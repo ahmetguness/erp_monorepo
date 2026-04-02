@@ -5,72 +5,177 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const faqs = [
   {
-    question: "Veri güvenliğini nasıl sağlıyorsunuz?",
-    answer: "Tüm verileriniz banka düzeyinde SSL sertifikaları ve uçtan uca şifreleme ile korunur. Bulut altyapımızda verileriniz günlük olarak yedeklenir ve ISO 27001 standartlarında veri merkezlerinde saklanır."
+    question: 'Kurulum ne kadar sürer?',
+    answer: 'İşletmenizin büyüklüğüne ve seçilen modüllere göre kurulum 3-7 iş günü arasında tamamlanır. Veri aktarımı ve entegrasyonlar bu süreye dahildir.',
   },
   {
-    question: "Eğitim ve kurulum süreci ne kadar sürer?",
-    answer: "İşletmenizin büyüklüğüne göre kurulum 2-4 iş günü, personel eğitimleri ise 1 hafta içinde tamamlanır. Süreç boyunca uzman danışmanlarımız birebir destek sağlar."
+    question: 'Mevcut verilerimi sisteme aktarabilir miyim?',
+    answer: 'Evet. Excel tabloları, muhasebe yazılımları veya farklı ERP sistemlerindeki verileriniz teknik ekibimiz tarafından kontrollü biçimde aktarılır.',
   },
   {
-    question: "Mevcut verilerimi ERP'ye aktarabilir miyim?",
-    answer: "Evet. Mevcut Excel tablolarınız veya farklı yazılımlardaki verileriniz; veri aktarım araçlarımız ve teknik ekibimiz tarafından kontrollü bir şekilde ERP sistemine entegre edilir."
+    question: 'Bulut ve şirket içi kurulum seçenekleri var mı?',
+    answer: 'Her iki seçeneği de sunuyoruz. Bulut çözümü hızlı kurulum ve düşük başlangıç maliyeti sağlar. Şirket içi kurulum ise tam veri kontrolü isteyen işletmeler için uygundur.',
   },
   {
-    question: "Destek hizmetleriniz nelerdir?",
-    answer: "7/24 telefon ve ticket desteği, düzenli sürüm güncellemeleri, yerinde danışmanlık opsiyonu ve kapsamlı dokümantasyon merkezimiz ile her zaman yanınızdayız."
-  }
+    question: 'Eğitim desteği sağlanıyor mu?',
+    answer: 'Evet. Canlıya geçiş öncesinde modül bazlı kullanıcı eğitimleri verilir. Uzaktan veya yerinde gerçekleştirilebilir.',
+  },
+  {
+    question: 'Modüller sonradan eklenebilir mi?',
+    answer: 'Evet. Başlangıçta ihtiyaç duyduğunuz modüllerle başlayabilir, işletmeniz büyüdükçe yeni modüller ekleyebilirsiniz.',
+  },
+  {
+    question: 'Teknik destek nasıl sağlanıyor?',
+    answer: '7/24 telefon, e-posta ve uzaktan bağlantı desteği sunulmaktadır. Profesyonel ve Kurumsal paketlerde kişisel teknik danışman atanır.',
+  },
+  {
+    question: 'Veri güvenliği nasıl sağlanıyor?',
+    answer: 'Tüm veriler 256-bit SSL şifreleme ile korunur. ISO 27001 sertifikalı altyapımızda günlük otomatik yedekleme yapılır. Rol bazlı yetkilendirme ile erişim kontrol altındadır.',
+  },
+  {
+    question: 'KVKK uyumluluğu sağlanıyor mu?',
+    answer: 'Evet. Sistem KVKK ve GDPR gerekliliklerine uygun tasarlanmıştır. Veri saklama ve silme politikaları sistem üzerinden yönetilebilir.',
+  },
 ];
 
 export default function FAQ() {
+  const [expanded, setExpanded] = useState(false);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section className="section-spacing bg-white">
+    <section className="py-10 relative bg-[#0F172A]">
       <div className="section-container">
-        <header className="text-center max-w-2xl mx-auto mb-20 space-y-4">
-          <h2 className="text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-none uppercase tracking-tighter">Sıkça Sorulan Sorular</h2>
-          <p className="text-xl text-slate-600 font-medium">Aklınıza takılan tüm sorular için kurumsal yanıtlarımız.</p>
-        </header>
 
-        <div className="max-w-3xl mx-auto space-y-4">
-          {faqs.map((faq, idx) => (
-            <article 
-              key={idx}
-              className={`border-2 rounded-2xl transition-all duration-300 ${
-                openIndex === idx ? 'border-blue-600 bg-blue-50/10 shadow-xl' : 'border-slate-100 hover:border-slate-200'
-              }`}
+        {/* Trigger row */}
+        <motion.button
+          onClick={() => { setExpanded(!expanded); setOpenIndex(null); }}
+          whileHover={{ scale: 1.005 }}
+          whileTap={{ scale: 0.998 }}
+          className={
+            'w-full flex items-center justify-between px-6 py-4 rounded-xl border transition-all duration-200 group ' +
+            (expanded
+              ? 'bg-slate-800/60 border-slate-700 rounded-b-none border-b-0'
+              : 'bg-slate-800/30 border-slate-800 hover:border-slate-700 hover:bg-slate-800/50')
+          }
+        >
+          <div className="flex items-center gap-4">
+            {/* Icon */}
+            <div className="w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="text-left">
+              <div className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">
+                Sık Sorulan Sorular
+              </div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                {faqs.length} soru — kurulum, güvenlik, destek ve daha fazlası
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <span className={
+              'text-xs font-medium px-3 py-1 rounded-full border transition-all duration-150 ' +
+              (expanded
+                ? 'text-blue-400 bg-blue-600/10 border-blue-500/20'
+                : 'text-slate-500 bg-slate-800 border-slate-700 group-hover:text-slate-300 group-hover:border-slate-600')
+            }>
+              {expanded ? 'Gizle' : 'Göster'}
+            </span>
+            <motion.div
+              animate={{ rotate: expanded ? 180 : 0 }}
+              transition={{ duration: 0.22 }}
             >
-              <button 
-                onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
-                className="w-full text-left p-8 flex justify-between items-center"
-              >
-                <h3 className={`text-lg font-black tracking-tight ${openIndex === idx ? 'text-blue-700' : 'text-slate-900'}`}>
-                  {faq.question}
-                </h3>
-                <span className={`text-2xl transition-transform duration-300 ${openIndex === idx ? 'rotate-180 text-blue-700' : 'text-slate-400'}`}>
-                  ▼
-                </span>
-              </button>
-              
-              <AnimatePresence>
-                {openIndex === idx && (
-                  <motion.div 
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="overflow-hidden"
-                  >
-                    <p className="px-8 pb-8 text-slate-600 font-bold leading-relaxed text-sm lg:text-base italic decoration-blue-100 decoration-4 underline-offset-8">
-                      {faq.answer}
-                    </p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </article>
-          ))}
-        </div>
+              <svg className={
+                'w-4 h-4 transition-colors duration-150 ' +
+                (expanded ? 'text-blue-400' : 'text-slate-600 group-hover:text-slate-400')
+              } fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </motion.div>
+          </div>
+        </motion.button>
+
+        {/* Expandable FAQ list */}
+        <AnimatePresence initial={false}>
+          {expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.28, ease: 'easeInOut' }}
+              className="overflow-hidden"
+            >
+              <div className="bg-slate-800/30 border border-slate-700 border-t-0 rounded-b-xl divide-y divide-slate-800">
+                {faqs.map((faq, idx) => (
+                  <div key={idx}>
+                    <button
+                      onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
+                      className="w-full text-left flex items-center justify-between px-6 py-4 hover:bg-slate-800/40 transition-colors duration-150 group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={
+                          'text-[11px] font-bold tabular-nums w-5 flex-shrink-0 ' +
+                          (openIndex === idx ? 'text-blue-500' : 'text-slate-700')
+                        }>
+                          {String(idx + 1).padStart(2, '0')}
+                        </span>
+                        <span className={
+                          'text-sm transition-colors duration-150 ' +
+                          (openIndex === idx
+                            ? 'text-white font-medium'
+                            : 'text-slate-400 group-hover:text-slate-200')
+                        }>
+                          {faq.question}
+                        </span>
+                      </div>
+                      <motion.div
+                        animate={{ rotate: openIndex === idx ? 45 : 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="flex-shrink-0 ml-4"
+                      >
+                        <div className={
+                          'w-5 h-5 rounded-full border flex items-center justify-center transition-all duration-150 ' +
+                          (openIndex === idx
+                            ? 'border-blue-500/50 bg-blue-600/15'
+                            : 'border-slate-700 group-hover:border-slate-600')
+                        }>
+                          <svg className={
+                            'w-2.5 h-2.5 transition-colors duration-150 ' +
+                            (openIndex === idx ? 'text-blue-400' : 'text-slate-600 group-hover:text-slate-400')
+                          } fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                          </svg>
+                        </div>
+                      </motion.div>
+                    </button>
+
+                    <AnimatePresence initial={false}>
+                      {openIndex === idx && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2, ease: 'easeInOut' }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-6 pb-5 pl-14">
+                            <p className="text-sm text-slate-400 leading-relaxed border-l border-slate-700 pl-4">
+                              {faq.answer}
+                            </p>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
       </div>
     </section>
   );

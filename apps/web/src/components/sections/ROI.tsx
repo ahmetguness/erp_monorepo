@@ -1,118 +1,166 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+
+const stats = [
+  { value: '%35', label: 'Verimlilik artisi', sub: 'ilk 6 ayda', width: '35%' },
+  { value: '%60', label: 'Manuel islem azalmasi', sub: 'fatura ve stok sureclerinde', width: '60%' },
+  { value: '%80', label: 'Raporlama hizi', sub: 'aylik kapanista', width: '80%' },
+  { value: '%45', label: 'Hata payi azalmasi', sub: 'veri girisinde', width: '45%' },
+];
+
+const benefits = [
+  {
+    title: 'Operasyonel verimlilik',
+    desc: 'Tekrarlayan manuel islemleri otomatiklestirerek ekibinizin zamanini daha degerli islere ayirin.',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Veriye dayali kararlar',
+    desc: 'Gercek zamanli raporlar ve yonetim panolari ile isletmenizin durumunu anlik takip edin.',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Departmanlar arasi koordinasyon',
+    desc: 'Satis, muhasebe, depo ve uretim ayni veri uzerinde calisir. Bilgi kopuklugu ortadan kalkar.',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Maliyet kontrolu',
+    desc: 'Kaynak israfini azaltin, maliyetleri gercek zamanli izleyin ve butce sapmalarini onceden goruntuleyin.',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+];
 
 export default function ROI() {
-  const [employees, setEmployees] = useState(50);
-  const [savings, setSavings] = useState(0);
-
-  useEffect(() => {
-    const calculated = employees * 500;
-    setSavings(calculated);
-  }, [employees]);
-
   return (
-    <section className="section-spacing relative bg-white overflow-hidden">
-      <div className="section-container">
-        <div className="relative bg-slate-950 rounded-[4rem] p-12 lg:p-32 overflow-hidden border border-white/10 shadow-[0_100px_200px_-50px_rgba(0,0,0,0.5)]">
-          
-          {/* Animated Background Gradients */}
-          <motion.div 
-            animate={{ 
-              scale: [1, 1.2, 1],
-              opacity: [0.3, 0.5, 0.3],
-              rotate: [0, 45, 0]
-            }}
-            transition={{ duration: 10, repeat: Infinity }}
-            className="absolute -top-1/4 -right-1/4 w-[800px] h-[800px] bg-blue-600/30 blur-[150px] rounded-full pointer-events-none" 
-          />
-          <motion.div 
-            animate={{ 
-              scale: [1, 1.1, 1],
-              opacity: [0.2, 0.4, 0.2],
-              rotate: [0, -30, 0]
-            }}
-            transition={{ duration: 15, repeat: Infinity, delay: 2 }}
-            className="absolute -bottom-1/4 -left-1/4 w-[600px] h-[600px] bg-indigo-900/40 blur-[120px] rounded-full pointer-events-none" 
-          />
+    <section className="section-spacing relative bg-[#0F172A] overflow-hidden">
+      {/* Glow */}
+      <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[400px] h-[400px] bg-blue-600/6 rounded-full blur-[100px] pointer-events-none" />
 
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-20 relative z-10">
-            <header className="flex-1 space-y-12">
-              <div className="inline-flex items-center gap-3 px-6 py-2 bg-white/5 rounded-full border border-white/10 backdrop-blur-md">
-                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                <span className="text-[10px] font-black text-white uppercase tracking-[0.4em]">Stratejik Analiz</span>
-              </div>
-              
-              <h2 className="text-5xl lg:text-8xl font-black text-white tracking-tighter uppercase italic leading-[0.85]">
-                İşletmenizi <br/>
-                <span className="text-blue-500 not-italic">Hızlandırın</span>
-              </h2>
-              
-              <p className="text-xl text-slate-400 font-medium leading-relaxed max-w-xl italic">
-                Dijitalleşme sadece bir tercih değil, bir karlılık stratejisidir. 
-                Axon ERP ile ekiplerinizin operasyonel yükünü minimize edin.
-              </p>
-              
-              <div className="pt-8">
-                <button className="group relative bg-white text-slate-950 px-16 py-6 rounded-2xl text-lg font-black uppercase tracking-widest transition-all hover:bg-blue-600 hover:text-white hover:shadow-[0_30px_100px_rgba(37,99,235,0.4)] active:scale-95 shadow-2xl">
-                  DETAYLI ANALİZ İSTE
-                </button>
-              </div>
-            </header>
+      <div className="section-container relative z-10">
 
-            <div className="flex-1 w-full max-w-[600px] bg-white/5 backdrop-blur-3xl border border-white/10 p-12 lg:p-20 rounded-[3rem] space-y-16 shadow-[0_50px_150px_-30px_rgba(0,0,0,0.5)]">
-              <div className="space-y-8">
-                <div className="flex justify-between items-end">
-                  <div>
-                    <label htmlFor="employees" className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500 mb-4 block leading-none">Personel Sayısı</label>
-                    <div className="text-5xl font-black text-white tracking-tighter italic">{employees}</div>
-                  </div>
-                  <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center text-2xl border border-white/10">👥</div>
-                </div>
-                
-                <input 
-                  id="employees"
-                  type="range" 
-                  min="5" 
-                  max="500" 
-                  value={employees} 
-                  onChange={(e) => setEmployees(parseInt(e.target.value))}
-                  className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all"
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4 }}
+          className="mb-12"
+        >
+          <div className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-3">Is Degeri</div>
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+            <h2 className="text-2xl lg:text-3xl font-bold text-white max-w-lg leading-tight">
+              ERP yatiriminin geri donusu olculebilir
+            </h2>
+            <p className="text-slate-400 text-sm leading-relaxed max-w-sm">
+              Dijitallasme bir maliyet kalemi degil, olculebilir getirisi olan bir yatirimdir.
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Stats bar — full width */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-slate-800 rounded-xl overflow-hidden border border-slate-800 mb-6"
+        >
+          {stats.map((s, idx) => (
+            <div key={idx} className="bg-[#0F172A] px-6 py-5 group hover:bg-slate-800/50 transition-colors duration-150">
+              <div className="text-2xl lg:text-3xl font-black text-white mb-1 tabular-nums">{s.value}</div>
+              <div className="text-xs font-medium text-slate-300 mb-0.5">{s.label}</div>
+              <div className="text-xs text-slate-600 mb-3">{s.sub}</div>
+              <div className="h-0.5 bg-slate-800 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-blue-500 rounded-full"
+                  initial={{ width: 0 }}
+                  whileInView={{ width: s.width }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.9, delay: 0.2 + idx * 0.1, ease: 'easeOut' }}
                 />
               </div>
+            </div>
+          ))}
+        </motion.div>
 
-              <div className="pt-16 border-t border-white/10 relative overflow-hidden group">
-                <div className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500 mb-6 block leading-none italic">Aylık Tahmini Tasarruf</div>
-                
-                <AnimatePresence mode="wait">
-                  <motion.div 
-                    key={savings}
-                    initial={{ opacity: 0, y: 20, filter: 'blur(10px)' }}
-                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                    exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }}
-                    transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                    className="space-y-4"
-                  >
-                    <div className="text-6xl lg:text-8xl font-black text-white tracking-tighter italic">
-                      {Intl.NumberFormat('en-US').format(employees * 20)} <span className="text-2xl text-blue-500 uppercase tracking-widest not-italic leading-none">Saat</span>
-                    </div>
-                    <div className="text-3xl font-black text-blue-500 tracking-tighter uppercase italic leading-none">
-                      ≈ ${Intl.NumberFormat('en-US').format(savings)} <span className="text-sm text-slate-500 tracking-widest leading-none">USD</span>
-                    </div>
-                  </motion.div>
-                </AnimatePresence>
-
-                {/* Decorative Accent */}
-                <div className="absolute right-0 bottom-0 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <div className="text-[10rem] font-black italic translate-x-1/4 translate-y-1/4 select-none">%</div>
+        {/* Benefits + CTA */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Benefits grid */}
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {benefits.map((b, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.35, delay: idx * 0.07 }}
+                className="bg-slate-800/40 border border-slate-700 rounded-lg p-5 hover:border-slate-600 transition-colors duration-150"
+              >
+                <div className="w-7 h-7 bg-blue-600/15 border border-blue-500/20 text-blue-400 rounded flex items-center justify-center mb-3">
+                  {b.icon}
                 </div>
+                <div className="text-sm font-semibold text-white mb-1.5">{b.title}</div>
+                <div className="text-xs text-slate-400 leading-relaxed">{b.desc}</div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* CTA card */}
+          <motion.div
+            initial={{ opacity: 0, x: 16 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.15 }}
+            className="bg-slate-800/40 border border-slate-700 rounded-lg p-6 flex flex-col justify-between"
+          >
+            <div>
+              <div className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">
+                Analiz Talep Et
+              </div>
+              <p className="text-sm text-slate-300 leading-relaxed mb-6">
+                Isletmenizin mevcut sureclerini analiz ederek size ozel bir ROI raporu hazirlayabiliriz.
+              </p>
+
+              {/* Mini checklist */}
+              <div className="space-y-2.5 mb-6">
+                {['Surec analizi', 'Tasarruf hesaplamasi', 'Yatirim geri donus suresi'].map((item) => (
+                  <div key={item} className="flex items-center gap-2.5">
+                    <div className="w-4 h-4 rounded-sm bg-blue-600/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-2.5 h-2.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <span className="text-xs text-slate-400">{item}</span>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
+
+            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-3 rounded-md transition-colors duration-150">
+              Detayli Analiz Talep Et
+            </button>
+          </motion.div>
         </div>
+
       </div>
     </section>
   );
 }
-

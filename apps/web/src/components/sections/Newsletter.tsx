@@ -4,39 +4,33 @@ import { motion } from 'framer-motion';
 
 export default function Newsletter() {
   return (
-    <section className="section-spacing bg-white border-t border-slate-50">
+    <section className="py-12 bg-white border-t border-slate-200">
       <div className="section-container">
-        <div className="bg-blue-50 border border-blue-100 rounded-3xl p-12 lg:p-24 text-center space-y-10 relative overflow-hidden">
-          {/* Subtle decoration */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-100/30 rounded-full blur-3xl -mr-32 -mt-32" />
-          
-          <motion.header 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
-            className="space-y-4 relative z-10"
-          >
-            <h2 className="text-3xl lg:text-5xl font-black text-slate-900 tracking-tight">Sektörel Gelişmeleri Takip Edin</h2>
-            <p className="text-lg text-slate-600 font-medium max-w-xl mx-auto">Kurumsal teknoloji trendlerini ve ERP dünyasındaki güncel haberleri ilk siz öğrenin.</p>
-          </motion.header>
-          
-          <motion.form 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="max-w-md mx-auto flex flex-col sm:flex-row gap-4 relative z-10"
-          >
-            <input 
-              type="email" 
-              placeholder="E-posta adresiniz" 
-              className="flex-1 bg-white border-2 border-slate-100 px-6 py-4 rounded text-sm font-bold focus:border-blue-700 focus:outline-none transition-all"
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4 }}
+          className="bg-slate-50 border border-slate-200 rounded-lg p-7 lg:p-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6"
+        >
+          <div className="lg:max-w-sm">
+            <h3 className="text-base font-semibold text-slate-900 mb-1.5">Sektörel gelişmeleri takip edin</h3>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              ERP ve dijital dönüşüm alanındaki güncel bilgileri aylık bültenimizle alın.
+            </p>
+          </div>
+          <form className="flex flex-col sm:flex-row gap-2.5 w-full lg:w-auto lg:min-w-80">
+            <input
+              type="email"
+              placeholder="E-posta adresiniz"
+              className="flex-1 bg-white border border-slate-200 px-4 py-2.5 rounded-md text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
               required
             />
-            <button className="bg-blue-700 text-white px-8 py-4 rounded text-sm font-black hover:bg-blue-800 transition-all uppercase tracking-widest shadow-xl shadow-blue-900/10 active:scale-95">KAYIT OL</button>
-          </motion.form>
-        </div>
+            <button type="submit" className="btn-primary whitespace-nowrap">
+              Abone Ol
+            </button>
+          </form>
+        </motion.div>
       </div>
     </section>
   );

@@ -5,136 +5,234 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const modules = [
   {
-    id: 'accounting',
-    title: 'Muhasebe & Finans',
-    icon: '💳',
+    id: 'finance',
+    title: 'Muhasebe ve Finans',
+    desc: 'Finansal sureclerinizi eksiksiz dijitalleştirin. Beyanname takibinden nakit akisina kadar tum muhasebe islemleri tek ekranda.',
     features: [
-      'Genel Muhasebe & Beyanname',
-      'Nakit Akış Yönetimi',
-      'E-Fatura & E-Arşiv Entegrasyonu',
-      'Banka & Post Hesap Takibi',
-      'Maliyet Muhasebesi'
+      'Genel muhasebe ve yevmiye defteri',
+      'Beyanname hazirlama ve takibi',
+      'Nakit akis yonetimi',
+      'E-Fatura ve e-Arsiv entegrasyonu',
+      'Banka hesap mutabakatı',
+      'Maliyet muhasebesi ve analizi',
     ],
-    highlight: 'Finansal süreçlerinizi %100 dijitalleştirin, hata payını sıfıra indirin.'
+    metrics: [
+      { label: 'Aylik Ciro', value: '2.847.500', unit: 'TL', trend: '+12%' },
+      { label: 'Tahsilat', value: '1.240.000', unit: 'TL', trend: '+8%' },
+      { label: 'Bekleyen Fatura', value: '23', unit: 'adet', trend: null },
+    ],
   },
   {
-    id: 'crm',
-    title: 'CRM & Satış',
-    icon: '🤝',
+    id: 'sales',
+    title: 'Satis ve CRM',
+    desc: 'Musteri iliskilerini ve satis sureclerini veriye dayali yonetin. Tekliften faturaya tum satis akisi tek sistemde.',
     features: [
-      'Müşteri Sadakati & Takibi',
-      'Satış Fırsatları (Pipeline)',
-      'Kampanya Yönetimi',
-      'Saha Satış Otomasyonu',
-      'Satış Sonrası Destek'
+      'Musteri ve potansiyel musteri takibi',
+      'Teklif hazirlama ve onay sureci',
+      'Satis firsatlari (pipeline) yonetimi',
+      'Siparis ve teslimat takibi',
+      'Satis performans raporlari',
+      'Saha satis ekibi yonetimi',
     ],
-    highlight: 'Müşteri ilişkilerinizi veriye dayalı yöneterek satışlarınızı artırın.'
+    metrics: [
+      { label: 'Acik Teklif', value: '47', unit: 'adet', trend: '+5' },
+      { label: 'Bu Ay Satis', value: '184.200', unit: 'TL', trend: '+18%' },
+      { label: 'Musteri Sayisi', value: '312', unit: 'aktif', trend: null },
+    ],
   },
   {
     id: 'production',
-    title: 'Üretim & Planlama',
-    icon: '🏭',
+    title: 'Uretim ve Planlama',
+    desc: 'Uretim sureclerinizi planlayın, takip edin ve optimize edin. Kaynak israfini azaltin, verimliligi artirin.',
     features: [
-      'Kaynak Planlama (MRP)',
-      'İş Emirleri & Takibi',
-      'Kalite Kontrol Süreçleri',
-      'Fason Takibi',
-      'Makine Verimlilik Analizi'
+      'Malzeme ihtiyac planlamasi (MRP)',
+      'Is emirleri ve uretim takibi',
+      'Kalite kontrol surecleri',
+      'Fason uretim takibi',
+      'Makine ve ekipman yonetimi',
+      'Uretim maliyet analizi',
     ],
-    highlight: 'Üretim bandınızı dijital ikizinizle takip edin, verimliliği maksimize edin.'
-  }
+    metrics: [
+      { label: 'Aktif Is Emri', value: '18', unit: 'adet', trend: null },
+      { label: 'Verimlilik', value: '94', unit: '%', trend: '+3%' },
+      { label: 'Stok Donus', value: '8.2', unit: 'gun', trend: '-1.1' },
+    ],
+  },
 ];
 
 export default function DeepDive() {
   const [activeTab, setActiveTab] = useState(modules[0].id);
-
-  const activeModule = modules.find(m => m.id === activeTab)!;
+  const active = modules.find((m) => m.id === activeTab)!;
 
   return (
-    <section className="section-spacing bg-slate-50 border-y border-slate-100">
-      <div className="section-container">
-        <header className="text-center max-w-3xl mx-auto mb-20 space-y-4">
-          <h2 className="text-4xl lg:text-6xl font-black text-slate-900 tracking-tight">Çözümlerimize Yakından Bakın</h2>
-          <p className="text-xl text-slate-600 font-medium">İşletmenizin derin operasyonel ihtiyaçları için detaylandırılmış kurumsal modüller.</p>
-        </header>
-        
-        <div className="flex flex-col lg:flex-row gap-16 items-start">
-          {/* Tabs Sidebar */}
-          <nav className="w-full lg:w-1/3 flex flex-col gap-2">
+    <section className="section-spacing relative bg-[#0F172A] overflow-hidden">
+      {/* Subtle glow */}
+      <div className="absolute bottom-0 left-1/3 w-[500px] h-[300px] bg-blue-600/6 rounded-full blur-[100px] pointer-events-none" />
+
+      <div className="section-container relative z-10">
+
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10"
+        >
+          <div>
+            <div className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-3">Modul Detaylari</div>
+            <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">Temel modullere yakindan bakin</h2>
+            <p className="text-slate-400 text-sm leading-relaxed max-w-lg">
+              Her modul, sektorunuzun ihtiyaclarina gore yapilandirilmis kapsamli ozellikler sunar.
+            </p>
+          </div>
+
+          {/* Tab nav */}
+          <div className="flex gap-1 bg-slate-800/60 border border-slate-700 rounded-lg p-1 w-fit">
             {modules.map((m) => (
               <button
                 key={m.id}
                 onClick={() => setActiveTab(m.id)}
-                className={`text-left p-8 rounded-xl border-2 transition-all duration-300 relative overflow-hidden group ${
-                  activeTab === m.id 
-                  ? 'bg-white border-blue-600 shadow-xl shadow-blue-900/5' 
-                  : 'bg-transparent border-slate-200 hover:border-slate-300'
-                }`}
+                className={
+                  'px-4 py-2 rounded-md text-sm font-medium transition-all duration-150 ' +
+                  (activeTab === m.id
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50')
+                }
               >
-                <div className="flex items-center gap-6">
-                  <span className={`text-3xl transition-transform duration-300 ${activeTab === m.id ? 'scale-110' : 'grayscale opacity-40'}`}>
-                    {m.icon}
-                  </span>
-                  <div>
-                    <h3 className={`font-black uppercase tracking-widest text-sm ${activeTab === m.id ? 'text-blue-700' : 'text-slate-500'}`}>
-                      {m.title}
-                    </h3>
-                    <p className="text-slate-400 text-xs font-bold mt-1 uppercase tracking-wider">Detayları İncele →</p>
-                  </div>
-                </div>
-                {activeTab === m.id && (
-                  <motion.div layoutId="activeTab" className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-600" />
-                )}
+                {m.title.split(' ')[0]}
               </button>
             ))}
-          </nav>
+          </div>
+        </motion.div>
 
-          {/* Content Area */}
-          <div className="flex-1 w-full bg-white rounded-3xl border-2 border-slate-200 p-12 lg:p-20 shadow-2xl relative overflow-hidden">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.5 }}
-                className="space-y-12"
-              >
-                <div className="space-y-6">
-                  <h4 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">{activeModule.title}</h4>
-                  <p className="text-xl text-blue-700 font-bold leading-relaxed max-w-2xl italic border-l-4 border-blue-600 pl-6 uppercase tracking-tight">
-                    {activeModule.highlight}
-                  </p>
+        {/* Content */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.22 }}
+            className="grid grid-cols-1 lg:grid-cols-5 gap-4"
+          >
+            {/* Left: features list */}
+            <div className="lg:col-span-3 bg-slate-800/40 border border-slate-700 rounded-lg overflow-hidden">
+              {/* Module header */}
+              <div className="px-6 py-5 border-b border-slate-700">
+                <h3 className="text-base font-semibold text-white mb-1">{active.title}</h3>
+                <p className="text-sm text-slate-400 leading-relaxed">{active.desc}</p>
+              </div>
+
+              {/* Feature grid */}
+              <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {active.features.map((f, i) => (
+                  <motion.div
+                    key={f}
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="flex items-center gap-3 px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded hover:border-slate-600 transition-colors duration-150"
+                  >
+                    <div className="w-4 h-4 rounded-sm bg-blue-600/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-2.5 h-2.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <span className="text-sm text-slate-300">{f}</span>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* CTA */}
+              <div className="px-6 pb-6 flex gap-3">
+                <button className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-md transition-colors duration-150">
+                  Demo Talep Et
+                </button>
+                <button className="bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white text-sm font-semibold px-5 py-2.5 rounded-md transition-colors duration-150">
+                  Brosur Indir
+                </button>
+              </div>
+            </div>
+
+            {/* Right: live metrics panel */}
+            <div className="lg:col-span-2 flex flex-col gap-3">
+              {/* Panel header */}
+              <div className="bg-slate-800/40 border border-slate-700 rounded-lg overflow-hidden">
+                <div className="bg-slate-900 px-4 py-2.5 flex items-center gap-2 border-b border-slate-700">
+                  <div className="flex gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-slate-700" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-slate-700" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-slate-700" />
+                  </div>
+                  <span className="text-xs text-slate-500 ml-1">Canli Ozet</span>
+                  <span className="ml-auto flex items-center gap-1.5 text-xs text-green-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                    Canli
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {activeModule.features.map((f, i) => (
-                    <motion.div 
-                      key={i}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      className="flex items-center gap-4 text-slate-600 font-bold"
+                <div className="p-4 space-y-3">
+                  {active.metrics.map((m, i) => (
+                    <motion.div
+                      key={m.label}
+                      initial={{ opacity: 0, x: 8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.07 }}
+                      className="flex items-center justify-between py-2.5 border-b border-slate-700/50 last:border-0"
                     >
-                      <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
-                      <span className="text-lg tracking-tight">{f}</span>
+                      <span className="text-xs text-slate-500">{m.label}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-white tabular-nums">{m.value}</span>
+                        <span className="text-xs text-slate-500">{m.unit}</span>
+                        {m.trend && (
+                          <span className={
+                            'text-xs font-medium px-1.5 py-0.5 rounded ' +
+                            (m.trend.startsWith('+') ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10')
+                          }>
+                            {m.trend}
+                          </span>
+                        )}
+                      </div>
                     </motion.div>
                   ))}
                 </div>
+              </div>
 
-                <div className="pt-8 border-t border-slate-100 flex flex-col sm:flex-row gap-6">
-                  <button className="bg-slate-900 text-white px-8 py-4 rounded text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all">Modül Broşürünü İndir</button>
-                  <button className="text-blue-700 font-black text-xs uppercase tracking-widest hover:underline decoration-2 underline-offset-8">Özellik Listesini Karşılaştır →</button>
+              {/* Mini bar chart */}
+              <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-4">
+                <div className="text-xs text-slate-500 mb-3">Son 6 ay performansi</div>
+                <div className="flex items-end gap-1.5 h-16">
+                  {[40, 65, 50, 80, 70, 90].map((h, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ height: 0 }}
+                      animate={{ height: `${h}%` }}
+                      transition={{ delay: 0.1 + i * 0.06, duration: 0.4, ease: 'easeOut' }}
+                      className={
+                        'flex-1 rounded-sm ' +
+                        (i === 5 ? 'bg-blue-500' : 'bg-slate-700')
+                      }
+                    />
+                  ))}
                 </div>
-              </motion.div>
-            </AnimatePresence>
-            
-            {/* Subtle decor */}
-            <div className="absolute -bottom-12 -right-12 w-64 h-64 bg-slate-50 rounded-full flex items-center justify-center text-slate-100 text-[10rem] font-black select-none pointer-events-none">
-              {activeModule.icon}
+                <div className="flex justify-between mt-2">
+                  {['Oca', 'Sub', 'Mar', 'Nis', 'May', 'Haz'].map((m) => (
+                    <span key={m} className="text-[10px] text-slate-600">{m}</span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Bottom link */}
+              <button className="w-full bg-slate-800/40 border border-slate-700 hover:border-slate-600 rounded-lg px-4 py-3 flex items-center justify-between group transition-colors duration-150">
+                <span className="text-sm text-slate-400 group-hover:text-slate-200 transition-colors">Tum raporlari goruntule</span>
+                <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
     </section>
   );

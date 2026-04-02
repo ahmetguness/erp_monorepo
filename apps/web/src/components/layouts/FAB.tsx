@@ -7,9 +7,7 @@ export default function FAB() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsVisible(window.scrollY > 400);
-    };
+    const handleScroll = () => setIsVisible(window.scrollY > 400);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -17,23 +15,18 @@ export default function FAB() {
   return (
     <AnimatePresence>
       {isVisible && (
-        <motion.div 
-          initial={{ opacity: 0, y: 50, scale: 0.8 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 20, scale: 0.8 }}
-          className="fixed bottom-8 right-8 z-[100] flex flex-col items-end gap-4"
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.8 }}
+          className="fixed bottom-6 right-6 z-[100] w-10 h-10 bg-blue-600 text-white rounded-md flex items-center justify-center shadow-md hover:bg-blue-700 transition-colors active:scale-95"
+          aria-label="İletişime geçin"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
         >
-          <div className="bg-white border-2 border-blue-700 px-6 py-3 rounded-full shadow-2xl text-xs font-black text-blue-700 uppercase tracking-widest hidden md:block">
-            Sizi Arayalım mı?
-          </div>
-          <button 
-            className="w-16 h-16 bg-blue-700 text-white rounded-full flex items-center justify-center shadow-2xl hover:bg-blue-800 transition-all active:scale-95 group relative"
-            aria-label="İletişime Geçin"
-          >
-            <span className="text-2xl group-hover:scale-110 transition-transform">📞</span>
-            <span className="absolute inset-0 rounded-full bg-blue-700 animate-ping opacity-20 pointer-events-none" />
-          </button>
-        </motion.div>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+          </svg>
+        </motion.button>
       )}
     </AnimatePresence>
   );

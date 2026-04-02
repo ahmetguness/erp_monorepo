@@ -3,25 +3,20 @@
 import { motion, useInView, useMotionValue, useSpring } from 'framer-motion';
 import { useEffect, useRef } from 'react';
 
-function Counter({ value, suffix = "" }: { value: number; suffix?: string }) {
+function Counter({ value, suffix = '' }: { value: number; suffix?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const motionValue = useMotionValue(0);
-  const springValue = useSpring(motionValue, {
-    damping: 30,
-    stiffness: 100,
-  });
-  const isInView = useInView(ref, { once: true, margin: "-100px" });
+  const springValue = useSpring(motionValue, { damping: 30, stiffness: 80 });
+  const isInView = useInView(ref, { once: true, margin: '-80px' });
 
   useEffect(() => {
-    if (isInView) {
-      motionValue.set(value);
-    }
+    if (isInView) motionValue.set(value);
   }, [isInView, value, motionValue]);
 
   useEffect(() => {
-    return springValue.on("change", (latest) => {
+    return springValue.on('change', (latest) => {
       if (ref.current) {
-        ref.current.textContent = Intl.NumberFormat("en-US").format(Math.floor(latest as number)) + suffix;
+        ref.current.textContent = Intl.NumberFormat('tr-TR').format(Math.floor(latest as number)) + suffix;
       }
     });
   }, [springValue, suffix]);
@@ -29,33 +24,31 @@ function Counter({ value, suffix = "" }: { value: number; suffix?: string }) {
   return <span ref={ref} />;
 }
 
-export default function Stats() {
-  const stats = [
-    { label: 'Yıllık Tecrübe', value: 25, suffix: '+' },
-    { label: 'Aktif Kullanıcı', value: 50000, suffix: '+' },
-    { label: 'Uzman Personel', value: 1500, suffix: '+' },
-    { label: 'Entegre Modül', value: 100, suffix: '+' }
-  ];
+const stats = [
+  { label: 'Yıllık sektör deneyimi', value: 15, suffix: '+' },
+  { label: 'Aktif müşteri işletme', value: 2400, suffix: '+' },
+  { label: 'Kurulu modül', value: 18, suffix: '' },
+  { label: 'Teknik destek uzmanı', value: 85, suffix: '+' },
+];
 
+export default function Stats() {
   return (
-    <section className="section-spacing bg-white">
+    <section className="py-12 bg-slate-50 border-y border-slate-200">
       <div className="section-container">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-24">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
           {stats.map((s, idx) => (
-            <motion.div 
+            <motion.div
               key={idx}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 10 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: idx * 0.1 }}
-              className="text-center space-y-4"
+              transition={{ duration: 0.4, delay: idx * 0.07 }}
+              className="text-center"
             >
-              <div className="text-4xl lg:text-7xl font-black text-blue-700 tracking-tighter">
+              <div className="text-2xl lg:text-3xl font-bold text-slate-900 mb-1">
                 <Counter value={s.value} suffix={s.suffix} />
               </div>
-              <div className="text-sm lg:text-base font-black text-slate-400 uppercase tracking-[0.2em]">
-                {s.label}
-              </div>
+              <div className="text-sm text-slate-500">{s.label}</div>
             </motion.div>
           ))}
         </div>
