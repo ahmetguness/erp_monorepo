@@ -1,0 +1,42 @@
+my-project/
+│
+├── apps/                      # Uygulamalar
+│   ├── mobile/               # React Native (Expo)
+│   │   ├── src/
+│   │   │   ├── components/
+│   │   │   ├── screens/
+│   │   │   ├── navigation/
+│   │   │   ├── services/
+│   │   │   └── utils/
+│   │   ├── app.json
+│   │   └── package.json
+│   │
+│   ├── web/                  # Next.js / React
+│   │   ├── src/
+│   │   │   ├── app/          # Next.js app router
+│   │   │   ├── components/
+│   │   │   ├── services/
+│   │   │   └── utils/
+│   │   ├── public/
+│   │   └── package.json
+│   │
+│   └── backend/              # API (Node.js)
+│       ├── src/
+│       │   ├── controllers/
+│       │   ├── services/
+│       │   ├── routes/
+│       │   ├── middlewares/
+│       │   ├── models/       # DB modelleri
+│       │   └── utils/
+│       ├── prisma/           # (opsiyonel)
+│       └── package.json
+│
+├── packages/                 # Ortak kodlar (çok önemli)
+│   ├── types/                # Ortak TS tipleri
+│   ├── ui/                   # Ortak componentler (web + mobile için ayrı olabilir)
+│   ├── utils/                # ortak helperlar
+│   └── api/                  # ortak API client logic
+│
+├── .env
+├── package.json              # root (workspace yönetimi)
+└── tsconfig.json
