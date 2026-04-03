@@ -44,6 +44,9 @@
 // ApprovalModule:        PURCHASE_REQUEST | LEAVE_REQUEST | INVOICE | SALES_ORDER | PURCHASE_ORDER | SERVICE_REQUEST | OTHER
 // ReservationRefType:    SALES_ORDER | WORK_ORDER | PURCHASE_REQUEST | OTHER
 // MovementRefType:       PURCHASE_ORDER | SALES_ORDER | WORK_ORDER | DELIVERY_NOTE | STOCK_COUNT | MANUAL | OTHER
+// FeatureType:           BOOLEAN | LIMIT | ENUM
+// FeatureKey:            MAX_USERS | MAX_PRODUCTS | MULTI_WAREHOUSE | ROLE_MANAGEMENT | APPROVALS | CRM | SALES | PURCHASING | PRODUCTION | SERVICE | MARKETPLACE | PAYROLL | API_ACCESS | AUDIT_LOG | CUSTOM_REPORTING
+// AppModule:             ACCOUNTING | INVENTORY | CRM | SALES | PURCHASING | WAREHOUSE | PRODUCTION | SERVICE | HR | PAYROLL | MARKETPLACE | REPORTING
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -69,7 +72,8 @@ Table tenants {
   plan              Plan      [default: "STARTER"]
   status            TenantStatus [default: "TRIAL"]
   deploymentType    DeploymentType [default: "CLOUD"]
-  maxUsers          Int       [default: 3]
+  maxUsers          Int       [null, note: 'Null means unlimited users']
+  userPrice         Decimal   [null, note: 'Price per user in the tenant subscription']
   trialEndsAt       DateTime  [null]
   subscriptionStart DateTime  [null]
   subscriptionEnd   DateTime  [null]
@@ -222,6 +226,73 @@ Table module_settings {
 }
 
 Ref: module_settings.tenantId > tenants.id [delete: cascade]
+
+// ─────────────────────────────────────────────
+// PLAN FEATURE YÖNETİMİ
+// ─────────────────────────────────────────────
+
+Table plan_features {
+  id        String   [pk]
+  createdAt DateTime
+  updatedAt DateTime
+  plan      Plan
+  key       String
+  value     String
+
+  indexes {
+    (plan, key) [unique]
+    plan
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PLAN & FEATURE YÖNETİMİ (EK MODELLER)
+// ═══════════════════════════════════════════════════════════════
+
+Table tenant_feature_overrides {
+  id          String     [pk]
+  tenantId    String
+  featureKey  FeatureKey
+  value       String
+  isEnabled   Boolean    [default: true]
+  reason      String     [null]
+  expiresAt   DateTime   [null]
+  createdAt   DateTime
+  updatedAt   DateTime
+  createdById String     [null]
+
+  indexes {
+    (tenantId, featureKey) [unique]
+    tenantId
+  }
+}
+
+Ref: tenant_feature_overrides.tenantId > tenants.id [delete: cascade]
+
+Table api_keys {
+  id          String   [pk]
+  tenantId    String
+  name        String
+  keyHash     String   [unique]
+  keyPrefix   String
+  lastUsedAt  DateTime [null]
+  expiresAt   DateTime [null]
+  isActive    Boolean  [default: true]
+  scopes      String[] [default: `{}`]
+  createdAt   DateTime
+  updatedAt   DateTime
+  deletedAt   DateTime [null]
+  createdById String   [null]
+  revokedAt   DateTime [null]
+  revokedById String   [null]
+
+  indexes {
+    (tenantId, isActive)
+    (tenantId, deletedAt)
+  }
+}
+
+Ref: api_keys.tenantId > tenants.id [delete: cascade]
 
 // ═══════════════════════════════════════════════════════════════
 // AUDIT LOGGING
@@ -1563,11 +1634,13 @@ Table payrolls {
   paidAt      DateTime [null]
   notes       String   [null]
   createdAt   DateTime
+  deletedAt   DateTime [null]
   createdById String   [null]
 
   indexes {
-    (employeeId, period) [unique]
+    (tenantId, employeeId, period) [unique]
     (tenantId, period)
+    deletedAt
   }
 }
 
@@ -1678,6 +1751,8 @@ Table work_orders {
   producedQty Decimal         [default: 0]
   startDate   DateTime        [null]
   endDate     DateTime        [null]
+  inputWarehouseId  String    [null]
+  outputWarehouseId String    [null]
   notes       String          [null]
   createdAt   DateTime
   updatedAt   DateTime
@@ -1694,6 +1769,8 @@ Table work_orders {
 Ref: work_orders.tenantId > tenants.id [delete: cascade]
 Ref: work_orders.bomId > boms.id
 Ref: work_orders.productId > products.id
+Ref: work_orders.inputWarehouseId > warehouses.id
+Ref: work_orders.outputWarehouseId > warehouses.id
 
 Table work_order_items {
   id          String  [pk]
@@ -1702,6 +1779,7 @@ Table work_order_items {
   productId   String
   requiredQty Decimal
   consumedQty Decimal [default: 0]
+  sourceWarehouseId String [null]
 
   indexes {
     (tenantId, workOrderId)
@@ -1710,6 +1788,7 @@ Table work_order_items {
 
 Ref: work_order_items.workOrderId > work_orders.id [delete: cascade]
 Ref: work_order_items.productId > products.id
+Ref: work_order_items.sourceWarehouseId > warehouses.id
 
 Table work_order_operations {
   id             String          [pk]

@@ -1,27 +1,108 @@
-const reset  = "\x1b[0m";
-const bold   = "\x1b[1m";
-const dim    = "\x1b[2m";
-const green  = "\x1b[32m";
-const yellow = "\x1b[33m";
-const red    = "\x1b[31m";
-const cyan   = "\x1b[36m";
-const magenta = "\x1b[35m";
-const white  = "\x1b[37m";
+// ─────────────────────────────────────────────
+// ANSI helpers
+// ─────────────────────────────────────────────
+const r = '\x1b[0m';
+const bold = '\x1b[1m';
+const dim = '\x1b[2m';
 
-function timestamp() {
-  return `${dim}${new Date().toLocaleTimeString("tr-TR")}${reset}`;
+const fg = {
+  black:   '\x1b[30m',
+  red:     '\x1b[31m',
+  green:   '\x1b[32m',
+  yellow:  '\x1b[33m',
+  blue:    '\x1b[34m',
+  magenta: '\x1b[35m',
+  cyan:    '\x1b[36m',
+  white:   '\x1b[37m',
+  gray:    '\x1b[90m',
+};
+
+const bg = {
+  red:     '\x1b[41m',
+  green:   '\x1b[42m',
+  yellow:  '\x1b[43m',
+  blue:    '\x1b[44m',
+  magenta: '\x1b[45m',
+  cyan:    '\x1b[46m',
+};
+
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+
+function time(): string {
+  return `${fg.gray}${dim}${new Date().toLocaleTimeString('tr-TR')}${r}`;
 }
 
+function badge(text: string, bgColor: string, fgColor = fg.black): string {
+  return `${bgColor}${fgColor}${bold} ${text} ${r}`;
+}
+
+function httpMethodBadge(method: string): string {
+  const colors: Record<string, string> = {
+    GET:    bg.blue,
+    POST:   bg.green,
+    PATCH:  bg.yellow,
+    PUT:    bg.yellow,
+    DELETE: bg.red,
+  };
+  const color = colors[method.toUpperCase()] ?? bg.magenta;
+  const textColor = method === 'PATCH' || method === 'PUT' ? fg.black : fg.white;
+  return `${color}${textColor}${bold} ${method.padEnd(6)}${r}`;
+}
+
+function statusBadge(status: number): string {
+  if (status >= 500) return `${fg.red}${bold}${status}${r}`;
+  if (status >= 400) return `${fg.yellow}${bold}${status}${r}`;
+  if (status >= 300) return `${fg.cyan}${bold}${status}${r}`;
+  return `${fg.green}${bold}${status}${r}`;
+}
+
+// ─────────────────────────────────────────────
+// Logger
+// ─────────────────────────────────────────────
+
 export const logger = {
-  info:    (msg: string) => console.log(`${timestamp()} ${cyan}${bold}INFO${reset}  ${white}${msg}${reset}`),
-  success: (msg: string) => console.log(`${timestamp()} ${green}${bold} OK ${reset}  ${white}${msg}${reset}`),
-  warn:    (msg: string) => console.log(`${timestamp()} ${yellow}${bold}WARN${reset}  ${white}${msg}${reset}`),
-  error:   (msg: string) => console.log(`${timestamp()} ${red}${bold}ERR ${reset}  ${white}${msg}${reset}`),
-  http:    (method: string, path: string, status: number, ms: number) => {
-    const statusColor = status >= 500 ? red : status >= 400 ? yellow : green;
-    const methodColor = magenta;
+  info: (msg: string) =>
+    console.log(`${time()} ${badge('INFO', bg.blue, fg.white)}  ${fg.white}${msg}${r}`),
+
+  success: (msg: string) =>
+    console.log(`${time()} ${badge(' OK ', bg.green, fg.white)}  ${fg.white}${msg}${r}`),
+
+  warn: (msg: string) =>
+    console.log(`${time()} ${badge('WARN', bg.yellow, fg.black)}  ${fg.yellow}${msg}${r}`),
+
+  error: (msg: string) =>
+    console.log(`${time()} ${badge('ERR ', bg.red, fg.white)}  ${fg.red}${msg}${r}`),
+
+  http: (method: string, path: string, status: number, ms: number) => {
+    const pathStr = `${fg.white}${path}${r}`;
+    const msStr   = ms > 500
+      ? `${fg.red}${bold}${ms}ms${r}`
+      : ms > 200
+        ? `${fg.yellow}${ms}ms${r}`
+        : `${dim}${ms}ms${r}`;
+
     console.log(
-      `${timestamp()} ${cyan}${bold}HTTP${reset}  ${methodColor}${bold}${method.padEnd(6)}${reset}${white}${path.padEnd(30)}${reset} ${statusColor}${bold}${status}${reset} ${dim}${ms}ms${reset}`
+      `${time()} ${httpMethodBadge(method)} ${pathStr.padEnd(38)} ${statusBadge(status)}  ${msStr}`,
     );
   },
 };
+
+// ─────────────────────────────────────────────
+// Banner
+// ─────────────────────────────────────────────
+
+export function printBanner(port: number): void {
+  const env = process.env.NODE_ENV ?? 'development';
+  const envColor = env === 'production' ? fg.green : env === 'test' ? fg.yellow : fg.cyan;
+
+  console.log('');
+  console.log(`  ${bg.cyan}${fg.black}${bold}  AXON ERP  ${r}`);
+  console.log(`  ${dim}${'─'.repeat(36)}${r}`);
+  console.log(`  ${fg.gray}server   ${r}${fg.white}http://localhost:${bold}${port}${r}`);
+  console.log(`  ${fg.gray}health   ${r}${fg.white}http://localhost:${port}/health${r}`);
+  console.log(`  ${fg.gray}env      ${r}${envColor}${bold}${env}${r}`);
+  console.log(`  ${dim}${'─'.repeat(36)}${r}`);
+  console.log('');
+}

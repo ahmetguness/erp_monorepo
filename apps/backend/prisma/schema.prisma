@@ -361,6 +361,48 @@ enum Priority {
   CRITICAL
 }
 
+// ─── DEĞİŞİKLİK 1 ───────────────────────────
+enum FeatureType {
+  BOOLEAN   // isEnabled kullanılır, value "true"/"false"
+  LIMIT     // value sayısal limit (örn: "500", "unlimited")
+  ENUM      // value izin verilen değerlerden biri
+}
+
+// ─── DEĞİŞİKLİK 2 ───────────────────────────
+enum FeatureKey {
+  MAX_USERS
+  MAX_PRODUCTS
+  MULTI_WAREHOUSE
+  ROLE_MANAGEMENT
+  APPROVALS
+  CRM
+  SALES
+  PURCHASING
+  PRODUCTION
+  SERVICE
+  MARKETPLACE
+  PAYROLL
+  API_ACCESS
+  AUDIT_LOG
+  CUSTOM_REPORTING
+}
+
+// ─── DEĞİŞİKLİK 4 ───────────────────────────
+enum AppModule {
+  ACCOUNTING
+  INVENTORY
+  CRM
+  SALES
+  PURCHASING
+  WAREHOUSE
+  PRODUCTION
+  SERVICE
+  HR
+  PAYROLL
+  MARKETPLACE
+  REPORTING
+}
+
 // ═════════════════════════════════════════════
 // TENANT & AUTH
 // ═════════════════════════════════════════════
@@ -390,12 +432,21 @@ model Tenant {
   plan              Plan           @default(STARTER)
   status            TenantStatus   @default(TRIAL)
   deploymentType    DeploymentType @default(CLOUD)
-  maxUsers          Int            @default(3)
+  /// Null means unlimited users
+  maxUsers          Int?
+  /// Price per user in the tenant's subscription (e.g. 10.00 = $10/user)
+  userPrice         Decimal?       @db.Decimal(10, 2)
   trialEndsAt       DateTime?
   subscriptionStart DateTime?
   subscriptionEnd   DateTime?
+  /// DEĞİŞİKLİK 5: plan upgrade/downgrade zamanı
+  planChangedAt     DateTime?
+  /// DEĞİŞİKLİK 5: Enterprise müşteriler için fiyat tablosunu bypass et
+  isCustomPricing   Boolean        @default(false)
 
-  /// Use ModuleSetting for per-module config; this field holds enabled module keys only
+  /// Legacy: serbest string array. Typed kullanım için AppModule enum'una bakın.
+  /// Migration notu: Bu alan zamanla AppModule[] tipine geçirilecek,
+  ///   şimdilik uygulama katmanında AppModule enum değerleriyle senkron tutulur.
   modules String[] @default([])
   notes   String?
 
@@ -480,6 +531,10 @@ model Tenant {
   marketplaceListings      MarketplaceListing[]
   marketplaceOrders        MarketplaceOrder[]
   marketplaceOrderItems    MarketplaceOrderItem[]
+  // DEĞİŞİKLİK 3: TenantFeatureOverride back-relation
+  featureOverrides         TenantFeatureOverride[]
+  // DEĞİŞİKLİK 6: ApiKey back-relation
+  apiKeys                  ApiKey[]
 
   @@index([status])
   @@index([deletedAt])
@@ -633,6 +688,122 @@ model ModuleSetting {
   @@unique([tenantId, module, key])
   @@index([tenantId, module])
   @@map("module_settings")
+}
+
+// ─────────────────────────────────────────────
+// PLAN FEATURE YÖNETİMİ
+// ─────────────────────────────────────────────
+
+/// Plan bazlı özellik/limit tanımları. DB üzerinden yönetilebilir pricing için kullanılır.
+/// Örnek: plan=STARTER, key="max_products", value="500"
+///        plan=PROFESSIONAL, key="api_access", value="true"
+model PlanFeature {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  plan  Plan   
+  key   String 
+  value String
+
+  // DEĞİŞİKLİK 1: yeni alanlar
+  type        FeatureType  @default(LIMIT)
+  isEnabled   Boolean      @default(true)
+  description String?
+
+  // DEĞİŞİKLİK 2: typed key — key String korunur, featureKey nullable eklendi
+  featureKey  FeatureKey?
+
+  // Mevcut unique korunur; featureKey için ayrı unique eklendi
+  @@unique([plan, key])
+  @@unique([plan, featureKey])
+  @@index([plan])
+  @@map("plan_features")
+}
+
+// Örnek seed verileri:
+// Starter:
+//   { plan: STARTER, key: "max_users",       value: "5" }
+//   { plan: STARTER, key: "max_products",    value: "500" }
+//   { plan: STARTER, key: "api_access",      value: "false" }
+//   { plan: STARTER, key: "modules",         value: "accounting,inventory" }
+//
+// Professional:
+//   { plan: PROFESSIONAL, key: "max_users",       value: "25" }
+//   { plan: PROFESSIONAL, key: "max_products",    value: "5000" }
+//   { plan: PROFESSIONAL, key: "api_access",      value: "true" }
+//   { plan: PROFESSIONAL, key: "modules",         value: "accounting,inventory,crm,purchasing" }
+//
+// Enterprise:
+//   { plan: ENTERPRISE, key: "max_users",       value: "unlimited" }
+//   { plan: ENTERPRISE, key: "max_products",    value: "unlimited" }
+//   { plan: ENTERPRISE, key: "api_access",      value: "true" }
+//   { plan: ENTERPRISE, key: "modules",         value: "accounting,inventory,crm,purchasing,manufacturing,service,marketplace" }
+//
+// DEĞİŞİKLİK 7 — Audit seviyeleri (AUDIT_LOG feature key ile kontrol edilir):
+// Starter:
+//   { plan: STARTER,       featureKey: AUDIT_LOG, type: ENUM,
+//     value: "basic",      description: "Son 30 günlük log" }
+// Professional:
+//   { plan: PROFESSIONAL,  featureKey: AUDIT_LOG, type: ENUM,
+//     value: "standard",   description: "Son 1 yıllık log + export" }
+// Enterprise:
+//   { plan: ENTERPRISE,    featureKey: AUDIT_LOG, type: ENUM,
+//     value: "full",       description: "Sınırsız log + SIEM entegrasyonu" }
+//
+// Uygulama katmanı: AuditLog yazarken önce TenantFeatureOverride,
+// sonra PlanFeature[AUDIT_LOG].value değerini kontrol eder.
+
+// ═════════════════════════════════════════════
+// PLAN & FEATURE YÖNETİMİ (EK MODELLER)
+// ═════════════════════════════════════════════
+
+// DEĞİŞİKLİK 3 — Tenant bazlı feature override
+model TenantFeatureOverride {
+  id          String     @id @default(cuid())
+  tenantId    String
+  featureKey  FeatureKey
+  value       String
+  isEnabled   Boolean    @default(true)
+  reason      String?    // neden override edildiğine dair not (Enterprise satış)
+  expiresAt   DateTime?  // geçici override desteği
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdById String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, featureKey])
+  @@index([tenantId])
+  @@map("tenant_feature_overrides")
+}
+
+// DEĞİŞİKLİK 6 — API Key yönetimi
+// NOT: Ham API key asla saklanmaz.
+// Uygulama katmanı: 1) Rastgele key üretir, 2) Hash'ler → keyHash,
+// 3) keyPrefix kaydeder, 4) Ham key'i sadece bir kez kullanıcıya gösterir.
+model ApiKey {
+  id          String    @id @default(cuid())
+  tenantId    String
+  name        String                       // key'e verilen isim (örn: "Production API")
+  keyHash     String    @unique            // bcrypt/sha256 hash — ham key saklanmaz
+  keyPrefix   String                       // ilk 8 karakter, UI'da gösterim için (örn: "sk_live_")
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  scopes      String[]  @default([])       // izin verilen scope'lar (örn: ["invoices:read"])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  revokedAt   DateTime?
+  revokedById String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isActive])
+  @@index([tenantId, deletedAt])
+  @@map("api_keys")
 }
 
 // ═════════════════════════════════════════════
