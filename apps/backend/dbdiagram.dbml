@@ -1,0 +1,1979 @@
+// ═══════════════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════════════
+// Plan:                  STARTER | PROFESSIONAL | ENTERPRISE
+// TenantStatus:          TRIAL | ACTIVE | SUSPENDED | CANCELLED
+// DeploymentType:        CLOUD | ON_PREMISE
+// Priority:              LOW | MEDIUM | HIGH | CRITICAL
+// ContactType:           CUSTOMER | SUPPLIER | BOTH
+// MovementType:          IN | OUT | TRANSFER | ADJUSTMENT | RETURN | OPENING
+// OrderStatus:           DRAFT | CONFIRMED | PARTIALLY_DELIVERED | DELIVERED | CANCELLED
+// QuoteStatus:           DRAFT | SENT | ACCEPTED | REJECTED | EXPIRED | CANCELLED
+// InvoiceType:           SALES | PURCHASE | RETURN_SALES | RETURN_PURCHASE
+// InvoiceStatus:         DRAFT | SENT | PAID | PARTIALLY_PAID | OVERDUE | CANCELLED
+// EDocumentType:         E_INVOICE | E_ARCHIVE | E_WAYBILL
+// EDocumentStatus:       PENDING | PROCESSING | SENT | ACCEPTED | REJECTED | CANCELLED | ERROR
+// PaymentMethod:         CASH | BANK_TRANSFER | CREDIT_CARD | CHECK | PROMISSORY_NOTE | OTHER
+// PaymentStatus:         PENDING | COMPLETED | FAILED | CANCELLED | REFUNDED
+// JournalEntryType:      MANUAL | AUTO_INVOICE | AUTO_PAYMENT | AUTO_PAYROLL | OPENING | CLOSING
+// LeaveType:             ANNUAL | SICK | MATERNITY | PATERNITY | UNPAID | OTHER
+// LeaveStatus:           PENDING | APPROVED | REJECTED | CANCELLED
+// WorkOrderStatus:       PLANNED | IN_PROGRESS | PAUSED | COMPLETED | CANCELLED
+// ServiceStatus:         OPEN | IN_PROGRESS | WAITING_PARTS | WAITING_CUSTOMER | COMPLETED | CANCELLED
+// MarketplaceChannel:    TRENDYOL | HEPSIBURADA | N11 | AMAZON | CICEKSEPETI | OTHER
+// PurchaseRequestStatus: DRAFT | PENDING_APPROVAL | APPROVED | REJECTED | ORDERED | CANCELLED
+// PurchaseOrderStatus:   DRAFT | SENT | PARTIALLY_RECEIVED | RECEIVED | CANCELLED
+// CostingMethod:         MOVING_AVERAGE | FIFO | LIFO | STANDARD
+// PermissionAction:      CREATE | READ | UPDATE | DELETE | APPROVE | EXPORT
+// ApprovalStatus:        PENDING | APPROVED | REJECTED | CANCELLED | ESCALATED
+// ApprovalActionType:    APPROVE | REJECT | ESCALATE | COMMENT | REASSIGN
+// BankAccountType:       CHECKING | SAVINGS | CREDIT | OTHER
+// BankTransactionType:   DEPOSIT | WITHDRAWAL | TRANSFER | FEE | INTEREST | OTHER
+// CheckStatus:           PENDING | DEPOSITED | CLEARED | BOUNCED | CANCELLED
+// CheckNoteType:         CHECK | PROMISSORY_NOTE
+// DeliveryNoteType:      OUTBOUND | INBOUND | RETURN
+// DeliveryNoteStatus:    DRAFT | CONFIRMED | PARTIALLY_SHIPPED | SHIPPED | DELIVERED | CANCELLED
+// NotificationStatus:    UNREAD | READ | ARCHIVED
+// AccountType:           ASSET | LIABILITY | EQUITY | REVENUE | EXPENSE
+// FiscalPeriodStatus:    OPEN | CLOSED | LOCKED
+// AuditAction:           CREATE | UPDATE | DELETE | APPROVE | REJECT | EXPORT | LOGIN | LOGOUT | OTHER
+// ServiceActivityType:   NOTE | STATUS_CHANGE | ASSIGNMENT | CALL | VISIT | OTHER
+// MarketplaceOrderStatus: PENDING | PROCESSING | SHIPPED | DELIVERED | CANCELLED | RETURNED | REFUNDED
+// CurrencyRateSource:    MANUAL | CENTRAL_BANK | API
+// EntityType:            INVOICE | PRODUCT | CONTACT | EMPLOYEE | SERVICE_REQUEST | PURCHASE_ORDER | SALES_ORDER | WORK_ORDER | DELIVERY_NOTE | OTHER
+// ApprovalModule:        PURCHASE_REQUEST | LEAVE_REQUEST | INVOICE | SALES_ORDER | PURCHASE_ORDER | SERVICE_REQUEST | OTHER
+// ReservationRefType:    SALES_ORDER | WORK_ORDER | PURCHASE_REQUEST | OTHER
+// MovementRefType:       PURCHASE_ORDER | SALES_ORDER | WORK_ORDER | DELIVERY_NOTE | STOCK_COUNT | MANUAL | OTHER
+
+
+// ═══════════════════════════════════════════════════════════════
+// TENANT & AUTH
+// ═══════════════════════════════════════════════════════════════
+
+Table tenants {
+  id                String    [pk]
+  createdAt         DateTime
+  updatedAt         DateTime
+  deletedAt         DateTime  [null]
+  slug              String    [unique]
+  companyName       String
+  taxNumber         String    [unique, null]
+  taxOffice         String    [null]
+  email             String
+  phone             String    [null]
+  website           String    [null]
+  address           String    [null]
+  city              String    [null]
+  country           String    [default: "TR"]
+  sector            String    [null]
+  plan              Plan      [default: "STARTER"]
+  status            TenantStatus [default: "TRIAL"]
+  deploymentType    DeploymentType [default: "CLOUD"]
+  maxUsers          Int       [default: 3]
+  trialEndsAt       DateTime  [null]
+  subscriptionStart DateTime  [null]
+  subscriptionEnd   DateTime  [null]
+  modules           String[]
+  notes             String    [null]
+
+  indexes {
+    status
+    deletedAt
+  }
+}
+
+Table users {
+  id                    String   [pk]
+  createdAt             DateTime
+  updatedAt             DateTime
+  deletedAt             DateTime [null]
+  email                 String   [unique]
+  name                  String
+  phone                 String   [null]
+  password              String
+  isActive              Boolean  [default: true]
+  lastLoginAt           DateTime [null]
+  passwordResetToken    String   [null]
+  passwordResetExpiry   DateTime [null]
+
+  indexes {
+    email
+    deletedAt
+  }
+}
+
+Table admin_users {
+  id          String   [pk]
+  createdAt   DateTime
+  updatedAt   DateTime
+  email       String   [unique]
+  name        String
+  password    String
+  isActive    Boolean  [default: true]
+  lastLoginAt DateTime [null]
+}
+
+Table tenant_users {
+  id        String   [pk]
+  createdAt DateTime
+  updatedAt DateTime
+  tenantId  String
+  userId    String
+  roleId    String   [null]
+  isOwner   Boolean  [default: false]
+  isActive  Boolean  [default: true]
+
+  indexes {
+    (tenantId, userId) [unique]
+    tenantId
+    userId
+  }
+}
+
+Ref: tenant_users.tenantId > tenants.id [delete: cascade]
+Ref: tenant_users.userId > users.id [delete: cascade]
+Ref: tenant_users.roleId > roles.id
+
+// ─────────────────────────────────────────────
+// RBAC
+// ─────────────────────────────────────────────
+
+Table roles {
+  id          String   [pk]
+  tenantId    String
+  name        String
+  description String   [null]
+  isSystem    Boolean  [default: false]
+  createdAt   DateTime
+  updatedAt   DateTime
+
+  indexes {
+    (tenantId, name) [unique]
+  }
+}
+
+Ref: roles.tenantId > tenants.id [delete: cascade]
+
+Table role_permissions {
+  id     String           [pk]
+  roleId String
+  module String
+  action PermissionAction
+
+  indexes {
+    (roleId, module, action) [unique]
+  }
+}
+
+Ref: role_permissions.roleId > roles.id [delete: cascade]
+
+// ─────────────────────────────────────────────
+// Number Sequences
+// ─────────────────────────────────────────────
+
+Table number_sequences {
+  id       String [pk]
+  tenantId String
+  module   String
+  prefix   String [default: ""]
+  lastNum  Int    [default: 0]
+  padding  Int    [default: 6]
+
+  indexes {
+    (tenantId, module) [unique]
+  }
+}
+
+Ref: number_sequences.tenantId > tenants.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// SYSTEM / CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+
+Table tenant_settings {
+  id        String   [pk]
+  tenantId  String
+  key       String
+  value     String
+  createdAt DateTime
+  updatedAt DateTime
+
+  indexes {
+    (tenantId, key) [unique]
+    tenantId
+  }
+}
+
+Ref: tenant_settings.tenantId > tenants.id [delete: cascade]
+
+Table module_settings {
+  id        String   [pk]
+  tenantId  String
+  module    String
+  key       String
+  value     String
+  createdAt DateTime
+  updatedAt DateTime
+
+  indexes {
+    (tenantId, module, key) [unique]
+    (tenantId, module)
+  }
+}
+
+Ref: module_settings.tenantId > tenants.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// AUDIT LOGGING
+// ═══════════════════════════════════════════════════════════════
+
+Table audit_logs {
+  id         String   [pk]
+  tenantId   String
+  userId     String   [null]
+  module     String
+  entityType EntityType
+  entityId   String
+  action     AuditAction
+  oldValues  Json     [null]
+  newValues  Json     [null]
+  ipAddress  String   [null]
+  userAgent  String   [null]
+  createdAt  DateTime
+
+  indexes {
+    (tenantId, module)
+    (tenantId, entityType, entityId)
+    (tenantId, userId)
+    (tenantId, createdAt)
+  }
+}
+
+Ref: audit_logs.tenantId > tenants.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// ATTACHMENTS
+// ═══════════════════════════════════════════════════════════════
+
+Table attachments {
+  id           String   [pk]
+  tenantId     String
+  entityType   EntityType
+  entityId     String
+  fileName     String
+  storagePath  String
+  mimeType     String   [null]
+  fileSize     Int      [null]
+  uploadedById String   [null]
+  createdAt    DateTime
+
+  indexes {
+    (tenantId, entityType, entityId)
+    (tenantId, uploadedById)
+  }
+}
+
+Ref: attachments.tenantId > tenants.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════════
+
+Table notifications {
+  id         String             [pk]
+  tenantId   String
+  userId     String
+  title      String
+  message    String             [null]
+  module     String             [null]
+  entityType EntityType [null]
+  entityId   String             [null]
+  status     NotificationStatus [default: "UNREAD"]
+  createdAt  DateTime
+  readAt     DateTime           [null]
+
+  indexes {
+    (tenantId, userId, status)
+    (tenantId, createdAt)
+  }
+}
+
+Ref: notifications.tenantId > tenants.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// APPROVAL WORKFLOW
+// ═══════════════════════════════════════════════════════════════
+
+Table approval_flows {
+  id          String   [pk]
+  tenantId    String
+  name        String
+  module      ApprovalModule
+  isActive    Boolean  [default: true]
+  createdAt   DateTime
+  updatedAt   DateTime
+  createdById String   [null]
+
+  indexes {
+    (tenantId, module, name) [unique]
+    (tenantId, module)
+  }
+}
+
+Ref: approval_flows.tenantId > tenants.id [delete: cascade]
+
+Table approval_steps {
+  id             String  [pk]
+  flowId         String
+  stepOrder      Int
+  name           String
+  approverRoleId String  [null]
+  approverUserId String  [null]
+  isRequired     Boolean [default: true]
+
+  indexes {
+    (flowId, stepOrder) [unique]
+  }
+}
+
+Ref: approval_steps.flowId > approval_flows.id [delete: cascade]
+
+Table approval_requests {
+  id          String         [pk]
+  tenantId    String
+  flowId      String
+  entityType  EntityType
+  entityId    String
+  status      ApprovalStatus [default: "PENDING"]
+  currentStep Int            [default: 1]
+  requestedBy String         [null]
+  notes       String         [null]
+  createdAt   DateTime
+  updatedAt   DateTime
+  resolvedAt  DateTime       [null]
+
+  indexes {
+    (tenantId, entityType, entityId)
+    (tenantId, status)
+  }
+}
+
+Ref: approval_requests.tenantId > tenants.id [delete: cascade]
+Ref: approval_requests.flowId > approval_flows.id
+
+Table approval_actions {
+  id         String             [pk]
+  requestId  String
+  stepId     String             [null]
+  actionType ApprovalActionType
+  actorId    String             [null]
+  notes      String             [null]
+  createdAt  DateTime
+
+  indexes {
+    requestId
+  }
+}
+
+Ref: approval_actions.requestId > approval_requests.id [delete: cascade]
+Ref: approval_actions.stepId > approval_steps.id
+
+// ═══════════════════════════════════════════════════════════════
+// ÇEKIRDEK (SHARED)
+// ═══════════════════════════════════════════════════════════════
+
+Table units {
+  id       String [pk]
+  tenantId String
+  name     String
+  code     String
+
+  indexes {
+    (tenantId, code) [unique]
+  }
+}
+
+Ref: units.tenantId > tenants.id [delete: cascade]
+
+Table categories {
+  id       String  [pk]
+  tenantId String
+  name     String
+  parentId String  [null]
+
+  indexes {
+    tenantId
+  }
+}
+
+Ref: categories.tenantId > tenants.id [delete: cascade]
+Ref: categories.parentId > categories.id
+
+Table tax_rates {
+  id       String  [pk]
+  tenantId String
+  name     String
+  rate     Decimal
+  isActive Boolean [default: true]
+}
+
+Ref: tax_rates.tenantId > tenants.id [delete: cascade]
+
+Table currencies {
+  id          String   [pk]
+  tenantId    String
+  code        String
+  name        String
+  symbol      String
+  defaultRate Decimal  [default: 1]
+  isBase      Boolean  [default: false]
+  updatedAt   DateTime
+
+  indexes {
+    (tenantId, code) [unique]
+  }
+}
+
+Ref: currencies.tenantId > tenants.id [delete: cascade]
+
+Table currency_rates {
+  id           String   [pk]
+  tenantId     String
+  currencyCode String
+  rate         Decimal
+  date         Date
+  source       CurrencyRateSource [null]
+  createdAt    DateTime
+
+  indexes {
+    (tenantId, currencyCode, date) [unique]
+    (tenantId, currencyCode)
+    (tenantId, date)
+  }
+}
+
+Ref: currency_rates.tenantId > tenants.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// CARİ HESAP
+// ═══════════════════════════════════════════════════════════════
+
+Table contacts {
+  id              String      [pk]
+  tenantId        String
+  type            ContactType
+  name            String
+  code            String      [null]
+  taxNumber       String      [null]
+  taxOffice       String      [null]
+  email           String      [null]
+  phone           String      [null]
+  website         String      [null]
+  address         String      [null]
+  city            String      [null]
+  country         String      [default: "TR"]
+  notes           String      [null]
+  isActive        Boolean     [default: true]
+  creditLimit     Decimal     [null]
+  paymentTermDays Int         [null]
+  createdAt       DateTime
+  updatedAt       DateTime
+  deletedAt       DateTime    [null]
+  createdById     String      [null]
+  updatedById     String      [null]
+
+  indexes {
+    (tenantId, code) [unique]
+    (tenantId, type)
+    (tenantId, isActive)
+    deletedAt
+  }
+}
+
+Ref: contacts.tenantId > tenants.id [delete: cascade]
+
+Table account_entries {
+  id          String   [pk]
+  tenantId    String
+  contactId   String
+  date        DateTime
+  debit       Decimal  [default: 0]
+  credit      Decimal  [default: 0]
+  balance     Decimal  [default: 0]
+  description String   [null]
+  refType     String   [null]
+  refId       String   [null]
+  createdAt   DateTime
+  createdById String   [null]
+
+  indexes {
+    (tenantId, contactId)
+    (tenantId, date)
+  }
+}
+
+Ref: account_entries.tenantId > tenants.id [delete: cascade]
+Ref: account_entries.contactId > contacts.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// ÜRÜN
+// ═══════════════════════════════════════════════════════════════
+
+Table products {
+  id            String        [pk]
+  tenantId      String
+  categoryId    String        [null]
+  unitId        String
+  taxRateId     String        [null]
+  code          String
+  name          String
+  barcode       String        [null]
+  description   String        [null]
+  imageUrl      String        [null]
+  purchasePrice Decimal       [default: 0]
+  salesPrice    Decimal       [default: 0]
+  minStockLevel Decimal       [default: 0]
+  costingMethod CostingMethod [default: "MOVING_AVERAGE"]
+  averageCost   Decimal       [default: 0]
+  isActive      Boolean       [default: true]
+  createdAt     DateTime
+  updatedAt     DateTime
+  deletedAt     DateTime      [null]
+  createdById   String        [null]
+  updatedById   String        [null]
+
+  indexes {
+    (tenantId, code) [unique]
+    (tenantId, isActive)
+    (tenantId, categoryId)
+    deletedAt
+  }
+}
+
+Ref: products.tenantId > tenants.id [delete: cascade]
+Ref: products.categoryId > categories.id
+Ref: products.unitId > units.id
+Ref: products.taxRateId > tax_rates.id
+
+// ═══════════════════════════════════════════════════════════════
+// DEPO YÖNETİMİ
+// ═══════════════════════════════════════════════════════════════
+
+Table warehouses {
+  id       String  [pk]
+  tenantId String
+  name     String
+  code     String
+  address  String  [null]
+  isActive Boolean [default: true]
+
+  indexes {
+    (tenantId, code) [unique]
+    tenantId
+  }
+}
+
+Ref: warehouses.tenantId > tenants.id [delete: cascade]
+
+Table locations {
+  id          String  [pk]
+  warehouseId String
+  tenantId    String
+  name        String
+  code        String
+  isActive    Boolean [default: true]
+
+  indexes {
+    (warehouseId, code) [unique]
+    tenantId
+  }
+}
+
+Ref: locations.warehouseId > warehouses.id [delete: cascade]
+Ref: locations.tenantId > tenants.id [delete: cascade]
+
+Table stock_levels {
+  id          String   [pk]
+  tenantId    String
+  productId   String
+  warehouseId String
+  locationId  String   [default: ""]
+  quantity    Decimal  [default: 0]
+  updatedAt   DateTime
+
+  indexes {
+    (productId, warehouseId, locationId) [unique]
+    (tenantId, productId)
+    (tenantId, warehouseId)
+  }
+}
+
+Ref: stock_levels.tenantId > tenants.id [delete: cascade]
+Ref: stock_levels.productId > products.id [delete: cascade]
+Ref: stock_levels.warehouseId > warehouses.id [delete: cascade]
+Ref: stock_levels.locationId > locations.id
+
+Table stock_movements {
+  id              String       [pk]
+  tenantId        String
+  productId       String
+  type            MovementType
+  quantity        Decimal
+  unitCost        Decimal      [null]
+  totalCost       Decimal      [null]
+  fromWarehouseId String       [null]
+  toWarehouseId   String       [null]
+  locationId      String       [null]
+  lotId           String              [null]
+  batchId         String              [null]
+  refType         MovementRefType     [null]
+  refId           String              [null]
+  notes           String       [null]
+  createdAt       DateTime
+  createdById     String       [null]
+
+  indexes {
+    (tenantId, productId)
+    (tenantId, type)
+    (tenantId, createdAt)
+    (refType, refId)
+  }
+}
+
+Ref: stock_movements.tenantId > tenants.id [delete: cascade]
+Ref: stock_movements.productId > products.id [delete: cascade]
+Ref: stock_movements.fromWarehouseId > warehouses.id
+Ref: stock_movements.toWarehouseId > warehouses.id
+
+Table stock_valuations {
+  id          String   [pk]
+  tenantId    String
+  productId   String
+  warehouseId String
+  movementId  String   [null]
+  date        DateTime
+  qtyIn       Decimal  [default: 0]
+  qtyOut      Decimal  [default: 0]
+  qtyBalance  Decimal  [default: 0]
+  unitCost    Decimal
+  totalValue  Decimal
+  createdAt   DateTime
+
+  indexes {
+    (tenantId, productId)
+    (tenantId, date)
+  }
+}
+
+Ref: stock_valuations.productId > products.id [delete: cascade]
+
+Table stock_counts {
+  id            String   [pk]
+  tenantId      String
+  warehouseId   String
+  number        String
+  date          DateTime
+  isFinalized   Boolean  [default: false]
+  notes         String   [null]
+  createdAt     DateTime
+  updatedAt     DateTime
+  createdById   String   [null]
+  finalizedById String   [null]
+  finalizedAt   DateTime [null]
+
+  indexes {
+    (tenantId, number) [unique]
+  }
+}
+
+Ref: stock_counts.tenantId > tenants.id [delete: cascade]
+Ref: stock_counts.warehouseId > warehouses.id
+
+Table stock_count_items {
+  id           String  [pk]
+  tenantId     String
+  stockCountId String
+  productId    String
+  locationId   String  [null]
+  expectedQty  Decimal
+  countedQty   Decimal
+  difference   Decimal
+
+  indexes {
+    (tenantId, stockCountId)
+  }
+}
+
+Ref: stock_count_items.tenantId > tenants.id [delete: cascade]
+Ref: stock_count_items.stockCountId > stock_counts.id [delete: cascade]
+Ref: stock_count_items.productId > products.id
+
+// ─────────────────────────────────────────────
+// Inventory Traceability
+// ─────────────────────────────────────────────
+
+Table inventory_reservations {
+  id          String   [pk]
+  tenantId    String
+  productId   String
+  warehouseId String
+  quantity    Decimal
+  refType     ReservationRefType
+  refId       String
+  notes       String   [null]
+  reservedAt  DateTime
+  expiresAt   DateTime [null]
+  releasedAt  DateTime [null]
+  createdById String   [null]
+
+  indexes {
+    (tenantId, productId)
+    (tenantId, refType, refId)
+  }
+}
+
+Ref: inventory_reservations.tenantId > tenants.id [delete: cascade]
+Ref: inventory_reservations.productId > products.id [delete: cascade]
+Ref: inventory_reservations.warehouseId > warehouses.id
+
+Table product_batches {
+  id             String   [pk]
+  tenantId       String
+  productId      String
+  batchNumber    String
+  expiryDate     Date     [null]
+  manufacturedAt Date     [null]
+  quantity       Decimal  [default: 0]
+  notes          String   [null]
+  createdAt      DateTime
+
+  indexes {
+    (tenantId, productId, batchNumber) [unique]
+    (tenantId, productId)
+  }
+}
+
+Ref: product_batches.productId > products.id [delete: cascade]
+
+Table lot_serial_numbers {
+  id           String   [pk]
+  tenantId     String
+  productId    String
+  batchId      String   [null]
+  serialNumber String
+  isUsed       Boolean  [default: false]
+  usedAt       DateTime [null]
+  usedRefType  String   [null]
+  usedRefId    String   [null]
+  createdAt    DateTime
+
+  indexes {
+    (tenantId, productId, serialNumber) [unique]
+    (tenantId, productId)
+  }
+}
+
+Ref: lot_serial_numbers.batchId > product_batches.id
+Ref: stock_movements.batchId > product_batches.id
+Ref: stock_movements.lotId > lot_serial_numbers.id
+
+// ═══════════════════════════════════════════════════════════════
+// SATIŞ & TEKLİF
+// ═══════════════════════════════════════════════════════════════
+
+Table sales_quotes {
+  id           String      [pk]
+  tenantId     String
+  contactId    String
+  number       String
+  date         DateTime
+  validUntil   DateTime    [null]
+  status       QuoteStatus [default: "DRAFT"]
+  currencyCode String      [default: "TRY"]
+  exchangeRate Decimal     [default: 1]
+  notes        String      [null]
+  totalNet     Decimal     [default: 0]
+  totalTax     Decimal     [default: 0]
+  totalGross   Decimal     [default: 0]
+  createdAt    DateTime
+  updatedAt    DateTime
+  deletedAt    DateTime    [null]
+  createdById  String      [null]
+  updatedById  String      [null]
+
+  indexes {
+    (tenantId, number) [unique]
+    (tenantId, status)
+    (tenantId, contactId)
+  }
+}
+
+Ref: sales_quotes.tenantId > tenants.id [delete: cascade]
+Ref: sales_quotes.contactId > contacts.id
+
+Table sales_quote_items {
+  id          String  [pk]
+  tenantId    String
+  quoteId     String
+  productId   String
+  description String  [null]
+  quantity    Decimal
+  unitPrice   Decimal
+  discount    Decimal [default: 0]
+  taxRate     Decimal [default: 0]
+  taxAmount   Decimal [default: 0]
+  lineTotal   Decimal
+  sortOrder   Int     [default: 0]
+
+  indexes {
+    (tenantId, quoteId)
+  }
+}
+
+Ref: sales_quote_items.quoteId > sales_quotes.id [delete: cascade]
+Ref: sales_quote_items.productId > products.id
+
+Table sales_orders {
+  id           String      [pk]
+  tenantId     String
+  contactId    String
+  quoteId      String      [null]
+  number       String
+  date         DateTime
+  dueDate      DateTime    [null]
+  status       OrderStatus [default: "DRAFT"]
+  currencyCode String      [default: "TRY"]
+  exchangeRate Decimal     [default: 1]
+  notes        String      [null]
+  totalNet     Decimal     [default: 0]
+  totalTax     Decimal     [default: 0]
+  totalGross   Decimal     [default: 0]
+  createdAt    DateTime
+  updatedAt    DateTime
+  deletedAt    DateTime    [null]
+  createdById  String      [null]
+  updatedById  String      [null]
+
+  indexes {
+    (tenantId, number) [unique]
+    (tenantId, status)
+    (tenantId, contactId)
+    (tenantId, date)
+  }
+}
+
+Ref: sales_orders.tenantId > tenants.id [delete: cascade]
+Ref: sales_orders.contactId > contacts.id
+
+Table sales_order_items {
+  id          String  [pk]
+  tenantId    String
+  orderId     String
+  productId   String
+  description String  [null]
+  quantity    Decimal
+  delivered   Decimal [default: 0]
+  unitPrice   Decimal
+  discount    Decimal [default: 0]
+  taxRate     Decimal [default: 0]
+  taxAmount   Decimal [default: 0]
+  lineTotal   Decimal
+  sortOrder   Int     [default: 0]
+
+  indexes {
+    (tenantId, orderId)
+  }
+}
+
+Ref: sales_order_items.orderId > sales_orders.id [delete: cascade]
+Ref: sales_order_items.productId > products.id
+
+Table sales_order_history {
+  id          String      [pk]
+  tenantId    String
+  orderId     String
+  fromStatus  OrderStatus [null]
+  toStatus    OrderStatus
+  notes       String      [null]
+  createdAt   DateTime
+  createdById String      [null]
+
+  indexes {
+    (tenantId, orderId)
+  }
+}
+
+Ref: sales_order_history.orderId > sales_orders.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// SATIN ALMA
+// ═══════════════════════════════════════════════════════════════
+
+Table purchase_requests {
+  id          String                [pk]
+  tenantId    String
+  number      String
+  date        DateTime
+  status      PurchaseRequestStatus [default: "DRAFT"]
+  requestedBy String                [null]
+  approvedBy  String                [null]
+  approvedAt  DateTime              [null]
+  notes       String                [null]
+  createdAt   DateTime
+  updatedAt   DateTime
+  deletedAt   DateTime              [null]
+  createdById String                [null]
+
+  indexes {
+    (tenantId, number) [unique]
+    (tenantId, status)
+  }
+}
+
+Ref: purchase_requests.tenantId > tenants.id [delete: cascade]
+
+Table purchase_request_items {
+  id          String  [pk]
+  tenantId    String
+  requestId   String
+  productId   String
+  description String  [null]
+  quantity    Decimal
+  notes       String  [null]
+
+  indexes {
+    (tenantId, requestId)
+  }
+}
+
+Ref: purchase_request_items.requestId > purchase_requests.id [delete: cascade]
+Ref: purchase_request_items.productId > products.id
+
+Table purchase_orders {
+  id           String              [pk]
+  tenantId     String
+  contactId    String
+  number       String
+  date         DateTime
+  dueDate      DateTime            [null]
+  status       PurchaseOrderStatus [default: "DRAFT"]
+  currencyCode String              [default: "TRY"]
+  exchangeRate Decimal             [default: 1]
+  notes        String              [null]
+  totalNet     Decimal             [default: 0]
+  totalTax     Decimal             [default: 0]
+  totalGross   Decimal             [default: 0]
+  createdAt    DateTime
+  updatedAt    DateTime
+  deletedAt    DateTime            [null]
+  createdById  String              [null]
+  updatedById  String              [null]
+
+  indexes {
+    (tenantId, number) [unique]
+    (tenantId, status)
+    (tenantId, contactId)
+  }
+}
+
+Ref: purchase_orders.tenantId > tenants.id [delete: cascade]
+Ref: purchase_orders.contactId > contacts.id
+
+Table purchase_order_items {
+  id          String  [pk]
+  tenantId    String
+  orderId     String
+  productId   String
+  description String  [null]
+  quantity    Decimal
+  received    Decimal [default: 0]
+  unitPrice   Decimal
+  discount    Decimal [default: 0]
+  taxRate     Decimal [default: 0]
+  taxAmount   Decimal [default: 0]
+  lineTotal   Decimal
+  sortOrder   Int     [default: 0]
+
+  indexes {
+    (tenantId, orderId)
+  }
+}
+
+Ref: purchase_order_items.orderId > purchase_orders.id [delete: cascade]
+Ref: purchase_order_items.productId > products.id
+
+Table purchase_order_history {
+  id          String               [pk]
+  tenantId    String
+  orderId     String
+  fromStatus  PurchaseOrderStatus  [null]
+  toStatus    PurchaseOrderStatus
+  notes       String               [null]
+  createdAt   DateTime
+  createdById String               [null]
+
+  indexes {
+    (tenantId, orderId)
+  }
+}
+
+Ref: purchase_order_history.orderId > purchase_orders.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// TESLİMAT / SEVKİYAT
+// ═══════════════════════════════════════════════════════════════
+
+Table delivery_notes {
+  id              String             [pk]
+  tenantId        String
+  number          String
+  type            DeliveryNoteType
+  status          DeliveryNoteStatus [default: "DRAFT"]
+  salesOrderId    String             [null]
+  purchaseOrderId String             [null]
+  contactId       String             [null]
+  warehouseId     String
+  date            DateTime
+  shippedAt       DateTime           [null]
+  deliveredAt     DateTime           [null]
+  trackingNumber  String             [null]
+  carrier         String             [null]
+  notes           String             [null]
+  createdAt       DateTime
+  updatedAt       DateTime
+  deletedAt       DateTime           [null]
+  createdById     String             [null]
+  updatedById     String             [null]
+
+  indexes {
+    (tenantId, number) [unique]
+    (tenantId, status)
+    (tenantId, salesOrderId)
+    (tenantId, purchaseOrderId)
+  }
+}
+
+Ref: delivery_notes.tenantId > tenants.id [delete: cascade]
+Ref: delivery_notes.salesOrderId > sales_orders.id
+Ref: delivery_notes.purchaseOrderId > purchase_orders.id
+Ref: delivery_notes.contactId > contacts.id
+Ref: delivery_notes.warehouseId > warehouses.id
+
+Table delivery_note_items {
+  id             String  [pk]
+  tenantId       String
+  deliveryNoteId String
+  productId      String
+  description    String  [null]
+  orderedQty     Decimal
+  deliveredQty   Decimal
+  locationId     String  [null]
+  lotId          String  [null]
+  batchId        String  [null]
+  salesOrderItemId    String  [null]
+  purchaseOrderItemId String  [null]
+  sortOrder      Int     [default: 0]
+
+  indexes {
+    (tenantId, deliveryNoteId)
+  }
+}
+
+Ref: delivery_note_items.deliveryNoteId > delivery_notes.id [delete: cascade]
+Ref: delivery_note_items.productId > products.id
+Ref: delivery_note_items.lotId > lot_serial_numbers.id
+Ref: delivery_note_items.batchId > product_batches.id
+Ref: delivery_note_items.salesOrderItemId > sales_order_items.id
+Ref: delivery_note_items.purchaseOrderItemId > purchase_order_items.id
+
+// ═══════════════════════════════════════════════════════════════
+// FATURA YÖNETİMİ
+// ═══════════════════════════════════════════════════════════════
+
+Table invoices {
+  id              String        [pk]
+  tenantId        String
+  contactId       String
+  salesOrderId    String        [null]
+  purchaseOrderId String        [null]
+  type            InvoiceType
+  status          InvoiceStatus [default: "DRAFT"]
+  number          String
+  date            DateTime
+  dueDate         DateTime      [null]
+  currencyCode    String        [default: "TRY"]
+  exchangeRate    Decimal       [default: 1]
+  totalNet        Decimal       [default: 0]
+  totalTax        Decimal       [default: 0]
+  totalGross      Decimal       [default: 0]
+  notes           String        [null]
+  createdAt       DateTime
+  updatedAt       DateTime
+  deletedAt       DateTime      [null]
+  createdById     String        [null]
+  updatedById     String        [null]
+
+  indexes {
+    (tenantId, number) [unique]
+    (tenantId, status)
+    (tenantId, contactId)
+    (tenantId, date)
+    (tenantId, dueDate)
+    deletedAt
+  }
+}
+
+Ref: invoices.tenantId > tenants.id [delete: cascade]
+Ref: invoices.contactId > contacts.id
+Ref: invoices.salesOrderId > sales_orders.id
+Ref: invoices.purchaseOrderId > purchase_orders.id
+
+Table invoice_lines {
+  id          String  [pk]
+  tenantId    String
+  invoiceId   String
+  productId   String  [null]
+  taxRateId   String  [null]
+  description String
+  quantity    Decimal
+  unitPrice   Decimal
+  discount    Decimal [default: 0]
+  taxAmount   Decimal [default: 0]
+  lineTotal   Decimal
+  sortOrder   Int     [default: 0]
+
+  indexes {
+    (tenantId, invoiceId)
+  }
+}
+
+Ref: invoice_lines.invoiceId > invoices.id [delete: cascade]
+Ref: invoice_lines.productId > products.id
+Ref: invoice_lines.taxRateId > tax_rates.id
+
+Table invoice_history {
+  id          String        [pk]
+  tenantId    String
+  invoiceId   String
+  fromStatus  InvoiceStatus [null]
+  toStatus    InvoiceStatus
+  notes       String        [null]
+  createdAt   DateTime
+  createdById String        [null]
+
+  indexes {
+    (tenantId, invoiceId)
+  }
+}
+
+Ref: invoice_history.invoiceId > invoices.id [delete: cascade]
+
+Table e_documents {
+  id              String          [pk]
+  tenantId        String
+  invoiceId       String
+  type            EDocumentType
+  status          EDocumentStatus [default: "PENDING"]
+  uuid            String          [unique, null]
+  providerCode    String          [null]
+  providerMessage String          [null]
+  requestPayload  Json            [null]
+  responsePayload Json            [null]
+  retryCount      Int             [default: 0]
+  lastRetryAt     DateTime        [null]
+  sentAt          DateTime        [null]
+  acceptedAt      DateTime        [null]
+  rejectedAt      DateTime        [null]
+  cancelledAt     DateTime        [null]
+  createdAt       DateTime
+  updatedAt       DateTime
+
+  indexes {
+    (tenantId, status)
+    (tenantId, invoiceId)
+  }
+}
+
+Ref: e_documents.invoiceId > invoices.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// HAZİNE / ÖDEME
+// ═══════════════════════════════════════════════════════════════
+
+Table bank_accounts {
+  id            String          [pk]
+  tenantId      String
+  name          String
+  accountNumber String          [null]
+  iban          String          [null]
+  bankName      String          [null]
+  branchName    String          [null]
+  branchCode    String          [null]
+  currencyCode  String          [default: "TRY"]
+  type          BankAccountType [default: "CHECKING"]
+  isActive      Boolean         [default: true]
+  createdAt     DateTime
+  updatedAt     DateTime
+  deletedAt     DateTime        [null]
+  createdById   String          [null]
+
+  indexes {
+    (tenantId, iban) [unique]
+    (tenantId, isActive)
+    deletedAt
+  }
+}
+
+Ref: bank_accounts.tenantId > tenants.id [delete: cascade]
+
+Table cash_accounts {
+  id           String   [pk]
+  tenantId     String
+  name         String
+  currencyCode String   [default: "TRY"]
+  isActive     Boolean  [default: true]
+  createdAt    DateTime
+  updatedAt    DateTime
+  deletedAt    DateTime [null]
+  createdById  String   [null]
+
+  indexes {
+    (tenantId, isActive)
+    deletedAt
+  }
+}
+
+Ref: cash_accounts.tenantId > tenants.id [delete: cascade]
+
+Table bank_transactions {
+  id            String              [pk]
+  tenantId      String
+  bankAccountId String
+  type          BankTransactionType
+  amount        Decimal
+  balanceAfter  Decimal
+  date          DateTime
+  description   String              [null]
+  reference     String              [null]
+  refType       String              [null]
+  refId         String              [null]
+  createdAt     DateTime
+  createdById   String              [null]
+
+  indexes {
+    (tenantId, bankAccountId)
+    (tenantId, date)
+    (refType, refId)
+  }
+}
+
+Ref: bank_transactions.tenantId > tenants.id [delete: cascade]
+Ref: bank_transactions.bankAccountId > bank_accounts.id
+
+Table check_promissory_notes {
+  id           String        [pk]
+  tenantId     String
+  contactId    String        [null]
+  type         CheckNoteType
+  number       String
+  amount       Decimal
+  currencyCode String        [default: "TRY"]
+  issueDate    Date
+  dueDate      Date
+  bankName     String        [null]
+  status       CheckStatus   [default: "PENDING"]
+  notes        String        [null]
+  deletedAt    DateTime      [null]
+  createdAt    DateTime
+  updatedAt    DateTime
+  createdById  String        [null]
+
+  indexes {
+    (tenantId, number) [unique]
+    (tenantId, status)
+    (tenantId, dueDate)
+    deletedAt
+  }
+}
+
+Ref: check_promissory_notes.tenantId > tenants.id [delete: cascade]
+
+Table payments {
+  id            String        [pk]
+  tenantId      String
+  contactId     String        [null]
+  bankAccountId String        [null]
+  cashAccountId String        [null]
+  checkNoteId   String        [null]
+  date          DateTime
+  amount        Decimal
+  method        PaymentMethod [default: "CASH"]
+  reference     String        [null]
+  status        PaymentStatus [default: "PENDING"]
+  notes         String        [null]
+  createdAt     DateTime
+  updatedAt     DateTime
+  deletedAt     DateTime      [null]
+  createdById   String        [null]
+
+  indexes {
+    (tenantId, status)
+    (tenantId, date)
+    (tenantId, contactId)
+  }
+}
+
+Ref: payments.tenantId > tenants.id [delete: cascade]
+Ref: payments.contactId > contacts.id
+Ref: payments.bankAccountId > bank_accounts.id
+Ref: payments.cashAccountId > cash_accounts.id
+Ref: payments.checkNoteId > check_promissory_notes.id
+
+Table payment_allocations {
+  id        String   [pk]
+  tenantId  String
+  paymentId String
+  invoiceId String
+  amount    Decimal
+  createdAt DateTime
+
+  indexes {
+    (paymentId, invoiceId) [unique]
+    (tenantId, paymentId)
+    (tenantId, invoiceId)
+  }
+}
+
+Ref: payment_allocations.tenantId > tenants.id [delete: cascade]
+Ref: payment_allocations.paymentId > payments.id [delete: cascade]
+Ref: payment_allocations.invoiceId > invoices.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// MUHASEBE
+// ═══════════════════════════════════════════════════════════════
+
+Table ledger_accounts {
+  id          String      [pk]
+  tenantId    String
+  code        String
+  name        String
+  parentId    String      [null]
+  isActive    Boolean     [default: true]
+  accountType AccountType [default: "ASSET"]
+
+  indexes {
+    (tenantId, code) [unique]
+    (tenantId, isActive)
+  }
+}
+
+Ref: ledger_accounts.tenantId > tenants.id [delete: cascade]
+Ref: ledger_accounts.parentId > ledger_accounts.id
+
+Table fiscal_periods {
+  id           String             [pk]
+  tenantId     String
+  name         String
+  startDate    Date
+  endDate      Date
+  status       FiscalPeriodStatus [default: "OPEN"]
+  closedAt     DateTime           [null]
+  closedById   String             [null]
+  createdAt    DateTime
+  updatedAt    DateTime
+
+  indexes {
+    (tenantId, startDate, endDate) [unique]
+    (tenantId, status)
+  }
+}
+
+Ref: fiscal_periods.tenantId > tenants.id [delete: cascade]
+
+Table journal_entries {
+  id             String           [pk]
+  tenantId       String
+  fiscalPeriodId String           [null]
+  type           JournalEntryType
+  number         String
+  date           DateTime
+  description    String           [null]
+  refType        String           [null]
+  refId          String           [null]
+  isPosted       Boolean          [default: false]
+  postedAt       DateTime         [null]
+  postedById     String           [null]
+  createdAt      DateTime
+  updatedAt      DateTime
+  createdById    String           [null]
+
+  indexes {
+    (tenantId, number) [unique]
+    (tenantId, date)
+    (tenantId, isPosted)
+    (refType, refId)
+  }
+}
+
+Ref: journal_entries.tenantId > tenants.id [delete: cascade]
+Ref: journal_entries.fiscalPeriodId > fiscal_periods.id
+
+Table journal_entry_lines {
+  id             String  [pk]
+  tenantId       String
+  journalEntryId String
+  accountId      String
+  debit          Decimal [default: 0]
+  credit         Decimal [default: 0]
+  description    String  [null]
+  sortOrder      Int     [default: 0]
+
+  indexes {
+    (tenantId, journalEntryId)
+    (tenantId, accountId)
+  }
+}
+
+Ref: journal_entry_lines.journalEntryId > journal_entries.id [delete: cascade]
+Ref: journal_entry_lines.accountId > ledger_accounts.id
+
+Table reconciliations {
+  id             String   [pk]
+  tenantId       String
+  name           String
+  description    String   [null]
+  date           Date
+  isFinalized    Boolean  [default: false]
+  finalizedAt    DateTime [null]
+  finalizedById  String   [null]
+  createdAt      DateTime
+  updatedAt      DateTime
+  createdById    String   [null]
+
+  indexes {
+    (tenantId, date)
+  }
+}
+
+Ref: reconciliations.tenantId > tenants.id [delete: cascade]
+
+Table reconciliation_lines {
+  id               String  [pk]
+  tenantId         String
+  reconciliationId String
+  accountId        String
+  refType          String  [null]
+  refId            String  [null]
+  amount           Decimal
+  isMatched        Boolean [default: false]
+  notes            String  [null]
+
+  indexes {
+    (tenantId, reconciliationId)
+  }
+}
+
+Ref: reconciliation_lines.reconciliationId > reconciliations.id [delete: cascade]
+Ref: reconciliation_lines.accountId > ledger_accounts.id
+
+// ═══════════════════════════════════════════════════════════════
+// PERSONEL TAKİBİ
+// ═══════════════════════════════════════════════════════════════
+
+Table employees {
+  id          String   [pk]
+  tenantId    String
+  firstName   String
+  lastName    String
+  email       String   [null]
+  phone       String   [null]
+  position    String   [null]
+  department  String   [null]
+  hireDate    DateTime
+  leaveDate   DateTime [null]
+  salary      Decimal  [default: 0]
+  isActive    Boolean  [default: true]
+  createdAt   DateTime
+  updatedAt   DateTime
+  deletedAt   DateTime [null]
+  createdById String   [null]
+  updatedById String   [null]
+
+  indexes {
+    (tenantId, isActive)
+    (tenantId, department)
+    deletedAt
+  }
+}
+
+Ref: employees.tenantId > tenants.id [delete: cascade]
+
+Table leave_requests {
+  id          String      [pk]
+  tenantId    String
+  employeeId  String
+  type        LeaveType
+  status      LeaveStatus [default: "PENDING"]
+  startDate   DateTime
+  endDate     DateTime
+  days        Decimal
+  notes       String      [null]
+  approvedBy  String      [null]
+  approvedAt  DateTime    [null]
+  createdAt   DateTime
+  updatedAt   DateTime
+  deletedAt   DateTime    [null]
+
+  indexes {
+    (tenantId, employeeId)
+    (tenantId, status)
+  }
+}
+
+Ref: leave_requests.employeeId > employees.id [delete: cascade]
+
+Table attendances {
+  id            String   [pk]
+  tenantId      String
+  employeeId    String
+  date          Date
+  checkIn       DateTime [null]
+  checkOut      DateTime [null]
+  overtimeHours Decimal  [default: 0]
+  notes         String   [null]
+
+  indexes {
+    (employeeId, date) [unique]
+    (tenantId, date)
+  }
+}
+
+Ref: attendances.employeeId > employees.id [delete: cascade]
+
+Table payrolls {
+  id          String   [pk]
+  tenantId    String
+  employeeId  String
+  period      String
+  grossSalary Decimal
+  deductions  Decimal  [default: 0]
+  netSalary   Decimal
+  paidAt      DateTime [null]
+  notes       String   [null]
+  createdAt   DateTime
+  createdById String   [null]
+
+  indexes {
+    (employeeId, period) [unique]
+    (tenantId, period)
+  }
+}
+
+Ref: payrolls.employeeId > employees.id [delete: cascade]
+
+Table payroll_items {
+  id          String  [pk]
+  tenantId    String
+  payrollId   String
+  label       String
+  amount      Decimal
+  isDeduction Boolean [default: false]
+
+  indexes {
+    (tenantId, payrollId)
+  }
+}
+
+Ref: payroll_items.payrollId > payrolls.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// ÜRETİM TAKİBİ
+// ═══════════════════════════════════════════════════════════════
+
+Table work_centers {
+  id          String   [pk]
+  tenantId    String
+  name        String
+  code        String
+  description String   [null]
+  capacity    Decimal  [null]
+  isActive    Boolean  [default: true]
+  createdAt   DateTime
+  updatedAt   DateTime
+
+  indexes {
+    (tenantId, code) [unique]
+    tenantId
+  }
+}
+
+Ref: work_centers.tenantId > tenants.id [delete: cascade]
+
+Table boms {
+  id        String  [pk]
+  tenantId  String
+  productId String
+  name      String
+  version   String  [default: "1.0"]
+  isActive  Boolean [default: true]
+  createdAt DateTime
+  updatedAt DateTime
+
+  indexes {
+    (tenantId, productId, version) [unique]
+  }
+}
+
+Ref: boms.tenantId > tenants.id [delete: cascade]
+Ref: boms.productId > products.id
+
+Table bom_items {
+  id        String  [pk]
+  tenantId  String
+  bomId     String
+  productId String
+  quantity  Decimal
+  unit      String  [null]
+  notes     String  [null]
+  sortOrder Int     [default: 0]
+
+  indexes {
+    (tenantId, bomId)
+  }
+}
+
+Ref: bom_items.bomId > boms.id [delete: cascade]
+Ref: bom_items.productId > products.id
+
+Table routing_operations {
+  id           String  [pk]
+  tenantId     String
+  bomId        String
+  workCenterId String
+  name         String
+  stepOrder    Int
+  setupTime    Decimal [null]
+  runTime      Decimal [null]
+  notes        String  [null]
+
+  indexes {
+    (bomId, stepOrder) [unique]
+    (tenantId, bomId)
+  }
+}
+
+Ref: routing_operations.bomId > boms.id [delete: cascade]
+Ref: routing_operations.workCenterId > work_centers.id
+
+Table work_orders {
+  id          String          [pk]
+  tenantId    String
+  bomId       String          [null]
+  productId   String
+  number      String
+  status      WorkOrderStatus [default: "PLANNED"]
+  plannedQty  Decimal
+  producedQty Decimal         [default: 0]
+  startDate   DateTime        [null]
+  endDate     DateTime        [null]
+  notes       String          [null]
+  createdAt   DateTime
+  updatedAt   DateTime
+  deletedAt   DateTime        [null]
+  createdById String          [null]
+
+  indexes {
+    (tenantId, number) [unique]
+    (tenantId, status)
+    deletedAt
+  }
+}
+
+Ref: work_orders.tenantId > tenants.id [delete: cascade]
+Ref: work_orders.bomId > boms.id
+Ref: work_orders.productId > products.id
+
+Table work_order_items {
+  id          String  [pk]
+  tenantId    String
+  workOrderId String
+  productId   String
+  requiredQty Decimal
+  consumedQty Decimal [default: 0]
+
+  indexes {
+    (tenantId, workOrderId)
+  }
+}
+
+Ref: work_order_items.workOrderId > work_orders.id [delete: cascade]
+Ref: work_order_items.productId > products.id
+
+Table work_order_operations {
+  id             String          [pk]
+  tenantId       String
+  workOrderId    String
+  routingOpId    String          [null]
+  workCenterId   String
+  name           String
+  stepOrder      Int
+  status         WorkOrderStatus [default: "PLANNED"]
+  plannedStartAt DateTime        [null]
+  plannedEndAt   DateTime        [null]
+  actualStartAt  DateTime        [null]
+  actualEndAt    DateTime        [null]
+  notes          String          [null]
+
+  indexes {
+    (tenantId, workOrderId)
+  }
+}
+
+Ref: work_order_operations.workOrderId > work_orders.id [delete: cascade]
+Ref: work_order_operations.routingOpId > routing_operations.id
+Ref: work_order_operations.workCenterId > work_centers.id
+
+Table work_order_history {
+  id          String          [pk]
+  tenantId    String
+  workOrderId String
+  fromStatus  WorkOrderStatus [null]
+  toStatus    WorkOrderStatus
+  notes       String          [null]
+  createdAt   DateTime
+  createdById String          [null]
+
+  indexes {
+    (tenantId, workOrderId)
+  }
+}
+
+Ref: work_order_history.workOrderId > work_orders.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// TEKNİK SERVİS
+// ═══════════════════════════════════════════════════════════════
+
+Table customer_assets {
+  id           String   [pk]
+  tenantId     String
+  contactId    String
+  name         String
+  brand        String   [null]
+  model        String   [null]
+  serialNo     String   [null]
+  purchaseDate Date     [null]
+  warrantyEnd  Date     [null]
+  notes        String   [null]
+  isActive     Boolean  [default: true]
+  createdAt    DateTime
+  updatedAt    DateTime
+  deletedAt    DateTime [null]
+  createdById  String   [null]
+
+  indexes {
+    (tenantId, contactId)
+    (tenantId, serialNo)
+  }
+}
+
+Ref: customer_assets.tenantId > tenants.id [delete: cascade]
+Ref: customer_assets.contactId > contacts.id
+
+Table service_requests {
+  id              String        [pk]
+  tenantId        String
+  contactId       String        [null]
+  customerAssetId String        [null]
+  number          String
+  status          ServiceStatus [default: "OPEN"]
+  subject         String
+  description     String        [null]
+  deviceInfo      String        [null]
+  serialNo        String        [null]
+  warrantyEnd     DateTime      [null]
+  assignedToId    String        [null]
+  priority        Priority      [default: "MEDIUM"]
+  closedAt        DateTime      [null]
+  createdAt       DateTime
+  updatedAt       DateTime
+  deletedAt       DateTime      [null]
+  createdById     String        [null]
+  updatedById     String        [null]
+
+  indexes {
+    (tenantId, number) [unique]
+    (tenantId, status)
+    (tenantId, assignedToId)
+    deletedAt
+  }
+}
+
+Ref: service_requests.tenantId > tenants.id [delete: cascade]
+Ref: service_requests.contactId > contacts.id
+Ref: service_requests.customerAssetId > customer_assets.id
+
+Table service_request_items {
+  id               String  [pk]
+  tenantId         String
+  serviceRequestId String
+  productId        String  [null]
+  description      String
+  quantity         Decimal [default: 1]
+  unitPrice        Decimal [default: 0]
+  lineTotal        Decimal [default: 0]
+
+  indexes {
+    (tenantId, serviceRequestId)
+  }
+}
+
+Ref: service_request_items.serviceRequestId > service_requests.id [delete: cascade]
+Ref: service_request_items.productId > products.id
+
+Table service_activities {
+  id               String   [pk]
+  tenantId         String
+  serviceRequestId String
+  actorId          String   [null]
+  activityType     ServiceActivityType
+  notes            String   [null]
+  createdAt        DateTime
+
+  indexes {
+    (tenantId, serviceRequestId)
+  }
+}
+
+Ref: service_activities.serviceRequestId > service_requests.id [delete: cascade]
+
+Table service_request_history {
+  id               String        [pk]
+  tenantId         String
+  serviceRequestId String
+  fromStatus       ServiceStatus [null]
+  toStatus         ServiceStatus
+  notes            String        [null]
+  createdAt        DateTime
+  createdById      String        [null]
+
+  indexes {
+    (tenantId, serviceRequestId)
+  }
+}
+
+Ref: service_request_history.serviceRequestId > service_requests.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// E-TİCARET
+// ═══════════════════════════════════════════════════════════════
+
+Table marketplace_integrations {
+  id         String             [pk]
+  tenantId   String
+  channel    MarketplaceChannel
+  name       String
+  apiKey     String             [null]
+  apiSecret  String             [null]
+  storeId    String             [null]
+  isActive   Boolean            [default: true]
+  lastSyncAt DateTime           [null]
+  syncErrors Int                [default: 0]
+  createdAt  DateTime
+  updatedAt  DateTime
+
+  indexes {
+    (tenantId, channel) [unique]
+  }
+}
+
+Ref: marketplace_integrations.tenantId > tenants.id [delete: cascade]
+
+Table marketplace_listings {
+  id            String   [pk]
+  tenantId      String
+  integrationId String
+  productId     String
+  externalId    String
+  externalSku   String   [null]
+  price         Decimal
+  stock         Int      [default: 0]
+  isActive      Boolean  [default: true]
+  lastSyncAt    DateTime [null]
+  syncError     String   [null]
+
+  indexes {
+    (integrationId, externalId) [unique]
+    (tenantId, productId)
+  }
+}
+
+Ref: marketplace_listings.integrationId > marketplace_integrations.id [delete: cascade]
+Ref: marketplace_listings.productId > products.id
+
+Table marketplace_orders {
+  id              String             [pk]
+  tenantId        String
+  integrationId   String
+  externalId      String
+  channel         MarketplaceChannel
+  status          MarketplaceOrderStatus [default: "PENDING"]
+  customerName    String             [null]
+  customerEmail   String             [null]
+  customerPhone   String             [null]
+  shippingAddress String             [null]
+  totalAmount     Decimal
+  orderDate       DateTime
+  syncedAt        DateTime
+  updatedAt       DateTime
+
+  indexes {
+    (integrationId, externalId) [unique]
+    (tenantId, channel)
+    (tenantId, status)
+  }
+}
+
+Ref: marketplace_orders.integrationId > marketplace_integrations.id [delete: cascade]
+
+Table marketplace_order_items {
+  id                 String  [pk]
+  tenantId           String
+  marketplaceOrderId String
+  externalProductId  String
+  productId          String  [null]
+  name               String
+  quantity           Int
+  unitPrice          Decimal
+  lineTotal          Decimal
+
+  indexes {
+    (tenantId, marketplaceOrderId)
+  }
+}
+
+Ref: marketplace_order_items.marketplaceOrderId > marketplace_orders.id [delete: cascade]
+Ref: marketplace_order_items.productId > products.id
+
+// ═══════════════════════════════════════════════════════════════
+// RAPORLAMA
+// ═══════════════════════════════════════════════════════════════
+
+Table saved_reports {
+  id        String   [pk]
+  tenantId  String
+  name      String
+  module    String
+  filters   Json
+  columns   String[]
+  isShared  Boolean  [default: false]
+  createdBy String   [null]
+  createdAt DateTime
+  updatedAt DateTime
+
+  indexes {
+    (tenantId, module)
+  }
+}
+
+Ref: saved_reports.tenantId > tenants.id [delete: cascade]

@@ -1,0 +1,2518 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═════════════════════════════════════════════
+// ENUMS
+// ═════════════════════════════════════════════
+
+enum Plan {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum DeploymentType {
+  CLOUD
+  ON_PREMISE
+}
+
+// Fix #3: UserRole enum removed — Role + RolePermission is the single source of truth
+
+enum ContactType {
+  CUSTOMER
+  SUPPLIER
+  BOTH
+}
+
+enum MovementType {
+  IN
+  OUT
+  TRANSFER
+  ADJUSTMENT
+  RETURN
+  OPENING
+}
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_DELIVERED
+  DELIVERED
+  CANCELLED
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum InvoiceType {
+  SALES
+  PURCHASE
+  RETURN_SALES
+  RETURN_PURCHASE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum EDocumentType {
+  E_INVOICE
+  E_ARCHIVE
+  E_WAYBILL
+}
+
+enum EDocumentStatus {
+  PENDING
+  PROCESSING
+  SENT
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  ERROR
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CREDIT_CARD
+  CHECK
+  PROMISSORY_NOTE
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum JournalEntryType {
+  MANUAL
+  AUTO_INVOICE
+  AUTO_PAYMENT
+  AUTO_PAYROLL
+  OPENING
+  CLOSING
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  MATERNITY
+  PATERNITY
+  UNPAID
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum WorkOrderStatus {
+  PLANNED
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum ServiceStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_PARTS
+  WAITING_CUSTOMER
+  COMPLETED
+  CANCELLED
+}
+
+enum MarketplaceChannel {
+  TRENDYOL
+  HEPSIBURADA
+  N11
+  AMAZON
+  CICEKSEPETI
+  OTHER
+}
+
+enum PurchaseRequestStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  ORDERED
+  CANCELLED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum CostingMethod {
+  MOVING_AVERAGE
+  FIFO
+  LIFO
+  STANDARD
+}
+
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  APPROVE
+  EXPORT
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  ESCALATED
+}
+
+enum ApprovalActionType {
+  APPROVE
+  REJECT
+  ESCALATE
+  COMMENT
+  REASSIGN
+}
+
+enum BankAccountType {
+  CHECKING
+  SAVINGS
+  CREDIT
+  OTHER
+}
+
+enum BankTransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER
+  FEE
+  INTEREST
+  OTHER
+}
+
+enum CheckStatus {
+  PENDING
+  DEPOSITED
+  CLEARED
+  BOUNCED
+  CANCELLED
+}
+
+enum DeliveryNoteType {
+  OUTBOUND
+  INBOUND
+  RETURN
+}
+
+enum DeliveryNoteStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_SHIPPED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum FiscalPeriodStatus {
+  OPEN
+  CLOSED
+  LOCKED
+}
+
+enum CheckNoteType {
+  CHECK
+  PROMISSORY_NOTE
+}
+
+enum ServiceActivityType {
+  NOTE
+  STATUS_CHANGE
+  ASSIGNMENT
+  CALL
+  VISIT
+  OTHER
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  EXPORT
+  LOGIN
+  LOGOUT
+  OTHER
+}
+
+enum MarketplaceOrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+  REFUNDED
+}
+
+enum CurrencyRateSource {
+  MANUAL
+  CENTRAL_BANK
+  API
+}
+
+enum EntityType {
+  INVOICE
+  PRODUCT
+  CONTACT
+  EMPLOYEE
+  SERVICE_REQUEST
+  PURCHASE_ORDER
+  SALES_ORDER
+  WORK_ORDER
+  DELIVERY_NOTE
+  OTHER
+}
+
+enum ApprovalModule {
+  PURCHASE_REQUEST
+  LEAVE_REQUEST
+  INVOICE
+  SALES_ORDER
+  PURCHASE_ORDER
+  SERVICE_REQUEST
+  OTHER
+}
+
+enum ReservationRefType {
+  SALES_ORDER
+  WORK_ORDER
+  PURCHASE_REQUEST
+  OTHER
+}
+
+enum MovementRefType {
+  PURCHASE_ORDER
+  SALES_ORDER
+  WORK_ORDER
+  DELIVERY_NOTE
+  STOCK_COUNT
+  MANUAL
+  OTHER
+}
+
+// Fix #6: Priority enum replacing Int priority on ServiceRequest
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ═════════════════════════════════════════════
+// TENANT & AUTH
+// ═════════════════════════════════════════════
+
+model Tenant {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  slug        String  @unique
+  companyName String
+
+  taxNumber String? @unique
+  taxOffice String?
+
+  email   String
+  phone   String?
+  website String?
+
+  address String?
+  city    String?
+  country String @default("TR")
+
+  sector String?
+
+  plan              Plan           @default(STARTER)
+  status            TenantStatus   @default(TRIAL)
+  deploymentType    DeploymentType @default(CLOUD)
+  maxUsers          Int            @default(3)
+  trialEndsAt       DateTime?
+  subscriptionStart DateTime?
+  subscriptionEnd   DateTime?
+
+  /// Use ModuleSetting for per-module config; this field holds enabled module keys only
+  modules String[] @default([])
+  notes   String?
+
+  // Relations
+  users                  TenantUser[]
+  roles                  Role[]
+  units                  Unit[]
+  categories             Category[]
+  taxRates               TaxRate[]
+  currencies             Currency[]
+  currencyRates          CurrencyRate[]
+  contacts               Contact[]
+  products               Product[]
+  warehouses             Warehouse[]
+  stockMovements         StockMovement[]
+  stockCounts            StockCount[]
+  inventoryReservations  InventoryReservation[]
+  salesOrders            SalesOrder[]
+  salesQuotes            SalesQuote[]
+  purchaseRequests       PurchaseRequest[]
+  purchaseOrders         PurchaseOrder[]
+  deliveryNotes          DeliveryNote[]
+  invoices               Invoice[]
+  payments               Payment[]
+  bankAccounts           BankAccount[]
+  cashAccounts           CashAccount[]
+  bankTransactions       BankTransaction[]
+  checkPromissoryNotes   CheckPromissoryNote[]
+  ledgerAccounts         LedgerAccount[]
+  journalEntries         JournalEntry[]
+  fiscalPeriods          FiscalPeriod[]
+  reconciliations        Reconciliation[]
+  employees              Employee[]
+  workOrders             WorkOrder[]
+  workCenters            WorkCenter[]
+  boms                   BOM[]
+  serviceRequests        ServiceRequest[]
+  customerAssets         CustomerAsset[]
+  marketplaces           MarketplaceIntegration[]
+  savedReports           SavedReport[]
+  numberSequences        NumberSequence[]
+  auditLogs              AuditLog[]
+  attachments            Attachment[]
+  approvalFlows          ApprovalFlow[]
+  approvalRequests       ApprovalRequest[]
+  notifications          Notification[]
+  tenantSettings         TenantSetting[]
+  moduleSettings         ModuleSetting[]
+  // Back-relations for models with tenantId
+  accountEntries           AccountEntry[]
+  stockLevels              StockLevel[]
+  locations                Location[]
+  stockCountItems          StockCountItem[]
+  paymentAllocations       PaymentAllocation[]
+  payrolls                 Payroll[]
+  leaveRequests            LeaveRequest[]
+  attendances              Attendance[]
+  lotSerialNumbers         LotSerialNumber[]
+  productBatches           ProductBatch[]
+  salesOrderHistories      SalesOrderHistory[]
+  purchaseOrderHistories   PurchaseOrderHistory[]
+  invoiceHistories         InvoiceHistory[]
+  workOrderHistories       WorkOrderHistory[]
+  routingOperations        RoutingOperation[]
+  journalEntryLines        JournalEntryLine[]
+  reconciliationLines      ReconciliationLine[]
+  payrollItems             PayrollItem[]
+  bomItems                 BOMItem[]
+  workOrderItems           WorkOrderItem[]
+  workOrderOperations      WorkOrderOperation[]
+  salesQuoteItems          SalesQuoteItem[]
+  salesOrderItems          SalesOrderItem[]
+  purchaseRequestItems     PurchaseRequestItem[]
+  purchaseOrderItems       PurchaseOrderItem[]
+  deliveryNoteItems        DeliveryNoteItem[]
+  invoiceLines             InvoiceLine[]
+  stockValuations          StockValuation[]
+  eDocuments               EDocument[]
+  serviceActivities        ServiceActivity[]
+  serviceRequestHistories  ServiceRequestHistory[]
+  serviceRequestItems      ServiceRequestItem[]
+  marketplaceListings      MarketplaceListing[]
+  marketplaceOrders        MarketplaceOrder[]
+  marketplaceOrderItems    MarketplaceOrderItem[]
+
+  @@index([status])
+  @@index([deletedAt])
+  @@map("tenants")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  email    String  @unique
+  name     String
+  phone    String?
+  password String
+
+  isActive            Boolean  @default(true)
+  lastLoginAt         DateTime?
+  passwordResetToken  String?
+  passwordResetExpiry DateTime?
+
+  tenants TenantUser[]
+  approvalSteps ApprovalStep[] @relation("StepApproverUser")
+
+  @@index([email])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model AdminUser {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  email    String  @unique
+  name     String
+  password String
+
+  isActive    Boolean  @default(true)
+  lastLoginAt DateTime?
+
+  @@map("admin_users")
+}
+
+// Fix #3: Removed `role UserRole` enum field; added `isOwner` flag to preserve owner concept
+model TenantUser {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId String
+  userId   String
+  roleId   String?
+
+  isOwner  Boolean @default(false)
+  isActive Boolean @default(true)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleRef Role?   @relation(fields: [roleId], references: [id])
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("tenant_users")
+}
+
+// ─────────────────────────────────────────────
+// RBAC
+// ─────────────────────────────────────────────
+
+model Role {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  users       TenantUser[]
+  approvalSteps ApprovalStep[] @relation("StepApproverRole")
+
+  @@unique([tenantId, name])
+  @@map("roles")
+}
+
+model RolePermission {
+  id     String           @id @default(cuid())
+  roleId String
+  module String
+  action PermissionAction
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, module, action])
+  @@map("role_permissions")
+}
+
+// ─────────────────────────────────────────────
+// Number Sequences
+// ─────────────────────────────────────────────
+
+model NumberSequence {
+  id       String @id @default(cuid())
+  tenantId String
+  module   String
+  prefix   String @default("")
+  lastNum  Int    @default(0)
+  padding  Int    @default(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, module])
+  @@map("number_sequences")
+}
+
+// ═════════════════════════════════════════════
+// SYSTEM / CONFIGURATION
+// ═════════════════════════════════════════════
+
+model TenantSetting {
+  id        String   @id @default(cuid())
+  tenantId  String
+  key       String
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("tenant_settings")
+}
+
+model ModuleSetting {
+  id        String   @id @default(cuid())
+  tenantId  String
+  module    String
+  key       String
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, module, key])
+  @@index([tenantId, module])
+  @@map("module_settings")
+}
+
+// ═════════════════════════════════════════════
+// AUDIT LOGGING
+// ═════════════════════════════════════════════
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  module     String
+  entityType EntityType
+  entityId   String
+  action     AuditAction
+  oldValues  Json?
+  newValues  Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, module])
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, userId])
+  @@index([tenantId, createdAt])
+  @@map("audit_logs")
+}
+
+// ═════════════════════════════════════════════
+// ATTACHMENTS
+// ═════════════════════════════════════════════
+
+model Attachment {
+  id           String   @id @default(cuid())
+  tenantId     String
+  entityType   EntityType
+  entityId     String
+  fileName     String
+  storagePath  String
+  mimeType     String?
+  fileSize     Int?     // bytes
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, uploadedById])
+  @@map("attachments")
+}
+
+// ═════════════════════════════════════════════
+// NOTIFICATIONS
+// ═════════════════════════════════════════════
+
+model Notification {
+  id         String             @id @default(cuid())
+  tenantId   String
+  userId     String
+  title      String
+  message    String?
+  module     String?
+  entityType EntityType?
+  entityId   String?
+  status     NotificationStatus @default(UNREAD)
+  createdAt  DateTime           @default(now())
+  readAt     DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, status])
+  @@index([tenantId, createdAt])
+  @@map("notifications")
+}
+
+// ═════════════════════════════════════════════
+// APPROVAL WORKFLOW
+// ═════════════════════════════════════════════
+
+model ApprovalFlow {
+  id         String   @id @default(cuid())
+  tenantId   String
+  name       String
+  module     ApprovalModule
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  createdById String?
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  steps    ApprovalStep[]
+  requests ApprovalRequest[]
+
+  @@unique([tenantId, module, name])
+  @@index([tenantId, module])
+  @@map("approval_flows")
+}
+
+model ApprovalStep {
+  id             String   @id @default(cuid())
+  flowId         String
+  stepOrder      Int
+  name           String
+  approverRoleId String?  // Role that can approve this step
+  approverUserId String?  // Specific user override
+  isRequired     Boolean  @default(true)
+
+  flow    ApprovalFlow      @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  actions ApprovalAction[]
+  approverRole Role?   @relation("StepApproverRole", fields: [approverRoleId], references: [id])
+  approverUser User?   @relation("StepApproverUser", fields: [approverUserId], references: [id])
+
+  @@unique([flowId, stepOrder])
+  @@map("approval_steps")
+}
+
+model ApprovalRequest {
+  id          String         @id @default(cuid())
+  tenantId    String
+  flowId      String
+  entityType  EntityType
+  entityId    String
+  status      ApprovalStatus @default(PENDING)
+  currentStep Int            @default(1)
+  requestedBy String?
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  resolvedAt  DateTime?
+
+  tenant  Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  flow    ApprovalFlow     @relation(fields: [flowId], references: [id])
+  actions ApprovalAction[]
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, status])
+  @@index([tenantId, entityType, entityId, status])
+  @@map("approval_requests")
+}
+
+model ApprovalAction {
+  id         String             @id @default(cuid())
+  requestId  String
+  stepId     String?
+  actionType ApprovalActionType
+  actorId    String?
+  notes      String?
+  createdAt  DateTime           @default(now())
+
+  request ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  step    ApprovalStep?   @relation(fields: [stepId], references: [id])
+
+  @@index([requestId])
+  @@map("approval_actions")
+}
+
+// ═════════════════════════════════════════════
+// ÇEKIRDEK (SHARED)
+// ═════════════════════════════════════════════
+
+model Unit {
+  id       String @id @default(cuid())
+  tenantId String
+  name     String
+  code     String
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([tenantId, code])
+  @@map("units")
+}
+
+model Category {
+  id       String  @id @default(cuid())
+  tenantId String
+  name     String
+  parentId String?
+
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@index([tenantId])
+  @@map("categories")
+}
+
+model TaxRate {
+  id       String  @id @default(cuid())
+  tenantId String
+  name     String
+  rate     Decimal @db.Decimal(5, 2)
+  isActive Boolean @default(true)
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products     Product[]
+  invoiceLines InvoiceLine[]
+
+  @@map("tax_rates")
+}
+
+// Fix #10: Renamed exchangeRate -> defaultRate with clarifying comment
+model Currency {
+  id       String   @id @default(cuid())
+  tenantId String
+  code     String
+  name     String
+  symbol   String
+  /// Fallback rate when no CurrencyRate row exists for a given date
+  defaultRate Decimal  @db.Decimal(18, 6) @default(1)
+  isBase   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@map("currencies")
+}
+
+/// Authoritative daily rate; use this over defaultRate when available
+model CurrencyRate {
+  id           String   @id @default(cuid())
+  tenantId     String
+  currencyCode String
+  rate         Decimal  @db.Decimal(18, 6)
+  date         DateTime @db.Date
+  source       CurrencyRateSource?
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, currencyCode, date])
+  @@index([tenantId, currencyCode])
+  @@index([tenantId, date])
+  @@map("currency_rates")
+}
+
+// ═════════════════════════════════════════════
+// CARİ HESAP (CONTACT)
+// ═════════════════════════════════════════════
+
+model Contact {
+  id       String      @id @default(cuid())
+  tenantId String
+  type     ContactType
+
+  name      String
+  code      String?
+  taxNumber String?
+  taxOffice String?
+  email     String?
+  phone     String?
+  website   String?
+  address   String?
+  city      String?
+  country   String  @default("TR")
+  notes     String?
+  isActive  Boolean @default(true)
+
+  creditLimit     Decimal? @db.Decimal(18, 2)
+  paymentTermDays Int?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salesOrders     SalesOrder[]
+  salesQuotes     SalesQuote[]
+  purchaseOrders  PurchaseOrder[]
+  invoices        Invoice[]
+  accountEntries  AccountEntry[]
+  serviceRequests ServiceRequest[]
+  customerAssets  CustomerAsset[]
+  payments        Payment[]
+  deliveryNotes   DeliveryNote[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, type])
+  @@index([tenantId, isActive])
+  @@index([tenantId, name])
+  @@index([deletedAt])
+  @@map("contacts")
+}
+
+model AccountEntry {
+  id          String   @id @default(cuid())
+  tenantId    String
+  contactId   String
+  date        DateTime
+  debit       Decimal  @db.Decimal(18, 2) @default(0)
+  credit      Decimal  @db.Decimal(18, 2) @default(0)
+  /// @computed - must be updated within the same transaction as the parent write
+  balance     Decimal  @db.Decimal(18, 2) @default(0)
+  description String?
+  refType     String?
+  refId       String?
+  createdAt   DateTime @default(now())
+  createdById String?
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, contactId])
+  @@index([tenantId, date])
+  @@map("account_entries")
+}
+
+// ═════════════════════════════════════════════
+// ÜRÜN (PRODUCT)
+// ═════════════════════════════════════════════
+
+model Product {
+  id         String  @id @default(cuid())
+  tenantId   String
+  categoryId String?
+  unitId     String
+  taxRateId  String?
+
+  code        String
+  name        String
+  barcode     String?
+  description String?
+  imageUrl    String?
+
+  purchasePrice Decimal       @db.Decimal(18, 2) @default(0)
+  salesPrice    Decimal       @db.Decimal(18, 2) @default(0)
+  minStockLevel Decimal       @db.Decimal(18, 3) @default(0)
+  costingMethod CostingMethod @default(MOVING_AVERAGE)
+  averageCost   Decimal       @db.Decimal(18, 4) @default(0)
+
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category             Category?             @relation(fields: [categoryId], references: [id])
+  unit                 Unit                  @relation(fields: [unitId], references: [id])
+  taxRate              TaxRate?              @relation(fields: [taxRateId], references: [id])
+  stockLevels          StockLevel[]
+  movements            StockMovement[]
+  stockValuations      StockValuation[]
+  reservations         InventoryReservation[]
+  batches              ProductBatch[]
+  salesItems           SalesOrderItem[]
+  quoteItems           SalesQuoteItem[]
+  purchaseItems        PurchaseOrderItem[]
+  purchaseRequestItems PurchaseRequestItem[]
+  invoiceLines         InvoiceLine[]
+  bomProducts          BOM[]
+  bomItems             BOMItem[]
+  workOrders           WorkOrder[]
+  workOrderItems       WorkOrderItem[]
+  stockCountItems      StockCountItem[]
+  serviceItems         ServiceRequestItem[]
+  marketplaceListings  MarketplaceListing[]
+  marketplaceOrderItems MarketplaceOrderItem[]
+  deliveryNoteItems    DeliveryNoteItem[]
+  lots                 LotSerialNumber[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+  @@index([tenantId, categoryId])
+  @@index([deletedAt])
+  @@map("products")
+}
+
+// ═════════════════════════════════════════════
+// DEPO YÖNETİMİ
+// ═════════════════════════════════════════════
+
+model Warehouse {
+  id       String  @id @default(cuid())
+  tenantId String
+  name     String
+  code     String
+  address  String?
+  isActive Boolean @default(true)
+
+  tenant           Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  locations        Location[]
+  stockLevels      StockLevel[]
+  movementsFrom    StockMovement[]        @relation("MovementFrom")
+  movementsTo      StockMovement[]        @relation("MovementTo")
+  stockCounts      StockCount[]
+  reservations     InventoryReservation[]
+  deliveryNotes    DeliveryNote[]
+  // Fix #5: back-relations for WorkOrder warehouse references
+  workOrdersInput  WorkOrder[]            @relation("WorkOrderInputWarehouse")
+  workOrdersOutput WorkOrder[]            @relation("WorkOrderOutputWarehouse")
+  workOrderItems   WorkOrderItem[]        @relation("WorkOrderItemSourceWarehouse")
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("warehouses")
+}
+
+model Location {
+  id          String  @id @default(cuid())
+  warehouseId String
+  tenantId    String
+  name        String
+  code        String
+  isActive    Boolean @default(true)
+
+  warehouse   Warehouse  @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  // Fix #4: locationId on StockLevel uses empty string "" as sentinel for "no location"
+  stockLevels StockLevel[]
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, code])
+  @@index([tenantId])
+  @@map("locations")
+}
+
+// Fix #4: locationId changed to non-nullable with @default("") to avoid NULL != NULL unique constraint issue in PostgreSQL
+model StockLevel {
+  id          String   @id @default(cuid())
+  tenantId    String
+  productId   String
+  warehouseId String
+  locationId  String   @default("")
+  quantity    Decimal  @db.Decimal(18, 3) @default(0)
+  updatedAt   DateTime @updatedAt
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  // Empty string sentinel means no location; relation is optional at app layer
+  location  Location? @relation(fields: [locationId], references: [id])
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, warehouseId, locationId])
+  @@index([tenantId, productId])
+  @@index([tenantId, warehouseId])
+  @@map("stock_levels")
+}
+
+model StockMovement {
+  id              String       @id @default(cuid())
+  tenantId        String
+  productId       String
+  type            MovementType
+  quantity        Decimal      @db.Decimal(18, 3)
+  unitCost        Decimal?     @db.Decimal(18, 4)
+  totalCost       Decimal?     @db.Decimal(18, 2)
+  fromWarehouseId String?
+  toWarehouseId   String?
+  locationId      String?
+  lotId           String?      // LotSerialNumber reference
+  batchId         String?      // ProductBatch reference
+  refType         MovementRefType?
+  refId           String?
+  notes           String?
+  createdAt       DateTime     @default(now())
+  createdById     String?
+
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product       Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fromWarehouse Warehouse? @relation("MovementFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse? @relation("MovementTo", fields: [toWarehouseId], references: [id])
+  lot           LotSerialNumber? @relation("LotMovements", fields: [lotId], references: [id])
+  batch         ProductBatch?    @relation("BatchMovements", fields: [batchId], references: [id])
+
+  @@index([tenantId, productId])
+  @@index([tenantId, type])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, createdAt, type])
+  @@index([refType, refId])
+  @@map("stock_movements")
+}
+
+model StockValuation {
+  id          String   @id @default(cuid())
+  tenantId    String
+  productId   String
+  warehouseId String
+  movementId  String?
+  date        DateTime
+  qtyIn       Decimal  @db.Decimal(18, 3) @default(0)
+  qtyOut      Decimal  @db.Decimal(18, 3) @default(0)
+  qtyBalance  Decimal  @db.Decimal(18, 3) @default(0)
+  unitCost    Decimal  @db.Decimal(18, 4)
+  totalValue  Decimal  @db.Decimal(18, 2)
+  createdAt   DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, productId])
+  @@index([tenantId, date])
+  @@map("stock_valuations")
+}
+
+model StockCount {
+  id            String   @id @default(cuid())
+  tenantId      String
+  warehouseId   String
+  number        String
+  date          DateTime
+  isFinalized   Boolean  @default(false)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdById   String?
+  finalizedById String?
+  finalizedAt   DateTime?
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse Warehouse        @relation(fields: [warehouseId], references: [id])
+  items     StockCountItem[]
+
+  @@unique([tenantId, number])
+  @@map("stock_counts")
+}
+
+model StockCountItem {
+  id           String  @id @default(cuid())
+  tenantId     String
+  stockCountId String
+  productId    String
+  locationId   String?
+  expectedQty  Decimal @db.Decimal(18, 3)
+  countedQty   Decimal @db.Decimal(18, 3)
+  difference   Decimal @db.Decimal(18, 3)
+
+  stockCount StockCount @relation(fields: [stockCountId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id])
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, stockCountId])
+  @@map("stock_count_items")
+}
+
+// ─────────────────────────────────────────────
+// Inventory Traceability
+// ─────────────────────────────────────────────
+
+model InventoryReservation {
+  id          String   @id @default(cuid())
+  tenantId    String
+  productId   String
+  warehouseId String
+  quantity    Decimal  @db.Decimal(18, 3)
+  refType     ReservationRefType
+  refId       String
+  notes       String?
+  reservedAt  DateTime @default(now())
+  expiresAt   DateTime?
+  releasedAt  DateTime?
+  createdById String?
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([tenantId, productId])
+  @@index([tenantId, refType, refId])
+  @@map("inventory_reservations")
+}
+
+model ProductBatch {
+  id             String    @id @default(cuid())
+  tenantId       String
+  productId      String
+  batchNumber    String
+  expiryDate     DateTime? @db.Date
+  manufacturedAt DateTime? @db.Date
+  quantity       Decimal   @db.Decimal(18, 3) @default(0)
+  notes          String?
+  createdAt      DateTime  @default(now())
+
+  product       Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lots          LotSerialNumber[]
+  movements     StockMovement[]    @relation("BatchMovements")
+  deliveryItems DeliveryNoteItem[] @relation("BatchDeliveryItems")
+
+  @@unique([tenantId, productId, batchNumber])
+  @@index([tenantId, productId])
+  @@map("product_batches")
+}
+
+model LotSerialNumber {
+  id           String    @id @default(cuid())
+  tenantId     String
+  productId    String
+  batchId      String?
+  serialNumber String
+  isUsed       Boolean   @default(false)
+  usedAt       DateTime?
+  usedRefType  String?
+  usedRefId    String?
+  createdAt    DateTime  @default(now())
+
+  batch         ProductBatch? @relation(fields: [batchId], references: [id])
+  product       Product       @relation(fields: [productId], references: [id])
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  movements     StockMovement[]    @relation("LotMovements")
+  deliveryItems DeliveryNoteItem[] @relation("LotDeliveryItems")
+
+  @@unique([tenantId, productId, serialNumber])
+  @@index([tenantId, productId])
+  @@map("lot_serial_numbers")
+}
+
+// ═════════════════════════════════════════════
+// SATIŞ & TEKLİF
+// ═════════════════════════════════════════════
+
+model SalesQuote {
+  id           String      @id @default(cuid())
+  tenantId     String
+  contactId    String
+  number       String
+  date         DateTime
+  validUntil   DateTime?
+  status       QuoteStatus @default(DRAFT)
+  currencyCode String      @default("TRY")
+  exchangeRate Decimal     @db.Decimal(18, 6) @default(1)
+  notes        String?
+  totalNet     Decimal     @db.Decimal(18, 2) @default(0)
+  totalTax     Decimal     @db.Decimal(18, 2) @default(0)
+  totalGross   Decimal     @db.Decimal(18, 2) @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
+  createdById  String?
+  updatedById  String?
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact     Contact          @relation(fields: [contactId], references: [id])
+  items       SalesQuoteItem[]
+  salesOrders SalesOrder[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, contactId])
+  @@map("sales_quotes")
+}
+
+model SalesQuoteItem {
+  id          String  @id @default(cuid())
+  tenantId    String
+  quoteId     String
+  productId   String
+  description String?
+  quantity    Decimal @db.Decimal(18, 3)
+  unitPrice   Decimal @db.Decimal(18, 2)
+  discount    Decimal @db.Decimal(5, 2) @default(0)
+  taxRate     Decimal @db.Decimal(5, 2) @default(0)
+  taxAmount   Decimal @db.Decimal(18, 2) @default(0)
+  lineTotal   Decimal @db.Decimal(18, 2)
+  sortOrder   Int     @default(0)
+
+  quote   SalesQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product    @relation(fields: [productId], references: [id])
+  tenant  Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, quoteId])
+  @@map("sales_quote_items")
+}
+
+// Fix #8: Added invoicedAmount with comment about application-layer update responsibility
+model SalesOrder {
+  id           String      @id @default(cuid())
+  tenantId     String
+  contactId    String
+  quoteId      String?
+  number       String
+  date         DateTime
+  dueDate      DateTime?
+  status       OrderStatus @default(DRAFT)
+  currencyCode String      @default("TRY")
+  exchangeRate Decimal     @db.Decimal(18, 6) @default(1)
+  notes        String?
+  totalNet     Decimal     @db.Decimal(18, 2) @default(0)
+  totalTax     Decimal     @db.Decimal(18, 2) @default(0)
+  totalGross   Decimal     @db.Decimal(18, 2) @default(0)
+  /// @computed - must be updated within the same transaction as the parent write
+  /// Update this field whenever a PaymentAllocation or Invoice linked to this order changes (application layer responsibility)
+  invoicedAmount Decimal   @db.Decimal(18, 2) @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
+  createdById  String?
+  updatedById  String?
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact       Contact             @relation(fields: [contactId], references: [id])
+  quote         SalesQuote?         @relation(fields: [quoteId], references: [id])
+  items         SalesOrderItem[]
+  invoices      Invoice[]
+  history       SalesOrderHistory[]
+  deliveryNotes DeliveryNote[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, contactId])
+  @@index([tenantId, date])
+  @@map("sales_orders")
+}
+
+model SalesOrderItem {
+  id          String  @id @default(cuid())
+  tenantId    String
+  orderId     String
+  productId   String
+  description String?
+  quantity    Decimal @db.Decimal(18, 3)
+  /// @computed - must be updated within the same transaction as the parent write
+  delivered   Decimal @db.Decimal(18, 3) @default(0)
+  unitPrice   Decimal @db.Decimal(18, 2)
+  discount    Decimal @db.Decimal(5, 2) @default(0)
+  taxRate     Decimal @db.Decimal(5, 2) @default(0)
+  taxAmount   Decimal @db.Decimal(18, 2) @default(0)
+  lineTotal   Decimal @db.Decimal(18, 2)
+  sortOrder   Int     @default(0)
+
+  order         SalesOrder       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product          @relation(fields: [productId], references: [id])
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveryItems DeliveryNoteItem[]
+
+  @@index([tenantId, orderId])
+  @@map("sales_order_items")
+}
+
+model SalesOrderHistory {
+  id          String       @id @default(cuid())
+  tenantId    String
+  orderId     String
+  fromStatus  OrderStatus?
+  toStatus    OrderStatus
+  notes       String?
+  createdAt   DateTime     @default(now())
+  createdById String?
+
+  order  SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, orderId])
+  @@map("sales_order_history")
+}
+
+// ═════════════════════════════════════════════
+// SATIN ALMA
+// ═════════════════════════════════════════════
+
+// Fix #1 & #7: Added purchaseOrderId FK and totalEstimated field
+model PurchaseRequest {
+  id              String                @id @default(cuid())
+  tenantId        String
+  number          String
+  date            DateTime
+  status          PurchaseRequestStatus @default(DRAFT)
+  requestedBy     String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  notes           String?
+  /// Sum of (PurchaseRequestItem.unitPrice × quantity); nullable until items have estimated prices
+  totalEstimated  Decimal?              @db.Decimal(18, 2)
+  // Fix #1: FK to the resulting PurchaseOrder when status = ORDERED
+  purchaseOrderId String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  deletedAt       DateTime?
+  createdById     String?
+
+  tenant        Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items         PurchaseRequestItem[]
+  purchaseOrder PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@map("purchase_requests")
+}
+
+// Fix #7: Added unitPrice for budget approval flows
+model PurchaseRequestItem {
+  id          String   @id @default(cuid())
+  tenantId    String
+  requestId   String
+  productId   String
+  description String?
+  quantity    Decimal  @db.Decimal(18, 3)
+  unitPrice   Decimal? @db.Decimal(18, 2)
+  notes       String?
+
+  request PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, requestId])
+  @@map("purchase_request_items")
+}
+
+// Fix #1: Added purchaseRequests back-relation
+model PurchaseOrder {
+  id           String              @id @default(cuid())
+  tenantId     String
+  contactId    String
+  number       String
+  date         DateTime
+  dueDate      DateTime?
+  status       PurchaseOrderStatus @default(DRAFT)
+  currencyCode String              @default("TRY")
+  exchangeRate Decimal             @db.Decimal(18, 6) @default(1)
+  notes        String?
+  totalNet     Decimal             @db.Decimal(18, 2) @default(0)
+  totalTax     Decimal             @db.Decimal(18, 2) @default(0)
+  totalGross   Decimal             @db.Decimal(18, 2) @default(0)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  deletedAt    DateTime?
+  createdById  String?
+  updatedById  String?
+
+  tenant           Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact          Contact                @relation(fields: [contactId], references: [id])
+  items            PurchaseOrderItem[]
+  invoices         Invoice[]
+  history          PurchaseOrderHistory[]
+  deliveryNotes    DeliveryNote[]
+  purchaseRequests PurchaseRequest[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, contactId])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id          String  @id @default(cuid())
+  tenantId    String
+  orderId     String
+  productId   String
+  description String?
+  quantity    Decimal @db.Decimal(18, 3)
+  /// @computed - must be updated within the same transaction as the parent write
+  received    Decimal @db.Decimal(18, 3) @default(0)
+  unitPrice   Decimal @db.Decimal(18, 2)
+  discount    Decimal @db.Decimal(5, 2) @default(0)
+  taxRate     Decimal @db.Decimal(5, 2) @default(0)
+  taxAmount   Decimal @db.Decimal(18, 2) @default(0)
+  lineTotal   Decimal @db.Decimal(18, 2)
+  sortOrder   Int     @default(0)
+
+  order         PurchaseOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product          @relation(fields: [productId], references: [id])
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveryItems DeliveryNoteItem[]
+
+  @@index([tenantId, orderId])
+  @@map("purchase_order_items")
+}
+
+model PurchaseOrderHistory {
+  id          String               @id @default(cuid())
+  tenantId    String
+  orderId     String
+  fromStatus  PurchaseOrderStatus?
+  toStatus    PurchaseOrderStatus
+  notes       String?
+  createdAt   DateTime             @default(now())
+  createdById String?
+
+  order  PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, orderId])
+  @@map("purchase_order_history")
+}
+
+// ═════════════════════════════════════════════
+// TESLİMAT / SEVKİYAT
+// ═════════════════════════════════════════════
+
+// Fix #2: Added eDocuments back-relation
+model DeliveryNote {
+  id              String             @id @default(cuid())
+  tenantId        String
+  number          String
+  type            DeliveryNoteType
+  status          DeliveryNoteStatus @default(DRAFT)
+  salesOrderId    String?
+  purchaseOrderId String?
+  contactId       String?
+  warehouseId     String
+  date            DateTime
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  trackingNumber  String?
+  carrier         String?
+  notes           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  deletedAt       DateTime?
+  createdById     String?
+  updatedById     String?
+
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salesOrder    SalesOrder?        @relation(fields: [salesOrderId], references: [id])
+  purchaseOrder PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
+  contact       Contact?           @relation(fields: [contactId], references: [id])
+  warehouse     Warehouse          @relation(fields: [warehouseId], references: [id])
+  items         DeliveryNoteItem[]
+  eDocuments    EDocument[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, purchaseOrderId])
+  @@map("delivery_notes")
+}
+
+model DeliveryNoteItem {
+  id                  String  @id @default(cuid())
+  tenantId            String
+  deliveryNoteId      String
+  productId           String
+  description         String?
+  orderedQty          Decimal @db.Decimal(18, 3)
+  deliveredQty        Decimal @db.Decimal(18, 3)
+  locationId          String?
+  lotId               String?
+  batchId             String?
+  salesOrderItemId    String?
+  purchaseOrderItemId String?
+  sortOrder           Int     @default(0)
+
+  deliveryNote      DeliveryNote      @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  product           Product           @relation(fields: [productId], references: [id])
+  lot               LotSerialNumber?  @relation("LotDeliveryItems", fields: [lotId], references: [id])
+  batch             ProductBatch?     @relation("BatchDeliveryItems", fields: [batchId], references: [id])
+  salesOrderItem    SalesOrderItem?   @relation(fields: [salesOrderItemId], references: [id])
+  purchaseOrderItem PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id])
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, deliveryNoteId])
+  @@map("delivery_note_items")
+}
+
+// ═════════════════════════════════════════════
+// FATURA YÖNETİMİ
+// ═════════════════════════════════════════════
+
+model Invoice {
+  id              String        @id @default(cuid())
+  tenantId        String
+  contactId       String
+  salesOrderId    String?
+  purchaseOrderId String?
+  type            InvoiceType
+  status          InvoiceStatus @default(DRAFT)
+  number          String
+  date            DateTime
+  dueDate         DateTime?
+  currencyCode    String        @default("TRY")
+  exchangeRate    Decimal       @db.Decimal(18, 6) @default(1)
+  totalNet        Decimal       @db.Decimal(18, 2) @default(0)
+  totalTax        Decimal       @db.Decimal(18, 2) @default(0)
+  totalGross      Decimal       @db.Decimal(18, 2) @default(0)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+  createdById     String?
+  updatedById     String?
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact       Contact             @relation(fields: [contactId], references: [id])
+  salesOrder    SalesOrder?         @relation(fields: [salesOrderId], references: [id])
+  purchaseOrder PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
+  lines         InvoiceLine[]
+  eDocuments    EDocument[]
+  payments      PaymentAllocation[]
+  history       InvoiceHistory[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, contactId])
+  @@index([tenantId, date])
+  @@index([tenantId, dueDate])
+  @@index([tenantId, status, dueDate])
+  @@index([tenantId, type, status])
+  @@index([tenantId, salesOrderId, type])
+  @@index([tenantId, purchaseOrderId, type])
+  @@index([deletedAt])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id          String  @id @default(cuid())
+  tenantId    String
+  invoiceId   String
+  productId   String?
+  taxRateId   String?
+  description String
+  quantity    Decimal @db.Decimal(18, 3)
+  unitPrice   Decimal @db.Decimal(18, 2)
+  discount    Decimal @db.Decimal(5, 2) @default(0)
+  taxAmount   Decimal @db.Decimal(18, 2) @default(0)
+  lineTotal   Decimal @db.Decimal(18, 2)
+  sortOrder   Int     @default(0)
+
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+  taxRate TaxRate? @relation(fields: [taxRateId], references: [id])
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, invoiceId])
+  @@map("invoice_lines")
+}
+
+model InvoiceHistory {
+  id          String        @id @default(cuid())
+  tenantId    String
+  invoiceId   String
+  fromStatus  InvoiceStatus?
+  toStatus    InvoiceStatus
+  notes       String?
+  createdAt   DateTime      @default(now())
+  createdById String?
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, invoiceId])
+  @@map("invoice_history")
+}
+
+// Fix #2: invoiceId is now optional; deliveryNoteId added for E_WAYBILL support
+// Application layer must ensure exactly one of invoiceId / deliveryNoteId is set
+model EDocument {
+  id              String          @id @default(cuid())
+  tenantId        String
+  // Required for E_INVOICE / E_ARCHIVE; must be null for E_WAYBILL
+  invoiceId       String?
+  // Required for E_WAYBILL; must be null for E_INVOICE / E_ARCHIVE
+  deliveryNoteId  String?
+  type            EDocumentType
+  status          EDocumentStatus @default(PENDING)
+  uuid            String?         @unique
+  providerCode    String?
+  providerMessage String?
+  requestPayload  Json?
+  responsePayload Json?
+  retryCount      Int             @default(0)
+  lastRetryAt     DateTime?
+  sentAt          DateTime?
+  acceptedAt      DateTime?
+  rejectedAt      DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  invoice      Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  deliveryNote DeliveryNote? @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, deliveryNoteId])
+  @@map("e_documents")
+}
+
+// ═════════════════════════════════════════════
+// HAZİNE / ÖDEME
+// ═════════════════════════════════════════════
+
+model BankAccount {
+  id            String          @id @default(cuid())
+  tenantId      String
+  name          String
+  accountNumber String?
+  /// NULL values are excluded from the unique constraint in PostgreSQL (NULL != NULL), so multiple rows with NULL iban are allowed
+  iban          String?
+  bankName      String?
+  branchName    String?
+  branchCode    String?
+  currencyCode  String          @default("TRY")
+  type          BankAccountType @default(CHECKING)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  deletedAt     DateTime?
+  createdById   String?
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions BankTransaction[]
+  payments     Payment[]
+
+  @@unique([tenantId, iban])
+  @@index([tenantId, isActive])
+  @@index([deletedAt])
+  @@map("bank_accounts")
+}
+
+model CashAccount {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String
+  currencyCode String   @default("TRY")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+  createdById  String?
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@index([tenantId, isActive])
+  @@index([deletedAt])
+  @@map("cash_accounts")
+}
+
+model BankTransaction {
+  id            String              @id @default(cuid())
+  tenantId      String
+  bankAccountId String
+  type          BankTransactionType
+  amount        Decimal             @db.Decimal(18, 2)
+  balanceAfter  Decimal             @db.Decimal(18, 2)
+  date          DateTime
+  description   String?
+  reference     String?
+  refType       String?
+  refId         String?
+  createdAt     DateTime            @default(now())
+  createdById   String?
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id])
+
+  @@index([tenantId, bankAccountId])
+  @@index([tenantId, date])
+  @@index([refType, refId])
+  @@map("bank_transactions")
+}
+
+model CheckPromissoryNote {
+  id           String      @id @default(cuid())
+  tenantId     String
+  contactId    String?
+  type         CheckNoteType
+  number       String
+  amount       Decimal     @db.Decimal(18, 2)
+  currencyCode String      @default("TRY")
+  issueDate    DateTime    @db.Date
+  dueDate      DateTime    @db.Date
+  bankName     String?
+  status       CheckStatus @default(PENDING)
+  notes        String?
+  deletedAt    DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  createdById  String?
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, dueDate])
+  @@index([deletedAt])
+  @@map("check_promissory_notes")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  tenantId      String
+  contactId     String?
+  bankAccountId String?
+  cashAccountId String?
+  checkNoteId   String?
+  date          DateTime
+  amount        Decimal       @db.Decimal(18, 2)
+  method        PaymentMethod @default(CASH)
+  reference     String?
+  status        PaymentStatus @default(PENDING)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+  createdById   String?
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact     Contact?             @relation(fields: [contactId], references: [id])
+  bankAccount BankAccount?         @relation(fields: [bankAccountId], references: [id])
+  cashAccount CashAccount?         @relation(fields: [cashAccountId], references: [id])
+  checkNote   CheckPromissoryNote? @relation(fields: [checkNoteId], references: [id])
+  allocations PaymentAllocation[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, date])
+  @@index([tenantId, contactId])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id        String   @id @default(cuid())
+  tenantId  String
+  paymentId String
+  invoiceId String
+  amount    Decimal  @db.Decimal(18, 2)
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentId, invoiceId])
+  @@index([tenantId, paymentId])
+  @@index([tenantId, invoiceId])
+  @@map("payment_allocations")
+}
+
+// ═════════════════════════════════════════════
+// MUHASEBE
+// ═════════════════════════════════════════════
+
+model LedgerAccount {
+  id          String      @id @default(cuid())
+  tenantId    String
+  code        String
+  name        String
+  parentId    String?
+  isActive    Boolean     @default(true)
+  accountType AccountType @default(ASSET)
+  deletedAt   DateTime?
+
+  tenant   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   LedgerAccount?     @relation("AccountTree", fields: [parentId], references: [id])
+  children LedgerAccount[]    @relation("AccountTree")
+  lines    JournalEntryLine[]
+  reconciliationLines ReconciliationLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+  @@index([deletedAt])
+  @@map("ledger_accounts")
+}
+
+model FiscalPeriod {
+  id         String             @id @default(cuid())
+  tenantId   String
+  name       String
+  startDate  DateTime           @db.Date
+  endDate    DateTime           @db.Date
+  status     FiscalPeriodStatus @default(OPEN)
+  closedAt   DateTime?
+  closedById String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  journalEntries JournalEntry[]
+
+  @@unique([tenantId, startDate, endDate])
+  @@index([tenantId, status])
+  @@map("fiscal_periods")
+}
+
+model JournalEntry {
+  id             String           @id @default(cuid())
+  tenantId       String
+  fiscalPeriodId String?
+  type           JournalEntryType
+  number         String
+  date           DateTime
+  description    String?
+  refType        String?
+  refId          String?
+  isPosted       Boolean          @default(false)
+  postedAt       DateTime?
+  postedById     String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  createdById    String?
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fiscalPeriod FiscalPeriod?      @relation(fields: [fiscalPeriodId], references: [id])
+  lines        JournalEntryLine[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, date])
+  @@index([tenantId, isPosted])
+  @@index([refType, refId])
+  @@map("journal_entries")
+}
+
+model JournalEntryLine {
+  id             String  @id @default(cuid())
+  tenantId       String
+  journalEntryId String
+  accountId      String
+  debit          Decimal @db.Decimal(18, 2) @default(0)
+  credit         Decimal @db.Decimal(18, 2) @default(0)
+  description    String?
+  sortOrder      Int     @default(0)
+
+  journalEntry JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      LedgerAccount @relation(fields: [accountId], references: [id])
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, journalEntryId])
+  @@index([tenantId, accountId])
+  @@map("journal_entry_lines")
+}
+
+model Reconciliation {
+  id            String   @id @default(cuid())
+  tenantId      String
+  name          String
+  description   String?
+  date          DateTime @db.Date
+  isFinalized   Boolean  @default(false)
+  finalizedAt   DateTime?
+  finalizedById String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdById   String?
+
+  tenant Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines  ReconciliationLine[]
+
+  @@index([tenantId, date])
+  @@map("reconciliations")
+}
+
+model ReconciliationLine {
+  id               String  @id @default(cuid())
+  tenantId         String
+  reconciliationId String
+  accountId        String
+  refType          String?
+  refId            String?
+  amount           Decimal @db.Decimal(18, 2)
+  isMatched        Boolean @default(false)
+  notes            String?
+
+  reconciliation Reconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  account        LedgerAccount  @relation(fields: [accountId], references: [id])
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, reconciliationId])
+  @@map("reconciliation_lines")
+}
+
+// ═════════════════════════════════════════════
+// PERSONEL TAKİBİ
+// ═════════════════════════════════════════════
+
+model Employee {
+  id          String    @id @default(cuid())
+  tenantId    String
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  position    String?
+  department  String?
+  hireDate    DateTime
+  leaveDate   DateTime?
+  salary      Decimal   @db.Decimal(18, 2) @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leaveRequests LeaveRequest[]
+  attendances   Attendance[]
+  payrolls      Payroll[]
+
+  @@index([tenantId, isActive])
+  @@index([tenantId, department])
+  @@index([deletedAt])
+  @@map("employees")
+}
+
+model LeaveRequest {
+  id         String      @id @default(cuid())
+  tenantId   String
+  employeeId String
+  type       LeaveType
+  status     LeaveStatus @default(PENDING)
+  startDate  DateTime
+  endDate    DateTime
+  days       Decimal     @db.Decimal(5, 1)
+  notes      String?
+  approvedBy String?
+  approvedAt DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  deletedAt  DateTime?
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, status])
+  @@map("leave_requests")
+}
+
+model Attendance {
+  id            String    @id @default(cuid())
+  tenantId      String
+  employeeId    String
+  date          DateTime  @db.Date
+  checkIn       DateTime?
+  checkOut      DateTime?
+  overtimeHours Decimal   @db.Decimal(5, 2) @default(0)
+  notes         String?
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([tenantId, date])
+  @@map("attendances")
+}
+
+model Payroll {
+  id          String    @id @default(cuid())
+  tenantId    String
+  employeeId  String
+  period      String    // "2026-03" (YYYY-MM)
+  grossSalary Decimal   @db.Decimal(18, 2)
+  deductions  Decimal   @db.Decimal(18, 2) @default(0)
+  netSalary   Decimal   @db.Decimal(18, 2)
+  paidAt      DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+  createdById String?
+
+  employee Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items    PayrollItem[]
+
+  @@unique([tenantId, employeeId, period])
+  @@index([tenantId, period])
+  @@index([deletedAt])
+  @@map("payrolls")
+}
+
+model PayrollItem {
+  id          String  @id @default(cuid())
+  tenantId    String
+  payrollId   String
+  label       String
+  amount      Decimal @db.Decimal(18, 2)
+  isDeduction Boolean @default(false)
+
+  payroll Payroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, payrollId])
+  @@map("payroll_items")
+}
+
+// ═════════════════════════════════════════════
+// ÜRETİM TAKİBİ
+// ═════════════════════════════════════════════
+
+model WorkCenter {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  code        String
+  description String?
+  capacity    Decimal? @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  operations   RoutingOperation[]
+  workOrderOps WorkOrderOperation[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("work_centers")
+}
+
+model BOM {
+  id        String   @id @default(cuid())
+  tenantId  String
+  productId String
+  name      String
+  version   String   @default("1.0")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product    Product            @relation(fields: [productId], references: [id])
+  items      BOMItem[]
+  workOrders WorkOrder[]
+  routings   RoutingOperation[]
+
+  @@unique([tenantId, productId, version])
+  @@map("boms")
+}
+
+model BOMItem {
+  id        String  @id @default(cuid())
+  tenantId  String
+  bomId     String
+  productId String
+  quantity  Decimal @db.Decimal(18, 3)
+  unit      String?
+  notes     String?
+  sortOrder Int     @default(0)
+
+  bom     BOM     @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, bomId])
+  @@map("bom_items")
+}
+
+model RoutingOperation {
+  id           String   @id @default(cuid())
+  tenantId     String
+  bomId        String
+  workCenterId String
+  name         String
+  stepOrder    Int
+  setupTime    Decimal? @db.Decimal(10, 2) // minutes
+  runTime      Decimal? @db.Decimal(10, 2) // minutes per unit
+  notes        String?
+
+  bom          BOM                  @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  workCenter   WorkCenter           @relation(fields: [workCenterId], references: [id])
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrderOps WorkOrderOperation[]
+
+  @@unique([bomId, stepOrder])
+  @@index([tenantId, bomId])
+  @@map("routing_operations")
+}
+
+// Fix #5: Added inputWarehouseId and outputWarehouseId for material consumption and finished goods
+model WorkOrder {
+  id               String          @id @default(cuid())
+  tenantId         String
+  bomId            String?
+  productId        String
+  number           String
+  status           WorkOrderStatus @default(PLANNED)
+  plannedQty       Decimal         @db.Decimal(18, 3)
+  producedQty      Decimal         @db.Decimal(18, 3) @default(0)
+  startDate        DateTime?
+  endDate          DateTime?
+  notes            String?
+  // Warehouse from which raw materials are consumed
+  inputWarehouseId  String?
+  // Warehouse to which finished goods are output
+  outputWarehouseId String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
+  createdById      String?
+
+  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bom             BOM?                 @relation(fields: [bomId], references: [id])
+  product         Product              @relation(fields: [productId], references: [id])
+  inputWarehouse  Warehouse?           @relation("WorkOrderInputWarehouse", fields: [inputWarehouseId], references: [id])
+  outputWarehouse Warehouse?           @relation("WorkOrderOutputWarehouse", fields: [outputWarehouseId], references: [id])
+  items           WorkOrderItem[]
+  operations      WorkOrderOperation[]
+  history         WorkOrderHistory[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([deletedAt])
+  @@map("work_orders")
+}
+
+// Fix #5: Added sourceWarehouseId for per-item material source warehouse
+model WorkOrderItem {
+  id                String  @id @default(cuid())
+  tenantId          String
+  workOrderId       String
+  productId         String
+  requiredQty       Decimal @db.Decimal(18, 3)
+  consumedQty       Decimal @db.Decimal(18, 3) @default(0)
+  // Warehouse from which this specific item is sourced (overrides WorkOrder.inputWarehouseId if set)
+  sourceWarehouseId String?
+
+  workOrder       WorkOrder  @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  product         Product    @relation(fields: [productId], references: [id])
+  tenant          Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceWarehouse Warehouse? @relation("WorkOrderItemSourceWarehouse", fields: [sourceWarehouseId], references: [id])
+
+  @@index([tenantId, workOrderId])
+  @@map("work_order_items")
+}
+
+model WorkOrderOperation {
+  id             String          @id @default(cuid())
+  tenantId       String
+  workOrderId    String
+  routingOpId    String?
+  workCenterId   String
+  name           String
+  stepOrder      Int
+  status         WorkOrderStatus @default(PLANNED)
+  plannedStartAt DateTime?
+  plannedEndAt   DateTime?
+  actualStartAt  DateTime?
+  actualEndAt    DateTime?
+  notes          String?
+
+  workOrder  WorkOrder         @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  routingOp  RoutingOperation? @relation(fields: [routingOpId], references: [id])
+  workCenter WorkCenter        @relation(fields: [workCenterId], references: [id])
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, workOrderId])
+  @@map("work_order_operations")
+}
+
+model WorkOrderHistory {
+  id          String           @id @default(cuid())
+  tenantId    String
+  workOrderId String
+  fromStatus  WorkOrderStatus?
+  toStatus    WorkOrderStatus
+  notes       String?
+  createdAt   DateTime         @default(now())
+  createdById String?
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, workOrderId])
+  @@map("work_order_history")
+}
+
+// ═════════════════════════════════════════════
+// TEKNİK SERVİS
+// ═════════════════════════════════════════════
+
+model CustomerAsset {
+  id           String    @id @default(cuid())
+  tenantId     String
+  contactId    String
+  name         String
+  brand        String?
+  model        String?
+  serialNo     String?
+  purchaseDate DateTime? @db.Date
+  warrantyEnd  DateTime? @db.Date
+  notes        String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  createdById  String?
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact         Contact          @relation(fields: [contactId], references: [id])
+  serviceRequests ServiceRequest[]
+
+  @@index([tenantId, contactId])
+  @@index([tenantId, serialNo])
+  @@map("customer_assets")
+}
+
+// Fix #6: Replaced priority Int with Priority enum
+model ServiceRequest {
+  id              String        @id @default(cuid())
+  tenantId        String
+  contactId       String?
+  customerAssetId String?
+  number          String
+  status          ServiceStatus @default(OPEN)
+  subject         String
+  description     String?
+  warrantyEnd     DateTime?
+  assignedToId    String?
+  priority        Priority      @default(MEDIUM)
+  closedAt        DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+  createdById     String?
+  updatedById     String?
+
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact       Contact?                @relation(fields: [contactId], references: [id])
+  customerAsset CustomerAsset?          @relation(fields: [customerAssetId], references: [id])
+  items         ServiceRequestItem[]
+  activities    ServiceActivity[]
+  history       ServiceRequestHistory[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, assignedToId])
+  @@index([deletedAt])
+  @@map("service_requests")
+}
+
+model ServiceRequestItem {
+  id               String  @id @default(cuid())
+  tenantId         String
+  serviceRequestId String
+  productId        String?
+  description      String
+  quantity         Decimal @db.Decimal(18, 3) @default(1)
+  unitPrice        Decimal @db.Decimal(18, 2) @default(0)
+  lineTotal        Decimal @db.Decimal(18, 2) @default(0)
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  product        Product?       @relation(fields: [productId], references: [id])
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, serviceRequestId])
+  @@map("service_request_items")
+}
+
+model ServiceActivity {
+  id               String              @id @default(cuid())
+  tenantId         String
+  serviceRequestId String
+  actorId          String?
+  activityType     ServiceActivityType
+  notes            String?
+  createdAt        DateTime            @default(now())
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, serviceRequestId])
+  @@map("service_activities")
+}
+
+model ServiceRequestHistory {
+  id               String         @id @default(cuid())
+  tenantId         String
+  serviceRequestId String
+  fromStatus       ServiceStatus?
+  toStatus         ServiceStatus
+  notes            String?
+  createdAt        DateTime       @default(now())
+  createdById      String?
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, serviceRequestId])
+  @@map("service_request_history")
+}
+
+// ═════════════════════════════════════════════
+// E-TİCARET
+// ═════════════════════════════════════════════
+
+model MarketplaceIntegration {
+  id         String             @id @default(cuid())
+  tenantId   String
+  channel    MarketplaceChannel
+  name       String
+  apiKey     String?
+  apiSecret  String?
+  storeId    String?
+  isActive   Boolean            @default(true)
+  lastSyncAt DateTime?
+  syncErrors Int                @default(0)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  listings MarketplaceListing[]
+  orders   MarketplaceOrder[]
+
+  @@unique([tenantId, channel])
+  @@map("marketplace_integrations")
+}
+
+// Minor fix: stock changed to Decimal for consistency with StockLevel.quantity
+model MarketplaceListing {
+  id            String    @id @default(cuid())
+  tenantId      String
+  integrationId String
+  productId     String
+  externalId    String
+  externalSku   String?
+  price         Decimal   @db.Decimal(18, 2)
+  stock         Decimal   @db.Decimal(18, 3) @default(0)
+  isActive      Boolean   @default(true)
+  lastSyncAt    DateTime?
+  syncError     String?
+
+  integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  product     Product                @relation(fields: [productId], references: [id])
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, externalId])
+  @@index([tenantId, productId])
+  @@map("marketplace_listings")
+}
+
+model MarketplaceOrder {
+  id              String                 @id @default(cuid())
+  tenantId        String
+  integrationId   String
+  externalId      String
+  channel         MarketplaceChannel
+  status          MarketplaceOrderStatus @default(PENDING)
+  customerName    String?
+  customerEmail   String?
+  customerPhone   String?
+  shippingAddress String?
+  totalAmount     Decimal                @db.Decimal(18, 2)
+  orderDate       DateTime
+  syncedAt        DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  items       MarketplaceOrderItem[]
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, externalId])
+  @@index([tenantId, channel])
+  @@index([tenantId, status])
+  @@map("marketplace_orders")
+}
+
+model MarketplaceOrderItem {
+  id                 String  @id @default(cuid())
+  tenantId           String
+  marketplaceOrderId String
+  externalProductId  String
+  productId          String?
+  name               String
+  quantity           Int
+  unitPrice          Decimal @db.Decimal(18, 2)
+  lineTotal          Decimal @db.Decimal(18, 2)
+
+  marketplaceOrder MarketplaceOrder @relation(fields: [marketplaceOrderId], references: [id], onDelete: Cascade)
+  product          Product?         @relation(fields: [productId], references: [id])
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, marketplaceOrderId])
+  @@map("marketplace_order_items")
+}
+
+// ═════════════════════════════════════════════
+// RAPORLAMA
+// ═════════════════════════════════════════════
+
+model SavedReport {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  module    String
+  filters   Json     @default("{}")
+  columns   String[] @default([])
+  isShared  Boolean  @default(false)
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, module])
+  @@map("saved_reports")
+}
