@@ -1360,10 +1360,12 @@ Table ledger_accounts {
   parentId    String      [null]
   isActive    Boolean     [default: true]
   accountType AccountType [default: "ASSET"]
+  deletedAt   DateTime    [null]
 
   indexes {
     (tenantId, code) [unique]
     (tenantId, isActive)
+    deletedAt
   }
 }
 
