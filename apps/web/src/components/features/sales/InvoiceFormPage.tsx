@@ -1,21 +1,24 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Trash2, ArrowLeft } from 'lucide-react';
-import { PageHeader } from '@/components/shared/PageHeader';
-import { FormRow, FormSection } from '@/components/shared/FormField';
+import {
+  ArrowLeft, Receipt, Users, Plus, Trash2, Save, X,
+  CalendarDays, Hash, DollarSign, Percent, ShoppingCart,
+  FileText, ArrowDownToLine, ArrowUpFromLine,
+} from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
+import { FormRow } from '@/components/shared/FormField';
 import { useCreateInvoice } from '@/hooks/useSales';
 import { useContacts } from '@/hooks/useContacts';
+import { useProducts } from '@/hooks/useProducts';
 import { useTaxRates } from '@/hooks/useMasterData';
-import { formatCurrency } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 // ─────────────────────────────────────────────
 // Schema
@@ -41,12 +44,16 @@ const invoiceSchema = z.object({
 
 type InvoiceForm = z.infer<typeof invoiceSchema>;
 
-const TYPE_OPTIONS = [
-  { value: 'SALES', label: 'Satış Faturası' },
-  { value: 'PURCHASE', label: 'Alış Faturası' },
-  { value: 'RETURN_SALES', label: 'Satış İade' },
-  { value: 'RETURN_PURCHASE', label: 'Alış İade' },
-];
+// ─────────────────────────────────────────────
+// Type selector config
+// ─────────────────────────────────────────────
+
+const INVOICE_TYPES = [
+  { value: 'SALES', label: 'Satış', icon: ArrowUpFromLine, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', ring: 'ring-emerald-500/20' },
+  { value: 'PURCHASE', label: 'Alış', icon: ArrowDownToLine, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/30', ring: 'ring-sky-500/20' },
+  { value: 'RETURN_SALES', label: 'Satış İade', icon: ArrowDownToLine, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30', ring: 'ring-amber-500/20' },
+  { value: 'RETURN_PURCHASE', label: 'Alış İade', icon: ArrowUpFromLine, color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/30', ring: 'ring-violet-500/20' },
+] as const;
 
 // ─────────────────────────────────────────────
 // Component
@@ -56,158 +63,359 @@ export function InvoiceFormPage() {
   const router = useRouter();
   const createInvoice = useCreateInvoice();
   const { data: contactsData } = useContacts({ limit: 200 });
+  const { data: productsData } = useProducts({ page: 1, limit: 200 });
   const { data: taxRates = [] } = useTaxRates();
 
-  const contactOptions = (contactsData?.data ?? []).map((c) => ({ value: c.id, label: c.name }));
-  const taxRateOptions = [
-    { value: '', label: '— KDV yok —' },
-    ...taxRates.map((t) => ({ value: t.id, label: `${t.name} (%${t.rate})` })),
-  ];
+  const contacts = contactsData?.data ?? [];
+  const products = productsData?.data ?? [];
 
-  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<InvoiceForm>({
+  const contactOptions = [{ value: '', label: '— Cari seçin —' }, ...contacts.map((c) => ({ value: c.id, label: `${c.name} (${c.code})` }))];
+  const taxRateOptions = [{ value: '', label: '— KDV yok —' }, ...taxRates.map((t) => ({ value: t.id, label: `${t.name} (%${t.rate})` }))];
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<InvoiceForm>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
-      type: 'SALES',
-      date: new Date().toISOString().split('T')[0],
+      type: 'SALES', date: today,
       lines: [{ description: '', quantity: '1', unitPrice: '0', discount: '0' }],
     },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
   const watchedLines = watch('lines');
+  const watchType = watch('type');
+  const watchContact = watch('contactId');
 
-  // Live totals
-  const totals = watchedLines.reduce(
-    (acc, line) => {
-      const qty = Number(line.quantity) || 0;
-      const price = Number(line.unitPrice) || 0;
-      const disc = Number(line.discount) || 0;
-      const net = qty * price * (1 - disc / 100);
-      const taxRate = taxRates.find((t) => t.id === line.taxRateId);
-      const tax = net * ((taxRate?.rate ?? 0) / 100);
-      return { net: acc.net + net, tax: acc.tax + tax };
-    },
-    { net: 0, tax: 0 },
-  );
+  const selectedContact = contacts.find((c) => c.id === watchContact);
+  const activeType = INVOICE_TYPES.find((t) => t.value === watchType) ?? INVOICE_TYPES[0];
+
+  // Line totals
+  const lineTotals = watchedLines.map((line) => {
+    const qty = Number(line.quantity || 0);
+    const price = Number(line.unitPrice || 0);
+    const disc = Number(line.discount || 0);
+    const net = qty * price * (1 - disc / 100);
+    const taxRate = taxRates.find((t) => t.id === line.taxRateId);
+    const taxAmt = net * ((taxRate?.rate ?? 0) / 100);
+    return { net, taxAmt, gross: net + taxAmt };
+  });
+  const totalNet = lineTotals.reduce((s, l) => s + l.net, 0);
+  const totalTax = lineTotals.reduce((s, l) => s + l.taxAmt, 0);
+  const totalGross = totalNet + totalTax;
+
+  const handleProductSelect = (idx: number, productId: string) => {
+    const product = products.find((p) => p.id === productId);
+    if (product) {
+      setValue(`lines.${idx}.productId`, productId);
+      setValue(`lines.${idx}.description`, product.name);
+      setValue(`lines.${idx}.unitPrice`, String(product.salesPrice));
+    }
+  };
 
   const onSubmit = (data: InvoiceForm) => {
-    const payload = {
-      contactId: data.contactId,
-      type: data.type,
-      date: data.date,
-      dueDate: data.dueDate || undefined,
-      notes: data.notes || undefined,
+    createInvoice.mutate({
+      contactId: data.contactId, type: data.type, date: data.date,
+      dueDate: data.dueDate || undefined, notes: data.notes || undefined,
       lines: data.lines.map((l) => ({
-        description: l.description,
-        productId: l.productId || undefined,
-        taxRateId: l.taxRateId || undefined,
-        quantity: Number(l.quantity),
-        unitPrice: Number(l.unitPrice),
-        discount: Number(l.discount) || 0,
+        description: l.description, productId: l.productId || undefined,
+        taxRateId: l.taxRateId || undefined, quantity: Number(l.quantity),
+        unitPrice: Number(l.unitPrice), discount: Number(l.discount) || 0,
       })),
-    };
-    createInvoice.mutate(payload, { onSuccess: (inv) => router.push(`/dashboard/invoices/${inv.id}`) });
+    }, { onSuccess: (inv) => router.push(`/dashboard/invoices/${inv.id}`) });
   };
 
   return (
     <div>
-      <PageHeader
-        title="Yeni Fatura"
-        action={<Button variant="ghost" leftIcon={<ArrowLeft className="w-4 h-4" />} onClick={() => router.back()}>Geri</Button>}
-      />
+      {/* ── Header banner ───────────────────────── */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-emerald-600/10 via-slate-900 to-sky-600/5 border border-slate-800 rounded-2xl p-5 mb-6">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(16,185,129,0.06)_0%,transparent_60%)]" />
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => router.back()}
+              className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600 transition-all backdrop-blur-sm">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div>
+              <h1 className="text-lg font-semibold text-white flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-emerald-500/10"><Receipt className="w-4 h-4 text-emerald-400" /></div>
+                Yeni Fatura Oluştur
+              </h1>
+              <p className="text-xs text-slate-500 mt-1 ml-[38px]">Satış veya alış faturası düzenleyin.</p>
+            </div>
+          </div>
+          {totalGross > 0 && (
+            <div className="hidden sm:block text-right">
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Toplam</p>
+              <p className="text-xl font-bold text-emerald-400 tabular-nums">{formatCurrency(totalGross)}</p>
+            </div>
+          )}
+        </div>
+      </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="max-w-4xl space-y-6">
-        <FormSection title="Fatura Bilgileri">
-          <FormRow cols={2}>
-            <Select label="Cari" required options={contactOptions} placeholder="Cari seçin" error={errors.contactId?.message} {...register('contactId')} />
-            <Select label="Fatura Tipi" required options={TYPE_OPTIONS} error={errors.type?.message} {...register('type')} />
-          </FormRow>
-          <FormRow cols={2}>
-            <Input label="Tarih" required type="date" error={errors.date?.message} {...register('date')} />
-            <Input label="Vade Tarihi" type="date" {...register('dueDate')} />
-          </FormRow>
-        </FormSection>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <div className="flex gap-6">
+          {/* ── Left: main form ─────────────────── */}
+          <div className="flex-1 min-w-0 space-y-5">
 
-        <FormSection title="Fatura Kalemleri">
-          <div className="space-y-3">
-            {/* Header */}
-            <div className="hidden sm:grid grid-cols-12 gap-2 px-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              <div className="col-span-4">Açıklama</div>
-              <div className="col-span-2 text-right">Miktar</div>
-              <div className="col-span-2 text-right">Birim Fiyat</div>
-              <div className="col-span-1 text-right">İsk.%</div>
-              <div className="col-span-2">KDV</div>
-              <div className="col-span-1" />
+            {/* ── Fatura Tipi ──────────────────── */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-800/60">
+                <div className="p-2 rounded-lg bg-violet-500/10"><FileText className="w-4 h-4 text-violet-400" /></div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Fatura Tipi</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Fatura türünü seçin</p>
+                </div>
+              </div>
+              <div className="p-5">
+                <div className="grid grid-cols-4 gap-2">
+                  {INVOICE_TYPES.map((t) => {
+                    const Icon = t.icon;
+                    const active = watchType === t.value;
+                    return (
+                      <button key={t.value} type="button" onClick={() => setValue('type', t.value as InvoiceForm['type'])}
+                        className={cn(
+                          'flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-200',
+                          active ? `${t.bg} ${t.border} ring-2 ${t.ring}` : 'border-slate-800 bg-slate-800/40 hover:border-slate-700 hover:bg-slate-800/70',
+                        )}>
+                        <Icon className={cn('w-5 h-5', active ? t.color : 'text-slate-500')} />
+                        <span className={cn('text-xs font-medium', active ? t.color : 'text-slate-500')}>{t.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            {fields.map((field, idx) => {
-              const line = watchedLines[idx];
-              const qty = Number(line?.quantity) || 0;
-              const price = Number(line?.unitPrice) || 0;
-              const disc = Number(line?.discount) || 0;
-              const net = qty * price * (1 - disc / 100);
-              const taxRate = taxRates.find((t) => t.id === line?.taxRateId);
-              const lineTotal = net + net * ((taxRate?.rate ?? 0) / 100);
+            {/* ── Fatura Bilgileri ──────────────── */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-800/60">
+                <div className="p-2 rounded-lg bg-sky-500/10"><Users className="w-4 h-4 text-sky-400" /></div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Fatura Bilgileri</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Cari, tarih ve vade</p>
+                </div>
+              </div>
+              <div className="p-5 space-y-4">
+                <Select label="Cari" required options={contactOptions} error={errors.contactId?.message} {...register('contactId')} />
+                <FormRow cols={2}>
+                  <Input label="Fatura Tarihi" required type="date" prefixIcon={<CalendarDays className="w-3.5 h-3.5" />} {...register('date')} />
+                  <Input label="Vade Tarihi" type="date" prefixIcon={<CalendarDays className="w-3.5 h-3.5" />} {...register('dueDate')} />
+                </FormRow>
+                <Textarea label="Notlar" placeholder="Fatura ile ilgili notlar…" {...register('notes')} />
+              </div>
+            </div>
 
-              return (
-                <div key={field.id} className="grid grid-cols-12 gap-2 items-start bg-slate-800/30 rounded-lg p-3">
-                  <div className="col-span-12 sm:col-span-4">
-                    <Input placeholder="Ürün / hizmet açıklaması" error={errors.lines?.[idx]?.description?.message} {...register(`lines.${idx}.description`)} />
-                  </div>
-                  <div className="col-span-4 sm:col-span-2">
-                    <Input type="number" step="0.001" placeholder="1" error={errors.lines?.[idx]?.quantity?.message} {...register(`lines.${idx}.quantity`)} />
-                  </div>
-                  <div className="col-span-4 sm:col-span-2">
-                    <Input type="number" step="0.01" placeholder="0.00" error={errors.lines?.[idx]?.unitPrice?.message} {...register(`lines.${idx}.unitPrice`)} />
-                  </div>
-                  <div className="col-span-4 sm:col-span-1">
-                    <Input type="number" step="0.01" placeholder="0" {...register(`lines.${idx}.discount`)} />
-                  </div>
-                  <div className="col-span-10 sm:col-span-2">
-                    <Select options={taxRateOptions} {...register(`lines.${idx}.taxRateId`)} />
-                  </div>
-                  <div className="col-span-2 sm:col-span-1 flex items-center justify-end gap-1 pt-1">
-                    <span className="text-xs text-slate-400 hidden sm:block">{formatCurrency(lineTotal)}</span>
-                    {fields.length > 1 && (
-                      <button type="button" onClick={() => remove(idx)} className="p-1.5 text-slate-500 hover:text-red-400 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+            {/* ── Kalemler ─────────────────────── */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800/60">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-emerald-500/10"><ShoppingCart className="w-4 h-4 text-emerald-400" /></div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Fatura Kalemleri</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Ürün veya hizmet kalemlerini ekleyin</p>
                   </div>
                 </div>
-              );
-            })}
+                <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  {fields.length} kalem
+                </span>
+              </div>
 
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              leftIcon={<Plus className="w-3.5 h-3.5" />}
-              onClick={() => append({ description: '', quantity: '1', unitPrice: '0', discount: '0' })}
-            >
-              Kalem Ekle
-            </Button>
-          </div>
+              <div className="p-5 space-y-3">
+                {fields.map((field, idx) => {
+                  const lineTotal = lineTotals[idx]?.gross ?? 0;
 
-          {/* Totals */}
-          <div className="flex justify-end mt-4">
-            <div className="w-64 space-y-2 text-sm">
-              <div className="flex justify-between text-slate-400"><span>Net Tutar</span><span>{formatCurrency(totals.net)}</span></div>
-              <div className="flex justify-between text-slate-400"><span>KDV</span><span>{formatCurrency(totals.tax)}</span></div>
-              <div className="flex justify-between text-white font-semibold text-base border-t border-slate-700 pt-2">
-                <span>Genel Toplam</span><span>{formatCurrency(totals.net + totals.tax)}</span>
+                  return (
+                    <div key={field.id} className="relative bg-slate-800/30 border border-slate-800 rounded-xl p-4 hover:border-slate-700/60 transition-colors">
+                      {/* Row number */}
+                      <div className="absolute -left-0 top-4 w-6 h-6 rounded-r-lg bg-slate-800 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-slate-500">{idx + 1}</span>
+                      </div>
+
+                      {/* Top: description + product quick-fill + delete */}
+                      <div className="flex items-start gap-3 ml-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex gap-2">
+                            <div className="flex-1">
+                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Açıklama</label>
+                              <input placeholder="Ürün / hizmet açıklaması"
+                                className={cn(
+                                  'w-full bg-slate-800 border rounded-lg text-sm text-white px-3 py-2.5',
+                                  'focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-colors',
+                                  errors.lines?.[idx]?.description ? 'border-red-500' : 'border-slate-700',
+                                )}
+                                {...register(`lines.${idx}.description`)} />
+                            </div>
+                            <div className="w-48 shrink-0">
+                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Ürün (opsiyonel)</label>
+                              <select
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-2.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
+                                value=""
+                                onChange={(e) => { if (e.target.value) handleProductSelect(idx, e.target.value); }}
+                              >
+                                <option value="">Hızlı doldur…</option>
+                                {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                        {fields.length > 1 && (
+                          <button type="button" onClick={() => remove(idx)}
+                            className="mt-6 p-2 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Bottom: qty, price, discount, tax, total */}
+                      <div className="grid grid-cols-5 gap-3 mt-3 ml-4">
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <Hash className="w-2.5 h-2.5" />Miktar
+                          </label>
+                          <input type="number" step="1" min="1" placeholder="1"
+                            className={cn(
+                              'w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-3 py-2 text-center tabular-nums',
+                              'focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors',
+                              errors.lines?.[idx]?.quantity && 'border-red-500',
+                            )}
+                            {...register(`lines.${idx}.quantity`)} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <DollarSign className="w-2.5 h-2.5" />Birim Fiyat
+                          </label>
+                          <input type="number" step="0.01" min="0" placeholder="0.00"
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-3 py-2 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
+                            {...register(`lines.${idx}.unitPrice`)} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <Percent className="w-2.5 h-2.5" />İskonto
+                          </label>
+                          <input type="number" step="1" min="0" max="100" placeholder="0"
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-3 py-2 text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
+                            {...register(`lines.${idx}.discount`)} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">KDV</label>
+                          <select
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
+                            {...register(`lines.${idx}.taxRateId`)}>
+                            {taxRateOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block text-right">Tutar</label>
+                          <div className="h-[38px] flex items-center justify-end">
+                            <span className={cn('text-sm font-bold tabular-nums', lineTotal > 0 ? 'text-white' : 'text-slate-600')}>
+                              {formatCurrency(lineTotal)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <button type="button"
+                  onClick={() => append({ description: '', quantity: '1', unitPrice: '0', discount: '0' })}
+                  className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-slate-700/50 rounded-xl text-xs font-medium text-slate-400 hover:text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-500/5 transition-all">
+                  <Plus className="w-4 h-4" /> Yeni Kalem Ekle
+                </button>
+              </div>
+            </div>
+
+            {/* ── Sticky action bar ─────────────── */}
+            <div className="sticky bottom-0 z-20 -mx-1 px-1 pb-4 pt-3 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent">
+              <div className="flex items-center justify-between bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-xl px-5 py-3">
+                <div className="flex items-center gap-4 text-xs text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <ShoppingCart className="w-3.5 h-3.5 text-slate-600" />
+                    {fields.length} kalem
+                  </span>
+                  <span className="w-px h-3.5 bg-slate-800" />
+                  <span className="font-semibold text-white text-sm">{formatCurrency(totalGross)}</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Button type="button" variant="ghost" size="sm" leftIcon={<X className="w-3.5 h-3.5" />}
+                    onClick={() => router.back()}>İptal</Button>
+                  <Button type="submit" size="sm" loading={createInvoice.isPending} leftIcon={<Save className="w-3.5 h-3.5" />}
+                    className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 shadow-lg shadow-emerald-500/20">
+                    Fatura Oluştur
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
-        </FormSection>
 
-        <FormSection title="Notlar">
-          <Textarea placeholder="Fatura notu…" {...register('notes')} />
-        </FormSection>
+          {/* ── Right sidebar ───────────────────── */}
+          <div className="hidden lg:block w-72 shrink-0">
+            <div className="sticky top-4 space-y-4">
+              {/* Type indicator */}
+              <div className={cn('border rounded-xl p-4 flex items-center gap-3', activeType.bg, activeType.border)}>
+                <activeType.icon className={cn('w-5 h-5', activeType.color)} />
+                <div>
+                  <p className={cn('text-sm font-semibold', activeType.color)}>{activeType.label} Faturası</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Seçili fatura tipi</p>
+                </div>
+              </div>
 
-        <div className="flex gap-3 pt-2">
-          <Button type="submit" loading={createInvoice.isPending}>Fatura Oluştur</Button>
-          <Button type="button" variant="ghost" onClick={() => router.back()}>İptal</Button>
+              {/* Customer card */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-xs font-semibold text-slate-400">Cari</span>
+                </div>
+                {selectedContact ? (
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-xs font-bold text-emerald-400">
+                      {selectedContact.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{selectedContact.name}</p>
+                      <p className="text-[10px] text-slate-500 font-mono">{selectedContact.code}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-600">Henüz seçilmedi</p>
+                )}
+              </div>
+
+              {/* Totals card */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                  <Receipt className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-xs font-semibold text-slate-400">Tutar Özeti</span>
+                </div>
+                <div className="p-4 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Ara Toplam</span>
+                    <span className="text-slate-300 font-medium tabular-nums">{formatCurrency(totalNet)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">KDV</span>
+                    <span className="text-slate-300 font-medium tabular-nums">{formatCurrency(totalTax)}</span>
+                  </div>
+                  <div className="h-px bg-slate-800" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-white">Genel Toplam</span>
+                    <span className="text-base font-bold text-emerald-400 tabular-nums">{formatCurrency(totalGross)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tips */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                <p className="text-xs font-semibold text-slate-400 mb-2">💡 İpuçları</p>
+                <ul className="space-y-1.5 text-[11px] text-slate-500 leading-relaxed">
+                  <li>• "Hızlı doldur" ile ürün seçerek otomatik doldurun</li>
+                  <li>• KDV oranı kalem bazında seçilebilir</li>
+                  <li>• Vade tarihi ödeme takibi için önemlidir</li>
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
       </form>
     </div>

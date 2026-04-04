@@ -253,6 +253,102 @@ export const AccountingController = {
 
     return c.json({ data: updated });
   },
+
+  // ── Update draft journal entry ───────────────
+
+  async updateJournalEntry(c: Context): Promise<Response> {
+    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const entryId = c.req.param('id');
+    if (!tenantId || typeof tenantId !== 'string') {
+      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    }
+
+    const entry = await prisma.journalEntry.findFirst({ where: { id: entryId, tenantId } });
+    if (!entry) return c.json(new NotFoundError('Yevmiye fişi', entryId).toJSON(), 404);
+    if (entry.isPosted) {
+      return c.json(new ValidationError('Onaylı fişler düzenlenemez.').toJSON(), 400);
+    }
+
+    const body = await c.req.json<CreateJournalEntryDTO>();
+
+    const totalDebit = body.lines.reduce((s, l) => s + (l.debit ?? 0), 0);
+    const totalCredit = body.lines.reduce((s, l) => s + (l.credit ?? 0), 0);
+    if (Math.abs(totalDebit - totalCredit) > 0.001) {
+      return c.json(new ValidationError('Borç ve alacak toplamları eşit olmalıdır.').toJSON(), 400);
+    }
+
+    const updatedEntry = await prisma.$transaction(async (tx) => {
+      await tx.journalEntryLine.deleteMany({ where: { journalEntryId: entryId } });
+      return tx.journalEntry.update({
+        where: { id: entryId },
+        data: {
+          date: new Date(body.date),
+          description: body.description ?? null,
+          lines: {
+            create: body.lines.map((l) => ({
+              tenantId,
+              accountId: l.accountId,
+              debit: l.debit,
+              credit: l.credit,
+              description: l.description ?? null,
+            })),
+          },
+        },
+        include: { lines: { include: { account: { select: { id: true, code: true, name: true } } } } },
+      });
+    });
+
+    return c.json({ data: updatedEntry });
+  },
+
+  // ── Reverse (storno) posted journal entry ────
+
+  async reverseJournalEntry(c: Context): Promise<Response> {
+    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const entryId = c.req.param('id');
+    if (!tenantId || typeof tenantId !== 'string') {
+      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    }
+
+    const entry = await prisma.journalEntry.findFirst({
+      where: { id: entryId, tenantId },
+      include: { lines: true },
+    });
+    if (!entry) return c.json(new NotFoundError('Yevmiye fişi', entryId).toJSON(), 404);
+    if (!entry.isPosted) {
+      return c.json(new ValidationError('Sadece onaylı fişler ters kayıt yapılabilir.').toJSON(), 400);
+    }
+
+    const seq = await prisma.numberSequence.upsert({
+      where: { tenantId_module: { tenantId, module: 'journal' } },
+      create: { tenantId, module: 'journal', prefix: 'JE-', lastNum: 1, padding: 6 },
+      update: { lastNum: { increment: 1 } },
+    });
+    const number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
+
+    const reversal = await prisma.journalEntry.create({
+      data: {
+        tenantId,
+        type: JournalEntryType.MANUAL,
+        number,
+        date: new Date(),
+        description: `Ters kayıt: ${entry.number}`,
+        isPosted: true,
+        lines: {
+          create: entry.lines.map((l) => ({
+            tenantId,
+            accountId: l.accountId,
+            debit: l.credit,
+            credit: l.debit,
+            description: `Storno: ${l.description ?? ''}`.trim(),
+          })),
+        },
+      },
+      include: { lines: { include: { account: { select: { id: true, code: true, name: true } } } } },
+    });
+
+    return c.json({ data: reversal }, 201);
+  },
 };
 
 // ─────────────────────────────────────────────
@@ -375,6 +471,22 @@ export const AccountingExtController = {
 
     if (startDate >= endDate) {
       return c.json(new ValidationError('Başlangıç tarihi bitiş tarihinden önce olmalıdır.').toJSON(), 400);
+    }
+
+    // Çakışma kontrolü — aynı tarih aralığında başka dönem olmamalı
+    const overlap = await prisma.fiscalPeriod.findFirst({
+      where: {
+        tenantId,
+        OR: [
+          { startDate: { lte: endDate }, endDate: { gte: startDate } },
+        ],
+      },
+    });
+    if (overlap) {
+      return c.json(
+        new ValidationError(`Bu tarih aralığı "${overlap.name}" dönemi ile çakışıyor.`).toJSON(),
+        400,
+      );
     }
 
     const period = await prisma.fiscalPeriod.create({

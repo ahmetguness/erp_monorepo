@@ -40,7 +40,7 @@ export function ProductDetailPage({ id }: Props) {
       key: 'quantity', header: 'Miktar', width: '120px', align: 'right',
       render: (r) => {
         const isCritical = r.product && Number(r.quantity) < Number(r.product.minStockLevel);
-        return <span className={isCritical ? 'text-red-400 font-semibold' : 'text-slate-200 font-medium'}>{Number(r.quantity).toFixed(3)}</span>;
+        return <span className={isCritical ? 'text-red-400 font-semibold' : 'text-slate-200 font-medium'}>{(() => { const v = Number(r.quantity); return Number.isInteger(v) ? v : v.toFixed(3); })()}</span>;
       },
     },
   ];

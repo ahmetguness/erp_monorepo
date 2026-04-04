@@ -145,6 +145,16 @@ export async function postJournalEntry(id: string): Promise<JournalEntry> {
   return safeParse(SingleResponseSchema(JournalEntrySchema), res.data, 'postJournalEntry').data;
 }
 
+export async function updateJournalEntry(id: string, data: CreateJournalEntryDTO): Promise<JournalEntry> {
+  const res = await apiClient.patch(`/api/accounting/journal-entries/${id}`, data);
+  return safeParse(SingleResponseSchema(JournalEntrySchema), res.data, 'updateJournalEntry').data;
+}
+
+export async function reverseJournalEntry(id: string): Promise<JournalEntry> {
+  const res = await apiClient.post(`/api/accounting/journal-entries/${id}/reverse`);
+  return safeParse(SingleResponseSchema(JournalEntrySchema), res.data, 'reverseJournalEntry').data;
+}
+
 export async function getBankAccounts(): Promise<BankAccount[]> {
   const res = await apiClient.get('/api/payments/bank-accounts');
   return safeParse(SingleResponseSchema(z.array(BankAccountSchema)), res.data, 'getBankAccounts').data;

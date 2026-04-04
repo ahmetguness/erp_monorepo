@@ -376,19 +376,30 @@ export const StockController = {
               },
             });
 
+            // Mevcut stok seviyesini bul (locationId eşleşmesi için)
+            const existing = await tx.stockLevel.findFirst({
+              where: {
+                tenantId,
+                productId: item.productId,
+                warehouseId: stockCount.warehouseId,
+              },
+            });
+
+            const locId = item.locationId ?? existing?.locationId ?? '';
+
             await tx.stockLevel.upsert({
               where: {
                 productId_warehouseId_locationId: {
                   productId: item.productId,
                   warehouseId: stockCount.warehouseId,
-                  locationId: '',
+                  locationId: locId,
                 },
               },
               create: {
                 tenantId,
                 productId: item.productId,
                 warehouseId: stockCount.warehouseId,
-                locationId: '',
+                locationId: locId,
                 quantity: item.countedQty,
               },
               update: { quantity: item.countedQty },

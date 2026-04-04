@@ -9,6 +9,15 @@ import {
   BookOpen,
   CreditCard,
   Settings,
+  Layers,
+  ArrowLeftRight,
+  ClipboardCheck,
+  FileSignature,
+  Receipt,
+  CalendarRange,
+  Banknote,
+  Landmark,
+  Coins,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -52,9 +61,9 @@ export const NAV_GROUPS: NavGroup[] = [
         children: [
           { label: 'Ürünler', href: '/dashboard/products', icon: Package },
           { label: 'Depolar', href: '/dashboard/warehouses', icon: Warehouse },
-          { label: 'Stok Seviyeleri', href: '/dashboard/stock/levels', icon: BarChart3 },
-          { label: 'Stok Hareketleri', href: '/dashboard/stock/movements', icon: BarChart3 },
-          { label: 'Sayımlar', href: '/dashboard/stock/counts', icon: BarChart3 },
+          { label: 'Stok Seviyeleri', href: '/dashboard/stock/levels', icon: Layers },
+          { label: 'Stok Hareketleri', href: '/dashboard/stock/movements', icon: ArrowLeftRight },
+          { label: 'Sayımlar', href: '/dashboard/stock/counts', icon: ClipboardCheck },
         ],
       },
     ],
@@ -68,9 +77,9 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: ShoppingCart,
         module: 'invoicing',
         children: [
-          { label: 'Teklifler', href: '/dashboard/sales-orders/quotes', icon: FileText },
+          { label: 'Teklifler', href: '/dashboard/sales-orders/quotes', icon: FileSignature },
           { label: 'Siparişler', href: '/dashboard/sales-orders', icon: ShoppingCart },
-          { label: 'Faturalar', href: '/dashboard/invoices', icon: FileText },
+          { label: 'Faturalar', href: '/dashboard/invoices', icon: Receipt },
         ],
       },
     ],
@@ -86,7 +95,7 @@ export const NAV_GROUPS: NavGroup[] = [
         children: [
           { label: 'Hesap Planı', href: '/dashboard/accounting/accounts', icon: BookOpen },
           { label: 'Yevmiye Fişleri', href: '/dashboard/accounting/journal-entries', icon: FileText },
-          { label: 'Mali Dönemler', href: '/dashboard/accounting/fiscal-periods', icon: FileText },
+          { label: 'Mali Dönemler', href: '/dashboard/accounting/fiscal-periods', icon: CalendarRange },
         ],
       },
       {
@@ -95,9 +104,9 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: CreditCard,
         module: 'accounting',
         children: [
-          { label: 'Ödemeler', href: '/dashboard/payments', icon: CreditCard },
-          { label: 'Banka Hesapları', href: '/dashboard/payments/bank-accounts', icon: CreditCard },
-          { label: 'Kasa Hesapları', href: '/dashboard/payments/cash-accounts', icon: CreditCard },
+          { label: 'Ödemeler', href: '/dashboard/payments', icon: Banknote },
+          { label: 'Banka Hesapları', href: '/dashboard/payments/bank-accounts', icon: Landmark },
+          { label: 'Kasa Hesapları', href: '/dashboard/payments/cash-accounts', icon: Coins },
         ],
       },
     ],

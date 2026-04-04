@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
-import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { useStockLevels } from '@/hooks/useStock';
 import { useWarehouses } from '@/hooks/useStock';
+import { cn } from '@/lib/utils';
 import type { StockLevel } from '@/services/stock.service';
 
 export function StockLevelsPage() {
@@ -42,7 +42,7 @@ export function StockLevelsPage() {
         const isCritical = r.product && Number(r.quantity) < Number(r.product.minStockLevel);
         return (
           <span className={`font-medium ${isCritical ? 'text-red-400' : 'text-slate-200'}`}>
-            {Number(r.quantity).toFixed(3)} {r.product?.unit?.code}
+            {(() => { const v = Number(r.quantity); return Number.isInteger(v) ? v : v.toFixed(3); })()} {r.product?.unit?.code}
           </span>
         );
       },
@@ -66,16 +66,24 @@ export function StockLevelsPage() {
     <div>
       <PageHeader title="Stok Seviyeleri" subtitle="Ürünlerin depo bazlı stok durumu." />
 
-      <div className="flex flex-wrap gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
         <Select options={warehouseOptions} value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="w-48" />
-        <Button
-          variant={belowMin ? 'danger' : 'ghost'}
-          size="sm"
-          leftIcon={<AlertTriangle className="w-3.5 h-3.5" />}
+        <button
+          type="button"
           onClick={() => setBelowMin((v) => !v)}
+          className={cn(
+            'inline-flex items-center gap-2 h-8 px-3.5 rounded-lg text-xs font-medium transition-all duration-200',
+            belowMin
+              ? 'bg-red-500/15 text-red-400 border border-red-500/20 shadow-sm shadow-red-500/10 hover:bg-red-500/20'
+              : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-amber-400 hover:border-amber-500/30 hover:bg-amber-500/5',
+          )}
         >
+          <AlertTriangle className={cn('w-3.5 h-3.5', belowMin ? 'text-red-400' : 'text-amber-500')} />
           {belowMin ? 'Kritik Stok Gösteriliyor' : 'Kritik Stok'}
-        </Button>
+          {belowMin && (
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+          )}
+        </button>
       </div>
 
       <DataTable

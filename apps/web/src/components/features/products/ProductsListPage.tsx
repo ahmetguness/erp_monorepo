@@ -2,16 +2,16 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus } from 'lucide-react';
+import { Plus, Package } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { ActiveBadge } from '@/components/shared/StatusBadge';
-import { Button } from '@/components/ui/Button';
 import { useProducts } from '@/hooks/useProducts';
 import { useCategories } from '@/hooks/useMasterData';
 import { formatCurrency } from '@/lib/utils';
 import { Select } from '@/components/ui/Select';
+import Link from 'next/link';
 import type { Product } from '@/services/product.service';
 
 export function ProductsListPage() {
@@ -65,7 +65,20 @@ export function ProductsListPage() {
       <PageHeader
         title="Ürünler"
         subtitle="Ürün kataloğunuzu yönetin."
-        action={<Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => router.push('/dashboard/products/new')}>Yeni Ürün</Button>}
+        action={
+          <Link
+            href="/dashboard/products/new"
+            className="group relative inline-flex items-center gap-2.5 h-10 px-5 rounded-xl font-medium text-sm text-white
+                       bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500
+                       shadow-lg shadow-sky-500/20 hover:shadow-sky-500/30
+                       transition-all duration-200 active:scale-[0.97]"
+          >
+            <span className="flex items-center justify-center w-5 h-5 rounded-md bg-white/15 group-hover:bg-white/20 transition-colors">
+              <Plus className="w-3.5 h-3.5" />
+            </span>
+            Yeni Ürün
+          </Link>
+        }
       />
 
       <div className="flex flex-wrap gap-3 mb-4">

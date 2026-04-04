@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Plus } from 'lucide-react';
+import Link from 'next/link';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { QuoteStatusBadge } from '@/components/shared/StatusBadge';
@@ -25,7 +27,24 @@ export function SalesQuotesListPage() {
 
   return (
     <div>
-      <PageHeader title="Teklifler" subtitle="Müşteri tekliflerinizi yönetin." />
+      <PageHeader
+        title="Teklifler"
+        subtitle="Müşterilerinize fiyat teklifi oluşturun. Kabul edilen teklifler siparişe dönüştürülebilir."
+        action={
+          <Link
+            href="/dashboard/sales-orders/quotes/new"
+            className="group relative inline-flex items-center gap-2.5 h-10 px-5 rounded-xl font-medium text-sm text-white
+                       bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500
+                       shadow-lg shadow-sky-500/20 hover:shadow-sky-500/30
+                       transition-all duration-200 active:scale-[0.97]"
+          >
+            <span className="flex items-center justify-center w-5 h-5 rounded-md bg-white/15 group-hover:bg-white/20 transition-colors">
+              <Plus className="w-3.5 h-3.5" />
+            </span>
+            Yeni Teklif
+          </Link>
+        }
+      />
       <DataTable
         columns={columns}
         data={data?.data ?? []}
@@ -33,6 +52,7 @@ export function SalesQuotesListPage() {
         isLoading={isLoading}
         onRowClick={(r) => router.push(`/dashboard/sales-orders/quotes/${r.id}`)}
         emptyTitle="Henüz teklif oluşturulmamış"
+        emptyDescription="Yeni bir teklif oluşturarak müşterilerinize fiyat sunun."
         pagination={data ? { page, pageSize: 20, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
       />
     </div>

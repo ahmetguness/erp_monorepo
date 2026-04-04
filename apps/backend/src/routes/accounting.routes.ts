@@ -18,6 +18,8 @@ accountingRoutes.get('/journal-entries', AccountingController.listJournalEntries
 accountingRoutes.post('/journal-entries', AccountingController.createJournalEntry);
 accountingRoutes.get('/journal-entries/:id', AccountingExtController.getJournalEntryById);
 accountingRoutes.post('/journal-entries/:id/post', AccountingController.postJournalEntry);
+accountingRoutes.patch('/journal-entries/:id', AccountingController.updateJournalEntry);
+accountingRoutes.post('/journal-entries/:id/reverse', AccountingController.reverseJournalEntry);
 
 // Mali dönemler
 accountingRoutes.get('/fiscal-periods', AccountingExtController.listFiscalPeriods);
