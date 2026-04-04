@@ -75,7 +75,8 @@ export default function Navbar() {
 
               {/* Right actions */}
               <div className="flex items-center gap-2">
-                <button
+                <Link
+                  href="/login"
                   className={`hidden lg:block text-sm font-medium px-3 py-1.5 rounded-lg transition-all duration-150 ${
                     isScrolled
                       ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
@@ -83,7 +84,7 @@ export default function Navbar() {
                   }`}
                 >
                   Giriş Yap
-                </button>
+                </Link>
 
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -174,7 +175,7 @@ export default function Navbar() {
                   </svg>
                   Demo Talep Et
                 </button>
-                <button className="w-full btn-secondary py-2.5">Giriş Yap</button>
+                <Link href="/login" className="w-full btn-secondary py-2.5 text-center block">Giriş Yap</Link>
               </div>
             </motion.nav>
           </motion.div>

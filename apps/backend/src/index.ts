@@ -13,6 +13,7 @@ import { masterDataRoutes } from './routes/master-data.routes';
 import { stockRoutes } from './routes/stock.routes';
 import { salesOrderRoutes } from './routes/sales-order.routes';
 import { paymentRoutes } from './routes/payment.routes';
+import { authRoutes } from './routes/auth.routes';
 
 const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
@@ -35,6 +36,9 @@ app.get('/health', async (c) => {
     return c.json({ status: 'error', db: 'disconnected' }, 500);
   }
 });
+
+// ── Auth (public) ────────────────────────────
+app.route('/api/auth', authRoutes);
 
 // ── Starter Plan Routes ──────────────────────
 app.route('/api/users', userRoutes);

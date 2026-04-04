@@ -1,4 +1,6 @@
 import { IBM_Plex_Sans } from "next/font/google";
+import { Providers } from "@/lib/providers";
+import { ToastContainer } from "@/components/ui/Toast";
 import "./globals.css";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -30,7 +32,8 @@ export default function RootLayout({
     <html lang="tr" className={`${ibmPlexSans.variable} scroll-smooth`}>
       <body className="font-sans relative text-slate-900 bg-white selection:bg-blue-50 selection:text-blue-900">
         <main id="main-content" role="main">
-          {children}
+          <Providers>{children}</Providers>
+          <ToastContainer />
         </main>
       </body>
     </html>

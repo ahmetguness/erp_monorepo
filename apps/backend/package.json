@@ -14,7 +14,11 @@
   "dependencies": {
     "@hono/node-server": "^1.19.12",
     "@prisma/client": "^5.22.0",
-    "hono": "^4.6.0"
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "bcryptjs": "^3.0.3",
+    "hono": "^4.6.0",
+    "jsonwebtoken": "^9.0.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

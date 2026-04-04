@@ -1,4 +1,31 @@
 // ─────────────────────────────────────────────
+// API WRAPPER TYPES
+// ─────────────────────────────────────────────
+
+export interface ApiResponse<T> {
+  data: T;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: {
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  };
+}
+
+export interface ApiErrorBody {
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+    fields?: Record<string, string>;
+  };
+}
+
+// ─────────────────────────────────────────────
 // ENUMS
 // ─────────────────────────────────────────────
 
@@ -20,13 +47,6 @@ export enum DeploymentType {
   ON_PREMISE = "ON_PREMISE",
 }
 
-export enum UserRole {
-  OWNER = "OWNER",
-  ADMIN = "ADMIN",
-  USER = "USER",
-  VIEWER = "VIEWER",
-}
-
 export enum ContactType {
   CUSTOMER = "CUSTOMER",
   SUPPLIER = "SUPPLIER",
@@ -39,6 +59,7 @@ export enum MovementType {
   TRANSFER = "TRANSFER",
   ADJUSTMENT = "ADJUSTMENT",
   RETURN = "RETURN",
+  OPENING = "OPENING",
 }
 
 export enum OrderStatus {
@@ -46,6 +67,15 @@ export enum OrderStatus {
   CONFIRMED = "CONFIRMED",
   PARTIALLY_DELIVERED = "PARTIALLY_DELIVERED",
   DELIVERED = "DELIVERED",
+  CANCELLED = "CANCELLED",
+}
+
+export enum QuoteStatus {
+  DRAFT = "DRAFT",
+  SENT = "SENT",
+  ACCEPTED = "ACCEPTED",
+  REJECTED = "REJECTED",
+  EXPIRED = "EXPIRED",
   CANCELLED = "CANCELLED",
 }
 
@@ -61,20 +91,25 @@ export enum InvoiceStatus {
   SENT = "SENT",
   PAID = "PAID",
   PARTIALLY_PAID = "PARTIALLY_PAID",
+  OVERDUE = "OVERDUE",
   CANCELLED = "CANCELLED",
 }
 
-export enum EDocumentType {
-  E_INVOICE = "E_INVOICE",
-  E_ARCHIVE = "E_ARCHIVE",
-  E_WAYBILL = "E_WAYBILL",
+export enum PaymentMethod {
+  CASH = "CASH",
+  BANK_TRANSFER = "BANK_TRANSFER",
+  CREDIT_CARD = "CREDIT_CARD",
+  CHECK = "CHECK",
+  PROMISSORY_NOTE = "PROMISSORY_NOTE",
+  OTHER = "OTHER",
 }
 
 export enum PaymentStatus {
   PENDING = "PENDING",
-  PAID = "PAID",
-  OVERDUE = "OVERDUE",
+  COMPLETED = "COMPLETED",
+  FAILED = "FAILED",
   CANCELLED = "CANCELLED",
+  REFUNDED = "REFUNDED",
 }
 
 export enum JournalEntryType {
@@ -86,126 +121,50 @@ export enum JournalEntryType {
   CLOSING = "CLOSING",
 }
 
-export enum LeaveType {
-  ANNUAL = "ANNUAL",
-  SICK = "SICK",
-  MATERNITY = "MATERNITY",
-  PATERNITY = "PATERNITY",
-  UNPAID = "UNPAID",
-  OTHER = "OTHER",
+export enum AccountType {
+  ASSET = "ASSET",
+  LIABILITY = "LIABILITY",
+  EQUITY = "EQUITY",
+  REVENUE = "REVENUE",
+  EXPENSE = "EXPENSE",
 }
 
-export enum LeaveStatus {
-  PENDING = "PENDING",
-  APPROVED = "APPROVED",
-  REJECTED = "REJECTED",
-  CANCELLED = "CANCELLED",
-}
-
-export enum WorkOrderStatus {
-  PLANNED = "PLANNED",
-  IN_PROGRESS = "IN_PROGRESS",
-  PAUSED = "PAUSED",
-  COMPLETED = "COMPLETED",
-  CANCELLED = "CANCELLED",
-}
-
-export enum ServiceStatus {
+export enum FiscalPeriodStatus {
   OPEN = "OPEN",
-  IN_PROGRESS = "IN_PROGRESS",
-  WAITING_PARTS = "WAITING_PARTS",
-  COMPLETED = "COMPLETED",
-  CANCELLED = "CANCELLED",
+  CLOSED = "CLOSED",
+  LOCKED = "LOCKED",
 }
 
-export enum MarketplaceChannel {
-  TRENDYOL = "TRENDYOL",
-  HEPSIBURADA = "HEPSIBURADA",
-  N11 = "N11",
-  AMAZON = "AMAZON",
-  CICEKSEPETI = "CICEKSEPETI",
+export enum BankAccountType {
+  CHECKING = "CHECKING",
+  SAVINGS = "SAVINGS",
+  CREDIT = "CREDIT",
   OTHER = "OTHER",
 }
 
-export enum PurchaseRequestStatus {
-  DRAFT = "DRAFT",
-  PENDING_APPROVAL = "PENDING_APPROVAL",
-  APPROVED = "APPROVED",
-  REJECTED = "REJECTED",
-  ORDERED = "ORDERED",
-}
-
-export enum PurchaseOrderStatus {
-  DRAFT = "DRAFT",
-  SENT = "SENT",
-  PARTIALLY_RECEIVED = "PARTIALLY_RECEIVED",
-  RECEIVED = "RECEIVED",
-  CANCELLED = "CANCELLED",
-}
-
 // ─────────────────────────────────────────────
-// TENANT & AUTH
+// AUTH
 // ─────────────────────────────────────────────
 
-export interface Tenant {
+export interface AuthUser {
   id: string;
-  createdAt: string;
-  updatedAt: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  isActive: boolean;
+}
+
+export interface TenantInfo {
+  id: string;
   slug: string;
   companyName: string;
-  taxNumber?: string;
-  taxOffice?: string;
-  email: string;
-  phone?: string;
-  website?: string;
-  address?: string;
-  city?: string;
-  country: string;
-  sector?: string;
   plan: Plan;
   status: TenantStatus;
-  deploymentType: DeploymentType;
-  maxUsers: number;
-  trialEndsAt?: string;
-  subscriptionStart?: string;
-  subscriptionEnd?: string;
   modules: string[];
-  notes?: string;
-  users?: TenantUser[];
-}
-
-export interface User {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  email: string;
-  name: string;
-  phone?: string;
-  isActive: boolean;
-  tenants?: TenantUser[];
-}
-
-export interface AdminUser {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  email: string;
-  name: string;
-  isActive: boolean;
-}
-
-export interface TenantUser {
-  id: string;
-  createdAt: string;
-  tenantId: string;
-  userId: string;
-  role: UserRole;
-  tenant?: Tenant;
-  user?: User;
 }
 
 // ─────────────────────────────────────────────
-// ÇEKIRDEK (SHARED)
+// MASTER DATA
 // ─────────────────────────────────────────────
 
 export interface Unit {
@@ -219,8 +178,7 @@ export interface Category {
   id: string;
   tenantId: string;
   name: string;
-  parentId?: string;
-  parent?: Category;
+  parentId: string | null;
   children?: Category[];
 }
 
@@ -229,6 +187,7 @@ export interface TaxRate {
   tenantId: string;
   name: string;
   rate: number;
+  isActive: boolean;
 }
 
 export interface Currency {
@@ -237,12 +196,12 @@ export interface Currency {
   code: string;
   name: string;
   symbol: string;
-  exchangeRate: number;
+  defaultRate: number;
   isBase: boolean;
 }
 
 // ─────────────────────────────────────────────
-// CARİ HESAP
+// CONTACT
 // ─────────────────────────────────────────────
 
 export interface Contact {
@@ -250,16 +209,18 @@ export interface Contact {
   tenantId: string;
   type: ContactType;
   name: string;
-  code?: string;
-  taxNumber?: string;
-  taxOffice?: string;
-  email?: string;
-  phone?: string;
-  website?: string;
-  address?: string;
-  city?: string;
+  code: string | null;
+  taxNumber: string | null;
+  taxOffice: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  address: string | null;
+  city: string | null;
   country: string;
-  notes?: string;
+  notes: string | null;
+  creditLimit: number | null;
+  paymentTermDays: number | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -273,31 +234,31 @@ export interface AccountEntry {
   debit: number;
   credit: number;
   balance: number;
-  description?: string;
-  refType?: string;
-  refId?: string;
+  description: string | null;
+  refType: string | null;
+  refId: string | null;
   createdAt: string;
-  contact?: Contact;
 }
 
 // ─────────────────────────────────────────────
-// ÜRÜN
+// PRODUCT & INVENTORY
 // ─────────────────────────────────────────────
 
 export interface Product {
   id: string;
   tenantId: string;
-  categoryId?: string;
+  categoryId: string | null;
   unitId: string;
-  taxRateId?: string;
+  taxRateId: string | null;
   code: string;
   name: string;
-  barcode?: string;
-  description?: string;
-  imageUrl?: string;
+  barcode: string | null;
+  description: string | null;
+  imageUrl: string | null;
   purchasePrice: number;
   salesPrice: number;
   minStockLevel: number;
+  averageCost: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -306,26 +267,23 @@ export interface Product {
   taxRate?: TaxRate;
 }
 
-// ─────────────────────────────────────────────
-// DEPO YÖNETİMİ
-// ─────────────────────────────────────────────
-
 export interface Warehouse {
   id: string;
   tenantId: string;
   name: string;
   code: string;
-  address?: string;
+  address: string | null;
   isActive: boolean;
-  locations?: Location[];
+  locations?: WarehouseLocation[];
 }
 
-export interface Location {
+export interface WarehouseLocation {
   id: string;
   warehouseId: string;
+  tenantId: string;
   name: string;
   code: string;
-  warehouse?: Warehouse;
+  isActive: boolean;
 }
 
 export interface StockLevel {
@@ -333,13 +291,13 @@ export interface StockLevel {
   tenantId: string;
   productId: string;
   warehouseId: string;
-  locationId?: string;
+  locationId: string;
   quantity: number;
-  reservedQty: number;
   updatedAt: string;
-  product?: Product;
-  warehouse?: Warehouse;
-  location?: Location;
+  product?: Pick<Product, 'id' | 'code' | 'name' | 'minStockLevel'> & {
+    unit?: Pick<Unit, 'code'>;
+  };
+  warehouse?: Pick<Warehouse, 'id' | 'name' | 'code'>;
 }
 
 export interface StockMovement {
@@ -348,17 +306,14 @@ export interface StockMovement {
   productId: string;
   type: MovementType;
   quantity: number;
-  unitCost?: number;
-  fromWarehouseId?: string;
-  toWarehouseId?: string;
-  refType?: string;
-  refId?: string;
-  notes?: string;
+  unitCost: number | null;
+  fromWarehouseId: string | null;
+  toWarehouseId: string | null;
+  notes: string | null;
   createdAt: string;
-  createdById?: string;
-  product?: Product;
-  fromWarehouse?: Warehouse;
-  toWarehouse?: Warehouse;
+  product?: Pick<Product, 'id' | 'code' | 'name'>;
+  fromWarehouse?: Pick<Warehouse, 'id' | 'name'>;
+  toWarehouse?: Pick<Warehouse, 'id' | 'name'>;
 }
 
 export interface StockCount {
@@ -368,26 +323,29 @@ export interface StockCount {
   number: string;
   date: string;
   isFinalized: boolean;
-  notes?: string;
+  finalizedAt: string | null;
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
-  warehouse?: Warehouse;
+  warehouse?: Pick<Warehouse, 'id' | 'name'>;
   items?: StockCountItem[];
+  _count?: { items: number };
 }
 
 export interface StockCountItem {
   id: string;
+  tenantId: string;
   stockCountId: string;
   productId: string;
-  locationId?: string;
+  locationId: string | null;
   expectedQty: number;
   countedQty: number;
   difference: number;
-  product?: Product;
+  product?: Pick<Product, 'id' | 'code' | 'name'>;
 }
 
 // ─────────────────────────────────────────────
-// SATIŞ & TEKLİF
+// SALES
 // ─────────────────────────────────────────────
 
 export interface SalesQuote {
@@ -396,193 +354,100 @@ export interface SalesQuote {
   contactId: string;
   number: string;
   date: string;
-  validUntil?: string;
-  status: OrderStatus;
-  notes?: string;
+  validUntil: string | null;
+  status: QuoteStatus;
+  notes: string | null;
   totalNet: number;
   totalTax: number;
   totalGross: number;
   createdAt: string;
   updatedAt: string;
-  contact?: Contact;
-  items?: SalesQuoteItem[];
-}
-
-export interface SalesQuoteItem {
-  id: string;
-  quoteId: string;
-  productId: string;
-  description?: string;
-  quantity: number;
-  unitPrice: number;
-  discount: number;
-  taxRate: number;
-  lineTotal: number;
-  product?: Product;
+  contact?: Pick<Contact, 'id' | 'name'>;
+  items?: SalesOrderItem[];
 }
 
 export interface SalesOrder {
   id: string;
   tenantId: string;
   contactId: string;
+  quoteId: string | null;
   number: string;
   date: string;
-  dueDate?: string;
+  dueDate: string | null;
   status: OrderStatus;
-  notes?: string;
+  notes: string | null;
   totalNet: number;
   totalTax: number;
   totalGross: number;
+  invoicedAmount: number;
   createdAt: string;
   updatedAt: string;
-  contact?: Contact;
+  contact?: Pick<Contact, 'id' | 'name'>;
   items?: SalesOrderItem[];
-  invoices?: Invoice[];
+  invoices?: Pick<Invoice, 'id' | 'number' | 'status' | 'totalGross'>[];
 }
 
 export interface SalesOrderItem {
   id: string;
+  tenantId: string;
   orderId: string;
   productId: string;
-  description?: string;
+  description: string | null;
   quantity: number;
-  delivered: number;
   unitPrice: number;
   discount: number;
   taxRate: number;
+  taxAmount: number;
   lineTotal: number;
-  product?: Product;
+  sortOrder: number;
+  product?: Pick<Product, 'id' | 'code' | 'name'>;
 }
 
 // ─────────────────────────────────────────────
-// SATIN ALMA
-// ─────────────────────────────────────────────
-
-export interface PurchaseRequest {
-  id: string;
-  tenantId: string;
-  number: string;
-  date: string;
-  status: PurchaseRequestStatus;
-  requestedBy?: string;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-  items?: PurchaseRequestItem[];
-}
-
-export interface PurchaseRequestItem {
-  id: string;
-  requestId: string;
-  productId: string;
-  description?: string;
-  quantity: number;
-  notes?: string;
-  product?: Product;
-}
-
-export interface PurchaseOrder {
-  id: string;
-  tenantId: string;
-  contactId: string;
-  number: string;
-  date: string;
-  dueDate?: string;
-  status: PurchaseOrderStatus;
-  notes?: string;
-  totalNet: number;
-  totalTax: number;
-  totalGross: number;
-  createdAt: string;
-  updatedAt: string;
-  contact?: Contact;
-  items?: PurchaseOrderItem[];
-  invoices?: Invoice[];
-}
-
-export interface PurchaseOrderItem {
-  id: string;
-  orderId: string;
-  productId: string;
-  description?: string;
-  quantity: number;
-  received: number;
-  unitPrice: number;
-  discount: number;
-  taxRate: number;
-  lineTotal: number;
-  product?: Product;
-}
-
-// ─────────────────────────────────────────────
-// FATURA YÖNETİMİ
+// INVOICE
 // ─────────────────────────────────────────────
 
 export interface Invoice {
   id: string;
   tenantId: string;
   contactId: string;
-  salesOrderId?: string;
-  purchaseOrderId?: string;
+  salesOrderId: string | null;
+  purchaseOrderId: string | null;
   type: InvoiceType;
   status: InvoiceStatus;
   number: string;
   date: string;
-  dueDate?: string;
+  dueDate: string | null;
+  currencyCode: string;
   totalNet: number;
   totalTax: number;
   totalGross: number;
-  paidAmount: number;
-  notes?: string;
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
-  contact?: Contact;
+  contact?: Pick<Contact, 'id' | 'name' | 'taxNumber'>;
   lines?: InvoiceLine[];
-  eDocuments?: EDocument[];
-  payments?: Payment[];
 }
 
 export interface InvoiceLine {
   id: string;
+  tenantId: string;
   invoiceId: string;
-  productId?: string;
-  taxRateId?: string;
+  productId: string | null;
+  taxRateId: string | null;
   description: string;
   quantity: number;
   unitPrice: number;
   discount: number;
   taxAmount: number;
   lineTotal: number;
-  product?: Product;
-  taxRate?: TaxRate;
-}
-
-export interface EDocument {
-  id: string;
-  invoiceId: string;
-  type: EDocumentType;
-  uuid?: string;
-  status?: string;
-  sentAt?: string;
-  responseAt?: string;
-  rawResponse?: string;
-}
-
-export interface Payment {
-  id: string;
-  tenantId: string;
-  invoiceId: string;
-  date: string;
-  amount: number;
-  method: string;
-  reference?: string;
-  status: PaymentStatus;
-  notes?: string;
-  createdAt: string;
+  sortOrder: number;
+  product?: Pick<Product, 'id' | 'code' | 'name'>;
+  taxRate?: Pick<TaxRate, 'id' | 'name' | 'rate'>;
 }
 
 // ─────────────────────────────────────────────
-// MUHASEBE
+// ACCOUNTING
 // ─────────────────────────────────────────────
 
 export interface LedgerAccount {
@@ -590,259 +455,158 @@ export interface LedgerAccount {
   tenantId: string;
   code: string;
   name: string;
-  parentId?: string;
+  accountType: AccountType;
+  parentId: string | null;
   isActive: boolean;
-  parent?: LedgerAccount;
-  children?: LedgerAccount[];
+  parent?: Pick<LedgerAccount, 'id' | 'code' | 'name'>;
+  children?: Pick<LedgerAccount, 'id' | 'code' | 'name'>[];
+}
+
+export interface FiscalPeriod {
+  id: string;
+  tenantId: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: FiscalPeriodStatus;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface JournalEntry {
   id: string;
   tenantId: string;
+  fiscalPeriodId: string | null;
   type: JournalEntryType;
   number: string;
   date: string;
-  description?: string;
-  refType?: string;
-  refId?: string;
+  description: string | null;
   isPosted: boolean;
+  postedAt: string | null;
   createdAt: string;
   updatedAt: string;
   lines?: JournalEntryLine[];
+  fiscalPeriod?: Pick<FiscalPeriod, 'id' | 'name' | 'status'>;
 }
 
 export interface JournalEntryLine {
   id: string;
+  tenantId: string;
   journalEntryId: string;
   accountId: string;
   debit: number;
   credit: number;
-  description?: string;
-  account?: LedgerAccount;
+  description: string | null;
+  sortOrder: number;
+  account?: Pick<LedgerAccount, 'id' | 'code' | 'name'>;
 }
 
 // ─────────────────────────────────────────────
-// PERSONEL TAKİBİ
+// PAYMENT
 // ─────────────────────────────────────────────
 
-export interface Employee {
+export interface BankAccount {
   id: string;
   tenantId: string;
-  firstName: string;
-  lastName: string;
-  email?: string;
-  phone?: string;
-  position?: string;
-  department?: string;
-  hireDate: string;
-  leaveDate?: string;
-  salary: number;
+  name: string;
+  accountNumber: string | null;
+  iban: string | null;
+  bankName: string | null;
+  currencyCode: string;
+  type: BankAccountType;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  leaveRequests?: LeaveRequest[];
-  attendances?: Attendance[];
-  payrolls?: Payroll[];
 }
 
-export interface LeaveRequest {
+export interface CashAccount {
   id: string;
-  employeeId: string;
-  type: LeaveType;
-  status: LeaveStatus;
-  startDate: string;
-  endDate: string;
-  days: number;
-  notes?: string;
+  tenantId: string;
+  name: string;
+  currencyCode: string;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  employee?: Employee;
 }
 
-export interface Attendance {
+export interface Payment {
   id: string;
-  employeeId: string;
+  tenantId: string;
+  contactId: string | null;
+  bankAccountId: string | null;
+  cashAccountId: string | null;
   date: string;
-  checkIn?: string;
-  checkOut?: string;
-  overtimeHours: number;
-  notes?: string;
-  employee?: Employee;
-}
-
-export interface Payroll {
-  id: string;
-  tenantId: string;
-  employeeId: string;
-  period: string;
-  grossSalary: number;
-  deductions: number;
-  netSalary: number;
-  paidAt?: string;
-  notes?: string;
-  createdAt: string;
-  employee?: Employee;
-  items?: PayrollItem[];
-}
-
-export interface PayrollItem {
-  id: string;
-  payrollId: string;
-  label: string;
   amount: number;
-  isDeduction: boolean;
-}
-
-// ─────────────────────────────────────────────
-// ÜRETİM TAKİBİ
-// ─────────────────────────────────────────────
-
-export interface BOM {
-  id: string;
-  tenantId: string;
-  productId: string;
-  name: string;
-  version: string;
-  isActive: boolean;
-  createdAt: string;
-  product?: Product;
-  items?: BOMItem[];
-}
-
-export interface BOMItem {
-  id: string;
-  bomId: string;
-  productId: string;
-  quantity: number;
-  unit?: string;
-  notes?: string;
-  product?: Product;
-}
-
-export interface WorkOrder {
-  id: string;
-  tenantId: string;
-  bomId?: string;
-  productId: string;
-  number: string;
-  status: WorkOrderStatus;
-  plannedQty: number;
-  producedQty: number;
-  startDate?: string;
-  endDate?: string;
-  notes?: string;
+  method: PaymentMethod;
+  reference: string | null;
+  status: PaymentStatus;
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
-  product?: Product;
-  items?: WorkOrderItem[];
+  contact?: Pick<Contact, 'id' | 'name'>;
+  bankAccount?: Pick<BankAccount, 'id' | 'name'>;
+  cashAccount?: Pick<CashAccount, 'id' | 'name'>;
+  allocations?: PaymentAllocation[];
 }
 
-export interface WorkOrderItem {
-  id: string;
-  workOrderId: string;
-  productId: string;
-  requiredQty: number;
-  consumedQty: number;
-  product?: Product;
-}
-
-// ─────────────────────────────────────────────
-// TEKNİK SERVİS
-// ─────────────────────────────────────────────
-
-export interface ServiceRequest {
+export interface PaymentAllocation {
   id: string;
   tenantId: string;
-  contactId?: string;
-  number: string;
-  status: ServiceStatus;
-  subject: string;
-  description?: string;
-  deviceInfo?: string;
-  serialNo?: string;
-  warrantyEnd?: string;
-  assignedTo?: string;
-  closedAt?: string;
+  paymentId: string;
+  invoiceId: string;
+  amount: number;
   createdAt: string;
-  updatedAt: string;
-  contact?: Contact;
-  items?: ServiceRequestItem[];
-}
-
-export interface ServiceRequestItem {
-  id: string;
-  serviceRequestId: string;
-  productId?: string;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  lineTotal: number;
-  product?: Product;
+  invoice?: Pick<Invoice, 'id' | 'number' | 'totalGross'>;
 }
 
 // ─────────────────────────────────────────────
-// E-TİCARET
+// REPORTS
 // ─────────────────────────────────────────────
 
-export interface MarketplaceIntegration {
-  id: string;
-  tenantId: string;
-  channel: MarketplaceChannel;
-  name: string;
-  apiKey?: string;
-  apiSecret?: string;
-  storeId?: string;
-  isActive: boolean;
-  lastSyncAt?: string;
-  createdAt: string;
-  updatedAt: string;
-  listings?: MarketplaceListing[];
-  orders?: MarketplaceOrder[];
+export interface RevenueSummary {
+  period: { from: string; to: string };
+  invoiceCount: number;
+  totalNet: number;
+  totalTax: number;
+  totalGross: number;
 }
 
-export interface MarketplaceListing {
-  id: string;
-  integrationId: string;
+export interface StockSummaryItem {
   productId: string;
-  externalId: string;
-  externalSku?: string;
-  price: number;
-  stock: number;
-  isActive: boolean;
-  lastSyncAt?: string;
-  product?: Product;
-  integration?: MarketplaceIntegration;
-}
-
-export interface MarketplaceOrder {
-  id: string;
-  integrationId: string;
-  externalId: string;
-  channel: MarketplaceChannel;
-  status: string;
-  customerName?: string;
-  customerEmail?: string;
-  totalAmount: number;
-  orderDate: string;
-  syncedAt: string;
-  integration?: MarketplaceIntegration;
-  items?: MarketplaceOrderItem[];
-}
-
-export interface MarketplaceOrderItem {
-  id: string;
-  marketplaceOrderId: string;
-  externalProductId: string;
-  productId?: string;
-  name: string;
+  productCode: string;
+  productName: string;
+  warehouseName: string;
   quantity: number;
-  unitPrice: number;
-  lineTotal: number;
+  minStockLevel: number;
 }
 
-// ─────────────────────────────────────────────
-// RAPORLAMA
-// ─────────────────────────────────────────────
+export interface StockSummary {
+  stockLevels: StockLevel[];
+  summary: {
+    totalLines: number;
+    belowMinStockCount: number;
+    totalStockValue: number;
+  };
+  belowMinStock: StockSummaryItem[];
+}
+
+export interface ContactBalanceItem {
+  contactId: string;
+  name: string;
+  code: string | null;
+  type: ContactType;
+  balance: number;
+  lastEntryDate: string | null;
+}
+
+export interface ContactBalanceSummary {
+  contacts: ContactBalanceItem[];
+  summary: {
+    totalReceivable: number;
+    totalPayable: number;
+  };
+}
 
 export interface SavedReport {
   id: string;
@@ -851,7 +615,8 @@ export interface SavedReport {
   module: string;
   filters: Record<string, unknown>;
   columns: string[];
-  createdBy?: string;
+  isShared: boolean;
+  createdBy: string | null;
   createdAt: string;
   updatedAt: string;
 }
