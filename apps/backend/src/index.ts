@@ -13,8 +13,14 @@ import { reportingRoutes } from './routes/reporting.routes';
 import { masterDataRoutes } from './routes/master-data.routes';
 import { stockRoutes } from './routes/stock.routes';
 import { salesOrderRoutes } from './routes/sales-order.routes';
+import { purchaseOrderRoutes } from './routes/purchase-order.routes';
 import { paymentRoutes } from './routes/payment.routes';
 import { authRoutes } from './routes/auth.routes';
+import { settingsRoutes } from './routes/settings.routes';
+import { notificationRoutes } from './routes/notification.routes';
+import { auditLogRoutes } from './routes/audit-log.routes';
+import { attachmentRoutes } from './routes/attachment.routes';
+import { CurrencyRatesController } from './controllers/currency-rates.controller';
 
 const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
@@ -57,11 +63,17 @@ app.route('/api/warehouses', warehouseRoutes);
 app.route('/api/contacts', contactRoutes);
 app.route('/api/invoices', invoiceRoutes);
 app.route('/api/sales-orders', salesOrderRoutes);
+app.route('/api/purchase-orders', purchaseOrderRoutes);
 app.route('/api/accounting', accountingRoutes);
 app.route('/api/payments', paymentRoutes);
 app.route('/api/stock', stockRoutes);
 app.route('/api/master', masterDataRoutes);
 app.route('/api/reports', reportingRoutes);
+app.route('/api/settings', settingsRoutes);
+app.route('/api/notifications', notificationRoutes);
+app.route('/api/audit-logs', auditLogRoutes);
+app.route('/api/attachments', attachmentRoutes);
+app.get('/api/currency-rates/tcmb', CurrencyRatesController.getTcmbRates);
 
 // ── Başlangıç logu ───────────────────────────
 serve({ fetch: app.fetch, port: PORT }, () => {

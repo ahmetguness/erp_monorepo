@@ -260,6 +260,19 @@ export const SavedReportController = {
     return c.json({ data: reports });
   },
 
+  async getById(c: Context): Promise<Response> {
+    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const id = c.req.param('id')!;
+    if (!tenantId || typeof tenantId !== 'string') {
+      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    }
+
+    const report = await prisma.savedReport.findFirst({ where: { id, tenantId } });
+    if (!report) return c.json(new NotFoundError('Rapor', id).toJSON(), 404);
+
+    return c.json({ data: report });
+  },
+
   async create(c: Context): Promise<Response> {
     const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') {

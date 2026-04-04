@@ -243,6 +243,11 @@ export const InvoiceController = {
       },
     });
 
+    // History kaydı
+    await prisma.invoiceHistory.create({
+      data: { tenantId, invoiceId: invoice.id, toStatus: InvoiceStatus.DRAFT, notes: 'Fatura oluşturuldu' },
+    });
+
     return c.json({ data: invoice }, 201);
   },
 
@@ -278,6 +283,13 @@ export const InvoiceController = {
       },
     });
 
+    // Status değiştiyse history kaydı
+    if (body.status && body.status !== invoice.status) {
+      await prisma.invoiceHistory.create({
+        data: { tenantId, invoiceId: invoiceId!, fromStatus: invoice.status, toStatus: body.status },
+      });
+    }
+
     return c.json({ data: updated });
   },
 
@@ -306,6 +318,10 @@ export const InvoiceController = {
     const updated = await prisma.invoice.update({
       where: { id: invoiceId },
       data: { status: InvoiceStatus.CANCELLED },
+    });
+
+    await prisma.invoiceHistory.create({
+      data: { tenantId, invoiceId: invoiceId!, fromStatus: invoice.status, toStatus: InvoiceStatus.CANCELLED, notes: 'Fatura iptal edildi' },
     });
 
     return c.json({ data: updated });

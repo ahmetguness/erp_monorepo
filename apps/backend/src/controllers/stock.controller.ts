@@ -194,21 +194,26 @@ export const StockController = {
         },
       });
 
-      // StockLevel güncelle
+      // StockLevel güncelle — mevcut kaydın locationId'sini bul
+      const existingLevel = await tx.stockLevel.findFirst({
+        where: { tenantId, productId: body.productId, warehouseId: body.warehouseId },
+      });
+      const locId = existingLevel?.locationId ?? '';
+
       if (body.type === MovementType.IN || body.type === MovementType.OPENING) {
         await tx.stockLevel.upsert({
           where: {
             productId_warehouseId_locationId: {
               productId: body.productId,
               warehouseId: body.warehouseId,
-              locationId: '',
+              locationId: locId,
             },
           },
           create: {
             tenantId,
             productId: body.productId,
             warehouseId: body.warehouseId,
-            locationId: '',
+            locationId: locId,
             quantity: body.quantity,
           },
           update: { quantity: { increment: body.quantity } },
@@ -219,20 +224,19 @@ export const StockController = {
           data: { quantity: { decrement: body.quantity } },
         });
       } else if (body.type === MovementType.ADJUSTMENT) {
-        // ADJUSTMENT: quantity = yeni mutlak değer
         await tx.stockLevel.upsert({
           where: {
             productId_warehouseId_locationId: {
               productId: body.productId,
               warehouseId: body.warehouseId,
-              locationId: '',
+              locationId: locId,
             },
           },
           create: {
             tenantId,
             productId: body.productId,
             warehouseId: body.warehouseId,
-            locationId: '',
+            locationId: locId,
             quantity: body.quantity,
           },
           update: { quantity: body.quantity },

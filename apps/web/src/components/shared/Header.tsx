@@ -1,10 +1,11 @@
 'use client';
 
-import { Menu, Bell, ChevronDown, LogOut, User } from 'lucide-react';
+import { Menu, ChevronDown, LogOut } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '@/store/ui.store';
 import { useCurrentUser, useLogout } from '@/hooks/useAuth';
 import { cn, initials } from '@/lib/utils';
+import { NotificationDropdown } from './NotificationDropdown';
 
 // ─────────────────────────────────────────────
 // User dropdown
@@ -86,12 +87,7 @@ export function Header() {
       <div className="flex-1" />
 
       {/* Notifications */}
-      <button
-        aria-label="Bildirimler"
-        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors relative"
-      >
-        <Bell className="w-5 h-5" />
-      </button>
+      <NotificationDropdown />
 
       {/* User */}
       <UserDropdown />

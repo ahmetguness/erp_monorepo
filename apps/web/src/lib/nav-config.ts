@@ -18,6 +18,9 @@ import {
   Banknote,
   Landmark,
   Coins,
+  Truck,
+  ClipboardList,
+  BadgeDollarSign,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -85,6 +88,21 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'Satın Alma',
+    items: [
+      {
+        label: 'Satın Alma',
+        href: '/dashboard/purchase-orders',
+        icon: Truck,
+        module: 'invoicing',
+        children: [
+          { label: 'Talepler', href: '/dashboard/purchase-orders/requests', icon: ClipboardList },
+          { label: 'Siparişler', href: '/dashboard/purchase-orders', icon: Truck },
+        ],
+      },
+    ],
+  },
+  {
     label: 'Muhasebe',
     items: [
       {
@@ -115,6 +133,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Raporlar',
     items: [
       { label: 'Raporlar', href: '/dashboard/reports', icon: BarChart3, module: 'reporting' },
+      { label: 'Döviz Kurları', href: '/dashboard/currency-rates', icon: BadgeDollarSign },
     ],
   },
   {

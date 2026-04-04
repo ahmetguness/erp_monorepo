@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { useInvoice, useCancelInvoice } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
 
 interface LineRow {
   id: string; description: string; quantity: number; unitPrice: number;
@@ -86,6 +87,9 @@ export function InvoiceDetailPage({ id }: Props) {
         keyExtractor={(r) => r.id}
         emptyTitle="Fatura kalemi bulunamadı"
       />
+
+      {/* Attachments */}
+      <AttachmentPanel entityType="INVOICE" entityId={id} />
 
       <ConfirmDialog
         isOpen={cancelOpen}

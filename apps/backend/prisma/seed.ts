@@ -35,6 +35,11 @@ async function main() {
   await prisma.salesOrder.deleteMany();
   await prisma.salesQuoteItem.deleteMany();
   await prisma.salesQuote.deleteMany();
+  await prisma.purchaseOrderHistory.deleteMany();
+  await prisma.purchaseOrderItem.deleteMany();
+  await prisma.purchaseRequestItem.deleteMany();
+  await prisma.purchaseRequest.deleteMany();
+  await prisma.purchaseOrder.deleteMany();
   await prisma.stockMovement.deleteMany();
   await prisma.stockLevel.deleteMany();
   await prisma.stockCount.deleteMany();
@@ -424,6 +429,130 @@ async function main() {
   });
 
   console.log('  ✓ Stok sayımı');
+
+  // ── Purchase Requests ─────────────────────────
+  const purchaseReq1 = await prisma.purchaseRequest.create({
+    data: {
+      tenantId: tenant.id, number: 'PR-000001', date: new Date('2026-03-20'),
+      status: 'ORDERED', notes: 'Mart ayı stok takviyesi',
+      totalEstimated: 54000,
+      items: {
+        create: [
+          { tenantId: tenant.id, productId: products[0].id, quantity: 3, unitPrice: 18000 },
+        ],
+      },
+    },
+  });
+
+  await prisma.purchaseRequest.create({
+    data: {
+      tenantId: tenant.id, number: 'PR-000002', date: new Date('2026-04-01'),
+      status: 'APPROVED', notes: 'Ofis malzemeleri talebi',
+      totalEstimated: 2550,
+      items: {
+        create: [
+          { tenantId: tenant.id, productId: products[5].id, quantity: 30, unitPrice: 85 },
+        ],
+      },
+    },
+  });
+
+  await prisma.purchaseRequest.create({
+    data: {
+      tenantId: tenant.id, number: 'PR-000003', date: new Date('2026-04-03'),
+      status: 'DRAFT', notes: 'Yeni dönem için elektronik alımı',
+      totalEstimated: 36000,
+      items: {
+        create: [
+          { tenantId: tenant.id, productId: products[3].id, quantity: 2, unitPrice: 12000 },
+          { tenantId: tenant.id, productId: products[4].id, quantity: 10, unitPrice: 280 },
+          { tenantId: tenant.id, productId: products[7].id, quantity: 1, unitPrice: 7500 },
+        ],
+      },
+    },
+  });
+
+  console.log('  ✓ Satın alma talepleri');
+
+  // ── Purchase Orders ───────────────────────────
+  const po1 = await prisma.purchaseOrder.create({
+    data: {
+      tenantId: tenant.id, contactId: contacts[3].id, number: 'PO-000001',
+      date: new Date('2026-03-22'), dueDate: new Date('2026-04-05'),
+      status: 'RECEIVED', notes: 'Laptop stok takviyesi',
+      totalNet: 54000, totalTax: 10800, totalGross: 64800,
+      items: {
+        create: [
+          { tenantId: tenant.id, productId: products[0].id, description: 'Laptop Pro 15"', quantity: 3, received: 3, unitPrice: 18000, taxRate: 20, taxAmount: 10800, lineTotal: 64800 },
+        ],
+      },
+    },
+  });
+
+  await prisma.purchaseOrderHistory.createMany({
+    data: [
+      { tenantId: tenant.id, orderId: po1.id, toStatus: 'DRAFT', notes: 'Sipariş oluşturuldu' },
+      { tenantId: tenant.id, orderId: po1.id, fromStatus: 'DRAFT', toStatus: 'SENT', notes: 'Tedarikçiye gönderildi' },
+      { tenantId: tenant.id, orderId: po1.id, fromStatus: 'SENT', toStatus: 'RECEIVED', notes: '3 kalem teslim alındı' },
+    ],
+  });
+
+  // Link PR-000001 to PO-000001
+  await prisma.purchaseRequest.update({
+    where: { id: purchaseReq1.id },
+    data: { purchaseOrderId: po1.id },
+  });
+
+  const po2 = await prisma.purchaseOrder.create({
+    data: {
+      tenantId: tenant.id, contactId: contacts[4].id, number: 'PO-000002',
+      date: new Date('2026-04-01'), dueDate: new Date('2026-04-15'),
+      status: 'SENT', notes: 'Ofis malzemeleri siparişi',
+      totalNet: 4050, totalTax: 405, totalGross: 4455,
+      items: {
+        create: [
+          { tenantId: tenant.id, productId: products[5].id, description: 'A4 Fotokopi Kağıdı', quantity: 30, received: 0, unitPrice: 85, taxRate: 10, taxAmount: 255, lineTotal: 2805 },
+          { tenantId: tenant.id, productId: products[6].id, description: 'Tükenmez Kalem Seti', quantity: 20, received: 0, unitPrice: 45, taxRate: 10, taxAmount: 90, lineTotal: 990 },
+        ],
+      },
+    },
+  });
+
+  await prisma.purchaseOrderHistory.createMany({
+    data: [
+      { tenantId: tenant.id, orderId: po2.id, toStatus: 'DRAFT' },
+      { tenantId: tenant.id, orderId: po2.id, fromStatus: 'DRAFT', toStatus: 'SENT' },
+    ],
+  });
+
+  const po3 = await prisma.purchaseOrder.create({
+    data: {
+      tenantId: tenant.id, contactId: contacts[3].id, number: 'PO-000003',
+      date: new Date('2026-04-03'),
+      status: 'DRAFT', notes: 'Monitör siparişi (taslak)',
+      totalNet: 15000, totalTax: 3000, totalGross: 18000,
+      items: {
+        create: [
+          { tenantId: tenant.id, productId: products[7].id, description: 'Monitör 27" 4K', quantity: 2, received: 0, unitPrice: 7500, taxRate: 20, taxAmount: 3000, lineTotal: 18000 },
+        ],
+      },
+    },
+  });
+
+  await prisma.purchaseOrderHistory.create({
+    data: { tenantId: tenant.id, orderId: po3.id, toStatus: 'DRAFT' },
+  });
+
+  console.log('  ✓ Satın alma siparişleri');
+
+  // ── Number Sequences for Purchase ─────────────
+  await prisma.numberSequence.createMany({
+    data: [
+      { tenantId: tenant.id, module: 'purchase_request', prefix: 'PR-', lastNum: 3, padding: 6 },
+      { tenantId: tenant.id, module: 'purchase_order', prefix: 'PO-', lastNum: 3, padding: 6 },
+    ],
+    skipDuplicates: true,
+  });
 
   // ── Roles & Permissions ───────────────────────
   const roleAdmin = await prisma.role.create({

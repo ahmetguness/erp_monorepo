@@ -15,6 +15,7 @@ reportingRoutes.get('/contact-balance', ReportingController.contactBalance);
 
 // Kayıtlı raporlar
 reportingRoutes.get('/saved', SavedReportController.list);
+reportingRoutes.get('/saved/:id', SavedReportController.getById);
 reportingRoutes.post('/saved', SavedReportController.create);
 reportingRoutes.patch('/saved/:id', SavedReportController.update);
 reportingRoutes.delete('/saved/:id', SavedReportController.remove);

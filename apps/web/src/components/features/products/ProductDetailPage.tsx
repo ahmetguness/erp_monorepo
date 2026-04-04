@@ -12,6 +12,7 @@ import { FullPageSpinner } from '@/components/ui/Spinner';
 import { useProduct, useDeleteProduct } from '@/hooks/useProducts';
 import { useStockLevels } from '@/hooks/useStock';
 import { formatCurrency } from '@/lib/utils';
+import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
 import type { StockLevel } from '@/services/stock.service';
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -84,6 +85,9 @@ export function ProductDetailPage({ id }: Props) {
           emptyTitle="Stok kaydı yok"
         />
       </div>
+
+      {/* Attachments */}
+      <AttachmentPanel entityType="PRODUCT" entityId={id} />
 
       <ConfirmDialog
         isOpen={deleteOpen}

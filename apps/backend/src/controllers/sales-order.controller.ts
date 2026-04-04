@@ -248,6 +248,10 @@ export const SalesOrderController = {
       return newOrder;
     });
 
+    await prisma.salesOrderHistory.create({
+      data: { tenantId, orderId: order.id, toStatus: 'DRAFT', notes: `Tekliften dönüştürüldü: ${quote.number}` },
+    });
+
     return c.json({ data: order }, 201);
   },
 
@@ -348,6 +352,10 @@ export const SalesOrderController = {
       include: { items: true, contact: { select: { id: true, name: true } } },
     });
 
+    await prisma.salesOrderHistory.create({
+      data: { tenantId, orderId: order.id, toStatus: 'DRAFT', notes: 'Sipariş oluşturuldu' },
+    });
+
     return c.json({ data: order }, 201);
   },
 
@@ -376,6 +384,12 @@ export const SalesOrderController = {
       },
     });
 
+    if (body.status && body.status !== order.status) {
+      await prisma.salesOrderHistory.create({
+        data: { tenantId, orderId: orderId!, fromStatus: order.status, toStatus: body.status },
+      });
+    }
+
     return c.json({ data: updated });
   },
 
@@ -396,6 +410,10 @@ export const SalesOrderController = {
     const updated = await prisma.salesOrder.update({
       where: { id: orderId },
       data: { status: OrderStatus.CANCELLED },
+    });
+
+    await prisma.salesOrderHistory.create({
+      data: { tenantId, orderId: orderId!, fromStatus: order.status, toStatus: OrderStatus.CANCELLED, notes: 'Sipariş iptal edildi' },
     });
 
     return c.json({ data: updated });

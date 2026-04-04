@@ -6,7 +6,7 @@ import {
   TrendingUp, TrendingDown, AlertTriangle, FileText,
   Package, Users, ArrowUpRight, ArrowDownRight,
   Plus, ShoppingCart, Clock, CalendarDays, Building2,
-  ChevronRight, Wallet, BarChart3,
+  ChevronRight, Wallet, BarChart3, DollarSign, Euro,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -151,6 +151,19 @@ export function DashboardOverview() {
 
 
   const profit = (rev?.totalGross ?? 0) - (exp?.totalGross ?? 0);
+
+  // TCMB rates for widget
+  const { data: tcmb } = useQuery({
+    queryKey: ['dash', 'tcmb'], queryFn: async () => {
+      const r = await apiClient.get('/api/currency-rates/tcmb');
+      return r.data?.data as { date: string; currencies: Array<{ code: string; name: string; forexBuying: number; forexSelling: number }> } | undefined;
+    },
+    staleTime: 30 * 60 * 1000,
+  });
+
+  const tcmbUsd = tcmb?.currencies.find((c) => c.code === 'USD');
+  const tcmbEur = tcmb?.currencies.find((c) => c.code === 'EUR');
+  const tcmbGbp = tcmb?.currencies.find((c) => c.code === 'GBP');
 
   // Pie data
   const pieData = (() => {
@@ -364,6 +377,48 @@ export function DashboardOverview() {
                     <span className="text-emerald-400 font-semibold">{formatCurrency(c.balance)}</span>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Currency rates widget */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-slate-800/60 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-amber-400" />Döviz
+              </h2>
+              <Link href="/dashboard/currency-rates" className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-0.5">
+                Tümü <ChevronRight className="w-3 h-3" />
+              </Link>
+            </div>
+            <div className="divide-y divide-slate-800/40">
+              {[
+                { cur: tcmbUsd, code: 'USD', icon: <DollarSign className="w-3 h-3" />, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                { cur: tcmbEur, code: 'EUR', icon: <Euro className="w-3 h-3" />, color: 'text-sky-400', bg: 'bg-sky-500/10' },
+              ].map((item) => (
+                <div key={item.code} className="flex items-center gap-2.5 px-4 py-2.5">
+                  <div className={cn('w-6 h-6 rounded-md flex items-center justify-center', item.bg, item.color)}>{item.icon}</div>
+                  <span className="text-xs font-semibold text-slate-300 w-8">{item.code}</span>
+                  {item.cur ? (
+                    <div className="flex-1 flex items-center justify-end gap-3">
+                      <div className="text-right">
+                        <p className="text-[9px] text-emerald-500">Alış</p>
+                        <p className="text-xs font-bold text-white tabular-nums">₺{item.cur.forexBuying.toFixed(4)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] text-red-500">Satış</p>
+                        <p className="text-xs font-bold text-white tabular-nums">₺{item.cur.forexSelling.toFixed(4)}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="flex-1 text-right text-xs text-slate-600">—</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            {tcmb?.date && (
+              <div className="px-4 py-1.5 border-t border-slate-800/40 text-center">
+                <span className="text-[9px] text-slate-600">TCMB · {tcmb.date}</span>
               </div>
             )}
           </div>
