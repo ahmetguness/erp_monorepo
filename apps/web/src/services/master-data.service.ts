@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { apiClient } from '@/lib/api-client';
+import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema } from '@/types/api.types';
 
 // ─────────────────────────────────────────────
@@ -27,7 +28,7 @@ export const TaxRateSchema = z.object({
   id: z.string(),
   tenantId: z.string(),
   name: z.string(),
-  rate: z.number(),
+  rate: z.coerce.number(),
   isActive: z.boolean(),
 });
 
@@ -37,7 +38,7 @@ export const CurrencySchema = z.object({
   code: z.string(),
   name: z.string(),
   symbol: z.string(),
-  defaultRate: z.number(),
+  defaultRate: z.coerce.number(),
   isBase: z.boolean(),
 });
 
@@ -80,12 +81,12 @@ const UnitsResponseSchema = SingleResponseSchema(z.array(UnitSchema));
 
 export async function getUnits(): Promise<Unit[]> {
   const res = await apiClient.get('/api/master/units');
-  return UnitsResponseSchema.parse(res.data).data;
+  return safeParse(UnitsResponseSchema, res.data, 'getUnits').data;
 }
 
 export async function createUnit(data: CreateUnitDTO): Promise<Unit> {
   const res = await apiClient.post('/api/master/units', data);
-  return SingleResponseSchema(UnitSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(UnitSchema), res.data, 'createUnit').data;
 }
 
 export async function deleteUnit(id: string): Promise<void> {
@@ -100,17 +101,17 @@ const CategoriesResponseSchema = SingleResponseSchema(z.array(CategorySchema));
 
 export async function getCategories(): Promise<CategoryItem[]> {
   const res = await apiClient.get('/api/master/categories');
-  return CategoriesResponseSchema.parse(res.data).data;
+  return safeParse(CategoriesResponseSchema, res.data, 'getCategories').data;
 }
 
 export async function createCategory(data: CreateCategoryDTO): Promise<CategoryItem> {
   const res = await apiClient.post('/api/master/categories', data);
-  return SingleResponseSchema(CategorySchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(CategorySchema), res.data, 'createCategory').data;
 }
 
 export async function updateCategory(id: string, data: UpdateCategoryDTO): Promise<CategoryItem> {
   const res = await apiClient.patch(`/api/master/categories/${id}`, data);
-  return SingleResponseSchema(CategorySchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(CategorySchema), res.data, 'updateCategory').data;
 }
 
 export async function deleteCategory(id: string): Promise<void> {
@@ -125,17 +126,17 @@ const TaxRatesResponseSchema = SingleResponseSchema(z.array(TaxRateSchema));
 
 export async function getTaxRates(): Promise<TaxRate[]> {
   const res = await apiClient.get('/api/master/tax-rates');
-  return TaxRatesResponseSchema.parse(res.data).data;
+  return safeParse(TaxRatesResponseSchema, res.data, 'getTaxRates').data;
 }
 
 export async function createTaxRate(data: CreateTaxRateDTO): Promise<TaxRate> {
   const res = await apiClient.post('/api/master/tax-rates', data);
-  return SingleResponseSchema(TaxRateSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(TaxRateSchema), res.data, 'createTaxRate').data;
 }
 
 export async function updateTaxRate(id: string, data: UpdateTaxRateDTO): Promise<TaxRate> {
   const res = await apiClient.patch(`/api/master/tax-rates/${id}`, data);
-  return SingleResponseSchema(TaxRateSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(TaxRateSchema), res.data, 'updateTaxRate').data;
 }
 
 // ─────────────────────────────────────────────
@@ -146,10 +147,10 @@ const CurrenciesResponseSchema = SingleResponseSchema(z.array(CurrencySchema));
 
 export async function getCurrencies(): Promise<Currency[]> {
   const res = await apiClient.get('/api/master/currencies');
-  return CurrenciesResponseSchema.parse(res.data).data;
+  return safeParse(CurrenciesResponseSchema, res.data, 'getCurrencies').data;
 }
 
 export async function createCurrency(data: CreateCurrencyDTO): Promise<Currency> {
   const res = await apiClient.post('/api/master/currencies', data);
-  return SingleResponseSchema(CurrencySchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(CurrencySchema), res.data, 'createCurrency').data;
 }

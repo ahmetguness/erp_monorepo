@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { apiClient } from '@/lib/api-client';
+import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema } from '@/types/api.types';
 import type { AuthUser, TenantInfo } from '@repo/types';
 
@@ -21,7 +22,11 @@ const TenantInfoSchema = z.object({
   companyName: z.string(),
   plan: z.enum(['STARTER', 'PROFESSIONAL', 'ENTERPRISE']),
   status: z.enum(['TRIAL', 'ACTIVE', 'SUSPENDED', 'CANCELLED']),
-  modules: z.array(z.string()),
+  // Backend bazen string[] bazen space-separated string döndürebilir
+  modules: z.union([
+    z.array(z.string()),
+    z.string().transform((s) => s.split(' ').filter(Boolean)),
+  ]),
 });
 
 const AvailableTenantSchema = z.object({
@@ -97,18 +102,18 @@ export interface RegisterData {
 
 export async function login(credentials: LoginCredentials): Promise<LoginResponse> {
   const res = await apiClient.post('/api/auth/login', credentials);
-  const parsed = LoginResponseSchema.parse(res.data).data;
+  const parsed = safeParse(LoginResponseSchema, res.data, 'login').data;
   return parsed as LoginResponse;
 }
 
 export async function register(data: RegisterData): Promise<RegisterResponse> {
   const res = await apiClient.post('/api/auth/register', data);
-  const parsed = RegisterResponseSchema.parse(res.data).data;
+  const parsed = safeParse(RegisterResponseSchema, res.data, 'register').data;
   return parsed as RegisterResponse;
 }
 
 export async function getMe(): Promise<{ user: AuthUser; tenant: TenantInfo }> {
   const res = await apiClient.get('/api/auth/me');
-  const parsed = MeResponseSchema.parse(res.data).data;
+  const parsed = safeParse(MeResponseSchema, res.data, 'getMe').data;
   return parsed as { user: AuthUser; tenant: TenantInfo };
 }

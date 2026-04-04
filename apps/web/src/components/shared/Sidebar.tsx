@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { ChevronDown, Lock } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NAV_GROUPS, STARTER_MODULES, type NavItem } from '@/lib/nav-config';
 import { useCurrentUser } from '@/hooks/useAuth';
@@ -30,11 +30,13 @@ function NavItemRow({ item, tenantModules, depth = 0 }: NavItemProps) {
     ? item.children.some((c) => pathname.startsWith(c.href))
     : pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
 
-  // Module access check
+  // Module access check — kapalı modüller hiç gösterilmez
   const isLocked =
     item.module !== undefined &&
     !STARTER_MODULES.has(item.module) &&
     !tenantModules.includes(item.module);
+
+  if (isLocked) return null;
 
   const Icon = item.icon;
 
@@ -43,29 +45,23 @@ function NavItemRow({ item, tenantModules, depth = 0 }: NavItemProps) {
     return (
       <div>
         <button
-          onClick={() => !isLocked && setOpen((o) => !o)}
-          disabled={isLocked}
+          onClick={() => setOpen((o) => !o)}
           className={cn(
             'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
             depth > 0 ? 'pl-8' : '',
             isActive
               ? 'bg-sky-500/10 text-sky-400'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
-            isLocked && 'opacity-40 cursor-not-allowed',
           )}
         >
           <Icon className="w-4 h-4 shrink-0" />
           <span className="flex-1 text-left">{item.label}</span>
-          {isLocked ? (
-            <Lock className="w-3 h-3 shrink-0" />
-          ) : (
-            <ChevronDown
-              className={cn('w-3.5 h-3.5 shrink-0 transition-transform', open && 'rotate-180')}
-            />
-          )}
+          <ChevronDown
+            className={cn('w-3.5 h-3.5 shrink-0 transition-transform', open && 'rotate-180')}
+          />
         </button>
 
-        {open && !isLocked && (
+        {open && (
           <div className="mt-0.5 space-y-0.5">
             {item.children.map((child) => (
               <NavItemRow key={child.href} item={child} tenantModules={tenantModules} depth={depth + 1} />
@@ -79,20 +75,17 @@ function NavItemRow({ item, tenantModules, depth = 0 }: NavItemProps) {
   // Leaf item
   return (
     <Link
-      href={isLocked ? '#' : item.href}
-      onClick={(e) => isLocked && e.preventDefault()}
+      href={item.href}
       className={cn(
         'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
         depth > 0 ? 'pl-8' : '',
         isActive
           ? 'bg-sky-500/10 text-sky-400 font-medium'
           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
-        isLocked && 'opacity-40 cursor-not-allowed',
       )}
     >
       <Icon className="w-4 h-4 shrink-0" />
       <span className="flex-1">{item.label}</span>
-      {isLocked && <Lock className="w-3 h-3 shrink-0" />}
     </Link>
   );
 }

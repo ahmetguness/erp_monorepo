@@ -34,22 +34,18 @@ export const useAuthStore = create<AuthStore>()(
       ...initialState,
 
       login: (user, token, tenant) => {
-        // Sync to localStorage for axios interceptor
         if (typeof window !== 'undefined') {
-          localStorage.setItem('axon_token', token);
-          localStorage.setItem('axon_tenant_id', tenant.id);
-          // Sync to cookie for Next.js middleware
-          document.cookie = `axon_token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+          const maxAge = 7 * 24 * 60 * 60;
+          document.cookie = `axon_token=${token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+          document.cookie = `axon_tenant_id=${tenant.id}; path=/; max-age=${maxAge}; SameSite=Lax`;
         }
         set({ user, token, tenant, isAuthenticated: true });
       },
 
       logout: () => {
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('axon_token');
-          localStorage.removeItem('axon_tenant_id');
-          // Clear cookie
           document.cookie = 'axon_token=; path=/; max-age=0';
+          document.cookie = 'axon_tenant_id=; path=/; max-age=0';
         }
         set(initialState);
       },
@@ -61,7 +57,6 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'axon-auth',
-      // Only persist non-sensitive fields
       partialize: (state) => ({
         user: state.user,
         token: state.token,

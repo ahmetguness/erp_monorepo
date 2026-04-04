@@ -11,7 +11,7 @@ export function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 30 * 1000, // 30 seconds
+        staleTime: 0, // Her zaman fresh fetch
         retry: (failureCount, error) => {
           // Don't retry on 4xx errors
           const msg = getErrorMessage(error);

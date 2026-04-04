@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { apiClient } from '@/lib/api-client';
+import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
 import type { PaginationParams } from '@/types/api.types';
 
@@ -22,8 +23,8 @@ export const ContactSchema = z.object({
   city: z.string().nullable(),
   country: z.string(),
   notes: z.string().nullable(),
-  creditLimit: z.number().nullable(),
-  paymentTermDays: z.number().nullable(),
+  creditLimit: z.coerce.number().nullable(),
+  paymentTermDays: z.coerce.number().nullable(),
   isActive: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -34,9 +35,9 @@ export const AccountEntrySchema = z.object({
   tenantId: z.string(),
   contactId: z.string(),
   date: z.string(),
-  debit: z.number(),
-  credit: z.number(),
-  balance: z.number(),
+  debit: z.coerce.number(),
+  credit: z.coerce.number(),
+  balance: z.coerce.number(),
   description: z.string().nullable(),
   refType: z.string().nullable(),
   refId: z.string().nullable(),
@@ -99,22 +100,22 @@ const AccountEntryListSchema = PaginatedResponseSchema(AccountEntrySchema);
 
 export async function getContacts(params: ContactListParams) {
   const res = await apiClient.get('/api/contacts', { params });
-  return ContactListSchema.parse(res.data);
+  return safeParse(ContactListSchema, res.data, 'getContacts');
 }
 
 export async function getContactById(id: string) {
   const res = await apiClient.get(`/api/contacts/${id}`);
-  return SingleResponseSchema(ContactSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(ContactSchema), res.data, 'getContactById').data;
 }
 
 export async function createContact(data: CreateContactDTO): Promise<Contact> {
   const res = await apiClient.post('/api/contacts', data);
-  return SingleResponseSchema(ContactSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(ContactSchema), res.data, 'createContact').data;
 }
 
 export async function updateContact(id: string, data: UpdateContactDTO): Promise<Contact> {
   const res = await apiClient.patch(`/api/contacts/${id}`, data);
-  return SingleResponseSchema(ContactSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(ContactSchema), res.data, 'updateContact').data;
 }
 
 export async function deleteContact(id: string): Promise<void> {
@@ -123,5 +124,5 @@ export async function deleteContact(id: string): Promise<void> {
 
 export async function getAccountEntries(contactId: string, params: AccountEntryListParams) {
   const res = await apiClient.get(`/api/contacts/${contactId}/entries`, { params });
-  return AccountEntryListSchema.parse(res.data);
+  return safeParse(AccountEntryListSchema, res.data, 'getAccountEntries');
 }

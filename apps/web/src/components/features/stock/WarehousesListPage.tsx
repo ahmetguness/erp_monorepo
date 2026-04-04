@@ -14,6 +14,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { FormRow } from '@/components/shared/FormField';
 import { useWarehouses, useCreateWarehouse } from '@/hooks/useStock';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import type { Warehouse } from '@/services/stock.service';
 
 const warehouseSchema = z.object({
@@ -28,6 +29,10 @@ export function WarehousesListPage() {
   const { data: warehouses = [], isLoading } = useWarehouses();
   const createWarehouse = useCreateWarehouse();
   const [createOpen, setCreateOpen] = useState(false);
+  const { multiWarehouse } = usePlanFeatures();
+
+  // Starter: 1 depo limiti — zaten depo varsa "Yeni Depo" gösterme
+  const canAddWarehouse = multiWarehouse || warehouses.length === 0;
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<WarehouseForm>({
     resolver: zodResolver(warehouseSchema),
@@ -68,7 +73,7 @@ export function WarehousesListPage() {
       <PageHeader
         title="Depolar"
         subtitle="Depo ve lokasyonlarınızı yönetin."
-        action={<Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Yeni Depo</Button>}
+        action={canAddWarehouse ? <Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>Yeni Depo</Button> : undefined}
       />
 
       <DataTable

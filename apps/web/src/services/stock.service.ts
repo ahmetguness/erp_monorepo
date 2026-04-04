@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { apiClient } from '@/lib/api-client';
+import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
 import type { PaginationParams } from '@/types/api.types';
 
@@ -15,7 +16,7 @@ export const WarehouseSchema = z.object({
   address: z.string().nullable(),
   isActive: z.boolean(),
   locations: z.array(z.object({ id: z.string(), name: z.string(), code: z.string() })).optional(),
-  _count: z.object({ stockLevels: z.number() }).optional(),
+  _count: z.object({ stockLevels: z.coerce.number() }).optional(),
 });
 
 export const LocationSchema = z.object({
@@ -33,10 +34,10 @@ export const StockLevelSchema = z.object({
   productId: z.string(),
   warehouseId: z.string(),
   locationId: z.string(),
-  quantity: z.number(),
+  quantity: z.coerce.number(),
   updatedAt: z.string(),
   product: z.object({
-    id: z.string(), code: z.string(), name: z.string(), minStockLevel: z.number(),
+    id: z.string(), code: z.string(), name: z.string(), minStockLevel: z.coerce.number(),
     unit: z.object({ code: z.string() }).optional(),
   }).optional(),
   warehouse: z.object({ id: z.string(), name: z.string(), code: z.string() }).optional(),
@@ -47,8 +48,8 @@ export const StockMovementSchema = z.object({
   tenantId: z.string(),
   productId: z.string(),
   type: z.enum(['IN', 'OUT', 'TRANSFER', 'ADJUSTMENT', 'RETURN', 'OPENING']),
-  quantity: z.number(),
-  unitCost: z.number().nullable(),
+  quantity: z.coerce.number(),
+  unitCost: z.coerce.number().nullable(),
   fromWarehouseId: z.string().nullable(),
   toWarehouseId: z.string().nullable(),
   notes: z.string().nullable(),
@@ -70,7 +71,7 @@ export const StockCountSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   warehouse: z.object({ id: z.string(), name: z.string() }).optional(),
-  _count: z.object({ items: z.number() }).optional(),
+  _count: z.object({ items: z.coerce.number() }).optional(),
 });
 
 export const StockCountItemSchema = z.object({
@@ -79,9 +80,9 @@ export const StockCountItemSchema = z.object({
   stockCountId: z.string(),
   productId: z.string(),
   locationId: z.string().nullable(),
-  expectedQty: z.number(),
-  countedQty: z.number(),
-  difference: z.number(),
+  expectedQty: z.coerce.number(),
+  countedQty: z.coerce.number(),
+  difference: z.coerce.number(),
   product: z.object({ id: z.string(), code: z.string(), name: z.string() }).optional(),
 });
 
@@ -131,22 +132,22 @@ const LocationListSchema = SingleResponseSchema(z.array(LocationSchema));
 
 export async function getWarehouses(): Promise<Warehouse[]> {
   const res = await apiClient.get('/api/warehouses');
-  return WarehouseListSchema.parse(res.data).data;
+  return safeParse(WarehouseListSchema, res.data, 'getWarehouses').data;
 }
 
 export async function getWarehouseById(id: string): Promise<Warehouse> {
   const res = await apiClient.get(`/api/warehouses/${id}`);
-  return SingleResponseSchema(WarehouseSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(WarehouseSchema), res.data, 'getWarehouseById').data;
 }
 
 export async function createWarehouse(data: CreateWarehouseDTO): Promise<Warehouse> {
   const res = await apiClient.post('/api/warehouses', data);
-  return SingleResponseSchema(WarehouseSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(WarehouseSchema), res.data, 'createWarehouse').data;
 }
 
 export async function updateWarehouse(id: string, data: Partial<CreateWarehouseDTO> & { isActive?: boolean }): Promise<Warehouse> {
   const res = await apiClient.patch(`/api/warehouses/${id}`, data);
-  return SingleResponseSchema(WarehouseSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(WarehouseSchema), res.data, 'updateWarehouse').data;
 }
 
 export async function transferStock(data: TransferStockDTO) {
@@ -156,12 +157,12 @@ export async function transferStock(data: TransferStockDTO) {
 
 export async function getLocations(warehouseId: string): Promise<WarehouseLocation[]> {
   const res = await apiClient.get(`/api/warehouses/${warehouseId}/locations`);
-  return LocationListSchema.parse(res.data).data;
+  return safeParse(LocationListSchema, res.data, 'getLocations').data;
 }
 
 export async function createLocation(warehouseId: string, data: CreateLocationDTO): Promise<WarehouseLocation> {
   const res = await apiClient.post(`/api/warehouses/${warehouseId}/locations`, data);
-  return SingleResponseSchema(LocationSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(LocationSchema), res.data, 'createLocation').data;
 }
 
 // ─────────────────────────────────────────────
@@ -174,12 +175,12 @@ const StockCountListSchema = SingleResponseSchema(z.array(StockCountSchema));
 
 export async function getStockLevels(params: StockLevelParams): Promise<StockLevel[]> {
   const res = await apiClient.get('/api/stock/levels', { params });
-  return StockLevelListSchema.parse(res.data).data;
+  return safeParse(StockLevelListSchema, res.data, 'getStockLevels').data;
 }
 
 export async function getStockMovements(params: StockMovementParams) {
   const res = await apiClient.get('/api/stock/movements', { params });
-  return StockMovementListSchema.parse(res.data);
+  return safeParse(StockMovementListSchema, res.data, 'getStockMovements');
 }
 
 export async function createManualMovement(data: CreateManualMovementDTO) {
@@ -189,14 +190,14 @@ export async function createManualMovement(data: CreateManualMovementDTO) {
 
 export async function getStockCounts(): Promise<StockCount[]> {
   const res = await apiClient.get('/api/stock/counts');
-  return StockCountListSchema.parse(res.data).data;
+  return safeParse(StockCountListSchema, res.data, 'getStockCounts').data;
 }
 
 export async function getStockCountById(id: string) {
   const res = await apiClient.get(`/api/stock/counts/${id}`);
-  return SingleResponseSchema(StockCountSchema.extend({
+  return safeParse(SingleResponseSchema(StockCountSchema.extend({
     items: z.array(StockCountItemSchema).optional(),
-  })).parse(res.data).data;
+  })), res.data, 'getStockCountById').data;
 }
 
 export async function createStockCount(data: CreateStockCountDTO) {

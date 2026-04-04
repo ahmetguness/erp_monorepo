@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { apiClient } from '@/lib/api-client';
+import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
 import type { PaginationParams } from '@/types/api.types';
 
@@ -18,16 +19,16 @@ export const ProductSchema = z.object({
   barcode: z.string().nullable(),
   description: z.string().nullable(),
   imageUrl: z.string().nullable(),
-  purchasePrice: z.number(),
-  salesPrice: z.number(),
-  minStockLevel: z.number(),
-  averageCost: z.number(),
+  purchasePrice: z.coerce.number(),
+  salesPrice: z.coerce.number(),
+  minStockLevel: z.coerce.number(),
+  averageCost: z.coerce.number(),
   isActive: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
   category: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
   unit: z.object({ id: z.string(), name: z.string(), code: z.string() }).nullable().optional(),
-  taxRate: z.object({ id: z.string(), name: z.string(), rate: z.number() }).nullable().optional(),
+  taxRate: z.object({ id: z.string(), name: z.string(), rate: z.coerce.number() }).nullable().optional(),
 });
 
 export const StockLevelSchema = z.object({
@@ -36,10 +37,10 @@ export const StockLevelSchema = z.object({
   productId: z.string(),
   warehouseId: z.string(),
   locationId: z.string(),
-  quantity: z.number(),
+  quantity: z.coerce.number(),
   updatedAt: z.string(),
   product: z.object({
-    id: z.string(), code: z.string(), name: z.string(), minStockLevel: z.number(),
+    id: z.string(), code: z.string(), name: z.string(), minStockLevel: z.coerce.number(),
     unit: z.object({ code: z.string() }).optional(),
   }).optional(),
   warehouse: z.object({ id: z.string(), name: z.string(), code: z.string() }).optional(),
@@ -85,22 +86,22 @@ const ProductListSchema = PaginatedResponseSchema(ProductSchema);
 
 export async function getProducts(params: ProductListParams) {
   const res = await apiClient.get('/api/products', { params });
-  return ProductListSchema.parse(res.data);
+  return safeParse(ProductListSchema, res.data, 'getProducts');
 }
 
 export async function getProductById(id: string): Promise<Product> {
   const res = await apiClient.get(`/api/products/${id}`);
-  return SingleResponseSchema(ProductSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(ProductSchema), res.data, 'getProductById').data;
 }
 
 export async function createProduct(data: CreateProductDTO): Promise<Product> {
   const res = await apiClient.post('/api/products', data);
-  return SingleResponseSchema(ProductSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(ProductSchema), res.data, 'createProduct').data;
 }
 
 export async function updateProduct(id: string, data: UpdateProductDTO): Promise<Product> {
   const res = await apiClient.patch(`/api/products/${id}`, data);
-  return SingleResponseSchema(ProductSchema).parse(res.data).data;
+  return safeParse(SingleResponseSchema(ProductSchema), res.data, 'updateProduct').data;
 }
 
 export async function deleteProduct(id: string): Promise<void> {

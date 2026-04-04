@@ -1,39 +1,38 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import { ApiErrorSchema, type ApiError } from '@/types/api.types';
 
-// ─────────────────────────────────────────────
-// Axios instance
-// ─────────────────────────────────────────────
-
 const apiClient: AxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
 });
 
 // ─────────────────────────────────────────────
-// Request interceptor — auth + tenant headers
+// Cookie reader
+// ─────────────────────────────────────────────
+
+function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+// ─────────────────────────────────────────────
+// Request interceptor — reads from cookies
 // ─────────────────────────────────────────────
 
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('axon_token');
-    const tenantId = localStorage.getItem('axon_tenant_id');
+  const token = getCookie('axon_token');
+  const tenantId = getCookie('axon_tenant_id');
 
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    if (tenantId) {
-      config.headers['x-tenant-id'] = tenantId;
-    }
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (tenantId) config.headers['x-tenant-id'] = tenantId;
+
   return config;
 });
 
 // ─────────────────────────────────────────────
-// Response interceptor — normalize errors
+// Response interceptor
 // ─────────────────────────────────────────────
 
 apiClient.interceptors.response.use(
@@ -41,44 +40,24 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response) {
       const parsed = ApiErrorSchema.safeParse(error.response.data);
-
       if (parsed.success) {
-        // 401 → clear auth and redirect
         if (error.response.status === 401 && typeof window !== 'undefined') {
-          localStorage.removeItem('axon_token');
-          localStorage.removeItem('axon_tenant_id');
           window.location.href = '/login';
         }
         return Promise.reject(parsed.data);
       }
-
-      // Fallback for non-standard errors
-      const fallback: ApiError = {
-        error: {
-          code: 'UNKNOWN_ERROR',
-          message: `Sunucu hatası: ${error.response.status}`,
-        },
-      };
-      return Promise.reject(fallback);
+      return Promise.reject({
+        error: { code: 'UNKNOWN_ERROR', message: `Sunucu hatası: ${error.response.status}` },
+      } as ApiError);
     }
-
     if (error.request) {
-      const networkError: ApiError = {
-        error: {
-          code: 'NETWORK_ERROR',
-          message: 'Sunucuya bağlanılamadı. İnternet bağlantınızı kontrol edin.',
-        },
-      };
-      return Promise.reject(networkError);
+      return Promise.reject({
+        error: { code: 'NETWORK_ERROR', message: 'Sunucuya bağlanılamadı.' },
+      } as ApiError);
     }
-
-    const unknownError: ApiError = {
-      error: {
-        code: 'UNKNOWN_ERROR',
-        message: error.message || 'Beklenmeyen bir hata oluştu.',
-      },
-    };
-    return Promise.reject(unknownError);
+    return Promise.reject({
+      error: { code: 'UNKNOWN_ERROR', message: error.message },
+    } as ApiError);
   },
 );
 

@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { prisma } from './lib/prisma';
 import { logger, printBanner } from './lib/logger';
@@ -17,6 +18,15 @@ import { authRoutes } from './routes/auth.routes';
 
 const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
+
+// ── CORS ─────────────────────────────────────
+app.use('*', cors({
+  origin: (origin) => origin ?? '*',
+  allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'x-tenant-id'],
+  exposeHeaders: ['Content-Length'],
+  maxAge: 86400,
+}));
 
 // ── HTTP istek logu ──────────────────────────
 app.use('*', async (c, next) => {
