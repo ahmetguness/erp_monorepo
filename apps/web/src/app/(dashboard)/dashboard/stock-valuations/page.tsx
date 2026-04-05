@@ -1,2 +1,3 @@
 import { StockValuationPage } from '@/components/features/professional/StockValuationPage';
-export default function Page() { return <StockValuationPage />; }
+import { FeatureGate } from '@/components/shared/FeatureGate';
+export default function Page() { return <FeatureGate plan="PROFESSIONAL"><StockValuationPage /></FeatureGate>; }

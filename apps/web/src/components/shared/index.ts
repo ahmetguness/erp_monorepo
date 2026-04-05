@@ -21,3 +21,5 @@ export {
   FiscalPeriodStatusBadge,
   ActiveBadge,
 } from './StatusBadge';
+
+export { FeatureGate } from './FeatureGate';

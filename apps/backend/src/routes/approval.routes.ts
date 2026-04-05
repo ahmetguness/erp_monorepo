@@ -1,10 +1,13 @@
 import { Hono } from 'hono';
+import { FeatureKey } from '@prisma/client';
 import { requirePlan } from '../middleware/requirePlan';
+import { requireFeature } from '../middleware/requireFeature';
 import { ApprovalController } from '../controllers/approval.controller';
 
 const approvalRoutes = new Hono();
 
 approvalRoutes.use('*', requirePlan('PROFESSIONAL'));
+approvalRoutes.use('*', requireFeature(FeatureKey.APPROVALS));
 
 // Approval Flows
 approvalRoutes.get('/flows', ApprovalController.listFlows);

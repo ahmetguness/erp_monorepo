@@ -1,11 +1,14 @@
 import { Hono } from 'hono';
+import { FeatureKey } from '@prisma/client';
 import { authenticateApiKey, requireScope } from '../middleware/authenticateApiKey';
+import { requireFeature } from '../middleware/requireFeature';
 import { prisma } from '../lib/prisma';
 import { ValidationError } from '../errors';
 
 const externalRoutes = new Hono();
 
 externalRoutes.use('*', authenticateApiKey());
+externalRoutes.use('*', requireFeature(FeatureKey.API_ACCESS));
 
 // ═══════════════════════════════════════════
 // PRODUCTS

@@ -1,2 +1,3 @@
 import { BankTransactionsPage } from '@/components/features/professional/BankTransactionsPage';
-export default function Page() { return <BankTransactionsPage />; }
+import { FeatureGate } from '@/components/shared/FeatureGate';
+export default function Page() { return <FeatureGate plan="PROFESSIONAL"><BankTransactionsPage /></FeatureGate>; }

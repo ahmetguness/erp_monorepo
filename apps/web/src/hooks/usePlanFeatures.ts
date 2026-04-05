@@ -10,7 +10,7 @@ type PlanType = (typeof Plan)[keyof typeof Plan];
 // Starter plan limits
 // ─────────────────────────────────────────────
 
-interface PlanFeatures {
+export interface PlanFeatures {
   plan: PlanType | null;
   isStarter: boolean;
   isProfessional: boolean;
@@ -19,6 +19,7 @@ interface PlanFeatures {
   multiWarehouse: boolean;
   maxUsers: number | null;
   maxProducts: number | null;
+  roleManagement: boolean;
   purchasing: boolean;
   production: boolean;
   service: boolean;
@@ -39,6 +40,7 @@ const STARTER_FEATURES: PlanFeatures = {
   multiWarehouse: false,
   maxUsers: 5,
   maxProducts: 500,
+  roleManagement: false,
   purchasing: false,
   production: false,
   service: false,
@@ -59,9 +61,10 @@ const PROFESSIONAL_FEATURES: PlanFeatures = {
   multiWarehouse: true,
   maxUsers: 25,
   maxProducts: 5000,
+  roleManagement: true,
   purchasing: true,
   production: false,
-  service: true,
+  service: false,
   marketplace: false,
   payroll: false,
   hr: true,
@@ -79,6 +82,7 @@ const ENTERPRISE_FEATURES: PlanFeatures = {
   multiWarehouse: true,
   maxUsers: null,
   maxProducts: null,
+  roleManagement: true,
   purchasing: true,
   production: true,
   service: true,

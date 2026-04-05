@@ -45,7 +45,7 @@
 // ReservationRefType:    SALES_ORDER | WORK_ORDER | PURCHASE_REQUEST | OTHER
 // MovementRefType:       PURCHASE_ORDER | SALES_ORDER | WORK_ORDER | DELIVERY_NOTE | STOCK_COUNT | MANUAL | OTHER
 // FeatureType:           BOOLEAN | LIMIT | ENUM
-// FeatureKey:            MAX_USERS | MAX_PRODUCTS | MULTI_WAREHOUSE | ROLE_MANAGEMENT | APPROVALS | CRM | SALES | PURCHASING | PRODUCTION | SERVICE | MARKETPLACE | PAYROLL | API_ACCESS | AUDIT_LOG | CUSTOM_REPORTING
+// FeatureKey:            MAX_USERS | MAX_PRODUCTS | MULTI_WAREHOUSE | ROLE_MANAGEMENT | APPROVALS | CRM | SALES | PURCHASING | PRODUCTION | SERVICE | MARKETPLACE | PAYROLL | HR | API_ACCESS | AUDIT_LOG | CUSTOM_REPORTING
 // AppModule:             ACCOUNTING | INVENTORY | CRM | SALES | PURCHASING | WAREHOUSE | PRODUCTION | SERVICE | HR | PAYROLL | MARKETPLACE | REPORTING
 
 
@@ -77,6 +77,8 @@ Table tenants {
   trialEndsAt       DateTime  [null]
   subscriptionStart DateTime  [null]
   subscriptionEnd   DateTime  [null]
+  planChangedAt     DateTime  [null, note: 'Plan upgrade/downgrade zamanı']
+  isCustomPricing   Boolean   [default: false, note: 'Enterprise müşteriler için fiyat tablosunu bypass et']
   modules           String[]
   notes             String    [null]
 
@@ -232,15 +234,20 @@ Ref: module_settings.tenantId > tenants.id [delete: cascade]
 // ─────────────────────────────────────────────
 
 Table plan_features {
-  id        String   [pk]
-  createdAt DateTime
-  updatedAt DateTime
-  plan      Plan
-  key       String
-  value     String
+  id          String      [pk]
+  createdAt   DateTime
+  updatedAt   DateTime
+  plan        Plan
+  key         String
+  value       String
+  type        FeatureType [default: "LIMIT"]
+  isEnabled   Boolean     [default: true]
+  description String      [null]
+  featureKey  FeatureKey  [null]
 
   indexes {
     (plan, key) [unique]
+    (plan, featureKey) [unique]
     plan
   }
 }
@@ -426,6 +433,7 @@ Table approval_requests {
   indexes {
     (tenantId, entityType, entityId)
     (tenantId, status)
+    (tenantId, entityType, entityId, status)
   }
 }
 
@@ -557,6 +565,7 @@ Table contacts {
     (tenantId, code) [unique]
     (tenantId, type)
     (tenantId, isActive)
+    (tenantId, name)
     deletedAt
   }
 }
@@ -707,6 +716,7 @@ Table stock_movements {
     (tenantId, productId)
     (tenantId, type)
     (tenantId, createdAt)
+    (tenantId, createdAt, type)
     (refType, refId)
   }
 }
@@ -919,6 +929,7 @@ Table sales_orders {
   totalNet     Decimal     [default: 0]
   totalTax     Decimal     [default: 0]
   totalGross   Decimal     [default: 0]
+  invoicedAmount Decimal   [default: 0, note: '@computed - update when PaymentAllocation or Invoice linked to this order changes']
   createdAt    DateTime
   updatedAt    DateTime
   deletedAt    DateTime    [null]
@@ -981,19 +992,21 @@ Ref: sales_order_history.orderId > sales_orders.id [delete: cascade]
 // ═══════════════════════════════════════════════════════════════
 
 Table purchase_requests {
-  id          String                [pk]
-  tenantId    String
-  number      String
-  date        DateTime
-  status      PurchaseRequestStatus [default: "DRAFT"]
-  requestedBy String                [null]
-  approvedBy  String                [null]
-  approvedAt  DateTime              [null]
-  notes       String                [null]
-  createdAt   DateTime
-  updatedAt   DateTime
-  deletedAt   DateTime              [null]
-  createdById String                [null]
+  id              String                [pk]
+  tenantId        String
+  number          String
+  date            DateTime
+  status          PurchaseRequestStatus [default: "DRAFT"]
+  requestedBy     String                [null]
+  approvedBy      String                [null]
+  approvedAt      DateTime              [null]
+  notes           String                [null]
+  totalEstimated  Decimal               [null, note: 'Sum of item unitPrice × quantity']
+  purchaseOrderId String                [null]
+  createdAt       DateTime
+  updatedAt       DateTime
+  deletedAt       DateTime              [null]
+  createdById     String                [null]
 
   indexes {
     (tenantId, number) [unique]
@@ -1002,6 +1015,7 @@ Table purchase_requests {
 }
 
 Ref: purchase_requests.tenantId > tenants.id [delete: cascade]
+Ref: purchase_requests.purchaseOrderId > purchase_orders.id
 
 Table purchase_request_items {
   id          String  [pk]
@@ -1010,6 +1024,7 @@ Table purchase_request_items {
   productId   String
   description String  [null]
   quantity    Decimal
+  unitPrice   Decimal [null]
   notes       String  [null]
 
   indexes {
@@ -1190,6 +1205,10 @@ Table invoices {
     (tenantId, contactId)
     (tenantId, date)
     (tenantId, dueDate)
+    (tenantId, status, dueDate)
+    (tenantId, type, status)
+    (tenantId, salesOrderId, type)
+    (tenantId, purchaseOrderId, type)
     deletedAt
   }
 }
@@ -1242,7 +1261,8 @@ Ref: invoice_history.invoiceId > invoices.id [delete: cascade]
 Table e_documents {
   id              String          [pk]
   tenantId        String
-  invoiceId       String
+  invoiceId       String          [null]
+  deliveryNoteId  String          [null]
   type            EDocumentType
   status          EDocumentStatus [default: "PENDING"]
   uuid            String          [unique, null]
@@ -1262,10 +1282,12 @@ Table e_documents {
   indexes {
     (tenantId, status)
     (tenantId, invoiceId)
+    (tenantId, deliveryNoteId)
   }
 }
 
 Ref: e_documents.invoiceId > invoices.id [delete: cascade]
+Ref: e_documents.deliveryNoteId > delivery_notes.id [delete: cascade]
 
 // ═══════════════════════════════════════════════════════════════
 // HAZİNE / ÖDEME
@@ -1870,8 +1892,6 @@ Table service_requests {
   status          ServiceStatus [default: "OPEN"]
   subject         String
   description     String        [null]
-  deviceInfo      String        [null]
-  serialNo        String        [null]
   warrantyEnd     DateTime      [null]
   assignedToId    String        [null]
   priority        Priority      [default: "MEDIUM"]
@@ -1978,7 +1998,7 @@ Table marketplace_listings {
   externalId    String
   externalSku   String   [null]
   price         Decimal
-  stock         Int      [default: 0]
+  stock         Decimal  [default: 0]
   isActive      Boolean  [default: true]
   lastSyncAt    DateTime [null]
   syncError     String   [null]

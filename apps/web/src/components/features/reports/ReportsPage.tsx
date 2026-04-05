@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormRow } from '@/components/shared/FormField';
+import { FeatureGate } from '@/components/shared/FeatureGate';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
@@ -205,17 +206,19 @@ export function ReportsPage() {
       )}
 
       {/* Saved reports */}
-      <div>
-        <h2 className="text-sm font-semibold text-white mb-3">Kayıtlı Raporlar</h2>
-        <DataTable
-          columns={savedColumns}
-          data={savedReports}
-          keyExtractor={(r) => r.id}
-          isLoading={loadingSaved}
-          emptyTitle="Kayıtlı rapor yok"
-          emptyDescription="Raporları kaydetmek için ilgili rapor sayfasından 'Kaydet' butonunu kullanın."
-        />
-      </div>
+      <FeatureGate feature="customReporting">
+        <div>
+          <h2 className="text-sm font-semibold text-white mb-3">Kayıtlı Raporlar</h2>
+          <DataTable
+            columns={savedColumns}
+            data={savedReports}
+            keyExtractor={(r) => r.id}
+            isLoading={loadingSaved}
+            emptyTitle="Kayıtlı rapor yok"
+            emptyDescription="Raporları kaydetmek için ilgili rapor sayfasından 'Kaydet' butonunu kullanın."
+          />
+        </div>
+      </FeatureGate>
 
       <ConfirmDialog
         isOpen={!!deleteTarget}

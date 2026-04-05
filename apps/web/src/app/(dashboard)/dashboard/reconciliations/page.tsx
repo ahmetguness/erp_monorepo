@@ -1,2 +1,3 @@
 import { ReconciliationsPage } from '@/components/features/professional/ReconciliationsPage';
-export default function Page() { return <ReconciliationsPage />; }
+import { FeatureGate } from '@/components/shared/FeatureGate';
+export default function Page() { return <FeatureGate plan="PROFESSIONAL"><ReconciliationsPage /></FeatureGate>; }

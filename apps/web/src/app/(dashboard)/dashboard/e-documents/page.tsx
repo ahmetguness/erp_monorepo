@@ -1,2 +1,3 @@
 import { EDocumentsPage } from '@/components/features/professional/EDocumentsPage';
-export default function Page() { return <EDocumentsPage />; }
+import { FeatureGate } from '@/components/shared/FeatureGate';
+export default function Page() { return <FeatureGate plan="PROFESSIONAL"><EDocumentsPage /></FeatureGate>; }

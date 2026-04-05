@@ -1,2 +1,3 @@
 import { ApprovalsPage } from '@/components/features/professional/ApprovalsPage';
-export default function Page() { return <ApprovalsPage />; }
+import { FeatureGate } from '@/components/shared/FeatureGate';
+export default function Page() { return <FeatureGate feature="approvals" plan="PROFESSIONAL"><ApprovalsPage /></FeatureGate>; }

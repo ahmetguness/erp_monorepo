@@ -32,6 +32,17 @@ import {
   Hash,
   Shield,
   TrendingUp,
+  Factory,
+  Cog,
+  Wrench,
+  Monitor,
+  Store,
+  Link2,
+  ShoppingBag,
+  UserCheck,
+  CalendarDays,
+  ClockIcon,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -113,7 +124,8 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Satın Alma',
         href: '/dashboard/purchase-orders',
         icon: Truck,
-        module: 'invoicing',
+        module: 'purchasing',
+        plan: 'PROFESSIONAL',
         children: [
           { label: 'Talepler', href: '/dashboard/purchase-orders/requests', icon: ClipboardList },
           { label: 'Siparişler', href: '/dashboard/purchase-orders', icon: Truck },
@@ -156,6 +168,72 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Raporlar', href: '/dashboard/reports', icon: BarChart3, module: 'reporting' },
       { label: 'Döviz Kurları', href: '/dashboard/currency-rates', icon: BadgeDollarSign },
+    ],
+  },
+  {
+    label: 'Üretim',
+    items: [
+      {
+        label: 'Üretim',
+        href: '/dashboard/production/work-orders',
+        icon: Factory,
+        module: 'production',
+        plan: 'ENTERPRISE',
+        children: [
+          { label: 'İş Emirleri', href: '/dashboard/production/work-orders', icon: ClipboardList },
+          { label: 'Ürün Ağaçları', href: '/dashboard/production/boms', icon: Layers },
+          { label: 'İş Merkezleri', href: '/dashboard/production/work-centers', icon: Cog },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'Teknik Servis',
+    items: [
+      {
+        label: 'Teknik Servis',
+        href: '/dashboard/service/requests',
+        icon: Wrench,
+        module: 'service',
+        children: [
+          { label: 'Servis Talepleri', href: '/dashboard/service/requests', icon: Wrench },
+          { label: 'Müşteri Varlıkları', href: '/dashboard/service/assets', icon: Monitor },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'Pazaryeri',
+    items: [
+      {
+        label: 'Pazaryeri',
+        href: '/dashboard/marketplace/integrations',
+        icon: Store,
+        module: 'marketplace',
+        plan: 'ENTERPRISE',
+        children: [
+          { label: 'Entegrasyonlar', href: '/dashboard/marketplace/integrations', icon: Link2 },
+          { label: 'Ürün Listelemeleri', href: '/dashboard/marketplace/listings', icon: ShoppingBag },
+          { label: 'Siparişler', href: '/dashboard/marketplace/orders', icon: ShoppingCart },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'İnsan Kaynakları',
+    items: [
+      {
+        label: 'İnsan Kaynakları',
+        href: '/dashboard/hr/employees',
+        icon: UserCheck,
+        module: 'hr',
+        children: [
+          { label: 'Personel', href: '/dashboard/hr/employees', icon: UserCheck },
+          { label: 'İzin Talepleri', href: '/dashboard/hr/leave-requests', icon: CalendarDays },
+          { label: 'Puantaj', href: '/dashboard/hr/attendance', icon: ClockIcon },
+          { label: 'Bordro', href: '/dashboard/hr/payroll', icon: Wallet, plan: 'ENTERPRISE' },
+        ],
+      },
     ],
   },
   {

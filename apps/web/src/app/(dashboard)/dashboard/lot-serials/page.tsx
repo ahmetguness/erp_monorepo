@@ -1,2 +1,3 @@
 import { LotSerialsPage } from '@/components/features/professional/LotSerialsPage';
-export default function Page() { return <LotSerialsPage />; }
+import { FeatureGate } from '@/components/shared/FeatureGate';
+export default function Page() { return <FeatureGate plan="PROFESSIONAL"><LotSerialsPage /></FeatureGate>; }

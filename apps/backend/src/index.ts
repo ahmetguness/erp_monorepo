@@ -38,6 +38,11 @@ import { productBatchRoutes } from './routes/product-batch.routes';
 import { lotSerialRoutes } from './routes/lot-serial.routes';
 import { roleRoutes } from './routes/role.routes';
 import { externalRoutes } from './routes/external.routes';
+import { productionRoutes } from './routes/production.routes';
+import { serviceRoutes } from './routes/service.routes';
+import { marketplaceRoutes } from './routes/marketplace.routes';
+import { hrRoutes } from './routes/hr.routes';
+import { payrollRoutes } from './routes/payroll.routes';
 
 const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
@@ -111,6 +116,13 @@ tenantApi.route('/inventory-reservations', inventoryReservationRoutes);
 tenantApi.route('/product-batches', productBatchRoutes);
 tenantApi.route('/lot-serials', lotSerialRoutes);
 tenantApi.route('/roles', roleRoutes);
+
+// Enterprise Plan Routes
+tenantApi.route('/production', productionRoutes);
+tenantApi.route('/service', serviceRoutes);
+tenantApi.route('/marketplace', marketplaceRoutes);
+tenantApi.route('/hr', hrRoutes);
+tenantApi.route('/payroll', payrollRoutes);
 
 // ── External API (API Key auth) ──────────────
 app.route('/api/external', externalRoutes);

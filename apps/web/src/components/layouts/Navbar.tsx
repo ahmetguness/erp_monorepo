@@ -9,6 +9,7 @@ const navLinks = [
   { name: 'Sektörler', href: '#solutions' },
   { name: 'Kurulum', href: '#deployment' },
   { name: 'Fiyatlandırma', href: '#pricing' },
+  { name: 'API Docs', href: '/api-docs' },
 ];
 
 export default function Navbar() {
