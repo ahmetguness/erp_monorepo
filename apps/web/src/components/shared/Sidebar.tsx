@@ -13,21 +13,32 @@ import { useUIStore } from '@/store/ui.store';
 // Nav item component
 // ─────────────────────────────────────────────
 
+const PLAN_RANK: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
+
 interface NavItemProps {
   item: NavItem;
   tenantModules: string[];
+  tenantPlan: string;
   depth?: number;
 }
 
-function NavItemRow({ item, tenantModules, depth = 0 }: NavItemProps) {
+function NavItemRow({ item, tenantModules, tenantPlan, depth = 0 }: NavItemProps) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(() => {
-    if (!item.children) return false;
-    return item.children.some((c) => pathname.startsWith(c.href));
+
+  // Filter children by plan before rendering
+  const visibleChildren = item.children?.filter((c) => {
+    if (c.plan && (PLAN_RANK[tenantPlan] ?? 0) < (PLAN_RANK[c.plan] ?? 0)) return false;
+    if (c.module && !STARTER_MODULES.has(c.module) && !tenantModules.includes(c.module)) return false;
+    return true;
   });
 
-  const isActive = item.children
-    ? item.children.some((c) => pathname.startsWith(c.href))
+  const [open, setOpen] = useState(() => {
+    if (!visibleChildren) return false;
+    return visibleChildren.some((c) => pathname.startsWith(c.href));
+  });
+
+  const isActive = visibleChildren
+    ? visibleChildren.some((c) => pathname.startsWith(c.href))
     : pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
 
   // Module access check — kapalı modüller hiç gösterilmez
@@ -38,10 +49,13 @@ function NavItemRow({ item, tenantModules, depth = 0 }: NavItemProps) {
 
   if (isLocked) return null;
 
+  // Plan access check — düşük plan seviyesindeki özellikler gösterilmez
+  if (item.plan && (PLAN_RANK[tenantPlan] ?? 0) < (PLAN_RANK[item.plan] ?? 0)) return null;
+
   const Icon = item.icon;
 
   // Has children → collapsible
-  if (item.children) {
+  if (visibleChildren && visibleChildren.length > 0) {
     return (
       <div>
         <button
@@ -63,8 +77,8 @@ function NavItemRow({ item, tenantModules, depth = 0 }: NavItemProps) {
 
         {open && (
           <div className="mt-0.5 space-y-0.5">
-            {item.children.map((child) => (
-              <NavItemRow key={child.href} item={child} tenantModules={tenantModules} depth={depth + 1} />
+            {visibleChildren.map((child) => (
+              <NavItemRow key={child.href} item={child} tenantModules={tenantModules} tenantPlan={tenantPlan} depth={depth + 1} />
             ))}
           </div>
         )}
@@ -98,6 +112,7 @@ export function Sidebar() {
   const { tenant } = useCurrentUser();
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const tenantModules = tenant?.modules ?? [];
+  const tenantPlan = tenant?.plan ?? 'STARTER';
 
   return (
     <aside
@@ -129,7 +144,7 @@ export function Sidebar() {
             )}
             <div className="space-y-0.5">
               {group.items.map((item) => (
-                <NavItemRow key={item.href} item={item} tenantModules={tenantModules} />
+                <NavItemRow key={item.href} item={item} tenantModules={tenantModules} tenantPlan={tenantPlan} />
               ))}
             </div>
           </div>

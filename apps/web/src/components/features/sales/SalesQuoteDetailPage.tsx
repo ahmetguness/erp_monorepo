@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { useSalesQuote, useConvertQuoteToOrder } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
 
 interface LineRow {
   id: string;
@@ -51,7 +52,7 @@ export function SalesQuoteDetailPage({ id }: Props) {
   if (isLoading) return <FullPageSpinner />;
   if (!quote) return <div className="text-slate-400 text-sm">Teklif bulunamadı.</div>;
 
-  const canConvert = quote.status === 'DRAFT' || quote.status === 'ACCEPTED';
+  const canConvert = quote.status === 'DRAFT' || quote.status === 'SENT';
 
   return (
     <div className="space-y-6">
@@ -86,6 +87,9 @@ export function SalesQuoteDetailPage({ id }: Props) {
         keyExtractor={(r) => r.id}
         emptyTitle="Kalem bulunamadı"
       />
+
+      {/* Attachments */}
+      <AttachmentPanel entityType="SALES_QUOTE" entityId={id} />
 
       <ConfirmDialog
         isOpen={confirmOpen}

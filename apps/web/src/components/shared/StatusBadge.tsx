@@ -1,5 +1,6 @@
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { InvoiceStatus, OrderStatus, QuoteStatus, PaymentStatus, FiscalPeriodStatus } from '@repo/types';
+import type { PurchaseOrderStatus } from '@/services/purchase.service';
 
 // ─────────────────────────────────────────────
 // Invoice Status
@@ -51,6 +52,23 @@ const QUOTE_STATUS_CONFIG: Record<string, { label: string; variant: BadgeVariant
 
 export function QuoteStatusBadge({ status }: { status: QuoteStatus | string }) {
   const config = QUOTE_STATUS_CONFIG[status] ?? { label: status, variant: 'neutral' as BadgeVariant };
+  return <Badge variant={config.variant}>{config.label}</Badge>;
+}
+
+// ─────────────────────────────────────────────
+// Purchase Order Status
+// ─────────────────────────────────────────────
+
+const PO_STATUS_CONFIG: Record<string, { label: string; variant: BadgeVariant }> = {
+  DRAFT:                { label: 'Taslak',           variant: 'neutral' },
+  SENT:                 { label: 'Gönderildi',       variant: 'info' },
+  PARTIALLY_RECEIVED:   { label: 'Kısmi Teslim',     variant: 'warning' },
+  RECEIVED:             { label: 'Teslim Alındı',    variant: 'success' },
+  CANCELLED:            { label: 'İptal',            variant: 'neutral' },
+};
+
+export function PurchaseOrderStatusBadge({ status }: { status: PurchaseOrderStatus | string }) {
+  const config = PO_STATUS_CONFIG[status] ?? { label: status, variant: 'neutral' as BadgeVariant };
   return <Badge variant={config.variant}>{config.label}</Badge>;
 }
 

@@ -21,6 +21,17 @@ import {
   Truck,
   ClipboardList,
   BadgeDollarSign,
+  Key,
+  GitBranch,
+  FileCheck,
+  Building2,
+  ScrollText,
+  Scale,
+  BookmarkCheck,
+  Boxes,
+  Hash,
+  Shield,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -34,6 +45,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** Module key — if set, checked against tenant.modules */
   module?: string;
+  /** Plan requirement — 'PROFESSIONAL' or 'ENTERPRISE' */
+  plan?: string;
   children?: NavItem[];
 }
 
@@ -67,6 +80,10 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: 'Stok Seviyeleri', href: '/dashboard/stock/levels', icon: Layers },
           { label: 'Stok Hareketleri', href: '/dashboard/stock/movements', icon: ArrowLeftRight },
           { label: 'Sayımlar', href: '/dashboard/stock/counts', icon: ClipboardCheck },
+          { label: 'Stok Değerleme', href: '/dashboard/stock-valuations', icon: TrendingUp, plan: 'PROFESSIONAL' },
+          { label: 'Rezervasyonlar', href: '/dashboard/reservations', icon: BookmarkCheck, plan: 'PROFESSIONAL' },
+          { label: 'Ürün Partileri', href: '/dashboard/product-batches', icon: Boxes, plan: 'PROFESSIONAL' },
+          { label: 'Lot / Seri No', href: '/dashboard/lot-serials', icon: Hash, plan: 'PROFESSIONAL' },
         ],
       },
     ],
@@ -83,6 +100,8 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: 'Teklifler', href: '/dashboard/sales-orders/quotes', icon: FileSignature },
           { label: 'Siparişler', href: '/dashboard/sales-orders', icon: ShoppingCart },
           { label: 'Faturalar', href: '/dashboard/invoices', icon: Receipt },
+          { label: 'İrsaliyeler', href: '/dashboard/delivery-notes', icon: Truck, plan: 'PROFESSIONAL' },
+          { label: 'E-Belgeler', href: '/dashboard/e-documents', icon: FileCheck, plan: 'PROFESSIONAL' },
         ],
       },
     ],
@@ -114,6 +133,7 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: 'Hesap Planı', href: '/dashboard/accounting/accounts', icon: BookOpen },
           { label: 'Yevmiye Fişleri', href: '/dashboard/accounting/journal-entries', icon: FileText },
           { label: 'Mali Dönemler', href: '/dashboard/accounting/fiscal-periods', icon: CalendarRange },
+          { label: 'Mutabakat', href: '/dashboard/reconciliations', icon: Scale, plan: 'PROFESSIONAL' },
         ],
       },
       {
@@ -125,6 +145,8 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: 'Ödemeler', href: '/dashboard/payments', icon: Banknote },
           { label: 'Banka Hesapları', href: '/dashboard/payments/bank-accounts', icon: Landmark },
           { label: 'Kasa Hesapları', href: '/dashboard/payments/cash-accounts', icon: Coins },
+          { label: 'Banka Hareketleri', href: '/dashboard/bank-transactions', icon: Building2, plan: 'PROFESSIONAL' },
+          { label: 'Çek / Senet', href: '/dashboard/check-promissory', icon: ScrollText, plan: 'PROFESSIONAL' },
         ],
       },
     ],
@@ -134,6 +156,14 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Raporlar', href: '/dashboard/reports', icon: BarChart3, module: 'reporting' },
       { label: 'Döviz Kurları', href: '/dashboard/currency-rates', icon: BadgeDollarSign },
+    ],
+  },
+  {
+    label: 'Yönetim',
+    items: [
+      { label: 'Onay Akışları', href: '/dashboard/approvals', icon: GitBranch, plan: 'PROFESSIONAL' },
+      { label: 'Rol Yönetimi', href: '/dashboard/roles', icon: Shield, plan: 'PROFESSIONAL' },
+      { label: 'API Anahtarları', href: '/dashboard/api-keys', icon: Key, plan: 'PROFESSIONAL' },
     ],
   },
   {

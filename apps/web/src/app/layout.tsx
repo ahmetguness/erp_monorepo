@@ -29,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="tr" className={`${ibmPlexSans.variable} scroll-smooth`}>
+    <html lang="tr" data-scroll-behavior="smooth" className={`${ibmPlexSans.variable} scroll-smooth`}>
       <body className="font-sans relative text-slate-900 bg-white selection:bg-blue-50 selection:text-blue-900">
         <main id="main-content" role="main">
           <Providers>{children}</Providers>

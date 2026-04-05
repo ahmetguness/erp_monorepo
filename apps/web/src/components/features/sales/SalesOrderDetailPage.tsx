@@ -2,14 +2,15 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { XCircle } from 'lucide-react';
+import { CheckCircle, XCircle } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { OrderStatusBadge, InvoiceStatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FullPageSpinner } from '@/components/ui/Spinner';
-import { useSalesOrder, useCancelSalesOrder } from '@/hooks/useSales';
+import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
+import { useSalesOrder, useCancelSalesOrder, useUpdateSalesOrder } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 interface LineRow { id: string; description: string; quantity: number; unitPrice: number; discount: number; taxRate: number; lineTotal: number; product?: { code: string; name: string } }
@@ -21,7 +22,9 @@ export function SalesOrderDetailPage({ id }: Props) {
   const router = useRouter();
   const { data: order, isLoading } = useSalesOrder(id);
   const cancelOrder = useCancelSalesOrder(id);
+  const updateOrder = useUpdateSalesOrder(id);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const lineColumns: ColumnDef<LineRow>[] = [
     { key: 'product', header: 'Ürün', render: (r) => <div><p className="text-slate-200">{r.product?.name ?? r.description}</p>{r.product && <p className="text-xs text-slate-500">{r.description}</p>}</div> },
@@ -46,9 +49,16 @@ export function SalesOrderDetailPage({ id }: Props) {
         title={`Sipariş ${order.number}`}
         subtitle={order.contact?.name}
         action={
-          order.status !== 'CANCELLED' && order.status !== 'DELIVERED' && (
-            <Button variant="danger" leftIcon={<XCircle className="w-4 h-4" />} onClick={() => setCancelOpen(true)}>İptal Et</Button>
-          )
+          <div className="flex items-center gap-2">
+            {order.status === 'DRAFT' && (
+              <Button leftIcon={<CheckCircle className="w-4 h-4" />} onClick={() => setConfirmOpen(true)}>
+                Onayla
+              </Button>
+            )}
+            {order.status !== 'CANCELLED' && order.status !== 'DELIVERED' && (
+              <Button variant="danger" leftIcon={<XCircle className="w-4 h-4" />} onClick={() => setCancelOpen(true)}>İptal Et</Button>
+            )}
+          </div>
         }
       />
 
@@ -74,6 +84,21 @@ export function SalesOrderDetailPage({ id }: Props) {
           <DataTable columns={invoiceColumns} data={order.invoices as InvoiceRef[]} keyExtractor={(r) => r.id} emptyTitle="Fatura yok" />
         </div>
       )}
+
+      {/* Attachments */}
+      <AttachmentPanel entityType="SALES_ORDER" entityId={id} />
+
+      {/* Confirm Order */}
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={() => updateOrder.mutate({ status: 'CONFIRMED' }, { onSuccess: () => setConfirmOpen(false) })}
+        title="Siparişi Onayla"
+        message={`"${order.number}" siparişini onaylamak istediğinize emin misiniz?`}
+        confirmLabel="Onayla"
+        isLoading={updateOrder.isPending}
+        variant="warning"
+      />
 
       <ConfirmDialog
         isOpen={cancelOpen}
