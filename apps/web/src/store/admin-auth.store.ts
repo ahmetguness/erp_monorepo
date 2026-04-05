@@ -6,7 +6,7 @@ import { adminLogin, adminMe, type AdminUser } from '@/services/admin.service';
 interface AdminAuthState {
   admin: AdminUser | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => void;
   fetchMe: () => Promise<void>;
 }
@@ -24,11 +24,16 @@ export const useAdminAuthStore = create<AdminAuthState>((set) => ({
   admin: null,
   isLoading: false,
 
-  login: async (email, password) => {
+  login: async (email, password, rememberMe = false) => {
     set({ isLoading: true });
     try {
       const { token, admin } = await adminLogin(email, password);
-      setCookie('admin-token', token, 1);
+      if (rememberMe) {
+        setCookie('admin-token', token, 7);
+      } else {
+        // Session cookie — tarayıcı kapanınca silinir
+        document.cookie = `admin-token=${encodeURIComponent(token)};path=/`;
+      }
       set({ admin, isLoading: false });
     } catch {
       set({ isLoading: false });

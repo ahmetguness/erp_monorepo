@@ -1,23 +1,22 @@
 import { Hono } from 'hono';
 import { SalesOrderController } from '../controllers/sales-order.controller';
 import { requireModule } from '../middleware/requireModule';
+import { requirePermission } from '../middleware/requirePermission';
 import { MODULE_KEYS } from '../types/module.types';
 
 const salesOrderRoutes = new Hono();
 
 salesOrderRoutes.use('*', requireModule(MODULE_KEYS.INVOICING));
 
-// Sales Quotes
-salesOrderRoutes.get('/quotes', SalesOrderController.listQuotes);
-salesOrderRoutes.get('/quotes/:id', SalesOrderController.getQuoteById);
-salesOrderRoutes.post('/quotes', SalesOrderController.createQuote);
-salesOrderRoutes.post('/quotes/:id/convert', SalesOrderController.convertQuoteToOrder);
+salesOrderRoutes.get('/quotes', requirePermission('invoicing', 'READ'), SalesOrderController.listQuotes);
+salesOrderRoutes.get('/quotes/:id', requirePermission('invoicing', 'READ'), SalesOrderController.getQuoteById);
+salesOrderRoutes.post('/quotes', requirePermission('invoicing', 'CREATE'), SalesOrderController.createQuote);
+salesOrderRoutes.post('/quotes/:id/convert', requirePermission('invoicing', 'CREATE'), SalesOrderController.convertQuoteToOrder);
 
-// Sales Orders
-salesOrderRoutes.get('/', SalesOrderController.listOrders);
-salesOrderRoutes.get('/:id', SalesOrderController.getOrderById);
-salesOrderRoutes.post('/', SalesOrderController.createOrder);
-salesOrderRoutes.patch('/:id', SalesOrderController.updateOrder);
-salesOrderRoutes.post('/:id/cancel', SalesOrderController.cancelOrder);
+salesOrderRoutes.get('/', requirePermission('invoicing', 'READ'), SalesOrderController.listOrders);
+salesOrderRoutes.get('/:id', requirePermission('invoicing', 'READ'), SalesOrderController.getOrderById);
+salesOrderRoutes.post('/', requirePermission('invoicing', 'CREATE'), SalesOrderController.createOrder);
+salesOrderRoutes.patch('/:id', requirePermission('invoicing', 'UPDATE'), SalesOrderController.updateOrder);
+salesOrderRoutes.post('/:id/cancel', requirePermission('invoicing', 'UPDATE'), SalesOrderController.cancelOrder);
 
 export { salesOrderRoutes };

@@ -78,9 +78,9 @@ export default function Roadmap() {
             viewport={{ once: true }}
             transition={{ duration: 0.4 }}
           >
-            <div className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-3">
-              Uygulama Sureci
-            </div>
+            <p className="text-sm text-blue-400 font-medium mb-3 border-l-2 border-blue-500 pl-3">
+              Uygulama Süreci
+            </p>
             <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">
               Sistemden canli kullanima 4 adim
             </h2>
@@ -195,8 +195,8 @@ export default function Roadmap() {
                 <div className="px-8 py-6 border-b border-slate-700 flex items-start justify-between gap-6">
                   <div>
                     <div className="flex items-center gap-2 mb-2.5">
-                      <span className="text-xs font-semibold text-blue-400 uppercase tracking-widest">
-                        Adim {steps[active].num}
+                      <span className="text-xs font-medium text-blue-400">
+                        Adım {steps[active].num}
                       </span>
                       <span className="w-px h-3 bg-slate-600" />
                       <span className="text-xs text-slate-500">{steps[active].tag}</span>
@@ -219,9 +219,9 @@ export default function Roadmap() {
 
                 {/* Checklist */}
                 <div className="px-8 py-6">
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest mb-4">
-                    Bu adimda yapilacaklar
-                  </div>
+                  <p className="text-xs text-slate-500 font-medium mb-4">
+                    Bu adımda yapılacaklar
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {steps[active].items.map((item, i) => (
                       <motion.div
@@ -231,11 +231,9 @@ export default function Roadmap() {
                         transition={{ delay: i * 0.06 }}
                         className="flex items-center gap-3 bg-slate-900/60 border border-slate-700/60 rounded px-4 py-3 hover:border-slate-600 hover:bg-slate-900/80 transition-colors duration-150"
                       >
-                        <div className="w-4 h-4 rounded-sm bg-blue-600/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
-                          <svg className="w-2.5 h-2.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
+                        <svg className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
                         <span className="text-sm text-slate-300">{item}</span>
                       </motion.div>
                     ))}

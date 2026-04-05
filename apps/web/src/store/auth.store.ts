@@ -14,7 +14,7 @@ interface AuthState {
 }
 
 interface AuthActions {
-  login: (user: AuthUser, token: string, tenant: TenantInfo) => void;
+  login: (user: AuthUser, token: string, tenant: TenantInfo, rememberMe?: boolean) => void;
   logout: () => void;
   updateUser: (user: Partial<AuthUser>) => void;
 }
@@ -33,11 +33,17 @@ export const useAuthStore = create<AuthStore>()(
     (set) => ({
       ...initialState,
 
-      login: (user, token, tenant) => {
+      login: (user, token, tenant, rememberMe = true) => {
         if (typeof window !== 'undefined') {
-          const maxAge = 7 * 24 * 60 * 60;
-          document.cookie = `axon_token=${token}; path=/; max-age=${maxAge}; SameSite=Lax`;
-          document.cookie = `axon_tenant_id=${tenant.id}; path=/; max-age=${maxAge}; SameSite=Lax`;
+          if (rememberMe) {
+            const maxAge = 7 * 24 * 60 * 60;
+            document.cookie = `axon_token=${token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+            document.cookie = `axon_tenant_id=${tenant.id}; path=/; max-age=${maxAge}; SameSite=Lax`;
+          } else {
+            // Session cookie — tarayıcı kapanınca silinir
+            document.cookie = `axon_token=${token}; path=/; SameSite=Lax`;
+            document.cookie = `axon_tenant_id=${tenant.id}; path=/; SameSite=Lax`;
+          }
         }
         set({ user, token, tenant, isAuthenticated: true });
       },

@@ -94,7 +94,7 @@ export default function Pricing() {
           transition={{ duration: 0.45 }}
           className="text-center max-w-2xl mx-auto mb-16"
         >
-          <p className="text-xs font-semibold text-blue-400 uppercase tracking-[0.2em] mb-4">
+          <p className="text-sm text-blue-400 font-medium mb-4">
             Lisans & Fiyatlandırma
           </p>
           <h2 className="text-3xl lg:text-4xl font-bold text-white mb-4 leading-tight">
@@ -137,11 +137,11 @@ export default function Pricing() {
               <div className="flex flex-col flex-1">
                 {/* Plan name + badge */}
                 <div className="flex items-center justify-between mb-5">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.18em]">
+                  <span className="text-[11px] font-semibold text-slate-400 tracking-wide">
                     {tier.name}
                   </span>
                   {tier.badge && (
-                    <span className="text-[10px] font-bold text-blue-300 bg-blue-500/10 border border-blue-500/25 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                    <span className="text-[10px] font-medium text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">
                       {tier.badge}
                     </span>
                   )}

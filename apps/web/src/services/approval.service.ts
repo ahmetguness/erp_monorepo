@@ -47,6 +47,10 @@ export interface CreateFlowDTO {
   name: string; module: ApprovalModule;
   steps: Array<{ stepOrder: number; name: string; approverRoleId?: string; approverUserId?: string; isRequired?: boolean }>;
 }
+export interface UpdateFlowDTO {
+  name?: string; isActive?: boolean;
+  steps?: Array<{ stepOrder: number; name: string; approverRoleId?: string; approverUserId?: string; isRequired?: boolean }>;
+}
 export interface CreateRequestDTO { flowId: string; entityType: string; entityId: string; requestedBy?: string; notes?: string }
 export interface ActionDTO { actionType: 'APPROVE' | 'REJECT' | 'ESCALATE' | 'COMMENT'; stepId?: string; actorId?: string; notes?: string }
 export interface FlowListParams extends PaginationParams { module?: string; isActive?: string }
@@ -66,6 +70,10 @@ export async function createApprovalFlow(data: CreateFlowDTO): Promise<ApprovalF
 }
 export async function deleteApprovalFlow(id: string) {
   await apiClient.delete(`/api/approvals/flows/${id}`);
+}
+export async function updateApprovalFlow(id: string, data: UpdateFlowDTO): Promise<ApprovalFlow> {
+  const res = await apiClient.patch(`/api/approvals/flows/${id}`, data);
+  return safeParse(SingleResponseSchema(ApprovalFlowSchema), res.data, 'updateApprovalFlow').data;
 }
 export async function getApprovalRequests(params: RequestListParams) {
   const res = await apiClient.get('/api/approvals/requests', { params });

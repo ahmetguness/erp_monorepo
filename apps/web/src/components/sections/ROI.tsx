@@ -64,7 +64,7 @@ export default function ROI() {
           transition={{ duration: 0.4 }}
           className="mb-12"
         >
-          <div className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-3">Is Degeri</div>
+          <p className="text-sm text-blue-400 font-medium mb-3 border-l-2 border-blue-500 pl-3">İş Değeri</p>
           <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
             <h2 className="text-2xl lg:text-3xl font-bold text-white max-w-lg leading-tight">
               ERP yatiriminin geri donusu olculebilir
@@ -114,7 +114,7 @@ export default function ROI() {
                 transition={{ duration: 0.35, delay: idx * 0.07 }}
                 className="bg-slate-800/40 border border-slate-700 rounded-lg p-5 hover:border-slate-600 transition-colors duration-150"
               >
-                <div className="w-7 h-7 bg-blue-600/15 border border-blue-500/20 text-blue-400 rounded flex items-center justify-center mb-3">
+                <div className="w-7 h-7 bg-blue-500/10 text-blue-400 rounded flex items-center justify-center mb-3">
                   {b.icon}
                 </div>
                 <div className="text-sm font-semibold text-white mb-1.5">{b.title}</div>
@@ -132,22 +132,20 @@ export default function ROI() {
             className="bg-slate-800/40 border border-slate-700 rounded-lg p-6 flex flex-col justify-between"
           >
             <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">
+              <p className="text-sm text-slate-400 font-medium mb-4">
                 Analiz Talep Et
-              </div>
+              </p>
               <p className="text-sm text-slate-300 leading-relaxed mb-6">
                 Isletmenizin mevcut sureclerini analiz ederek size ozel bir ROI raporu hazirlayabiliriz.
               </p>
 
               {/* Mini checklist */}
               <div className="space-y-2.5 mb-6">
-                {['Surec analizi', 'Tasarruf hesaplamasi', 'Yatirim geri donus suresi'].map((item) => (
+                {['Süreç analizi', 'Tasarruf hesaplaması', 'Yatırım geri dönüş süresi'].map((item) => (
                   <div key={item} className="flex items-center gap-2.5">
-                    <div className="w-4 h-4 rounded-sm bg-blue-600/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-2.5 h-2.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
+                    <svg className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
                     <span className="text-xs text-slate-400">{item}</span>
                   </div>
                 ))}

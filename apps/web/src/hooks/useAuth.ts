@@ -18,9 +18,10 @@ export function useLogin() {
   const { toast } = useUIStore();
 
   return useMutation({
-    mutationFn: (credentials: LoginCredentials) => login(credentials),
-    onSuccess: (data) => {
-      storeLogin(data.user, data.token, data.tenant);
+    mutationFn: (vars: { credentials: LoginCredentials; rememberMe: boolean }) =>
+      login(vars.credentials),
+    onSuccess: (data, vars) => {
+      storeLogin(data.user, data.token, data.tenant, vars.rememberMe);
       toast.success(`Hoş geldiniz, ${data.user.name}`);
       router.push('/dashboard');
     },

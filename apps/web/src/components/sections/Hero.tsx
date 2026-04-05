@@ -27,24 +27,22 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55 }}
           >
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
               transition={{ duration: 0.4 }}
-              className="inline-flex items-center gap-2 bg-blue-600/10 border border-blue-500/20 text-blue-400 text-xs font-semibold px-3 py-1.5 rounded-md mb-5 uppercase tracking-widest"
+              className="text-sm text-blue-400 font-medium tracking-wide mb-4 border-l-2 border-blue-500 pl-3"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
               Kurumsal ERP Yazılımı
-            </motion.div>
+            </motion.p>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-[2.75rem] font-bold text-white leading-tight mb-5">
-              Tüm iş süreçlerinizi{' '}
-              <span className="text-blue-400">tek platformda</span>{' '}
-              yönetin
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white leading-[1.15] mb-5">
+              İş süreçleriniz için<br />
+              <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">tek doğru adres.</span>
             </h1>
             <p className="text-base text-slate-400 leading-relaxed mb-8 max-w-lg">
-              Muhasebe, stok, satış, satın alma ve personel yönetimini birbirine entegre bir sistemde toplayın.
-              Axon ERP ile operasyonel verimliliğinizi artırın, manuel süreçleri azaltın.
+              Muhasebe, stok, satış ve satın alma — hepsi birbirine bağlı, tek ekranda.
+              Axon ERP ile karmaşıklığı geride bırakın.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 mb-10">

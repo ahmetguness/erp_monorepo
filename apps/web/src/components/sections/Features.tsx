@@ -164,7 +164,7 @@ export default function Features() {
           className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-12"
         >
           <div className="max-w-xl">
-            <div className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-3">Modüller</div>
+            <p className="text-sm text-blue-400 font-medium mb-3 border-l-2 border-blue-500 pl-3">Modüller</p>
             <h2 className="text-2xl lg:text-3xl font-bold text-white mb-3">
               İşletmenizin tüm süreçleri için entegre modüller
             </h2>
@@ -172,10 +172,9 @@ export default function Features() {
               Birbirine tam entegre çalışan modüller sayesinde departmanlar arası veri akışı kesintisiz devam eder.
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500 flex-shrink-0">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            {modules.length} modül mevcut
-          </div>
+          <span className="text-xs text-slate-500 flex-shrink-0">
+            {modules.length} modül
+          </span>
         </motion.div>
 
         {/* Grid */}
@@ -235,11 +234,6 @@ export default function Features() {
                     )}
                   </AnimatePresence>
                 </div>
-
-                {/* Corner dot */}
-                <div className={`absolute top-3 right-3 w-1.5 h-1.5 rounded-full transition-colors duration-200 ${
-                  isActive ? c.dot : 'bg-slate-700 group-hover:bg-slate-500'
-                }`} />
               </motion.article>
             );
           })}

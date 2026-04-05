@@ -3,9 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
-  getApprovalFlows, getApprovalFlowById, createApprovalFlow, deleteApprovalFlow,
+  getApprovalFlows, getApprovalFlowById, createApprovalFlow, updateApprovalFlow, deleteApprovalFlow,
   getApprovalRequests, createApprovalRequest, addApprovalAction,
-  type FlowListParams, type RequestListParams, type CreateFlowDTO, type CreateRequestDTO, type ActionDTO,
+  type FlowListParams, type RequestListParams, type CreateFlowDTO, type UpdateFlowDTO, type CreateRequestDTO, type ActionDTO,
 } from '@/services/approval.service';
 
 const KEYS = {
@@ -33,6 +33,14 @@ export function useDeleteApprovalFlow() {
   return useMutation({
     mutationFn: (id: string) => deleteApprovalFlow(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['approval-flows'] }); toast.success('Onay akışı silindi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+export function useUpdateApprovalFlow() {
+  const qc = useQueryClient(); const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateFlowDTO }) => updateApprovalFlow(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['approval-flows'] }); toast.success('Onay akışı güncellendi.'); },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }

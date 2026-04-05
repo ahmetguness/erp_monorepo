@@ -60,7 +60,7 @@ export default function FAQ() {
         >
           <div className="flex items-center gap-4">
             {/* Icon */}
-            <div className="w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
               <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -77,10 +77,10 @@ export default function FAQ() {
 
           <div className="flex items-center gap-3 flex-shrink-0">
             <span className={
-              'text-xs font-medium px-3 py-1 rounded-full border transition-all duration-150 ' +
+              'text-xs font-medium px-3 py-1 rounded-md transition-all duration-150 ' +
               (expanded
-                ? 'text-blue-400 bg-blue-600/10 border-blue-500/20'
-                : 'text-slate-500 bg-slate-800 border-slate-700 group-hover:text-slate-300 group-hover:border-slate-600')
+                ? 'text-blue-400 bg-blue-500/10'
+                : 'text-slate-500 bg-slate-800 group-hover:text-slate-300')
             }>
               {expanded ? 'Gizle' : 'Göster'}
             </span>
@@ -137,10 +137,10 @@ export default function FAQ() {
                         className="flex-shrink-0 ml-4"
                       >
                         <div className={
-                          'w-5 h-5 rounded-full border flex items-center justify-center transition-all duration-150 ' +
+                          'w-5 h-5 rounded flex items-center justify-center transition-all duration-150 ' +
                           (openIndex === idx
-                            ? 'border-blue-500/50 bg-blue-600/15'
-                            : 'border-slate-700 group-hover:border-slate-600')
+                            ? 'bg-blue-500/10'
+                            : 'group-hover:bg-slate-800')
                         }>
                           <svg className={
                             'w-2.5 h-2.5 transition-colors duration-150 ' +

@@ -81,7 +81,9 @@ export const RoleController = {
       where: { id, tenantId },
       include: {
         permissions: true,
+        _count: { select: { users: true } },
         users: {
+          where: { isActive: true },
           include: {
             user: { select: { id: true, name: true, email: true } },
           },

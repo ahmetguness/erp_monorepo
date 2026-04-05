@@ -67,7 +67,7 @@ export default function Deployment() {
           className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10"
         >
           <div>
-            <div className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-3">Kurulum Modelleri</div>
+            <p className="text-sm text-blue-400 font-medium mb-3 border-l-2 border-blue-500 pl-3">Kurulum Modelleri</p>
             <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">
               Altyapınıza uygun kurulum seçeneği
             </h2>
@@ -108,7 +108,7 @@ export default function Deployment() {
             {/* Left: info */}
             <div className="lg:col-span-5 bg-slate-800/40 border border-slate-700 rounded-xl p-8 flex flex-col gap-6">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-blue-600/15 border border-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 flex-shrink-0">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3 transition-colors duration-200 bg-blue-600/15 text-blue-400 flex-shrink-0">
                   {model.icon}
                 </div>
                 <div>
@@ -120,7 +120,7 @@ export default function Deployment() {
               <p className="text-sm text-slate-400 leading-relaxed">{model.desc}</p>
 
               <div className="bg-slate-900/60 border border-slate-700/50 rounded-lg px-5 py-4">
-                <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-2">Kimler için ideal?</div>
+                <p className="text-xs text-slate-500 font-medium mb-2">Kimler için ideal?</p>
                 <p className="text-sm text-slate-300 leading-relaxed">{model.ideal}</p>
               </div>
 
@@ -131,9 +131,8 @@ export default function Deployment() {
 
             {/* Right: feature table */}
             <div className="lg:col-span-7 bg-slate-800/40 border border-slate-700 rounded-xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-700 flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-500" />
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Teknik Özellikler</span>
+              <div className="px-6 py-4 border-b border-slate-700">
+                <span className="text-xs text-slate-400 font-medium">Teknik Özellikler</span>
               </div>
 
               <div className="divide-y divide-slate-700/60">

@@ -22,6 +22,7 @@ import { auditLogRoutes } from './routes/audit-log.routes';
 import { attachmentRoutes } from './routes/attachment.routes';
 import { CurrencyRatesController } from './controllers/currency-rates.controller';
 import { adminRoutes } from './routes/admin.routes';
+import { requireAuth } from './middleware/requireAuth';
 
 // Professional Plan Route Imports
 import { apiKeyRoutes } from './routes/api-key.routes';
@@ -36,6 +37,7 @@ import { inventoryReservationRoutes } from './routes/inventory-reservation.route
 import { productBatchRoutes } from './routes/product-batch.routes';
 import { lotSerialRoutes } from './routes/lot-serial.routes';
 import { roleRoutes } from './routes/role.routes';
+import { externalRoutes } from './routes/external.routes';
 
 const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
@@ -74,38 +76,47 @@ app.route('/api/auth', authRoutes);
 // ── Admin Panel ──────────────────────────────
 app.route('/api/admin', adminRoutes);
 
-// ── Starter Plan Routes ──────────────────────
-app.route('/api/users', userRoutes);
-app.route('/api/products', productRoutes);
-app.route('/api/warehouses', warehouseRoutes);
-app.route('/api/contacts', contactRoutes);
-app.route('/api/invoices', invoiceRoutes);
-app.route('/api/sales-orders', salesOrderRoutes);
-app.route('/api/purchase-orders', purchaseOrderRoutes);
-app.route('/api/accounting', accountingRoutes);
-app.route('/api/payments', paymentRoutes);
-app.route('/api/stock', stockRoutes);
-app.route('/api/master', masterDataRoutes);
-app.route('/api/reports', reportingRoutes);
-app.route('/api/settings', settingsRoutes);
-app.route('/api/notifications', notificationRoutes);
-app.route('/api/audit-logs', auditLogRoutes);
-app.route('/api/attachments', attachmentRoutes);
-app.get('/api/currency-rates/tcmb', CurrencyRatesController.getTcmbRates);
+// ── Tenant Routes (JWT protected) ────────────
+const tenantApi = new Hono();
+tenantApi.use('*', requireAuth);
 
-// ── Professional Plan Routes ─────────────────
-app.route('/api/api-keys', apiKeyRoutes);
-app.route('/api/approvals', approvalRoutes);
-app.route('/api/delivery-notes', deliveryNoteRoutes);
-app.route('/api/e-documents', eDocumentRoutes);
-app.route('/api/bank-transactions', bankTransactionRoutes);
-app.route('/api/check-promissory', checkPromissoryRoutes);
-app.route('/api/reconciliations', reconciliationRoutes);
-app.route('/api/stock-valuations', stockValuationRoutes);
-app.route('/api/inventory-reservations', inventoryReservationRoutes);
-app.route('/api/product-batches', productBatchRoutes);
-app.route('/api/lot-serials', lotSerialRoutes);
-app.route('/api/roles', roleRoutes);
+tenantApi.route('/users', userRoutes);
+tenantApi.route('/products', productRoutes);
+tenantApi.route('/warehouses', warehouseRoutes);
+tenantApi.route('/contacts', contactRoutes);
+tenantApi.route('/invoices', invoiceRoutes);
+tenantApi.route('/sales-orders', salesOrderRoutes);
+tenantApi.route('/purchase-orders', purchaseOrderRoutes);
+tenantApi.route('/accounting', accountingRoutes);
+tenantApi.route('/payments', paymentRoutes);
+tenantApi.route('/stock', stockRoutes);
+tenantApi.route('/master', masterDataRoutes);
+tenantApi.route('/reports', reportingRoutes);
+tenantApi.route('/settings', settingsRoutes);
+tenantApi.route('/notifications', notificationRoutes);
+tenantApi.route('/audit-logs', auditLogRoutes);
+tenantApi.route('/attachments', attachmentRoutes);
+tenantApi.get('/currency-rates/tcmb', CurrencyRatesController.getTcmbRates);
+
+// Professional Plan Routes
+tenantApi.route('/api-keys', apiKeyRoutes);
+tenantApi.route('/approvals', approvalRoutes);
+tenantApi.route('/delivery-notes', deliveryNoteRoutes);
+tenantApi.route('/e-documents', eDocumentRoutes);
+tenantApi.route('/bank-transactions', bankTransactionRoutes);
+tenantApi.route('/check-promissory', checkPromissoryRoutes);
+tenantApi.route('/reconciliations', reconciliationRoutes);
+tenantApi.route('/stock-valuations', stockValuationRoutes);
+tenantApi.route('/inventory-reservations', inventoryReservationRoutes);
+tenantApi.route('/product-batches', productBatchRoutes);
+tenantApi.route('/lot-serials', lotSerialRoutes);
+tenantApi.route('/roles', roleRoutes);
+
+// ── External API (API Key auth) ──────────────
+app.route('/api/external', externalRoutes);
+
+// Mount tenant routes under /api (after more specific routes)
+app.route('/api', tenantApi);
 
 // ── Başlangıç logu ───────────────────────────
 serve({ fetch: app.fetch, port: PORT }, () => {

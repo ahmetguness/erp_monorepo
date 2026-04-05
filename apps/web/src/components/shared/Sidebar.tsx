@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NAV_GROUPS, STARTER_MODULES, type NavItem } from '@/lib/nav-config';
-import { useCurrentUser } from '@/hooks/useAuth';
+import { useCurrentUser, useLogout } from '@/hooks/useAuth';
 import { useUIStore } from '@/store/ui.store';
 
 // ─────────────────────────────────────────────
@@ -109,7 +109,8 @@ function NavItemRow({ item, tenantModules, tenantPlan, depth = 0 }: NavItemProps
 // ─────────────────────────────────────────────
 
 export function Sidebar() {
-  const { tenant } = useCurrentUser();
+  const { user, tenant } = useCurrentUser();
+  const logout = useLogout();
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const tenantModules = tenant?.modules ?? [];
   const tenantPlan = tenant?.plan ?? 'STARTER';
@@ -151,13 +152,27 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Tenant info */}
-      {tenant && (
-        <div className="px-3 py-3 border-t border-slate-800 shrink-0">
-          <p className="text-xs font-medium text-slate-300 truncate">{tenant.companyName}</p>
-          <p className="text-[11px] text-slate-500 truncate">{tenant.slug}</p>
-        </div>
-      )}
+      {/* User + tenant info */}
+      <div className="px-3 py-3 border-t border-slate-800 shrink-0">
+        {user && (
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs font-bold shrink-0">
+              {user.name.charAt(0)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-slate-300 truncate">{user.name}</p>
+              <p className="text-[10px] text-slate-500 truncate">{tenant?.companyName ?? user.email}</p>
+            </div>
+          </div>
+        )}
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-slate-500 hover:text-red-400 hover:bg-red-500/5 transition-colors"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          Çıkış Yap
+        </button>
+      </div>
     </aside>
   );
 }
