@@ -268,7 +268,7 @@ export function DashboardOverview() {
           <h2 className="text-sm font-semibold text-white mb-1">Gelir & Gider Trendi</h2>
           <p className="text-xs text-slate-500 mb-4">Aylık karşılaştırma</p>
           <div className="h-52 min-h-[208px] min-w-0 overflow-hidden">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            <ResponsiveContainer width="100%" height={208} minWidth={1} minHeight={1}>
               <AreaChart data={areaData}>
                 <defs>
                   <linearGradient id="gGelir" x1="0" y1="0" x2="0" y2="1">
@@ -298,7 +298,7 @@ export function DashboardOverview() {
           {pieData.length > 0 ? (
             <>
               <div className="h-36 mb-3 min-h-[144px] min-w-0 overflow-hidden">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <ResponsiveContainer width="100%" height={144} minWidth={1} minHeight={1}>
                   <PieChart>
                     <Pie data={pieData} cx="50%" cy="50%" innerRadius={38} outerRadius={62} paddingAngle={4} dataKey="value" strokeWidth={0}>
                       {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}

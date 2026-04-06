@@ -1,6 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { usePlanFeatures, type PlanFeatures } from '@/hooks/usePlanFeatures';
+import { useAuthStore } from '@/store/auth.store';
 import { Lock } from 'lucide-react';
 import Link from 'next/link';
 
@@ -20,6 +22,18 @@ const PLAN_RANK: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPR
 
 export function FeatureGate({ feature, plan, children, fallback }: FeatureGateProps) {
   const features = usePlanFeatures();
+  const tenant = useAuthStore((s) => s.tenant);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  // Store henüz hydrate olmadıysa loading göster, upgrade mesajı değil
+  if (!hydrated || tenant === null) {
+    return null;
+  }
+
   const currentPlan = features.plan ?? 'STARTER';
 
   // Plan kontrolü

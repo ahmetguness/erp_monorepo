@@ -640,6 +640,27 @@ async function seedProfessionalTenant() {
   }
   console.log('  + Urunler ve stok seviyeleri');
 
+  // Product Batches & Lot/Serial Numbers
+  const batch1 = await prisma.productBatch.create({ data: { tenantId: tenant.id, productId: products[0].id, batchNumber: 'ZYT-2026-001', expiryDate: new Date('2027-06-15'), manufacturedAt: new Date('2026-01-10'), quantity: 100, notes: 'Ege bolgesinden ilk parti' } });
+  const batch2 = await prisma.productBatch.create({ data: { tenantId: tenant.id, productId: products[0].id, batchNumber: 'ZYT-2026-002', expiryDate: new Date('2027-09-20'), manufacturedAt: new Date('2026-03-05'), quantity: 50, notes: 'Ikinci parti - organik' } });
+  const batch3 = await prisma.productBatch.create({ data: { tenantId: tenant.id, productId: products[2].id, batchNumber: 'BAL-2026-001', expiryDate: new Date('2028-01-01'), manufacturedAt: new Date('2025-12-15'), quantity: 40, notes: 'Mugla cicek bali' } });
+  const batch4 = await prisma.productBatch.create({ data: { tenantId: tenant.id, productId: products[4].id, batchNumber: 'CAY-2026-001', expiryDate: new Date('2027-12-31'), manufacturedAt: new Date('2026-02-01'), quantity: 60, notes: 'Rize siyah cay' } });
+
+  // Lot/Serial Numbers
+  for (let i = 1; i <= 10; i++) {
+    await prisma.lotSerialNumber.create({ data: { tenantId: tenant.id, productId: products[0].id, batchId: batch1.id, serialNumber: `ZYT-001-${String(i).padStart(4, '0')}`, isUsed: i <= 3 } });
+  }
+  for (let i = 1; i <= 5; i++) {
+    await prisma.lotSerialNumber.create({ data: { tenantId: tenant.id, productId: products[0].id, batchId: batch2.id, serialNumber: `ZYT-002-${String(i).padStart(4, '0')}` } });
+  }
+  for (let i = 1; i <= 8; i++) {
+    await prisma.lotSerialNumber.create({ data: { tenantId: tenant.id, productId: products[2].id, batchId: batch3.id, serialNumber: `BAL-001-${String(i).padStart(4, '0')}`, isUsed: i <= 2 } });
+  }
+  for (let i = 1; i <= 6; i++) {
+    await prisma.lotSerialNumber.create({ data: { tenantId: tenant.id, productId: products[4].id, batchId: batch4.id, serialNumber: `CAY-001-${String(i).padStart(4, '0')}` } });
+  }
+  console.log('  + Urun partileri ve lot/seri numaralari');
+
   // Contacts
   const contacts = await Promise.all([
     prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Market Zinciri A.S.', code: 'C001', taxNumber: '1112223344', taxOffice: 'Kadikoy', email: 'satin@marketzinciri.com', phone: '+90 212 444 0010', city: 'Istanbul', country: 'TR', creditLimit: 200000, paymentTermDays: 30 } }),
