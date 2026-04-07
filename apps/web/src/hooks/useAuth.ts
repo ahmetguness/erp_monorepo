@@ -21,6 +21,7 @@ export function useLogin() {
     mutationFn: (vars: { credentials: LoginCredentials; rememberMe: boolean }) =>
       login(vars.credentials),
     onSuccess: (data, vars) => {
+      console.log('LOGIN TENANT DATA:', JSON.stringify(data.tenant));
       storeLogin(data.user, data.token, data.tenant, vars.rememberMe);
       toast.success(`Hoş geldiniz, ${data.user.name}`);
       router.push('/dashboard');

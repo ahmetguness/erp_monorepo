@@ -2688,3 +2688,46 @@ model SavedReport {
   @@index([tenantId, module])
   @@map("saved_reports")
 }
+
+// ═════════════════════════════════════════════
+// DEMO REQUEST
+// ═════════════════════════════════════════════
+
+enum DemoRequestStatus {
+  PENDING
+  APPROVED
+  PROVISIONING
+  PROVISIONED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+model DemoRequest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fullName    String
+  companyName String
+  email       String
+  phone       String?
+  plan        Plan       @default(STARTER)
+  status      DemoRequestStatus @default(PENDING)
+
+  /// Provisioning sonrası oluşturulan tenant
+  tenantId    String?
+  /// Şifre belirleme token'ı
+  setPasswordToken   String?
+  setPasswordExpiry  DateTime?
+
+  notes       String?
+  rejectedReason String?
+  processedAt DateTime?
+  processedBy String?
+
+  @@index([email])
+  @@index([status])
+  @@index([createdAt])
+  @@map("demo_requests")
+}

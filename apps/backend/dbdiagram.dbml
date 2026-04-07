@@ -47,6 +47,7 @@
 // FeatureType:           BOOLEAN | LIMIT | ENUM
 // FeatureKey:            MAX_USERS | MAX_PRODUCTS | MULTI_WAREHOUSE | ROLE_MANAGEMENT | APPROVALS | CRM | SALES | PURCHASING | PRODUCTION | SERVICE | MARKETPLACE | PAYROLL | HR | API_ACCESS | AUDIT_LOG | CUSTOM_REPORTING
 // AppModule:             ACCOUNTING | INVENTORY | CRM | SALES | PURCHASING | WAREHOUSE | PRODUCTION | SERVICE | HR | PAYROLL | MARKETPLACE | REPORTING
+// DemoRequestStatus:     PENDING | APPROVED | PROVISIONING | PROVISIONED | REJECTED | EXPIRED | CANCELLED
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -2078,3 +2079,36 @@ Table saved_reports {
 }
 
 Ref: saved_reports.tenantId > tenants.id [delete: cascade]
+
+// ═══════════════════════════════════════════════════════════════
+// DEMO REQUEST
+// ═══════════════════════════════════════════════════════════════
+// DemoRequestStatus: PENDING | APPROVED | PROVISIONING | PROVISIONED | REJECTED | EXPIRED | CANCELLED
+
+Table demo_requests {
+  id                 String            [pk]
+  createdAt          DateTime
+  updatedAt          DateTime
+
+  fullName           String
+  companyName        String
+  email              String
+  phone              String            [null]
+  plan               Plan              [default: "STARTER"]
+  status             DemoRequestStatus [default: "PENDING"]
+
+  tenantId           String            [null, note: 'Provisioning sonrası oluşturulan tenant']
+  setPasswordToken   String            [null, note: 'Şifre belirleme token\'ı']
+  setPasswordExpiry  DateTime          [null]
+
+  notes              String            [null]
+  rejectedReason     String            [null]
+  processedAt        DateTime          [null]
+  processedBy        String            [null]
+
+  indexes {
+    email
+    status
+    createdAt
+  }
+}

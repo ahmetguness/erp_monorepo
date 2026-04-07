@@ -43,6 +43,9 @@ import { serviceRoutes } from './routes/service.routes';
 import { marketplaceRoutes } from './routes/marketplace.routes';
 import { hrRoutes } from './routes/hr.routes';
 import { payrollRoutes } from './routes/payroll.routes';
+import { mailRoutes } from './routes/mail.routes';
+import { demoPublicRoutes, demoAdminRoutes } from './routes/demo.routes';
+import { SetPasswordController } from './controllers/set-password.controller';
 
 const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
@@ -78,8 +81,14 @@ app.get('/health', async (c) => {
 // ── Auth (public) ────────────────────────────
 app.route('/api/auth', authRoutes);
 
+// ── Public routes (JWT gerektirmez) ──────────
+app.route('/api/public', demoPublicRoutes);
+app.post('/api/public/set-password', SetPasswordController.setPassword);
+app.post('/api/public/set-password/validate', SetPasswordController.validateToken);
+
 // ── Admin Panel ──────────────────────────────
 app.route('/api/admin', adminRoutes);
+app.route('/api/admin', demoAdminRoutes);
 
 // ── Tenant Routes (JWT protected) ────────────
 const tenantApi = new Hono();
@@ -123,6 +132,7 @@ tenantApi.route('/service', serviceRoutes);
 tenantApi.route('/marketplace', marketplaceRoutes);
 tenantApi.route('/hr', hrRoutes);
 tenantApi.route('/payroll', payrollRoutes);
+tenantApi.route('/mail', mailRoutes);
 
 // ── External API (API Key auth) ──────────────
 app.route('/api/external', externalRoutes);

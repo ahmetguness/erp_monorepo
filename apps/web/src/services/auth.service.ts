@@ -27,6 +27,7 @@ const TenantInfoSchema = z.object({
     z.array(z.string()),
     z.string().transform((s) => s.split(' ').filter(Boolean)),
   ]),
+  trialEndsAt: z.string().nullable().optional(),
 });
 
 const AvailableTenantSchema = z.object({

@@ -161,6 +161,7 @@ export interface TenantInfo {
   plan: Plan;
   status: TenantStatus;
   modules: string[];
+  trialEndsAt?: string | null;
 }
 
 // ─────────────────────────────────────────────

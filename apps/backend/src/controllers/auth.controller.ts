@@ -70,6 +70,7 @@ export const AuthController = {
                 plan: true,
                 status: true,
                 modules: true,
+                trialEndsAt: true,
               },
             },
           },
@@ -156,6 +157,7 @@ export const AuthController = {
           plan: tenant.plan,
           status: tenant.status,
           modules: tenant.modules,
+          trialEndsAt: tenant.trialEndsAt,
         },
         // Birden fazla tenant varsa listeyi de döndür
         availableTenants: user.tenants.map((tu) => ({
@@ -275,6 +277,7 @@ export const AuthController = {
             plan: result.tenant.plan,
             status: result.tenant.status,
             modules: result.tenant.modules,
+            trialEndsAt: result.tenant.trialEndsAt,
           },
         },
       },
@@ -329,6 +332,7 @@ export const AuthController = {
         plan: true,
         status: true,
         modules: true,
+        trialEndsAt: true,
       },
     });
 

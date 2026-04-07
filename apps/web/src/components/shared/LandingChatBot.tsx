@@ -99,6 +99,20 @@ export function LandingChatBot() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
+  // Dışarıdan chatbot'a mesaj göndermek için global event dinle
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (detail) {
+        setOpen(true);
+        // Chatbot açıldıktan sonra mesajı gönder
+        setTimeout(() => sendMessage(detail), 300);
+      }
+    };
+    window.addEventListener('openChatWithMessage', handler);
+    return () => window.removeEventListener('openChatWithMessage', handler);
+  }, [sendMessage]);
+
   const showQuickQuestions = messages.length <= 1 && !loading;
 
   if (!open) {

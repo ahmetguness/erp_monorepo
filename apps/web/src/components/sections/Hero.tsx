@@ -49,6 +49,11 @@ export default function Hero() {
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('openChatWithMessage', { detail: 'Demo hesabı talep etmek istiyorum' })
+                  );
+                }}
                 className="btn-primary px-6 py-3 text-sm"
               >
                 Demo Talep Et
