@@ -8,6 +8,7 @@ import Pricing from '@/components/sections/Pricing';
 import FAQ from '@/components/sections/FAQ';
 import Footer from '@/components/layouts/Footer';
 import FAB from '@/components/layouts/FAB';
+import { LandingChatBot } from '@/components/shared/LandingChatBot';
 
 export default function Home() {
   return (
@@ -23,6 +24,7 @@ export default function Home() {
       <div className="h-px bg-slate-800" />
       <Footer />
       <FAB />
+      <LandingChatBot />
     </main>
   );
 }

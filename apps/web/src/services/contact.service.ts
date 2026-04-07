@@ -30,6 +30,55 @@ export const ContactSchema = z.object({
   updatedAt: z.string(),
 });
 
+/** Enriched contact returned by the list endpoint */
+export const ContactListItemSchema = ContactSchema.extend({
+  totalDebit: z.coerce.number().optional().default(0),
+  totalCredit: z.coerce.number().optional().default(0),
+  currentBalance: z.coerce.number().optional().default(0),
+  lastTransactionDate: z.string().nullable().optional().default(null),
+  openInvoiceCount: z.coerce.number().optional().default(0),
+  overdueInvoiceCount: z.coerce.number().optional().default(0),
+  riskLevel: z.enum(['safe', 'warning', 'exceeded', 'none']).optional().default('none'),
+  riskRatio: z.coerce.number().optional().default(0),
+});
+
+export const ListSummarySchema = z.object({
+  totalReceivable: z.coerce.number(),
+  totalPayable: z.coerce.number(),
+  netBalance: z.coerce.number(),
+  riskyAccountCount: z.coerce.number(),
+  totalAccounts: z.coerce.number(),
+});
+
+export const FinancialsSchema = z.object({
+  totalDebit: z.coerce.number(),
+  totalCredit: z.coerce.number(),
+  currentBalance: z.coerce.number(),
+  lastTransactionDate: z.string().nullable(),
+  transactionCount: z.coerce.number(),
+  openInvoiceCount: z.coerce.number(),
+  overdueInvoiceCount: z.coerce.number(),
+  riskLevel: z.enum(['safe', 'warning', 'exceeded', 'none']),
+  riskRatio: z.coerce.number(),
+});
+
+export const OpenInvoiceSchema = z.object({
+  id: z.string(),
+  number: z.string(),
+  date: z.string(),
+  dueDate: z.string().nullable(),
+  status: z.string(),
+  totalGross: z.coerce.number(),
+  type: z.string(),
+  isOverdue: z.boolean(),
+});
+
+/** Detail endpoint returns contact + financials + openInvoices */
+export const ContactDetailSchema = ContactSchema.extend({
+  financials: FinancialsSchema.optional(),
+  openInvoices: z.array(OpenInvoiceSchema).optional(),
+});
+
 export const AccountEntrySchema = z.object({
   id: z.string(),
   tenantId: z.string(),
@@ -49,8 +98,14 @@ export const AccountEntrySchema = z.object({
 // ─────────────────────────────────────────────
 
 export type Contact = z.infer<typeof ContactSchema>;
+export type ContactListItem = z.infer<typeof ContactListItemSchema>;
+export type ContactDetail = z.infer<typeof ContactDetailSchema>;
 export type ContactType = Contact['type'];
 export type AccountEntry = z.infer<typeof AccountEntrySchema>;
+export type OpenInvoice = z.infer<typeof OpenInvoiceSchema>;
+export type ContactFinancials = z.infer<typeof FinancialsSchema>;
+export type ListSummary = z.infer<typeof ListSummarySchema>;
+export type RiskLevel = ContactListItem['riskLevel'];
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -60,6 +115,9 @@ export interface ContactListParams extends PaginationParams {
   search?: string;
   type?: ContactType;
   isActive?: boolean;
+  balanceFilter?: 'receivable' | 'payable' | 'risky';
+  sortBy?: string;
+  sortDir?: 'asc' | 'desc';
 }
 
 export interface CreateContactDTO {
@@ -77,6 +135,7 @@ export interface CreateContactDTO {
   notes?: string;
   creditLimit?: number;
   paymentTermDays?: number;
+  tags?: string[];
 }
 
 export type UpdateContactDTO = Partial<Omit<CreateContactDTO, 'type'>> & { isActive?: boolean };
@@ -84,28 +143,36 @@ export type UpdateContactDTO = Partial<Omit<CreateContactDTO, 'type'>> & { isAct
 export interface AccountEntryListParams extends PaginationParams {
   dateFrom?: string;
   dateTo?: string;
+  refType?: string;
 }
+
+// ─────────────────────────────────────────────
+// Response schemas
+// ─────────────────────────────────────────────
+
+const ContactListResponseSchema = PaginatedResponseSchema(ContactListItemSchema).extend({
+  summary: ListSummarySchema.optional(),
+});
+
+const AccountEntryListSchema = PaginatedResponseSchema(AccountEntrySchema).extend({
+  periodTotals: z.object({
+    debit: z.coerce.number(),
+    credit: z.coerce.number(),
+  }).optional(),
+});
 
 // ─────────────────────────────────────────────
 // Service functions
 // ─────────────────────────────────────────────
 
-const ContactListSchema = PaginatedResponseSchema(ContactSchema);
-const ContactDetailSchema = SingleResponseSchema(
-  ContactSchema.extend({
-    accountEntries: z.array(AccountEntrySchema).optional(),
-  }),
-);
-const AccountEntryListSchema = PaginatedResponseSchema(AccountEntrySchema);
-
 export async function getContacts(params: ContactListParams) {
   const res = await apiClient.get('/api/contacts', { params });
-  return safeParse(ContactListSchema, res.data, 'getContacts');
+  return safeParse(ContactListResponseSchema, res.data, 'getContacts');
 }
 
 export async function getContactById(id: string) {
   const res = await apiClient.get(`/api/contacts/${id}`);
-  return safeParse(SingleResponseSchema(ContactSchema), res.data, 'getContactById').data;
+  return safeParse(SingleResponseSchema(ContactDetailSchema), res.data, 'getContactById').data;
 }
 
 export async function createContact(data: CreateContactDTO): Promise<Contact> {

@@ -958,9 +958,14 @@ async function seedEnterpriseTenant() {
   console.log('  + Urunler ve stok');
 
   // Contacts
-  const cMusteri = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Insaat Holding A.S.', code: 'C001', taxNumber: '1231231234', taxOffice: 'Gebze', email: 'satin@insaatholding.com', city: 'Istanbul', creditLimit: 500000, paymentTermDays: 60 } });
-  const cTedarikci = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'SUPPLIER', name: 'Metal Sanayi Ltd.', code: 'S001', taxNumber: '4564564567', taxOffice: 'Dilovasi', email: 'satis@metalsanayi.com', city: 'Kocaeli', paymentTermDays: 45 } });
-  console.log('  + Cari hesaplar');
+  const cMusteri = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Insaat Holding A.S.', code: 'C001', taxNumber: '1231231234', taxOffice: 'Gebze', email: 'satin@insaatholding.com', phone: '+90 262 444 0010', city: 'Istanbul', creditLimit: 500000, paymentTermDays: 60 } });
+  const cTedarikci = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'SUPPLIER', name: 'Metal Sanayi Ltd.', code: 'S001', taxNumber: '4564564567', taxOffice: 'Dilovasi', email: 'satis@metalsanayi.com', phone: '+90 262 555 0010', city: 'Kocaeli', paymentTermDays: 45 } });
+  const cMusteri2 = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Yildiz Insaat Taahhut', code: 'C002', taxNumber: '7897897890', taxOffice: 'Kadikoy', email: 'muhasebe@yildizinsaat.com', phone: '+90 216 333 0020', city: 'Istanbul', creditLimit: 200000, paymentTermDays: 30 } });
+  const cMusteri3 = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Anadolu Yapi Malzemeleri', code: 'C003', taxNumber: '3213213210', taxOffice: 'Bursa', email: 'finans@anadoluyapi.com', phone: '+90 224 444 0030', city: 'Bursa', creditLimit: 100000, paymentTermDays: 45 } });
+  const cTedarikci2 = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'SUPPLIER', name: 'Ege Boya Kimya', code: 'S002', taxNumber: '6546546540', taxOffice: 'Izmir', email: 'siparis@egeboya.com', phone: '+90 232 555 0020', city: 'Izmir', paymentTermDays: 30 } });
+  const cBoth = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'BOTH', name: 'Marmara Aluminyum Tic.', code: 'B001', taxNumber: '9879879870', taxOffice: 'Gebze', email: 'info@marmaraaluminyum.com', phone: '+90 262 555 0040', city: 'Kocaeli', creditLimit: 300000, paymentTermDays: 30 } });
+  const cPasif = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Eski Musteri Ltd.', code: 'C004', taxNumber: '1111111110', taxOffice: 'Ankara', email: 'info@eskimusteri.com', phone: '+90 312 555 0050', city: 'Ankara', creditLimit: 50000, paymentTermDays: 30, isActive: false } });
+  console.log('  + Cari hesaplar (7 adet)');
 
   // ─── PRODUCTION ─────────────────────────────
 
@@ -1227,22 +1232,178 @@ async function seedEnterpriseTenant() {
   });
   await prisma.cashAccount.create({ data: { tenantId: tenant.id, name: 'Fabrika Kasa', currencyCode: 'TRY' } });
 
-  // Invoice + Payment
+  // Invoice + Payment — zengin finansal veri
+  // Insaat Holding: Büyük müşteri, ödenen + açık faturalar
   const inv1 = await prisma.invoice.create({
     data: {
       tenantId: tenant.id, contactId: cMusteri.id, type: 'SALES', status: 'PAID', number: 'INV-000001',
-      date: new Date('2026-03-15'), dueDate: new Date('2026-05-15'),
+      date: new Date('2026-01-15'), dueDate: new Date('2026-03-15'),
       totalNet: 125000, totalTax: 25000, totalGross: 150000,
       lines: { create: [
         { tenantId: tenant.id, productId: pCerceve.id, taxRateId: kdv20.id, description: 'Aluminyum Pencere Cercevesi', quantity: 50, unitPrice: 2500, discount: 0, taxAmount: 25000, lineTotal: 150000, sortOrder: 0 },
       ] },
     },
   });
+  const invEnt2 = await prisma.invoice.create({
+    data: {
+      tenantId: tenant.id, contactId: cMusteri.id, type: 'SALES', status: 'SENT', number: 'INV-000002',
+      date: new Date('2026-03-10'), dueDate: new Date('2026-05-10'),
+      totalNet: 90000, totalTax: 18000, totalGross: 108000,
+      lines: { create: [
+        { tenantId: tenant.id, productId: pKapi.id, taxRateId: kdv20.id, description: 'Aluminyum Kapi Sistemi', quantity: 20, unitPrice: 4500, discount: 0, taxAmount: 18000, lineTotal: 108000, sortOrder: 0 },
+      ] },
+    },
+  });
+  const invEnt3 = await prisma.invoice.create({
+    data: {
+      tenantId: tenant.id, contactId: cMusteri.id, type: 'SALES', status: 'PARTIALLY_PAID', number: 'INV-000003',
+      date: new Date('2026-03-25'), dueDate: new Date('2026-05-25'),
+      totalNet: 62500, totalTax: 12500, totalGross: 75000,
+      lines: { create: [
+        { tenantId: tenant.id, productId: pCerceve.id, taxRateId: kdv20.id, description: 'Aluminyum Pencere Cercevesi (2. parti)', quantity: 25, unitPrice: 2500, discount: 0, taxAmount: 12500, lineTotal: 75000, sortOrder: 0 },
+      ] },
+    },
+  });
+
+  // Yildiz Insaat: Orta müşteri, gecikmiş fatura var
+  const invEnt4 = await prisma.invoice.create({
+    data: {
+      tenantId: tenant.id, contactId: cMusteri2.id, type: 'SALES', status: 'OVERDUE', number: 'INV-000004',
+      date: new Date('2026-02-01'), dueDate: new Date('2026-03-01'),
+      totalNet: 50000, totalTax: 10000, totalGross: 60000,
+      lines: { create: [
+        { tenantId: tenant.id, productId: pCerceve.id, taxRateId: kdv20.id, description: 'Pencere Cercevesi', quantity: 20, unitPrice: 2500, discount: 0, taxAmount: 10000, lineTotal: 60000, sortOrder: 0 },
+      ] },
+    },
+  });
+  const invEnt5 = await prisma.invoice.create({
+    data: {
+      tenantId: tenant.id, contactId: cMusteri2.id, type: 'SALES', status: 'SENT', number: 'INV-000005',
+      date: new Date('2026-03-20'), dueDate: new Date('2026-04-20'),
+      totalNet: 45000, totalTax: 9000, totalGross: 54000,
+      lines: { create: [
+        { tenantId: tenant.id, productId: pKapi.id, taxRateId: kdv20.id, description: 'Kapi Sistemi', quantity: 10, unitPrice: 4500, discount: 0, taxAmount: 9000, lineTotal: 54000, sortOrder: 0 },
+      ] },
+    },
+  });
+
+  // Anadolu Yapi: Kredi limiti aşımı riski
+  const invEnt6 = await prisma.invoice.create({
+    data: {
+      tenantId: tenant.id, contactId: cMusteri3.id, type: 'SALES', status: 'SENT', number: 'INV-000006',
+      date: new Date('2026-03-05'), dueDate: new Date('2026-04-20'),
+      totalNet: 75000, totalTax: 15000, totalGross: 90000,
+      lines: { create: [
+        { tenantId: tenant.id, productId: pCerceve.id, taxRateId: kdv20.id, description: 'Pencere Cercevesi (toplu)', quantity: 30, unitPrice: 2500, discount: 0, taxAmount: 15000, lineTotal: 90000, sortOrder: 0 },
+      ] },
+    },
+  });
+
+  // Tedarikçi faturaları
+  const invEntPurch1 = await prisma.invoice.create({
+    data: {
+      tenantId: tenant.id, contactId: cTedarikci.id, type: 'PURCHASE', status: 'PAID', number: 'INV-000007',
+      date: new Date('2026-02-10'), dueDate: new Date('2026-03-25'),
+      totalNet: 90000, totalTax: 18000, totalGross: 108000,
+      lines: { create: [
+        { tenantId: tenant.id, productId: pAluminyum.id, taxRateId: kdv20.id, description: 'Aluminyum Profil 6m (200 adet)', quantity: 200, unitPrice: 450, discount: 0, taxAmount: 18000, lineTotal: 108000, sortOrder: 0 },
+      ] },
+    },
+  });
+  const invEntPurch2 = await prisma.invoice.create({
+    data: {
+      tenantId: tenant.id, contactId: cTedarikci2.id, type: 'PURCHASE', status: 'SENT', number: 'INV-000008',
+      date: new Date('2026-03-15'), dueDate: new Date('2026-04-15'),
+      totalNet: 16000, totalTax: 3200, totalGross: 19200,
+      lines: { create: [
+        { tenantId: tenant.id, productId: pBoya.id, taxRateId: kdv20.id, description: 'Endustriyel Boya 5L (50 adet)', quantity: 50, unitPrice: 320, discount: 0, taxAmount: 3200, lineTotal: 19200, sortOrder: 0 },
+      ] },
+    },
+  });
+
+  // Marmara Aluminyum (BOTH): hem alış hem satış
+  const invEntBoth1 = await prisma.invoice.create({
+    data: {
+      tenantId: tenant.id, contactId: cBoth.id, type: 'SALES', status: 'SENT', number: 'INV-000009',
+      date: new Date('2026-03-18'), dueDate: new Date('2026-04-18'),
+      totalNet: 37500, totalTax: 7500, totalGross: 45000,
+      lines: { create: [
+        { tenantId: tenant.id, productId: pCerceve.id, taxRateId: kdv20.id, description: 'Pencere Cercevesi', quantity: 15, unitPrice: 2500, discount: 0, taxAmount: 7500, lineTotal: 45000, sortOrder: 0 },
+      ] },
+    },
+  });
+
+  // Ödemeler
   const pay1 = await prisma.payment.create({
-    data: { tenantId: tenant.id, contactId: cMusteri.id, bankAccountId: bankAccount.id, date: new Date('2026-03-25'), amount: 150000, method: 'BANK_TRANSFER', reference: 'EFT-2026-001', status: 'COMPLETED' },
+    data: { tenantId: tenant.id, contactId: cMusteri.id, bankAccountId: bankAccount.id, date: new Date('2026-02-20'), amount: 150000, method: 'BANK_TRANSFER', reference: 'EFT-2026-001', status: 'COMPLETED', notes: 'INV-000001 tam odeme' },
   });
   await prisma.paymentAllocation.create({ data: { tenantId: tenant.id, paymentId: pay1.id, invoiceId: inv1.id, amount: 150000 } });
-  console.log('  + Muhasebe, fatura, odeme');
+
+  const payEnt2 = await prisma.payment.create({
+    data: { tenantId: tenant.id, contactId: cMusteri.id, bankAccountId: bankAccount.id, date: new Date('2026-04-01'), amount: 30000, method: 'BANK_TRANSFER', reference: 'EFT-2026-004', status: 'COMPLETED', notes: 'INV-000003 kismi odeme' },
+  });
+  await prisma.paymentAllocation.create({ data: { tenantId: tenant.id, paymentId: payEnt2.id, invoiceId: invEnt3.id, amount: 30000 } });
+
+  const payEnt3 = await prisma.payment.create({
+    data: { tenantId: tenant.id, contactId: cMusteri2.id, bankAccountId: bankAccount.id, date: new Date('2026-03-15'), amount: 20000, method: 'BANK_TRANSFER', reference: 'EFT-2026-005', status: 'COMPLETED', notes: 'INV-000004 kismi odeme' },
+  });
+
+  const payEntPurch1 = await prisma.payment.create({
+    data: { tenantId: tenant.id, contactId: cTedarikci.id, bankAccountId: bankAccount.id, date: new Date('2026-03-20'), amount: 108000, method: 'BANK_TRANSFER', reference: 'EFT-2026-002', status: 'COMPLETED', notes: 'INV-000007 tedarikci odemesi' },
+  });
+  await prisma.paymentAllocation.create({ data: { tenantId: tenant.id, paymentId: payEntPurch1.id, invoiceId: invEntPurch1.id, amount: 108000 } });
+
+  // ─── ACCOUNT ENTRIES (Cari Hareketler) ──────
+  // Insaat Holding (cMusteri) — bakiye: 150000 - 150000 + 108000 + 75000 - 30000 = 153000 alacak
+  await prisma.accountEntry.createMany({
+    data: [
+      { tenantId: tenant.id, contactId: cMusteri.id, date: new Date('2026-01-15'), debit: 150000, credit: 0, balance: 150000, description: 'INV-000001 Pencere cercevesi faturasi', refType: 'INVOICE', refId: inv1.id },
+      { tenantId: tenant.id, contactId: cMusteri.id, date: new Date('2026-02-20'), debit: 0, credit: 150000, balance: 0, description: 'EFT-2026-001 Banka havalesi', refType: 'PAYMENT', refId: pay1.id },
+      { tenantId: tenant.id, contactId: cMusteri.id, date: new Date('2026-03-10'), debit: 108000, credit: 0, balance: 108000, description: 'INV-000002 Kapi sistemi faturasi', refType: 'INVOICE', refId: invEnt2.id },
+      { tenantId: tenant.id, contactId: cMusteri.id, date: new Date('2026-03-25'), debit: 75000, credit: 0, balance: 183000, description: 'INV-000003 Pencere cercevesi 2. parti', refType: 'INVOICE', refId: invEnt3.id },
+      { tenantId: tenant.id, contactId: cMusteri.id, date: new Date('2026-04-01'), debit: 0, credit: 30000, balance: 153000, description: 'EFT-2026-004 Kismi odeme', refType: 'PAYMENT', refId: payEnt2.id },
+    ],
+  });
+
+  // Yildiz Insaat (cMusteri2) — bakiye: 60000 + 54000 - 20000 = 94000 alacak (limit: 200000, risk: %47)
+  await prisma.accountEntry.createMany({
+    data: [
+      { tenantId: tenant.id, contactId: cMusteri2.id, date: new Date('2026-02-01'), debit: 60000, credit: 0, balance: 60000, description: 'INV-000004 Pencere cercevesi faturasi', refType: 'INVOICE', refId: invEnt4.id },
+      { tenantId: tenant.id, contactId: cMusteri2.id, date: new Date('2026-03-15'), debit: 0, credit: 20000, balance: 40000, description: 'EFT-2026-005 Kismi odeme', refType: 'PAYMENT', refId: payEnt3.id },
+      { tenantId: tenant.id, contactId: cMusteri2.id, date: new Date('2026-03-20'), debit: 54000, credit: 0, balance: 94000, description: 'INV-000005 Kapi sistemi faturasi', refType: 'INVOICE', refId: invEnt5.id },
+    ],
+  });
+
+  // Anadolu Yapi (cMusteri3) — bakiye: 90000 alacak (limit: 100000, risk: %90 WARNING)
+  await prisma.accountEntry.createMany({
+    data: [
+      { tenantId: tenant.id, contactId: cMusteri3.id, date: new Date('2026-03-05'), debit: 90000, credit: 0, balance: 90000, description: 'INV-000006 Toplu pencere cercevesi', refType: 'INVOICE', refId: invEnt6.id },
+    ],
+  });
+
+  // Metal Sanayi (cTedarikci) — bakiye: 0 (tam ödendi)
+  await prisma.accountEntry.createMany({
+    data: [
+      { tenantId: tenant.id, contactId: cTedarikci.id, date: new Date('2026-02-10'), debit: 0, credit: 108000, balance: -108000, description: 'INV-000007 Aluminyum profil alimi', refType: 'INVOICE', refId: invEntPurch1.id },
+      { tenantId: tenant.id, contactId: cTedarikci.id, date: new Date('2026-03-20'), debit: 108000, credit: 0, balance: 0, description: 'EFT-2026-002 Tedarikci odemesi', refType: 'PAYMENT', refId: payEntPurch1.id },
+    ],
+  });
+
+  // Ege Boya (cTedarikci2) — bakiye: -19200 (borçluyuz)
+  await prisma.accountEntry.createMany({
+    data: [
+      { tenantId: tenant.id, contactId: cTedarikci2.id, date: new Date('2026-03-15'), debit: 0, credit: 19200, balance: -19200, description: 'INV-000008 Boya alimi', refType: 'INVOICE', refId: invEntPurch2.id },
+    ],
+  });
+
+  // Marmara Aluminyum (cBoth) — bakiye: 45000 alacak
+  await prisma.accountEntry.createMany({
+    data: [
+      { tenantId: tenant.id, contactId: cBoth.id, date: new Date('2026-03-18'), debit: 45000, credit: 0, balance: 45000, description: 'INV-000009 Pencere cercevesi satisi', refType: 'INVOICE', refId: invEntBoth1.id },
+    ],
+  });
+
+  console.log('  + Faturalar (9 adet), odemeler (4 adet), cari hareketler (12 adet)');
 
   // ─── SETTINGS & NOTIFICATIONS ───────────────
 

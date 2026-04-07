@@ -1,78 +1,101 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { MessageCircle, X, Send, Bot, User, Loader2, Minimize2, Maximize2 } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, User, Loader2, Minimize2, Maximize2, Trash2, Database } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 
-// ─────────────────────────────────────────────
-// Config
-// ─────────────────────────────────────────────
-
-const N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL ?? '';
+const N8N_PRIVATE_URL = process.env.NEXT_PUBLIC_N8N_PRIVATE_WEBHOOK_URL ?? '';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  /** Indicates the bot queried ERP data for this response */
+  usedData?: boolean;
 }
 
-// ─────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────
+const QUICK_ACTIONS = [
+  { label: 'Bugünkü özet', message: 'Bugünkü finansal özeti göster' },
+  { label: 'Gecikmiş faturalar', message: 'Gecikmiş faturaları listele' },
+  { label: 'Riskli cariler', message: 'Kredi limiti aşan cari hesapları göster' },
+  { label: 'Stok uyarıları', message: 'Minimum stok seviyesinin altındaki ürünleri göster' },
+];
 
 export function ChatBot() {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    { id: 'welcome', role: 'assistant', content: 'Merhaba! Size nasıl yardımcı olabilirim?', timestamp: new Date() },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const user = useAuthStore((s) => s.user);
   const tenant = useAuthStore((s) => s.tenant);
+  const token = useAuthStore((s) => s.token);
+
+  // Welcome message with user context
+  useEffect(() => {
+    if (messages.length === 0) {
+      const name = user?.name?.split(' ')[0] ?? 'Merhaba';
+      setMessages([{
+        id: 'welcome', role: 'assistant', timestamp: new Date(),
+        content: `Merhaba ${name}! 👋 Ben Axon ERP asistanınızım. Cari hesaplar, faturalar, stok ve raporlar hakkında sorularınızı yanıtlayabilirim.`,
+      }]);
+    }
+  }, [user, messages.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
+    if (open) setTimeout(() => inputRef.current?.focus(), 100);
   }, [open]);
 
-  const sendMessage = useCallback(async () => {
-    const text = input.trim();
-    if (!text || loading) return;
+  const clearChat = () => {
+    const name = user?.name?.split(' ')[0] ?? 'Merhaba';
+    setMessages([{
+      id: 'welcome', role: 'assistant', timestamp: new Date(),
+      content: `Sohbet temizlendi. Size nasıl yardımcı olabilirim, ${name}?`,
+    }]);
+  };
 
-    const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: text, timestamp: new Date() };
+  const sendMessage = useCallback(async (text?: string) => {
+    const msg = (text ?? input).trim();
+    if (!msg || loading) return;
+
+    const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: msg, timestamp: new Date() };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setLoading(true);
 
     try {
-      if (!N8N_WEBHOOK_URL) {
-        // n8n URL yapılandırılmamışsa fallback
+      if (!N8N_PRIVATE_URL) {
         setTimeout(() => {
           setMessages((prev) => [...prev, {
             id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
-            content: 'Chatbot henüz yapılandırılmamış. NEXT_PUBLIC_N8N_WEBHOOK_URL ortam değişkenini ayarlayın.',
+            content: 'Chatbot henüz yapılandırılmamış. NEXT_PUBLIC_N8N_PRIVATE_WEBHOOK_URL ortam değişkenini ayarlayın.',
           }]);
           setLoading(false);
         }, 500);
         return;
       }
 
-      const res = await fetch(N8N_WEBHOOK_URL, {
+      const res = await fetch(N8N_PRIVATE_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
-          message: text,
-          sessionId: `${tenant?.id ?? 'anon'}-${user?.id ?? 'anon'}`,
+          message: msg,
+          sessionId: `${tenant?.id ?? 'unknown'}-${user?.id ?? 'unknown'}`,
           context: {
+            userId: user?.id,
             userName: user?.name ?? 'Kullanıcı',
+            tenantId: tenant?.id,
             tenantName: tenant?.companyName ?? '',
             plan: tenant?.plan ?? 'STARTER',
           },
@@ -81,11 +104,22 @@ export function ChatBot() {
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const data = await res.json();
-      const reply = data.output ?? data.response ?? data.message ?? data.text ?? JSON.stringify(data);
+      const contentType = res.headers.get('content-type') ?? '';
+      let reply: string;
+      let usedData = false;
+
+      if (contentType.includes('application/json')) {
+        const data = await res.json();
+        reply = data.output ?? data.response ?? data.message ?? data.text ?? JSON.stringify(data);
+        usedData = data.usedTools === true || data.toolsUsed?.length > 0;
+      } else {
+        reply = await res.text();
+      }
+
+      if (!reply || reply.trim() === '') throw new Error('Empty response');
 
       setMessages((prev) => [...prev, {
-        id: `a-${Date.now()}`, role: 'assistant', content: reply, timestamp: new Date(),
+        id: `a-${Date.now()}`, role: 'assistant', content: reply, timestamp: new Date(), usedData,
       }]);
     } catch {
       setMessages((prev) => [...prev, {
@@ -95,11 +129,13 @@ export function ChatBot() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, user, tenant]);
+  }, [input, loading, user, tenant, token]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
+
+  const showQuickActions = messages.length <= 1 && !loading;
 
   if (!open) {
     return (
@@ -123,22 +159,29 @@ export function ChatBot() {
       <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm flex-shrink-0">
         <div className="relative">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center">
-            <Bot className="w-4.5 h-4.5 text-white" />
+            <Bot className="w-4 h-4 text-white" />
           </div>
           <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-slate-900" />
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-white">Axon Asistan</h3>
-          <p className="text-[10px] text-emerald-400">Çevrimiçi</p>
+          <p className="text-[10px] text-slate-500 truncate">
+            {tenant?.companyName ?? 'ERP Asistanı'}
+          </p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
+          <button onClick={clearChat}
+            className="p-1.5 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-colors"
+            aria-label="Sohbeti temizle" title="Sohbeti temizle">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
           <button onClick={() => setExpanded(!expanded)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors hidden sm:flex"
+            className="p-1.5 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-colors hidden sm:flex"
             aria-label={expanded ? 'Küçült' : 'Büyüt'}>
             {expanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
           <button onClick={() => { setOpen(false); setExpanded(false); }}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-colors"
             aria-label="Kapat">
             <X className="w-4 h-4" />
           </button>
@@ -167,14 +210,35 @@ export function ChatBot() {
                   <span key={i}>{line}{i < msg.content.split('\n').length - 1 && <br />}</span>
                 ))}
               </div>
-              <p className={`text-[10px] text-slate-600 mt-1 ${msg.role === 'user' ? 'text-right' : ''}`}>
-                {msg.timestamp.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-              </p>
+              <div className={`flex items-center gap-1.5 mt-1 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                {msg.usedData && (
+                  <span className="inline-flex items-center gap-0.5 text-[9px] text-sky-500">
+                    <Database className="w-2.5 h-2.5" /> ERP verisi
+                  </span>
+                )}
+                <p className="text-[10px] text-slate-600">
+                  {msg.timestamp.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
             </div>
           </div>
         ))}
 
-        {/* Typing indicator */}
+        {/* Quick actions */}
+        {showQuickActions && (
+          <div className="space-y-1.5 pt-1">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Hızlı İşlemler</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {QUICK_ACTIONS.map((q) => (
+                <button key={q.label} onClick={() => sendMessage(q.message)}
+                  className="text-left px-2.5 py-2 rounded-xl text-[11px] text-slate-300 bg-slate-800/50 border border-slate-700/30 hover:bg-slate-800 hover:border-sky-500/30 transition-all">
+                  {q.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading && (
           <div className="flex gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
@@ -182,14 +246,13 @@ export function ChatBot() {
             </div>
             <div className="bg-slate-800/80 border border-slate-700/50 rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
         )}
-
         <div ref={messagesEndRef} />
       </div>
 
@@ -202,21 +265,18 @@ export function ChatBot() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Mesajınızı yazın..."
+            placeholder="Cari sorgula, rapor iste, stok kontrol et..."
             disabled={loading}
             className="flex-1 bg-transparent text-sm text-white placeholder:text-slate-600 focus:outline-none py-1.5 disabled:opacity-50"
             autoComplete="off"
           />
-          <button
-            onClick={sendMessage}
-            disabled={!input.trim() || loading}
+          <button onClick={() => sendMessage()} disabled={!input.trim() || loading}
             className="p-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white disabled:opacity-30 disabled:hover:bg-sky-500 transition-all flex-shrink-0"
-            aria-label="Gönder"
-          >
+            aria-label="Gönder">
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
           </button>
         </div>
-        <p className="text-[9px] text-slate-700 text-center mt-1.5">Axon AI Asistan — Yanıtlar bilgilendirme amaçlıdır</p>
+        <p className="text-[9px] text-slate-700 text-center mt-1.5">Axon AI — ERP verilerinize erişerek yanıt verir</p>
       </div>
     </div>
   );
