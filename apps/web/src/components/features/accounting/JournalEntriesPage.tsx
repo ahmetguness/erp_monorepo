@@ -1,4 +1,5 @@
 'use client';
+'use no memo';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -338,7 +339,7 @@ export function JournalEntriesPage() {
                           {accountOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
                         {errors.lines?.[idx]?.accountId && (
-                          <p className="text-[10px] text-red-400 mt-0.5">{errors.lines[idx].accountId?.message}</p>
+                          <p className="text-[10px] text-red-400 mt-0.5">{errors.lines?.[idx]?.accountId?.message}</p>
                         )}
                       </div>
                       {/* Debit */}
@@ -476,7 +477,7 @@ function EditJournalEntryModal({ entry, accounts, onClose, onSave, isPending }: 
       date: entry.date.split('T')[0],
       description: entry.description ?? '',
       lines: (entry.lines ?? []).map((l) => ({
-        accountId: l.accountId ?? (l as Record<string, unknown>).account?.id ?? '',
+        accountId: l.accountId ?? ((l as Record<string, any>).account?.id as string) ?? '',
         debit: String(Number(l.debit)),
         credit: String(Number(l.credit)),
         description: l.description ?? '',
@@ -580,7 +581,7 @@ function EditJournalEntryModal({ entry, accounts, onClose, onSave, isPending }: 
                           {accountOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
                         {errors.lines?.[idx]?.accountId && (
-                          <p className="text-[10px] text-red-400 mt-0.5">{errors.lines[idx].accountId?.message}</p>
+                          <p className="text-[10px] text-red-400 mt-0.5">{errors.lines?.[idx]?.accountId?.message}</p>
                         )}
                       </div>
                       {fields.length > 2 && (

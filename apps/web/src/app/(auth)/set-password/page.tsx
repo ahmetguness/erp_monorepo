@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, Lock, Loader2, CheckCircle2, XCircle } from 'lucide-react';
@@ -11,6 +11,19 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 type Status = 'validating' | 'ready' | 'submitting' | 'success' | 'error';
 
 export default function SetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+        <p className="text-sm text-slate-400">Yükleniyor…</p>
+      </div>
+    }>
+      <SetPasswordContent />
+    </Suspense>
+  );
+}
+
+function SetPasswordContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 

@@ -70,7 +70,7 @@ export const PurchaseOrderController = {
   // ── Purchase Requests ────────────────────────
 
   async listRequests(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const query = c.req.query() as ListQuery;
@@ -95,7 +95,7 @@ export const PurchaseOrderController = {
   },
 
   async createRequest(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const body = await c.req.json<CreatePurchaseRequestDTO>();
@@ -134,7 +134,7 @@ export const PurchaseOrderController = {
   },
 
   async approveRequest(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -154,7 +154,7 @@ export const PurchaseOrderController = {
   },
 
   async convertRequestToOrder(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -215,7 +215,7 @@ export const PurchaseOrderController = {
   // ── Purchase Orders ──────────────────────────
 
   async listOrders(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const query = c.req.query() as ListQuery;
@@ -244,7 +244,7 @@ export const PurchaseOrderController = {
   },
 
   async getOrderById(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -265,7 +265,7 @@ export const PurchaseOrderController = {
   },
 
   async createOrder(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const body = await c.req.json<CreatePurchaseOrderDTO>();
@@ -310,7 +310,7 @@ export const PurchaseOrderController = {
   },
 
   async sendOrder(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id')!;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -334,7 +334,7 @@ export const PurchaseOrderController = {
   },
 
   async receiveOrder(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id')!;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -428,7 +428,7 @@ export const PurchaseOrderController = {
   },
 
   async cancelOrder(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id')!;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 

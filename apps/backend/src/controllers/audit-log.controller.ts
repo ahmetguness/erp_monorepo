@@ -39,7 +39,7 @@ function getAuditDateFilter(auditLevel: string): Date | null {
 export const AuditLogController = {
 
   async list(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
@@ -79,7 +79,7 @@ export const AuditLogController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id')!;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -105,7 +105,7 @@ export const AuditLogController = {
    * Standard ve basic seviyelerde 403 döner.
    */
   async exportLogs(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const feature = await tenantFeatureService.resolveFeature(tenantId, FeatureKey.AUDIT_LOG);

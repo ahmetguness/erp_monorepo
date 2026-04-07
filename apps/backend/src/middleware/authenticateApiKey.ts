@@ -51,10 +51,6 @@ export function authenticateApiKey() {
     c.set('apiKeyId', apiKey.id);
     c.set('apiKeyScopes', apiKey.scopes);
 
-    // Also set x-tenant-id header so downstream handlers can read it
-    c.req.raw.headers.set?.('x-tenant-id', apiKey.tenantId);
-    c.res.headers.set('x-tenant-id', apiKey.tenantId);
-
     await next();
   };
 }
@@ -69,7 +65,9 @@ export function requireScope(scope: string) {
   return async (c: Context, next: Next): Promise<Response | void> => {
     const scopes: string[] = c.get('apiKeyScopes') ?? [];
 
-    // Empty scopes = full access
+    // Boş scope = full access (tasarım kararı)
+    // Bu, API key oluşturulurken scope belirtilmezse tüm endpoint'lere erişim sağlar.
+    // Kısıtlı erişim için API key'e scope atanmalıdır (örn: ["invoices:read", "products:read"])
     if (scopes.length === 0) {
       await next();
       return;

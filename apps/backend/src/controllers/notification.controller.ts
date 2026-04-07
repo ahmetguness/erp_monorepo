@@ -10,7 +10,7 @@ import { ForbiddenError, NotFoundError } from '../errors';
 export const NotificationController = {
 
   async list(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const userId = c.get('userId') as string | undefined;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -35,7 +35,7 @@ export const NotificationController = {
   },
 
   async markAsRead(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id')!;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -51,7 +51,7 @@ export const NotificationController = {
   },
 
   async markAllAsRead(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const userId = c.get('userId') as string | undefined;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -64,7 +64,7 @@ export const NotificationController = {
   },
 
   async delete(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id')!;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 

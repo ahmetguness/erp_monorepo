@@ -52,7 +52,7 @@ export const ProductController = {
    * Tenant'a ait ürünleri listeler (sayfalama + filtreleme).
    */
   async list(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
 
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -103,7 +103,7 @@ export const ProductController = {
    * Belirli bir ürünü döner.
    */
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const productId = c.req.param('id');
 
     if (!tenantId || typeof tenantId !== 'string') {
@@ -137,7 +137,7 @@ export const ProductController = {
    * NOT: Ürün limiti enforceStarterLimits('product') middleware'inde kontrol edilir.
    */
   async create(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
 
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -194,7 +194,7 @@ export const ProductController = {
    * Ürün bilgilerini günceller.
    */
   async update(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const productId = c.req.param('id');
 
     if (!tenantId || typeof tenantId !== 'string') {
@@ -240,7 +240,7 @@ export const ProductController = {
    * Ürünü soft-delete yapar.
    */
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const productId = c.req.param('id');
 
     if (!tenantId || typeof tenantId !== 'string') {

@@ -15,7 +15,7 @@ import { isModuleInList } from '../utils/feature-helpers';
  */
 export function requireModule(module: ModuleKey) {
   return async (c: Context, next: Next): Promise<Response | void> => {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
 
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);

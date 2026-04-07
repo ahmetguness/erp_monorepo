@@ -1,11 +1,14 @@
 import { Context } from 'hono';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { Plan, TenantStatus } from '@prisma/client';
+import { Plan, TenantStatus, AuditAction } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ValidationError, NotFoundError } from '../errors';
 
-const JWT_SECRET = process.env.JWT_SECRET ?? 'axon-dev-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
+
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || JWT_SECRET + '_admin';
 
 // ─────────────────────────────────────────────
 // Admin Auth
@@ -24,7 +27,7 @@ export const AdminAuthController = {
 
     await prisma.adminUser.update({ where: { id: admin.id }, data: { lastLoginAt: new Date() } });
 
-    const token = jwt.sign({ adminId: admin.id, email: admin.email, role: 'admin' }, JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign({ adminId: admin.id, email: admin.email, role: 'admin' }, ADMIN_JWT_SECRET, { expiresIn: '24h' });
 
     return c.json({ data: { token, admin: { id: admin.id, email: admin.email, name: admin.name } } });
   },
@@ -304,10 +307,16 @@ export const AdminAuditController = {
     const module = c.req.query('module');
     const action = c.req.query('action');
 
+    // Action enum validasyonu
+    const VALID_ACTIONS = ['CREATE', 'UPDATE', 'DELETE', 'APPROVE', 'REJECT', 'EXPORT', 'LOGIN', 'LOGOUT', 'OTHER'];
+    if (action && !VALID_ACTIONS.includes(action)) {
+      return c.json(new ValidationError(`Geçersiz action. Geçerli değerler: ${VALID_ACTIONS.join(', ')}`).toJSON(), 400);
+    }
+
     const where = {
       ...(tenantId && { tenantId }),
       ...(module && { module }),
-      ...(action && { action: action as never }),
+      ...(action && { action: action as AuditAction }),
     };
 
     const [total, logs] = await prisma.$transaction([

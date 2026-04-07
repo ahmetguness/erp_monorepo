@@ -12,7 +12,7 @@ export const SettingsController = {
   // ── Tenant Settings ──────────────────────────
 
   async listTenantSettings(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const settings = await prisma.tenantSetting.findMany({ where: { tenantId }, orderBy: { key: 'asc' } });
@@ -20,7 +20,7 @@ export const SettingsController = {
   },
 
   async upsertTenantSetting(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const body = await c.req.json<{ key: string; value: string }>();
@@ -38,7 +38,7 @@ export const SettingsController = {
   },
 
   async deleteTenantSetting(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const key = c.req.param('key');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -49,7 +49,7 @@ export const SettingsController = {
   // ── Module Settings ──────────────────────────
 
   async listModuleSettings(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const module = c.req.query('module');
@@ -61,7 +61,7 @@ export const SettingsController = {
   },
 
   async upsertModuleSetting(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const body = await c.req.json<{ module: string; key: string; value: string }>();

@@ -8,7 +8,7 @@ import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
 
 export const CustomerAssetController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
@@ -35,7 +35,7 @@ export const CustomerAssetController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id')!;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -56,7 +56,7 @@ export const CustomerAssetController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const body = await c.req.json<{
@@ -79,7 +79,7 @@ export const CustomerAssetController = {
   },
 
   async update(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id')!;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -108,7 +108,7 @@ export const CustomerAssetController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id')!;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 

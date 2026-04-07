@@ -8,8 +8,28 @@ import { ValidationError, ForbiddenError, NotFoundError } from '../errors';
 // Config
 // ─────────────────────────────────────────────
 
-const JWT_SECRET = process.env.JWT_SECRET ?? 'axon-dev-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
+
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '7d';
+
+// ─────────────────────────────────────────────
+// Rate limiter (register + login brute force koruması)
+// ─────────────────────────────────────────────
+
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(key: string, maxAttempts: number, windowMs: number): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= maxAttempts) return false;
+  entry.count++;
+  return true;
+}
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -46,6 +66,12 @@ export const AuthController = {
    * Email + password ile giriş. Tenant slug opsiyonel (tek tenant varsa otomatik seçilir).
    */
   async login(c: Context): Promise<Response> {
+    // Rate limit: IP başına 15 dakikada max 10 giriş denemesi
+    const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
+    if (!checkRateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
+      return c.json({ error: { code: 'RATE_LIMITED', message: 'Çok fazla giriş denemesi. Lütfen 15 dakika sonra tekrar deneyin.' } }, 429);
+    }
+
     const body = await c.req.json<LoginDTO>();
 
     if (!body.email || !body.password) {
@@ -175,6 +201,12 @@ export const AuthController = {
    * Yeni kullanıcı + tenant oluşturur (self-service kayıt).
    */
   async register(c: Context): Promise<Response> {
+    // Rate limit: IP başına 15 dakikada max 5 kayıt
+    const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
+    if (!checkRateLimit(`register:${ip}`, 5, 15 * 60 * 1000)) {
+      return c.json({ error: { code: 'RATE_LIMITED', message: 'Çok fazla kayıt denemesi. Lütfen 15 dakika sonra tekrar deneyin.' } }, 429);
+    }
+
     const body = await c.req.json<RegisterDTO>();
 
     if (!body.email || !body.name || !body.password || !body.companyName) {
@@ -290,26 +322,12 @@ export const AuthController = {
    * JWT'den mevcut kullanıcı + tenant bilgisini döner.
    */
   async me(c: Context): Promise<Response> {
-    const authHeader = c.req.header('Authorization');
-    const tenantId = c.req.header('x-tenant-id');
-
-    if (!authHeader?.startsWith('Bearer ')) {
-      return c.json(new ForbiddenError('Token bulunamadı.').toJSON(), 401);
-    }
-
-    const token = authHeader.slice(7);
-
-    let payload: JwtPayload;
-    try {
-      payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
-    } catch {
-      return c.json(new ForbiddenError('Geçersiz veya süresi dolmuş token.').toJSON(), 401);
-    }
-
-    const resolvedTenantId = tenantId ?? payload.tenantId;
+    // userId ve tenantId artık requireAuth middleware'inden geliyor
+    const userId = c.get('userId') as string;
+    const tenantId = c.get('tenantId') as string;
 
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
+      where: { id: userId },
       select: {
         id: true,
         email: true,
@@ -324,7 +342,7 @@ export const AuthController = {
     }
 
     const tenant = await prisma.tenant.findUnique({
-      where: { id: resolvedTenantId },
+      where: { id: tenantId },
       select: {
         id: true,
         slug: true,
@@ -337,7 +355,7 @@ export const AuthController = {
     });
 
     if (!tenant) {
-      return c.json(new NotFoundError('Tenant', resolvedTenantId).toJSON(), 404);
+      return c.json(new NotFoundError('Tenant', tenantId).toJSON(), 404);
     }
 
     return c.json({ data: { user, tenant } });

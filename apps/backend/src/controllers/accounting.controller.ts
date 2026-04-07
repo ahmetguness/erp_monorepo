@@ -49,7 +49,7 @@ export const AccountingController = {
   // ── Ledger Accounts ──────────────────────────
 
   async listAccounts(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     }
@@ -77,7 +77,7 @@ export const AccountingController = {
   },
 
   async createAccount(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     }
@@ -117,7 +117,7 @@ export const AccountingController = {
   // ── Journal Entries ──────────────────────────
 
   async listJournalEntries(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     }
@@ -164,7 +164,7 @@ export const AccountingController = {
   },
 
   async createJournalEntry(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     }
@@ -229,7 +229,7 @@ export const AccountingController = {
   },
 
   async postJournalEntry(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const entryId = c.req.param('id');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -257,7 +257,7 @@ export const AccountingController = {
   // ── Update draft journal entry ───────────────
 
   async updateJournalEntry(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const entryId = c.req.param('id');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -304,7 +304,7 @@ export const AccountingController = {
   // ── Reverse (storno) posted journal entry ────
 
   async reverseJournalEntry(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const entryId = c.req.param('id');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -371,7 +371,7 @@ export const AccountingExtController = {
   // ── LedgerAccount ────────────────────────────
 
   async getAccountById(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const accountId = c.req.param('id');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -390,7 +390,7 @@ export const AccountingExtController = {
   },
 
   async updateAccount(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const accountId = c.req.param('id');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -417,7 +417,7 @@ export const AccountingExtController = {
   // ── JournalEntry ─────────────────────────────
 
   async getJournalEntryById(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const entryId = c.req.param('id');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -441,7 +441,7 @@ export const AccountingExtController = {
   // ── FiscalPeriod ─────────────────────────────
 
   async listFiscalPeriods(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     }
@@ -455,7 +455,7 @@ export const AccountingExtController = {
   },
 
   async createFiscalPeriod(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     }
@@ -497,7 +497,7 @@ export const AccountingExtController = {
   },
 
   async closeFiscalPeriod(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const periodId = c.req.param('id');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);

@@ -8,7 +8,7 @@ import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
 
 export const AttendanceController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
@@ -45,7 +45,7 @@ export const AttendanceController = {
   },
 
   async checkIn(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const body = await c.req.json<{ employeeId: string; date?: string; checkIn?: string; notes?: string }>();
@@ -71,7 +71,7 @@ export const AttendanceController = {
   },
 
   async checkOut(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const body = await c.req.json<{ employeeId: string; date?: string; checkOut?: string; overtimeHours?: number }>();
@@ -97,7 +97,7 @@ export const AttendanceController = {
   },
 
   async update(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id')!;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
@@ -118,7 +118,7 @@ export const AttendanceController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const id = c.req.param('id')!;
     if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 

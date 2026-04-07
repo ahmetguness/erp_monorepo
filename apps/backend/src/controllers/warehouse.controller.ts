@@ -44,7 +44,7 @@ export const WarehouseController = {
    * Tenant'a ait depoları listeler.
    */
   async list(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
 
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -70,7 +70,7 @@ export const WarehouseController = {
    * Belirli bir depoyu döner.
    */
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const warehouseId = c.req.param('id');
 
     if (!tenantId || typeof tenantId !== 'string') {
@@ -102,7 +102,7 @@ export const WarehouseController = {
    * NOT: Tek depo kuralı enforceStarterLimits('warehouse') middleware'inde kontrol edilir.
    */
   async create(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
 
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -145,7 +145,7 @@ export const WarehouseController = {
    * Depo bilgilerini günceller.
    */
   async update(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const warehouseId = c.req.param('id');
 
     if (!tenantId || typeof tenantId !== 'string') {
@@ -180,7 +180,7 @@ export const WarehouseController = {
    * NOT: MULTI_WAREHOUSE kontrolü enforceStarterLimits('warehouse_transfer') middleware'inde yapılır.
    */
   async transfer(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
 
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -287,7 +287,7 @@ export const WarehouseController = {
 
 export const LocationController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const warehouseId = c.req.param('warehouseId');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -305,7 +305,7 @@ export const LocationController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const warehouseId = c.req.param('warehouseId');
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -338,7 +338,7 @@ export const LocationController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const warehouseId = c.req.param('warehouseId');
     const locationId = c.req.param('locationId');
     if (!tenantId || typeof tenantId !== 'string') {

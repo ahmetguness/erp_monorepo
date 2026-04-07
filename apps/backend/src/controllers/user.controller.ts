@@ -1,4 +1,5 @@
 import { Context } from 'hono';
+import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
 
@@ -32,7 +33,7 @@ export const UserController = {
    * Tenant'a ait tüm kullanıcıları listeler.
    */
   async list(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
 
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -67,7 +68,7 @@ export const UserController = {
    * Belirli bir kullanıcıyı döner.
    */
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const userId = c.req.param('id');
 
     if (!tenantId || typeof tenantId !== 'string') {
@@ -107,7 +108,7 @@ export const UserController = {
    * NOT: Kullanıcı limiti enforceStarterLimits('user') middleware'inde kontrol edilir.
    */
   async create(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
 
     if (!tenantId || typeof tenantId !== 'string') {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
@@ -160,12 +161,14 @@ export const UserController = {
     }
 
     // Yeni kullanıcı oluştur
+    const hashedPassword = await bcrypt.hash(body.password, 12);
+
     const newUser = await prisma.user.create({
       data: {
         email: body.email,
         name: body.name,
         phone: body.phone ?? null,
-        password: body.password, // Hash işlemi auth service'de yapılmalı
+        password: hashedPassword,
         tenants: {
           create: {
             tenantId,
@@ -192,7 +195,7 @@ export const UserController = {
    * Kullanıcı bilgilerini günceller.
    */
   async update(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const userId = c.req.param('id');
 
     if (!tenantId || typeof tenantId !== 'string') {
@@ -236,7 +239,7 @@ export const UserController = {
    * Kullanıcıyı tenant'tan çıkarır (soft deactivate).
    */
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const userId = c.req.param('id');
 
     if (!tenantId || typeof tenantId !== 'string') {

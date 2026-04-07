@@ -103,7 +103,7 @@ export function ApiPlayground() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<'response' | 'curl' | null>(null);
   const [history, setHistory] = useState<Array<{ method: string; path: string; status: number; duration: number; time: string }>>([]);
-  const responseRef = useRef<HTMLPreElement>(null);
+  const responseRef = useRef<HTMLDivElement>(null);
 
   const endpoint = ALL_ENDPOINTS[selectedIdx];
   const methodStyle = METHOD_STYLES[endpoint.method];

@@ -24,14 +24,14 @@ export const MasterDataController = {
   // ── Units ────────────────────────────────────
 
   async listUnits(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const units = await prisma.unit.findMany({ where: { tenantId }, orderBy: { name: 'asc' } });
     return c.json({ data: units });
   },
 
   async createUnit(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const body = await c.req.json<CreateUnitDTO>();
     if (!body.name || !body.code) return c.json(new ValidationError('name ve code zorunludur.').toJSON(), 400);
@@ -42,7 +42,7 @@ export const MasterDataController = {
   },
 
   async deleteUnit(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const unitId = c.req.param('id');
     if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const unit = await prisma.unit.findFirst({ where: { id: unitId, tenantId } });
@@ -56,7 +56,7 @@ export const MasterDataController = {
   // ── Categories ───────────────────────────────
 
   async listCategories(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const categories = await prisma.category.findMany({
       where: { tenantId },
@@ -67,7 +67,7 @@ export const MasterDataController = {
   },
 
   async createCategory(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const body = await c.req.json<CreateCategoryDTO>();
     if (!body.name) return c.json(new ValidationError('name zorunludur.').toJSON(), 400);
@@ -76,7 +76,7 @@ export const MasterDataController = {
   },
 
   async updateCategory(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const categoryId = c.req.param('id');
     if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const category = await prisma.category.findFirst({ where: { id: categoryId, tenantId } });
@@ -93,7 +93,7 @@ export const MasterDataController = {
   },
 
   async deleteCategory(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const categoryId = c.req.param('id');
     if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const category = await prisma.category.findFirst({ where: { id: categoryId, tenantId } });
@@ -107,14 +107,14 @@ export const MasterDataController = {
   // ── Tax Rates ────────────────────────────────
 
   async listTaxRates(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const taxRates = await prisma.taxRate.findMany({ where: { tenantId, isActive: true }, orderBy: { rate: 'asc' } });
     return c.json({ data: taxRates });
   },
 
   async createTaxRate(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const body = await c.req.json<CreateTaxRateDTO>();
     if (!body.name || body.rate === undefined) return c.json(new ValidationError('name ve rate zorunludur.').toJSON(), 400);
@@ -123,7 +123,7 @@ export const MasterDataController = {
   },
 
   async updateTaxRate(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     const taxRateId = c.req.param('id');
     if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const taxRate = await prisma.taxRate.findFirst({ where: { id: taxRateId, tenantId } });
@@ -143,14 +143,14 @@ export const MasterDataController = {
   // ── Currencies ───────────────────────────────
 
   async listCurrencies(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const currencies = await prisma.currency.findMany({ where: { tenantId }, orderBy: { code: 'asc' } });
     return c.json({ data: currencies });
   },
 
   async createCurrency(c: Context): Promise<Response> {
-    const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+    const tenantId = c.get('tenantId');
     if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const body = await c.req.json<CreateCurrencyDTO>();
     if (!body.code || !body.name || !body.symbol) return c.json(new ValidationError('code, name ve symbol zorunludur.').toJSON(), 400);

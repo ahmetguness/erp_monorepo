@@ -1,6 +1,18 @@
 import { Context } from 'hono';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
+
+/** Timing-safe token karşılaştırma (gelen raw token hash'lenerek DB'deki hash ile karşılaştırılır) */
+function tokensMatch(storedHash: string | null, rawToken: string): boolean {
+  if (!storedHash) return false;
+  try {
+    const incomingHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    return crypto.timingSafeEqual(Buffer.from(storedHash), Buffer.from(incomingHash));
+  } catch {
+    return false;
+  }
+}
 
 export class SetPasswordController {
   /**
@@ -22,16 +34,19 @@ export class SetPasswordController {
       where: { email: email.toLowerCase().trim() },
     });
 
+    // Genel hata mesajı — kullanıcı varlığını sızdırma
+    const genericError = { error: 'Geçersiz veya süresi dolmuş token.' };
+
     if (!user) {
-      return c.json({ error: 'Geçersiz token veya e-posta.' }, 400);
+      return c.json(genericError, 400);
     }
 
-    if (user.passwordResetToken !== token) {
-      return c.json({ error: 'Geçersiz veya kullanılmış token.' }, 400);
+    if (!tokensMatch(user.passwordResetToken, token)) {
+      return c.json(genericError, 400);
     }
 
-    if (user.passwordResetExpiry && user.passwordResetExpiry < new Date()) {
-      return c.json({ error: 'Token süresi dolmuş. Lütfen yeni bir link talep edin.' }, 400);
+    if (!user.passwordResetExpiry || user.passwordResetExpiry < new Date()) {
+      return c.json(genericError, 400);
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -63,12 +78,14 @@ export class SetPasswordController {
       where: { email: email.toLowerCase().trim() },
     });
 
-    if (!user || user.passwordResetToken !== token) {
-      return c.json({ valid: false, error: 'Geçersiz token.' }, 400);
+    const genericError = { valid: false, error: 'Geçersiz veya süresi dolmuş token.' };
+
+    if (!user || !tokensMatch(user.passwordResetToken, token)) {
+      return c.json(genericError, 400);
     }
 
-    if (user.passwordResetExpiry && user.passwordResetExpiry < new Date()) {
-      return c.json({ valid: false, error: 'Token süresi dolmuş.' }, 400);
+    if (!user.passwordResetExpiry || user.passwordResetExpiry < new Date()) {
+      return c.json(genericError, 400);
     }
 
     return c.json({ valid: true, name: user.name });

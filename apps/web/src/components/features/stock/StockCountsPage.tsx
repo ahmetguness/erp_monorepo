@@ -62,7 +62,7 @@ export function StockCountsPage() {
   const today = new Date().toISOString().split('T')[0];
 
   const { register, handleSubmit, control, reset, setValue, watch, formState: { errors } } = useForm<NewCountForm>({
-    resolver: zodResolver(newCountSchema),
+    resolver: zodResolver(newCountSchema) as any,
     defaultValues: { warehouseId: '', date: today, notes: '', items: [] },
   });
 

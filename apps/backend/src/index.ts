@@ -51,10 +51,15 @@ const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
 
 // ── CORS ─────────────────────────────────────
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(s => s.trim());
+
 app.use('*', cors({
-  origin: (origin) => origin ?? '*',
+  origin: (origin) => {
+    if (!origin) return '*'; // server-to-server (Postman, curl vb.)
+    return ALLOWED_ORIGINS.includes(origin) ? origin : '';
+  },
   allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'x-tenant-id'],
+  allowHeaders: ['Content-Type', 'Authorization', 'x-tenant-id', 'x-api-key'],
   exposeHeaders: ['Content-Length'],
   maxAge: 86400,
 }));
@@ -139,6 +144,27 @@ app.route('/api/external', externalRoutes);
 
 // Mount tenant routes under /api (after more specific routes)
 app.route('/api', tenantApi);
+
+// ── Global error handler ─────────────────────
+app.onError((err, c) => {
+  logger.error('Unhandled error:', err.message);
+
+  // Development'ta detaylı hata, production'da generic
+  if (process.env.NODE_ENV === 'development') {
+    return c.json({
+      error: { code: 'INTERNAL_ERROR', message: err.message, stack: err.stack },
+    }, 500);
+  }
+
+  return c.json({
+    error: { code: 'INTERNAL_ERROR', message: 'Beklenmeyen bir hata oluştu.' },
+  }, 500);
+});
+
+// ── 404 handler ──────────────────────────────
+app.notFound((c) => {
+  return c.json({ error: { code: 'NOT_FOUND', message: 'Endpoint bulunamadı.' } }, 404);
+});
 
 // ── Başlangıç logu ───────────────────────────
 serve({ fetch: app.fetch, port: PORT }, () => {

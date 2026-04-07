@@ -305,7 +305,7 @@ export function ApiKeysPage() {
                         <td className="px-4 py-2.5 text-sm text-slate-300">{mod.label}</td>
                         {(['read', 'write', 'delete'] as const).map((action) => {
                           const scopeKey = `${mod.module}:${action}`;
-                          const available = mod.actions.includes(action);
+                          const available = (mod.actions as readonly string[]).includes(action);
                           const selected = form.scopes.includes(scopeKey);
                           return (
                             <td key={action} className="text-center px-2 py-2.5">

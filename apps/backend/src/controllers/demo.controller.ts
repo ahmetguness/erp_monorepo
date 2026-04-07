@@ -7,17 +7,53 @@ import {
 import { prisma } from '../lib/prisma';
 
 export class DemoController {
+  // Basit in-memory rate limiter (IP bazlı)
+  private static rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+  private static readonly RATE_LIMIT = 5; // 15 dakikada max 5 talep
+  private static readonly RATE_WINDOW = 15 * 60 * 1000; // 15 dakika
+
+  private static checkRateLimit(ip: string): boolean {
+    const now = Date.now();
+    const entry = DemoController.rateLimitMap.get(ip);
+
+    if (!entry || now > entry.resetAt) {
+      DemoController.rateLimitMap.set(ip, { count: 1, resetAt: now + DemoController.RATE_WINDOW });
+      return true;
+    }
+
+    if (entry.count >= DemoController.RATE_LIMIT) return false;
+    entry.count++;
+    return true;
+  }
+
   /**
    * POST /public/demo-requests
    * Herkese açık – demo talebi oluşturur.
    */
   static async create(c: Context) {
+    // Rate limit kontrolü
+    const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
+    if (!DemoController.checkRateLimit(ip)) {
+      return c.json({ success: false, code: 'RATE_LIMITED', message: 'Çok fazla talep gönderdiniz. Lütfen 15 dakika sonra tekrar deneyin.' }, 429);
+    }
+
     const body = await c.req.json();
-    console.log('📩 DEMO REQUEST RAW BODY:', JSON.stringify(body, null, 2));
 
     if (!body.fullName || !body.companyName || !body.email) {
       return c.json({ error: 'fullName, companyName ve email zorunludur.' }, 400);
     }
+
+    // Input uzunluk limitleri
+    if (body.fullName.length > 100 || body.companyName.length > 100) {
+      return c.json({ error: 'Ad ve şirket adı en fazla 100 karakter olabilir.' }, 400);
+    }
+
+    if (body.phone && body.phone.length > 20) {
+      return c.json({ error: 'Telefon numarası en fazla 20 karakter olabilir.' }, 400);
+    }
+
+    // HTML tag temizleme (XSS koruması — mail template'lerine gidiyor)
+    const stripHtml = (s: string) => s.replace(/<[^>]*>/g, '').trim();
 
     // Basit email validasyonu
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,11 +61,17 @@ export class DemoController {
       return c.json({ error: 'Geçerli bir e-posta adresi giriniz.' }, 400);
     }
 
+    // Plan validasyonu
+    const validPlans = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'];
+    if (body.plan && !validPlans.includes(body.plan)) {
+      return c.json({ error: 'Geçersiz plan. STARTER, PROFESSIONAL veya ENTERPRISE olmalıdır.' }, 400);
+    }
+
     const result = await createDemoRequest({
-      fullName: body.fullName,
-      companyName: body.companyName,
+      fullName: stripHtml(body.fullName),
+      companyName: stripHtml(body.companyName),
       email: body.email,
-      phone: body.phone,
+      phone: body.phone ? stripHtml(body.phone) : undefined,
       plan: body.plan,
     });
 
@@ -47,8 +89,8 @@ export class DemoController {
    */
   static async list(c: Context) {
     const status = c.req.query('status');
-    const page = parseInt(c.req.query('page') || '1');
-    const limit = parseInt(c.req.query('limit') || '20');
+    const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') || '20', 10)));
 
     const where = status ? { status: status as any } : {};
 

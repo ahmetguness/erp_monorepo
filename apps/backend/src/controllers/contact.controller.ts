@@ -45,7 +45,7 @@ interface ContactListQuery {
 // ─────────────────────────────────────────────
 
 function getTenantId(c: Context): string {
-  const tenantId = c.req.header('x-tenant-id') ?? c.get('tenantId');
+  const tenantId = c.get('tenantId');
   if (!tenantId || typeof tenantId !== 'string') {
     throw new ForbiddenError('Tenant kimliği bulunamadı.');
   }

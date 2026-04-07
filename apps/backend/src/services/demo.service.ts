@@ -198,7 +198,8 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
     const slug = existing ? `${baseSlug}-${Date.now().toString(36)}` : baseSlug;
 
     // Set-password token oluştur
-    const setPasswordToken = crypto.randomBytes(32).toString('hex');
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const setPasswordToken = crypto.createHash('sha256').update(rawToken).digest('hex');
     const setPasswordExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 saat
 
     // Trial süresi: 15 gün
@@ -278,9 +279,9 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
       },
     });
 
-    // Mail gönder
+    // Mail gönder (raw token kullan — DB'de hash saklanıyor)
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
-    const setPasswordUrl = `${appUrl}/set-password?token=${setPasswordToken}&email=${encodeURIComponent(demoRequest.email)}`;
+    const setPasswordUrl = `${appUrl}/set-password?token=${rawToken}&email=${encodeURIComponent(demoRequest.email)}`;
 
     const template = demoReadyEmail(
       demoRequest.fullName,

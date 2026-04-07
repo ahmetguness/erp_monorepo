@@ -75,13 +75,13 @@ export function AuditLogPage() {
               <div><span className="text-slate-500">Kaynak</span><p className="text-slate-200">{detail.entityType}</p></div>
               <div><span className="text-slate-500">Tarih</span><p className="text-slate-200">{new Date(detail.createdAt).toLocaleString('tr-TR')}</p></div>
             </div>
-            {detail.oldValues && (
+            {detail.oldValues != null && (
               <div>
                 <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Eski Değerler</p>
                 <pre className="bg-slate-800 rounded-lg p-3 text-xs text-slate-300 overflow-auto max-h-40">{JSON.stringify(detail.oldValues, null, 2)}</pre>
               </div>
             )}
-            {detail.newValues && (
+            {detail.newValues != null && (
               <div>
                 <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Yeni Değerler</p>
                 <pre className="bg-slate-800 rounded-lg p-3 text-xs text-slate-300 overflow-auto max-h-40">{JSON.stringify(detail.newValues, null, 2)}</pre>

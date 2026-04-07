@@ -403,18 +403,57 @@ externalRoutes.post('/stock-movements', requireScope('products:write'), async (c
     return c.json(new ValidationError('productId, type ve quantity zorunludur.').toJSON(), 400);
   }
 
-  const movement = await prisma.stockMovement.create({
-    data: {
-      tenantId, productId: body.productId,
-      type: body.type, quantity: body.quantity,
-      toWarehouseId: body.toWarehouseId ?? null,
-      fromWarehouseId: body.fromWarehouseId ?? null,
-      notes: body.notes ?? null,
-    },
-    select: { id: true, type: true, quantity: true, createdAt: true },
+  // IN ve ADJUSTMENT için toWarehouseId zorunlu, OUT için fromWarehouseId zorunlu
+  const warehouseId = body.type === 'OUT' ? body.fromWarehouseId : body.toWarehouseId;
+  if (!warehouseId) {
+    return c.json(new ValidationError(
+      body.type === 'OUT'
+        ? 'OUT hareketi için fromWarehouseId zorunludur.'
+        : 'IN/ADJUSTMENT hareketi için toWarehouseId zorunludur.'
+    ).toJSON(), 400);
+  }
+
+  // Transaction: movement + stockLevel güncelleme
+  const result = await prisma.$transaction(async (tx) => {
+    const movement = await tx.stockMovement.create({
+      data: {
+        tenantId, productId: body.productId,
+        type: body.type, quantity: body.quantity,
+        toWarehouseId: body.toWarehouseId ?? null,
+        fromWarehouseId: body.fromWarehouseId ?? null,
+        notes: body.notes ?? null,
+      },
+      select: { id: true, type: true, quantity: true, createdAt: true },
+    });
+
+    // StockLevel güncelle (upsert)
+    const quantityDelta = body.type === 'OUT' ? -body.quantity : body.quantity;
+
+    const existing = await tx.stockLevel.findFirst({
+      where: { tenantId, productId: body.productId, warehouseId },
+    });
+
+    if (existing) {
+      const newQty = Number(existing.quantity) + quantityDelta;
+      if (newQty < 0) throw new Error(`Yetersiz stok. Mevcut: ${existing.quantity}, Talep: ${body.quantity}`);
+      await tx.stockLevel.update({
+        where: { id: existing.id },
+        data: { quantity: newQty },
+      });
+    } else {
+      if (quantityDelta < 0) throw new Error('Stok kaydı bulunamadı, çıkış yapılamaz.');
+      await tx.stockLevel.create({
+        data: { tenantId, productId: body.productId, warehouseId, quantity: quantityDelta },
+      });
+    }
+
+    // OUT'ta fromWarehouse, IN'de toWarehouse güncellendi.
+    // TRANSFER durumunda her iki depo da güncellenmeli (şimdilik desteklenmiyor, ayrı endpoint gerekir)
+
+    return movement;
   });
 
-  return c.json({ data: movement }, 201);
+  return c.json({ data: result }, 201);
 });
 
 // ═══════════════════════════════════════════
