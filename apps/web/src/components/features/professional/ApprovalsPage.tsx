@@ -1,53 +1,76 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
-  Plus, CheckCircle, XCircle, GitBranch, ClipboardList,
-  Trash2, Eye, ToggleLeft, ToggleRight, Send,
-} from 'lucide-react';
-import { PageHeader } from '@/components/shared/PageHeader';
-import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
+  Plus,
+  CheckCircle,
+  XCircle,
+  GitBranch,
+  ClipboardList,
+  Trash2,
+  Eye,
+  ToggleLeft,
+  ToggleRight,
+  Send,
+} from "lucide-react";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import {
-  useApprovalFlows, useApprovalFlow, useCreateApprovalFlow,
-  useUpdateApprovalFlow, useDeleteApprovalFlow,
-  useApprovalRequests, useCreateApprovalRequest, useAddApprovalAction,
-} from '@/hooks/useApprovals';
-import { formatDate } from '@/lib/utils';
-import type { ApprovalFlow, ApprovalRequest, ApprovalModule } from '@/services/approval.service';
+  useApprovalFlows,
+  useApprovalFlow,
+  useCreateApprovalFlow,
+  useUpdateApprovalFlow,
+  useDeleteApprovalFlow,
+  useApprovalRequests,
+  useCreateApprovalRequest,
+  useAddApprovalAction,
+} from "@/hooks/useApprovals";
+import { formatDate } from "@/lib/utils";
+import type {
+  ApprovalFlow,
+  ApprovalRequest,
+  ApprovalModule,
+} from "@/services/approval.service";
 
 const MODULE_MAP: Record<string, string> = {
-  PURCHASE_REQUEST: 'Satın Alma Talebi',
-  LEAVE_REQUEST: 'İzin Talebi',
-  INVOICE: 'Fatura',
-  SALES_ORDER: 'Satış Siparişi',
-  PURCHASE_ORDER: 'Satın Alma Siparişi',
-  SERVICE_REQUEST: 'Servis Talebi',
-  OTHER: 'Diğer',
+  PURCHASE_REQUEST: "Satın Alma Talebi",
+  LEAVE_REQUEST: "İzin Talebi",
+  INVOICE: "Fatura",
+  SALES_ORDER: "Satış Siparişi",
+  PURCHASE_ORDER: "Satın Alma Siparişi",
+  SERVICE_REQUEST: "Servis Talebi",
+  OTHER: "Diğer",
 };
 
-const STATUS_MAP: Record<string, { label: string; variant: 'neutral' | 'success' | 'warning' | 'danger' | 'info' }> = {
-  PENDING: { label: 'Bekliyor', variant: 'warning' },
-  APPROVED: { label: 'Onaylı', variant: 'success' },
-  REJECTED: { label: 'Reddedildi', variant: 'danger' },
-  CANCELLED: { label: 'İptal', variant: 'neutral' },
-  ESCALATED: { label: 'Yükseltildi', variant: 'info' },
+const STATUS_MAP: Record<
+  string,
+  {
+    label: string;
+    variant: "neutral" | "success" | "warning" | "danger" | "info";
+  }
+> = {
+  PENDING: { label: "Bekliyor", variant: "warning" },
+  APPROVED: { label: "Onaylı", variant: "success" },
+  REJECTED: { label: "Reddedildi", variant: "danger" },
+  CANCELLED: { label: "İptal", variant: "neutral" },
+  ESCALATED: { label: "Yükseltildi", variant: "info" },
 };
 
 const ENTITY_TYPES = [
-  { value: 'PURCHASE_ORDER', label: 'Satın Alma Siparişi' },
-  { value: 'SALES_ORDER', label: 'Satış Siparişi' },
-  { value: 'INVOICE', label: 'Fatura' },
-  { value: 'SERVICE_REQUEST', label: 'Servis Talebi' },
-  { value: 'OTHER', label: 'Diğer' },
+  { value: "PURCHASE_ORDER", label: "Satın Alma Siparişi" },
+  { value: "SALES_ORDER", label: "Satış Siparişi" },
+  { value: "INVOICE", label: "Fatura" },
+  { value: "SERVICE_REQUEST", label: "Servis Talebi" },
+  { value: "OTHER", label: "Diğer" },
 ];
 
 export function ApprovalsPage() {
-  const [tab, setTab] = useState<'flows' | 'requests'>('flows');
+  const [tab, setTab] = useState<"flows" | "requests">("flows");
   const [flowPage, setFlowPage] = useState(1);
   const [reqPage, setReqPage] = useState(1);
 
@@ -57,13 +80,28 @@ export function ApprovalsPage() {
   const [detailFlowId, setDetailFlowId] = useState<string | null>(null);
 
   // Forms
-  const [flowForm, setFlowForm] = useState({ name: '', module: 'PURCHASE_REQUEST' as ApprovalModule, stepName: '' });
-  const [reqForm, setReqForm] = useState({ flowId: '', entityType: 'PURCHASE_ORDER', entityId: '', notes: '' });
+  const [flowForm, setFlowForm] = useState({
+    name: "",
+    module: "PURCHASE_REQUEST" as ApprovalModule,
+    stepName: "",
+  });
+  const [reqForm, setReqForm] = useState({
+    flowId: "",
+    entityType: "PURCHASE_ORDER",
+    entityId: "",
+    notes: "",
+  });
 
   // Queries
-  const { data: flowsData, isLoading: flowsLoading } = useApprovalFlows({ page: flowPage, limit: 20 });
-  const { data: reqsData, isLoading: reqsLoading } = useApprovalRequests({ page: reqPage, limit: 20 });
-  const { data: detailFlow } = useApprovalFlow(detailFlowId ?? '');
+  const { data: flowsData, isLoading: flowsLoading } = useApprovalFlows({
+    page: flowPage,
+    limit: 20,
+  });
+  const { data: reqsData, isLoading: reqsLoading } = useApprovalRequests({
+    page: reqPage,
+    limit: 20,
+  });
+  const { data: detailFlow } = useApprovalFlow(detailFlowId ?? "");
 
   // Mutations
   const createFlow = useCreateApprovalFlow();
@@ -79,7 +117,8 @@ export function ApprovalsPage() {
 
   const flowColumns: ColumnDef<ApprovalFlow>[] = [
     {
-      key: 'name', header: 'Akış Adı',
+      key: "name",
+      header: "Akış Adı",
       render: (r) => (
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center flex-shrink-0">
@@ -87,13 +126,18 @@ export function ApprovalsPage() {
           </div>
           <div>
             <span className="text-white font-medium text-sm">{r.name}</span>
-            <span className="block text-xs text-slate-500">{MODULE_MAP[r.module] ?? r.module}</span>
+            <span className="block text-xs text-slate-500">
+              {MODULE_MAP[r.module] ?? r.module}
+            </span>
           </div>
         </div>
       ),
     },
     {
-      key: 'steps', header: 'Adım', width: '80px', align: 'center',
+      key: "steps",
+      header: "Adım",
+      width: "80px",
+      align: "center",
       render: (r) => (
         <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-800 text-xs font-medium text-slate-300">
           {r.steps?.length ?? 0}
@@ -101,7 +145,10 @@ export function ApprovalsPage() {
       ),
     },
     {
-      key: 'requests', header: 'Talep', width: '80px', align: 'center',
+      key: "requests",
+      header: "Talep",
+      width: "80px",
+      align: "center",
       render: (r) => (
         <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-800 text-xs font-medium text-slate-300">
           {r._count?.requests ?? 0}
@@ -109,18 +156,29 @@ export function ApprovalsPage() {
       ),
     },
     {
-      key: 'isActive', header: 'Durum', width: '100px',
-      render: (r) => r.isActive
-        ? <Badge variant="success">Aktif</Badge>
-        : <Badge variant="neutral">Pasif</Badge>,
+      key: "isActive",
+      header: "Durum",
+      width: "100px",
+      render: (r) =>
+        r.isActive ? (
+          <Badge variant="success">Aktif</Badge>
+        ) : (
+          <Badge variant="neutral">Pasif</Badge>
+        ),
     },
     {
-      key: 'actions', header: '', width: '110px', align: 'right',
+      key: "actions",
+      header: "",
+      width: "110px",
+      align: "right",
       render: (r) => (
         <div className="flex items-center justify-end gap-1">
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); setDetailFlowId(r.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setDetailFlowId(r.id);
+            }}
             className="p-1.5 rounded-lg text-slate-600 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
             aria-label="Detay"
           >
@@ -133,13 +191,20 @@ export function ApprovalsPage() {
               updateFlow.mutate({ id: r.id, data: { isActive: !r.isActive } });
             }}
             className="p-1.5 rounded-lg text-slate-600 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
-            aria-label={r.isActive ? 'Pasife al' : 'Aktife al'}
+            aria-label={r.isActive ? "Pasife al" : "Aktife al"}
           >
-            {r.isActive ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
+            {r.isActive ? (
+              <ToggleRight className="w-3.5 h-3.5" />
+            ) : (
+              <ToggleLeft className="w-3.5 h-3.5" />
+            )}
           </button>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); deleteFlow.mutate(r.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteFlow.mutate(r.id);
+            }}
             className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             aria-label="Sil"
           >
@@ -154,16 +219,23 @@ export function ApprovalsPage() {
 
   const reqColumns: ColumnDef<ApprovalRequest>[] = [
     {
-      key: 'flow', header: 'Akış',
+      key: "flow",
+      header: "Akış",
       render: (r) => (
         <div>
-          <span className="text-white text-sm font-medium">{r.flow?.name ?? '—'}</span>
-          <span className="block text-xs text-slate-500">{MODULE_MAP[r.flow?.module ?? ''] ?? r.flow?.module}</span>
+          <span className="text-white text-sm font-medium">
+            {r.flow?.name ?? "—"}
+          </span>
+          <span className="block text-xs text-slate-500">
+            {MODULE_MAP[r.flow?.module ?? ""] ?? r.flow?.module}
+          </span>
         </div>
       ),
     },
     {
-      key: 'entityId', header: 'Kaynak', width: '130px',
+      key: "entityId",
+      header: "Kaynak",
+      width: "130px",
       render: (r) => (
         <code className="text-xs text-slate-500 bg-slate-800/60 px-2 py-1 rounded-md">
           {r.entityId.slice(0, 8)}…
@@ -171,7 +243,10 @@ export function ApprovalsPage() {
       ),
     },
     {
-      key: 'currentStep', header: 'Adım', width: '70px', align: 'center',
+      key: "currentStep",
+      header: "Adım",
+      width: "70px",
+      align: "center",
       render: (r) => (
         <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-800 text-xs font-medium text-slate-300">
           {r.currentStep}
@@ -179,34 +254,63 @@ export function ApprovalsPage() {
       ),
     },
     {
-      key: 'status', header: 'Durum', width: '130px',
+      key: "status",
+      header: "Durum",
+      width: "130px",
       render: (r) => {
         const s = STATUS_MAP[r.status];
-        return s ? <Badge variant={s.variant}>{s.label}</Badge> : <span>{r.status}</span>;
+        return s ? (
+          <Badge variant={s.variant}>{s.label}</Badge>
+        ) : (
+          <span>{r.status}</span>
+        );
       },
     },
     {
-      key: 'createdAt', header: 'Tarih', width: '110px',
-      render: (r) => <span className="text-slate-500 text-xs">{formatDate(r.createdAt)}</span>,
+      key: "createdAt",
+      header: "Tarih",
+      width: "110px",
+      render: (r) => (
+        <span className="text-slate-500 text-xs">
+          {formatDate(r.createdAt)}
+        </span>
+      ),
     },
     {
-      key: 'actions', header: '', width: '170px', align: 'right',
+      key: "actions",
+      header: "",
+      width: "170px",
+      align: "right",
       render: (r) =>
-        r.status === 'PENDING' ? (
+        r.status === "PENDING" ? (
           <div className="flex items-center justify-end gap-1.5">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); addAction.mutate({ requestId: r.id, data: { actionType: 'APPROVE' } }); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                addAction.mutate({
+                  requestId: r.id,
+                  data: { actionType: "APPROVE" },
+                });
+              }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 transition-colors"
             >
-              <CheckCircle className="w-3.5 h-3.5" />Onayla
+              <CheckCircle className="w-3.5 h-3.5" />
+              Onayla
             </button>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); addAction.mutate({ requestId: r.id, data: { actionType: 'REJECT' } }); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                addAction.mutate({
+                  requestId: r.id,
+                  data: { actionType: "REJECT" },
+                });
+              }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
             >
-              <XCircle className="w-3.5 h-3.5" />Reddet
+              <XCircle className="w-3.5 h-3.5" />
+              Reddet
             </button>
           </div>
         ) : null,
@@ -216,8 +320,18 @@ export function ApprovalsPage() {
   // ── Tabs config ──
 
   const tabs = [
-    { id: 'flows' as const, label: 'Akışlar', icon: GitBranch, count: flowCount },
-    { id: 'requests' as const, label: 'Talepler', icon: ClipboardList, count: reqCount },
+    {
+      id: "flows" as const,
+      label: "Akışlar",
+      icon: GitBranch,
+      count: flowCount,
+    },
+    {
+      id: "requests" as const,
+      label: "Talepler",
+      icon: ClipboardList,
+      count: reqCount,
+    },
   ];
 
   return (
@@ -227,8 +341,12 @@ export function ApprovalsPage() {
         subtitle="Onay süreçlerini ve taleplerini yönetin."
         action={
           <div className="flex items-center gap-2">
-            {tab === 'requests' && (
-              <Button variant="ghost" size="sm" onClick={() => setCreateReqOpen(true)}>
+            {tab === "requests" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCreateReqOpen(true)}
+              >
                 <Send className="w-4 h-4" />
                 Yeni Talep
               </Button>
@@ -249,16 +367,20 @@ export function ApprovalsPage() {
             onClick={() => setTab(t.id)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               tab === t.id
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-300'
+                ? "bg-slate-800 text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-300"
             }`}
           >
             <t.icon className="w-4 h-4" />
             {t.label}
             {t.count > 0 && (
-              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${
-                tab === t.id ? 'bg-sky-500/15 text-sky-400' : 'bg-slate-800 text-slate-500'
-              }`}>
+              <span
+                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${
+                  tab === t.id
+                    ? "bg-sky-500/15 text-sky-400"
+                    : "bg-slate-800 text-slate-500"
+                }`}
+              >
                 {t.count}
               </span>
             )}
@@ -267,7 +389,7 @@ export function ApprovalsPage() {
       </div>
 
       {/* Tables */}
-      {tab === 'flows' && (
+      {tab === "flows" && (
         <DataTable
           columns={flowColumns}
           data={flowsData?.data ?? []}
@@ -275,14 +397,20 @@ export function ApprovalsPage() {
           isLoading={flowsLoading}
           emptyTitle="Onay akışı bulunamadı"
           emptyDescription="Yeni bir onay akışı oluşturarak başlayın."
-          pagination={flowsData ? {
-            page: flowPage, pageSize: 20,
-            total: flowsData.meta.total, totalPages: flowsData.meta.totalPages,
-            onChange: setFlowPage,
-          } : undefined}
+          pagination={
+            flowsData
+              ? {
+                  page: flowPage,
+                  pageSize: 20,
+                  total: flowsData.meta.total,
+                  totalPages: flowsData.meta.totalPages,
+                  onChange: setFlowPage,
+                }
+              : undefined
+          }
         />
       )}
-      {tab === 'requests' && (
+      {tab === "requests" && (
         <DataTable
           columns={reqColumns}
           data={reqsData?.data ?? []}
@@ -290,11 +418,17 @@ export function ApprovalsPage() {
           isLoading={reqsLoading}
           emptyTitle="Onay talebi bulunamadı"
           emptyDescription="Henüz onay talebi yok."
-          pagination={reqsData ? {
-            page: reqPage, pageSize: 20,
-            total: reqsData.meta.total, totalPages: reqsData.meta.totalPages,
-            onChange: setReqPage,
-          } : undefined}
+          pagination={
+            reqsData
+              ? {
+                  page: reqPage,
+                  pageSize: 20,
+                  total: reqsData.meta.total,
+                  totalPages: reqsData.meta.totalPages,
+                  onChange: setReqPage,
+                }
+              : undefined
+          }
         />
       )}
 
@@ -307,15 +441,39 @@ export function ApprovalsPage() {
         size="sm"
         footer={
           <>
-            <Button variant="ghost" size="sm" onClick={() => setCreateFlowOpen(false)}>İptal</Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCreateFlowOpen(false)}
+            >
+              İptal
+            </Button>
             <Button
               size="sm"
               loading={createFlow.isPending}
               disabled={!flowForm.name.trim()}
               onClick={() => {
                 createFlow.mutate(
-                  { name: flowForm.name, module: flowForm.module, steps: [{ stepOrder: 1, name: flowForm.stepName || 'Onay Adımı 1' }] },
-                  { onSuccess: () => { setCreateFlowOpen(false); setFlowForm({ name: '', module: 'PURCHASE_REQUEST', stepName: '' }); } },
+                  {
+                    name: flowForm.name,
+                    module: flowForm.module,
+                    steps: [
+                      {
+                        stepOrder: 1,
+                        name: flowForm.stepName || "Onay Adımı 1",
+                      },
+                    ],
+                  },
+                  {
+                    onSuccess: () => {
+                      setCreateFlowOpen(false);
+                      setFlowForm({
+                        name: "",
+                        module: "PURCHASE_REQUEST",
+                        stepName: "",
+                      });
+                    },
+                  },
                 );
               }}
             >
@@ -325,9 +483,39 @@ export function ApprovalsPage() {
         }
       >
         <div className="space-y-5">
-          <Input label="Akış Adı" required placeholder="ör. Satın Alma Onayı" value={flowForm.name} onChange={(e) => setFlowForm((p) => ({ ...p, name: e.target.value }))} />
-          <Select label="Modül" required options={Object.entries(MODULE_MAP).map(([k, v]) => ({ value: k, label: v }))} value={flowForm.module} onChange={(e) => setFlowForm((p) => ({ ...p, module: e.target.value as ApprovalModule }))} />
-          <Input label="İlk Adım Adı" placeholder="Onay Adımı 1" helperText="Boş bırakırsanız varsayılan isim kullanılır." value={flowForm.stepName} onChange={(e) => setFlowForm((p) => ({ ...p, stepName: e.target.value }))} />
+          <Input
+            label="Akış Adı"
+            required
+            placeholder="ör. Satın Alma Onayı"
+            value={flowForm.name}
+            onChange={(e) =>
+              setFlowForm((p) => ({ ...p, name: e.target.value }))
+            }
+          />
+          <Select
+            label="Modül"
+            required
+            options={Object.entries(MODULE_MAP).map(([k, v]) => ({
+              value: k,
+              label: v,
+            }))}
+            value={flowForm.module}
+            onChange={(e) =>
+              setFlowForm((p) => ({
+                ...p,
+                module: e.target.value as ApprovalModule,
+              }))
+            }
+          />
+          <Input
+            label="İlk Adım Adı"
+            placeholder="Onay Adımı 1"
+            helperText="Boş bırakırsanız varsayılan isim kullanılır."
+            value={flowForm.stepName}
+            onChange={(e) =>
+              setFlowForm((p) => ({ ...p, stepName: e.target.value }))
+            }
+          />
         </div>
       </Modal>
 
@@ -340,15 +528,37 @@ export function ApprovalsPage() {
         size="sm"
         footer={
           <>
-            <Button variant="ghost" size="sm" onClick={() => setCreateReqOpen(false)}>İptal</Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCreateReqOpen(false)}
+            >
+              İptal
+            </Button>
             <Button
               size="sm"
               loading={createReq.isPending}
               disabled={!reqForm.flowId || !reqForm.entityId.trim()}
               onClick={() => {
                 createReq.mutate(
-                  { flowId: reqForm.flowId, entityType: reqForm.entityType, entityId: reqForm.entityId, notes: reqForm.notes || undefined },
-                  { onSuccess: () => { setCreateReqOpen(false); setReqForm({ flowId: '', entityType: 'PURCHASE_ORDER', entityId: '', notes: '' }); setTab('requests'); } },
+                  {
+                    flowId: reqForm.flowId,
+                    entityType: reqForm.entityType,
+                    entityId: reqForm.entityId,
+                    notes: reqForm.notes || undefined,
+                  },
+                  {
+                    onSuccess: () => {
+                      setCreateReqOpen(false);
+                      setReqForm({
+                        flowId: "",
+                        entityType: "PURCHASE_ORDER",
+                        entityId: "",
+                        notes: "",
+                      });
+                      setTab("requests");
+                    },
+                  },
                 );
               }}
             >
@@ -362,19 +572,43 @@ export function ApprovalsPage() {
             label="Onay Akışı"
             required
             placeholder="Akış seçin"
-            options={(flowsData?.data ?? []).filter((f) => f.isActive).map((f) => ({ value: f.id, label: `${f.name} (${MODULE_MAP[f.module] ?? f.module})` }))}
+            options={(flowsData?.data ?? [])
+              .filter((f) => f.isActive)
+              .map((f) => ({
+                value: f.id,
+                label: `${f.name} (${MODULE_MAP[f.module] ?? f.module})`,
+              }))}
             value={reqForm.flowId}
-            onChange={(e) => setReqForm((p) => ({ ...p, flowId: e.target.value }))}
+            onChange={(e) =>
+              setReqForm((p) => ({ ...p, flowId: e.target.value }))
+            }
           />
           <Select
             label="Kaynak Tipi"
             required
             options={ENTITY_TYPES}
             value={reqForm.entityType}
-            onChange={(e) => setReqForm((p) => ({ ...p, entityType: e.target.value }))}
+            onChange={(e) =>
+              setReqForm((p) => ({ ...p, entityType: e.target.value }))
+            }
           />
-          <Input label="Kaynak ID" required placeholder="İlgili kaydın ID'si" value={reqForm.entityId} onChange={(e) => setReqForm((p) => ({ ...p, entityId: e.target.value }))} />
-          <Input label="Not" placeholder="Opsiyonel açıklama" value={reqForm.notes} onChange={(e) => setReqForm((p) => ({ ...p, notes: e.target.value }))} />
+          <Input
+            label="Kaynak ID"
+            required
+            placeholder="İlgili kaydın ID'si"
+            value={reqForm.entityId}
+            onChange={(e) =>
+              setReqForm((p) => ({ ...p, entityId: e.target.value }))
+            }
+          />
+          <Input
+            label="Not"
+            placeholder="Opsiyonel açıklama"
+            value={reqForm.notes}
+            onChange={(e) =>
+              setReqForm((p) => ({ ...p, notes: e.target.value }))
+            }
+          />
         </div>
       </Modal>
 
@@ -382,11 +616,21 @@ export function ApprovalsPage() {
       <Modal
         isOpen={!!detailFlowId}
         onClose={() => setDetailFlowId(null)}
-        title={detailFlow?.name ?? 'Akış Detayı'}
-        description={detailFlow ? `${MODULE_MAP[detailFlow.module] ?? detailFlow.module} — ${detailFlow.isActive ? 'Aktif' : 'Pasif'}` : undefined}
+        title={detailFlow?.name ?? "Akış Detayı"}
+        description={
+          detailFlow
+            ? `${MODULE_MAP[detailFlow.module] ?? detailFlow.module} — ${detailFlow.isActive ? "Aktif" : "Pasif"}`
+            : undefined
+        }
         size="md"
         footer={
-          <Button variant="ghost" size="sm" onClick={() => setDetailFlowId(null)}>Kapat</Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDetailFlowId(null)}
+          >
+            Kapat
+          </Button>
         }
       >
         {detailFlow ? (
@@ -395,34 +639,63 @@ export function ApprovalsPage() {
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">
                 <div className="text-[10px] text-slate-500 mb-1">Modül</div>
-                <div className="text-sm text-white font-medium">{MODULE_MAP[detailFlow.module] ?? detailFlow.module}</div>
+                <div className="text-sm text-white font-medium">
+                  {MODULE_MAP[detailFlow.module] ?? detailFlow.module}
+                </div>
               </div>
               <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">
-                <div className="text-[10px] text-slate-500 mb-1">Adım Sayısı</div>
-                <div className="text-sm text-white font-medium">{detailFlow.steps?.length ?? 0}</div>
+                <div className="text-[10px] text-slate-500 mb-1">
+                  Adım Sayısı
+                </div>
+                <div className="text-sm text-white font-medium">
+                  {detailFlow.steps?.length ?? 0}
+                </div>
               </div>
               <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">
                 <div className="text-[10px] text-slate-500 mb-1">Durum</div>
-                <div>{detailFlow.isActive ? <Badge variant="success">Aktif</Badge> : <Badge variant="neutral">Pasif</Badge>}</div>
+                <div>
+                  {detailFlow.isActive ? (
+                    <Badge variant="success">Aktif</Badge>
+                  ) : (
+                    <Badge variant="neutral">Pasif</Badge>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Steps */}
             <div>
-              <h4 className="text-xs font-medium text-slate-400 mb-3">Onay Adımları</h4>
+              <h4 className="text-xs font-medium text-slate-400 mb-3">
+                Onay Adımları
+              </h4>
               {detailFlow.steps && detailFlow.steps.length > 0 ? (
                 <div className="space-y-2">
                   {detailFlow.steps.map((step, i) => (
-                    <div key={step.id} className="flex items-center gap-3 bg-slate-800/30 border border-slate-700/40 rounded-xl px-4 py-3">
+                    <div
+                      key={step.id}
+                      className="flex items-center gap-3 bg-slate-800/30 border border-slate-700/40 rounded-xl px-4 py-3"
+                    >
                       <span className="w-6 h-6 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center text-xs font-bold flex-shrink-0">
                         {i + 1}
                       </span>
                       <div className="flex-1 min-w-0">
                         <span className="text-sm text-white">{step.name}</span>
                         <div className="flex items-center gap-2 mt-0.5">
-                          {step.approverRole && <span className="text-[10px] text-slate-500">Rol: {step.approverRole.name}</span>}
-                          {step.approverUser && <span className="text-[10px] text-slate-500">Kullanıcı: {step.approverUser.name}</span>}
-                          {!step.approverRole && !step.approverUser && <span className="text-[10px] text-slate-600">Atanmamış</span>}
+                          {step.approverRole && (
+                            <span className="text-[10px] text-slate-500">
+                              Rol: {step.approverRole.name}
+                            </span>
+                          )}
+                          {step.approverUser && (
+                            <span className="text-[10px] text-slate-500">
+                              Kullanıcı: {step.approverUser.name}
+                            </span>
+                          )}
+                          {!step.approverRole && !step.approverUser && (
+                            <span className="text-[10px] text-slate-600">
+                              Atanmamış
+                            </span>
+                          )}
                         </div>
                       </div>
                       {step.isRequired && <Badge variant="info">Zorunlu</Badge>}
@@ -430,7 +703,9 @@ export function ApprovalsPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500">Henüz adım tanımlanmamış.</p>
+                <p className="text-sm text-slate-500">
+                  Henüz adım tanımlanmamış.
+                </p>
               )}
             </div>
           </div>

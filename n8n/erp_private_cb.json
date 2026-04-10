@@ -1,0 +1,1428 @@
+{
+  "name": "erp_private_cb",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatbot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a43fa59e-e75d-4650-b815-4a1c32f5b905",
+      "name": "Webhook",
+      "webhookId": "2c9d01b7-2754-4a7b-a9c2-0ac71c4315aa"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "836ccffa-adcc-4f95-af55-ca41eedbf2a5",
+              "name": "SHARED_SECRET",
+              "value": "axon-n8n-shared-secret-dev-2026",
+              "type": "string"
+            },
+            {
+              "id": "553fb316-c669-4202-8a55-24c1d83d6ba9",
+              "name": "API_BASE_URL",
+              "value": "http://host.docker.internal:3001",
+              "type": "string"
+            },
+            {
+              "id": "82cee280-13ae-4107-9a0c-58940b36229d",
+              "name": "message",
+              "value": "={{$json.body.message}}",
+              "type": "string"
+            },
+            {
+              "id": "37f032ea-e7b8-4ee8-a2e5-0974dbdba170",
+              "name": "serviceToken",
+              "value": "={{$json.body.serviceToken}}",
+              "type": "string"
+            },
+            {
+              "id": "1fbc3daf-ec6d-4b65-9e33-bcbaf3aa5a7d",
+              "name": "userName",
+              "value": "={{$json.body.userName}}",
+              "type": "string"
+            },
+            {
+              "id": "a70aaade-223a-4ee7-9340-896836fd5224",
+              "name": "tenantName",
+              "value": "={{$json.body.tenantName}}",
+              "type": "string"
+            },
+            {
+              "id": "1696c1a7-2e50-413c-92ba-93993e41a534",
+              "name": "plan",
+              "value": "={{$json.body.plan}}",
+              "type": "string"
+            },
+            {
+              "id": "3f70c6ee-2b67-4b38-aec8-6e01173fb42a",
+              "name": "requestSecret",
+              "value": "={{$json.headers['x-internal-secret']}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "4584b233-a993-4e49-bc00-ead8b9a75924",
+      "name": "Config"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cb3f2d1c-0b61-4e7d-aa6f-e2a34416ae0e",
+              "leftValue": "={{$json.requestSecret}}",
+              "rightValue": "={{$json.SHARED_SECRET}}",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "6e2ee488-6018-42ef-a460-7dd41ce95ed3",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'Unauthorized' }) }}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        640,
+        144
+      ],
+      "id": "36dc01b1-e6be-417a-a562-fe3fda4ec5d3",
+      "name": "403 Reject"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0,\n  \"max_tokens\": 50,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Kullanici mesajini analiz et. TAM OLARAK su kategorilerden birini don: FATURA_GENEL, FATURA_GECIKME, GELIR_RAPOR, GIDER_RAPOR, CARI_BAKIYE, STOK, SIPARIS, ODEME, SATIN_ALMA, SERVIS, CEK_SENET, IZIN, URETIM, PAZARYERI, GUNLUK_OZET, GENEL. Baska hicbir sey yazma.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{$('Config').item.json.message}}\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        640,
+        -96
+      ],
+      "id": "4cb75daf-bb9a-42aa-b9cb-93f6132d2e9c",
+      "name": "Intent Sinifla",
+      "credentials": {
+        "openAiApi": {
+          "id": "yBLsLbeBaKbKZVlJ",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "da23ff9e-a9d7-47b9-abbe-347e6a03a7c3",
+              "name": "intent",
+              "value": "={{$json.choices[0].message.content.trim().toUpperCase()}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        848,
+        -96
+      ],
+      "id": "592d190b-fef6-43e0-980b-94ef30a914e4",
+      "name": "Intent Parse"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "=FATURA_GENEL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "d8488b32-40bc-4f4f-91da-35c98f34832d"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "d3204653-6c4e-453c-95c6-848225c0bb27",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "FATURA_GECIKME",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "46c3d922-2a66-4af1-836a-52d9c3738ba9",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "GELIR_RAPOR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "90c7e79f-bb76-4470-853d-865980aaeb87",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "CARI_BAKIYE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "9f3d5392-6327-45d6-90fa-6fd08438a722",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "STOK",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "b411b708-0902-48de-bdda-ff77f3621e80",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "SIPARIS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "976f9fb7-ab26-409c-a385-2c206e1c64d6",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "ODEME",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "a2e67169-0408-4055-a856-5fcbc0fd3143",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "GIDER_RAPOR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "3e70e2c7-6d2d-45e5-8170-9c66abd698ba",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "SATIN_ALMA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "66043c07-724b-4f59-8820-54c917cbd8ea",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "SERVIS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f3c2240d-67a4-4c2e-a04e-d045726fccc3",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "CEK_SENET",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "c93b46cf-57b3-4ffc-95c8-852ce90eaff9",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "IZIN",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4df19496-1cb5-4cb9-911c-f0551d5afe58",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "URETIM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "34ffdc27-c9e6-4d1e-9997-cee1fe077be7",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "PAZARYERI",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "6d7e7b2d-ba8d-4dd5-af8b-c7b40efc7c5d",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "GUNLUK_OZET",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1072,
+        -368
+      ],
+      "id": "cbefbfe5-a622-4945-9cd9-4f23920edf9e",
+      "name": "Router"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/invoices?limit=20",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -2256
+      ],
+      "id": "89396bf7-562e-4e1d-8119-8034b4852208",
+      "name": "Faturalari Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/reports/overdue",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -2112
+      ],
+      "id": "ca260d65-01c6-4773-8d62-114a1156f403",
+      "name": "Gecikmis Faturalari Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/reports/revenue?dateFrom={{ new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0] }}&dateTo={{ new Date().toISOString().split('T')[0] }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -1968
+      ],
+      "id": "5db25421-d795-4e80-a3d0-62b619765e00",
+      "name": "Gelir Raporu Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/reports/balances",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -1808
+      ],
+      "id": "eb601c96-4f7e-44df-a073-20136742c9e1",
+      "name": "Cari Bakiyeleri Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/reports/stock",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -1648
+      ],
+      "id": "952b3d34-2383-4750-8ee5-2257b3b78ea4",
+      "name": "Stok Durumu Cek"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0.5,\n  \"max_tokens\": 500,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Sen {{ $('Config').item.json.tenantName }} sirketinin Axon ERP asistanisin. Bu genel bir soru, ERP verisi cekilmedi. Sadece ERP kullanimi hakkinda yardimci ol. Baska sirket bilgisi verme. Turkce yanit ver. Kisa tut.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($('Config').item.json.message) }}\n    }\n  ]\n}",
+        "options": {
+          "timeout": 100000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1328,
+        208
+      ],
+      "id": "4b657988-2828-4d77-9298-960658045853",
+      "name": "AI Yanit Genel",
+      "credentials": {
+        "openAiApi": {
+          "id": "yBLsLbeBaKbKZVlJ",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "gpt-4o-mini"
+            },
+            {
+              "name": "temperature",
+              "value": "={{ 0.3 }}"
+            },
+            {
+              "name": "max_tokens",
+              "value": "={{ 1000 }}"
+            },
+            {
+              "name": "messages",
+              "value": "={{\n[\n  {\n    role: \"system\",\n    content:\n      \"Sen \" + (($('Config').item.json.tenantName || '').toString()) + \" sirketinin Axon ERP asistanisin.\\n\\n\" +\n      \"KURALLAR:\\n\" +\n      \"1. SADECE sana verilen ERP verisini kullan. Veri disinda bilgi uydurma.\\n\" +\n      \"2. Baska sirket veya tenant hakkinda bilgi verme.\\n\" +\n      \"3. TC kimlik, IBAN, kredi karti, sifre gibi hassas bilgileri ASLA paylasma.\\n\" +\n      \"4. Turkce yanit ver. Para birimlerini TL ile goster.\\n\" +\n      \"5. Kisa ve oz yanit ver.\\n\" +\n      \"6. Veri yoksa bunu acikca belirt.\\n\" +\n      \"7. Eger ERP verisi bos, hata iceriyor veya alinamadiysa bunu acikca belirt ve genel yonlendirme yap.\\n\\n\" +\n      \"Kullanici: \" + (($('Config').item.json.userName || '').toString()) + \"\\n\" +\n      \"Plan: \" + (($('Config').item.json.plan || '').toString())\n  },\n  {\n    role: \"user\",\n    content:\n      \"Soru: \" + (($('Config').item.json.message || '').toString()) +\n      \"\\n\\nERP Verisi:\\n\" +\n      JSON.stringify($json.data || $json, null, 2)\n  }\n]\n}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 100000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2400,
+        -320
+      ],
+      "id": "834e0c8d-8852-4e65-a66b-701c22ef6497",
+      "name": "AI Yanit Veri",
+      "credentials": {
+        "openAiApi": {
+          "id": "yBLsLbeBaKbKZVlJ",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ output: $json.choices[0].message.content, usedTools: true }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2608,
+        -320
+      ],
+      "id": "168ee36c-d55f-4ad1-808f-bb09b7aaeeb5",
+      "name": "Yanit Don Veri"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ output: $json.choices[0].message.content, usedTools: false }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1536,
+        208
+      ],
+      "id": "e9aae874-d273-4910-b632-e4c38fe3f69e",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/orders/sales",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -1472
+      ],
+      "id": "d0b1d840-dcd9-407a-bcef-3dd271598d0c",
+      "name": "Siparisleri Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/payments/pending",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -1280
+      ],
+      "id": "3e7aa5d5-f9a5-4b54-9af8-4851b281001d",
+      "name": "Bekleyen Odemeleri Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/reports/expenses?dateFrom={{ new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0] }}&dateTo={{ new Date().toISOString().split('T')[0] }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -1088
+      ],
+      "id": "1248cdce-3eaf-4352-80d8-4ab708fa2c9e",
+      "name": "Gider Raporu Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/orders/purchase",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -912
+      ],
+      "id": "3a34219f-0800-4478-ac22-c8dd438679fd",
+      "name": "Satin Alma Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/service/open",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -752
+      ],
+      "id": "c75210c3-3f3e-458c-a762-34f8f95ef31d",
+      "name": "Servis Talepleri Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/checks/due",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -608
+      ],
+      "id": "7fff362c-da86-4078-bc2e-fcd77b6608a3",
+      "name": "Cek Senet Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/hr/leaves",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -432
+      ],
+      "id": "899b55a8-5faa-4a27-a417-f3f3fadf9fb8",
+      "name": "Izin Talepleri Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/production/open",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -272
+      ],
+      "id": "a9d71f5e-27b9-442e-9506-3eadf91b723c",
+      "name": "Uretim Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/marketplace/orders",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        -112
+      ],
+      "id": "5b2ccc05-6852-45b4-99a8-fc811547ad0e",
+      "name": "Pazaryeri Cek"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.API_BASE_URL }}/api/internal/reports/daily-summary",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.serviceToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        48
+      ],
+      "id": "35240f36-d3e7-45a2-a71c-dae48c1e1497",
+      "name": "Gunluk Ozet Cek"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Intent Sinifla",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "403 Reject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intent Sinifla": {
+      "main": [
+        [
+          {
+            "node": "Intent Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intent Parse": {
+      "main": [
+        [
+          {
+            "node": "Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router": {
+      "main": [
+        [
+          {
+            "node": "Faturalari Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gecikmis Faturalari Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gelir Raporu Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cari Bakiyeleri Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stok Durumu Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Siparisleri Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bekleyen Odemeleri Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gider Raporu Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Satin Alma Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Servis Talepleri Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cek Senet Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Izin Talepleri Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uretim Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pazaryeri Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gunluk Ozet Cek",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Yanit Genel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Faturalari Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gecikmis Faturalari Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gelir Raporu Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cari Bakiyeleri Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stok Durumu Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Yanit Veri": {
+      "main": [
+        [
+          {
+            "node": "Yanit Don Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Yanit Genel": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Siparisleri Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bekleyen Odemeleri Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gider Raporu Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Satin Alma Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Servis Talepleri Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cek Senet Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Izin Talepleri Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uretim Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pazaryeri Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gunluk Ozet Cek": {
+      "main": [
+        [
+          {
+            "node": "AI Yanit Veri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "eeccffce-4971-48f9-a50d-48d6617f5c66",
+  "meta": {
+    "instanceId": "38cff3df36acfd97f97e0bca7457a5826ff8b8e15ac2b7af54d0d21fe8cff856"
+  },
+  "id": "6eqXFWKir1YX2wdo",
+  "tags": []
+}

@@ -20,7 +20,12 @@ export type ServiceScope =
   | 'read:contacts'
   | 'read:stock'
   | 'read:products'
-  | 'read:payments';
+  | 'read:payments'
+  | 'read:orders'
+  | 'read:service'
+  | 'read:hr'
+  | 'read:production'
+  | 'read:marketplace';
 
 export interface ServiceJwtPayload {
   type: 'service';
@@ -39,6 +44,11 @@ export const CHATBOT_SCOPES: ServiceScope[] = [
   'read:stock',
   'read:products',
   'read:payments',
+  'read:orders',
+  'read:service',
+  'read:hr',
+  'read:production',
+  'read:marketplace',
 ];
 
 /**
