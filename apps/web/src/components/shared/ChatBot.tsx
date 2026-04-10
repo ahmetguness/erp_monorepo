@@ -3,8 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { MessageCircle, X, Send, Bot, User, Loader2, Minimize2, Maximize2, Trash2, Database } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
-
-const N8N_PRIVATE_URL = process.env.NEXT_PUBLIC_N8N_PRIVATE_WEBHOOK_URL ?? '';
+import { apiClient } from '@/lib/api-client';
 
 interface Message {
   id: string;
@@ -33,7 +32,6 @@ export function ChatBot() {
 
   const user = useAuthStore((s) => s.user);
   const tenant = useAuthStore((s) => s.tenant);
-  const token = useAuthStore((s) => s.token);
 
   // Welcome message with user context
   useEffect(() => {
@@ -72,49 +70,10 @@ export function ChatBot() {
     setLoading(true);
 
     try {
-      if (!N8N_PRIVATE_URL) {
-        setTimeout(() => {
-          setMessages((prev) => [...prev, {
-            id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
-            content: 'Chatbot henüz yapılandırılmamış. NEXT_PUBLIC_N8N_PRIVATE_WEBHOOK_URL ortam değişkenini ayarlayın.',
-          }]);
-          setLoading(false);
-        }, 500);
-        return;
-      }
-
-      const res = await fetch(N8N_PRIVATE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          message: msg,
-          sessionId: `${tenant?.id ?? 'unknown'}-${user?.id ?? 'unknown'}`,
-          context: {
-            userId: user?.id,
-            userName: user?.name ?? 'Kullanıcı',
-            tenantId: tenant?.id,
-            tenantName: tenant?.companyName ?? '',
-            plan: tenant?.plan ?? 'STARTER',
-          },
-        }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const contentType = res.headers.get('content-type') ?? '';
-      let reply: string;
-      let usedData = false;
-
-      if (contentType.includes('application/json')) {
-        const data = await res.json();
-        reply = data.output ?? data.response ?? data.message ?? data.text ?? JSON.stringify(data);
-        usedData = data.usedTools === true || data.toolsUsed?.length > 0;
-      } else {
-        reply = await res.text();
-      }
+      const res = await apiClient.post('/api/chat', { message: msg });
+      const data = res.data;
+      const reply = data.output ?? data.response ?? data.message ?? '';
+      const usedData = data.usedTools === true;
 
       if (!reply || reply.trim() === '') throw new Error('Empty response');
 
@@ -129,7 +88,7 @@ export function ChatBot() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, user, tenant, token]);
+  }, [input, loading]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }

@@ -47,6 +47,8 @@ import { mailRoutes } from './routes/mail.routes';
 import { demoPublicRoutes, demoAdminRoutes } from './routes/demo.routes';
 import { invitationRoutes, invitationPublicRoutes } from './routes/invitation.routes';
 import { SetPasswordController } from './controllers/set-password.controller';
+import { chatRoutes } from './routes/chat.routes';
+import { internalServiceRoutes } from './routes/internal-service.routes';
 
 const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
@@ -141,9 +143,13 @@ tenantApi.route('/hr', hrRoutes);
 tenantApi.route('/payroll', payrollRoutes);
 tenantApi.route('/mail', mailRoutes);
 tenantApi.route('/invitations', invitationRoutes);
+tenantApi.route('/chat', chatRoutes);
 
 // ── External API (API Key auth) ──────────────
 app.route('/api/external', externalRoutes);
+
+// ── Internal Service API (Service JWT auth — n8n vb.) ──
+app.route('/api/internal', internalServiceRoutes);
 
 // Mount tenant routes under /api (after more specific routes)
 app.route('/api', tenantApi);
