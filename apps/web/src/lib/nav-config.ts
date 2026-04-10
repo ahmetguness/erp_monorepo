@@ -54,10 +54,13 @@ export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
-  /** Module key — if set, checked against tenant.modules */
-  module?: string;
-  /** Plan requirement — 'PROFESSIONAL' or 'ENTERPRISE' */
-  plan?: string;
+  /**
+   * Minimum plan gereksinimi.
+   * Belirtilmezse → tüm planlarda görünür (STARTER dahil).
+   * 'PROFESSIONAL' → Professional ve Enterprise'da görünür.
+   * 'ENTERPRISE' → Sadece Enterprise'da görünür.
+   */
+  plan?: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
   children?: NavItem[];
 }
 
@@ -67,7 +70,11 @@ export interface NavGroup {
 }
 
 // ─────────────────────────────────────────────
-// Navigation config
+// Plan → görünürlük matrisi
+//
+// STARTER:      Dashboard, Cari, Ürünler & Stok (temel), Satış (temel), Muhasebe (temel), Ödemeler (temel), Raporlar, Döviz, Ayarlar
+// PROFESSIONAL: + Stok gelişmiş (değerleme, rezervasyon, parti, lot), İrsaliye, E-Belge, Satın Alma, Mutabakat, Banka Hareketleri, Çek/Senet, Onay, Rol, API Key
+// ENTERPRISE:   + Üretim, Teknik Servis, Pazaryeri, İnsan Kaynakları, Bordro
 // ─────────────────────────────────────────────
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -79,12 +86,11 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Cari & Ürün',
     items: [
-      { label: 'Cari Hesaplar', href: '/dashboard/contacts', icon: Users, module: 'contacts' },
+      { label: 'Cari Hesaplar', href: '/dashboard/contacts', icon: Users },
       {
         label: 'Ürünler & Stok',
         href: '/dashboard/products',
         icon: Package,
-        module: 'inventory',
         children: [
           { label: 'Ürünler', href: '/dashboard/products', icon: Package },
           { label: 'Depolar', href: '/dashboard/warehouses', icon: Warehouse },
@@ -106,7 +112,6 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Satış',
         href: '/dashboard/sales-orders',
         icon: ShoppingCart,
-        module: 'invoicing',
         children: [
           { label: 'Teklifler', href: '/dashboard/sales-orders/quotes', icon: FileSignature },
           { label: 'Siparişler', href: '/dashboard/sales-orders', icon: ShoppingCart },
@@ -124,7 +129,6 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Satın Alma',
         href: '/dashboard/purchase-orders',
         icon: Truck,
-        module: 'purchasing',
         plan: 'PROFESSIONAL',
         children: [
           { label: 'Talepler', href: '/dashboard/purchase-orders/requests', icon: ClipboardList },
@@ -140,7 +144,6 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Muhasebe',
         href: '/dashboard/accounting',
         icon: BookOpen,
-        module: 'accounting',
         children: [
           { label: 'Hesap Planı', href: '/dashboard/accounting/accounts', icon: BookOpen },
           { label: 'Yevmiye Fişleri', href: '/dashboard/accounting/journal-entries', icon: FileText },
@@ -152,7 +155,6 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Ödemeler',
         href: '/dashboard/payments',
         icon: CreditCard,
-        module: 'accounting',
         children: [
           { label: 'Ödemeler', href: '/dashboard/payments', icon: Banknote },
           { label: 'Banka Hesapları', href: '/dashboard/payments/bank-accounts', icon: Landmark },
@@ -166,7 +168,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Raporlar',
     items: [
-      { label: 'Raporlar', href: '/dashboard/reports', icon: BarChart3, module: 'reporting' },
+      { label: 'Raporlar', href: '/dashboard/reports', icon: BarChart3 },
       { label: 'Döviz Kurları', href: '/dashboard/currency-rates', icon: BadgeDollarSign },
     ],
   },
@@ -177,7 +179,6 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Üretim',
         href: '/dashboard/production/work-orders',
         icon: Factory,
-        module: 'production',
         plan: 'ENTERPRISE',
         children: [
           { label: 'İş Emirleri', href: '/dashboard/production/work-orders', icon: ClipboardList },
@@ -194,7 +195,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Teknik Servis',
         href: '/dashboard/service/requests',
         icon: Wrench,
-        module: 'service',
+        plan: 'ENTERPRISE',
         children: [
           { label: 'Servis Talepleri', href: '/dashboard/service/requests', icon: Wrench },
           { label: 'Müşteri Varlıkları', href: '/dashboard/service/assets', icon: Monitor },
@@ -209,7 +210,6 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Pazaryeri',
         href: '/dashboard/marketplace/integrations',
         icon: Store,
-        module: 'marketplace',
         plan: 'ENTERPRISE',
         children: [
           { label: 'Entegrasyonlar', href: '/dashboard/marketplace/integrations', icon: Link2 },
@@ -226,12 +226,12 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'İnsan Kaynakları',
         href: '/dashboard/hr/employees',
         icon: UserCheck,
-        module: 'hr',
+        plan: 'ENTERPRISE',
         children: [
           { label: 'Personel', href: '/dashboard/hr/employees', icon: UserCheck },
           { label: 'İzin Talepleri', href: '/dashboard/hr/leave-requests', icon: CalendarDays },
           { label: 'Puantaj', href: '/dashboard/hr/attendance', icon: ClockIcon },
-          { label: 'Bordro', href: '/dashboard/hr/payroll', icon: Wallet, plan: 'ENTERPRISE' },
+          { label: 'Bordro', href: '/dashboard/hr/payroll', icon: Wallet },
         ],
       },
     ],
@@ -251,12 +251,3 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ];
-
-// Starter plan open modules
-export const STARTER_MODULES = new Set([
-  'accounting',
-  'inventory',
-  'contacts',
-  'invoicing',
-  'reporting',
-]);

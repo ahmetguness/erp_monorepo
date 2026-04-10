@@ -5,32 +5,39 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { ChevronDown, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { NAV_GROUPS, STARTER_MODULES, type NavItem } from '@/lib/nav-config';
+import { NAV_GROUPS, type NavItem } from '@/lib/nav-config';
 import { useCurrentUser, useLogout } from '@/hooks/useAuth';
 import { useUIStore } from '@/store/ui.store';
+
+// ─────────────────────────────────────────────
+// Plan rank — yüksek rank düşük rank'ı kapsar
+// ─────────────────────────────────────────────
+
+const PLAN_RANK: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
+
+function hasPlanAccess(tenantPlan: string, requiredPlan?: string): boolean {
+  if (!requiredPlan) return true; // plan belirtilmemişse herkese açık
+  return (PLAN_RANK[tenantPlan] ?? 0) >= (PLAN_RANK[requiredPlan] ?? 0);
+}
 
 // ─────────────────────────────────────────────
 // Nav item component
 // ─────────────────────────────────────────────
 
-const PLAN_RANK: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
-
 interface NavItemProps {
   item: NavItem;
-  tenantModules: string[];
   tenantPlan: string;
   depth?: number;
 }
 
-function NavItemRow({ item, tenantModules, tenantPlan, depth = 0 }: NavItemProps) {
+function NavItemRow({ item, tenantPlan, depth = 0 }: NavItemProps) {
   const pathname = usePathname();
 
-  // Filter children by plan before rendering
-  const visibleChildren = item.children?.filter((c) => {
-    if (c.plan && (PLAN_RANK[tenantPlan] ?? 0) < (PLAN_RANK[c.plan] ?? 0)) return false;
-    if (c.module && !STARTER_MODULES.has(c.module) && !tenantModules.includes(c.module)) return false;
-    return true;
-  });
+  // Plan kontrolü — erişim yoksa render etme
+  if (!hasPlanAccess(tenantPlan, item.plan)) return null;
+
+  // Children'ları plan'a göre filtrele
+  const visibleChildren = item.children?.filter((c) => hasPlanAccess(tenantPlan, c.plan));
 
   const [open, setOpen] = useState(() => {
     if (!visibleChildren) return false;
@@ -40,17 +47,6 @@ function NavItemRow({ item, tenantModules, tenantPlan, depth = 0 }: NavItemProps
   const isActive = visibleChildren
     ? visibleChildren.some((c) => pathname.startsWith(c.href))
     : pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
-
-  // Module access check — kapalı modüller hiç gösterilmez
-  const isLocked =
-    item.module !== undefined &&
-    !STARTER_MODULES.has(item.module) &&
-    !tenantModules.includes(item.module);
-
-  if (isLocked) return null;
-
-  // Plan access check — düşük plan seviyesindeki özellikler gösterilmez
-  if (item.plan && (PLAN_RANK[tenantPlan] ?? 0) < (PLAN_RANK[item.plan] ?? 0)) return null;
 
   const Icon = item.icon;
 
@@ -78,7 +74,7 @@ function NavItemRow({ item, tenantModules, tenantPlan, depth = 0 }: NavItemProps
         {open && (
           <div className="mt-0.5 space-y-0.5">
             {visibleChildren.map((child) => (
-              <NavItemRow key={child.href} item={child} tenantModules={tenantModules} tenantPlan={tenantPlan} depth={depth + 1} />
+              <NavItemRow key={child.href} item={child} tenantPlan={tenantPlan} depth={depth + 1} />
             ))}
           </div>
         )}
@@ -112,7 +108,6 @@ export function Sidebar() {
   const { user, tenant } = useCurrentUser();
   const logout = useLogout();
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
-  const tenantModules = tenant?.modules ?? [];
   const tenantPlan = tenant?.plan ?? 'STARTER';
 
   return (
@@ -136,20 +131,25 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
-        {NAV_GROUPS.map((group, gi) => (
-          <div key={gi}>
-            {group.label && (
-              <p className="px-3 mb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                {group.label}
-              </p>
-            )}
-            <div className="space-y-0.5">
-              {group.items.map((item) => (
-                <NavItemRow key={item.href} item={item} tenantModules={tenantModules} tenantPlan={tenantPlan} />
-              ))}
+        {NAV_GROUPS.map((group, gi) => {
+          const visibleItems = group.items.filter((item) => hasPlanAccess(tenantPlan, item.plan));
+          if (visibleItems.length === 0) return null;
+
+          return (
+            <div key={gi}>
+              {group.label && (
+                <p className="px-3 mb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                  {group.label}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {visibleItems.map((item) => (
+                  <NavItemRow key={item.href} item={item} tenantPlan={tenantPlan} />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* User + tenant info */}

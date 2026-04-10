@@ -45,6 +45,7 @@ import { hrRoutes } from './routes/hr.routes';
 import { payrollRoutes } from './routes/payroll.routes';
 import { mailRoutes } from './routes/mail.routes';
 import { demoPublicRoutes, demoAdminRoutes } from './routes/demo.routes';
+import { invitationRoutes, invitationPublicRoutes } from './routes/invitation.routes';
 import { SetPasswordController } from './controllers/set-password.controller';
 
 const app = new Hono();
@@ -88,6 +89,7 @@ app.route('/api/auth', authRoutes);
 
 // ── Public routes (JWT gerektirmez) ──────────
 app.route('/api/public', demoPublicRoutes);
+app.route('/api/public', invitationPublicRoutes);
 app.post('/api/public/set-password', SetPasswordController.setPassword);
 app.post('/api/public/set-password/validate', SetPasswordController.validateToken);
 
@@ -138,6 +140,7 @@ tenantApi.route('/marketplace', marketplaceRoutes);
 tenantApi.route('/hr', hrRoutes);
 tenantApi.route('/payroll', payrollRoutes);
 tenantApi.route('/mail', mailRoutes);
+tenantApi.route('/invitations', invitationRoutes);
 
 // ── External API (API Key auth) ──────────────
 app.route('/api/external', externalRoutes);

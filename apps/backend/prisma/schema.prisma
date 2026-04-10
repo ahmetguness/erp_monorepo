@@ -2731,3 +2731,37 @@ model DemoRequest {
   @@index([createdAt])
   @@map("demo_requests")
 }
+
+// ═════════════════════════════════════════════
+// TENANT INVITATIONS
+// ═════════════════════════════════════════════
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
+model Invitation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId    String
+  email       String
+  roleId      String?
+  status      InvitationStatus @default(PENDING)
+
+  tokenHash   String   @unique
+  expiresAt   DateTime
+
+  invitedBy   String
+  acceptedAt  DateTime?
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([status])
+  @@index([tokenHash])
+  @@map("invitations")
+}

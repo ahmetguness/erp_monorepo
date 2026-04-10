@@ -19,7 +19,6 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { useJournalEntries, useCreateJournalEntry, useLedgerAccounts } from '@/hooks/useAccounting';
 import { postJournalEntry, updateJournalEntry, reverseJournalEntry } from '@/services/accounting.service';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';

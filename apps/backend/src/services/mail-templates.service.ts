@@ -157,3 +157,33 @@ export function demoEnterpriseNotifyEmail(
     `),
   };
 }
+
+// ── Kullanıcı davet maili ────────────────────
+export function invitationEmail(
+  companyName: string,
+  inviteUrl: string,
+  roleName?: string,
+) {
+  const roleText = roleName ? `<strong>${roleName}</strong> rolüyle ` : '';
+
+  return {
+    subject: `${companyName} sizi Axon ERP'ye davet ediyor`,
+    html: baseLayout(`
+      <h2 style="margin:0 0 16px;color:#1e293b;">Axon ERP'ye Davet Edildiniz</h2>
+      <p style="color:#475569;line-height:1.6;">
+        <strong>${companyName}</strong> sizi ${roleText}Axon ERP platformuna davet etti.
+      </p>
+      <p style="color:#475569;line-height:1.6;">
+        Daveti kabul etmek ve hesabınızı oluşturmak için aşağıdaki butona tıklayın:
+      </p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${inviteUrl}" style="display:inline-block;padding:14px 36px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:16px;">
+          Daveti Kabul Et
+        </a>
+      </div>
+      <p style="color:#94a3b8;font-size:13px;">
+        Bu link 48 saat geçerlidir. Daveti siz talep etmediyseniz bu e-postayı görmezden gelebilirsiniz.
+      </p>
+    `),
+  };
+}

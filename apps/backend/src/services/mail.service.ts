@@ -37,14 +37,14 @@ export async function sendMail(options: SendMailOptions): Promise<MailResult> {
     });
 
     if (error) {
-      logger.error('Mail gönderim hatası:', error);
+      logger.error(`Mail gönderim hatası: ${JSON.stringify(error)}`);
       return { success: false, error: error.message };
     }
 
     logger.info(`Mail gönderildi → ${options.to} (id: ${data?.id})`);
     return { success: true, id: data?.id };
   } catch (err: any) {
-    logger.error('Mail gönderim exception:', err);
+    logger.error(`Mail gönderim exception: ${err.message}`);
     return { success: false, error: err.message };
   }
 }

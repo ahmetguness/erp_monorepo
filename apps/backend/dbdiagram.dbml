@@ -48,6 +48,7 @@
 // FeatureKey:            MAX_USERS | MAX_PRODUCTS | MULTI_WAREHOUSE | ROLE_MANAGEMENT | APPROVALS | CRM | SALES | PURCHASING | PRODUCTION | SERVICE | MARKETPLACE | PAYROLL | HR | API_ACCESS | AUDIT_LOG | CUSTOM_REPORTING
 // AppModule:             ACCOUNTING | INVENTORY | CRM | SALES | PURCHASING | WAREHOUSE | PRODUCTION | SERVICE | HR | PAYROLL | MARKETPLACE | REPORTING
 // DemoRequestStatus:     PENDING | APPROVED | PROVISIONING | PROVISIONED | REJECTED | EXPIRED | CANCELLED
+// InvitationStatus:      PENDING | ACCEPTED | EXPIRED | CANCELLED
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -2110,5 +2111,33 @@ Table demo_requests {
     email
     status
     createdAt
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TENANT INVITATIONS
+// ═══════════════════════════════════════════════════════════════
+
+Table invitations {
+  id          String           [pk]
+  createdAt   DateTime
+  updatedAt   DateTime
+
+  tenantId    String
+  email       String
+  roleId      String           [null]
+  status      InvitationStatus [default: "PENDING"]
+
+  tokenHash   String           [unique]
+  expiresAt   DateTime
+
+  invitedBy   String
+  acceptedAt  DateTime         [null]
+
+  indexes {
+    (tenantId, email) [unique]
+    tenantId
+    status
+    tokenHash
   }
 }

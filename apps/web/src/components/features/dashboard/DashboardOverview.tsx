@@ -184,9 +184,10 @@ export function DashboardOverview() {
   // Top debtors
   const debtors = (bal?.contacts ?? []).filter((c) => c.balance > 0).sort((a, b) => b.balance - a.balance).slice(0, 4);
 
-  const [clock, setClock] = useState(() => new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  const [clock, setClock] = useState('');
 
   useEffect(() => {
+    setClock(new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     const id = setInterval(() => {
       setClock(new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     }, 1000);

@@ -33,7 +33,7 @@ interface ConflictResult {
 
 // ── Spam / Duplicate / Mevcut hesap kontrol ──
 
-async function checkConflicts(email: string): Promise<ConflictResult | null> {
+async function checkConflicts(email: string, phone?: string, companyName?: string): Promise<ConflictResult | null> {
   const normalizedEmail = email.toLowerCase().trim();
 
   // 1. Mevcut kayıtlı kullanıcı var mı? (tüm tenant'lar)
@@ -63,7 +63,48 @@ async function checkConflicts(email: string): Promise<ConflictResult | null> {
     }
   }
 
-  // 2. Aktif (PROVISIONED) demo var mı?
+  // 2. Aynı telefon numarası ile aktif hesap var mı?
+  if (phone && phone.trim()) {
+    const normalizedPhone = phone.replace(/\s+/g, '').trim();
+    const phoneUser = await prisma.user.findFirst({
+      where: { phone: normalizedPhone },
+      include: {
+        tenants: {
+          where: { isActive: true },
+          include: { tenant: { select: { status: true } } },
+        },
+      },
+    });
+    if (phoneUser && phoneUser.tenants.some((tu) => tu.tenant.status === 'ACTIVE' || tu.tenant.status === 'TRIAL')) {
+      return {
+        success: false,
+        code: 'PHONE_ALREADY_EXISTS',
+        message: 'Bu telefon numarası ile zaten aktif bir hesap bulunmaktadır.',
+        details: { email: normalizedEmail },
+      };
+    }
+  }
+
+  // 3. Birebir aynı şirket adı ile aktif tenant var mı?
+  if (companyName && companyName.trim()) {
+    const existingTenant = await prisma.tenant.findFirst({
+      where: {
+        companyName: { equals: companyName.trim(), mode: 'insensitive' },
+        status: { in: ['ACTIVE', 'TRIAL'] },
+        deletedAt: null,
+      },
+    });
+    if (existingTenant) {
+      return {
+        success: false,
+        code: 'COMPANY_ALREADY_EXISTS',
+        message: 'Bu şirket adı ile zaten aktif bir hesap bulunmaktadır.',
+        details: { email: normalizedEmail },
+      };
+    }
+  }
+
+  // 4. Aktif (PROVISIONED) demo var mı?
   const activeDemo = await prisma.demoRequest.findFirst({
     where: {
       email: normalizedEmail,
@@ -80,7 +121,7 @@ async function checkConflicts(email: string): Promise<ConflictResult | null> {
     };
   }
 
-  // 3. Bekleyen (PENDING / APPROVED / PROVISIONING) talep var mı?
+  // 5. Bekleyen (PENDING / APPROVED / PROVISIONING) talep var mı?
   const pendingRequest = await prisma.demoRequest.findFirst({
     where: {
       email: normalizedEmail,
@@ -97,7 +138,7 @@ async function checkConflicts(email: string): Promise<ConflictResult | null> {
     };
   }
 
-  // 4. Son 24 saatte oluşturulmuş talep var mı? (spam koruması)
+  // 6. Son 24 saatte oluşturulmuş talep var mı? (spam koruması)
   const recentRequest = await prisma.demoRequest.findFirst({
     where: {
       email: normalizedEmail,
@@ -123,8 +164,8 @@ async function checkConflicts(email: string): Promise<ConflictResult | null> {
 export async function createDemoRequest(dto: CreateDemoRequestDTO) {
   const email = dto.email.toLowerCase().trim();
 
-  // Conflict kontrol
-  const conflict = await checkConflicts(email);
+  // Conflict kontrol (email + telefon + şirket adı)
+  const conflict = await checkConflicts(email, dto.phone, dto.companyName);
   if (conflict) {
     return conflict;
   }
@@ -138,28 +179,13 @@ export async function createDemoRequest(dto: CreateDemoRequestDTO) {
       email,
       phone: dto.phone,
       plan,
-      status: plan === 'ENTERPRISE' ? 'PENDING' : 'APPROVED',
+      status: 'APPROVED',
     },
   });
 
   logger.info(`Demo talebi oluşturuldu: ${demoRequest.id} (${plan})`);
 
-  // Enterprise → sales ekibine bildirim, manuel onay bekler
-  if (plan === 'ENTERPRISE') {
-    const salesEmail = process.env.SALES_NOTIFICATION_EMAIL;
-    if (salesEmail) {
-      const template = demoEnterpriseNotifyEmail(dto.fullName, dto.companyName, email);
-      await sendMail({ to: salesEmail, ...template });
-    }
-    return {
-      success: true,
-      demoRequestId: demoRequest.id,
-      requiresApproval: true,
-      message: 'Enterprise demo talebi alındı. Satış ekibimiz en kısa sürede sizinle iletişime geçecektir.',
-    };
-  }
-
-  // Starter / Professional → otomatik provisioning
+  // Tüm planlar → otomatik provisioning
   const result = await provisionDemoTenant(demoRequest.id);
   return result;
 }
@@ -186,8 +212,10 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
   });
 
   try {
-    // Slug oluştur
+    // Slug oluştur (Türkçe karakter dönüşümü)
+    const turkishMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u', Ç: 'c', Ğ: 'g', İ: 'i', Ö: 'o', Ş: 's', Ü: 'u' };
     const baseSlug = `demo-${demoRequest.companyName
+      .replace(/[çğıöşüÇĞİÖŞÜ]/g, (ch) => turkishMap[ch] || ch)
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '-')
       .replace(/-+/g, '-')
