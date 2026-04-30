@@ -5,7 +5,7 @@ import { logger } from '../lib/logger';
 import { sanitizeOutput } from '../lib/output-sanitizer';
 import { ValidationError } from '../errors';
 import { Plan } from '@prisma/client';
-import { handlePrivateChat, handlePrivateChatStream, clearConversation } from '../services/ai-chat.service';
+import { handlePrivateChat, handlePrivateChatStream, clearConversation, type UserPermissions } from '../services/ai-chat.service';
 
 // ─────────────────────────────────────────────
 // Config
@@ -101,7 +101,7 @@ function checkChatRateLimit(userId: string, plan: Plan): { allowed: boolean; rea
 
 async function validateChatRequest(c: Context): Promise<
   | { error: Response }
-  | { userId: string; tenantId: string; user: { name: string; isActive: boolean }; tenant: { companyName: string; plan: Plan; status: string }; message: string }
+  | { userId: string; tenantId: string; user: { name: string; isActive: boolean }; tenant: { companyName: string; plan: Plan; status: string; modules: string[] }; message: string; permissions: UserPermissions }
 > {
   if (!OPENAI_API_KEY) {
     return { error: c.json({ error: 'Chatbot yapılandırılmamış.' }, 503) };
@@ -110,9 +110,20 @@ async function validateChatRequest(c: Context): Promise<
   const userId = c.get('userId') as string;
   const tenantId = c.get('tenantId') as string;
 
-  const [user, tenant] = await Promise.all([
+  const [user, tenant, tenantUser] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { name: true, isActive: true } }),
-    prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyName: true, plan: true, status: true } }),
+    prisma.tenant.findUnique({ where: { id: tenantId }, select: { companyName: true, plan: true, status: true, modules: true } }),
+    prisma.tenantUser.findFirst({
+      where: { tenantId, userId, isActive: true },
+      select: {
+        isOwner: true,
+        roleRef: {
+          select: {
+            permissions: { select: { module: true, action: true } },
+          },
+        },
+      },
+    }),
   ]);
 
   if (!user?.isActive) return { error: c.json({ error: 'Kullanıcı hesabı aktif değil.' }, 403) };
@@ -133,7 +144,13 @@ async function validateChatRequest(c: Context): Promise<
     return { error: c.json(new ValidationError(`Mesaj en fazla ${MAX_MESSAGE_LENGTH} karakter olabilir.`).toJSON(), 400) };
   }
 
-  return { userId, tenantId, user: user!, tenant: tenant!, message };
+  // Kullanıcı izinlerini derle
+  const permissions: UserPermissions = {
+    isOwner: tenantUser?.isOwner ?? false,
+    modules: tenantUser?.roleRef?.permissions.map((p) => ({ module: p.module, action: p.action })) ?? [],
+  };
+
+  return { userId, tenantId, user: user!, tenant: tenant!, message, permissions };
 }
 
 // ─────────────────────────────────────────────
@@ -154,6 +171,8 @@ export const ChatController = {
         userName: v.user.name,
         tenantName: v.tenant.companyName,
         plan: v.tenant.plan,
+        permissions: v.permissions,
+        tenantModules: v.tenant.modules,
       });
 
       if (!result.output || result.output.trim() === '') {
@@ -183,38 +202,55 @@ export const ChatController = {
     if ('error' in v) return v.error;
 
     return streamSSE(c, async (s) => {
-      await handlePrivateChatStream(
-        {
-          message: v.message,
-          tenantId: v.tenantId,
-          userId: v.userId,
-          userName: v.user.name,
-          tenantName: v.tenant.companyName,
-          plan: v.tenant.plan,
-        },
-        {
-          onToken(token) {
-            s.writeSSE({ event: 'token', data: JSON.stringify({ token }) });
+      let accumulatedRaw = '';
+      let lastSanitizedLength = 0;
+
+      try {
+        await handlePrivateChatStream(
+          {
+            message: v.message,
+            tenantId: v.tenantId,
+            userId: v.userId,
+            userName: v.user.name,
+            tenantName: v.tenant.companyName,
+            plan: v.tenant.plan,
+            permissions: v.permissions,
+            tenantModules: v.tenant.modules,
           },
-          onToolStart() {
-            s.writeSSE({ event: 'tool_start', data: '{}' });
+          {
+            async onToken(token) {
+              accumulatedRaw += token;
+              const sanitized = sanitizeOutput(accumulatedRaw).text;
+              const newPart = sanitized.slice(lastSanitizedLength);
+              lastSanitizedLength = sanitized.length;
+              if (newPart) {
+                await s.writeSSE({ event: 'token', data: JSON.stringify({ token: newPart }) });
+              }
+            },
+            async onToolStart() {
+              await s.writeSSE({ event: 'tool_start', data: '{}' });
+            },
+            async onDone(fullText, usedTools) {
+              const sanitized = sanitizeOutput(fullText);
+              if (sanitized.maskedCount > 0) {
+                logger.warn(`Chat: ${sanitized.maskedCount} hassas veri maskelendi [${sanitized.maskedTypes.join(', ')}] tenant=${v.tenantId}`);
+              }
+              const finalOutput = sanitized.text.length > MAX_RESPONSE_LENGTH
+                ? sanitized.text.slice(0, MAX_RESPONSE_LENGTH) + '\n\n_(Yanıt kısaltıldı)_'
+                : sanitized.text;
+              await s.writeSSE({ event: 'done', data: JSON.stringify({ output: finalOutput, usedTools }) });
+            },
+            async onError(error) {
+              logger.error(`Chat stream: ${error}`);
+              await s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan şu an yanıt veremiyor.' }) });
+            },
           },
-          onDone(fullText, usedTools) {
-            const sanitized = sanitizeOutput(fullText);
-            if (sanitized.maskedCount > 0) {
-              logger.warn(`Chat: ${sanitized.maskedCount} hassas veri maskelendi [${sanitized.maskedTypes.join(', ')}] tenant=${v.tenantId}`);
-            }
-            const finalOutput = sanitized.text.length > MAX_RESPONSE_LENGTH
-              ? sanitized.text.slice(0, MAX_RESPONSE_LENGTH) + '\n\n_(Yanıt kısaltıldı)_'
-              : sanitized.text;
-            s.writeSSE({ event: 'done', data: JSON.stringify({ output: finalOutput, usedTools }) });
-          },
-          onError(error) {
-            logger.error(`Chat stream: ${error}`);
-            s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan şu an yanıt veremiyor.' }) });
-          },
-        },
-      );
+        );
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        logger.error(`Chat stream unhandled: ${errMsg}`);
+        await s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan şu an yanıt veremiyor.' }) });
+      }
     });
   },
 

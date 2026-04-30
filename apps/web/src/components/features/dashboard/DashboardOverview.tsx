@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   TrendingUp, TrendingDown, Package, Users, ArrowUpRight, ArrowDownRight, Plus,
@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {
-  ResponsiveContainer,
   AreaChart, Area, XAxis, YAxis, Tooltip,
   PieChart, Pie, Cell,
 } from "recharts";
@@ -65,6 +64,29 @@ const TOOLTIP_STYLE = { background: "#1e293b", border: "none", borderRadius: 8, 
 
 /* ── Tiny helpers ───────────────────────────── */
 
+/** Measures a block-level element whose dimensions are set by CSS (not flex-1). */
+function useSize(ref: React.RefObject<HTMLDivElement | null>) {
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const onResize = useCallback((entries: ResizeObserverEntry[]) => {
+    const { width, height } = entries[0].contentRect;
+    if (width > 0 && height > 0) {
+      setSize(prev =>
+        prev && prev.w === Math.floor(width) && prev.h === Math.floor(height)
+          ? prev
+          : { w: Math.floor(width), h: Math.floor(height) },
+      );
+    }
+  }, []);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(onResize);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, onResize]);
+  return size;
+}
+
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
   return <div className={cn("bg-slate-900 border border-slate-800 rounded-2xl shadow-lg ring-1 ring-white/[0.03] overflow-hidden", className)}>{children}</div>;
 }
@@ -85,6 +107,10 @@ export function DashboardOverview() {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Chart container refs
+  const areaRef = useRef<HTMLDivElement>(null);
+  const areaSize = useSize(areaRef);
 
   /* ── Queries ── */
   const now = new Date();
@@ -204,9 +230,9 @@ export function DashboardOverview() {
         {/* Area — Gelir & Gider Trendi */}
         <Card>
           <CardHeader icon={<TrendingUp className="w-4 h-4 text-emerald-400" />} title="Gelir & Gider Trendi" />
-          <div className="px-4 pb-4 pt-2" style={{ height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={areaData}>
+          <div ref={areaRef} className="px-4 pb-4 pt-2" style={{ height: 280 }}>
+            {areaSize && (
+              <AreaChart width={areaSize.w} height={areaSize.h} data={areaData}>
                 <defs>
                   <linearGradient id="gGe" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="100%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
                   <linearGradient id="gGi" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ef4444" stopOpacity={0.2} /><stop offset="100%" stopColor="#ef4444" stopOpacity={0} /></linearGradient>
@@ -217,27 +243,23 @@ export function DashboardOverview() {
                 <Area type="monotone" dataKey="gelir" name="Gelir" stroke="#10b981" fill="url(#gGe)" strokeWidth={2} />
                 <Area type="monotone" dataKey="gider" name="Gider" stroke="#ef4444" fill="url(#gGi)" strokeWidth={2} />
               </AreaChart>
-            </ResponsiveContainer>
+            )}
           </div>
         </Card>
 
         {/* Pie — Fatura Durumları */}
         <Card>
           <CardHeader icon={<FileText className="w-4 h-4 text-blue-400" />} title="Fatura Durumları" />
-          <div className="px-4 pb-4 pt-2 flex items-center gap-6" style={{ height: 280 }}>
+          <div className="p-4 flex flex-col sm:flex-row items-center justify-center gap-6" style={{ height: 280 }}>
             {pieData.length > 0 ? (
               <>
-                <div className="flex-1 h-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius="40%" outerRadius="70%" paddingAngle={3} dataKey="value" strokeWidth={0}>
-                        {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex flex-col gap-2.5 shrink-0 min-w-[100px]">
+                <PieChart width={220} height={220}>
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={3} dataKey="value" strokeWidth={0} isAnimationActive={false}>
+                    {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                </PieChart>
+                <div className="flex flex-col gap-2.5 min-w-[100px]">
                   {pieData.map((d, i) => (
                     <div key={d.name} className="flex items-center gap-2">
                       <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
@@ -248,7 +270,7 @@ export function DashboardOverview() {
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-sm text-slate-500">Fatura verisi yok</div>
+              <div className="text-sm text-slate-500">Fatura verisi yok</div>
             )}
           </div>
         </Card>

@@ -13,9 +13,9 @@ payrollRoutes.use('*', requireFeature(FeatureKey.PAYROLL));
 payrollRoutes.use('*', requireModule(MODULE_KEYS.PAYROLL));
 
 payrollRoutes.get('/', PayrollController.list);
-payrollRoutes.get('/:id', PayrollController.getById);
 payrollRoutes.post('/', PayrollController.create);
 payrollRoutes.post('/generate-bulk', PayrollController.generateBulk);
+payrollRoutes.get('/:id', PayrollController.getById);
 payrollRoutes.post('/:id/items', PayrollController.addItem);
 payrollRoutes.delete('/:id/items/:itemId', PayrollController.removeItem);
 payrollRoutes.post('/:id/pay', PayrollController.markPaid);

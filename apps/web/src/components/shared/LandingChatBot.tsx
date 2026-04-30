@@ -144,8 +144,8 @@ export function LandingChatBot() {
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        const errMsg = (errData as any).error ?? `Hata: ${res.status}`;
+        const errData: Record<string, unknown> = await res.json().catch(() => ({}));
+        const errMsg = typeof errData.error === 'string' ? errData.error : `Hata: ${res.status}`;
         setMessages((prev) => [...prev, {
           id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
           content: errMsg, error: true,

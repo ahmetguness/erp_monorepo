@@ -4,11 +4,12 @@ import { logger } from '../lib/logger';
 import type {
   ChatCompletionMessageParam,
   ChatCompletionTool,
+  ChatCompletionMessageFunctionToolCall,
 } from 'openai/resources/chat/completions';
 
 // ─────────────────────────────────────────────
 // OpenAI Function Definitions — ERP veri araçları
-// Plan bazlı erişim: STARTER < PROFESSIONAL < ENTERPRISE
+// Üç katmanlı erişim: Plan + Modül + Kullanıcı Rolü
 // ─────────────────────────────────────────────
 
 type PlanTier = 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
@@ -16,32 +17,101 @@ type PlanTier = 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
 interface ToolDef {
   tool: ChatCompletionTool;
   minPlan: PlanTier;
+  /** RBAC modül adı (küçük harf, requirePermission ile aynı). null = herkes erişebilir */
+  module: string | null;
+}
+
+/** Kullanıcının sahip olduğu izinler */
+export interface UserPermissions {
+  isOwner: boolean;
+  modules: Array<{ module: string; action: string }>;
 }
 
 const PLAN_ORDER: Record<PlanTier, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
 
-function hasAccess(userPlan: PlanTier, requiredPlan: PlanTier): boolean {
+function hasPlanAccess(userPlan: PlanTier, requiredPlan: PlanTier): boolean {
   return PLAN_ORDER[userPlan] >= PLAN_ORDER[requiredPlan];
 }
 
-/** Plan'a göre erişilebilir tool'ları döndür */
-function getToolsForPlan(plan: string): ChatCompletionTool[] {
-  const tier = (PLAN_ORDER[plan as PlanTier] !== undefined ? plan : 'STARTER') as PlanTier;
-  return ALL_TOOLS.filter((t) => hasAccess(tier, t.minPlan)).map((t) => t.tool);
+/**
+ * Tenant modules (BÜYÜK HARF AppModule) → tool module (küçük harf MODULE_KEY) mapping.
+ * Tenant.modules = ['ACCOUNTING', 'CRM', 'SALES', ...]
+ * Tool.module = 'accounting', 'contacts', 'invoicing', ...
+ */
+const TENANT_MODULE_TO_TOOL_MODULE: Record<string, string> = {
+  ACCOUNTING: 'accounting',
+  INVENTORY: 'inventory',
+  CRM: 'contacts',
+  SALES: 'invoicing',
+  PURCHASING: 'purchasing',
+  WAREHOUSE: 'warehouse',
+  PRODUCTION: 'production',
+  SERVICE: 'service',
+  HR: 'hr',
+  PAYROLL: 'payroll',
+  MARKETPLACE: 'marketplace',
+  REPORTING: 'reporting',
+};
+
+/** Tenant'ın aktif modüllerini tool module adlarına çevir */
+function tenantModulesToToolModules(tenantModules: string[]): string[] {
+  return tenantModules.map((m) => TENANT_MODULE_TO_TOOL_MODULE[m.toUpperCase()] ?? m.toLowerCase());
 }
 
-/** Plan'a göre tool çağrısı yetkisi kontrol et */
-function canCallTool(toolName: string, plan: string): boolean {
+/** Plan + Rol + Modül bazlı erişilebilir tool'ları döndür */
+function getAccessibleTools(plan: string, permissions: UserPermissions, tenantModules: string[]): ChatCompletionTool[] {
   const tier = (PLAN_ORDER[plan as PlanTier] !== undefined ? plan : 'STARTER') as PlanTier;
-  const def = ALL_TOOLS.find((t) => (t.tool as any).function?.name === toolName);
+  const activeToolModules = tenantModulesToToolModules(tenantModules);
+
+  return ALL_TOOLS.filter((t) => {
+    // 1. Plan kontrolü
+    if (!hasPlanAccess(tier, t.minPlan)) return false;
+
+    // 2. Modül kontrolü — tool'un modülü tenant'ın aktif modüllerinde mi
+    if (t.module && activeToolModules.length > 0) {
+      if (!activeToolModules.includes(t.module)) return false;
+    }
+
+    // 3. Rol kontrolü — owner her şeye erişir, değilse READ izni gerekli
+    if (t.module && !permissions.isOwner) {
+      const hasRead = permissions.modules.some(
+        (p) => p.module === t.module && p.action === 'READ',
+      );
+      if (!hasRead) return false;
+    }
+
+    return true;
+  }).map((t) => t.tool);
+}
+
+/** Tool çağrısı yetkisi kontrol et (defense in depth) */
+function canCallTool(toolName: string, plan: string, permissions: UserPermissions, tenantModules: string[]): boolean {
+  const tier = (PLAN_ORDER[plan as PlanTier] !== undefined ? plan : 'STARTER') as PlanTier;
+  const def = ALL_TOOLS.find((t) => t.tool.type === 'function' && t.tool.function.name === toolName);
   if (!def) return false;
-  return hasAccess(tier, def.minPlan);
+
+  if (!hasPlanAccess(tier, def.minPlan)) return false;
+
+  const activeToolModules = tenantModulesToToolModules(tenantModules);
+  if (def.module && activeToolModules.length > 0) {
+    if (!activeToolModules.includes(def.module)) return false;
+  }
+
+  if (def.module && !permissions.isOwner) {
+    const hasRead = permissions.modules.some(
+      (p) => p.module === def.module && p.action === 'READ',
+    );
+    if (!hasRead) return false;
+  }
+
+  return true;
 }
 
 const ALL_TOOLS: ToolDef[] = [
   // ── STARTER ────────────────────────────────
   {
     minPlan: 'STARTER',
+    module: null,
     tool: {
       type: 'function',
       function: {
@@ -52,196 +122,134 @@ const ALL_TOOLS: ToolDef[] = [
     },
   },
   {
-    minPlan: 'STARTER',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_overdue_invoices',
-        description: 'Vadesi geçmiş (gecikmiş) faturaları getirir. Gecikme, vade aşımı sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'STARTER', module: null,
+    tool: { type: 'function', function: { name: 'get_overdue_invoices', description: 'Vadesi geçmiş (gecikmiş) faturaları getirir. Kaç gün geciktiği bilgisini de içerir.', parameters: { type: 'object', properties: {} } } },
   },
   {
-    minPlan: 'STARTER',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_revenue',
-        description: 'Belirli dönem için gelir/ciro raporunu getirir. Gelir, ciro, satış toplamı sorguları için kullan.',
-        parameters: {
-          type: 'object',
-          properties: {
-            dateFrom: { type: 'string', description: 'Başlangıç tarihi (YYYY-MM-DD)' },
-            dateTo: { type: 'string', description: 'Bitiş tarihi (YYYY-MM-DD)' },
-          },
-          required: ['dateFrom', 'dateTo'],
-        },
-      },
-    },
+    minPlan: 'STARTER', module: null,
+    tool: { type: 'function', function: { name: 'get_revenue', description: 'Belirli dönem için gelir/ciro raporunu getirir.', parameters: { type: 'object', properties: { dateFrom: { type: 'string', description: 'Başlangıç tarihi (YYYY-MM-DD)' }, dateTo: { type: 'string', description: 'Bitiş tarihi (YYYY-MM-DD)' } }, required: ['dateFrom', 'dateTo'] } } },
   },
   {
-    minPlan: 'STARTER',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_expenses',
-        description: 'Belirli dönem için gider raporunu getirir. Gider, maliyet, alış toplamı sorguları için kullan.',
-        parameters: {
-          type: 'object',
-          properties: {
-            dateFrom: { type: 'string', description: 'Başlangıç tarihi (YYYY-MM-DD)' },
-            dateTo: { type: 'string', description: 'Bitiş tarihi (YYYY-MM-DD)' },
-          },
-          required: ['dateFrom', 'dateTo'],
-        },
-      },
-    },
+    minPlan: 'STARTER', module: null,
+    tool: { type: 'function', function: { name: 'get_expenses', description: 'Belirli dönem için gider raporunu getirir.', parameters: { type: 'object', properties: { dateFrom: { type: 'string', description: 'Başlangıç tarihi (YYYY-MM-DD)' }, dateTo: { type: 'string', description: 'Bitiş tarihi (YYYY-MM-DD)' } }, required: ['dateFrom', 'dateTo'] } } },
   },
   {
-    minPlan: 'STARTER',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_balances',
-        description: 'Cari hesap bakiyelerini getirir. Cari bakiye, alacak, borç, müşteri/tedarikçi bakiye sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'STARTER', module: null,
+    tool: { type: 'function', function: { name: 'get_balances', description: 'Cari hesap bakiyelerini getirir. Cari bakiye, alacak, borç, kredi limiti aşımı ve riskli cari sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
   },
   {
-    minPlan: 'STARTER',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_stock',
-        description: 'Stok durumunu getirir. Stok seviyesi, minimum stok altı ürünler, depo durumu sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'STARTER', module: 'inventory',
+    tool: { type: 'function', function: { name: 'get_stock', description: 'Stok durumunu getirir. Stok seviyesi, minimum stok altı ürünler, stok uyarıları ve toplam stok değeri sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
   },
   {
-    minPlan: 'STARTER',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_daily_summary',
-        description: 'Günlük özet raporu getirir. Bugünkü durum, genel özet, dashboard sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'STARTER', module: null,
+    tool: { type: 'function', function: { name: 'get_daily_summary', description: 'Günlük özet raporu getirir. Bugünkü satış/alış tutarları, gecikmiş fatura tutarı, bekleyen ödeme tutarı, açık sipariş sayısı ve stok uyarıları dahil.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'STARTER', module: 'inventory',
+    tool: { type: 'function', function: { name: 'get_products', description: 'Ürün listesini getirir. Ürün arama, fiyat, kategori sorguları için kullan.', parameters: { type: 'object', properties: { search: { type: 'string', description: 'Ürün adı veya kodu ile arama' } } } } },
+  },
+  {
+    minPlan: 'STARTER', module: null,
+    tool: { type: 'function', function: { name: 'get_contact_detail', description: 'Belirli bir cari hesabın detayını getirir. Müşteri/tedarikçi bilgisi, bakiye sorguları için kullan.', parameters: { type: 'object', properties: { contactName: { type: 'string', description: 'Cari hesap adı (kısmi eşleşme)' } }, required: ['contactName'] } } },
+  },
+  {
+    minPlan: 'STARTER', module: 'inventory',
+    tool: { type: 'function', function: { name: 'get_stock_movements', description: 'Stok hareketlerini getirir. Giriş, çıkış, transfer hareketleri sorguları için kullan.', parameters: { type: 'object', properties: { productName: { type: 'string', description: 'Ürün adı ile filtreleme (opsiyonel)' } } } } },
   },
   // ── PROFESSIONAL ───────────────────────────
   {
-    minPlan: 'PROFESSIONAL',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_sales_orders',
-        description: 'Satış siparişlerini getirir. Sipariş durumu, açık siparişler sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'PROFESSIONAL', module: 'invoicing',
+    tool: { type: 'function', function: { name: 'get_sales_orders', description: 'Satış siparişlerini getirir. Sipariş durumu, açık siparişler sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
   },
   {
-    minPlan: 'PROFESSIONAL',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_pending_payments',
-        description: 'Bekleyen ödemeleri getirir. Ödeme durumu, bekleyen tahsilat/tediye sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'PROFESSIONAL', module: 'accounting',
+    tool: { type: 'function', function: { name: 'get_pending_payments', description: 'Bekleyen ödemeleri getirir. Ödeme durumu, bekleyen tahsilat/tediye sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
   },
   {
-    minPlan: 'PROFESSIONAL',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_purchase_orders',
-        description: 'Satın alma siparişlerini getirir. Tedarik, satın alma durumu sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'PROFESSIONAL', module: 'purchasing',
+    tool: { type: 'function', function: { name: 'get_purchase_orders', description: 'Satın alma siparişlerini getirir. Tedarik, satın alma durumu sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
   },
   {
-    minPlan: 'PROFESSIONAL',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_due_checks',
-        description: 'Vadesi yaklaşan veya geçmiş çek/senetleri getirir. Çek, senet, vade sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'PROFESSIONAL', module: 'accounting',
+    tool: { type: 'function', function: { name: 'get_due_checks', description: 'Vadesi yaklaşan veya geçmiş çek/senetleri getirir. Çek, senet, vade sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'PROFESSIONAL', module: 'invoicing',
+    tool: { type: 'function', function: { name: 'get_sales_quotes', description: 'Satış tekliflerini getirir. Teklif durumu, açık teklifler sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'PROFESSIONAL', module: 'purchasing',
+    tool: { type: 'function', function: { name: 'get_purchase_requests', description: 'Satın alma taleplerini getirir. Talep durumu, onay bekleyen talepler sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'PROFESSIONAL', module: 'warehouse',
+    tool: { type: 'function', function: { name: 'get_delivery_notes', description: 'İrsaliyeleri getirir. Sevkiyat, teslimat, irsaliye durumu sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'PROFESSIONAL', module: 'accounting',
+    tool: { type: 'function', function: { name: 'get_bank_transactions', description: 'Banka hareketlerini getirir. Banka hesap hareketleri, yatırma, çekme sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'PROFESSIONAL', module: 'accounting',
+    tool: { type: 'function', function: { name: 'get_e_documents', description: 'E-Belgeleri getirir. E-fatura, e-irsaliye durumu sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'PROFESSIONAL', module: 'accounting',
+    tool: { type: 'function', function: { name: 'get_ledger_accounts', description: 'Hesap planını getirir. Muhasebe hesapları, hesap kodu sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'PROFESSIONAL', module: 'accounting',
+    tool: { type: 'function', function: { name: 'get_journal_entries', description: 'Yevmiye fişlerini getirir. Muhasebe kayıtları, borç/alacak sorguları için kullan.', parameters: { type: 'object', properties: { dateFrom: { type: 'string', description: 'Başlangıç tarihi (YYYY-MM-DD)' }, dateTo: { type: 'string', description: 'Bitiş tarihi (YYYY-MM-DD)' } } } } },
   },
   // ── ENTERPRISE ─────────────────────────────
   {
-    minPlan: 'ENTERPRISE',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_employees',
-        description: 'Personel listesini getirir. Çalışan, personel, kadro sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'ENTERPRISE', module: 'hr',
+    tool: { type: 'function', function: { name: 'get_employees', description: 'Personel listesini getirir. Çalışan, personel, kadro sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
   },
   {
-    minPlan: 'ENTERPRISE',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_employee_summary',
-        description: 'Personel özetini getirir. Toplam çalışan sayısı, departman dağılımı sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'ENTERPRISE', module: 'hr',
+    tool: { type: 'function', function: { name: 'get_employee_summary', description: 'Personel özetini getirir. Toplam çalışan sayısı, departman dağılımı sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
   },
   {
-    minPlan: 'ENTERPRISE',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_pending_leaves',
-        description: 'Bekleyen izin taleplerini getirir. İzin, tatil, personel izin sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'ENTERPRISE', module: 'hr',
+    tool: { type: 'function', function: { name: 'get_employee_payroll', description: 'Belirli bir personelin bordro geçmişini getirir. Personel adı veya soyadı ile arama yapar.', parameters: { type: 'object', properties: { employeeName: { type: 'string', description: 'Personelin adı veya soyadı' } }, required: ['employeeName'] } } },
   },
   {
-    minPlan: 'ENTERPRISE',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_service_requests',
-        description: 'Açık servis taleplerini getirir. Servis, teknik destek, arıza sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'ENTERPRISE', module: 'payroll',
+    tool: { type: 'function', function: { name: 'get_payroll_summary', description: 'Bordro özetini getirir. Genel toplam sorularında period="all" gönder.', parameters: { type: 'object', properties: { period: { type: 'string', description: 'Bordro dönemi. YYYY-MM veya "all". Belirtilmezse bu ay.' } } } } },
   },
   {
-    minPlan: 'ENTERPRISE',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_work_orders',
-        description: 'Açık iş emirlerini getirir. Üretim, iş emri, üretim durumu sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'ENTERPRISE', module: 'hr',
+    tool: { type: 'function', function: { name: 'get_attendance_summary', description: 'Puantaj özetini getirir. Giriş/çıkış, mesai sorguları için kullan.', parameters: { type: 'object', properties: { dateFrom: { type: 'string', description: 'Başlangıç tarihi (YYYY-MM-DD)' }, dateTo: { type: 'string', description: 'Bitiş tarihi (YYYY-MM-DD)' } } } } },
   },
   {
-    minPlan: 'ENTERPRISE',
-    tool: {
-      type: 'function',
-      function: {
-        name: 'get_marketplace_orders',
-        description: 'Pazaryeri siparişlerini getirir. Trendyol, Hepsiburada, N11 sipariş sorguları için kullan.',
-        parameters: { type: 'object', properties: {} },
-      },
-    },
+    minPlan: 'ENTERPRISE', module: 'hr',
+    tool: { type: 'function', function: { name: 'get_pending_leaves', description: 'Bekleyen izin taleplerini getirir. İzin, tatil sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'ENTERPRISE', module: 'service',
+    tool: { type: 'function', function: { name: 'get_service_requests', description: 'Açık servis taleplerini getirir. Servis, teknik destek sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'ENTERPRISE', module: 'production',
+    tool: { type: 'function', function: { name: 'get_work_orders', description: 'Açık iş emirlerini getirir. Üretim, iş emri sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'ENTERPRISE', module: 'marketplace',
+    tool: { type: 'function', function: { name: 'get_marketplace_orders', description: 'Pazaryeri siparişlerini getirir. Trendyol, Hepsiburada, N11 sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'ENTERPRISE', module: 'production',
+    tool: { type: 'function', function: { name: 'get_boms', description: 'Ürün ağaçlarını (BOM) getirir. Reçete, malzeme listesi sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'ENTERPRISE', module: 'service',
+    tool: { type: 'function', function: { name: 'get_customer_assets', description: 'Müşteri varlıklarını getirir. Servis altındaki cihazlar, garanti sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
+  },
+  {
+    minPlan: 'ENTERPRISE', module: 'marketplace',
+    tool: { type: 'function', function: { name: 'get_marketplace_integrations', description: 'Pazaryeri entegrasyonlarını getirir. Bağlı pazaryerleri sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
   },
 ];
 
@@ -254,10 +262,12 @@ async function executeFunctionCall(
   args: Record<string, unknown>,
   tenantId: string,
   plan: string,
+  permissions: UserPermissions,
+  tenantModules: string[],
 ): Promise<string> {
-  // Plan bazlı yetki kontrolü
-  if (!canCallTool(name, plan)) {
-    return JSON.stringify({ error: `Bu özellik mevcut planınızda kullanılamaz. Üst plana geçerek erişebilirsiniz.` });
+  // Üç katmanlı yetki kontrolü
+  if (!canCallTool(name, plan, permissions, tenantModules)) {
+    return JSON.stringify({ error: `Bu veriye erişim yetkiniz bulunmuyor.` });
   }
 
   try {
@@ -303,6 +313,27 @@ async function executeFunctionCall(
       case 'get_due_checks':
         result = await ChatDataService.getDueChecks(tenantId);
         break;
+      case 'get_sales_quotes':
+        result = await ChatDataService.getSalesQuotes(tenantId);
+        break;
+      case 'get_purchase_requests':
+        result = await ChatDataService.getPurchaseRequests(tenantId);
+        break;
+      case 'get_delivery_notes':
+        result = await ChatDataService.getDeliveryNotes(tenantId);
+        break;
+      case 'get_bank_transactions':
+        result = await ChatDataService.getBankTransactions(tenantId);
+        break;
+      case 'get_e_documents':
+        result = await ChatDataService.getEDocuments(tenantId);
+        break;
+      case 'get_ledger_accounts':
+        result = await ChatDataService.getLedgerAccounts(tenantId);
+        break;
+      case 'get_journal_entries':
+        result = await ChatDataService.getJournalEntries(tenantId, args.dateFrom as string | undefined, args.dateTo as string | undefined);
+        break;
       case 'get_pending_leaves':
         result = await ChatDataService.getPendingLeaves(tenantId);
         break;
@@ -312,14 +343,41 @@ async function executeFunctionCall(
       case 'get_marketplace_orders':
         result = await ChatDataService.getMarketplaceOrders(tenantId);
         break;
+      case 'get_boms':
+        result = await ChatDataService.getBOMs(tenantId);
+        break;
+      case 'get_customer_assets':
+        result = await ChatDataService.getCustomerAssets(tenantId);
+        break;
+      case 'get_marketplace_integrations':
+        result = await ChatDataService.getMarketplaceIntegrations(tenantId);
+        break;
       case 'get_daily_summary':
         result = await ChatDataService.getDailySummary(tenantId);
+        break;
+      case 'get_products':
+        result = await ChatDataService.getProducts(tenantId, args.search as string | undefined);
+        break;
+      case 'get_contact_detail':
+        result = await ChatDataService.getContactDetail(tenantId, String(args.contactName ?? ''));
+        break;
+      case 'get_stock_movements':
+        result = await ChatDataService.getStockMovements(tenantId, args.productName as string | undefined);
         break;
       case 'get_employees':
         result = await ChatDataService.getEmployees(tenantId);
         break;
       case 'get_employee_summary':
         result = await ChatDataService.getEmployeeSummary(tenantId);
+        break;
+      case 'get_employee_payroll':
+        result = await ChatDataService.getEmployeePayroll(tenantId, String(args.employeeName ?? ''));
+        break;
+      case 'get_payroll_summary':
+        result = await ChatDataService.getPayrollSummary(tenantId, args.period as string | undefined);
+        break;
+      case 'get_attendance_summary':
+        result = await ChatDataService.getAttendanceSummary(tenantId, args.dateFrom as string | undefined, args.dateTo as string | undefined);
         break;
       default:
         result = { error: `Bilinmeyen fonksiyon: ${name}` };
@@ -363,6 +421,8 @@ YANIT FORMATI:
 - Yanıtın sonuna "---" ayracından sonra JSON formatında 2-3 takip sorusu öner:
   ---
   {"suggestions":["Öneri 1","Öneri 2","Öneri 3"]}
+- Öneriler SADECE sana verilen araçlarla (function call) yanıtlanabilecek sorular olsun.
+- Erişemediğin veri hakkında öneri yapma. Örneğin performans raporu aracın yoksa "performans raporunu incele" önerme.
 - Öneriler mevcut konuşma bağlamına uygun ve farklı veri kaynaklarına yönlendirici olsun.`;
 }
 
@@ -557,6 +617,8 @@ export interface PrivateChatParams {
   userName: string;
   tenantName: string;
   plan: string;
+  permissions: UserPermissions;
+  tenantModules: string[];
 }
 
 export interface PrivateChatResult {
@@ -568,9 +630,9 @@ export interface PrivateChatResult {
  * Dashboard chatbot — ERP verilerine erişimli, function calling ile.
  */
 export async function handlePrivateChat(params: PrivateChatParams): Promise<PrivateChatResult> {
-  const { message, tenantId, userId, userName, tenantName, plan } = params;
+  const { message, tenantId, userId, userName, tenantName, plan, permissions, tenantModules } = params;
   const sessionId = `private:${tenantId}:${userId}`;
-  const planTools = getToolsForPlan(plan);
+  const planTools = getAccessibleTools(plan, permissions, tenantModules);
 
   const systemMessage: ChatCompletionMessageParam = {
     role: 'system',
@@ -595,7 +657,7 @@ export async function handlePrivateChat(params: PrivateChatParams): Promise<Priv
   let response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages,
-    tools: planTools,
+    ...(planTools.length > 0 && { tools: planTools }),
     temperature: 0.3,
     max_tokens: 1000,
   });
@@ -611,11 +673,13 @@ export async function handlePrivateChat(params: PrivateChatParams): Promise<Priv
     messages.push(choice.message as ChatCompletionMessageParam);
 
     const toolResults = await Promise.all(
-      choice.message.tool_calls.map(async (toolCall: any) => {
+      choice.message.tool_calls
+        .filter((tc): tc is ChatCompletionMessageFunctionToolCall => tc.type === 'function')
+        .map(async (toolCall) => {
         const fnName = toolCall.function.name;
         let fnArgs: Record<string, unknown> = {};
         try { fnArgs = JSON.parse(toolCall.function.arguments || '{}'); } catch { /* */ }
-        const result = await executeFunctionCall(fnName, fnArgs, tenantId, plan);
+        const result = await executeFunctionCall(fnName, fnArgs, tenantId, plan, permissions, tenantModules);
         return {
           role: 'tool' as const,
           tool_call_id: toolCall.id,
@@ -629,7 +693,7 @@ export async function handlePrivateChat(params: PrivateChatParams): Promise<Priv
     response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
-      tools: planTools,
+      ...(planTools.length > 0 && { tools: planTools }),
       temperature: 0.3,
       max_tokens: 1000,
     });
@@ -662,7 +726,7 @@ export interface PublicChatResult {
  */
 export async function handlePublicChat(
   params: PublicChatParams,
-  createDemoFn: (data: { fullName: string; companyName: string; email: string; phone: string; plan: string }) => Promise<unknown>,
+  createDemoFn: (data: { fullName: string; companyName: string; email: string; phone: string; plan: string }) => Promise<{ success: boolean; message?: string }>,
   checkEmailFn: (email: string) => Promise<{ available: boolean; message: string }>,
 ): Promise<PublicChatResult> {
   const { message, sessionId } = params;
@@ -698,7 +762,9 @@ export async function handlePublicChat(
   let iterations = 0;
   while (choice.message.tool_calls && choice.message.tool_calls.length > 0 && iterations < 3) {
     iterations++;
-    const toolCall: any = choice.message.tool_calls[0];
+    const toolCallRaw = choice.message.tool_calls[0];
+    if (toolCallRaw.type !== 'function') continue;
+    const toolCall = toolCallRaw;
     let args: Record<string, unknown> = {};
     try { args = JSON.parse(toolCall.function.arguments || '{}'); } catch { /* */ }
 
@@ -729,7 +795,7 @@ export async function handlePublicChat(
       } else {
         try {
           const planStr = String(args.plan ?? 'STARTER');
-          const demoResult: any = await createDemoFn({
+          const demoResult = await createDemoFn({
             fullName: String(args.fullName).slice(0, 100),
             companyName: String(args.companyName).slice(0, 100),
             email: email.slice(0, 254),
@@ -784,10 +850,10 @@ export { clearConversation };
 // ─────────────────────────────────────────────
 
 export interface StreamCallbacks {
-  onToken: (token: string) => void;
-  onToolStart: () => void;
-  onDone: (fullText: string, usedTools: boolean) => void;
-  onError: (error: string) => void;
+  onToken: (token: string) => void | Promise<void>;
+  onToolStart: () => void | Promise<void>;
+  onDone: (fullText: string, usedTools: boolean) => void | Promise<void>;
+  onError: (error: string) => void | Promise<void>;
 }
 
 /**
@@ -798,7 +864,7 @@ export async function handlePrivateChatStream(
   params: PrivateChatParams,
   callbacks: StreamCallbacks,
 ): Promise<void> {
-  const { message, tenantId, userId, userName, tenantName, plan } = params;
+  const { message, tenantId, userId, userName, tenantName, plan, permissions, tenantModules } = params;
   const sessionId = `private:${tenantId}:${userId}`;
 
   const systemMessage: ChatCompletionMessageParam = {
@@ -810,7 +876,7 @@ export async function handlePrivateChatStream(
   const userMessage: ChatCompletionMessageParam = { role: 'user', content: message };
 
   const messages: ChatCompletionMessageParam[] = [systemMessage, ...history, userMessage];
-  const planTools = getToolsForPlan(plan);
+  const planTools = getAccessibleTools(plan, permissions, tenantModules);
 
   let usedTools = false;
   let fullText = '';
@@ -820,7 +886,7 @@ export async function handlePrivateChatStream(
     let preResponse = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
-      tools: planTools,
+      ...(planTools.length > 0 && { tools: planTools }),
       temperature: 0.3,
       max_tokens: 1000,
     });
@@ -831,16 +897,18 @@ export async function handlePrivateChatStream(
     while (preChoice.message.tool_calls && preChoice.message.tool_calls.length > 0 && iterations < 3) {
       usedTools = true;
       iterations++;
-      callbacks.onToolStart();
+      await callbacks.onToolStart();
 
       messages.push(preChoice.message as ChatCompletionMessageParam);
 
       const toolResults = await Promise.all(
-        preChoice.message.tool_calls.map(async (toolCall: any) => {
+        preChoice.message.tool_calls
+          .filter((tc): tc is ChatCompletionMessageFunctionToolCall => tc.type === 'function')
+          .map(async (toolCall) => {
           const fnName = toolCall.function.name;
           let fnArgs: Record<string, unknown> = {};
           try { fnArgs = JSON.parse(toolCall.function.arguments || '{}'); } catch { /* */ }
-          const result = await executeFunctionCall(fnName, fnArgs, tenantId, plan);
+          const result = await executeFunctionCall(fnName, fnArgs, tenantId, plan, permissions, tenantModules);
           return { role: 'tool' as const, tool_call_id: toolCall.id, content: result };
         }),
       );
@@ -850,7 +918,7 @@ export async function handlePrivateChatStream(
       preResponse = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages,
-        tools: planTools,
+        ...(planTools.length > 0 && { tools: planTools }),
         temperature: 0.3,
         max_tokens: 1000,
       });
@@ -874,12 +942,11 @@ export async function handlePrivateChatStream(
           const delta = chunk.choices[0]?.delta?.content;
           if (delta) {
             fullText += delta;
-            callbacks.onToken(delta);
+            await callbacks.onToken(delta);
           }
         }
       } else {
         // Tool kullanılmadı — ilk yanıt zaten var, onu kullan
-        // (non-streaming çağrıdan gelen content'i stream gibi gönder)
         const content = preChoice.message.content ?? '';
         if (content) {
           // Küçük parçalar halinde gönder (streaming hissi)
@@ -887,21 +954,28 @@ export async function handlePrivateChatStream(
           for (let i = 0; i < content.length; i += chunkSize) {
             const part = content.slice(i, i + chunkSize);
             fullText += part;
-            callbacks.onToken(part);
+            await callbacks.onToken(part);
           }
         }
       }
     }
 
-    if (!fullText) fullText = preChoice.message.content ?? 'Yanıt üretilemedi.';
+    // Eğer fullText hâlâ boşsa, preChoice.message.content'i kullan veya fallback
+    if (!fullText) {
+      fullText = preChoice.message.content ?? 'Yanıt üretilemedi. Lütfen tekrar deneyin.';
+      // Boş olmayan fallback'i de token olarak gönder
+      if (fullText) {
+        await callbacks.onToken(fullText);
+      }
+    }
 
     // Konuşma geçmişine ekle
     addToConversation(sessionId, [userMessage, { role: 'assistant', content: fullText }]);
 
-    callbacks.onDone(fullText, usedTools);
+    await callbacks.onDone(fullText, usedTools);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    callbacks.onError(errMsg);
+    await callbacks.onError(errMsg);
   }
 }
 

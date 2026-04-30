@@ -27,10 +27,10 @@ const STORAGE_KEY_PREFIX = 'axon_chat_messages_';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 const QUICK_ACTIONS = [
-  { label: 'Bugünkü özet', message: 'Bugünkü finansal özeti göster' },
-  { label: 'Gecikmiş faturalar', message: 'Gecikmiş faturaları listele' },
-  { label: 'Riskli cariler', message: 'Kredi limiti aşan cari hesapları göster' },
-  { label: 'Stok uyarıları', message: 'Minimum stok seviyesinin altındaki ürünleri göster' },
+  { label: 'Bugünkü özet', message: 'Bugünkü genel durumu özetle: satış, gider, gecikmiş faturalar, bekleyen ödemeler ve stok uyarıları' },
+  { label: 'Gecikmiş faturalar', message: 'Vadesi geçmiş tüm faturaları listele, kaç gün geciktiğini ve toplam tutarı göster' },
+  { label: 'Riskli cariler', message: 'Kredi limitini aşan riskli cari hesapları göster' },
+  { label: 'Stok uyarıları', message: 'Minimum stok seviyesinin altındaki ürünleri listele' },
 ];
 
 // ─────────────────────────────────────────────
@@ -63,7 +63,7 @@ function loadMessages(userId?: string): Message[] | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
-    return parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
+    return parsed.map((m: { id: string; role: 'user' | 'assistant'; content: string; timestamp: string; usedData?: boolean; suggestions?: string[]; error?: boolean }) => ({ ...m, timestamp: new Date(m.timestamp) }));
   } catch { return null; }
 }
 
@@ -272,8 +272,8 @@ export function ChatBot() {
 
       // Non-streaming hata yanıtları
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        const errMsg = (errData as any).error ?? `Hata: ${res.status}`;
+        const errData: Record<string, unknown> = await res.json().catch(() => ({}));
+        const errMsg = typeof errData.error === 'string' ? errData.error : `Hata: ${res.status}`;
         setMessages((prev) => [...prev, {
           id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
           content: errMsg, error: true,
@@ -320,7 +320,8 @@ export function ChatBot() {
               gotDone = true;
               try {
                 const { output, usedTools: ut } = JSON.parse(data);
-                const { content, suggestions } = parseSuggestions(output);
+                const finalOutput = output || accumulated || 'Yanıt alınamadı.';
+                const { content, suggestions } = parseSuggestions(finalOutput);
                 setMessages((prev) => [...prev, {
                   id: `a-${Date.now()}`, role: 'assistant', content,
                   timestamp: new Date(), usedData: ut || usedTools, suggestions,
@@ -347,12 +348,20 @@ export function ChatBot() {
       }
 
       // Stream bitti ama done event gelmemişse — accumulated'ı mesaj olarak ekle
-      if (!gotDone && accumulated) {
-        const { content, suggestions } = parseSuggestions(accumulated);
-        setMessages((prev) => [...prev, {
-          id: `a-${Date.now()}`, role: 'assistant', content,
-          timestamp: new Date(), usedData: usedTools, suggestions,
-        }]);
+      if (!gotDone) {
+        if (accumulated) {
+          const { content, suggestions } = parseSuggestions(accumulated);
+          setMessages((prev) => [...prev, {
+            id: `a-${Date.now()}`, role: 'assistant', content,
+            timestamp: new Date(), usedData: usedTools, suggestions,
+          }]);
+        } else {
+          // Hiçbir veri gelmedi — hata mesajı göster
+          setMessages((prev) => [...prev, {
+            id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
+            content: 'Yanıt alınamadı. Lütfen tekrar deneyin.', error: true,
+          }]);
+        }
         setStreamingContent('');
       }
     } catch (err) {
