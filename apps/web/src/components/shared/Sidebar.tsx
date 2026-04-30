@@ -21,6 +21,47 @@ function hasPlanAccess(tenantPlan: string, requiredPlan?: string): boolean {
 }
 
 // ─────────────────────────────────────────────
+// Path matching — tüm nav href'lerini bilerek eşleştir
+// ─────────────────────────────────────────────
+
+/** Tüm leaf href'leri topla */
+function collectAllHrefs(groups: NavGroup[]): string[] {
+  const hrefs: string[] = [];
+  for (const group of groups) {
+    for (const item of group.items) {
+      if (item.children) {
+        for (const child of item.children) hrefs.push(child.href);
+      } else {
+        hrefs.push(item.href);
+      }
+    }
+  }
+  return hrefs;
+}
+
+const ALL_HREFS = collectAllHrefs(NAV_GROUPS);
+
+/**
+ * Pathname'in belirli bir href ile eşleşip eşleşmediğini kontrol eder.
+ * Exact match önceliklidir. startsWith sadece daha spesifik bir sibling yoksa kullanılır.
+ */
+function isPathMatch(pathname: string, href: string): boolean {
+  if (pathname === href) return true;
+  if (href === '/dashboard') return false; // Dashboard sadece exact match
+
+  // pathname bu href ile başlıyorsa VE daha spesifik bir href eşleşmiyorsa aktif
+  if (pathname.startsWith(href + '/')) {
+    // Daha spesifik bir href var mı kontrol et
+    const hasMoreSpecific = ALL_HREFS.some(
+      (other) => other !== href && other.startsWith(href + '/') && (pathname === other || pathname.startsWith(other + '/')),
+    );
+    return !hasMoreSpecific;
+  }
+
+  return false;
+}
+
+// ─────────────────────────────────────────────
 // Nav item component
 // ─────────────────────────────────────────────
 
@@ -41,12 +82,12 @@ function NavItemRow({ item, tenantPlan, depth = 0 }: NavItemProps) {
 
   const [open, setOpen] = useState(() => {
     if (!visibleChildren) return false;
-    return visibleChildren.some((c) => pathname.startsWith(c.href));
+    return visibleChildren.some((c) => isPathMatch(pathname, c.href));
   });
 
   const isActive = visibleChildren
-    ? visibleChildren.some((c) => pathname.startsWith(c.href))
-    : pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+    ? visibleChildren.some((c) => isPathMatch(pathname, c.href))
+    : isPathMatch(pathname, item.href);
 
   const Icon = item.icon;
 

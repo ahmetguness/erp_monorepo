@@ -138,12 +138,11 @@ export const DeliveryNoteController = {
       );
     }
 
-    const seq = await prisma.numberSequence.upsert({
-      where: { tenantId_module: { tenantId, module: 'delivery_note' } },
-      create: { tenantId, module: 'delivery_note', prefix: 'DN-', lastNum: 1, padding: 6 },
-      update: { lastNum: { increment: 1 } },
+    const { generateDocumentNumber } = await import('../utils/generate-number');
+    const number = await generateDocumentNumber(tenantId, 'delivery_note', 'DN-', async (tid, num) => {
+      const found = await prisma.deliveryNote.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
+      return !!found;
     });
-    const number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
 
     const note = await prisma.deliveryNote.create({
       data: {

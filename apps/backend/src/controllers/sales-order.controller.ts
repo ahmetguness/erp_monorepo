@@ -158,12 +158,11 @@ export const SalesOrderController = {
 
     let number = body.number;
     if (!number) {
-      const seq = await prisma.numberSequence.upsert({
-        where: { tenantId_module: { tenantId, module: 'sales_quote' } },
-        create: { tenantId, module: 'sales_quote', prefix: 'TKL-', lastNum: 1, padding: 6 },
-        update: { lastNum: { increment: 1 } },
+      const { generateDocumentNumber } = await import('../utils/generate-number');
+      number = await generateDocumentNumber(tenantId, 'sales_quote', 'TKL-', async (tid, num) => {
+        const found = await prisma.salesQuote.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
+        return !!found;
       });
-      number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
     }
 
     const quote = await prisma.salesQuote.create({
@@ -203,12 +202,11 @@ export const SalesOrderController = {
       return c.json(new ValidationError('Sadece taslak veya kabul edilmiş teklifler siparişe dönüştürülebilir.').toJSON(), 400);
     }
 
-    const seq = await prisma.numberSequence.upsert({
-      where: { tenantId_module: { tenantId, module: 'sales_order' } },
-      create: { tenantId, module: 'sales_order', prefix: 'SIP-', lastNum: 1, padding: 6 },
-      update: { lastNum: { increment: 1 } },
+    const { generateDocumentNumber } = await import('../utils/generate-number');
+    const number = await generateDocumentNumber(tenantId, 'sales_order', 'SIP-', async (tid, num) => {
+      const found = await prisma.salesOrder.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
+      return !!found;
     });
-    const number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
 
     const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.salesOrder.create({
@@ -327,12 +325,11 @@ export const SalesOrderController = {
 
     let number = body.number;
     if (!number) {
-      const seq = await prisma.numberSequence.upsert({
-        where: { tenantId_module: { tenantId, module: 'sales_order' } },
-        create: { tenantId, module: 'sales_order', prefix: 'SIP-', lastNum: 1, padding: 6 },
-        update: { lastNum: { increment: 1 } },
+      const { generateDocumentNumber } = await import('../utils/generate-number');
+      number = await generateDocumentNumber(tenantId, 'sales_order', 'SIP-', async (tid, num) => {
+        const found = await prisma.salesOrder.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
+        return !!found;
       });
-      number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
     }
 
     const order = await prisma.salesOrder.create({

@@ -103,12 +103,11 @@ export const PurchaseOrderController = {
       return c.json(new ValidationError('date ve en az bir kalem zorunludur.').toJSON(), 400);
     }
 
-    const seq = await prisma.numberSequence.upsert({
-      where: { tenantId_module: { tenantId, module: 'purchase_request' } },
-      create: { tenantId, module: 'purchase_request', prefix: 'PR-', lastNum: 1, padding: 6 },
-      update: { lastNum: { increment: 1 } },
+    const { generateDocumentNumber } = await import('../utils/generate-number');
+    const number = await generateDocumentNumber(tenantId, 'purchase_request', 'PR-', async (tid, num) => {
+      const found = await prisma.purchaseRequest.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
+      return !!found;
     });
-    const number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
 
     const totalEstimated = body.items.reduce((s, i) => s + (i.unitPrice ?? 0) * i.quantity, 0);
 
@@ -170,12 +169,11 @@ export const PurchaseOrderController = {
       return c.json(new ValidationError('Sadece onaylı talepler siparişe dönüştürülebilir.').toJSON(), 400);
     }
 
-    const seq = await prisma.numberSequence.upsert({
-      where: { tenantId_module: { tenantId, module: 'purchase_order' } },
-      create: { tenantId, module: 'purchase_order', prefix: 'PO-', lastNum: 1, padding: 6 },
-      update: { lastNum: { increment: 1 } },
+    const { generateDocumentNumber } = await import('../utils/generate-number');
+    const number = await generateDocumentNumber(tenantId, 'purchase_order', 'PO-', async (tid, num) => {
+      const found = await prisma.purchaseOrder.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
+      return !!found;
     });
-    const number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
 
     const items: OrderItemDTO[] = request.items.map((i) => ({
       productId: i.productId,
@@ -273,12 +271,11 @@ export const PurchaseOrderController = {
       return c.json(new ValidationError('contactId, date ve en az bir kalem zorunludur.').toJSON(), 400);
     }
 
-    const seq = await prisma.numberSequence.upsert({
-      where: { tenantId_module: { tenantId, module: 'purchase_order' } },
-      create: { tenantId, module: 'purchase_order', prefix: 'PO-', lastNum: 1, padding: 6 },
-      update: { lastNum: { increment: 1 } },
+    const { generateDocumentNumber } = await import('../utils/generate-number');
+    const number = await generateDocumentNumber(tenantId, 'purchase_order', 'PO-', async (tid, num) => {
+      const found = await prisma.purchaseOrder.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
+      return !!found;
     });
-    const number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
 
     const { lineData, totalNet, totalTax, totalGross } = computeItems(body.items);
 

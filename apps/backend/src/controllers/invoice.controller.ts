@@ -209,15 +209,14 @@ export const InvoiceController = {
       tenantId,
     );
 
-    // Otomatik numara — NumberSequence yoksa timestamp fallback
+    // Otomatik numara — çakışma korumalı
     let number = body.number;
     if (!number) {
-      const seq = await prisma.numberSequence.upsert({
-        where: { tenantId_module: { tenantId, module: 'invoice' } },
-        create: { tenantId, module: 'invoice', prefix: 'INV-', lastNum: 1, padding: 6 },
-        update: { lastNum: { increment: 1 } },
+      const { generateDocumentNumber } = await import('../utils/generate-number');
+      number = await generateDocumentNumber(tenantId, 'invoice', 'INV-', async (tid, num) => {
+        const found = await prisma.invoice.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
+        return !!found;
       });
-      number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
     }
 
     const invoice = await prisma.invoice.create({

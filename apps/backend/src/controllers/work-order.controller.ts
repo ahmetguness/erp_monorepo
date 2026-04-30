@@ -81,12 +81,11 @@ export const WorkOrderController = {
     if (!body.productId || !body.plannedQty) return c.json(new ValidationError('productId ve plannedQty zorunludur.').toJSON(), 400);
 
     // Numara üret
-    const seq = await prisma.numberSequence.upsert({
-      where: { tenantId_module: { tenantId, module: 'work_order' } },
-      create: { tenantId, module: 'work_order', prefix: 'WO-', lastNum: 1, padding: 6 },
-      update: { lastNum: { increment: 1 } },
+    const { generateDocumentNumber } = await import('../utils/generate-number');
+    const number = await generateDocumentNumber(tenantId, 'work_order', 'WO-', async (tid, num) => {
+      const found = await prisma.workOrder.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
+      return !!found;
     });
-    const number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
 
     // BOM varsa item ve operasyonları otomatik kopyala
     let itemsCreate: Array<{ tenantId: string; productId: string; requiredQty: number }> = [];

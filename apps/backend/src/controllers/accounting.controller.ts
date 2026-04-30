@@ -191,12 +191,11 @@ export const AccountingController = {
       );
     }
 
-    const seq = await prisma.numberSequence.upsert({
-      where: { tenantId_module: { tenantId, module: 'journal' } },
-      create: { tenantId, module: 'journal', prefix: 'JE-', lastNum: 1, padding: 6 },
-      update: { lastNum: { increment: 1 } },
+    const { generateDocumentNumber } = await import('../utils/generate-number');
+    const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', async (tid, num) => {
+      const found = await prisma.journalEntry.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
+      return !!found;
     });
-    const number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
 
     const entry = await prisma.journalEntry.create({
       data: {
@@ -319,12 +318,11 @@ export const AccountingController = {
       return c.json(new ValidationError('Sadece onaylı fişler ters kayıt yapılabilir.').toJSON(), 400);
     }
 
-    const seq = await prisma.numberSequence.upsert({
-      where: { tenantId_module: { tenantId, module: 'journal' } },
-      create: { tenantId, module: 'journal', prefix: 'JE-', lastNum: 1, padding: 6 },
-      update: { lastNum: { increment: 1 } },
+    const { generateDocumentNumber } = await import('../utils/generate-number');
+    const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', async (tid, num) => {
+      const found = await prisma.journalEntry.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
+      return !!found;
     });
-    const number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
 
     const reversal = await prisma.journalEntry.create({
       data: {

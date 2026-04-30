@@ -48,7 +48,7 @@ import { demoPublicRoutes, demoAdminRoutes } from './routes/demo.routes';
 import { invitationRoutes, invitationPublicRoutes } from './routes/invitation.routes';
 import { SetPasswordController } from './controllers/set-password.controller';
 import { chatRoutes } from './routes/chat.routes';
-import { internalServiceRoutes } from './routes/internal-service.routes';
+import { publicChatRoutes } from './routes/public-chat.routes';
 
 const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
@@ -92,6 +92,7 @@ app.route('/api/auth', authRoutes);
 // ── Public routes (JWT gerektirmez) ──────────
 app.route('/api/public', demoPublicRoutes);
 app.route('/api/public', invitationPublicRoutes);
+app.route('/api/public', publicChatRoutes);
 app.post('/api/public/set-password', SetPasswordController.setPassword);
 app.post('/api/public/set-password/validate', SetPasswordController.validateToken);
 
@@ -148,15 +149,12 @@ tenantApi.route('/chat', chatRoutes);
 // ── External API (API Key auth) ──────────────
 app.route('/api/external', externalRoutes);
 
-// ── Internal Service API (Service JWT auth — n8n vb.) ──
-app.route('/api/internal', internalServiceRoutes);
-
 // Mount tenant routes under /api (after more specific routes)
 app.route('/api', tenantApi);
 
 // ── Global error handler ─────────────────────
 app.onError((err, c) => {
-  logger.error('Unhandled error:', err.message);
+  logger.error(`Unhandled error: ${err.message}`);
 
   // Development'ta detaylı hata, production'da generic
   if (process.env.NODE_ENV === 'development') {

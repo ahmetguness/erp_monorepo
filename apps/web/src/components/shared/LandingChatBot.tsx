@@ -1,15 +1,26 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { MessageCircle, X, Send, Bot, User, Loader2, Sparkles } from 'lucide-react';
+import {
+  MessageCircle, X, Send, Loader2, Sparkles, User,
+  Trash2, Copy, Check, CheckCircle, AlertCircle,
+} from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
-const N8N_PUBLIC_URL = process.env.NEXT_PUBLIC_N8N_PUBLIC_WEBHOOK_URL ?? '';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+
+// ─────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  error?: boolean;
+  demoSuccess?: boolean;
 }
 
 const QUICK_QUESTIONS = [
@@ -18,6 +29,74 @@ const QUICK_QUESTIONS = [
   'Demo görebilir miyim?',
   'Hangi modüller var?',
 ];
+
+// ─────────────────────────────────────────────
+// Copy button
+// ─────────────────────────────────────────────
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard API kullanılamıyor */ }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1 rounded text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-colors"
+      aria-label="Kopyala" title="Kopyala"
+    >
+      {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Markdown renderer
+// ─────────────────────────────────────────────
+
+function ChatMarkdown({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+        strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+        ul: ({ children }) => <ul className="list-disc list-inside mb-1.5 space-y-0.5">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal list-inside mb-1.5 space-y-0.5">{children}</ol>,
+        li: ({ children }) => <li className="text-slate-200">{children}</li>,
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-2">
+            <table className="min-w-full text-xs border-collapse">{children}</table>
+          </div>
+        ),
+        thead: ({ children }) => <thead className="bg-slate-700/50">{children}</thead>,
+        th: ({ children }) => <th className="px-2 py-1 text-left text-slate-300 font-medium border-b border-slate-600">{children}</th>,
+        td: ({ children }) => <td className="px-2 py-1 text-slate-200 border-b border-slate-700/50">{children}</td>,
+        code: ({ children, className }) => {
+          const isInline = !className;
+          return isInline
+            ? <code className="bg-slate-700/50 px-1 py-0.5 rounded text-xs text-blue-300">{children}</code>
+            : <code className="block bg-slate-800 p-2 rounded text-xs overflow-x-auto my-1">{children}</code>;
+        },
+        a: ({ href, children }) => (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{children}</a>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────
 
 export function LandingChatBot() {
   const [open, setOpen] = useState(false);
@@ -41,6 +120,13 @@ export function LandingChatBot() {
     if (open) setTimeout(() => inputRef.current?.focus(), 100);
   }, [open]);
 
+  const clearChat = () => {
+    setMessages([{
+      id: 'welcome', role: 'assistant', timestamp: new Date(),
+      content: 'Sohbet temizlendi. Size nasıl yardımcı olabilirim?',
+    }]);
+  };
+
   const sendMessage = useCallback(async (text?: string) => {
     const msg = (text ?? input).trim();
     if (!msg || loading) return;
@@ -51,44 +137,40 @@ export function LandingChatBot() {
     setLoading(true);
 
     try {
-      if (!N8N_PUBLIC_URL) {
-        setTimeout(() => {
-          setMessages((prev) => [...prev, {
-            id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
-            content: 'Chatbot henüz yapılandırılmamış. Lütfen NEXT_PUBLIC_N8N_PUBLIC_WEBHOOK_URL ortam değişkenini ayarlayın.',
-          }]);
-          setLoading(false);
-        }, 500);
-        return;
-      }
-
-      const res = await fetch(N8N_PUBLIC_URL, {
+      const res = await fetch(`${API_URL}/api/public/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg, sessionId }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const contentType = res.headers.get('content-type') ?? '';
-      let reply: string;
-
-      if (contentType.includes('application/json')) {
-        const data = await res.json();
-        reply = data.output ?? data.response ?? data.message ?? data.text ?? JSON.stringify(data);
-      } else {
-        reply = await res.text();
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = (errData as any).error ?? `Hata: ${res.status}`;
+        setMessages((prev) => [...prev, {
+          id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
+          content: errMsg, error: true,
+        }]);
+        setLoading(false);
+        return;
       }
+
+      const data = await res.json();
+      const reply = data.output ?? data.response ?? data.message ?? '';
 
       if (!reply || reply.trim() === '') throw new Error('Empty response');
 
+      // Demo başarı tespiti — sadece gerçekten oluşturulduğunda
+      const demoSuccess = /demo\s*(hesabınız|ortamınız)\s*(hazırlan|oluşturul|başarıyla)/i.test(reply)
+        && !/oluşturulamadı|hata|başarısız/i.test(reply);
+
       setMessages((prev) => [...prev, {
-        id: `a-${Date.now()}`, role: 'assistant', content: reply, timestamp: new Date(),
+        id: `a-${Date.now()}`, role: 'assistant', content: reply,
+        timestamp: new Date(), demoSuccess,
       }]);
     } catch {
       setMessages((prev) => [...prev, {
         id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
-        content: 'Üzgünüm, şu an yanıt veremiyorum. Lütfen daha sonra tekrar deneyin.',
+        content: 'Üzgünüm, şu an yanıt veremiyorum. Lütfen daha sonra tekrar deneyin.', error: true,
       }]);
     } finally {
       setLoading(false);
@@ -105,7 +187,6 @@ export function LandingChatBot() {
       const detail = (e as CustomEvent<string>).detail;
       if (detail) {
         setOpen(true);
-        // Chatbot açıldıktan sonra mesajı gönder
         setTimeout(() => sendMessage(detail), 300);
       }
     };
@@ -115,6 +196,7 @@ export function LandingChatBot() {
 
   const showQuickQuestions = messages.length <= 1 && !loading;
 
+  // ── Kapalı durum ──
   if (!open) {
     return (
       <button onClick={() => setOpen(true)}
@@ -126,8 +208,9 @@ export function LandingChatBot() {
     );
   }
 
+  // ── Açık durum ──
   return (
-    <div className="fixed bottom-4 right-4 z-[90] w-[380px] h-[540px] rounded-2xl bg-[#0F172A] border border-slate-700/50 shadow-2xl shadow-black/50 flex flex-col overflow-hidden">
+    <div className="fixed bottom-4 right-4 z-[90] w-[calc(100vw-2rem)] max-w-[380px] h-[min(540px,calc(100vh-6rem))] rounded-2xl bg-[#0F172A] border border-slate-700/50 shadow-2xl shadow-black/50 flex flex-col overflow-hidden sm:w-[380px]">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-800 bg-gradient-to-r from-blue-600/10 to-indigo-600/10 flex-shrink-0">
         <div className="relative">
@@ -140,11 +223,18 @@ export function LandingChatBot() {
           <h3 className="text-sm font-semibold text-white">Axon ERP</h3>
           <p className="text-[10px] text-blue-400">Satış Asistanı</p>
         </div>
-        <button onClick={() => setOpen(false)}
-          className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
-          aria-label="Kapat">
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button onClick={clearChat}
+            className="p-1.5 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-colors"
+            aria-label="Sohbeti temizle" title="Sohbeti temizle">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => setOpen(false)}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
+            aria-label="Kapat">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
@@ -152,26 +242,51 @@ export function LandingChatBot() {
         {messages.map((msg) => (
           <div key={msg.id} className={`flex gap-2.5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
             <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
-              msg.role === 'user' ? 'bg-blue-500/20' : 'bg-slate-800'
+              msg.role === 'user'
+                ? 'bg-blue-500/20'
+                : msg.error ? 'bg-red-500/20'
+                : msg.demoSuccess ? 'bg-emerald-500/20'
+                : 'bg-slate-800'
             }`}>
               {msg.role === 'user'
                 ? <User className="w-3.5 h-3.5 text-blue-400" />
-                : <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                : msg.demoSuccess
+                  ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                  : msg.error
+                    ? <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+                    : <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
               }
             </div>
-            <div className={`max-w-[80%] ${msg.role === 'user' ? 'text-right' : ''}`}>
+            <div className={`max-w-[85%] ${msg.role === 'user' ? 'text-right' : ''}`}>
               <div className={`inline-block px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
                 msg.role === 'user'
                   ? 'bg-blue-600 text-white rounded-br-md'
-                  : 'bg-slate-800/80 text-slate-200 rounded-bl-md border border-slate-700/50'
+                  : msg.error
+                    ? 'bg-red-500/10 text-red-300 rounded-bl-md border border-red-500/20'
+                    : msg.demoSuccess
+                      ? 'bg-emerald-500/10 text-emerald-200 rounded-bl-md border border-emerald-500/20'
+                      : 'bg-slate-800/80 text-slate-200 rounded-bl-md border border-slate-700/50'
               }`}>
-                {msg.content.split('\n').map((line, i) => (
-                  <span key={i}>{line}{i < msg.content.split('\n').length - 1 && <br />}</span>
-                ))}
+                {msg.role === 'user'
+                  ? msg.content
+                  : <ChatMarkdown content={msg.content} />
+                }
               </div>
-              <p className={`text-[10px] text-slate-600 mt-1 ${msg.role === 'user' ? 'text-right' : ''}`}>
-                {msg.timestamp.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-              </p>
+
+              {/* Meta row */}
+              <div className={`flex items-center gap-1.5 mt-1 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                {msg.demoSuccess && (
+                  <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-500">
+                    <CheckCircle className="w-2.5 h-2.5" /> Demo oluşturuldu
+                  </span>
+                )}
+                {msg.role === 'assistant' && msg.id !== 'welcome' && !msg.error && (
+                  <CopyButton text={msg.content} />
+                )}
+                <p className="text-[10px] text-slate-600">
+                  {msg.timestamp.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
             </div>
           </div>
         ))}

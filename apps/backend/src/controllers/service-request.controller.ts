@@ -81,12 +81,11 @@ export const ServiceRequestController = {
     }>();
     if (!body.subject) return c.json(new ValidationError('subject zorunludur.').toJSON(), 400);
 
-    const seq = await prisma.numberSequence.upsert({
-      where: { tenantId_module: { tenantId, module: 'service_request' } },
-      create: { tenantId, module: 'service_request', prefix: 'SR-', lastNum: 1, padding: 6 },
-      update: { lastNum: { increment: 1 } },
+    const { generateDocumentNumber } = await import('../utils/generate-number');
+    const number = await generateDocumentNumber(tenantId, 'service_request', 'SR-', async (tid, num) => {
+      const found = await prisma.serviceRequest.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
+      return !!found;
     });
-    const number = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
 
     // Garanti bilgisini asset'ten al
     let warrantyEnd: Date | null = null;

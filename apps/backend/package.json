@@ -20,6 +20,7 @@
     "bcryptjs": "^3.0.3",
     "hono": "^4.12.10",
     "jsonwebtoken": "^9.0.3",
+    "openai": "^6.35.0",
     "resend": "^6.10.0"
   },
   "devDependencies": {
