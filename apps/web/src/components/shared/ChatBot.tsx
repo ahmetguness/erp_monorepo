@@ -386,7 +386,7 @@ export function ChatBot() {
       setFetchingData(false);
       abortRef.current = null;
     }
-  }, [input, loading, streamingContent, messages]);
+  }, [input, loading, streamingContent]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
