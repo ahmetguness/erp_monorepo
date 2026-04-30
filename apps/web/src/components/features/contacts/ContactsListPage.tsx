@@ -508,7 +508,7 @@ export function ContactsListPage() {
             options={BALANCE_OPTIONS}
             value={balanceFilter}
             onChange={(e) => {
-              setBalanceFilter(e.target.value as any);
+              setBalanceFilter(e.target.value as "" | "receivable" | "payable" | "risky");
               setPage(1);
             }}
             className="w-48 !py-1.5 text-xs"

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { requireServiceAuth } from '../middleware/requireServiceAuth';
 import { prisma } from '../lib/prisma';
-import { InvoiceStatus, InvoiceType, PaymentStatus } from '@prisma/client';
+import { InvoiceStatus, InvoiceType, PaymentStatus, OrderStatus, PurchaseOrderStatus, MarketplaceChannel } from '@prisma/client';
 
 /**
  * Internal Service API — n8n chatbot workflow'u için.
@@ -198,7 +198,7 @@ routes.get(
       where: {
         tenantId,
         deletedAt: null,
-        ...(status && { status: status as any }),
+        ...(status && { status: status as OrderStatus }),
       },
       select: {
         number: true, date: true, dueDate: true, status: true,
@@ -291,7 +291,7 @@ routes.get(
       where: {
         tenantId,
         deletedAt: null,
-        ...(status && { status: status as any }),
+        ...(status && { status: status as PurchaseOrderStatus }),
       },
       select: {
         number: true, date: true, dueDate: true, status: true, totalGross: true,
@@ -432,7 +432,7 @@ routes.get(
     const orders = await prisma.marketplaceOrder.findMany({
       where: {
         tenantId,
-        ...(channel && { channel: channel as any }),
+        ...(channel && { channel: channel as MarketplaceChannel }),
         status: { in: ['PENDING', 'PROCESSING'] },
       },
       select: {

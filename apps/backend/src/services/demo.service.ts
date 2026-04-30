@@ -4,6 +4,7 @@ import { sendMail } from './mail.service';
 import { demoReadyEmail, demoEnterpriseNotifyEmail } from './mail-templates.service';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
 
 // ── Tipler ───────────────────────────────────
 
@@ -326,7 +327,7 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
       demoRequestId,
       tenantSlug: slug,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Demo provisioning hatası:', err);
 
     // Rollback status
@@ -335,7 +336,8 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
       data: { status: 'APPROVED' },
     });
 
-    return { success: false, demoRequestId, error: err.message };
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, demoRequestId, error: message };
   }
 }
 
@@ -382,7 +384,7 @@ function getModulesForPlan(plan: string): string[] {
 
 // ── Demo seed verileri ───────────────────────
 
-async function seedDemoData(tx: any, tenantId: string) {
+async function seedDemoData(tx: Prisma.TransactionClient, tenantId: string) {
   // Temel birimler
   const adet = await tx.unit.create({ data: { tenantId, name: 'Adet', code: 'AD' } });
   const kg = await tx.unit.create({ data: { tenantId, name: 'Kilogram', code: 'KG' } });

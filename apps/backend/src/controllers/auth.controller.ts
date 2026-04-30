@@ -358,6 +358,46 @@ export const AuthController = {
       return c.json(new NotFoundError('Tenant', tenantId).toJSON(), 404);
     }
 
-    return c.json({ data: { user, tenant } });
+    const tenantUser = await prisma.tenantUser.findUnique({
+      where: {
+        tenantId_userId: { tenantId, userId }
+      },
+      select: {
+        preferences: true
+      }
+    });
+
+    return c.json({ data: { user, tenant, preferences: tenantUser?.preferences || null } });
+  },
+
+  /**
+   * PATCH /api/auth/me/preferences
+   * Kullanıcının o anki tenant'a ait ayarlarını (ör: dashboard layout) günceller.
+   */
+  async updatePreferences(c: Context): Promise<Response> {
+    const userId = c.get('userId') as string;
+    const tenantId = c.get('tenantId') as string;
+
+    const body = await c.req.json<{ preferences: Record<string, unknown> }>();
+
+    const tenantUser = await prisma.tenantUser.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+    });
+
+    if (!tenantUser) {
+      return c.json(new NotFoundError('Kullanıcı', userId).toJSON(), 404);
+    }
+
+    // JSON birleştirme: Mevcut preferences ile yeni gelen preferences
+    const currentPrefs = (tenantUser.preferences as Record<string, unknown>) || {};
+    const newPrefs = { ...currentPrefs, ...body.preferences };
+
+    const updated = await prisma.tenantUser.update({
+      where: { id: tenantUser.id },
+      data: { preferences: newPrefs },
+      select: { preferences: true },
+    });
+
+    return c.json({ data: updated });
   },
 };

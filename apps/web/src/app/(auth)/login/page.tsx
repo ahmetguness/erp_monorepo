@@ -26,7 +26,8 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors },
   } = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema) as any,
+    // @ts-expect-error -- zodResolver type mismatch with react-hook-form generics
+    resolver: zodResolver(loginSchema),
   });
 
   const onSubmit = (data: LoginForm) => {

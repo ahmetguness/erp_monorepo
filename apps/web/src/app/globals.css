@@ -88,3 +88,36 @@
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* react-grid-layout resize handle */
+.react-resizable-handle {
+  background-image: none !important;
+  z-index: 30;
+}
+.react-resizable-handle-se {
+  bottom: 0 !important;
+  right: 0 !important;
+  width: 20px !important;
+  height: 20px !important;
+  cursor: se-resize !important;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.react-resizable-handle-se::after {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid rgba(148, 163, 184, 0.5);
+  border-bottom: 2px solid rgba(148, 163, 184, 0.5);
+  border-radius: 0 0 2px 0;
+}
+*:hover > .react-resizable-handle-se,
+.react-resizable-handle-se:hover {
+  opacity: 1;
+}
+.react-resizable-handle-se:hover::after {
+  border-color: rgba(56, 189, 248, 0.8);
+}

@@ -84,11 +84,10 @@ function SetPasswordContent() {
         password,
       });
       setStatus('success');
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus('ready');
-      setFormError(
-        err.response?.data?.error || 'Bir hata oluştu. Lütfen tekrar deneyin.'
-      );
+      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+      setFormError(message || 'Bir hata oluştu. Lütfen tekrar deneyin.');
     }
   };
 

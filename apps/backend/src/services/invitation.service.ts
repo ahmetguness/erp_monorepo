@@ -107,7 +107,7 @@ export async function validateInvitation(rawToken: string, email: string) {
   return {
     valid: true,
     invitationId: invitation.id,
-    tenantName: (invitation as any).tenant?.companyName,
+    tenantName: invitation.tenant?.companyName,
     email: invitation.email,
   };
 }

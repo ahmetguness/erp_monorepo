@@ -43,8 +43,9 @@ export async function sendMail(options: SendMailOptions): Promise<MailResult> {
 
     logger.info(`Mail gönderildi → ${options.to} (id: ${data?.id})`);
     return { success: true, id: data?.id };
-  } catch (err: any) {
-    logger.error(`Mail gönderim exception: ${err.message}`);
-    return { success: false, error: err.message };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error(`Mail gönderim exception: ${message}`);
+    return { success: false, error: message };
   }
 }

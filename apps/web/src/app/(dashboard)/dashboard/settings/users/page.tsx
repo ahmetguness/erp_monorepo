@@ -95,7 +95,7 @@ export default function UsersAndInvitesPage() {
                 </tr>
               </thead>
               <tbody>
-                {(Array.isArray(users) ? users : (users as any)?.data ?? []).map((tu: any) => {
+                {users.map((tu) => {
                   const u = tu.user || tu;
                   return (
                     <tr key={tu.id || u.id} className="border-b border-slate-800/50 last:border-0">
@@ -217,7 +217,7 @@ export default function UsersAndInvitesPage() {
             <select value={selectedRoleId} onChange={(e) => setSelectedRoleId(e.target.value)}
               className="w-full h-12 px-4 bg-slate-900/80 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/40 transition-all">
               <option value="">Rol seçilmedi (varsayılan)</option>
-              {roles.map((r: any) => (
+              {roles.map((r) => (
                 <option key={r.id} value={r.id}>{r.name}{r.description ? ` — ${r.description}` : ''}</option>
               ))}
             </select>

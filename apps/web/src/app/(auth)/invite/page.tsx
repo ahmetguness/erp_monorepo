@@ -69,9 +69,10 @@ function InviteContent() {
     try {
       await axios.post(`${API_URL}/api/public/invitations/accept`, { token, email, name: name.trim(), password });
       setStatus('success');
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus('ready');
-      setFormError(err.response?.data?.error || 'Bir hata oluştu.');
+      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+      setFormError(message || 'Bir hata oluştu.');
     }
   };
 

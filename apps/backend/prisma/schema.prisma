@@ -593,6 +593,8 @@ model TenantUser {
 
   isOwner  Boolean @default(false)
   isActive Boolean @default(true)
+  
+  preferences Json? // Eklenen alan: Dashboard layout, widget ayarları vb.
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -788,7 +788,7 @@ function EditJournalEntryModal({
       lines: (entry.lines ?? []).map((l) => ({
         accountId:
           l.accountId ??
-          ((l as Record<string, any>).account?.id as string) ??
+          ((l as Record<string, unknown>).account as { id?: string } | undefined)?.id ??
           "",
         debit: String(Number(l.debit)),
         credit: String(Number(l.credit)),

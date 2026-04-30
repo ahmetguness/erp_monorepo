@@ -5,6 +5,7 @@ import {
   rejectDemoRequest,
 } from '../services/demo.service';
 import { prisma } from '../lib/prisma';
+import { DemoRequestStatus } from '@prisma/client';
 
 export class DemoController {
   // Basit in-memory rate limiter (IP bazlı)
@@ -92,7 +93,7 @@ export class DemoController {
     const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') || '20', 10)));
 
-    const where = status ? { status: status as any } : {};
+    const where = status ? { status: status as DemoRequestStatus } : {};
 
     const [data, total] = await Promise.all([
       prisma.demoRequest.findMany({
@@ -128,7 +129,7 @@ export class DemoController {
    */
   static async approve(c: Context) {
     const id = c.req.param('id');
-    const adminId = (c as any).get?.('userId') || 'admin';
+    const adminId = c.get('userId') as string || 'admin';
 
     const result = await approveDemoRequest(id, adminId);
     return c.json(result, result.success ? 200 : 400);
@@ -141,7 +142,7 @@ export class DemoController {
   static async reject(c: Context) {
     const id = c.req.param('id');
     const body = await c.req.json().catch(() => ({}));
-    const adminId = (c as any).get?.('userId') || 'admin';
+    const adminId = c.get('userId') as string || 'admin';
 
     const result = await rejectDemoRequest(id, adminId, body.reason);
     return c.json(result);

@@ -62,7 +62,8 @@ export function StockCountsPage() {
   const today = new Date().toISOString().split('T')[0];
 
   const { register, handleSubmit, control, reset, setValue, watch, formState: { errors } } = useForm<NewCountForm>({
-    resolver: zodResolver(newCountSchema) as any,
+    // @ts-expect-error -- zodResolver type mismatch with react-hook-form generics
+    resolver: zodResolver(newCountSchema),
     defaultValues: { warehouseId: '', date: today, notes: '', items: [] },
   });
 

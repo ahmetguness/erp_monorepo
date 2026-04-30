@@ -58,6 +58,7 @@ const MeResponseSchema = SingleResponseSchema(
   z.object({
     user: AuthUserSchema,
     tenant: TenantInfoSchema,
+    preferences: z.record(z.string(), z.unknown()).nullable().optional(),
   }),
 );
 
@@ -113,8 +114,12 @@ export async function register(data: RegisterData): Promise<RegisterResponse> {
   return parsed as RegisterResponse;
 }
 
-export async function getMe(): Promise<{ user: AuthUser; tenant: TenantInfo }> {
+export async function getMe(): Promise<{ user: AuthUser; tenant: TenantInfo; preferences: Record<string, unknown> | null }> {
   const res = await apiClient.get('/api/auth/me');
   const parsed = safeParse(MeResponseSchema, res.data, 'getMe').data;
-  return parsed as { user: AuthUser; tenant: TenantInfo };
+  return parsed as { user: AuthUser; tenant: TenantInfo; preferences: Record<string, unknown> | null };
+}
+
+export async function updateMePreferences(preferences: Record<string, unknown>): Promise<void> {
+  await apiClient.patch('/api/auth/me/preferences', { preferences });
 }

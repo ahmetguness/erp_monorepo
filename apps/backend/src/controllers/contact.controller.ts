@@ -1,7 +1,7 @@
 import { Context } from 'hono';
-import { ContactType } from '@prisma/client';
+import { ContactType, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError, ForbiddenError, BaseError } from '../errors';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -65,8 +65,8 @@ export const ContactController = {
    */
   async list(c: Context): Promise<Response> {
     let tenantId: string;
-    try { tenantId = getTenantId(c); } catch (e: any) {
-      return c.json(e.toJSON(), 403);
+    try { tenantId = getTenantId(c); } catch (e: unknown) {
+      return c.json((e as BaseError).toJSON(), 403);
     }
 
     const query = c.req.query() as ContactListQuery;
@@ -75,7 +75,7 @@ export const ContactController = {
     const skip = (page - 1) * pageSize;
 
     // Base where clause
-    const where: any = {
+    const where: Prisma.ContactWhereInput = {
       tenantId,
       deletedAt: null,
       ...(query.type && { type: query.type }),
@@ -241,8 +241,8 @@ export const ContactController = {
    */
   async getById(c: Context): Promise<Response> {
     let tenantId: string;
-    try { tenantId = getTenantId(c); } catch (e: any) {
-      return c.json(e.toJSON(), 403);
+    try { tenantId = getTenantId(c); } catch (e: unknown) {
+      return c.json((e as BaseError).toJSON(), 403);
     }
     const contactId = c.req.param('id');
 
@@ -318,8 +318,8 @@ export const ContactController = {
 
   async create(c: Context): Promise<Response> {
     let tenantId: string;
-    try { tenantId = getTenantId(c); } catch (e: any) {
-      return c.json(e.toJSON(), 403);
+    try { tenantId = getTenantId(c); } catch (e: unknown) {
+      return c.json((e as BaseError).toJSON(), 403);
     }
 
     const body = await c.req.json<CreateContactDTO>();
@@ -381,8 +381,8 @@ export const ContactController = {
 
   async update(c: Context): Promise<Response> {
     let tenantId: string;
-    try { tenantId = getTenantId(c); } catch (e: any) {
-      return c.json(e.toJSON(), 403);
+    try { tenantId = getTenantId(c); } catch (e: unknown) {
+      return c.json((e as BaseError).toJSON(), 403);
     }
     const contactId = c.req.param('id');
 
@@ -420,8 +420,8 @@ export const ContactController = {
 
   async remove(c: Context): Promise<Response> {
     let tenantId: string;
-    try { tenantId = getTenantId(c); } catch (e: any) {
-      return c.json(e.toJSON(), 403);
+    try { tenantId = getTenantId(c); } catch (e: unknown) {
+      return c.json((e as BaseError).toJSON(), 403);
     }
     const contactId = c.req.param('id');
 
@@ -457,8 +457,8 @@ interface AccountEntryListQuery {
 export const AccountEntryController = {
   async list(c: Context): Promise<Response> {
     let tenantId: string;
-    try { tenantId = getTenantId(c); } catch (e: any) {
-      return c.json(e.toJSON(), 403);
+    try { tenantId = getTenantId(c); } catch (e: unknown) {
+      return c.json((e as BaseError).toJSON(), 403);
     }
     const contactId = c.req.param('contactId');
 
@@ -471,7 +471,7 @@ export const AccountEntryController = {
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
 
-    const where: any = {
+    const where: Prisma.AccountEntryWhereInput = {
       tenantId,
       contactId,
       ...(query.refType && { refType: query.refType }),
