@@ -26,6 +26,50 @@ interface Message {
 const STORAGE_KEY_PREFIX = 'axon_chat_messages_';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+// ─────────────────────────────────────────────
+// rAF-based smooth streaming hook
+// ─────────────────────────────────────────────
+
+/**
+ * Token'ları bir pending buffer'da biriktirir, requestAnimationFrame ile
+ * frame başına bir kez state'e yazar. Böylece React re-render sayısı
+ * token sayısından bağımsız, 60fps ile sınırlı kalır.
+ */
+function useSmoothStream() {
+  const [displayed, setDisplayed] = useState('');
+  const pendingRef = useRef('');
+  const rafRef = useRef<number | null>(null);
+
+  const flush = useCallback(() => {
+    rafRef.current = null;
+    const next = pendingRef.current;
+    setDisplayed(next);
+  }, []);
+
+  const append = useCallback((token: string) => {
+    pendingRef.current += token;
+    if (rafRef.current === null) {
+      rafRef.current = requestAnimationFrame(flush);
+    }
+  }, [flush]);
+
+  const reset = useCallback((value = '') => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    pendingRef.current = value;
+    setDisplayed(value);
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  return { displayed, append, reset };
+}
+
 const QUICK_ACTIONS = [
   { label: 'Bugünkü özet', message: 'Bugünkü genel durumu özetle: satış, gider, gecikmiş faturalar, bekleyen ödemeler ve stok uyarıları' },
   { label: 'Gecikmiş faturalar', message: 'Vadesi geçmiş tüm faturaları listele, kaç gün geciktiğini ve toplam tutarı göster' },
@@ -151,7 +195,7 @@ export function ChatBot() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
-  const [streamingContent, setStreamingContent] = useState('');
+  const { displayed: streamingContent, append: appendStream, reset: resetStream } = useSmoothStream();
   const [fetchingData, setFetchingData] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -240,7 +284,7 @@ export function ChatBot() {
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setLoading(true);
-    setStreamingContent('');
+    resetStream();
     setFetchingData(false);
 
     const token = document.cookie.match(/axon_token=([^;]+)/)?.[1];
@@ -311,7 +355,7 @@ export function ChatBot() {
               try {
                 const { token: t } = JSON.parse(data);
                 accumulated += t;
-                setStreamingContent(accumulated);
+                appendStream(t);
               } catch { /* */ }
             } else if (currentEvent === 'tool_start') {
               setFetchingData(true);
@@ -327,7 +371,7 @@ export function ChatBot() {
                   timestamp: new Date(), usedData: ut || usedTools, suggestions,
                 }]);
               } catch { /* */ }
-              setStreamingContent('');
+              resetStream();
               accumulated = '';
             } else if (currentEvent === 'error') {
               gotDone = true;
@@ -338,7 +382,7 @@ export function ChatBot() {
                   content: errText, error: true,
                 }]);
               } catch { /* */ }
-              setStreamingContent('');
+              resetStream();
               accumulated = '';
             }
 
@@ -362,7 +406,7 @@ export function ChatBot() {
             content: 'Yanıt alınamadı. Lütfen tekrar deneyin.', error: true,
           }]);
         }
-        setStreamingContent('');
+        resetStream();
       }
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
@@ -372,21 +416,21 @@ export function ChatBot() {
             id: `a-${Date.now()}`, role: 'assistant', content: streamingContent,
             timestamp: new Date(),
           }]);
-          setStreamingContent('');
+          resetStream();
         }
       } else {
         setMessages((prev) => [...prev, {
           id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
           content: 'Üzgünüm, şu an yanıt veremiyorum. Lütfen daha sonra tekrar deneyin.', error: true,
         }]);
-        setStreamingContent('');
+        resetStream();
       }
     } finally {
       setLoading(false);
       setFetchingData(false);
       abortRef.current = null;
     }
-  }, [input, loading, streamingContent]);
+  }, [input, loading, streamingContent, appendStream, resetStream]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }

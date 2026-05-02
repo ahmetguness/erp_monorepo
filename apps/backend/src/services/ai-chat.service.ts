@@ -8,6 +8,10 @@ import type {
 } from 'openai/resources/chat/completions';
 
 // ─────────────────────────────────────────────
+// Model config — tek yerden değiştir
+// ─────────────────────────────────────────────
+
+const CHAT_MODEL = 'gpt-4o-mini';
 // OpenAI Function Definitions — ERP veri araçları
 // Üç katmanlı erişim: Plan + Modül + Kullanıcı Rolü
 // ─────────────────────────────────────────────
@@ -655,7 +659,7 @@ export async function handlePrivateChat(params: PrivateChatParams): Promise<Priv
 
   // İlk çağrı
   let response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: CHAT_MODEL,
     messages,
     ...(planTools.length > 0 && { tools: planTools }),
     temperature: 0.3,
@@ -691,7 +695,7 @@ export async function handlePrivateChat(params: PrivateChatParams): Promise<Priv
     messages.push(...toolResults);
 
     response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: CHAT_MODEL,
       messages,
       ...(planTools.length > 0 && { tools: planTools }),
       temperature: 0.3,
@@ -749,7 +753,7 @@ export async function handlePublicChat(
   ];
 
   let response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: CHAT_MODEL,
     messages,
     tools: PUBLIC_TOOLS,
     temperature: 0.7,
@@ -822,7 +826,7 @@ export async function handlePublicChat(
     messages.push({ role: 'tool', tool_call_id: toolCall.id, content: toolResult });
 
     response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: CHAT_MODEL,
       messages,
       tools: PUBLIC_TOOLS,
       temperature: 0.7,
@@ -846,8 +850,140 @@ export async function handlePublicChat(
 export { clearConversation };
 
 // ─────────────────────────────────────────────
-// Streaming — Private Chat
+// Streaming — Public Chat
 // ─────────────────────────────────────────────
+
+type CreateDemoFn = (data: { fullName: string; companyName: string; email: string; phone: string; plan: string }) => Promise<{ success: boolean; message?: string }>;
+type CheckEmailFn = (email: string) => Promise<{ available: boolean; message: string }>;
+
+/**
+ * Landing page chatbot — streaming versiyonu.
+ * Tool call'lar (email check, demo create) non-streaming; son metin yanıtı stream edilir.
+ */
+export async function handlePublicChatStream(
+  params: PublicChatParams,
+  createDemoFn: CreateDemoFn,
+  checkEmailFn: CheckEmailFn,
+  callbacks: StreamCallbacks,
+): Promise<void> {
+  const { message, sessionId } = params;
+
+  const systemMessage: ChatCompletionMessageParam = { role: 'system', content: PUBLIC_SYSTEM_PROMPT };
+  const history = getConversation(sessionId);
+  const userMessage: ChatCompletionMessageParam = { role: 'user', content: message };
+  const messages: ChatCompletionMessageParam[] = [systemMessage, ...history, userMessage];
+
+  let fullText = '';
+
+  try {
+    // Tool call aşaması — non-streaming (tool call'lar stream edilemez)
+    let response = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      messages,
+      tools: PUBLIC_TOOLS,
+      temperature: 0.7,
+      max_tokens: 500,
+    });
+
+    let choice = response.choices[0];
+    let iterations = 0;
+
+    while (choice.message.tool_calls && choice.message.tool_calls.length > 0 && iterations < 3) {
+      iterations++;
+      const toolCallRaw = choice.message.tool_calls[0];
+      if (toolCallRaw.type !== 'function') break;
+      const toolCall = toolCallRaw;
+      let args: Record<string, unknown> = {};
+      try { args = JSON.parse(toolCall.function.arguments || '{}'); } catch { /* */ }
+
+      let toolResult: string;
+
+      if (toolCall.function.name === 'check_email_availability') {
+        const email = String(args.email ?? '').trim().toLowerCase();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) {
+          toolResult = JSON.stringify({ available: false, message: 'Geçersiz e-posta formatı.' });
+        } else {
+          try {
+            const result = await checkEmailFn(email);
+            toolResult = JSON.stringify(result);
+          } catch (err) {
+            logger.error(`Public chat stream email check error: ${err instanceof Error ? err.message : String(err)}`);
+            toolResult = JSON.stringify({ available: true, message: 'Kontrol yapılamadı, devam edebilirsiniz.' });
+          }
+        }
+      } else if (toolCall.function.name === 'create_demo_request') {
+        const email = String(args.email ?? '').trim().toLowerCase();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!args.fullName || !args.companyName || !email || !emailRegex.test(email)) {
+          toolResult = JSON.stringify({ success: false, message: 'Geçersiz veya eksik bilgi. Lütfen tekrar deneyin.' });
+        } else {
+          try {
+            const planStr = String(args.plan ?? 'STARTER');
+            const demoResult = await createDemoFn({
+              fullName: String(args.fullName).slice(0, 100),
+              companyName: String(args.companyName).slice(0, 100),
+              email: email.slice(0, 254),
+              phone: String(args.phone ?? '').slice(0, 20),
+              plan: ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'].includes(planStr) ? planStr : 'STARTER',
+            });
+            toolResult = demoResult?.success === false
+              ? JSON.stringify({ success: false, message: demoResult.message ?? 'Demo talebi oluşturulamadı.' })
+              : JSON.stringify({ success: true, message: 'Demo talebi başarıyla oluşturuldu.' });
+          } catch (err) {
+            logger.error(`Public chat stream demo request error: ${err instanceof Error ? err.message : String(err)}`);
+            toolResult = JSON.stringify({ success: false, message: 'Demo talebi oluşturulamadı.' });
+          }
+        }
+      } else {
+        toolResult = JSON.stringify({ error: 'Bilinmeyen işlem.' });
+      }
+
+      messages.push(choice.message as ChatCompletionMessageParam);
+      messages.push({ role: 'tool', tool_call_id: toolCall.id, content: toolResult });
+
+      response = await openai.chat.completions.create({
+        model: CHAT_MODEL,
+        messages,
+        tools: PUBLIC_TOOLS,
+        temperature: 0.7,
+        max_tokens: 500,
+      });
+
+      choice = response.choices[0];
+    }
+
+    // Tool call bitti — son yanıtı stream et
+    if (!choice.message.tool_calls || choice.message.tool_calls.length === 0) {
+      const stream = await openai.chat.completions.create({
+        model: CHAT_MODEL,
+        messages: [...messages, choice.message as ChatCompletionMessageParam],
+        temperature: 0.7,
+        max_tokens: 500,
+        stream: true,
+      });
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content;
+        if (delta) {
+          fullText += delta;
+          await callbacks.onToken(delta);
+        }
+      }
+    }
+
+    if (!fullText) {
+      fullText = choice.message.content ?? 'Yanıt üretilemedi.';
+      if (fullText) await callbacks.onToken(fullText);
+    }
+
+    addToConversation(sessionId, [userMessage, { role: 'assistant', content: fullText }]);
+    await callbacks.onDone(fullText, false);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    await callbacks.onError(errMsg);
+  }
+}
 
 export interface StreamCallbacks {
   onToken: (token: string) => void | Promise<void>;
@@ -884,7 +1020,7 @@ export async function handlePrivateChatStream(
   try {
     // Function calling aşaması — streaming olmadan (tool call'lar stream edilemez)
     let preResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: CHAT_MODEL,
       messages,
       ...(planTools.length > 0 && { tools: planTools }),
       temperature: 0.3,
@@ -916,7 +1052,7 @@ export async function handlePrivateChatStream(
       messages.push(...toolResults);
 
       preResponse = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: CHAT_MODEL,
         messages,
         ...(planTools.length > 0 && { tools: planTools }),
         temperature: 0.3,
@@ -931,7 +1067,7 @@ export async function handlePrivateChatStream(
       if (usedTools) {
         // Tool sonuçları zaten messages'ta — tools olmadan stream et
         const stream = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
+          model: CHAT_MODEL,
           messages,
           temperature: 0.3,
           max_tokens: 1000,

@@ -31,6 +31,43 @@ const QUICK_QUESTIONS = [
 ];
 
 // ─────────────────────────────────────────────
+// rAF-based smooth streaming hook
+// ─────────────────────────────────────────────
+
+function useSmoothStream() {
+  const [displayed, setDisplayed] = useState('');
+  const pendingRef = useRef('');
+  const rafRef = useRef<number | null>(null);
+
+  const flush = useCallback(() => {
+    rafRef.current = null;
+    setDisplayed(pendingRef.current);
+  }, []);
+
+  const append = useCallback((token: string) => {
+    pendingRef.current += token;
+    if (rafRef.current === null) {
+      rafRef.current = requestAnimationFrame(flush);
+    }
+  }, [flush]);
+
+  const reset = useCallback((value = '') => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    pendingRef.current = value;
+    setDisplayed(value);
+  }, []);
+
+  useEffect(() => () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  return { displayed, append, reset };
+}
+
+// ─────────────────────────────────────────────
 // Copy button
 // ─────────────────────────────────────────────
 
@@ -108,13 +145,14 @@ export function LandingChatBot() {
     },
   ]);
   const [loading, setLoading] = useState(false);
+  const { displayed: streamingContent, append: appendStream, reset: resetStream } = useSmoothStream();
   const [sessionId] = useState(() => `pub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, streamingContent]);
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 100);
@@ -135,9 +173,10 @@ export function LandingChatBot() {
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setLoading(true);
+    resetStream();
 
     try {
-      const res = await fetch(`${API_URL}/api/public/chat`, {
+      const res = await fetch(`${API_URL}/api/public/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg, sessionId }),
@@ -154,28 +193,95 @@ export function LandingChatBot() {
         return;
       }
 
-      const data = await res.json();
-      const reply = data.output ?? data.response ?? data.message ?? '';
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('Stream okunamadı');
 
-      if (!reply || reply.trim() === '') throw new Error('Empty response');
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulated = '';
+      let currentEvent = '';
+      let gotDone = false;
 
-      // Demo başarı tespiti — sadece gerçekten oluşturulduğunda
-      const demoSuccess = /demo\s*(hesabınız|ortamınız)\s*(hazırlan|oluşturul|başarıyla)/i.test(reply)
-        && !/oluşturulamadı|hata|başarısız/i.test(reply);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      setMessages((prev) => [...prev, {
-        id: `a-${Date.now()}`, role: 'assistant', content: reply,
-        timestamp: new Date(), demoSuccess,
-      }]);
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            currentEvent = line.slice(6).trim();
+          } else if (line.startsWith('data:')) {
+            const data = line.slice(5).trim();
+
+            if (currentEvent === 'token') {
+              try {
+                const { token: t } = JSON.parse(data);
+                accumulated += t;
+                appendStream(t);
+              } catch { /* */ }
+            } else if (currentEvent === 'done') {
+              gotDone = true;
+              try {
+                const { output } = JSON.parse(data);
+                const reply = output || accumulated;
+                if (reply) {
+                  const demoSuccess = /demo\s*(hesabınız|ortamınız)\s*(hazırlan|oluşturul|başarıyla)/i.test(reply)
+                    && !/oluşturulamadı|hata|başarısız/i.test(reply);
+                  setMessages((prev) => [...prev, {
+                    id: `a-${Date.now()}`, role: 'assistant', content: reply,
+                    timestamp: new Date(), demoSuccess,
+                  }]);
+                }
+              } catch { /* */ }
+              resetStream();
+              accumulated = '';
+            } else if (currentEvent === 'error') {
+              gotDone = true;
+              try {
+                const { error: errText } = JSON.parse(data);
+                setMessages((prev) => [...prev, {
+                  id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
+                  content: errText, error: true,
+                }]);
+              } catch { /* */ }
+              resetStream();
+              accumulated = '';
+            }
+
+            currentEvent = '';
+          }
+        }
+      }
+
+      if (!gotDone) {
+        if (accumulated) {
+          const demoSuccess = /demo\s*(hesabınız|ortamınız)\s*(hazırlan|oluşturul|başarıyla)/i.test(accumulated)
+            && !/oluşturulamadı|hata|başarısız/i.test(accumulated);
+          setMessages((prev) => [...prev, {
+            id: `a-${Date.now()}`, role: 'assistant', content: accumulated,
+            timestamp: new Date(), demoSuccess,
+          }]);
+        } else {
+          setMessages((prev) => [...prev, {
+            id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
+            content: 'Yanıt alınamadı. Lütfen tekrar deneyin.', error: true,
+          }]);
+        }
+        resetStream();
+      }
     } catch {
       setMessages((prev) => [...prev, {
         id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
         content: 'Üzgünüm, şu an yanıt veremiyorum. Lütfen daha sonra tekrar deneyin.', error: true,
       }]);
+      resetStream();
     } finally {
       setLoading(false);
     }
-  }, [input, loading, sessionId]);
+  }, [input, loading, sessionId, appendStream, resetStream]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -310,11 +416,20 @@ export function LandingChatBot() {
               <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
             </div>
             <div className="bg-slate-800/80 border border-slate-700/50 rounded-2xl rounded-bl-md px-4 py-3">
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
+              {streamingContent ? (
+                <div className="max-w-[85%]">
+                  <div className="text-sm leading-relaxed text-slate-200">
+                    <ChatMarkdown content={streamingContent} />
+                    <span className="inline-block w-1.5 h-4 bg-blue-400 animate-pulse ml-0.5 align-middle" />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              )}
             </div>
           </div>
         )}
