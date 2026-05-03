@@ -2,6 +2,10 @@ import { Context } from 'hono';
 import { MarketplaceChannel, MarketplaceOrderStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import {
+  TrendyolService,
+  buildTrendyolCredentials,
+} from '../services/trendyol.service';
 
 // ─────────────────────────────────────────────
 // Marketplace Controller — Entegrasyon, Listeleme, Sipariş
@@ -250,5 +254,110 @@ export const MarketplaceOrderController = {
       data: { status: body.status },
     });
     return c.json({ data: updated });
+  },
+};
+
+// ─────────────────────────────────────────────
+// Trendyol Sync Controller — queue-based
+// ─────────────────────────────────────────────
+
+import { TrendyolWorker } from '../services/trendyol-worker.service';
+
+export const TrendyolSyncController = {
+
+  /** POST /marketplace/integrations/:id/trendyol/test */
+  async testConnection(c: Context): Promise<Response> {
+    const tenantId = c.get('tenantId');
+    const id = c.req.param('id')!;
+    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+
+    const integration = await prisma.marketplaceIntegration.findFirst({
+      where: { id, tenantId, channel: 'TRENDYOL' },
+    });
+    if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
+
+    try {
+      const creds = buildTrendyolCredentials(integration);
+      const result = await TrendyolService.testConnection(creds);
+      return c.json({ data: result });
+    } catch (err) {
+      return c.json({ data: { success: false, message: err instanceof Error ? err.message : String(err) } });
+    }
+  },
+
+  /**
+   * POST /marketplace/integrations/:id/trendyol/sync-orders
+   * Enqueues a SYNC_ORDERS job and returns the job ID immediately.
+   */
+  async syncOrders(c: Context): Promise<Response> {
+    const tenantId = c.get('tenantId');
+    const id = c.req.param('id')!;
+    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+
+    const integration = await prisma.marketplaceIntegration.findFirst({
+      where: { id, tenantId, channel: 'TRENDYOL' },
+    });
+    if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
+
+    const body = await c.req.json<{ hoursBack?: number; status?: string }>().catch(() => ({}));
+    const jobId = await TrendyolWorker.enqueue(tenantId, id, 'SYNC_ORDERS', {
+      hoursBack: body.hoursBack ?? 24,
+      status: body.status,
+    });
+
+    return c.json({ data: { jobId, message: 'Sipariş senkronizasyonu kuyruğa alındı.' } }, 202);
+  },
+
+  /**
+   * POST /marketplace/integrations/:id/trendyol/sync-stock
+   * Enqueues a SYNC_STOCK job and returns the job ID immediately.
+   */
+  async syncStock(c: Context): Promise<Response> {
+    const tenantId = c.get('tenantId');
+    const id = c.req.param('id')!;
+    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+
+    const integration = await prisma.marketplaceIntegration.findFirst({
+      where: { id, tenantId, channel: 'TRENDYOL' },
+    });
+    if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
+
+    const body = await c.req.json<{ force?: boolean }>().catch(() => ({}));
+    const jobId = await TrendyolWorker.enqueue(tenantId, id, 'SYNC_STOCK', { force: body.force ?? false });
+
+    return c.json({ data: { jobId, message: 'Stok senkronizasyonu kuyruğa alındı.' } }, 202);
+  },
+
+  /** GET /marketplace/integrations/:id/trendyol/jobs/:jobId — job status */
+  async getJobStatus(c: Context): Promise<Response> {
+    const tenantId = c.get('tenantId');
+    const jobId = c.req.param('jobId')!;
+    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+
+    const job = await TrendyolWorker.getJob(jobId);
+    if (!job || job.tenantId !== tenantId) return c.json(new NotFoundError('Job', jobId).toJSON(), 404);
+
+    return c.json({ data: job });
+  },
+
+  /** GET /marketplace/integrations/:id/trendyol/batch/:batchRequestId */
+  async getBatchResult(c: Context): Promise<Response> {
+    const tenantId = c.get('tenantId');
+    const id = c.req.param('id')!;
+    const batchRequestId = c.req.param('batchRequestId')!;
+    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+
+    const integration = await prisma.marketplaceIntegration.findFirst({
+      where: { id, tenantId, channel: 'TRENDYOL' },
+    });
+    if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
+
+    try {
+      const creds = buildTrendyolCredentials(integration);
+      const result = await TrendyolService.waitForBatch(creds, batchRequestId, { maxWaitMs: 30_000 });
+      return c.json({ data: result });
+    } catch (err) {
+      return c.json(new ValidationError(err instanceof Error ? err.message : String(err)).toJSON(), 502);
+    }
   },
 };

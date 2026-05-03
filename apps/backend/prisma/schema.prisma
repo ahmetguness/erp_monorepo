@@ -531,6 +531,9 @@ model Tenant {
   serviceRequestItems      ServiceRequestItem[]
   marketplaceListings      MarketplaceListing[]
   marketplaceOrders        MarketplaceOrder[]
+  marketplaceSyncJobs      MarketplaceSyncJob[]
+  marketplaceWebhookEvents MarketplaceWebhookEvent[]
+  marketplaceListingSnapshots MarketplaceListingSnapshot[]
   marketplaceOrderItems    MarketplaceOrderItem[]
   // DEĞİŞİKLİK 3: TenantFeatureOverride back-relation
   featureOverrides         TenantFeatureOverride[]
@@ -2596,6 +2599,8 @@ model MarketplaceIntegration {
   tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   listings MarketplaceListing[]
   orders   MarketplaceOrder[]
+  syncJobs     MarketplaceSyncJob[]
+  webhookEvents MarketplaceWebhookEvent[]
 
   @@unique([tenantId, channel])
   @@map("marketplace_integrations")
@@ -2618,12 +2623,12 @@ model MarketplaceListing {
   integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   product     Product                @relation(fields: [productId], references: [id])
   tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  snapshot    MarketplaceListingSnapshot?
 
   @@unique([integrationId, externalId])
   @@index([tenantId, productId])
   @@map("marketplace_listings")
 }
-
 model MarketplaceOrder {
   id              String                 @id @default(cuid())
   tenantId        String
@@ -2667,6 +2672,84 @@ model MarketplaceOrderItem {
 
   @@index([tenantId, marketplaceOrderId])
   @@map("marketplace_order_items")
+}
+
+// ═════════════════════════════════════════════
+// MARKETPLACE — SYNC STATE & WEBHOOK
+// ═════════════════════════════════════════════
+
+/// Trendyol (ve diğer kanal) sync işlemlerinin durumunu izler.
+/// Her sync job bir kayıt oluşturur; queue worker bu tabloyu okur.
+model MarketplaceSyncJob {
+  id            String   @id @default(cuid())
+  tenantId      String
+  integrationId String
+  jobType       String   // 'SYNC_ORDERS' | 'SYNC_STOCK' | 'SYNC_PRODUCTS'
+  status        String   @default("PENDING") // PENDING | RUNNING | DONE | FAILED
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  /// Kaç kayıt işlendi
+  processedCount Int     @default(0)
+  /// Kaç kayıt hata verdi
+  errorCount    Int      @default(0)
+  /// Hata mesajı (varsa)
+  errorMessage  String?
+  /// Job parametreleri (JSON): hoursBack, status filtresi vb.
+  params        Json?
+  /// Sonuç özeti (JSON): created, updated, skipped, batchIds vb.
+  result        Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, integrationId, status])
+  @@index([tenantId, jobType, status])
+  @@index([createdAt])
+  @@map("marketplace_sync_jobs")
+}
+
+/// Trendyol webhook event'lerini idempotent şekilde işlemek için.
+/// Her event bir kez işlenir; tekrar gelirse atlanır.
+model MarketplaceWebhookEvent {
+  id            String   @id @default(cuid())
+  tenantId      String
+  integrationId String
+  /// Trendyol'un gönderdiği event ID (idempotency key)
+  eventId       String
+  eventType     String   // 'ORDER_STATUS_CHANGED' | 'STOCK_UPDATED' vb.
+  payload       Json
+  processedAt   DateTime?
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+
+  integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, eventId])
+  @@index([tenantId, processedAt])
+  @@map("marketplace_webhook_events")
+}
+
+/// Stok/fiyat güncelleme için değişiklik takibi.
+/// Son gönderilen değerleri saklar; değişmemişse tekrar göndermez.
+/// 15 dk duplicate koruması için lastSentAt kullanılır.
+model MarketplaceListingSnapshot {
+  id            String   @id @default(cuid())
+  tenantId      String
+  listingId     String   @unique
+  lastSentQty   Int
+  lastSentSalePrice  Decimal @db.Decimal(18, 2)
+  lastSentListPrice  Decimal @db.Decimal(18, 2)
+  lastSentAt    DateTime
+  batchRequestId String?
+
+  listing MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  tenant  Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("marketplace_listing_snapshots")
 }
 
 // ═════════════════════════════════════════════

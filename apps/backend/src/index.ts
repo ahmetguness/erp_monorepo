@@ -49,6 +49,8 @@ import { invitationRoutes, invitationPublicRoutes } from './routes/invitation.ro
 import { SetPasswordController } from './controllers/set-password.controller';
 import { chatRoutes } from './routes/chat.routes';
 import { publicChatRoutes } from './routes/public-chat.routes';
+import { TrendyolWebhookController } from './controllers/trendyol-webhook.controller';
+import { TrendyolWorker } from './services/trendyol-worker.service';
 
 const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
@@ -95,6 +97,8 @@ app.route('/api/public', invitationPublicRoutes);
 app.route('/api/public', publicChatRoutes);
 app.post('/api/public/set-password', SetPasswordController.setPassword);
 app.post('/api/public/set-password/validate', SetPasswordController.validateToken);
+// Trendyol webhook (public — validated by secret header inside controller)
+app.post('/api/public/trendyol/webhook/:integrationId', TrendyolWebhookController.handle);
 
 // ── Admin Panel ──────────────────────────────
 app.route('/api/admin', adminRoutes);
@@ -176,4 +180,6 @@ app.notFound((c) => {
 // ── Başlangıç logu ───────────────────────────
 serve({ fetch: app.fetch, port: PORT }, () => {
   printBanner(PORT);
+  // Trendyol sync worker — in-process job queue
+  TrendyolWorker.start();
 });

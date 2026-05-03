@@ -4,7 +4,12 @@ import { requirePlan } from '../middleware/requirePlan';
 import { requireFeature } from '../middleware/requireFeature';
 import { requireModule } from '../middleware/requireModule';
 import { MODULE_KEYS } from '../types/module.types';
-import { MarketplaceIntegrationController, MarketplaceListingController, MarketplaceOrderController } from '../controllers/marketplace.controller';
+import {
+  MarketplaceIntegrationController,
+  MarketplaceListingController,
+  MarketplaceOrderController,
+  TrendyolSyncController,
+} from '../controllers/marketplace.controller';
 
 const marketplaceRoutes = new Hono();
 
@@ -18,6 +23,13 @@ marketplaceRoutes.get('/integrations/:id', MarketplaceIntegrationController.getB
 marketplaceRoutes.post('/integrations', MarketplaceIntegrationController.create);
 marketplaceRoutes.patch('/integrations/:id', MarketplaceIntegrationController.update);
 marketplaceRoutes.delete('/integrations/:id', MarketplaceIntegrationController.remove);
+
+// Trendyol Sync (queue-based — returns 202 + jobId)
+marketplaceRoutes.post('/integrations/:id/trendyol/test', TrendyolSyncController.testConnection);
+marketplaceRoutes.post('/integrations/:id/trendyol/sync-orders', TrendyolSyncController.syncOrders);
+marketplaceRoutes.post('/integrations/:id/trendyol/sync-stock', TrendyolSyncController.syncStock);
+marketplaceRoutes.get('/integrations/:id/trendyol/jobs/:jobId', TrendyolSyncController.getJobStatus);
+marketplaceRoutes.get('/integrations/:id/trendyol/batch/:batchRequestId', TrendyolSyncController.getBatchResult);
 
 // Listlemeler
 marketplaceRoutes.get('/listings', MarketplaceListingController.list);

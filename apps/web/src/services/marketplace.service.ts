@@ -79,3 +79,71 @@ export const getOrder = (id: string) =>
 
 export const changeOrderStatus = (id: string, data: { status: string }) =>
   apiClient.post<{ data: MarketplaceOrder }>(`/api/marketplace/orders/${id}/status`, data).then((r) => r.data.data);
+
+// ─── Trendyol Sync ────────────────────────────
+
+export interface TrendyolJobEnqueueResult {
+  jobId: string;
+  message: string;
+}
+
+export interface TrendyolSyncJob {
+  id: string;
+  tenantId: string;
+  integrationId: string;
+  jobType: string;
+  status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
+  startedAt: string | null;
+  finishedAt: string | null;
+  processedCount: number;
+  errorCount: number;
+  errorMessage: string | null;
+  params: Record<string, unknown> | null;
+  result: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrendyolBatchSummary {
+  batchRequestId: string;
+  status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  total: number;
+  succeeded: number;
+  failed: number;
+  failures: Array<{ barcode: string; reasons: string[] }>;
+}
+
+// Test connection
+export const testTrendyolConnection = (integrationId: string) =>
+  apiClient.post<{ data: { success: boolean; message: string } }>(
+    `/api/marketplace/integrations/${integrationId}/trendyol/test`,
+  ).then((r) => r.data.data);
+
+// Enqueue sync-orders job → returns jobId (202)
+export const syncTrendyolOrders = (
+  integrationId: string,
+  params?: { hoursBack?: number; status?: string },
+) =>
+  apiClient.post<{ data: TrendyolJobEnqueueResult }>(
+    `/api/marketplace/integrations/${integrationId}/trendyol/sync-orders`,
+    params ?? {},
+  ).then((r) => r.data.data);
+
+// Enqueue sync-stock job → returns jobId (202)
+export const syncTrendyolStock = (integrationId: string, params?: { force?: boolean }) =>
+  apiClient.post<{ data: TrendyolJobEnqueueResult }>(
+    `/api/marketplace/integrations/${integrationId}/trendyol/sync-stock`,
+    params ?? {},
+  ).then((r) => r.data.data);
+
+// Poll job status
+export const getTrendyolJobStatus = (integrationId: string, jobId: string) =>
+  apiClient.get<{ data: TrendyolSyncJob }>(
+    `/api/marketplace/integrations/${integrationId}/trendyol/jobs/${jobId}`,
+  ).then((r) => r.data.data);
+
+// Get batch result (waits up to 30s on backend)
+export const getTrendyolBatchResult = (integrationId: string, batchRequestId: string) =>
+  apiClient.get<{ data: TrendyolBatchSummary }>(
+    `/api/marketplace/integrations/${integrationId}/trendyol/batch/${batchRequestId}`,
+  ).then((r) => r.data.data);

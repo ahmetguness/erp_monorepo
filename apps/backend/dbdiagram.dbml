@@ -2058,6 +2058,74 @@ Table marketplace_order_items {
 Ref: marketplace_order_items.marketplaceOrderId > marketplace_orders.id [delete: cascade]
 Ref: marketplace_order_items.productId > products.id
 
+// ═════════════════════════════════════════════
+// MARKETPLACE — SYNC STATE & WEBHOOK
+// ═════════════════════════════════════════════
+
+Table marketplace_sync_jobs {
+  id             String   [pk]
+  tenantId       String
+  integrationId  String
+  jobType        String   [note: 'SYNC_ORDERS | SYNC_STOCK | SYNC_PRODUCTS']
+  status         String   [default: "PENDING", note: 'PENDING | RUNNING | DONE | FAILED']
+  startedAt      DateTime [null]
+  finishedAt     DateTime [null]
+  processedCount Int      [default: 0, note: 'Kaç kayıt işlendi']
+  errorCount     Int      [default: 0, note: 'Kaç kayıt hata verdi']
+  errorMessage   String   [null]
+  params         Json     [null, note: 'Job parametreleri: hoursBack, status filtresi vb.']
+  result         Json     [null, note: 'Sonuç özeti: created, updated, skipped, batchIds vb.']
+  createdAt      DateTime
+  updatedAt      DateTime
+
+  indexes {
+    (tenantId, integrationId, status)
+    (tenantId, jobType, status)
+    createdAt
+  }
+}
+
+Ref: marketplace_sync_jobs.integrationId > marketplace_integrations.id [delete: cascade]
+Ref: marketplace_sync_jobs.tenantId > tenants.id [delete: cascade]
+
+Table marketplace_webhook_events {
+  id            String   [pk]
+  tenantId      String
+  integrationId String
+  eventId       String   [note: 'Trendyol\'un gönderdiği event ID (idempotency key)']
+  eventType     String   [note: 'ORDER_STATUS_CHANGED | STOCK_UPDATED vb.']
+  payload       Json
+  processedAt   DateTime [null]
+  errorMessage  String   [null]
+  createdAt     DateTime
+
+  indexes {
+    (integrationId, eventId) [unique]
+    (tenantId, processedAt)
+  }
+}
+
+Ref: marketplace_webhook_events.integrationId > marketplace_integrations.id [delete: cascade]
+Ref: marketplace_webhook_events.tenantId > tenants.id [delete: cascade]
+
+Table marketplace_listing_snapshots {
+  id                 String   [pk]
+  tenantId           String
+  listingId          String   [unique, note: 'Son gönderilen değerleri saklar; değişmemişse tekrar göndermez']
+  lastSentQty        Int
+  lastSentSalePrice  Decimal
+  lastSentListPrice  Decimal
+  lastSentAt         DateTime
+  batchRequestId     String   [null]
+
+  indexes {
+    tenantId
+  }
+}
+
+Ref: marketplace_listing_snapshots.listingId > marketplace_listings.id [delete: cascade]
+Ref: marketplace_listing_snapshots.tenantId > tenants.id [delete: cascade]
+
 // ═══════════════════════════════════════════════════════════════
 // RAPORLAMA
 // ═══════════════════════════════════════════════════════════════
