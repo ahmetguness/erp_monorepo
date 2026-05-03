@@ -20,7 +20,9 @@ import { logger } from '../lib/logger';
 // Constants
 // ─────────────────────────────────────────────
 
-const BASE_URL = 'https://apigw.trendyol.com';
+const BASE_URL = process.env.TRENDYOL_MOCK === 'true'
+  ? 'http://localhost:3099'
+  : 'https://apigw.trendyol.com';
 const INTEGRATOR = 'AxonERP';
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 3;

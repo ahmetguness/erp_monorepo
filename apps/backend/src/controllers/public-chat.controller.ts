@@ -5,6 +5,7 @@ import { ValidationError } from '../errors';
 import { handlePublicChat, handlePublicChatStream } from '../services/ai-chat.service';
 import { createDemoRequest } from '../services/demo.service';
 import { prisma } from '../lib/prisma';
+import { sanitizeOutput } from '../lib/output-sanitizer';
 
 // ─────────────────────────────────────────────
 // Config
@@ -156,7 +157,8 @@ export const PublicChatController = {
     try {
       const { createDemoFn, checkEmailFn } = await buildChatDeps();
       const result = await handlePublicChat({ message, sessionId: `public:${sessionId}` }, createDemoFn, checkEmailFn);
-      return c.json({ output: result.output });
+      const sanitized = sanitizeOutput(result.output, true);
+      return c.json({ output: sanitized.text });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`PublicChat: OpenAI hatası — ${errMsg}`);
@@ -192,11 +194,13 @@ export const PublicChatController = {
           checkEmailFn,
           {
             async onToken(token) {
-              await s.writeSSE({ event: 'token', data: JSON.stringify({ token }) });
+              const sanitized = sanitizeOutput(token, true);
+              await s.writeSSE({ event: 'token', data: JSON.stringify({ token: sanitized.text }) });
             },
             async onToolStart() { /* public chat'te tool_start göstermiyoruz */ },
             async onDone(fullText) {
-              await s.writeSSE({ event: 'done', data: JSON.stringify({ output: fullText }) });
+              const sanitized = sanitizeOutput(fullText, true);
+              await s.writeSSE({ event: 'done', data: JSON.stringify({ output: sanitized.text }) });
             },
             async onError(error) {
               logger.error(`PublicChat stream: ${error}`);

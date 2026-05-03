@@ -51,6 +51,7 @@ import { chatRoutes } from './routes/chat.routes';
 import { publicChatRoutes } from './routes/public-chat.routes';
 import { TrendyolWebhookController } from './controllers/trendyol-webhook.controller';
 import { TrendyolWorker } from './services/trendyol-worker.service';
+import { startMarketplaceMocks } from './mocks';
 
 const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
@@ -180,6 +181,7 @@ app.notFound((c) => {
 // ── Başlangıç logu ───────────────────────────
 serve({ fetch: app.fetch, port: PORT }, () => {
   printBanner(PORT);
-  // Trendyol sync worker — in-process job queue
+  // Trendyol sync worker -- in-process job queue
   TrendyolWorker.start();
+  startMarketplaceMocks();
 });

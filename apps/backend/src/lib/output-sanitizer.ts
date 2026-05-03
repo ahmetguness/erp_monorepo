@@ -1,9 +1,14 @@
 /**
  * AI çıktısından hassas verileri maskeler.
- * TC kimlik, IBAN, kredi kartı, telefon numarası vb.
+ *
+ * privateChat = false (public chatbot): email ve telefon da maskelenir.
+ * privateChat = true  (dashboard chatbot): sadece TC, IBAN, kredi kartı maskelenir.
+ *   Çalışan email/telefon gibi iç veriler kendi şirket verisi olduğundan gösterilir.
  */
 
-const SANITIZE_RULES: { pattern: RegExp; replacement: string; label: string }[] = [
+interface SanitizeRule { pattern: RegExp; replacement: string; label: string; publicOnly?: boolean }
+
+const SANITIZE_RULES: SanitizeRule[] = [
   {
     // TC Kimlik No: 11 haneli, başı 0 olmayan
     pattern: /\b[1-9]\d{10}\b/g,
@@ -24,15 +29,19 @@ const SANITIZE_RULES: { pattern: RegExp; replacement: string; label: string }[] 
   },
   {
     // Telefon: +90 veya 0 ile başlayan 10-11 hane
+    // publicOnly: true — sadece public chatbot'ta maskelenir
     pattern: /(?:\+90|0)\s?\(?\d{3}\)?\s?\d{3}\s?\d{2}\s?\d{2}\b/g,
     replacement: '***TEL GİZLİ***',
     label: 'Telefon',
+    publicOnly: true,
   },
   {
     // Email adresleri
+    // publicOnly: true — sadece public chatbot'ta maskelenir
     pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
     replacement: '***EMAIL GİZLİ***',
     label: 'Email',
+    publicOnly: true,
   },
   {
     // Vergi No: 10 haneli
@@ -50,14 +59,18 @@ export interface SanitizeResult {
 
 /**
  * Metindeki hassas verileri maskeler.
- * AI yanıtı client'a gönderilmeden önce çağrılmalı.
+ * @param text      AI yanıt metni
+ * @param isPublic  true = public chatbot (tüm kurallar), false = private/dashboard (publicOnly kurallar atlanır)
  */
-export function sanitizeOutput(text: string): SanitizeResult {
+export function sanitizeOutput(text: string, isPublic = false): SanitizeResult {
   let result = text;
   let maskedCount = 0;
   const maskedTypes: string[] = [];
 
   for (const rule of SANITIZE_RULES) {
+    // Private chat'te publicOnly kuralları atla
+    if (rule.publicOnly && !isPublic) continue;
+
     const matches = result.match(rule.pattern);
     if (matches && matches.length > 0) {
       maskedCount += matches.length;
