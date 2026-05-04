@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { ValidationError, ForbiddenError, NotFoundError } from '../errors';
+import { Prisma } from '@prisma/client';
 
 // ─────────────────────────────────────────────
 // Config
@@ -378,7 +379,7 @@ export const AuthController = {
     const userId = c.get('userId') as string;
     const tenantId = c.get('tenantId') as string;
 
-    const body = await c.req.json<{ preferences: Record<string, unknown> }>();
+    const body = await c.req.json<{ preferences: Prisma.InputJsonObject }>();
 
     const tenantUser = await prisma.tenantUser.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
@@ -389,8 +390,8 @@ export const AuthController = {
     }
 
     // JSON birleştirme: Mevcut preferences ile yeni gelen preferences
-    const currentPrefs = (tenantUser.preferences as Record<string, unknown>) || {};
-    const newPrefs = { ...currentPrefs, ...body.preferences };
+    const currentPrefs = (tenantUser.preferences as Prisma.JsonObject) || {};
+    const newPrefs: Prisma.InputJsonObject = { ...currentPrefs, ...body.preferences };
 
     const updated = await prisma.tenantUser.update({
       where: { id: tenantUser.id },

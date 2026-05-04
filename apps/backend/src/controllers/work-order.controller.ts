@@ -2,6 +2,9 @@ import { Context } from 'hono';
 import { WorkOrderStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { generateDocumentNumber } from '../utils/generate-number.js';
+import { getPaginationParams } from '../utils/pagination.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Work Order Controller — İş emri CRUD + durum geçişleri
@@ -17,11 +20,9 @@ const STATUS_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
 
 export const WorkOrderController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 20);
     const status = c.req.query('status') as WorkOrderStatus | undefined;
 
     const where = { tenantId, deletedAt: null, ...(status && { status }) };
@@ -36,7 +37,7 @@ export const WorkOrderController = {
           _count: { select: { items: true, operations: true } },
         },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
     ]);
@@ -69,8 +70,7 @@ export const WorkOrderController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{
       productId: string; bomId?: string; plannedQty: number;
@@ -81,11 +81,7 @@ export const WorkOrderController = {
     if (!body.productId || !body.plannedQty) return c.json(new ValidationError('productId ve plannedQty zorunludur.').toJSON(), 400);
 
     // Numara üret
-    const { generateDocumentNumber } = await import('../utils/generate-number');
-    const number = await generateDocumentNumber(tenantId, 'work_order', 'WO-', async (tid, num) => {
-      const found = await prisma.workOrder.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
-      return !!found;
-    });
+    const number = await generateDocumentNumber(tenantId, 'work_order', 'WO-', 'workOrder');
 
     // BOM varsa item ve operasyonları otomatik kopyala
     let itemsCreate: Array<{ tenantId: string; productId: string; requiredQty: number }> = [];

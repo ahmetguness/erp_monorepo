@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -33,11 +34,7 @@ export const UserController = {
    * Tenant'a ait tüm kullanıcıları listeler.
    */
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const tenantUsers = await prisma.tenantUser.findMany({
       where: { tenantId },
@@ -108,11 +105,7 @@ export const UserController = {
    * NOT: Kullanıcı limiti enforceStarterLimits('user') middleware'inde kontrol edilir.
    */
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateUserDTO>();
 

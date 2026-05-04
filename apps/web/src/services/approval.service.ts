@@ -87,3 +87,7 @@ export async function addApprovalAction(requestId: string, data: ActionDTO) {
   const res = await apiClient.post(`/api/approvals/requests/${requestId}/action`, data);
   return res.data.data;
 }
+
+export async function deleteApprovalRequest(id: string): Promise<void> {
+  await apiClient.delete(`/api/approvals/requests/${id}`);
+}

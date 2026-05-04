@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { Plan, TenantStatus, AuditAction } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ValidationError, NotFoundError } from '../errors';
+import { getPaginationParams } from '../utils/pagination.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
@@ -47,8 +48,7 @@ export const AdminAuthController = {
 export const AdminTenantController = {
 
   async list(c: Context): Promise<Response> {
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 20);
     const status = c.req.query('status') as TenantStatus | undefined;
     const plan = c.req.query('plan') as Plan | undefined;
     const search = c.req.query('search');
@@ -79,7 +79,7 @@ export const AdminTenantController = {
           _count: { select: { users: true, products: true, invoices: true, contacts: true } },
         },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
     ]);
@@ -301,8 +301,7 @@ export const AdminMetricsController = {
 export const AdminAuditController = {
 
   async list(c: Context): Promise<Response> {
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '50', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 50);
     const tenantId = c.req.query('tenantId');
     const module = c.req.query('module');
     const action = c.req.query('action');
@@ -324,7 +323,7 @@ export const AdminAuditController = {
       prisma.auditLog.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
     ]);

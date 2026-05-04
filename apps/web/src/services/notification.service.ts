@@ -7,7 +7,7 @@ export const NotificationSchema = z.object({
   id: z.string(), tenantId: z.string(), userId: z.string(),
   title: z.string(), message: z.string().nullable(),
   module: z.string().nullable(), entityType: z.string().nullable(), entityId: z.string().nullable(),
-  status: z.enum(['UNREAD', 'READ']),
+  status: z.enum(['UNREAD', 'READ', 'ARCHIVED']),
   createdAt: z.string(), readAt: z.string().nullable(),
 });
 
@@ -34,4 +34,9 @@ export async function markAllAsRead(): Promise<void> {
 
 export async function deleteNotification(id: string): Promise<void> {
   await apiClient.delete(`/api/notifications/${id}`);
+}
+
+export async function archiveNotification(id: string): Promise<Notification> {
+  const res = await apiClient.post(`/api/notifications/${id}/archive`);
+  return safeParse(SingleResponseSchema(NotificationSchema), res.data, 'archiveNotification').data;
 }

@@ -2,6 +2,8 @@ import { Context } from 'hono';
 import { InvoiceType, InvoiceStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { generateDocumentNumber } from '../utils/generate-number.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -109,10 +111,7 @@ async function computeLineTotals(
 
 export const InvoiceController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as InvoiceListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -183,10 +182,7 @@ export const InvoiceController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateInvoiceDTO>();
 
@@ -212,11 +208,7 @@ export const InvoiceController = {
     // Otomatik numara — çakışma korumalı
     let number = body.number;
     if (!number) {
-      const { generateDocumentNumber } = await import('../utils/generate-number');
-      number = await generateDocumentNumber(tenantId, 'invoice', 'INV-', async (tid, num) => {
-        const found = await prisma.invoice.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
-        return !!found;
-      });
+      number = await generateDocumentNumber(tenantId, 'invoice', 'INV-', 'invoice');
     }
 
     const invoice = await prisma.invoice.create({

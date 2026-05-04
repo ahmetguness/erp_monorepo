@@ -26,5 +26,6 @@ accountingRoutes.post('/journal-entries/:id/reverse', requirePermission('account
 accountingRoutes.get('/fiscal-periods', requirePermission('accounting', 'READ'), AccountingExtController.listFiscalPeriods);
 accountingRoutes.post('/fiscal-periods', requirePermission('accounting', 'CREATE'), AccountingExtController.createFiscalPeriod);
 accountingRoutes.post('/fiscal-periods/:id/close', requirePermission('accounting', 'UPDATE'), AccountingExtController.closeFiscalPeriod);
+accountingRoutes.delete('/fiscal-periods/:id', requirePermission('accounting', 'DELETE'), AccountingExtController.deleteFiscalPeriod);
 
 export { accountingRoutes };

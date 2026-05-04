@@ -37,3 +37,8 @@ export async function downloadAttachment(id: string): Promise<Blob> {
 export async function deleteAttachment(id: string): Promise<void> {
   await apiClient.delete(`/api/attachments/${id}`);
 }
+
+export async function renameAttachment(id: string, fileName: string): Promise<Attachment> {
+  const res = await apiClient.patch(`/api/attachments/${id}`, { fileName });
+  return safeParse(SingleResponseSchema(AttachmentSchema), res.data, 'renameAttachment').data;
+}

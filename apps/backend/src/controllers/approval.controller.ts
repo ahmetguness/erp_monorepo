@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { ApprovalModule, ApprovalStatus, ApprovalActionType, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -69,10 +70,7 @@ export const ApprovalController = {
   // ── Approval Flows ───────────────────────────
 
   async listFlows(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as ApprovalFlowListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -130,10 +128,7 @@ export const ApprovalController = {
   },
 
   async createFlow(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateApprovalFlowDTO>();
 
@@ -222,10 +217,7 @@ export const ApprovalController = {
   // ── Approval Requests ────────────────────────
 
   async listRequests(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as ApprovalRequestListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -259,10 +251,7 @@ export const ApprovalController = {
   },
 
   async createRequest(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateApprovalRequestDTO>();
 
@@ -356,5 +345,23 @@ export const ApprovalController = {
     });
 
     return c.json({ data: result }, 201);
+  },
+
+  async deleteRequest(c: Context): Promise<Response> {
+    const tenantId = c.get('tenantId');
+    const id = c.req.param('id')!;
+    if (!tenantId || typeof tenantId !== 'string') {
+      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    }
+
+    const existing = await prisma.approvalRequest.findFirst({ where: { id, tenantId } });
+    if (!existing) return c.json(new NotFoundError('Onay talebi', id).toJSON(), 404);
+
+    if (existing.status === ApprovalStatus.PENDING) {
+      return c.json(new ValidationError('Bekleyen onay talepleri silinemez. Önce iptal edin.').toJSON(), 400);
+    }
+
+    await prisma.approvalRequest.delete({ where: { id } });
+    return c.json({ data: { success: true } });
   },
 };

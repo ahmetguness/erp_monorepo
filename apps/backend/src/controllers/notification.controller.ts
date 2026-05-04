@@ -63,6 +63,22 @@ export const NotificationController = {
     return c.json({ data: { success: true } });
   },
 
+  async archive(c: Context): Promise<Response> {
+    const tenantId = c.get('tenantId');
+    const id = c.req.param('id')!;
+    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+
+    const notif = await prisma.notification.findFirst({ where: { id, tenantId } });
+    if (!notif) return c.json(new NotFoundError('Bildirim', id).toJSON(), 404);
+
+    const updated = await prisma.notification.update({
+      where: { id },
+      data: { status: NotificationStatus.ARCHIVED },
+    });
+
+    return c.json({ data: updated });
+  },
+
   async delete(c: Context): Promise<Response> {
     const tenantId = c.get('tenantId');
     const id = c.req.param('id')!;

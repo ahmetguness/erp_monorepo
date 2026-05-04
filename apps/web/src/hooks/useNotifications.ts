@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
-import { getNotifications, markAsRead, markAllAsRead, deleteNotification } from '@/services/notification.service';
+import { getNotifications, markAsRead, markAllAsRead, deleteNotification, archiveNotification } from '@/services/notification.service';
 
 export function useNotifications(params?: { status?: string; limit?: number }) {
   return useQuery({
@@ -35,6 +35,14 @@ export function useDeleteNotification() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteNotification(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+}
+
+export function useArchiveNotification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => archiveNotification(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 }

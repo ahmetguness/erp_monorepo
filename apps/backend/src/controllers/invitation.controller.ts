@@ -42,7 +42,7 @@ export class InvitationController {
   /** POST /api/invitations/:id/cancel — Daveti iptal et */
   static async cancel(c: Context) {
     const tenantId = c.get('tenantId') as string;
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const result = await cancelInvitation(id, tenantId);
     return c.json(result, result.success ? 200 : 400);
   }

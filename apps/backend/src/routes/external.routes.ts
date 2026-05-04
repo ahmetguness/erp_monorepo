@@ -4,6 +4,7 @@ import { authenticateApiKey, requireScope } from '../middleware/authenticateApiK
 import { requireFeature } from '../middleware/requireFeature';
 import { prisma } from '../lib/prisma';
 import { ValidationError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 const externalRoutes = new Hono();
 
@@ -15,7 +16,7 @@ externalRoutes.use('*', requireFeature(FeatureKey.API_ACCESS));
 // ═══════════════════════════════════════════
 
 externalRoutes.get('/products', requireScope('products:read'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
 
@@ -40,7 +41,7 @@ externalRoutes.get('/products', requireScope('products:read'), async (c) => {
 });
 
 externalRoutes.get('/products/:id', requireScope('products:read'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const id = c.req.param('id')!;
 
   const product = await prisma.product.findFirst({
@@ -60,7 +61,7 @@ externalRoutes.get('/products/:id', requireScope('products:read'), async (c) => 
 });
 
 externalRoutes.post('/products', requireScope('products:write'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const body = await c.req.json<{
     code: string; name: string; unitId: string;
     barcode?: string; description?: string; categoryId?: string; taxRateId?: string;
@@ -86,7 +87,7 @@ externalRoutes.post('/products', requireScope('products:write'), async (c) => {
 });
 
 externalRoutes.patch('/products/:id', requireScope('products:write'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const id = c.req.param('id')!;
   const body = await c.req.json<{
     name?: string; barcode?: string; description?: string;
@@ -114,7 +115,7 @@ externalRoutes.patch('/products/:id', requireScope('products:write'), async (c) 
 });
 
 externalRoutes.delete('/products/:id', requireScope('products:delete'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const id = c.req.param('id')!;
 
   const existing = await prisma.product.findFirst({ where: { id, tenantId, deletedAt: null } });
@@ -129,7 +130,7 @@ externalRoutes.delete('/products/:id', requireScope('products:delete'), async (c
 // ═══════════════════════════════════════════
 
 externalRoutes.get('/contacts', requireScope('contacts:read'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
 
@@ -152,7 +153,7 @@ externalRoutes.get('/contacts', requireScope('contacts:read'), async (c) => {
 });
 
 externalRoutes.get('/contacts/:id', requireScope('contacts:read'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const id = c.req.param('id')!;
 
   const contact = await prisma.contact.findFirst({
@@ -171,7 +172,7 @@ externalRoutes.get('/contacts/:id', requireScope('contacts:read'), async (c) => 
 });
 
 externalRoutes.post('/contacts', requireScope('contacts:write'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const body = await c.req.json<{
     type: 'CUSTOMER' | 'SUPPLIER' | 'BOTH'; name: string;
     code?: string; taxNumber?: string; taxOffice?: string;
@@ -199,7 +200,7 @@ externalRoutes.post('/contacts', requireScope('contacts:write'), async (c) => {
 });
 
 externalRoutes.patch('/contacts/:id', requireScope('contacts:write'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const id = c.req.param('id')!;
   const body = await c.req.json<{
     name?: string; email?: string; phone?: string; address?: string; city?: string;
@@ -228,7 +229,7 @@ externalRoutes.patch('/contacts/:id', requireScope('contacts:write'), async (c) 
 });
 
 externalRoutes.delete('/contacts/:id', requireScope('contacts:delete'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const id = c.req.param('id')!;
 
   const existing = await prisma.contact.findFirst({ where: { id, tenantId, deletedAt: null } });
@@ -243,7 +244,7 @@ externalRoutes.delete('/contacts/:id', requireScope('contacts:delete'), async (c
 // ═══════════════════════════════════════════
 
 externalRoutes.get('/invoices', requireScope('invoices:read'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
 
@@ -268,7 +269,7 @@ externalRoutes.get('/invoices', requireScope('invoices:read'), async (c) => {
 });
 
 externalRoutes.get('/invoices/:id', requireScope('invoices:read'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const id = c.req.param('id')!;
 
   const invoice = await prisma.invoice.findFirst({
@@ -296,7 +297,7 @@ externalRoutes.get('/invoices/:id', requireScope('invoices:read'), async (c) => 
 });
 
 externalRoutes.post('/invoices', requireScope('invoices:write'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const body = await c.req.json<{
     contactId: string; type: 'SALES' | 'PURCHASE'; number: string;
     date: string; dueDate?: string; notes?: string; currencyCode?: string;
@@ -350,7 +351,7 @@ externalRoutes.post('/invoices', requireScope('invoices:write'), async (c) => {
 });
 
 externalRoutes.post('/invoices/:id/cancel', requireScope('invoices:delete'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const id = c.req.param('id')!;
 
   const existing = await prisma.invoice.findFirst({ where: { id, tenantId, deletedAt: null } });
@@ -371,7 +372,7 @@ externalRoutes.post('/invoices/:id/cancel', requireScope('invoices:delete'), asy
 // ═══════════════════════════════════════════
 
 externalRoutes.get('/stock-levels', requireScope('products:read'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '50', 10)));
 
@@ -393,7 +394,7 @@ externalRoutes.get('/stock-levels', requireScope('products:read'), async (c) => 
 });
 
 externalRoutes.post('/stock-movements', requireScope('products:write'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const body = await c.req.json<{
     productId: string; type: 'IN' | 'OUT' | 'ADJUSTMENT';
     quantity: number; toWarehouseId?: string; fromWarehouseId?: string; notes?: string;
@@ -461,7 +462,7 @@ externalRoutes.post('/stock-movements', requireScope('products:write'), async (c
 // ═══════════════════════════════════════════
 
 externalRoutes.get('/sales-orders', requireScope('orders:read'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
 
@@ -485,7 +486,7 @@ externalRoutes.get('/sales-orders', requireScope('orders:read'), async (c) => {
 });
 
 externalRoutes.post('/sales-orders', requireScope('orders:write'), async (c) => {
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
   const body = await c.req.json<{
     contactId: string; number: string; date: string; dueDate?: string; notes?: string;
     items: Array<{

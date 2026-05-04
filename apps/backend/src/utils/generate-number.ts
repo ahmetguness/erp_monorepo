@@ -1,5 +1,17 @@
 import { prisma } from '../lib/prisma';
 
+export type DocumentModelName = 
+  | 'invoice' 
+  | 'salesOrder' 
+  | 'salesQuote'
+  | 'purchaseOrder' 
+  | 'purchaseRequest'
+  | 'journalEntry' 
+  | 'deliveryNote' 
+  | 'serviceRequest' 
+  | 'stockCount' 
+  | 'workOrder';
+
 /**
  * Benzersiz belge numarası üretir.
  * NumberSequence tablosunu kullanır, çakışma durumunda retry yapar.
@@ -7,13 +19,13 @@ import { prisma } from '../lib/prisma';
  * @param tenantId - Tenant ID
  * @param module - Modül adı (invoice, sales_order, vb.)
  * @param prefix - Numara öneki (INV-, SIP-, vb.)
- * @param existsCheck - Çakışma kontrolü fonksiyonu
+ * @param modelName - Kontrol edilecek Prisma modeli
  */
 export async function generateDocumentNumber(
   tenantId: string,
   module: string,
   prefix: string,
-  existsCheck: (tenantId: string, number: string) => Promise<boolean>,
+  modelName: DocumentModelName,
 ): Promise<string> {
   const MAX_RETRIES = 5;
   const PADDING = 6;
@@ -27,7 +39,15 @@ export async function generateDocumentNumber(
 
     const candidate = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
 
-    const exists = await existsCheck(tenantId, candidate);
+    const delegate = prisma[modelName] as unknown as {
+      findFirst: (args: { where: { tenantId: string; number: string }; select: { id: true } }) => Promise<{ id: string } | null>;
+    };
+
+    const exists = await delegate.findFirst({
+      where: { tenantId, number: candidate },
+      select: { id: true }
+    });
+
     if (!exists) return candidate;
 
     // Çakışma var — loop devam edecek, sequence bir daha artacak

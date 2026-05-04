@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { InvoiceStatus, InvoiceType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ForbiddenError, ValidationError, NotFoundError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -23,10 +24,7 @@ export const ReportingController = {
    * Belirli tarih aralığında satış faturası toplamları
    */
   async revenueSummary(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as DateRangeQuery;
 
@@ -78,10 +76,7 @@ export const ReportingController = {
    * Depo bazlı stok durumu özeti
    */
   async stockSummary(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const stockLevels = await prisma.stockLevel.findMany({
       where: { tenantId, quantity: { gt: 0 } },
@@ -136,10 +131,7 @@ export const ReportingController = {
    * Cari hesap bakiye özeti
    */
   async contactBalance(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     // Her cari için son bakiye kaydını al
     const contacts = await prisma.contact.findMany({
@@ -189,10 +181,7 @@ export const ReportingController = {
    * Belirli tarih aralığında alış faturası toplamları
    */
   async expenseSummary(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as DateRangeQuery;
 
@@ -247,10 +236,7 @@ interface CreateSavedReportDTO {
 
 export const SavedReportController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const reports = await prisma.savedReport.findMany({
       where: { tenantId },
@@ -274,10 +260,7 @@ export const SavedReportController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateSavedReportDTO>();
 

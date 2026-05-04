@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { EDocumentType, EDocumentStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -37,10 +38,7 @@ interface UpdateEDocumentStatusDTO {
 
 export const EDocumentController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as EDocumentListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -95,10 +93,7 @@ export const EDocumentController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateEDocumentDTO>();
 

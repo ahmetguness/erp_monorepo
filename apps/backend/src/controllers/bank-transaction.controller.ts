@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { BankTransactionType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -37,10 +38,7 @@ interface MatchPaymentDTO {
 
 export const BankTransactionController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as BankTransactionListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -81,10 +79,7 @@ export const BankTransactionController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateBankTransactionDTO>();
 

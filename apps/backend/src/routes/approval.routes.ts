@@ -20,5 +20,6 @@ approvalRoutes.delete('/flows/:id', ApprovalController.deleteFlow);
 approvalRoutes.get('/requests', ApprovalController.listRequests);
 approvalRoutes.post('/requests', ApprovalController.createRequest);
 approvalRoutes.post('/requests/:id/action', ApprovalController.addAction);
+approvalRoutes.delete('/requests/:id', ApprovalController.deleteRequest);
 
 export { approvalRoutes };

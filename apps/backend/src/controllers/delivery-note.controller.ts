@@ -2,6 +2,8 @@ import { Context } from 'hono';
 import { DeliveryNoteType, DeliveryNoteStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { generateDocumentNumber } from '../utils/generate-number.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -53,10 +55,7 @@ interface UpdateDeliveryNoteStatusDTO {
 
 export const DeliveryNoteController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as DeliveryNoteListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -124,10 +123,7 @@ export const DeliveryNoteController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateDeliveryNoteDTO>();
 
@@ -137,12 +133,7 @@ export const DeliveryNoteController = {
         400,
       );
     }
-
-    const { generateDocumentNumber } = await import('../utils/generate-number');
-    const number = await generateDocumentNumber(tenantId, 'delivery_note', 'DN-', async (tid, num) => {
-      const found = await prisma.deliveryNote.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
-      return !!found;
-    });
+    const number = await generateDocumentNumber(tenantId, 'delivery_note', 'DN-', 'deliveryNote');
 
     const note = await prisma.deliveryNote.create({
       data: {

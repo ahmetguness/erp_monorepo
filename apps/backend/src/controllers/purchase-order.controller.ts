@@ -2,6 +2,8 @@ import { Context } from 'hono';
 import { PurchaseOrderStatus, PurchaseRequestStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { generateDocumentNumber } from '../utils/generate-number.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -70,8 +72,7 @@ export const PurchaseOrderController = {
   // ── Purchase Requests ────────────────────────
 
   async listRequests(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as ListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -95,19 +96,13 @@ export const PurchaseOrderController = {
   },
 
   async createRequest(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreatePurchaseRequestDTO>();
     if (!body.date || !body.items?.length) {
       return c.json(new ValidationError('date ve en az bir kalem zorunludur.').toJSON(), 400);
     }
-
-    const { generateDocumentNumber } = await import('../utils/generate-number');
-    const number = await generateDocumentNumber(tenantId, 'purchase_request', 'PR-', async (tid, num) => {
-      const found = await prisma.purchaseRequest.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
-      return !!found;
-    });
+    const number = await generateDocumentNumber(tenantId, 'purchase_request', 'PR-', 'purchaseRequest');
 
     const totalEstimated = body.items.reduce((s, i) => s + (i.unitPrice ?? 0) * i.quantity, 0);
 
@@ -168,12 +163,7 @@ export const PurchaseOrderController = {
     if (request.status !== PurchaseRequestStatus.APPROVED) {
       return c.json(new ValidationError('Sadece onaylı talepler siparişe dönüştürülebilir.').toJSON(), 400);
     }
-
-    const { generateDocumentNumber } = await import('../utils/generate-number');
-    const number = await generateDocumentNumber(tenantId, 'purchase_order', 'PO-', async (tid, num) => {
-      const found = await prisma.purchaseOrder.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
-      return !!found;
-    });
+    const number = await generateDocumentNumber(tenantId, 'purchase_order', 'PO-', 'purchaseOrder');
 
     const items: OrderItemDTO[] = request.items.map((i) => ({
       productId: i.productId,
@@ -213,8 +203,7 @@ export const PurchaseOrderController = {
   // ── Purchase Orders ──────────────────────────
 
   async listOrders(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as ListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -263,19 +252,13 @@ export const PurchaseOrderController = {
   },
 
   async createOrder(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreatePurchaseOrderDTO>();
     if (!body.contactId || !body.date || !body.items?.length) {
       return c.json(new ValidationError('contactId, date ve en az bir kalem zorunludur.').toJSON(), 400);
     }
-
-    const { generateDocumentNumber } = await import('../utils/generate-number');
-    const number = await generateDocumentNumber(tenantId, 'purchase_order', 'PO-', async (tid, num) => {
-      const found = await prisma.purchaseOrder.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
-      return !!found;
-    });
+    const number = await generateDocumentNumber(tenantId, 'purchase_order', 'PO-', 'purchaseOrder');
 
     const { lineData, totalNet, totalTax, totalGross } = computeItems(body.items);
 

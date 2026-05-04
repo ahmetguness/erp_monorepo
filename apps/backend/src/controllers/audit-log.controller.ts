@@ -3,6 +3,7 @@ import { FeatureKey } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ForbiddenError } from '../errors';
 import { TenantFeatureService } from '../services/tenant-feature.service';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // AuditLog Controller
@@ -39,8 +40,7 @@ function getAuditDateFilter(auditLevel: string): Date | null {
 export const AuditLogController = {
 
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '50', 10)));
@@ -105,8 +105,7 @@ export const AuditLogController = {
    * Standard ve basic seviyelerde 403 döner.
    */
   async exportLogs(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const feature = await tenantFeatureService.resolveFeature(tenantId, FeatureKey.AUDIT_LOG);
     if (feature.value !== 'full') {

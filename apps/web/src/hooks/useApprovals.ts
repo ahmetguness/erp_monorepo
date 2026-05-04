@@ -4,7 +4,7 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getApprovalFlows, getApprovalFlowById, createApprovalFlow, updateApprovalFlow, deleteApprovalFlow,
-  getApprovalRequests, createApprovalRequest, addApprovalAction,
+  getApprovalRequests, createApprovalRequest, addApprovalAction, deleteApprovalRequest,
   type FlowListParams, type RequestListParams, type CreateFlowDTO, type UpdateFlowDTO, type CreateRequestDTO, type ActionDTO,
 } from '@/services/approval.service';
 
@@ -60,6 +60,14 @@ export function useAddApprovalAction() {
   return useMutation({
     mutationFn: ({ requestId, data }: { requestId: string; data: ActionDTO }) => addApprovalAction(requestId, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['approval-requests'] }); toast.success('İşlem kaydedildi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+export function useDeleteApprovalRequest() {
+  const qc = useQueryClient(); const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (id: string) => deleteApprovalRequest(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['approval-requests'] }); toast.success('Onay talebi silindi.'); },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }

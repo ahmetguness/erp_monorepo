@@ -328,7 +328,7 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
       tenantSlug: slug,
     };
   } catch (err: unknown) {
-    logger.error('Demo provisioning hatası:', err);
+    logger.error(`Demo provisioning hatası: ${err instanceof Error ? err.message : String(err)}`);
 
     // Rollback status
     await prisma.demoRequest.update({

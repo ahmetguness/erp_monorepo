@@ -125,6 +125,10 @@ export async function closeFiscalPeriod(id: string): Promise<FiscalPeriod> {
   return safeParse(SingleResponseSchema(FiscalPeriodSchema), res.data, 'closeFiscalPeriod').data;
 }
 
+export async function deleteFiscalPeriod(id: string): Promise<void> {
+  await apiClient.delete(`/api/accounting/fiscal-periods/${id}`);
+}
+
 export async function getJournalEntries(params: JournalEntryListParams) {
   const res = await apiClient.get('/api/accounting/journal-entries', { params });
   return safeParse(PaginatedResponseSchema(JournalEntrySchema), res.data, 'getJournalEntries');

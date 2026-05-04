@@ -6,6 +6,9 @@ import {
   TrendyolService,
   buildTrendyolCredentials,
 } from '../services/trendyol.service';
+import { TrendyolWorker } from '../services/trendyol-worker.service';
+import { requireTenantId } from '../utils/context.js';
+import { getPaginationParams } from '../utils/pagination.js';
 
 // ─────────────────────────────────────────────
 // Marketplace Controller — Entegrasyon, Listeleme, Sipariş
@@ -13,8 +16,7 @@ import {
 
 export const MarketplaceIntegrationController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const data = await prisma.marketplaceIntegration.findMany({
       where: { tenantId },
@@ -41,8 +43,7 @@ export const MarketplaceIntegrationController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{
       channel: MarketplaceChannel; name: string;
@@ -105,11 +106,9 @@ export const MarketplaceIntegrationController = {
 
 export const MarketplaceListingController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 20);
     const integrationId = c.req.query('integrationId');
 
     const where = { tenantId, ...(integrationId && { integrationId }) };
@@ -123,7 +122,7 @@ export const MarketplaceListingController = {
           integration: { select: { id: true, channel: true, name: true } },
         },
         orderBy: { lastSyncAt: 'desc' },
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
     ]);
@@ -132,8 +131,7 @@ export const MarketplaceListingController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{
       integrationId: string; productId: string; externalId: string;
@@ -195,11 +193,9 @@ export const MarketplaceListingController = {
 
 export const MarketplaceOrderController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 20);
     const status = c.req.query('status') as MarketplaceOrderStatus | undefined;
     const channel = c.req.query('channel') as MarketplaceChannel | undefined;
 
@@ -214,7 +210,7 @@ export const MarketplaceOrderController = {
           _count: { select: { items: true } },
         },
         orderBy: { orderDate: 'desc' },
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
     ]);
@@ -255,13 +251,29 @@ export const MarketplaceOrderController = {
     });
     return c.json({ data: updated });
   },
+
+  async remove(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const order = await prisma.marketplaceOrder.findFirst({ where: { id, tenantId } });
+    if (!order) return c.json(new NotFoundError('Pazaryeri Siparişi', id).toJSON(), 404);
+
+    const terminalStatuses: MarketplaceOrderStatus[] = ['DELIVERED', 'CANCELLED', 'RETURNED', 'REFUNDED'];
+    if (!terminalStatuses.includes(order.status)) {
+      return c.json(new ValidationError('Sadece tamamlanmış, iptal edilmiş veya iade edilmiş siparişler silinebilir.').toJSON(), 400);
+    }
+
+    await prisma.marketplaceOrder.delete({ where: { id } });
+    return c.json({ data: { success: true } });
+  },
 };
 
 // ─────────────────────────────────────────────
 // Trendyol Sync Controller — queue-based
 // ─────────────────────────────────────────────
 
-import { TrendyolWorker } from '../services/trendyol-worker.service';
+
 
 export const TrendyolSyncController = {
 
@@ -299,7 +311,7 @@ export const TrendyolSyncController = {
     });
     if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
 
-    const body = await c.req.json<{ hoursBack?: number; status?: string }>().catch(() => ({}));
+    const body = await c.req.json<{ hoursBack?: number; status?: string }>().catch((): { hoursBack?: number; status?: string } => ({}));
     const jobId = await TrendyolWorker.enqueue(tenantId, id, 'SYNC_ORDERS', {
       hoursBack: body.hoursBack ?? 24,
       status: body.status,
@@ -322,7 +334,7 @@ export const TrendyolSyncController = {
     });
     if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
 
-    const body = await c.req.json<{ force?: boolean }>().catch(() => ({}));
+    const body = await c.req.json<{ force?: boolean }>().catch((): { force?: boolean } => ({}));
     const jobId = await TrendyolWorker.enqueue(tenantId, id, 'SYNC_STOCK', { force: body.force ?? false });
 
     return c.json({ data: { jobId, message: 'Stok senkronizasyonu kuyruğa alındı.' } }, 202);
@@ -359,5 +371,123 @@ export const TrendyolSyncController = {
     } catch (err) {
       return c.json(new ValidationError(err instanceof Error ? err.message : String(err)).toJSON(), 502);
     }
+  },
+};
+
+// ─────────────────────────────────────────────
+// Marketplace Monitoring Controller
+// Read-only endpoints for SyncJob, WebhookEvent, ListingSnapshot
+// ─────────────────────────────────────────────
+
+export const MarketplaceMonitoringController = {
+
+  // ── Sync Jobs ─────────────────────────────────
+
+  async listSyncJobs(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+
+    const { page, limit, skip } = getPaginationParams(c, 20);
+    const integrationId = c.req.query('integrationId');
+    const status = c.req.query('status');
+    const jobType = c.req.query('jobType');
+
+    const where = {
+      tenantId,
+      ...(integrationId && { integrationId }),
+      ...(status && { status }),
+      ...(jobType && { jobType }),
+    };
+
+    const [total, jobs] = await prisma.$transaction([
+      prisma.marketplaceSyncJob.count({ where }),
+      prisma.marketplaceSyncJob.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return c.json({ data: jobs, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
+  },
+
+  async getSyncJob(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const job = await prisma.marketplaceSyncJob.findFirst({ where: { id, tenantId } });
+    if (!job) return c.json(new NotFoundError('Sync Job', id).toJSON(), 404);
+
+    return c.json({ data: job });
+  },
+
+  // ── Webhook Events ────────────────────────────
+
+  async listWebhookEvents(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+
+    const { page, limit, skip } = getPaginationParams(c, 20);
+    const integrationId = c.req.query('integrationId');
+    const eventType = c.req.query('eventType');
+    const processed = c.req.query('processed');
+
+    const where = {
+      tenantId,
+      ...(integrationId && { integrationId }),
+      ...(eventType && { eventType }),
+      ...(processed === 'true' && { processedAt: { not: null } }),
+      ...(processed === 'false' && { processedAt: null }),
+    };
+
+    const [total, events] = await prisma.$transaction([
+      prisma.marketplaceWebhookEvent.count({ where }),
+      prisma.marketplaceWebhookEvent.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return c.json({ data: events, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
+  },
+
+  async getWebhookEvent(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const event = await prisma.marketplaceWebhookEvent.findFirst({ where: { id, tenantId } });
+    if (!event) return c.json(new NotFoundError('Webhook Event', id).toJSON(), 404);
+
+    return c.json({ data: event });
+  },
+
+  // ── Listing Snapshots ─────────────────────────
+
+  async listSnapshots(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+
+    const { page, limit, skip } = getPaginationParams(c, 20);
+    const integrationId = c.req.query('integrationId');
+
+    const where = {
+      tenantId,
+      ...(integrationId && { listing: { integrationId } }),
+    };
+
+    const [total, snapshots] = await prisma.$transaction([
+      prisma.marketplaceListingSnapshot.count({ where }),
+      prisma.marketplaceListingSnapshot.findMany({
+        where,
+        include: {
+          listing: { select: { id: true, externalId: true, externalSku: true, price: true, isActive: true } },
+        },
+        orderBy: { lastSentAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return c.json({ data: snapshots, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
   },
 };

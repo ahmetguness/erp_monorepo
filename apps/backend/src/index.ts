@@ -23,6 +23,7 @@ import { attachmentRoutes } from './routes/attachment.routes';
 import { CurrencyRatesController } from './controllers/currency-rates.controller';
 import { adminRoutes } from './routes/admin.routes';
 import { requireAuth } from './middleware/requireAuth';
+import { BaseError } from './errors';
 
 // Professional Plan Route Imports
 import { apiKeyRoutes } from './routes/api-key.routes';
@@ -159,6 +160,11 @@ app.route('/api', tenantApi);
 
 // ── Global error handler ─────────────────────
 app.onError((err, c) => {
+  if (err instanceof BaseError && err.isOperational) {
+    logger.warn(`Operational error: ${err.message}`);
+    return c.json(err.toJSON(), err.statusCode as 400);
+  }
+
   logger.error(`Unhandled error: ${err.message}`);
 
   // Development'ta detaylı hata, production'da generic

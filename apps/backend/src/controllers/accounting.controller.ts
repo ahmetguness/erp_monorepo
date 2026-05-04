@@ -2,6 +2,8 @@ import { Context } from 'hono';
 import { JournalEntryType, AccountType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { generateDocumentNumber } from '../utils/generate-number.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -49,10 +51,7 @@ export const AccountingController = {
   // ── Ledger Accounts ──────────────────────────
 
   async listAccounts(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as LedgerAccountListQuery;
 
@@ -77,10 +76,7 @@ export const AccountingController = {
   },
 
   async createAccount(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateLedgerAccountDTO>();
 
@@ -117,10 +113,7 @@ export const AccountingController = {
   // ── Journal Entries ──────────────────────────
 
   async listJournalEntries(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as JournalEntryListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -164,10 +157,7 @@ export const AccountingController = {
   },
 
   async createJournalEntry(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateJournalEntryDTO>();
 
@@ -190,12 +180,7 @@ export const AccountingController = {
         400,
       );
     }
-
-    const { generateDocumentNumber } = await import('../utils/generate-number');
-    const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', async (tid, num) => {
-      const found = await prisma.journalEntry.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
-      return !!found;
-    });
+    const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', 'journalEntry');
 
     const entry = await prisma.journalEntry.create({
       data: {
@@ -317,12 +302,7 @@ export const AccountingController = {
     if (!entry.isPosted) {
       return c.json(new ValidationError('Sadece onaylı fişler ters kayıt yapılabilir.').toJSON(), 400);
     }
-
-    const { generateDocumentNumber } = await import('../utils/generate-number');
-    const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', async (tid, num) => {
-      const found = await prisma.journalEntry.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
-      return !!found;
-    });
+    const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', 'journalEntry');
 
     const reversal = await prisma.journalEntry.create({
       data: {
@@ -439,10 +419,7 @@ export const AccountingExtController = {
   // ── FiscalPeriod ─────────────────────────────
 
   async listFiscalPeriods(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const periods = await prisma.fiscalPeriod.findMany({
       where: { tenantId },
@@ -453,10 +430,7 @@ export const AccountingExtController = {
   },
 
   async createFiscalPeriod(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateFiscalPeriodDTO>();
 
@@ -514,5 +488,28 @@ export const AccountingExtController = {
     });
 
     return c.json({ data: updated });
+  },
+
+  async deleteFiscalPeriod(c: Context): Promise<Response> {
+    const tenantId = c.get('tenantId');
+    const periodId = c.req.param('id');
+    if (!tenantId || typeof tenantId !== 'string') {
+      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    }
+
+    const period = await prisma.fiscalPeriod.findFirst({ where: { id: periodId, tenantId } });
+    if (!period) return c.json(new NotFoundError('Dönem', periodId).toJSON(), 404);
+
+    if (period.status !== 'OPEN') {
+      return c.json(new ValidationError('Sadece açık dönemler silinebilir.').toJSON(), 400);
+    }
+
+    const hasEntries = await prisma.journalEntry.count({ where: { tenantId, fiscalPeriodId: periodId } });
+    if (hasEntries > 0) {
+      return c.json(new ValidationError(`Bu döneme ait ${hasEntries} yevmiye fişi var. Önce fişleri silin.`).toJSON(), 400);
+    }
+
+    await prisma.fiscalPeriod.delete({ where: { id: periodId } });
+    return c.json({ data: { success: true } });
   },
 };

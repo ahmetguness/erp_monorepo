@@ -1,6 +1,7 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -24,15 +25,13 @@ export const MasterDataController = {
   // ── Units ────────────────────────────────────
 
   async listUnits(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
     const units = await prisma.unit.findMany({ where: { tenantId }, orderBy: { name: 'asc' } });
     return c.json({ data: units });
   },
 
   async createUnit(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
     const body = await c.req.json<CreateUnitDTO>();
     if (!body.name || !body.code) return c.json(new ValidationError('name ve code zorunludur.').toJSON(), 400);
     const existing = await prisma.unit.findUnique({ where: { tenantId_code: { tenantId, code: body.code } } });
@@ -56,8 +55,7 @@ export const MasterDataController = {
   // ── Categories ───────────────────────────────
 
   async listCategories(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
     const categories = await prisma.category.findMany({
       where: { tenantId },
       include: { children: { select: { id: true, name: true } } },
@@ -67,8 +65,7 @@ export const MasterDataController = {
   },
 
   async createCategory(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
     const body = await c.req.json<CreateCategoryDTO>();
     if (!body.name) return c.json(new ValidationError('name zorunludur.').toJSON(), 400);
     const category = await prisma.category.create({ data: { tenantId, name: body.name, parentId: body.parentId ?? null } });
@@ -107,15 +104,13 @@ export const MasterDataController = {
   // ── Tax Rates ────────────────────────────────
 
   async listTaxRates(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
     const taxRates = await prisma.taxRate.findMany({ where: { tenantId, isActive: true }, orderBy: { rate: 'asc' } });
     return c.json({ data: taxRates });
   },
 
   async createTaxRate(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
     const body = await c.req.json<CreateTaxRateDTO>();
     if (!body.name || body.rate === undefined) return c.json(new ValidationError('name ve rate zorunludur.').toJSON(), 400);
     const taxRate = await prisma.taxRate.create({ data: { tenantId, name: body.name, rate: body.rate } });
@@ -143,15 +138,13 @@ export const MasterDataController = {
   // ── Currencies ───────────────────────────────
 
   async listCurrencies(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
     const currencies = await prisma.currency.findMany({ where: { tenantId }, orderBy: { code: 'asc' } });
     return c.json({ data: currencies });
   },
 
   async createCurrency(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
     const body = await c.req.json<CreateCurrencyDTO>();
     if (!body.code || !body.name || !body.symbol) return c.json(new ValidationError('code, name ve symbol zorunludur.').toJSON(), 400);
     const existing = await prisma.currency.findUnique({ where: { tenantId_code: { tenantId, code: body.code } } });

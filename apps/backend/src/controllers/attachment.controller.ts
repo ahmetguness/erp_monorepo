@@ -5,6 +5,7 @@ import { ForbiddenError, ValidationError, NotFoundError } from '../errors';
 import { writeFile, mkdir, unlink } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
+import { requireTenantId } from '../utils/context.js';
 
 const UPLOAD_DIR = join(process.cwd(), 'uploads');
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -17,8 +18,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 export const AttachmentController = {
 
   async listByEntity(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const entityType = c.req.query('entityType') as EntityType | undefined;
     const entityId = c.req.query('entityId');
@@ -36,8 +36,7 @@ export const AttachmentController = {
   },
 
   async upload(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const formData = await c.req.formData();
     const file = formData.get('file') as File | null;
@@ -101,6 +100,27 @@ export const AttachmentController = {
     } catch {
       return c.json({ error: 'Dosya bulunamadı.' }, 404);
     }
+  },
+
+  async rename(c: Context): Promise<Response> {
+    const tenantId = c.get('tenantId');
+    const id = c.req.param('id')!;
+    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+
+    const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
+    if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
+
+    const body = await c.req.json<{ fileName: string }>();
+    if (!body.fileName?.trim()) {
+      return c.json(new ValidationError('fileName zorunludur.').toJSON(), 400);
+    }
+
+    const updated = await prisma.attachment.update({
+      where: { id },
+      data: { fileName: body.fileName.trim() },
+    });
+
+    return c.json({ data: updated });
   },
 
   async delete(c: Context): Promise<Response> {

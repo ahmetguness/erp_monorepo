@@ -90,9 +90,6 @@ export async function validateInvitation(rawToken: string, email: string) {
 
   const invitation = await prisma.invitation.findFirst({
     where: { tokenHash, email: normalizedEmail, status: 'PENDING' },
-    include: {
-      tenant: { select: { id: true, companyName: true, plan: true } },
-    },
   });
 
   if (!invitation) {
@@ -104,10 +101,15 @@ export async function validateInvitation(rawToken: string, email: string) {
     return { valid: false, error: 'Davet linkinin süresi dolmuş.' };
   }
 
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: invitation.tenantId },
+    select: { id: true, companyName: true, plan: true },
+  });
+
   return {
     valid: true,
     invitationId: invitation.id,
-    tenantName: invitation.tenant?.companyName,
+    tenantName: tenant?.companyName,
     email: invitation.email,
   };
 }

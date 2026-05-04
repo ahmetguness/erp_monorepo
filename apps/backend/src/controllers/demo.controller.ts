@@ -6,6 +6,7 @@ import {
 } from '../services/demo.service';
 import { prisma } from '../lib/prisma';
 import { DemoRequestStatus } from '@prisma/client';
+import { getPaginationParams } from '../utils/pagination.js';
 
 export class DemoController {
   // Basit in-memory rate limiter (IP bazlı)
@@ -90,8 +91,7 @@ export class DemoController {
    */
   static async list(c: Context) {
     const status = c.req.query('status');
-    const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') || '20', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 20);
 
     const where = status ? { status: status as DemoRequestStatus } : {};
 
@@ -99,7 +99,7 @@ export class DemoController {
       prisma.demoRequest.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
       prisma.demoRequest.count({ where }),
@@ -128,8 +128,8 @@ export class DemoController {
    * Admin – Enterprise demo talebini onayla ve provision et.
    */
   static async approve(c: Context) {
-    const id = c.req.param('id');
-    const adminId = c.get('userId') as string || 'admin';
+    const id = c.req.param('id')!;
+    const adminId = (c.get('userId') as string) || 'admin';
 
     const result = await approveDemoRequest(id, adminId);
     return c.json(result, result.success ? 200 : 400);
@@ -140,9 +140,9 @@ export class DemoController {
    * Admin – demo talebini reddet.
    */
   static async reject(c: Context) {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const body = await c.req.json().catch(() => ({}));
-    const adminId = c.get('userId') as string || 'admin';
+    const adminId = (c.get('userId') as string) || 'admin';
 
     const result = await rejectDemoRequest(id, adminId, body.reason);
     return c.json(result);

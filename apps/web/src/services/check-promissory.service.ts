@@ -41,3 +41,15 @@ export async function updateCheckStatus(id: string, status: CheckStatus): Promis
   const res = await apiClient.patch(`/api/check-promissory/${id}/status`, { status });
   return safeParse(SingleResponseSchema(CheckPromissorySchema), res.data, 'updateCheckStatus').data;
 }
+
+export async function updateCheckPromissory(
+  id: string,
+  data: { contactId?: string; amount?: number; dueDate?: string; bankName?: string; notes?: string },
+): Promise<CheckPromissory> {
+  const res = await apiClient.patch(`/api/check-promissory/${id}`, data);
+  return safeParse(SingleResponseSchema(CheckPromissorySchema), res.data, 'updateCheckPromissory').data;
+}
+
+export async function deleteCheckPromissory(id: string): Promise<void> {
+  await apiClient.delete(`/api/check-promissory/${id}`);
+}

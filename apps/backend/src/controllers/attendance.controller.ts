@@ -1,6 +1,8 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { getPaginationParams } from '../utils/pagination.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Attendance Controller — Puantaj / Giriş-Çıkış
@@ -8,11 +10,9 @@ import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
 
 export const AttendanceController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '50', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 50);
     const employeeId = c.req.query('employeeId');
     const dateFrom = c.req.query('dateFrom');
     const dateTo = c.req.query('dateTo');
@@ -36,7 +36,7 @@ export const AttendanceController = {
           employee: { select: { id: true, firstName: true, lastName: true, department: true } },
         },
         orderBy: { date: 'desc' },
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
     ]);
@@ -45,8 +45,7 @@ export const AttendanceController = {
   },
 
   async checkIn(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{ employeeId: string; date?: string; checkIn?: string; notes?: string }>();
     if (!body.employeeId) return c.json(new ValidationError('employeeId zorunludur.').toJSON(), 400);
@@ -71,8 +70,7 @@ export const AttendanceController = {
   },
 
   async checkOut(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{ employeeId: string; date?: string; checkOut?: string; overtimeHours?: number }>();
     if (!body.employeeId) return c.json(new ValidationError('employeeId zorunludur.').toJSON(), 400);

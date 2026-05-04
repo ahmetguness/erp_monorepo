@@ -1,6 +1,8 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { getPaginationParams } from '../utils/pagination.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Payroll Controller — Bordro CRUD + toplu oluşturma
@@ -8,11 +10,9 @@ import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
 
 export const PayrollController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 20);
     const period = c.req.query('period');
     const employeeId = c.req.query('employeeId');
 
@@ -31,7 +31,7 @@ export const PayrollController = {
           items: true,
         },
         orderBy: [{ period: 'desc' }, { employee: { lastName: 'asc' } }],
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
     ]);
@@ -56,8 +56,7 @@ export const PayrollController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{
       employeeId: string; period: string; grossSalary: number;
@@ -108,8 +107,7 @@ export const PayrollController = {
   },
 
   async generateBulk(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{ period: string }>();
     if (!body.period || !/^\d{4}-\d{2}$/.test(body.period)) {

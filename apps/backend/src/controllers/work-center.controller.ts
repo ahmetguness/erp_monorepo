@@ -1,6 +1,8 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { getPaginationParams } from '../utils/pagination.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Work Center Controller — İş merkezi CRUD
@@ -8,11 +10,9 @@ import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
 
 export const WorkCenterController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '50', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 50);
 
     const [total, data] = await prisma.$transaction([
       prisma.workCenter.count({ where: { tenantId } }),
@@ -20,7 +20,7 @@ export const WorkCenterController = {
         where: { tenantId },
         include: { _count: { select: { operations: true, workOrderOps: true } } },
         orderBy: { code: 'asc' },
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
     ]);
@@ -42,8 +42,7 @@ export const WorkCenterController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{ code: string; name: string; description?: string; capacity?: number }>();
     if (!body.code || !body.name) return c.json(new ValidationError('code ve name zorunludur.').toJSON(), 400);

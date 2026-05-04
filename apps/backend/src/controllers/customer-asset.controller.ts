@@ -1,6 +1,8 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { getPaginationParams } from '../utils/pagination.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Customer Asset Controller — Müşteri varlıkları CRUD
@@ -8,11 +10,9 @@ import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
 
 export const CustomerAssetController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 20);
     const contactId = c.req.query('contactId');
 
     const where = { tenantId, deletedAt: null, ...(contactId && { contactId }) };
@@ -26,7 +26,7 @@ export const CustomerAssetController = {
           _count: { select: { serviceRequests: true } },
         },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
     ]);
@@ -56,8 +56,7 @@ export const CustomerAssetController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{
       contactId: string; name: string; brand?: string; model?: string;

@@ -5,7 +5,7 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getLedgerAccounts, createLedgerAccount,
-  getFiscalPeriods, createFiscalPeriod, closeFiscalPeriod,
+  getFiscalPeriods, createFiscalPeriod, closeFiscalPeriod, deleteFiscalPeriod,
   getJournalEntries, getJournalEntryById, createJournalEntry, postJournalEntry,
   getBankAccounts, createBankAccount, getCashAccounts, createCashAccount,
   getPayments, getPaymentById, createPayment,
@@ -54,6 +54,16 @@ export function useCreateFiscalPeriod() {
   return useMutation({
     mutationFn: (data: CreateFiscalPeriodDTO) => createFiscalPeriod(data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.periods }); toast.success('Mali dönem oluşturuldu.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useDeleteFiscalPeriod() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (id: string) => deleteFiscalPeriod(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.periods }); toast.success('Mali dönem silindi.'); },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }

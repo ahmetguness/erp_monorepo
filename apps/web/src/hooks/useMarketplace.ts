@@ -96,3 +96,44 @@ export function useChangeOrderStatus() {
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
+
+export function useDeleteMarketplaceOrder() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (id: string) => svc.deleteOrder(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['mp-orders'] }); toast.success('Sipariş silindi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+// ─── Monitoring ───────────────────────────────
+
+export function useSyncJobs(params?: { page?: number; limit?: number; integrationId?: string; status?: string; jobType?: string }) {
+  return useQuery({ queryKey: ['mp-sync-jobs', params], queryFn: () => svc.getSyncJobs(params) });
+}
+
+export function useSyncJob(id: string) {
+  return useQuery({
+    queryKey: ['mp-sync-jobs', id],
+    queryFn: () => svc.getSyncJob(id),
+    enabled: !!id,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data && (data.status === 'DONE' || data.status === 'FAILED')) return false;
+      return 3_000; // poll every 3s while PENDING/RUNNING
+    },
+  });
+}
+
+export function useWebhookEvents(params?: { page?: number; limit?: number; integrationId?: string; eventType?: string; processed?: string }) {
+  return useQuery({ queryKey: ['mp-webhook-events', params], queryFn: () => svc.getWebhookEvents(params) });
+}
+
+export function useWebhookEvent(id: string) {
+  return useQuery({ queryKey: ['mp-webhook-events', id], queryFn: () => svc.getWebhookEvent(id), enabled: !!id });
+}
+
+export function useListingSnapshots(params?: { page?: number; limit?: number; integrationId?: string }) {
+  return useQuery({ queryKey: ['mp-listing-snapshots', params], queryFn: () => svc.getListingSnapshots(params) });
+}

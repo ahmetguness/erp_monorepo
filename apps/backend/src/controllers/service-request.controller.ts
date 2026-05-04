@@ -2,6 +2,9 @@ import { Context } from 'hono';
 import { ServiceStatus, ServiceActivityType, Priority } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { generateDocumentNumber } from '../utils/generate-number.js';
+import { getPaginationParams } from '../utils/pagination.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Service Request Controller
@@ -18,11 +21,9 @@ const STATUS_TRANSITIONS: Record<ServiceStatus, ServiceStatus[]> = {
 
 export const ServiceRequestController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 20);
     const status = c.req.query('status') as ServiceStatus | undefined;
     const priority = c.req.query('priority') as Priority | undefined;
     const assignedToId = c.req.query('assignedToId');
@@ -44,7 +45,7 @@ export const ServiceRequestController = {
           _count: { select: { items: true, activities: true } },
         },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
     ]);
@@ -72,20 +73,14 @@ export const ServiceRequestController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{
       contactId?: string; customerAssetId?: string; subject: string;
       description?: string; priority?: Priority; assignedToId?: string;
     }>();
     if (!body.subject) return c.json(new ValidationError('subject zorunludur.').toJSON(), 400);
-
-    const { generateDocumentNumber } = await import('../utils/generate-number');
-    const number = await generateDocumentNumber(tenantId, 'service_request', 'SR-', async (tid, num) => {
-      const found = await prisma.serviceRequest.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
-      return !!found;
-    });
+    const number = await generateDocumentNumber(tenantId, 'service_request', 'SR-', 'serviceRequest');
 
     // Garanti bilgisini asset'ten al
     let warrantyEnd: Date | null = null;

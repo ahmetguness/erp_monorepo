@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { MovementType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -44,11 +45,7 @@ export const WarehouseController = {
    * Tenant'a ait depoları listeler.
    */
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const warehouses = await prisma.warehouse.findMany({
       where: { tenantId },
@@ -102,11 +99,7 @@ export const WarehouseController = {
    * NOT: Tek depo kuralı enforceStarterLimits('warehouse') middleware'inde kontrol edilir.
    */
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateWarehouseDTO>();
 
@@ -180,11 +173,7 @@ export const WarehouseController = {
    * NOT: MULTI_WAREHOUSE kontrolü enforceStarterLimits('warehouse_transfer') middleware'inde yapılır.
    */
   async transfer(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<TransferStockDTO>();
 

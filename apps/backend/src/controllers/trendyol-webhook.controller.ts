@@ -16,7 +16,7 @@ import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { mapTrendyolOrderStatus } from '../services/trendyol.service';
-import { MarketplaceOrderStatus } from '@prisma/client';
+import { MarketplaceOrderStatus, Prisma } from '@prisma/client';
 
 // Webhook secret is stored per-integration in apiSecret field
 // Trendyol sends it as X-Webhook-Secret header (configurable in seller panel)
@@ -58,7 +58,7 @@ export const TrendyolWebhookController = {
 
     // 5. Idempotency check
     const existing = await prisma.marketplaceWebhookEvent.findUnique({
-      where: { integrationId_eventId: { integrationId, eventId } },
+      where: { integrationId_eventId: { integrationId: integrationId!, eventId } },
     });
     if (existing?.processedAt) {
       logger.info(`[TrendyolWebhook] Duplicate event ${eventId} — skipping`);
@@ -67,13 +67,13 @@ export const TrendyolWebhookController = {
 
     // 6. Store event (upsert for safety)
     const event = await prisma.marketplaceWebhookEvent.upsert({
-      where: { integrationId_eventId: { integrationId, eventId } },
+      where: { integrationId_eventId: { integrationId: integrationId!, eventId } },
       create: {
         tenantId: integration.tenantId,
-        integrationId,
+        integrationId: integrationId!,
         eventId,
         eventType,
-        payload,
+        payload: payload as Prisma.InputJsonValue,
       },
       update: {},
     });
@@ -81,7 +81,7 @@ export const TrendyolWebhookController = {
     // 7. Process event
     let errorMessage: string | null = null;
     try {
-      await processWebhookEvent(integration.tenantId, integrationId, eventType, payload);
+      await processWebhookEvent(integration.tenantId, integrationId!, eventType, payload);
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : String(err);
       logger.error(`[TrendyolWebhook] Processing error for event ${eventId}: ${errorMessage}`);

@@ -1,6 +1,8 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { getPaginationParams } from '../utils/pagination.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Employee Controller — Personel CRUD
@@ -8,11 +10,9 @@ import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
 
 export const EmployeeController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 20);
     const department = c.req.query('department');
     const isActive = c.req.query('isActive');
 
@@ -30,7 +30,7 @@ export const EmployeeController = {
           _count: { select: { leaveRequests: true, payrolls: true } },
         },
         orderBy: { lastName: 'asc' },
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
     ]);
@@ -56,8 +56,7 @@ export const EmployeeController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{
       firstName: string; lastName: string; email?: string; phone?: string;
@@ -122,8 +121,7 @@ export const EmployeeController = {
   },
 
   async departments(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const result = await prisma.employee.groupBy({
       by: ['department'],

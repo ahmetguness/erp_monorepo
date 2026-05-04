@@ -80,6 +80,48 @@ export const getOrder = (id: string) =>
 export const changeOrderStatus = (id: string, data: { status: string }) =>
   apiClient.post<{ data: MarketplaceOrder }>(`/api/marketplace/orders/${id}/status`, data).then((r) => r.data.data);
 
+export const deleteOrder = (id: string) =>
+  apiClient.delete(`/api/marketplace/orders/${id}`);
+
+// ─── Monitoring (read-only) ───────────────────
+
+export interface MarketplaceSyncJobRecord {
+  id: string; tenantId: string; integrationId: string;
+  jobType: string; status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
+  startedAt: string | null; finishedAt: string | null;
+  processedCount: number; errorCount: number; errorMessage: string | null;
+  params: Record<string, unknown> | null; result: Record<string, unknown> | null;
+  createdAt: string; updatedAt: string;
+}
+
+export interface MarketplaceWebhookEventRecord {
+  id: string; tenantId: string; integrationId: string;
+  eventId: string; eventType: string; payload: Record<string, unknown>;
+  processedAt: string | null; errorMessage: string | null; createdAt: string;
+}
+
+export interface MarketplaceListingSnapshotRecord {
+  id: string; tenantId: string; listingId: string;
+  lastSentQty: number; lastSentSalePrice: number; lastSentListPrice: number;
+  lastSentAt: string; batchRequestId: string | null;
+  listing?: { id: string; externalId: string; externalSku: string | null; price: number; isActive: boolean };
+}
+
+export const getSyncJobs = (params?: { page?: number; limit?: number; integrationId?: string; status?: string; jobType?: string }) =>
+  apiClient.get<Paginated<MarketplaceSyncJobRecord>>('/api/marketplace/sync-jobs', { params }).then((r) => r.data);
+
+export const getSyncJob = (id: string) =>
+  apiClient.get<{ data: MarketplaceSyncJobRecord }>(`/api/marketplace/sync-jobs/${id}`).then((r) => r.data.data);
+
+export const getWebhookEvents = (params?: { page?: number; limit?: number; integrationId?: string; eventType?: string; processed?: string }) =>
+  apiClient.get<Paginated<MarketplaceWebhookEventRecord>>('/api/marketplace/webhook-events', { params }).then((r) => r.data);
+
+export const getWebhookEvent = (id: string) =>
+  apiClient.get<{ data: MarketplaceWebhookEventRecord }>(`/api/marketplace/webhook-events/${id}`).then((r) => r.data.data);
+
+export const getListingSnapshots = (params?: { page?: number; limit?: number; integrationId?: string }) =>
+  apiClient.get<Paginated<MarketplaceListingSnapshotRecord>>('/api/marketplace/listing-snapshots', { params }).then((r) => r.data);
+
 // ─── Trendyol Sync ────────────────────────────
 
 export interface TrendyolJobEnqueueResult {

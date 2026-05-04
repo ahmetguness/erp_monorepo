@@ -2,6 +2,8 @@ import { Context } from 'hono';
 import { LeaveType, LeaveStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { getPaginationParams } from '../utils/pagination.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Leave Request Controller — İzin talebi CRUD + onay
@@ -9,11 +11,9 @@ import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
 
 export const LeaveRequestController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+    const { page, limit, skip } = getPaginationParams(c, 20);
     const status = c.req.query('status') as LeaveStatus | undefined;
     const employeeId = c.req.query('employeeId');
 
@@ -31,7 +31,7 @@ export const LeaveRequestController = {
           employee: { select: { id: true, firstName: true, lastName: true, department: true, position: true } },
         },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
+        skip: skip,
         take: limit,
       }),
     ]);
@@ -55,8 +55,7 @@ export const LeaveRequestController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{
       employeeId: string; type: LeaveType; startDate: string; endDate: string;

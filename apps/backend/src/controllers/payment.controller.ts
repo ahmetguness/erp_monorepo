@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { PaymentMethod, PaymentStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -51,10 +52,7 @@ export const PaymentController = {
   // ── Bank Accounts ────────────────────────────
 
   async listBankAccounts(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const accounts = await prisma.bankAccount.findMany({
       where: { tenantId, deletedAt: null, isActive: true },
@@ -65,10 +63,7 @@ export const PaymentController = {
   },
 
   async createBankAccount(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateBankAccountDTO>();
 
@@ -93,10 +88,7 @@ export const PaymentController = {
   // ── Cash Accounts ────────────────────────────
 
   async listCashAccounts(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const accounts = await prisma.cashAccount.findMany({
       where: { tenantId, deletedAt: null, isActive: true },
@@ -107,10 +99,7 @@ export const PaymentController = {
   },
 
   async createCashAccount(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateCashAccountDTO>();
 
@@ -132,10 +121,7 @@ export const PaymentController = {
   // ── Payments ─────────────────────────────────
 
   async listPayments(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as PaymentListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -181,10 +167,7 @@ export const PaymentController = {
   },
 
   async createPayment(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreatePaymentDTO>();
 

@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { CheckNoteType, CheckStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -37,10 +38,7 @@ interface UpdateCheckStatusDTO {
 
 export const CheckPromissoryController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as CheckPromissoryListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -72,10 +70,7 @@ export const CheckPromissoryController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateCheckPromissoryDTO>();
 
@@ -126,7 +121,6 @@ export const CheckPromissoryController = {
       return c.json(new ValidationError('status alanı zorunludur.').toJSON(), 400);
     }
 
-    // Validate status transitions
     const validTransitions: Record<CheckStatus, CheckStatus[]> = {
       [CheckStatus.PENDING]: [CheckStatus.DEPOSITED, CheckStatus.CANCELLED],
       [CheckStatus.DEPOSITED]: [CheckStatus.CLEARED, CheckStatus.BOUNCED],
@@ -151,5 +145,57 @@ export const CheckPromissoryController = {
     });
 
     return c.json({ data: updated });
+  },
+
+  async update(c: Context): Promise<Response> {
+    const tenantId = c.get('tenantId');
+    const id = c.req.param('id')!;
+    if (!tenantId || typeof tenantId !== 'string') {
+      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    }
+
+    const existing = await prisma.checkPromissoryNote.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+    if (!existing) return c.json(new NotFoundError('Çek/Senet', id).toJSON(), 404);
+
+    if (existing.status !== CheckStatus.PENDING) {
+      return c.json(new ValidationError('Sadece bekleyen çek/senetler düzenlenebilir.').toJSON(), 400);
+    }
+
+    const body = await c.req.json<Partial<CreateCheckPromissoryDTO>>();
+
+    const updated = await prisma.checkPromissoryNote.update({
+      where: { id },
+      data: {
+        ...(body.contactId !== undefined && { contactId: body.contactId }),
+        ...(body.amount !== undefined && { amount: body.amount }),
+        ...(body.dueDate !== undefined && { dueDate: new Date(body.dueDate) }),
+        ...(body.bankName !== undefined && { bankName: body.bankName }),
+        ...(body.notes !== undefined && { notes: body.notes }),
+      },
+    });
+
+    return c.json({ data: updated });
+  },
+
+  async remove(c: Context): Promise<Response> {
+    const tenantId = c.get('tenantId');
+    const id = c.req.param('id')!;
+    if (!tenantId || typeof tenantId !== 'string') {
+      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
+    }
+
+    const existing = await prisma.checkPromissoryNote.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+    if (!existing) return c.json(new NotFoundError('Çek/Senet', id).toJSON(), 404);
+
+    if (existing.status !== CheckStatus.PENDING) {
+      return c.json(new ValidationError('Sadece bekleyen çek/senetler silinebilir.').toJSON(), 400);
+    }
+
+    await prisma.checkPromissoryNote.update({ where: { id }, data: { deletedAt: new Date() } });
+    return c.json({ data: { success: true } });
   },
 };

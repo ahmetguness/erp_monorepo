@@ -2,6 +2,8 @@ import { Context } from 'hono';
 import { OrderStatus, QuoteStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { generateDocumentNumber } from '../utils/generate-number.js';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -91,10 +93,7 @@ export const SalesOrderController = {
   // ── Sales Quotes ─────────────────────────────
 
   async listQuotes(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as OrderListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -143,10 +142,7 @@ export const SalesOrderController = {
   },
 
   async createQuote(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateSalesQuoteDTO>();
 
@@ -158,11 +154,7 @@ export const SalesOrderController = {
 
     let number = body.number;
     if (!number) {
-      const { generateDocumentNumber } = await import('../utils/generate-number');
-      number = await generateDocumentNumber(tenantId, 'sales_quote', 'TKL-', async (tid, num) => {
-        const found = await prisma.salesQuote.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
-        return !!found;
-      });
+      number = await generateDocumentNumber(tenantId, 'sales_quote', 'TKL-', 'salesQuote');
     }
 
     const quote = await prisma.salesQuote.create({
@@ -201,12 +193,7 @@ export const SalesOrderController = {
     if (quote.status !== QuoteStatus.ACCEPTED && quote.status !== QuoteStatus.DRAFT) {
       return c.json(new ValidationError('Sadece taslak veya kabul edilmiş teklifler siparişe dönüştürülebilir.').toJSON(), 400);
     }
-
-    const { generateDocumentNumber } = await import('../utils/generate-number');
-    const number = await generateDocumentNumber(tenantId, 'sales_order', 'SIP-', async (tid, num) => {
-      const found = await prisma.salesOrder.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
-      return !!found;
-    });
+    const number = await generateDocumentNumber(tenantId, 'sales_order', 'SIP-', 'salesOrder');
 
     const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.salesOrder.create({
@@ -256,10 +243,7 @@ export const SalesOrderController = {
   // ── Sales Orders ─────────────────────────────
 
   async listOrders(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as OrderListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -310,10 +294,7 @@ export const SalesOrderController = {
   },
 
   async createOrder(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateSalesOrderDTO>();
 
@@ -325,11 +306,7 @@ export const SalesOrderController = {
 
     let number = body.number;
     if (!number) {
-      const { generateDocumentNumber } = await import('../utils/generate-number');
-      number = await generateDocumentNumber(tenantId, 'sales_order', 'SIP-', async (tid, num) => {
-        const found = await prisma.salesOrder.findFirst({ where: { tenantId: tid, number: num }, select: { id: true } });
-        return !!found;
-      });
+      number = await generateDocumentNumber(tenantId, 'sales_order', 'SIP-', 'salesOrder');
     }
 
     const order = await prisma.salesOrder.create({
