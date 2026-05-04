@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { ValidationError, ForbiddenError, NotFoundError } from '../errors';
 import { Prisma } from '@prisma/client';
+import { requireTenantId } from '../utils/context.js';
+import { logger } from '../lib/logger';
 
 // ─────────────────────────────────────────────
 // Config
@@ -106,6 +108,7 @@ export const AuthController = {
     });
 
     if (!user || !user.isActive) {
+      logger.warn(`[Auth] Login başarısız — kullanıcı bulunamadı: ${body.email}`);
       return c.json(
         new ValidationError('E-posta veya şifre hatalı.').toJSON(),
         401,
@@ -115,6 +118,7 @@ export const AuthController = {
     // Şifre kontrolü
     const isPasswordValid = await bcrypt.compare(body.password, user.password);
     if (!isPasswordValid) {
+      logger.warn(`[Auth] Login başarısız — yanlış şifre: ${body.email}`);
       return c.json(
         new ValidationError('E-posta veya şifre hatalı.').toJSON(),
         401,
@@ -325,7 +329,7 @@ export const AuthController = {
   async me(c: Context): Promise<Response> {
     // userId ve tenantId artık requireAuth middleware'inden geliyor
     const userId = c.get('userId') as string;
-    const tenantId = c.get('tenantId') as string;
+    const tenantId = requireTenantId(c);
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -377,7 +381,7 @@ export const AuthController = {
    */
   async updatePreferences(c: Context): Promise<Response> {
     const userId = c.get('userId') as string;
-    const tenantId = c.get('tenantId') as string;
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{ preferences: Prisma.InputJsonObject }>();
 

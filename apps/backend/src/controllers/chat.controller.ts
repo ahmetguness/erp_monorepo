@@ -6,6 +6,7 @@ import { sanitizeOutput } from '../lib/output-sanitizer';
 import { ValidationError } from '../errors';
 import { Plan } from '@prisma/client';
 import { handlePrivateChat, handlePrivateChatStream, clearConversation, type UserPermissions } from '../services/ai-chat.service';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Config
@@ -108,7 +109,7 @@ async function validateChatRequest(c: Context): Promise<
   }
 
   const userId = c.get('userId') as string;
-  const tenantId = c.get('tenantId') as string;
+  const tenantId = requireTenantId(c);
 
   const [user, tenant, tenantUser] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { name: true, isActive: true } }),
@@ -257,7 +258,7 @@ export const ChatController = {
   /** Konuşma geçmişini temizle (backend + frontend senkron) */
   async clear(c: Context): Promise<Response> {
     const userId = c.get('userId') as string;
-    const tenantId = c.get('tenantId') as string;
+    const tenantId = requireTenantId(c);
     const sessionId = `private:${tenantId}:${userId}`;
     clearConversation(sessionId);
     return c.json({ success: true });

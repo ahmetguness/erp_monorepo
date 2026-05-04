@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
+import { getPaginationParams } from '../utils/pagination.js';
+import { logger } from '../lib/logger';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -36,28 +38,35 @@ export const UserController = {
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const tenantUsers = await prisma.tenantUser.findMany({
-      where: { tenantId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            phone: true,
-            isActive: true,
-            lastLoginAt: true,
-            createdAt: true,
+    const { page, limit, skip } = getPaginationParams(c, 50);
+
+    const [total, tenantUsers] = await prisma.$transaction([
+      prisma.tenantUser.count({ where: { tenantId } }),
+      prisma.tenantUser.findMany({
+        where: { tenantId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              phone: true,
+              isActive: true,
+              lastLoginAt: true,
+              createdAt: true,
+            },
+          },
+          roleRef: {
+            select: { id: true, name: true },
           },
         },
-        roleRef: {
-          select: { id: true, name: true },
-        },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+        orderBy: { createdAt: 'asc' },
+        skip,
+        take: limit,
+      }),
+    ]);
 
-    return c.json({ data: tenantUsers });
+    return c.json({ data: tenantUsers, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
   },
 
   /**
@@ -65,12 +74,8 @@ export const UserController = {
    * Belirli bir kullanıcıyı döner.
    */
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const userId = c.req.param('id');
-
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const tenantUser = await prisma.tenantUser.findFirst({
       where: { tenantId, userId },
@@ -180,20 +185,16 @@ export const UserController = {
       },
     });
 
+    logger.info(`[User] Yeni kullanıcı oluşturuldu: ${newUser.email} (tenant: ${tenantId})`);
     return c.json({ data: newUser }, 201);
   },
 
   /**
    * PATCH /api/users/:id
-   * Kullanıcı bilgilerini günceller.
    */
   async update(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const userId = c.req.param('id');
-
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const tenantUser = await prisma.tenantUser.findFirst({
       where: { tenantId, userId },
@@ -232,12 +233,8 @@ export const UserController = {
    * Kullanıcıyı tenant'tan çıkarır (soft deactivate).
    */
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const userId = c.req.param('id');
-
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const tenantUser = await prisma.tenantUser.findFirst({
       where: { tenantId, userId },

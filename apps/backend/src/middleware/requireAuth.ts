@@ -15,7 +15,7 @@ interface JwtPayload {
  * Authorization header'dan token okur, doğrular ve userId + tenantId'yi context'e set eder.
  * tenantId her zaman JWT payload'dan alınır — header override yapılamaz.
  */
-export async function requireAuth(c: Context<any>, next: Next) {
+export async function requireAuth(c: Context, next: Next) {
   const auth = c.req.header('Authorization');
   if (!auth?.startsWith('Bearer ')) {
     return c.json(new ForbiddenError('Yetkilendirme gerekli.').toJSON(), 401);

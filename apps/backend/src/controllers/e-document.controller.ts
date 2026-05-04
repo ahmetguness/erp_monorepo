@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { EDocumentType, EDocumentStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
@@ -74,11 +74,8 @@ export const EDocumentController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const doc = await prisma.eDocument.findFirst({
       where: { id, tenantId },
@@ -135,11 +132,8 @@ export const EDocumentController = {
   },
 
   async updateStatus(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const existing = await prisma.eDocument.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('E-Belge', id).toJSON(), 404);

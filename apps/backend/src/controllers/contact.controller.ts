@@ -1,7 +1,8 @@
 import { Context } from 'hono';
 import { ContactType, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError, BaseError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -41,19 +42,6 @@ interface ContactListQuery {
 }
 
 // ─────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────
-
-function getTenantId(c: Context): string {
-  const tenantId = c.get('tenantId');
-  if (!tenantId || typeof tenantId !== 'string') {
-    throw new ForbiddenError('Tenant kimliği bulunamadı.');
-  }
-  return tenantId;
-}
-
-
-// ─────────────────────────────────────────────
 // Contact Controller
 // ─────────────────────────────────────────────
 
@@ -64,10 +52,7 @@ export const ContactController = {
    *   lastTransactionDate, riskLevel
    */
   async list(c: Context): Promise<Response> {
-    let tenantId: string;
-    try { tenantId = getTenantId(c); } catch (e: unknown) {
-      return c.json((e as BaseError).toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const query = c.req.query() as ContactListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
@@ -240,10 +225,7 @@ export const ContactController = {
    * GET BY ID — returns contact with full financial summary
    */
   async getById(c: Context): Promise<Response> {
-    let tenantId: string;
-    try { tenantId = getTenantId(c); } catch (e: unknown) {
-      return c.json((e as BaseError).toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
     const contactId = c.req.param('id');
 
     const contact = await prisma.contact.findFirst({
@@ -317,10 +299,7 @@ export const ContactController = {
   },
 
   async create(c: Context): Promise<Response> {
-    let tenantId: string;
-    try { tenantId = getTenantId(c); } catch (e: unknown) {
-      return c.json((e as BaseError).toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
 
     const body = await c.req.json<CreateContactDTO>();
 
@@ -380,10 +359,7 @@ export const ContactController = {
   },
 
   async update(c: Context): Promise<Response> {
-    let tenantId: string;
-    try { tenantId = getTenantId(c); } catch (e: unknown) {
-      return c.json((e as BaseError).toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
     const contactId = c.req.param('id');
 
     const contact = await prisma.contact.findFirst({
@@ -419,10 +395,7 @@ export const ContactController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    let tenantId: string;
-    try { tenantId = getTenantId(c); } catch (e: unknown) {
-      return c.json((e as BaseError).toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
     const contactId = c.req.param('id');
 
     const contact = await prisma.contact.findFirst({
@@ -456,10 +429,7 @@ interface AccountEntryListQuery {
 
 export const AccountEntryController = {
   async list(c: Context): Promise<Response> {
-    let tenantId: string;
-    try { tenantId = getTenantId(c); } catch (e: unknown) {
-      return c.json((e as BaseError).toJSON(), 403);
-    }
+    const tenantId = requireTenantId(c);
     const contactId = c.req.param('contactId');
 
     const contact = await prisma.contact.findFirst({

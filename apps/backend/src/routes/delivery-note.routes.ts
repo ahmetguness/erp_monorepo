@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
+import { Plan } from '@prisma/client';
 import { requirePlan } from '../middleware/requirePlan';
 import { DeliveryNoteController } from '../controllers/delivery-note.controller';
 
 const deliveryNoteRoutes = new Hono();
 
-deliveryNoteRoutes.use('*', requirePlan('PROFESSIONAL'));
+deliveryNoteRoutes.use('*', requirePlan(Plan.PROFESSIONAL));
 
 deliveryNoteRoutes.get('/', DeliveryNoteController.list);
 deliveryNoteRoutes.get('/:id', DeliveryNoteController.getById);

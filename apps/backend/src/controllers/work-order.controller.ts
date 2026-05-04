@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { WorkOrderStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { getPaginationParams } from '../utils/pagination.js';
 import { requireTenantId } from '../utils/context.js';
@@ -46,9 +46,8 @@ export const WorkOrderController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const wo = await prisma.workOrder.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -126,9 +125,8 @@ export const WorkOrderController = {
   },
 
   async changeStatus(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const wo = await prisma.workOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!wo) return c.json(new NotFoundError('İş Emri', id).toJSON(), 404);
@@ -167,9 +165,8 @@ export const WorkOrderController = {
   },
 
   async reportProduction(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const wo = await prisma.workOrder.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -220,9 +217,8 @@ export const WorkOrderController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const wo = await prisma.workOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!wo) return c.json(new NotFoundError('İş Emri', id).toJSON(), 404);

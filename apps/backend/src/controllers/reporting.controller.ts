@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { InvoiceStatus, InvoiceType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { ForbiddenError, ValidationError, NotFoundError } from '../errors';
+import { ValidationError, NotFoundError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
@@ -247,11 +247,8 @@ export const SavedReportController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const report = await prisma.savedReport.findFirst({ where: { id, tenantId } });
     if (!report) return c.json(new NotFoundError('Rapor', id).toJSON(), 404);
@@ -283,11 +280,8 @@ export const SavedReportController = {
   },
 
   async update(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const reportId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const report = await prisma.savedReport.findFirst({ where: { id: reportId, tenantId } });
     if (!report) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
@@ -308,11 +302,8 @@ export const SavedReportController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const reportId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const report = await prisma.savedReport.findFirst({ where: { id: reportId, tenantId } });
     if (!report) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);

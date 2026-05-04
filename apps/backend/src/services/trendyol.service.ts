@@ -314,15 +314,15 @@ interface RateBucket { count: number; windowStart: number }
 const rateBuckets = new Map<string, RateBucket>();
 
 // Redis singleton — created once, reused across all calls
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _redisClient: any = null;
+type RedisClient = { incr(k: string): Promise<number>; expire(k: string, s: number): Promise<number>; on(event: string, cb: (err: Error) => void): void };
+let _redisClient: RedisClient | null = null;
 
-function getRedisClient(): { incr(k: string): Promise<number>; expire(k: string, s: number): Promise<number> } | null {
+function getRedisClient(): RedisClient | null {
   if (!process.env.REDIS_URL) return null;
   if (_redisClient) return _redisClient;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Redis = require('ioredis') as new (url: string) => typeof _redisClient;
+    const Redis = require('ioredis') as new (url: string) => RedisClient;
     _redisClient = new Redis(process.env.REDIS_URL);
     _redisClient.on('error', (err: Error) => {
       logger.warn(`[Trendyol] Redis error: ${err.message} — falling back to in-process rate limiter`);

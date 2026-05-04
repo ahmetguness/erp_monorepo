@@ -54,21 +54,40 @@ import { TrendyolWebhookController } from './controllers/trendyol-webhook.contro
 import { TrendyolWorker } from './services/trendyol-worker.service';
 import { startMarketplaceMocks } from './mocks';
 
+// ── Startup env var kontrolü ─────────────────
+const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET'] as const;
+for (const key of REQUIRED_ENV_VARS) {
+  if (!process.env[key]) {
+    throw new Error(`Zorunlu ortam değişkeni eksik: ${key}. Uygulama başlatılamaz.`);
+  }
+}
+
+// OpenAI opsiyonel — sadece chat aktifse gerekli
+if (!process.env.OPENAI_API_KEY) {
+  logger.warn('[Startup] OPENAI_API_KEY tanımlı değil — AI chat devre dışı.');
+}
+
 const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 // ── CORS ─────────────────────────────────────
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(s => s.trim());
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 app.use('*', cors({
   origin: (origin) => {
-    if (!origin) return '*'; // server-to-server (Postman, curl vb.)
+    // Production'da origin zorunlu — server-to-server için API key kullanılmalı
+    if (!origin) return IS_PRODUCTION ? '' : '*';
     return ALLOWED_ORIGINS.includes(origin) ? origin : '';
   },
   allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'x-tenant-id', 'x-api-key'],
+  allowHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
   exposeHeaders: ['Content-Length'],
   maxAge: 86400,
+  credentials: true,
 }));
 
 // ── HTTP istek logu ──────────────────────────
@@ -81,13 +100,31 @@ app.use('*', async (c, next) => {
 // ── Routes ───────────────────────────────────
 app.get('/', (c) => c.json({ status: 'ok', service: 'Axon ERP API' }));
 
+// ── Health Check (genişletilmiş) ─────────────
 app.get('/health', async (c) => {
+  const checks: Record<string, 'ok' | 'error' | 'disabled'> = {};
+
+  // DB kontrolü
   try {
     await prisma.$queryRaw`SELECT 1`;
-    return c.json({ status: 'ok', db: 'connected' });
+    checks.db = 'ok';
   } catch {
-    return c.json({ status: 'error', db: 'disconnected' }, 500);
+    checks.db = 'error';
   }
+
+  // OpenAI kontrolü (opsiyonel)
+  checks.openai = process.env.OPENAI_API_KEY ? 'ok' : 'disabled';
+
+  // Resend (mail) kontrolü (opsiyonel)
+  checks.mail = process.env.RESEND_API_KEY ? 'ok' : 'disabled';
+
+  // Redis kontrolü (opsiyonel)
+  checks.redis = process.env.REDIS_URL ? 'ok' : 'disabled';
+
+  const hasError = Object.values(checks).includes('error');
+  const status = hasError ? 'degraded' : 'ok';
+
+  return c.json({ status, checks, uptime: process.uptime() }, hasError ? 503 : 200);
 });
 
 // ── Auth (public) ────────────────────────────
@@ -110,6 +147,7 @@ app.route('/api/admin', demoAdminRoutes);
 const tenantApi = new Hono();
 tenantApi.use('*', requireAuth);
 
+// Starter Plan Routes (tüm planlara açık)
 tenantApi.route('/users', userRoutes);
 tenantApi.route('/products', productRoutes);
 tenantApi.route('/warehouses', warehouseRoutes);
@@ -126,6 +164,7 @@ tenantApi.route('/settings', settingsRoutes);
 tenantApi.route('/notifications', notificationRoutes);
 tenantApi.route('/audit-logs', auditLogRoutes);
 tenantApi.route('/attachments', attachmentRoutes);
+tenantApi.route('/invitations', invitationRoutes);
 tenantApi.get('/currency-rates/tcmb', CurrencyRatesController.getTcmbRates);
 
 // Professional Plan Routes
@@ -149,7 +188,6 @@ tenantApi.route('/marketplace', marketplaceRoutes);
 tenantApi.route('/hr', hrRoutes);
 tenantApi.route('/payroll', payrollRoutes);
 tenantApi.route('/mail', mailRoutes);
-tenantApi.route('/invitations', invitationRoutes);
 tenantApi.route('/chat', chatRoutes);
 
 // ── External API (API Key auth) ──────────────
@@ -167,15 +205,14 @@ app.onError((err, c) => {
 
   logger.error(`Unhandled error: ${err.message}`);
 
-  // Development'ta detaylı hata, production'da generic
-  if (process.env.NODE_ENV === 'development') {
+  if (IS_PRODUCTION) {
     return c.json({
-      error: { code: 'INTERNAL_ERROR', message: err.message, stack: err.stack },
+      error: { code: 'INTERNAL_ERROR', message: 'Beklenmeyen bir hata oluştu.' },
     }, 500);
   }
 
   return c.json({
-    error: { code: 'INTERNAL_ERROR', message: 'Beklenmeyen bir hata oluştu.' },
+    error: { code: 'INTERNAL_ERROR', message: err.message, stack: err.stack },
   }, 500);
 });
 
@@ -184,10 +221,9 @@ app.notFound((c) => {
   return c.json({ error: { code: 'NOT_FOUND', message: 'Endpoint bulunamadı.' } }, 404);
 });
 
-// ── Başlangıç logu ───────────────────────────
+// ── Başlangıç ────────────────────────────────
 serve({ fetch: app.fetch, port: PORT }, () => {
   printBanner(PORT);
-  // Trendyol sync worker -- in-process job queue
   TrendyolWorker.start();
   startMarketplaceMocks();
 });

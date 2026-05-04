@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { AttachmentController } from '../controllers/attachment.controller';
 
+// Attachments tüm planlara açık — requireAuth zaten tenantApi seviyesinde uygulanıyor
 const attachmentRoutes = new Hono();
 
 attachmentRoutes.get('/', AttachmentController.listByEntity);

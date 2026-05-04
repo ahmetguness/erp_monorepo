@@ -1,8 +1,9 @@
 import { Context } from 'hono';
 import { MovementType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
+import { getPaginationParams } from '../utils/pagination.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -47,19 +48,26 @@ export const WarehouseController = {
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const warehouses = await prisma.warehouse.findMany({
-      where: { tenantId },
-      include: {
-        locations: {
-          where: { isActive: true },
-          select: { id: true, name: true, code: true },
-        },
-        _count: { select: { stockLevels: true } },
-      },
-      orderBy: { name: 'asc' },
-    });
+    const { page, limit, skip } = getPaginationParams(c, 50);
 
-    return c.json({ data: warehouses });
+    const [total, warehouses] = await prisma.$transaction([
+      prisma.warehouse.count({ where: { tenantId } }),
+      prisma.warehouse.findMany({
+        where: { tenantId },
+        include: {
+          locations: {
+            where: { isActive: true },
+            select: { id: true, name: true, code: true },
+          },
+          _count: { select: { stockLevels: true } },
+        },
+        orderBy: { name: 'asc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return c.json({ data: warehouses, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
   },
 
   /**
@@ -67,12 +75,8 @@ export const WarehouseController = {
    * Belirli bir depoyu döner.
    */
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const warehouseId = c.req.param('id');
-
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const warehouse = await prisma.warehouse.findFirst({
       where: { id: warehouseId, tenantId },
@@ -138,12 +142,8 @@ export const WarehouseController = {
    * Depo bilgilerini günceller.
    */
   async update(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const warehouseId = c.req.param('id');
-
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const warehouse = await prisma.warehouse.findFirst({
       where: { id: warehouseId, tenantId },
@@ -276,11 +276,8 @@ export const WarehouseController = {
 
 export const LocationController = {
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const warehouseId = c.req.param('warehouseId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, tenantId } });
     if (!warehouse) return c.json(new NotFoundError('Depo', warehouseId).toJSON(), 404);
@@ -294,11 +291,8 @@ export const LocationController = {
   },
 
   async create(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const warehouseId = c.req.param('warehouseId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
     if (!warehouseId) {
       return c.json(new ValidationError('warehouseId zorunludur.').toJSON(), 400);
     }
@@ -327,12 +321,9 @@ export const LocationController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const warehouseId = c.req.param('warehouseId');
     const locationId = c.req.param('locationId');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const location = await prisma.location.findFirst({
       where: { id: locationId, warehouseId, tenantId },

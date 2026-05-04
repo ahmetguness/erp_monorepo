@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { ForbiddenError, ValidationError, NotFoundError } from '../errors';
+import { ValidationError, NotFoundError } from '../errors';
 import { writeFile, mkdir, unlink } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
@@ -78,9 +78,8 @@ export const AttachmentController = {
   },
 
   async download(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
     if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
@@ -103,9 +102,8 @@ export const AttachmentController = {
   },
 
   async rename(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
     if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
@@ -124,9 +122,8 @@ export const AttachmentController = {
   },
 
   async delete(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
     if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);

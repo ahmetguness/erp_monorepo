@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { MarketplaceChannel, MarketplaceOrderStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import {
   TrendyolService,
   buildTrendyolCredentials,
@@ -27,9 +27,8 @@ export const MarketplaceIntegrationController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const integration = await prisma.marketplaceIntegration.findFirst({
       where: { id, tenantId },
@@ -66,9 +65,8 @@ export const MarketplaceIntegrationController = {
   },
 
   async update(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const existing = await prisma.marketplaceIntegration.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Entegrasyon', id).toJSON(), 404);
@@ -88,9 +86,8 @@ export const MarketplaceIntegrationController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const existing = await prisma.marketplaceIntegration.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Entegrasyon', id).toJSON(), 404);
@@ -153,9 +150,8 @@ export const MarketplaceListingController = {
   },
 
   async update(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const existing = await prisma.marketplaceListing.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Listeleme', id).toJSON(), 404);
@@ -175,9 +171,8 @@ export const MarketplaceListingController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const existing = await prisma.marketplaceListing.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Listeleme', id).toJSON(), 404);
@@ -219,9 +214,8 @@ export const MarketplaceOrderController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const order = await prisma.marketplaceOrder.findFirst({
       where: { id, tenantId },
@@ -235,9 +229,8 @@ export const MarketplaceOrderController = {
   },
 
   async changeStatus(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const order = await prisma.marketplaceOrder.findFirst({ where: { id, tenantId } });
     if (!order) return c.json(new NotFoundError('Pazaryeri Siparişi', id).toJSON(), 404);
@@ -279,9 +272,8 @@ export const TrendyolSyncController = {
 
   /** POST /marketplace/integrations/:id/trendyol/test */
   async testConnection(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const integration = await prisma.marketplaceIntegration.findFirst({
       where: { id, tenantId, channel: 'TRENDYOL' },
@@ -302,9 +294,8 @@ export const TrendyolSyncController = {
    * Enqueues a SYNC_ORDERS job and returns the job ID immediately.
    */
   async syncOrders(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const integration = await prisma.marketplaceIntegration.findFirst({
       where: { id, tenantId, channel: 'TRENDYOL' },
@@ -325,9 +316,8 @@ export const TrendyolSyncController = {
    * Enqueues a SYNC_STOCK job and returns the job ID immediately.
    */
   async syncStock(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const integration = await prisma.marketplaceIntegration.findFirst({
       where: { id, tenantId, channel: 'TRENDYOL' },
@@ -342,9 +332,8 @@ export const TrendyolSyncController = {
 
   /** GET /marketplace/integrations/:id/trendyol/jobs/:jobId — job status */
   async getJobStatus(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const jobId = c.req.param('jobId')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const job = await TrendyolWorker.getJob(jobId);
     if (!job || job.tenantId !== tenantId) return c.json(new NotFoundError('Job', jobId).toJSON(), 404);
@@ -354,10 +343,9 @@ export const TrendyolSyncController = {
 
   /** GET /marketplace/integrations/:id/trendyol/batch/:batchRequestId */
   async getBatchResult(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
     const batchRequestId = c.req.param('batchRequestId')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const integration = await prisma.marketplaceIntegration.findFirst({
       where: { id, tenantId, channel: 'TRENDYOL' },

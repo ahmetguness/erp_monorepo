@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { InvoiceType, InvoiceStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
 
@@ -153,11 +153,8 @@ export const InvoiceController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const invoiceId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const invoice = await prisma.invoice.findFirst({
       where: { id: invoiceId, tenantId },
@@ -243,11 +240,8 @@ export const InvoiceController = {
   },
 
   async update(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const invoiceId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const invoice = await prisma.invoice.findFirst({
       where: { id: invoiceId, tenantId },
@@ -285,11 +279,8 @@ export const InvoiceController = {
   },
 
   async cancel(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const invoiceId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const invoice = await prisma.invoice.findFirst({
       where: { id: invoiceId, tenantId },

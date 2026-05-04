@@ -6,13 +6,14 @@ import {
   listInvitations,
   cancelInvitation,
 } from '../services/invitation.service';
+import { requireTenantId } from '../utils/context.js';
 
 export class InvitationController {
   /** POST /api/invitations — Owner davet gönderir */
   static async create(c: Context) {
-    const tenantId = c.get('tenantId') as string;
+    const tenantId = requireTenantId(c);
     const userId = c.get('userId') as string;
-    const { email, roleId } = await c.req.json();
+    const { email, roleId } = await c.req.json<{ email: string; roleId?: string }>();
 
     if (!email) {
       return c.json({ error: 'E-posta adresi zorunludur.' }, 400);
@@ -34,14 +35,14 @@ export class InvitationController {
 
   /** GET /api/invitations — Tenant davetlerini listele */
   static async list(c: Context) {
-    const tenantId = c.get('tenantId') as string;
+    const tenantId = requireTenantId(c);
     const invitations = await listInvitations(tenantId);
     return c.json({ data: invitations });
   }
 
   /** POST /api/invitations/:id/cancel — Daveti iptal et */
   static async cancel(c: Context) {
-    const tenantId = c.get('tenantId') as string;
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
     const result = await cancelInvitation(id, tenantId);
     return c.json(result, result.success ? 200 : 400);
@@ -49,7 +50,7 @@ export class InvitationController {
 
   /** POST /api/public/invitations/validate — Token doğrula (public) */
   static async validate(c: Context) {
-    const { token, email } = await c.req.json();
+    const { token, email } = await c.req.json<{ token: string; email: string }>();
     if (!token || !email) {
       return c.json({ error: 'token ve email zorunludur.' }, 400);
     }
@@ -59,7 +60,9 @@ export class InvitationController {
 
   /** POST /api/public/invitations/accept — Daveti kabul et (public) */
   static async accept(c: Context) {
-    const { token, email, name, password } = await c.req.json();
+    const { token, email, name, password } = await c.req.json<{
+      token: string; email: string; name: string; password: string;
+    }>();
 
     if (!token || !email || !name || !password) {
       return c.json({ error: 'token, email, name ve password zorunludur.' }, 400);

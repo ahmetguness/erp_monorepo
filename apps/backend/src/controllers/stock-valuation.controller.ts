@@ -1,6 +1,6 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
-import { ValidationError, ForbiddenError } from '../errors';
+import { ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { CheckNoteType, CheckStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
@@ -104,11 +104,8 @@ export const CheckPromissoryController = {
   },
 
   async updateStatus(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const existing = await prisma.checkPromissoryNote.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -148,11 +145,8 @@ export const CheckPromissoryController = {
   },
 
   async update(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const existing = await prisma.checkPromissoryNote.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -180,11 +174,8 @@ export const CheckPromissoryController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const existing = await prisma.checkPromissoryNote.findFirst({
       where: { id, tenantId, deletedAt: null },

@@ -1,6 +1,6 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
 import { requireTenantId } from '../utils/context.js';
 
@@ -35,9 +35,8 @@ export const CustomerAssetController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const asset = await prisma.customerAsset.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -78,9 +77,8 @@ export const CustomerAssetController = {
   },
 
   async update(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const existing = await prisma.customerAsset.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) return c.json(new NotFoundError('Müşteri Varlığı', id).toJSON(), 404);
@@ -107,9 +105,8 @@ export const CustomerAssetController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const existing = await prisma.customerAsset.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) return c.json(new NotFoundError('Müşteri Varlığı', id).toJSON(), 404);

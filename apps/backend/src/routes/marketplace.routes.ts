@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { FeatureKey } from '@prisma/client';
+import { FeatureKey, Plan } from '@prisma/client';
 import { requirePlan } from '../middleware/requirePlan';
 import { requireFeature } from '../middleware/requireFeature';
 import { requireModule } from '../middleware/requireModule';
@@ -14,7 +14,7 @@ import {
 
 const marketplaceRoutes = new Hono();
 
-marketplaceRoutes.use('*', requirePlan('ENTERPRISE'));
+marketplaceRoutes.use('*', requirePlan(Plan.ENTERPRISE));
 marketplaceRoutes.use('*', requireFeature(FeatureKey.MARKETPLACE));
 marketplaceRoutes.use('*', requireModule(MODULE_KEYS.MARKETPLACE));
 

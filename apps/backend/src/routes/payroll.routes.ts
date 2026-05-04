@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { FeatureKey } from '@prisma/client';
+import { FeatureKey, Plan } from '@prisma/client';
 import { requirePlan } from '../middleware/requirePlan';
 import { requireFeature } from '../middleware/requireFeature';
 import { requireModule } from '../middleware/requireModule';
@@ -8,7 +8,7 @@ import { PayrollController } from '../controllers/payroll.controller';
 
 const payrollRoutes = new Hono();
 
-payrollRoutes.use('*', requirePlan('ENTERPRISE'));
+payrollRoutes.use('*', requirePlan(Plan.ENTERPRISE));
 payrollRoutes.use('*', requireFeature(FeatureKey.PAYROLL));
 payrollRoutes.use('*', requireModule(MODULE_KEYS.PAYROLL));
 

@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { PurchaseOrderStatus, PurchaseRequestStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
 
@@ -128,9 +128,8 @@ export const PurchaseOrderController = {
   },
 
   async approveRequest(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const request = await prisma.purchaseRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!request) return c.json(new NotFoundError('Satın alma talebi', id).toJSON(), 404);
@@ -148,9 +147,8 @@ export const PurchaseOrderController = {
   },
 
   async convertRequestToOrder(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const body = await c.req.json<{ contactId: string }>();
     if (!body.contactId) return c.json(new ValidationError('contactId zorunludur.').toJSON(), 400);
@@ -231,9 +229,8 @@ export const PurchaseOrderController = {
   },
 
   async getOrderById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const order = await prisma.purchaseOrder.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -290,9 +287,8 @@ export const PurchaseOrderController = {
   },
 
   async sendOrder(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const order = await prisma.purchaseOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!order) return c.json(new NotFoundError('Satın alma siparişi', id).toJSON(), 404);
@@ -314,9 +310,8 @@ export const PurchaseOrderController = {
   },
 
   async receiveOrder(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const body = await c.req.json<{
       warehouseId: string;
@@ -408,9 +403,8 @@ export const PurchaseOrderController = {
   },
 
   async cancelOrder(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const order = await prisma.purchaseOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!order) return c.json(new NotFoundError('Satın alma siparişi', id).toJSON(), 404);

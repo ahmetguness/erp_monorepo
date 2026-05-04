@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { BankTransactionType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
@@ -115,11 +115,8 @@ export const BankTransactionController = {
   },
 
   async matchPayment(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const existing = await prisma.bankTransaction.findFirst({
       where: { id, tenantId },

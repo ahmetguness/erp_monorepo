@@ -1,7 +1,8 @@
 import { Context } from 'hono';
 import { NotificationStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { ForbiddenError, NotFoundError } from '../errors';
+import { NotFoundError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Notification Controller
@@ -10,9 +11,8 @@ import { ForbiddenError, NotFoundError } from '../errors';
 export const NotificationController = {
 
   async list(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const userId = c.get('userId') as string | undefined;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const status = c.req.query('status') as NotificationStatus | undefined;
     const limit = Math.min(100, parseInt(c.req.query('limit') ?? '50', 10));
@@ -35,9 +35,8 @@ export const NotificationController = {
   },
 
   async markAsRead(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const notif = await prisma.notification.findFirst({ where: { id, tenantId } });
     if (!notif) return c.json(new NotFoundError('Bildirim', id).toJSON(), 404);
@@ -51,9 +50,8 @@ export const NotificationController = {
   },
 
   async markAllAsRead(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const userId = c.get('userId') as string | undefined;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     await prisma.notification.updateMany({
       where: { tenantId, ...(userId && { userId }), status: NotificationStatus.UNREAD },
@@ -64,9 +62,8 @@ export const NotificationController = {
   },
 
   async archive(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const notif = await prisma.notification.findFirst({ where: { id, tenantId } });
     if (!notif) return c.json(new NotFoundError('Bildirim', id).toJSON(), 404);
@@ -80,9 +77,8 @@ export const NotificationController = {
   },
 
   async delete(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     await prisma.notification.deleteMany({ where: { id, tenantId } });
     return c.json({ data: { success: true } });

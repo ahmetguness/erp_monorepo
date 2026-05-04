@@ -3,7 +3,7 @@ import { FeatureKey } from '@prisma/client';
 import { authenticateApiKey, requireScope } from '../middleware/authenticateApiKey';
 import { requireFeature } from '../middleware/requireFeature';
 import { prisma } from '../lib/prisma';
-import { ValidationError } from '../errors';
+import { ValidationError, NotFoundError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 
 const externalRoutes = new Hono();
@@ -56,7 +56,7 @@ externalRoutes.get('/products/:id', requireScope('products:read'), async (c) => 
     },
   });
 
-  if (!product) return c.json({ error: 'Ürün bulunamadı.' }, 404);
+  if (!product) return c.json(new NotFoundError('Ürün', id).toJSON(), 404);
   return c.json({ data: product });
 });
 
@@ -95,7 +95,7 @@ externalRoutes.patch('/products/:id', requireScope('products:write'), async (c) 
   }>();
 
   const existing = await prisma.product.findFirst({ where: { id, tenantId, deletedAt: null } });
-  if (!existing) return c.json({ error: 'Ürün bulunamadı.' }, 404);
+  if (!existing) return c.json(new NotFoundError('Ürün', id).toJSON(), 404);
 
   const updated = await prisma.product.update({
     where: { id },
@@ -119,7 +119,7 @@ externalRoutes.delete('/products/:id', requireScope('products:delete'), async (c
   const id = c.req.param('id')!;
 
   const existing = await prisma.product.findFirst({ where: { id, tenantId, deletedAt: null } });
-  if (!existing) return c.json({ error: 'Ürün bulunamadı.' }, 404);
+  if (!existing) return c.json(new NotFoundError('Ürün', id).toJSON(), 404);
 
   await prisma.product.update({ where: { id }, data: { deletedAt: new Date() } });
   return c.json({ data: { success: true } });
@@ -167,7 +167,7 @@ externalRoutes.get('/contacts/:id', requireScope('contacts:read'), async (c) => 
     },
   });
 
-  if (!contact) return c.json({ error: 'Cari hesap bulunamadı.' }, 404);
+  if (!contact) return c.json(new NotFoundError('Cari hesap', id).toJSON(), 404);
   return c.json({ data: contact });
 });
 
@@ -208,7 +208,7 @@ externalRoutes.patch('/contacts/:id', requireScope('contacts:write'), async (c) 
   }>();
 
   const existing = await prisma.contact.findFirst({ where: { id, tenantId, deletedAt: null } });
-  if (!existing) return c.json({ error: 'Cari hesap bulunamadı.' }, 404);
+  if (!existing) return c.json(new NotFoundError('Cari hesap', id).toJSON(), 404);
 
   const updated = await prisma.contact.update({
     where: { id },
@@ -233,7 +233,7 @@ externalRoutes.delete('/contacts/:id', requireScope('contacts:delete'), async (c
   const id = c.req.param('id')!;
 
   const existing = await prisma.contact.findFirst({ where: { id, tenantId, deletedAt: null } });
-  if (!existing) return c.json({ error: 'Cari hesap bulunamadı.' }, 404);
+  if (!existing) return c.json(new NotFoundError('Cari hesap', id).toJSON(), 404);
 
   await prisma.contact.update({ where: { id }, data: { deletedAt: new Date() } });
   return c.json({ data: { success: true } });
@@ -292,7 +292,7 @@ externalRoutes.get('/invoices/:id', requireScope('invoices:read'), async (c) => 
     },
   });
 
-  if (!invoice) return c.json({ error: 'Fatura bulunamadı.' }, 404);
+  if (!invoice) return c.json(new NotFoundError('Fatura', id).toJSON(), 404);
   return c.json({ data: invoice });
 });
 
@@ -355,8 +355,8 @@ externalRoutes.post('/invoices/:id/cancel', requireScope('invoices:delete'), asy
   const id = c.req.param('id')!;
 
   const existing = await prisma.invoice.findFirst({ where: { id, tenantId, deletedAt: null } });
-  if (!existing) return c.json({ error: 'Fatura bulunamadı.' }, 404);
-  if (existing.status === 'CANCELLED') return c.json({ error: 'Fatura zaten iptal edilmiş.' }, 400);
+  if (!existing) return c.json(new NotFoundError('Fatura', id).toJSON(), 404);
+  if (existing.status === 'CANCELLED') return c.json(new ValidationError('Fatura zaten iptal edilmiş.').toJSON(), 400);
 
   const updated = await prisma.invoice.update({
     where: { id },
@@ -371,7 +371,7 @@ externalRoutes.post('/invoices/:id/cancel', requireScope('invoices:delete'), asy
 // STOCK
 // ═══════════════════════════════════════════
 
-externalRoutes.get('/stock-levels', requireScope('products:read'), async (c) => {
+externalRoutes.get('/stock-levels', requireScope('inventory:read'), async (c) => {
   const tenantId = requireTenantId(c);
   const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '50', 10)));
@@ -393,7 +393,7 @@ externalRoutes.get('/stock-levels', requireScope('products:read'), async (c) => 
   return c.json({ data: levels, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
 });
 
-externalRoutes.post('/stock-movements', requireScope('products:write'), async (c) => {
+externalRoutes.post('/stock-movements', requireScope('inventory:write'), async (c) => {
   const tenantId = requireTenantId(c);
   const body = await c.req.json<{
     productId: string; type: 'IN' | 'OUT' | 'ADJUSTMENT';

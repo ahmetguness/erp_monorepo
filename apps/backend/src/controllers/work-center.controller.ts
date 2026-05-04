@@ -1,6 +1,6 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
 import { requireTenantId } from '../utils/context.js';
 
@@ -29,9 +29,8 @@ export const WorkCenterController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const wc = await prisma.workCenter.findFirst({
       where: { id, tenantId },
@@ -57,9 +56,8 @@ export const WorkCenterController = {
   },
 
   async update(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const existing = await prisma.workCenter.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('İş Merkezi', id).toJSON(), 404);
@@ -78,9 +76,8 @@ export const WorkCenterController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const existing = await prisma.workCenter.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('İş Merkezi', id).toJSON(), 404);

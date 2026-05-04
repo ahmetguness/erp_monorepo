@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { ServiceStatus, ServiceActivityType, Priority } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { getPaginationParams } from '../utils/pagination.js';
 import { requireTenantId } from '../utils/context.js';
@@ -54,9 +54,8 @@ export const ServiceRequestController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const sr = await prisma.serviceRequest.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -106,9 +105,8 @@ export const ServiceRequestController = {
   },
 
   async changeStatus(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const sr = await prisma.serviceRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!sr) return c.json(new NotFoundError('Servis Talebi', id).toJSON(), 404);
@@ -142,9 +140,8 @@ export const ServiceRequestController = {
   },
 
   async assign(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const sr = await prisma.serviceRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!sr) return c.json(new NotFoundError('Servis Talebi', id).toJSON(), 404);
@@ -161,9 +158,8 @@ export const ServiceRequestController = {
   },
 
   async update(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const existing = await prisma.serviceRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) return c.json(new NotFoundError('Servis Talebi', id).toJSON(), 404);
@@ -183,9 +179,8 @@ export const ServiceRequestController = {
   // ─── Items ──────────────────────────────────
 
   async addItem(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const srId = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const sr = await prisma.serviceRequest.findFirst({ where: { id: srId, tenantId, deletedAt: null } });
     if (!sr) return c.json(new NotFoundError('Servis Talebi', srId).toJSON(), 404);
@@ -207,9 +202,8 @@ export const ServiceRequestController = {
   },
 
   async removeItem(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const itemId = c.req.param('itemId')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const item = await prisma.serviceRequestItem.findFirst({ where: { id: itemId, tenantId } });
     if (!item) return c.json(new NotFoundError('Servis Kalemi', itemId).toJSON(), 404);
@@ -221,9 +215,8 @@ export const ServiceRequestController = {
   // ─── Activities ─────────────────────────────
 
   async addActivity(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const srId = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const sr = await prisma.serviceRequest.findFirst({ where: { id: srId, tenantId, deletedAt: null } });
     if (!sr) return c.json(new NotFoundError('Servis Talebi', srId).toJSON(), 404);
@@ -238,9 +231,8 @@ export const ServiceRequestController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const sr = await prisma.serviceRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!sr) return c.json(new NotFoundError('Servis Talebi', id).toJSON(), 404);

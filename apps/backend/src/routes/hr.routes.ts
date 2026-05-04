@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { FeatureKey } from '@prisma/client';
+import { FeatureKey, Plan } from '@prisma/client';
+import { requirePlan } from '../middleware/requirePlan';
 import { requireFeature } from '../middleware/requireFeature';
 import { requireModule } from '../middleware/requireModule';
 import { MODULE_KEYS } from '../types/module.types';
@@ -9,6 +10,7 @@ import { AttendanceController } from '../controllers/attendance.controller';
 
 const hrRoutes = new Hono();
 
+hrRoutes.use('*', requirePlan(Plan.ENTERPRISE));
 hrRoutes.use('*', requireFeature(FeatureKey.HR));
 hrRoutes.use('*', requireModule(MODULE_KEYS.HR));
 

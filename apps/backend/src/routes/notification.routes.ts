@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { NotificationController } from '../controllers/notification.controller';
 
+// Notifications tüm planlara açık — requireAuth zaten tenantApi seviyesinde uygulanıyor
 const notificationRoutes = new Hono();
 
 notificationRoutes.get('/', NotificationController.list);

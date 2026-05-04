@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { FeatureKey } from '@prisma/client';
+import { FeatureKey, Plan } from '@prisma/client';
 import { requirePlan } from '../middleware/requirePlan';
 import { requireFeature } from '../middleware/requireFeature';
 import { requireModule } from '../middleware/requireModule';
@@ -10,7 +10,7 @@ import { WorkOrderController } from '../controllers/work-order.controller';
 
 const productionRoutes = new Hono();
 
-productionRoutes.use('*', requirePlan('ENTERPRISE'));
+productionRoutes.use('*', requirePlan(Plan.ENTERPRISE));
 productionRoutes.use('*', requireFeature(FeatureKey.PRODUCTION));
 productionRoutes.use('*', requireModule(MODULE_KEYS.PRODUCTION));
 

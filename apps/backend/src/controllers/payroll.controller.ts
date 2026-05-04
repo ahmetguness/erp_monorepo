@@ -1,6 +1,6 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
 import { requireTenantId } from '../utils/context.js';
 
@@ -40,9 +40,8 @@ export const PayrollController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const payroll = await prisma.payroll.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -147,9 +146,8 @@ export const PayrollController = {
   },
 
   async addItem(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const payrollId = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const payroll = await prisma.payroll.findFirst({ where: { id: payrollId, tenantId, deletedAt: null } });
     if (!payroll) return c.json(new NotFoundError('Bordro', payrollId).toJSON(), 404);
@@ -175,9 +173,8 @@ export const PayrollController = {
   },
 
   async removeItem(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const itemId = c.req.param('itemId')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const item = await prisma.payrollItem.findFirst({ where: { id: itemId, tenantId } });
     if (!item) return c.json(new NotFoundError('Bordro Kalemi', itemId).toJSON(), 404);
@@ -202,9 +199,8 @@ export const PayrollController = {
   },
 
   async markPaid(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const payroll = await prisma.payroll.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!payroll) return c.json(new NotFoundError('Bordro', id).toJSON(), 404);
@@ -215,9 +211,8 @@ export const PayrollController = {
   },
 
   async remove(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const payroll = await prisma.payroll.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!payroll) return c.json(new NotFoundError('Bordro', id).toJSON(), 404);

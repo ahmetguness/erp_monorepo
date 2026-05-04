@@ -1,6 +1,6 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
@@ -41,9 +41,8 @@ export const MasterDataController = {
   },
 
   async deleteUnit(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const unitId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const unit = await prisma.unit.findFirst({ where: { id: unitId, tenantId } });
     if (!unit) return c.json(new NotFoundError('Birim', unitId).toJSON(), 404);
     const usedCount = await prisma.product.count({ where: { unitId, deletedAt: null } });
@@ -73,9 +72,8 @@ export const MasterDataController = {
   },
 
   async updateCategory(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const categoryId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const category = await prisma.category.findFirst({ where: { id: categoryId, tenantId } });
     if (!category) return c.json(new NotFoundError('Kategori', categoryId).toJSON(), 404);
     const body = await c.req.json<UpdateCategoryDTO>();
@@ -90,9 +88,8 @@ export const MasterDataController = {
   },
 
   async deleteCategory(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const categoryId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const category = await prisma.category.findFirst({ where: { id: categoryId, tenantId } });
     if (!category) return c.json(new NotFoundError('Kategori', categoryId).toJSON(), 404);
     const usedCount = await prisma.product.count({ where: { categoryId, deletedAt: null } });
@@ -118,9 +115,8 @@ export const MasterDataController = {
   },
 
   async updateTaxRate(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const taxRateId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     const taxRate = await prisma.taxRate.findFirst({ where: { id: taxRateId, tenantId } });
     if (!taxRate) return c.json(new NotFoundError('KDV oranı', taxRateId).toJSON(), 404);
     const body = await c.req.json<UpdateTaxRateDTO>();

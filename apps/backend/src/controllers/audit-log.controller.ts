@@ -79,9 +79,8 @@ export const AuditLogController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     // Plan bazlı tarih kısıtlaması — eski kayıtlara erişimi engelle
     const feature = await tenantFeatureService.resolveFeature(tenantId, FeatureKey.AUDIT_LOG);

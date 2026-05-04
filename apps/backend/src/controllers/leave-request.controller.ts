@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { LeaveType, LeaveStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
 import { requireTenantId } from '../utils/context.js';
 
@@ -40,9 +40,8 @@ export const LeaveRequestController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const lr = await prisma.leaveRequest.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -89,9 +88,8 @@ export const LeaveRequestController = {
   },
 
   async approve(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const lr = await prisma.leaveRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!lr) return c.json(new NotFoundError('İzin Talebi', id).toJSON(), 404);
@@ -106,9 +104,8 @@ export const LeaveRequestController = {
   },
 
   async reject(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const lr = await prisma.leaveRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!lr) return c.json(new NotFoundError('İzin Talebi', id).toJSON(), 404);
@@ -119,9 +116,8 @@ export const LeaveRequestController = {
   },
 
   async cancel(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     const lr = await prisma.leaveRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!lr) return c.json(new NotFoundError('İzin Talebi', id).toJSON(), 404);

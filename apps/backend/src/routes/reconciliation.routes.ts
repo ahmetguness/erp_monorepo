@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
+import { Plan } from '@prisma/client';
 import { requirePlan } from '../middleware/requirePlan';
 import { ReconciliationController } from '../controllers/reconciliation.controller';
 
 const reconciliationRoutes = new Hono();
 
-reconciliationRoutes.use('*', requirePlan('PROFESSIONAL'));
+reconciliationRoutes.use('*', requirePlan(Plan.PROFESSIONAL));
 
 reconciliationRoutes.get('/', ReconciliationController.list);
 reconciliationRoutes.get('/:id', ReconciliationController.getById);

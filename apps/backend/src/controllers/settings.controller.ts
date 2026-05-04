@@ -1,6 +1,6 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
-import { ForbiddenError, NotFoundError, ValidationError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
@@ -37,9 +37,8 @@ export const SettingsController = {
   },
 
   async deleteTenantSetting(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const key = c.req.param('key');
-    if (!tenantId) return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
 
     await prisma.tenantSetting.deleteMany({ where: { tenantId, key } });
     return c.json({ data: { success: true } });

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { SettingsController } from '../controllers/settings.controller';
 
+// Settings tüm planlara açık — requireAuth zaten tenantApi seviyesinde uygulanıyor
 const settingsRoutes = new Hono();
 
 // Tenant settings

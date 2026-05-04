@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { JournalEntryType, AccountType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
 
@@ -213,11 +213,8 @@ export const AccountingController = {
   },
 
   async postJournalEntry(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const entryId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const entry = await prisma.journalEntry.findFirst({
       where: { id: entryId, tenantId },
@@ -241,11 +238,8 @@ export const AccountingController = {
   // ── Update draft journal entry ───────────────
 
   async updateJournalEntry(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const entryId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const entry = await prisma.journalEntry.findFirst({ where: { id: entryId, tenantId } });
     if (!entry) return c.json(new NotFoundError('Yevmiye fişi', entryId).toJSON(), 404);
@@ -288,11 +282,8 @@ export const AccountingController = {
   // ── Reverse (storno) posted journal entry ────
 
   async reverseJournalEntry(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const entryId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const entry = await prisma.journalEntry.findFirst({
       where: { id: entryId, tenantId },
@@ -349,11 +340,8 @@ export const AccountingExtController = {
   // ── LedgerAccount ────────────────────────────
 
   async getAccountById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const accountId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const account = await prisma.ledgerAccount.findFirst({
       where: { id: accountId, tenantId, deletedAt: null },
@@ -368,11 +356,8 @@ export const AccountingExtController = {
   },
 
   async updateAccount(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const accountId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const account = await prisma.ledgerAccount.findFirst({
       where: { id: accountId, tenantId, deletedAt: null },
@@ -395,11 +380,8 @@ export const AccountingExtController = {
   // ── JournalEntry ─────────────────────────────
 
   async getJournalEntryById(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const entryId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const entry = await prisma.journalEntry.findFirst({
       where: { id: entryId, tenantId },
@@ -469,11 +451,8 @@ export const AccountingExtController = {
   },
 
   async closeFiscalPeriod(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const periodId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const period = await prisma.fiscalPeriod.findFirst({ where: { id: periodId, tenantId } });
     if (!period) return c.json(new NotFoundError('Dönem', periodId).toJSON(), 404);
@@ -491,11 +470,8 @@ export const AccountingExtController = {
   },
 
   async deleteFiscalPeriod(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const periodId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const period = await prisma.fiscalPeriod.findFirst({ where: { id: periodId, tenantId } });
     if (!period) return c.json(new NotFoundError('Dönem', periodId).toJSON(), 404);

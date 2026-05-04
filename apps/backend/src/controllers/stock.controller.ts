@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { MovementType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
 
@@ -260,11 +260,8 @@ export const StockController = {
   },
 
   async getStockCount(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const countId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const stockCount = await prisma.stockCount.findFirst({
       where: { id: countId, tenantId },
@@ -325,11 +322,8 @@ export const StockController = {
   },
 
   async finalizeStockCount(c: Context): Promise<Response> {
-    const tenantId = c.get('tenantId');
+    const tenantId = requireTenantId(c);
     const countId = c.req.param('id');
-    if (!tenantId || typeof tenantId !== 'string') {
-      return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
-    }
 
     const stockCount = await prisma.stockCount.findFirst({
       where: { id: countId, tenantId },
