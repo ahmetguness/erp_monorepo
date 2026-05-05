@@ -1,8 +1,10 @@
 import { Context } from 'hono';
-import { PaymentMethod, PaymentStatus } from '@prisma/client';
+import { PaymentMethod, PaymentStatus, AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { writePaymentAccountEntry } from '../utils/account-entry.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -85,6 +87,40 @@ export const PaymentController = {
     return c.json({ data: account }, 201);
   },
 
+  async updateBankAccount(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const existing = await prisma.bankAccount.findFirst({ where: { id, tenantId, deletedAt: null } });
+    if (!existing) return c.json(new NotFoundError('Banka hesabı', id).toJSON(), 404);
+
+    const body = await c.req.json<Partial<CreateBankAccountDTO> & { isActive?: boolean }>();
+
+    const updated = await prisma.bankAccount.update({
+      where: { id },
+      data: {
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.accountNumber !== undefined && { accountNumber: body.accountNumber }),
+        ...(body.iban !== undefined && { iban: body.iban }),
+        ...(body.bankName !== undefined && { bankName: body.bankName }),
+        ...(body.isActive !== undefined && { isActive: body.isActive }),
+      },
+    });
+
+    return c.json({ data: updated });
+  },
+
+  async deleteBankAccount(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const existing = await prisma.bankAccount.findFirst({ where: { id, tenantId, deletedAt: null } });
+    if (!existing) return c.json(new NotFoundError('Banka hesabı', id).toJSON(), 404);
+
+    await prisma.bankAccount.update({ where: { id }, data: { deletedAt: new Date(), isActive: false } });
+    return c.json({ data: { success: true } });
+  },
+
   // ── Cash Accounts ────────────────────────────
 
   async listCashAccounts(c: Context): Promise<Response> {
@@ -116,6 +152,37 @@ export const PaymentController = {
     });
 
     return c.json({ data: account }, 201);
+  },
+
+  async updateCashAccount(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const existing = await prisma.cashAccount.findFirst({ where: { id, tenantId, deletedAt: null } });
+    if (!existing) return c.json(new NotFoundError('Kasa hesabı', id).toJSON(), 404);
+
+    const body = await c.req.json<{ name?: string; isActive?: boolean }>();
+
+    const updated = await prisma.cashAccount.update({
+      where: { id },
+      data: {
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.isActive !== undefined && { isActive: body.isActive }),
+      },
+    });
+
+    return c.json({ data: updated });
+  },
+
+  async deleteCashAccount(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const existing = await prisma.cashAccount.findFirst({ where: { id, tenantId, deletedAt: null } });
+    if (!existing) return c.json(new NotFoundError('Kasa hesabı', id).toJSON(), 404);
+
+    await prisma.cashAccount.update({ where: { id }, data: { deletedAt: new Date(), isActive: false } });
+    return c.json({ data: { success: true } });
   },
 
   // ── Payments ─────────────────────────────────
@@ -168,6 +235,8 @@ export const PaymentController = {
 
   async createPayment(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
 
     const body = await c.req.json<CreatePaymentDTO>();
 
@@ -219,7 +288,29 @@ export const PaymentController = {
         });
       }
 
+      // AccountEntry: cari hesap hareketi (contactId varsa)
+      if (body.contactId) {
+        await writePaymentAccountEntry(tx, {
+          tenantId,
+          contactId: body.contactId,
+          paymentId: newPayment.id,
+          reference: body.reference,
+          amount: body.amount,
+          date: new Date(body.date),
+          userId,
+        });
+      }
+
       return newPayment;
+    });
+
+    // Audit log
+    await createAuditLog(prisma, {
+      tenantId, userId, module: 'accounting',
+      entityType: EntityType.INVOICE, entityId: payment.id,
+      action: AuditAction.CREATE,
+      newValues: { amount: body.amount, method: body.method, contactId: body.contactId ?? null },
+      ipAddress, userAgent,
     });
 
     return c.json({ data: payment }, 201);

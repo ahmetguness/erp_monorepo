@@ -66,7 +66,9 @@ export function useLogout() {
   return () => {
     storeLogout();
     toast.info('Çıkış yapıldı.');
-    router.push('/login');
+    // replace kullan — history'den dashboard'u temizler,
+    // geri tuşuyla dashboard'a dönülmesini önler
+    router.replace('/login');
   };
 }
 

@@ -1,5 +1,5 @@
 import { Context } from 'hono';
-import { MarketplaceChannel, MarketplaceOrderStatus } from '@prisma/client';
+import { MarketplaceChannel, MarketplaceOrderStatus, SyncJobType, SyncJobStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import {
@@ -303,7 +303,7 @@ export const TrendyolSyncController = {
     if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
 
     const body = await c.req.json<{ hoursBack?: number; status?: string }>().catch((): { hoursBack?: number; status?: string } => ({}));
-    const jobId = await TrendyolWorker.enqueue(tenantId, id, 'SYNC_ORDERS', {
+    const jobId = await TrendyolWorker.enqueue(tenantId, id, SyncJobType.SYNC_ORDERS, {
       hoursBack: body.hoursBack ?? 24,
       status: body.status,
     });
@@ -325,7 +325,7 @@ export const TrendyolSyncController = {
     if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
 
     const body = await c.req.json<{ force?: boolean }>().catch((): { force?: boolean } => ({}));
-    const jobId = await TrendyolWorker.enqueue(tenantId, id, 'SYNC_STOCK', { force: body.force ?? false });
+    const jobId = await TrendyolWorker.enqueue(tenantId, id, SyncJobType.SYNC_STOCK, { force: body.force ?? false });
 
     return c.json({ data: { jobId, message: 'Stok senkronizasyonu kuyruğa alındı.' } }, 202);
   },
@@ -376,8 +376,11 @@ export const MarketplaceMonitoringController = {
 
     const { page, limit, skip } = getPaginationParams(c, 20);
     const integrationId = c.req.query('integrationId');
-    const status = c.req.query('status');
-    const jobType = c.req.query('jobType');
+    const statusRaw = c.req.query('status');
+    const jobTypeRaw = c.req.query('jobType');
+
+    const status = statusRaw as SyncJobStatus | undefined;
+    const jobType = jobTypeRaw as SyncJobType | undefined;
 
     const where = {
       tenantId,

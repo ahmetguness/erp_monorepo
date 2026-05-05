@@ -1,4 +1,8 @@
 import { Context } from 'hono';
+import { CurrencyRateSource } from '@prisma/client';
+import { prisma } from '../lib/prisma';
+import { ValidationError } from '../errors';
+import { requireTenantId } from '../utils/context.js';
 
 interface TcmbCurrency {
   code: string;
@@ -68,5 +72,82 @@ export const CurrencyRatesController = {
       if (cache) return c.json({ data: cache.data });
       return c.json({ error: 'TCMB kurları alınamadı.' }, 502);
     }
+  },
+
+  /**
+   * POST /api/currency-rates
+   * Manuel kur girişi — tenant bazlı belirli bir tarih için kur kaydeder.
+   */
+  async createRate(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+
+    const body = await c.req.json<{
+      currencyCode: string;
+      rate: number;
+      date: string;
+      source?: CurrencyRateSource;
+    }>();
+
+    if (!body.currencyCode || !body.rate || !body.date) {
+      return c.json(new ValidationError('currencyCode, rate ve date zorunludur.').toJSON(), 400);
+    }
+
+    if (body.rate <= 0) {
+      return c.json(new ValidationError('Kur değeri 0\'dan büyük olmalıdır.').toJSON(), 400);
+    }
+
+    const rate = await prisma.currencyRate.upsert({
+      where: {
+        tenantId_currencyCode_date: {
+          tenantId,
+          currencyCode: body.currencyCode.toUpperCase(),
+          date: new Date(body.date),
+        },
+      },
+      create: {
+        tenantId,
+        currencyCode: body.currencyCode.toUpperCase(),
+        rate: body.rate,
+        date: new Date(body.date),
+        source: body.source ?? CurrencyRateSource.MANUAL,
+      },
+      update: {
+        rate: body.rate,
+        source: body.source ?? CurrencyRateSource.MANUAL,
+      },
+    });
+
+    return c.json({ data: rate }, 201);
+  },
+
+  /**
+   * GET /api/currency-rates
+   * Tenant'ın kayıtlı kurlarını listeler.
+   */
+  async listRates(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+
+    const currencyCode = c.req.query('currencyCode');
+    const dateFrom = c.req.query('dateFrom');
+    const dateTo = c.req.query('dateTo');
+
+    const rates = await prisma.currencyRate.findMany({
+      where: {
+        tenantId,
+        ...(currencyCode && { currencyCode: currencyCode.toUpperCase() }),
+        ...(dateFrom || dateTo
+          ? {
+              date: {
+                ...(dateFrom && { gte: new Date(dateFrom) }),
+                ...(dateTo && { lte: new Date(dateTo) }),
+              },
+            }
+          : {}),
+      },
+      orderBy: [{ currencyCode: 'asc' }, { date: 'desc' }],
+      take: 200,
+    });
+
+    return c.json({ data: rates });
   },
 };

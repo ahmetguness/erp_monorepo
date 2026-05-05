@@ -166,6 +166,8 @@ tenantApi.route('/audit-logs', auditLogRoutes);
 tenantApi.route('/attachments', attachmentRoutes);
 tenantApi.route('/invitations', invitationRoutes);
 tenantApi.get('/currency-rates/tcmb', CurrencyRatesController.getTcmbRates);
+tenantApi.get('/currency-rates', CurrencyRatesController.listRates);
+tenantApi.post('/currency-rates', CurrencyRatesController.createRate);
 
 // Professional Plan Routes
 tenantApi.route('/api-keys', apiKeyRoutes);

@@ -46,9 +46,11 @@
 // MovementRefType:       PURCHASE_ORDER | SALES_ORDER | WORK_ORDER | DELIVERY_NOTE | STOCK_COUNT | MANUAL | OTHER
 // FeatureType:           BOOLEAN | LIMIT | ENUM
 // FeatureKey:            MAX_USERS | MAX_PRODUCTS | MULTI_WAREHOUSE | ROLE_MANAGEMENT | APPROVALS | CRM | SALES | PURCHASING | PRODUCTION | SERVICE | MARKETPLACE | PAYROLL | HR | API_ACCESS | AUDIT_LOG | CUSTOM_REPORTING
-// AppModule:             ACCOUNTING | INVENTORY | CRM | SALES | PURCHASING | WAREHOUSE | PRODUCTION | SERVICE | HR | PAYROLL | MARKETPLACE | REPORTING
+// AppModule:             ACCOUNTING | INVENTORY | CRM | SALES | PURCHASING | WAREHOUSE | PRODUCTION | SERVICE | HR | PAYROLL | MARKETPLACE | REPORTING | CONTACTS | INVOICING | APPROVALS
 // DemoRequestStatus:     PENDING | APPROVED | PROVISIONING | PROVISIONED | REJECTED | EXPIRED | CANCELLED
-// InvitationStatus:      PENDING | ACCEPTED | EXPIRED | CANCELLED
+// InvitationStatus:      PENDING | ACCEPTED | EXPIRED | CANCELLED  [removed — inline string in model]
+// SyncJobStatus:         PENDING | RUNNING | DONE | FAILED
+// SyncJobType:           SYNC_ORDERS | SYNC_STOCK | SYNC_PRODUCTS
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -2066,8 +2068,8 @@ Table marketplace_sync_jobs {
   id             String   [pk]
   tenantId       String
   integrationId  String
-  jobType        String   [note: 'SYNC_ORDERS | SYNC_STOCK | SYNC_PRODUCTS']
-  status         String   [default: "PENDING", note: 'PENDING | RUNNING | DONE | FAILED']
+  jobType        SyncJobType  [note: 'SYNC_ORDERS | SYNC_STOCK | SYNC_PRODUCTS']
+  status         SyncJobStatus [default: "PENDING", note: 'PENDING | RUNNING | DONE | FAILED']
   startedAt      DateTime [null]
   finishedAt     DateTime [null]
   processedCount Int      [default: 0, note: 'Kaç kayıt işlendi']
@@ -2182,6 +2184,8 @@ Table demo_requests {
   }
 }
 
+Ref: demo_requests.tenantId > tenants.id
+
 // ═══════════════════════════════════════════════════════════════
 // TENANT INVITATIONS
 // ═══════════════════════════════════════════════════════════════
@@ -2205,7 +2209,12 @@ Table invitations {
   indexes {
     (tenantId, email) [unique]
     tenantId
+    roleId
     status
     tokenHash
   }
 }
+
+Ref: invitations.tenantId > tenants.id [delete: cascade]
+Ref: invitations.roleId > roles.id
+Ref: invitations.invitedBy > users.id

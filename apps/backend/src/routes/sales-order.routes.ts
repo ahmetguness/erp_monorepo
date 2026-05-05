@@ -15,6 +15,7 @@ salesOrderRoutes.post('/quotes/:id/convert', requirePermission('invoicing', 'CRE
 
 salesOrderRoutes.get('/', requirePermission('invoicing', 'READ'), SalesOrderController.listOrders);
 salesOrderRoutes.get('/:id', requirePermission('invoicing', 'READ'), SalesOrderController.getOrderById);
+salesOrderRoutes.get('/:id/history', requirePermission('invoicing', 'READ'), SalesOrderController.getOrderHistory);
 salesOrderRoutes.post('/', requirePermission('invoicing', 'CREATE'), SalesOrderController.createOrder);
 salesOrderRoutes.patch('/:id', requirePermission('invoicing', 'UPDATE'), SalesOrderController.updateOrder);
 salesOrderRoutes.post('/:id/cancel', requirePermission('invoicing', 'UPDATE'), SalesOrderController.cancelOrder);

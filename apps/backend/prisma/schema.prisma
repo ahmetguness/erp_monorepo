@@ -353,6 +353,20 @@ enum MovementRefType {
   OTHER
 }
 
+enum LotUsedRefType {
+  SALES_ORDER
+  WORK_ORDER
+  DELIVERY_NOTE
+  OTHER
+}
+
+enum BankTransactionRefType {
+  PAYMENT
+  INVOICE
+  RECONCILIATION
+  OTHER
+}
+
 // Fix #6: Priority enum replacing Int priority on ServiceRequest
 enum Priority {
   LOW
@@ -402,6 +416,32 @@ enum AppModule {
   PAYROLL
   MARKETPLACE
   REPORTING
+  // Ek modüller — uygulama katmanında kullanılır
+  CONTACTS
+  INVOICING
+  APPROVALS
+}
+
+// ─── Marketplace Job Enum'ları ───────────────
+enum SyncJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum SyncJobType {
+  SYNC_ORDERS
+  SYNC_STOCK
+  SYNC_PRODUCTS
+}
+
+// ─── Invitation Status ───────────────────────
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
 }
 
 // ═════════════════════════════════════════════
@@ -539,6 +579,9 @@ model Tenant {
   featureOverrides         TenantFeatureOverride[]
   // DEĞİŞİKLİK 6: ApiKey back-relation
   apiKeys                  ApiKey[]
+  // Invitation & DemoRequest back-relations
+  invitations              Invitation[]
+  demoRequests             DemoRequest[]
 
   @@index([status])
   @@index([deletedAt])
@@ -563,6 +606,7 @@ model User {
 
   tenants TenantUser[]
   approvalSteps ApprovalStep[] @relation("StepApproverUser")
+  sentInvitations Invitation[] @relation("InvitationInviter")
 
   @@index([email])
   @@index([deletedAt])
@@ -626,6 +670,7 @@ model Role {
   permissions RolePermission[]
   users       TenantUser[]
   approvalSteps ApprovalStep[] @relation("StepApproverRole")
+  invitations Invitation[]
 
   @@unique([tenantId, name])
   @@map("roles")
@@ -1119,6 +1164,7 @@ model AccountEntry {
 
   @@index([tenantId, contactId])
   @@index([tenantId, date])
+  @@index([refType, refId])
   @@map("account_entries")
 }
 
@@ -1407,7 +1453,7 @@ model LotSerialNumber {
   serialNumber String
   isUsed       Boolean   @default(false)
   usedAt       DateTime?
-  usedRefType  String?
+  usedRefType  LotUsedRefType?
   usedRefId    String?
   createdAt    DateTime  @default(now())
 
@@ -1944,7 +1990,7 @@ model BankTransaction {
   date          DateTime
   description   String?
   reference     String?
-  refType       String?
+  refType       BankTransactionRefType?
   refId         String?
   createdAt     DateTime            @default(now())
   createdById   String?
@@ -1982,6 +2028,7 @@ model CheckPromissoryNote {
   @@unique([tenantId, number])
   @@index([tenantId, status])
   @@index([tenantId, dueDate])
+  @@index([tenantId, contactId])
   @@index([deletedAt])
   @@map("check_promissory_notes")
 }
@@ -2234,6 +2281,7 @@ model Attendance {
   checkOut      DateTime?
   overtimeHours Decimal   @db.Decimal(5, 2) @default(0)
   notes         String?
+  updatedAt     DateTime  @updatedAt
 
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2254,6 +2302,7 @@ model Payroll {
   paidAt      DateTime?
   notes       String?
   createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
   createdById String?
 
@@ -2443,6 +2492,7 @@ model WorkOrderOperation {
   tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, workOrderId])
+  @@index([tenantId, workCenterId])
   @@map("work_order_operations")
 }
 
@@ -2681,25 +2731,25 @@ model MarketplaceOrderItem {
 /// Trendyol (ve diğer kanal) sync işlemlerinin durumunu izler.
 /// Her sync job bir kayıt oluşturur; queue worker bu tabloyu okur.
 model MarketplaceSyncJob {
-  id            String   @id @default(cuid())
+  id            String        @id @default(cuid())
   tenantId      String
   integrationId String
-  jobType       String   // 'SYNC_ORDERS' | 'SYNC_STOCK' | 'SYNC_PRODUCTS'
-  status        String   @default("PENDING") // PENDING | RUNNING | DONE | FAILED
+  jobType       SyncJobType
+  status        SyncJobStatus @default(PENDING)
   startedAt     DateTime?
   finishedAt    DateTime?
   /// Kaç kayıt işlendi
-  processedCount Int     @default(0)
+  processedCount Int          @default(0)
   /// Kaç kayıt hata verdi
-  errorCount    Int      @default(0)
+  errorCount    Int           @default(0)
   /// Hata mesajı (varsa)
   errorMessage  String?
   /// Job parametreleri (JSON): hoursBack, status filtresi vb.
   params        Json?
   /// Sonuç özeti (JSON): created, updated, skipped, batchIds vb.
   result        Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2739,7 +2789,7 @@ model MarketplaceListingSnapshot {
   id            String   @id @default(cuid())
   tenantId      String
   listingId     String   @unique
-  lastSentQty   Int
+  lastSentQty   Decimal  @db.Decimal(18, 3)
   lastSentSalePrice  Decimal @db.Decimal(18, 2)
   lastSentListPrice  Decimal @db.Decimal(18, 2)
   lastSentAt    DateTime
@@ -2811,8 +2861,11 @@ model DemoRequest {
   processedAt DateTime?
   processedBy String?
 
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
   @@index([email])
   @@index([status])
+  @@index([tenantId])
   @@index([createdAt])
   @@map("demo_requests")
 }
@@ -2820,13 +2873,6 @@ model DemoRequest {
 // ═════════════════════════════════════════════
 // TENANT INVITATIONS
 // ═════════════════════════════════════════════
-
-enum InvitationStatus {
-  PENDING
-  ACCEPTED
-  EXPIRED
-  CANCELLED
-}
 
 model Invitation {
   id        String   @id @default(cuid())
@@ -2844,8 +2890,13 @@ model Invitation {
   invitedBy   String
   acceptedAt  DateTime?
 
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role      Role?   @relation(fields: [roleId], references: [id])
+  inviter   User    @relation("InvitationInviter", fields: [invitedBy], references: [id])
+
   @@unique([tenantId, email])
   @@index([tenantId])
+  @@index([roleId])
   @@index([status])
   @@index([tokenHash])
   @@map("invitations")

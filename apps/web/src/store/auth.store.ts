@@ -38,11 +38,9 @@ export const useAuthStore = create<AuthStore>()(
           if (rememberMe) {
             const maxAge = 7 * 24 * 60 * 60;
             document.cookie = `axon_token=${token}; path=/; max-age=${maxAge}; SameSite=Lax`;
-            document.cookie = `axon_tenant_id=${tenant.id}; path=/; max-age=${maxAge}; SameSite=Lax`;
           } else {
             // Session cookie — tarayıcı kapanınca silinir
             document.cookie = `axon_token=${token}; path=/; SameSite=Lax`;
-            document.cookie = `axon_tenant_id=${tenant.id}; path=/; SameSite=Lax`;
           }
         }
         set({ user, token, tenant, isAuthenticated: true });
@@ -51,7 +49,6 @@ export const useAuthStore = create<AuthStore>()(
       logout: () => {
         if (typeof window !== 'undefined') {
           document.cookie = 'axon_token=; path=/; max-age=0';
-          document.cookie = 'axon_tenant_id=; path=/; max-age=0';
         }
         set(initialState);
       },

@@ -1,9 +1,10 @@
 import { Context } from 'hono';
-import { DeliveryNoteType, DeliveryNoteStatus } from '@prisma/client';
+import { DeliveryNoteType, DeliveryNoteStatus, AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -121,6 +122,8 @@ export const DeliveryNoteController = {
 
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
 
     const body = await c.req.json<CreateDeliveryNoteDTO>();
 
@@ -132,40 +135,89 @@ export const DeliveryNoteController = {
     }
     const number = await generateDocumentNumber(tenantId, 'delivery_note', 'DN-', 'deliveryNote');
 
-    const note = await prisma.deliveryNote.create({
-      data: {
-        tenantId,
-        number,
-        type: body.type,
-        salesOrderId: body.salesOrderId ?? null,
-        purchaseOrderId: body.purchaseOrderId ?? null,
-        contactId: body.contactId ?? null,
-        warehouseId: body.warehouseId,
-        date: new Date(body.date),
-        trackingNumber: body.trackingNumber ?? null,
-        carrier: body.carrier ?? null,
-        notes: body.notes ?? null,
-        items: {
-          create: body.items.map((item) => ({
-            tenantId,
-            productId: item.productId,
-            description: item.description ?? null,
-            orderedQty: item.orderedQty,
-            deliveredQty: item.deliveredQty,
-            locationId: item.locationId ?? null,
-            lotId: item.lotId ?? null,
-            batchId: item.batchId ?? null,
-            salesOrderItemId: item.salesOrderItemId ?? null,
-            purchaseOrderItemId: item.purchaseOrderItemId ?? null,
-            sortOrder: item.sortOrder ?? 0,
-          })),
+    const note = await prisma.$transaction(async (tx) => {
+      const newNote = await tx.deliveryNote.create({
+        data: {
+          tenantId,
+          number,
+          type: body.type,
+          salesOrderId: body.salesOrderId ?? null,
+          purchaseOrderId: body.purchaseOrderId ?? null,
+          contactId: body.contactId ?? null,
+          warehouseId: body.warehouseId,
+          date: new Date(body.date),
+          trackingNumber: body.trackingNumber ?? null,
+          carrier: body.carrier ?? null,
+          notes: body.notes ?? null,
+          items: {
+            create: body.items.map((item) => ({
+              tenantId,
+              productId: item.productId,
+              description: item.description ?? null,
+              orderedQty: item.orderedQty,
+              deliveredQty: item.deliveredQty,
+              locationId: item.locationId ?? null,
+              lotId: item.lotId ?? null,
+              batchId: item.batchId ?? null,
+              salesOrderItemId: item.salesOrderItemId ?? null,
+              purchaseOrderItemId: item.purchaseOrderItemId ?? null,
+              sortOrder: item.sortOrder ?? 0,
+            })),
+          },
         },
-      },
-      include: {
-        items: {
-          include: { product: { select: { id: true, code: true, name: true } } },
+        include: {
+          items: {
+            include: { product: { select: { id: true, code: true, name: true } } },
+          },
         },
-      },
+      });
+
+      // SalesOrderItem.delivered güncelle
+      for (const item of body.items) {
+        if (item.salesOrderItemId && item.deliveredQty > 0) {
+          await tx.salesOrderItem.update({
+            where: { id: item.salesOrderItemId },
+            data: { delivered: { increment: item.deliveredQty } },
+          });
+        }
+      }
+
+      // SalesOrder durumunu güncelle (kısmi/tam teslimat)
+      if (body.salesOrderId) {
+        const orderItems = await tx.salesOrderItem.findMany({
+          where: { orderId: body.salesOrderId },
+          select: { quantity: true, delivered: true },
+        });
+
+        if (orderItems.length > 0) {
+          const allDelivered = orderItems.every(
+            (i) => Number(i.delivered) >= Number(i.quantity),
+          );
+          const anyDelivered = orderItems.some((i) => Number(i.delivered) > 0);
+
+          if (allDelivered) {
+            await tx.salesOrder.update({
+              where: { id: body.salesOrderId },
+              data: { status: 'DELIVERED' },
+            });
+          } else if (anyDelivered) {
+            await tx.salesOrder.update({
+              where: { id: body.salesOrderId },
+              data: { status: 'PARTIALLY_DELIVERED' },
+            });
+          }
+        }
+      }
+
+      return newNote;
+    });
+
+    await createAuditLog(prisma, {
+      tenantId, userId, module: 'inventory',
+      entityType: EntityType.DELIVERY_NOTE, entityId: note.id,
+      action: AuditAction.CREATE,
+      newValues: { number, type: body.type, salesOrderId: body.salesOrderId ?? null },
+      ipAddress, userAgent,
     });
 
     return c.json({ data: note }, 201);

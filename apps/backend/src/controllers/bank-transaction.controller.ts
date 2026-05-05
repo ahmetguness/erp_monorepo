@@ -1,5 +1,5 @@
 import { Context } from 'hono';
-import { BankTransactionType } from '@prisma/client';
+import { BankTransactionType, BankTransactionRefType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
@@ -28,7 +28,7 @@ interface CreateBankTransactionDTO {
 }
 
 interface MatchPaymentDTO {
-  refType: string;
+  refType: BankTransactionRefType;
   refId: string;
 }
 

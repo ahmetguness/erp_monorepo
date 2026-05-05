@@ -1,9 +1,10 @@
 import { Context } from 'hono';
-import { OrderStatus, QuoteStatus } from '@prisma/client';
+import { OrderStatus, QuoteStatus, AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -284,8 +285,25 @@ export const SalesOrderController = {
     return c.json({ data: order });
   },
 
+  async getOrderHistory(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const orderId = c.req.param('id');
+
+    const order = await prisma.salesOrder.findFirst({ where: { id: orderId, tenantId, deletedAt: null } });
+    if (!order) return c.json(new NotFoundError('Sipariş', orderId).toJSON(), 404);
+
+    const history = await prisma.salesOrderHistory.findMany({
+      where: { tenantId, orderId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return c.json({ data: history });
+  },
+
   async createOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
 
     const body = await c.req.json<CreateSalesOrderDTO>();
 
@@ -319,6 +337,14 @@ export const SalesOrderController = {
 
     await prisma.salesOrderHistory.create({
       data: { tenantId, orderId: order.id, toStatus: 'DRAFT', notes: 'Sipariş oluşturuldu' },
+    });
+
+    await createAuditLog(prisma, {
+      tenantId, userId, module: 'invoicing',
+      entityType: EntityType.SALES_ORDER, entityId: order.id,
+      action: AuditAction.CREATE,
+      newValues: { number: order.number, contactId: body.contactId, totalGross },
+      ipAddress, userAgent,
     });
 
     return c.json({ data: order }, 201);
@@ -357,6 +383,8 @@ export const SalesOrderController = {
 
   async cancelOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
     const orderId = c.req.param('id');
 
     const order = await prisma.salesOrder.findFirst({ where: { id: orderId, tenantId, deletedAt: null } });
@@ -373,6 +401,15 @@ export const SalesOrderController = {
 
     await prisma.salesOrderHistory.create({
       data: { tenantId, orderId: orderId!, fromStatus: order.status, toStatus: OrderStatus.CANCELLED, notes: 'Sipariş iptal edildi' },
+    });
+
+    await createAuditLog(prisma, {
+      tenantId, userId, module: 'invoicing',
+      entityType: EntityType.SALES_ORDER, entityId: orderId!,
+      action: AuditAction.UPDATE,
+      oldValues: { status: order.status },
+      newValues: { status: OrderStatus.CANCELLED },
+      ipAddress, userAgent,
     });
 
     return c.json({ data: updated });

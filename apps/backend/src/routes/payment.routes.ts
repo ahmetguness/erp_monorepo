@@ -10,10 +10,14 @@ paymentRoutes.use('*', requireModule(MODULE_KEYS.ACCOUNTING));
 // Bank Accounts
 paymentRoutes.get('/bank-accounts', PaymentController.listBankAccounts);
 paymentRoutes.post('/bank-accounts', PaymentController.createBankAccount);
+paymentRoutes.patch('/bank-accounts/:id', PaymentController.updateBankAccount);
+paymentRoutes.delete('/bank-accounts/:id', PaymentController.deleteBankAccount);
 
 // Cash Accounts
 paymentRoutes.get('/cash-accounts', PaymentController.listCashAccounts);
 paymentRoutes.post('/cash-accounts', PaymentController.createCashAccount);
+paymentRoutes.patch('/cash-accounts/:id', PaymentController.updateCashAccount);
+paymentRoutes.delete('/cash-accounts/:id', PaymentController.deleteCashAccount);
 
 // Payments
 paymentRoutes.get('/', PaymentController.listPayments);

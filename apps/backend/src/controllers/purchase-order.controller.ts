@@ -1,9 +1,10 @@
 import { Context } from 'hono';
-import { PurchaseOrderStatus, PurchaseRequestStatus } from '@prisma/client';
+import { PurchaseOrderStatus, PurchaseRequestStatus, AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -248,8 +249,25 @@ export const PurchaseOrderController = {
     return c.json({ data: order });
   },
 
+  async getOrderHistory(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id');
+
+    const order = await prisma.purchaseOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
+    if (!order) return c.json(new NotFoundError('Satın alma siparişi', id).toJSON(), 404);
+
+    const history = await prisma.purchaseOrderHistory.findMany({
+      where: { tenantId, orderId: id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return c.json({ data: history });
+  },
+
   async createOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
 
     const body = await c.req.json<CreatePurchaseOrderDTO>();
     if (!body.contactId || !body.date || !body.items?.length) {
@@ -281,6 +299,14 @@ export const PurchaseOrderController = {
       });
 
       return po;
+    });
+
+    await createAuditLog(prisma, {
+      tenantId, userId, module: 'purchasing',
+      entityType: EntityType.PURCHASE_ORDER, entityId: order.id,
+      action: AuditAction.CREATE,
+      newValues: { number: order.number, contactId: body.contactId, totalGross },
+      ipAddress, userAgent,
     });
 
     return c.json({ data: order }, 201);

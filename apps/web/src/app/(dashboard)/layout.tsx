@@ -7,6 +7,7 @@ import { Sidebar } from '@/components/shared/Sidebar';
 import { Header } from '@/components/shared/Header';
 import { ChatBot } from '@/components/shared/ChatBot';
 import { DemoBanner } from '@/components/shared/DemoBanner';
+import { Spinner } from '@/components/ui/Spinner';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -18,9 +19,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [isAuthenticated, router]);
 
-  // Auth yoksa boş ekran göster (redirect olana kadar)
+  // Auth yoksa login'e yönlenene kadar spinner göster (beyaz ekranı önler)
   if (!isAuthenticated) {
-    return null;
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-950">
+        <Spinner size="lg" />
+      </div>
+    );
   }
 
   return (

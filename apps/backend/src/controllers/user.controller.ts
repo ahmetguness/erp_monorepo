@@ -1,10 +1,12 @@
 import { Context } from 'hono';
 import bcrypt from 'bcryptjs';
+import { AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 import { getPaginationParams } from '../utils/pagination.js';
 import { logger } from '../lib/logger';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -111,6 +113,8 @@ export const UserController = {
    */
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
 
     const body = await c.req.json<CreateUserDTO>();
 
@@ -186,6 +190,15 @@ export const UserController = {
     });
 
     logger.info(`[User] Yeni kullanıcı oluşturuldu: ${newUser.email} (tenant: ${tenantId})`);
+
+    await createAuditLog(prisma, {
+      tenantId, userId, module: 'users',
+      entityType: EntityType.OTHER, entityId: newUser.id,
+      action: AuditAction.CREATE,
+      newValues: { email: newUser.email, name: newUser.name },
+      ipAddress, userAgent,
+    });
+
     return c.json({ data: newUser }, 201);
   },
 
@@ -235,6 +248,8 @@ export const UserController = {
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = c.req.param('id');
+    const actorId = c.get('userId') as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
 
     const tenantUser = await prisma.tenantUser.findFirst({
       where: { tenantId, userId },
@@ -254,6 +269,15 @@ export const UserController = {
     await prisma.tenantUser.update({
       where: { id: tenantUser.id },
       data: { isActive: false },
+    });
+
+    await createAuditLog(prisma, {
+      tenantId, userId: actorId, module: 'users',
+      entityType: EntityType.OTHER, entityId: userId!,
+      action: AuditAction.DELETE,
+      oldValues: { isActive: true },
+      newValues: { isActive: false },
+      ipAddress, userAgent,
     });
 
     return c.json({ data: { success: true } });

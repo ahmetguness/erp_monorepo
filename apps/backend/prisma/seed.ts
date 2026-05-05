@@ -3,1444 +3,1539 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log('Seed basliyor...');
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
 
-  // -- Admin User --
-  await prisma.adminUser.deleteMany();
-  await prisma.adminUser.create({
-    data: {
+function d(dateStr: string): Date {
+  return new Date(dateStr);
+}
+
+async function hash(pw: string): Promise<string> {
+  return bcrypt.hash(pw, 12);
+}
+
+// ─────────────────────────────────────────────
+// MAIN
+// ─────────────────────────────────────────────
+
+async function main() {
+  console.log('\n🌱 Seed başlıyor...\n');
+
+  // ── 1. Admin User ────────────────────────────
+  await prisma.adminUser.upsert({
+    where: { email: 'admin@axonerp.com' },
+    create: {
       email: 'admin@axonerp.com',
       name: 'Platform Admin',
-      password: await bcrypt.hash('admin1234', 10),
+      password: await hash('admin1234'),
       isActive: true,
     },
+    update: { password: await hash('admin1234') },
   });
-  console.log('  + Admin kullanici (admin@axonerp.com / admin1234)');
+  console.log('  ✓ Admin: admin@axonerp.com / admin1234');
 
-  // -- Cleanup --
-  // -- Cleanup --
-  await prisma.savedReport.deleteMany();
-  await prisma.notification.deleteMany();
-  await prisma.auditLog.deleteMany();
-  await prisma.attachment.deleteMany();
-  await prisma.approvalAction.deleteMany();
-  await prisma.approvalRequest.deleteMany();
-  await prisma.approvalStep.deleteMany();
-  await prisma.approvalFlow.deleteMany();
-  await prisma.apiKey.deleteMany();
-  await prisma.lotSerialNumber.deleteMany();
-  await prisma.eDocument.deleteMany();
-  await prisma.checkPromissoryNote.deleteMany();
-  await prisma.rolePermission.deleteMany();
-  await prisma.role.deleteMany();
-  await prisma.tenantSetting.deleteMany();
-  await prisma.moduleSetting.deleteMany();
-  await prisma.bankTransaction.deleteMany();
-  await prisma.reconciliationLine.deleteMany();
-  await prisma.reconciliation.deleteMany();
-  await prisma.deliveryNoteItem.deleteMany();
-  await prisma.deliveryNote.deleteMany();
-  await prisma.invoiceHistory.deleteMany();
-  await prisma.salesOrderHistory.deleteMany();
-  await prisma.inventoryReservation.deleteMany();
-  await prisma.stockValuation.deleteMany();
-  await prisma.productBatch.deleteMany();
-  await prisma.currencyRate.deleteMany();
-  await prisma.tenantFeatureOverride.deleteMany();
-  // Marketplace
-  await prisma.marketplaceOrderItem.deleteMany();
-  await prisma.marketplaceOrder.deleteMany();
-  await prisma.marketplaceListing.deleteMany();
-  await prisma.marketplaceIntegration.deleteMany();
-  // Service
-  await prisma.serviceActivity.deleteMany();
-  await prisma.serviceRequestHistory.deleteMany();
-  await prisma.serviceRequestItem.deleteMany();
-  await prisma.serviceRequest.deleteMany();
-  await prisma.customerAsset.deleteMany();
-  // Production
-  await prisma.workOrderHistory.deleteMany();
-  await prisma.workOrderOperation.deleteMany();
-  await prisma.workOrderItem.deleteMany();
-  await prisma.workOrder.deleteMany();
-  await prisma.routingOperation.deleteMany();
-  await prisma.bOMItem.deleteMany();
-  await prisma.bOM.deleteMany();
-  await prisma.workCenter.deleteMany();
-  // HR & Payroll
-  await prisma.payrollItem.deleteMany();
-  await prisma.payroll.deleteMany();
-  await prisma.attendance.deleteMany();
-  await prisma.leaveRequest.deleteMany();
-  await prisma.employee.deleteMany();
-  // Finance
-  await prisma.paymentAllocation.deleteMany();
-  await prisma.payment.deleteMany();
-  await prisma.invoiceLine.deleteMany();
-  await prisma.invoice.deleteMany();
-  await prisma.salesOrderItem.deleteMany();
-  await prisma.salesOrder.deleteMany();
-  await prisma.salesQuoteItem.deleteMany();
-  await prisma.salesQuote.deleteMany();
-  await prisma.purchaseOrderHistory.deleteMany();
-  await prisma.purchaseOrderItem.deleteMany();
-  await prisma.purchaseRequestItem.deleteMany();
-  await prisma.purchaseRequest.deleteMany();
-  await prisma.purchaseOrder.deleteMany();
-  await prisma.stockMovement.deleteMany();
-  await prisma.stockLevel.deleteMany();
-  await prisma.stockCountItem.deleteMany();
-  await prisma.stockCount.deleteMany();
-  await prisma.accountEntry.deleteMany();
-  await prisma.contact.deleteMany();
-  await prisma.product.deleteMany();
-  await prisma.location.deleteMany();
-  await prisma.warehouse.deleteMany();
-  await prisma.taxRate.deleteMany();
-  await prisma.category.deleteMany();
-  await prisma.unit.deleteMany();
-  await prisma.currency.deleteMany();
-  await prisma.bankAccount.deleteMany();
-  await prisma.cashAccount.deleteMany();
-  await prisma.journalEntryLine.deleteMany();
-  await prisma.journalEntry.deleteMany();
-  await prisma.ledgerAccount.deleteMany();
-  await prisma.fiscalPeriod.deleteMany();
-  await prisma.numberSequence.deleteMany();
-  await prisma.tenantUser.deleteMany();
-  await prisma.tenantFeatureOverride.deleteMany();
-  await prisma.planFeature.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.tenant.deleteMany();
-  console.log('  + Eski veriler temizlendi');
+  // ── 2. Plan Features ─────────────────────────
+  await seedPlanFeatures();
+  console.log('  ✓ Plan features (Starter / Professional / Enterprise)');
 
-  // -- Tenant (Starter) --
+  // ── 3. Demo Tenant (Enterprise) ──────────────
+  const { tenant, users } = await seedTenant();
+  console.log(`  ✓ Tenant: ${tenant.companyName} (Enterprise)`);
+  console.log(`  ✓ Kullanıcılar: ${users.map(u => u.email).join(', ')}`);
+
+  // ── 4. Master Data ───────────────────────────
+  const master = await seedMasterData(tenant.id);
+  console.log('  ✓ Master data (birim, kategori, KDV, döviz, hesap planı)');
+
+  // ── 5. Warehouse & Locations ─────────────────
+  const { warehouse, warehouse2, locations } = await seedWarehouses(tenant.id);
+  console.log('  ✓ Depolar ve lokasyonlar');
+
+  // ── 6. Products & Stock ──────────────────────
+  const products = await seedProducts(tenant.id, master, warehouse, warehouse2, locations);
+  console.log(`  ✓ ${products.length} ürün ve stok seviyeleri`);
+
+  // ── 7. Contacts ──────────────────────────────
+  const contacts = await seedContacts(tenant.id);
+  console.log(`  ✓ ${contacts.length} cari hesap`);
+
+  // ── 8. Sales ─────────────────────────────────
+  const { invoices, payments } = await seedSales(tenant.id, contacts, products, master, warehouse);
+  console.log(`  ✓ Satış: ${invoices.length} fatura, ${payments.length} ödeme`);
+
+  // ── 9. Purchasing ────────────────────────────
+  await seedPurchasing(tenant.id, contacts, products, master, warehouse);
+  console.log('  ✓ Satın alma: talepler ve siparişler');
+
+  // ── 10. Accounting ───────────────────────────
+  await seedAccounting(tenant.id, master.accounts, invoices);
+  console.log('  ✓ Muhasebe: yevmiye fişleri, mali dönem');
+
+  // ── 11. HR & Payroll ─────────────────────────
+  await seedHR(tenant.id);
+  console.log('  ✓ İK: personel, izin, puantaj, bordro');
+
+  // ── 12. Production ───────────────────────────
+  await seedProduction(tenant.id, products, master, warehouse, warehouse2);
+  console.log('  ✓ Üretim: iş merkezleri, BOM, iş emirleri');
+
+  // ── 13. Service ──────────────────────────────
+  await seedService(tenant.id, contacts, products);
+  console.log('  ✓ Servis: müşteri varlıkları, servis talepleri');
+
+  // ── 14. Marketplace ──────────────────────────
+  await seedMarketplace(tenant.id, products);
+  console.log('  ✓ Pazaryeri: Trendyol entegrasyonu');
+
+  // ── 15. Roles & Permissions ──────────────────
+  await seedRoles(tenant.id, users);
+  console.log('  ✓ Roller ve izinler');
+
+  // ── 16. Notifications ────────────────────────
+  await seedNotifications(tenant.id, users[0].id);
+  console.log('  ✓ Bildirimler');
+
+  // ── 17. Settings ─────────────────────────────
+  await seedSettings(tenant.id);
+  console.log('  ✓ Tenant ayarları');
+
+  console.log('\n✅ Seed tamamlandı!\n');
+  console.log('  Giriş: admin@axondemo.com / demo1234');
+  console.log('  Admin: admin@axonerp.com / admin1234\n');
+}
+
+// ─────────────────────────────────────────────
+// PLAN FEATURES
+// ─────────────────────────────────────────────
+
+async function seedPlanFeatures() {
+  const features = [
+    // STARTER
+    { plan: 'STARTER' as const, key: 'max_users',        featureKey: 'MAX_USERS' as const,        value: '5',         type: 'LIMIT' as const },
+    { plan: 'STARTER' as const, key: 'max_products',     featureKey: 'MAX_PRODUCTS' as const,     value: '500',       type: 'LIMIT' as const },
+    { plan: 'STARTER' as const, key: 'multi_warehouse',  featureKey: 'MULTI_WAREHOUSE' as const,  value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'STARTER' as const, key: 'role_management',  featureKey: 'ROLE_MANAGEMENT' as const,  value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'STARTER' as const, key: 'approvals',        featureKey: 'APPROVALS' as const,        value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'STARTER' as const, key: 'crm',              featureKey: 'CRM' as const,              value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'STARTER' as const, key: 'sales',            featureKey: 'SALES' as const,            value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'STARTER' as const, key: 'purchasing',       featureKey: 'PURCHASING' as const,       value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'STARTER' as const, key: 'production',       featureKey: 'PRODUCTION' as const,       value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'STARTER' as const, key: 'service',          featureKey: 'SERVICE' as const,          value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'STARTER' as const, key: 'marketplace',      featureKey: 'MARKETPLACE' as const,      value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'STARTER' as const, key: 'payroll',          featureKey: 'PAYROLL' as const,          value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'STARTER' as const, key: 'hr',               featureKey: 'HR' as const,               value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'STARTER' as const, key: 'api_access',       featureKey: 'API_ACCESS' as const,       value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'STARTER' as const, key: 'audit_log',        featureKey: 'AUDIT_LOG' as const,        value: 'basic',     type: 'ENUM' as const },
+    { plan: 'STARTER' as const, key: 'custom_reporting', featureKey: 'CUSTOM_REPORTING' as const, value: 'false',     type: 'BOOLEAN' as const },
+    // PROFESSIONAL
+    { plan: 'PROFESSIONAL' as const, key: 'max_users',        featureKey: 'MAX_USERS' as const,        value: '25',        type: 'LIMIT' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'max_products',     featureKey: 'MAX_PRODUCTS' as const,     value: '5000',      type: 'LIMIT' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'multi_warehouse',  featureKey: 'MULTI_WAREHOUSE' as const,  value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'role_management',  featureKey: 'ROLE_MANAGEMENT' as const,  value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'approvals',        featureKey: 'APPROVALS' as const,        value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'crm',              featureKey: 'CRM' as const,              value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'sales',            featureKey: 'SALES' as const,            value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'purchasing',       featureKey: 'PURCHASING' as const,       value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'production',       featureKey: 'PRODUCTION' as const,       value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'service',          featureKey: 'SERVICE' as const,          value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'marketplace',      featureKey: 'MARKETPLACE' as const,      value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'payroll',          featureKey: 'PAYROLL' as const,          value: 'false',     type: 'BOOLEAN' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'hr',               featureKey: 'HR' as const,               value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'api_access',       featureKey: 'API_ACCESS' as const,       value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'audit_log',        featureKey: 'AUDIT_LOG' as const,        value: 'standard',  type: 'ENUM' as const },
+    { plan: 'PROFESSIONAL' as const, key: 'custom_reporting', featureKey: 'CUSTOM_REPORTING' as const, value: 'true',      type: 'BOOLEAN' as const },
+    // ENTERPRISE
+    { plan: 'ENTERPRISE' as const, key: 'max_users',        featureKey: 'MAX_USERS' as const,        value: 'unlimited', type: 'LIMIT' as const },
+    { plan: 'ENTERPRISE' as const, key: 'max_products',     featureKey: 'MAX_PRODUCTS' as const,     value: 'unlimited', type: 'LIMIT' as const },
+    { plan: 'ENTERPRISE' as const, key: 'multi_warehouse',  featureKey: 'MULTI_WAREHOUSE' as const,  value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'ENTERPRISE' as const, key: 'role_management',  featureKey: 'ROLE_MANAGEMENT' as const,  value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'ENTERPRISE' as const, key: 'approvals',        featureKey: 'APPROVALS' as const,        value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'ENTERPRISE' as const, key: 'crm',              featureKey: 'CRM' as const,              value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'ENTERPRISE' as const, key: 'sales',            featureKey: 'SALES' as const,            value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'ENTERPRISE' as const, key: 'purchasing',       featureKey: 'PURCHASING' as const,       value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'ENTERPRISE' as const, key: 'production',       featureKey: 'PRODUCTION' as const,       value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'ENTERPRISE' as const, key: 'service',          featureKey: 'SERVICE' as const,          value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'ENTERPRISE' as const, key: 'marketplace',      featureKey: 'MARKETPLACE' as const,      value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'ENTERPRISE' as const, key: 'payroll',          featureKey: 'PAYROLL' as const,          value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'ENTERPRISE' as const, key: 'hr',               featureKey: 'HR' as const,               value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'ENTERPRISE' as const, key: 'api_access',       featureKey: 'API_ACCESS' as const,       value: 'true',      type: 'BOOLEAN' as const },
+    { plan: 'ENTERPRISE' as const, key: 'audit_log',        featureKey: 'AUDIT_LOG' as const,        value: 'full',      type: 'ENUM' as const },
+    { plan: 'ENTERPRISE' as const, key: 'custom_reporting', featureKey: 'CUSTOM_REPORTING' as const, value: 'true',      type: 'BOOLEAN' as const },
+  ];
+
+  for (const f of features) {
+    await prisma.planFeature.upsert({
+      where: { plan_key: { plan: f.plan, key: f.key } },
+      create: f,
+      update: { value: f.value },
+    });
+  }
+}
+
+// ─────────────────────────────────────────────
+// TENANT & USERS
+// ─────────────────────────────────────────────
+
+async function seedTenant() {
+  // Önce mevcut tenant'ı temizle (idempotent seed)
+  const existing = await prisma.tenant.findUnique({ where: { slug: 'axon-demo' } });
+  if (existing) {
+    // Cascade delete ile tüm bağlı verileri sil
+    await prisma.tenant.delete({ where: { id: existing.id } });
+  }
+  // Tüm kullanıcıları da temizle (tenant dışı)
+  await prisma.user.deleteMany({ where: { email: { in: ['admin@axondemo.com', 'satis@axondemo.com', 'muhasebe@axondemo.com', 'depo@axondemo.com'] } } });
+
   const tenant = await prisma.tenant.create({
     data: {
       slug: 'axon-demo',
-      companyName: 'Axon Demo A.S.',
+      companyName: 'Axon Demo Teknoloji A.Ş.',
       taxNumber: '1234567890',
-      taxOffice: 'Kadikoy',
+      taxOffice: 'Kadıköy',
       email: 'info@axondemo.com',
       phone: '+90 212 555 0100',
-      address: 'Bagdat Caddesi No:42',
-      city: 'Istanbul',
+      address: 'Bağdat Caddesi No:42 Daire:5',
+      city: 'İstanbul',
       country: 'TR',
       sector: 'Teknoloji',
-      plan: 'STARTER',
-      status: 'ACTIVE',
-      modules: ['accounting', 'inventory', 'contacts', 'invoicing', 'reporting'],
-    },
-  });
-  console.log('  + Tenant: ' + tenant.companyName);
-
-  // -- User --
-  const hashedPassword = await bcrypt.hash('demo1234', 12);
-  const user = await prisma.user.create({
-    data: {
-      email: 'admin@axondemo.com',
-      name: 'Ahmet Yilmaz',
-      phone: '+90 532 555 0101',
-      password: hashedPassword,
-      isActive: true,
-    },
-  });
-  await prisma.tenantUser.create({
-    data: { tenantId: tenant.id, userId: user.id, isOwner: true, isActive: true },
-  });
-  console.log('  + Kullanici: admin@axondemo.com / demo1234');
-
-  // -- Plan Features --
-  const planFeatures = [
-    { plan: 'STARTER' as const, key: 'max_users', featureKey: 'MAX_USERS' as const, value: '5', type: 'LIMIT' as const },
-    { plan: 'STARTER' as const, key: 'max_products', featureKey: 'MAX_PRODUCTS' as const, value: '500', type: 'LIMIT' as const },
-    { plan: 'STARTER' as const, key: 'multi_warehouse', featureKey: 'MULTI_WAREHOUSE' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'role_management', featureKey: 'ROLE_MANAGEMENT' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'approvals', featureKey: 'APPROVALS' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'crm', featureKey: 'CRM' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'sales', featureKey: 'SALES' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'purchasing', featureKey: 'PURCHASING' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'production', featureKey: 'PRODUCTION' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'service', featureKey: 'SERVICE' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'marketplace', featureKey: 'MARKETPLACE' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'payroll', featureKey: 'PAYROLL' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'hr', featureKey: 'HR' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'api_access', featureKey: 'API_ACCESS' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'audit_log', featureKey: 'AUDIT_LOG' as const, value: 'basic', type: 'ENUM' as const },
-    { plan: 'STARTER' as const, key: 'custom_reporting', featureKey: 'CUSTOM_REPORTING' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'max_users', featureKey: 'MAX_USERS' as const, value: '25', type: 'LIMIT' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'max_products', featureKey: 'MAX_PRODUCTS' as const, value: '5000', type: 'LIMIT' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'multi_warehouse', featureKey: 'MULTI_WAREHOUSE' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'role_management', featureKey: 'ROLE_MANAGEMENT' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'approvals', featureKey: 'APPROVALS' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'crm', featureKey: 'CRM' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'sales', featureKey: 'SALES' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'purchasing', featureKey: 'PURCHASING' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'production', featureKey: 'PRODUCTION' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'service', featureKey: 'SERVICE' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'marketplace', featureKey: 'MARKETPLACE' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'payroll', featureKey: 'PAYROLL' as const, value: 'false', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'hr', featureKey: 'HR' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'api_access', featureKey: 'API_ACCESS' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'audit_log', featureKey: 'AUDIT_LOG' as const, value: 'standard', type: 'ENUM' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'custom_reporting', featureKey: 'CUSTOM_REPORTING' as const, value: 'true', type: 'BOOLEAN' as const },
-    // Enterprise
-    { plan: 'ENTERPRISE' as const, key: 'max_users', featureKey: 'MAX_USERS' as const, value: 'unlimited', type: 'LIMIT' as const },
-    { plan: 'ENTERPRISE' as const, key: 'max_products', featureKey: 'MAX_PRODUCTS' as const, value: 'unlimited', type: 'LIMIT' as const },
-    { plan: 'ENTERPRISE' as const, key: 'multi_warehouse', featureKey: 'MULTI_WAREHOUSE' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'role_management', featureKey: 'ROLE_MANAGEMENT' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'approvals', featureKey: 'APPROVALS' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'crm', featureKey: 'CRM' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'sales', featureKey: 'SALES' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'purchasing', featureKey: 'PURCHASING' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'production', featureKey: 'PRODUCTION' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'service', featureKey: 'SERVICE' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'marketplace', featureKey: 'MARKETPLACE' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'payroll', featureKey: 'PAYROLL' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'hr', featureKey: 'HR' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'api_access', featureKey: 'API_ACCESS' as const, value: 'true', type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'audit_log', featureKey: 'AUDIT_LOG' as const, value: 'full', type: 'ENUM' as const },
-    { plan: 'ENTERPRISE' as const, key: 'custom_reporting', featureKey: 'CUSTOM_REPORTING' as const, value: 'true', type: 'BOOLEAN' as const },
-  ];
-  for (const pf of planFeatures) {
-    await prisma.planFeature.upsert({
-      where: { plan_key: { plan: pf.plan, key: pf.key } },
-      create: pf,
-      update: { value: pf.value },
-    });
-  }
-  console.log('  + Plan features');
-
-  // -- Master Data --
-  const [unitAdet, unitKg, unitLt, unitMt] = await Promise.all([
-    prisma.unit.create({ data: { tenantId: tenant.id, name: 'Adet', code: 'AD' } }),
-    prisma.unit.create({ data: { tenantId: tenant.id, name: 'Kilogram', code: 'KG' } }),
-    prisma.unit.create({ data: { tenantId: tenant.id, name: 'Litre', code: 'LT' } }),
-    prisma.unit.create({ data: { tenantId: tenant.id, name: 'Metre', code: 'MT' } }),
-  ]);
-  const catElektronik = await prisma.category.create({ data: { tenantId: tenant.id, name: 'Elektronik' } });
-  const catBilgisayar = await prisma.category.create({ data: { tenantId: tenant.id, name: 'Bilgisayar', parentId: catElektronik.id } });
-  const catTelefon = await prisma.category.create({ data: { tenantId: tenant.id, name: 'Telefon', parentId: catElektronik.id } });
-  const catOfis = await prisma.category.create({ data: { tenantId: tenant.id, name: 'Ofis Malzemeleri' } });
-  const [kdv0, kdv10, kdv20] = await Promise.all([
-    prisma.taxRate.create({ data: { tenantId: tenant.id, name: 'KDV %0', rate: 0 } }),
-    prisma.taxRate.create({ data: { tenantId: tenant.id, name: 'KDV %10', rate: 10 } }),
-    prisma.taxRate.create({ data: { tenantId: tenant.id, name: 'KDV %20', rate: 20 } }),
-  ]);
-  await Promise.all([
-    prisma.currency.create({ data: { tenantId: tenant.id, code: 'TRY', name: 'Turk Lirasi', symbol: 'TL', defaultRate: 1, isBase: true } }),
-    prisma.currency.create({ data: { tenantId: tenant.id, code: 'USD', name: 'Amerikan Dolari', symbol: '$', defaultRate: 32.5 } }),
-    prisma.currency.create({ data: { tenantId: tenant.id, code: 'EUR', name: 'Euro', symbol: 'E', defaultRate: 35.2 } }),
-  ]);
-  console.log('  + Master data (birim, kategori, KDV, doviz)');
-
-  // -- Warehouse --
-  const warehouse = await prisma.warehouse.create({
-    data: { tenantId: tenant.id, name: 'Ana Depo', code: 'WH01', address: 'Dudullu OSB, Istanbul' },
-  });
-  const [locA1, locA2, locB1] = await Promise.all([
-    prisma.location.create({ data: { tenantId: tenant.id, warehouseId: warehouse.id, name: 'Raf A-1', code: 'A-1' } }),
-    prisma.location.create({ data: { tenantId: tenant.id, warehouseId: warehouse.id, name: 'Raf A-2', code: 'A-2' } }),
-    prisma.location.create({ data: { tenantId: tenant.id, warehouseId: warehouse.id, name: 'Raf B-1', code: 'B-1' } }),
-  ]);
-  console.log('  + Depo ve lokasyonlar');
-
-  // -- Products --
-  const products = await Promise.all([
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P001', name: 'Laptop Pro 15"', unitId: unitAdet.id, categoryId: catBilgisayar.id, taxRateId: kdv20.id, purchasePrice: 18000, salesPrice: 24999, minStockLevel: 5, averageCost: 18000 } }),
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P002', name: 'Mekanik Klavye', unitId: unitAdet.id, categoryId: catBilgisayar.id, taxRateId: kdv20.id, purchasePrice: 800, salesPrice: 1299, minStockLevel: 10, averageCost: 800 } }),
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P003', name: 'Kablosuz Mouse', unitId: unitAdet.id, categoryId: catBilgisayar.id, taxRateId: kdv20.id, purchasePrice: 350, salesPrice: 599, minStockLevel: 15, averageCost: 350 } }),
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P004', name: 'Akilli Telefon X12', unitId: unitAdet.id, categoryId: catTelefon.id, taxRateId: kdv20.id, purchasePrice: 12000, salesPrice: 16999, minStockLevel: 8, averageCost: 12000 } }),
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P005', name: 'USB-C Hub 7 Port', unitId: unitAdet.id, categoryId: catElektronik.id, taxRateId: kdv20.id, purchasePrice: 280, salesPrice: 499, minStockLevel: 20, averageCost: 280 } }),
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P006', name: 'A4 Fotokopi Kagidi (500 yaprak)', unitId: unitAdet.id, categoryId: catOfis.id, taxRateId: kdv10.id, purchasePrice: 85, salesPrice: 120, minStockLevel: 50, averageCost: 85 } }),
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P007', name: 'Tukenmez Kalem Seti (12li)', unitId: unitAdet.id, categoryId: catOfis.id, taxRateId: kdv10.id, purchasePrice: 45, salesPrice: 79, minStockLevel: 30, averageCost: 45 } }),
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P008', name: 'Monitor 27" 4K', unitId: unitAdet.id, categoryId: catBilgisayar.id, taxRateId: kdv20.id, purchasePrice: 7500, salesPrice: 10999, minStockLevel: 3, averageCost: 7500 } }),
-  ]);
-
-  // Stock levels
-  const stockData = [
-    { productId: products[0].id, qty: 12, locationId: locA1.id },
-    { productId: products[1].id, qty: 45, locationId: locA1.id },
-    { productId: products[2].id, qty: 38, locationId: locA2.id },
-    { productId: products[3].id, qty: 7, locationId: locA2.id },
-    { productId: products[4].id, qty: 62, locationId: locB1.id },
-    { productId: products[5].id, qty: 3, locationId: locB1.id },
-    { productId: products[6].id, qty: 28, locationId: locA1.id },
-    { productId: products[7].id, qty: 2, locationId: locA2.id },
-  ];
-  for (const s of stockData) {
-    await prisma.stockLevel.create({ data: { tenantId: tenant.id, productId: s.productId, warehouseId: warehouse.id, locationId: s.locationId, quantity: s.qty } });
-    await prisma.stockMovement.create({ data: { tenantId: tenant.id, productId: s.productId, type: 'OPENING', quantity: s.qty, toWarehouseId: warehouse.id, notes: 'Acilis stogu' } });
-  }
-  console.log('  + Urunler ve stok seviyeleri');
-
-  // -- Contacts --
-  const contacts = await Promise.all([
-    prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Teknoloji Cozumleri Ltd.', code: 'C001', taxNumber: '9876543210', taxOffice: 'Sisli', email: 'satin@teknolojicozmler.com', phone: '+90 212 444 0001', city: 'Istanbul', country: 'TR', creditLimit: 100000, paymentTermDays: 30 } }),
-    prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Dijital Medya A.S.', code: 'C002', taxNumber: '1122334455', taxOffice: 'Besiktas', email: 'muhasebe@dijitalmedya.com', phone: '+90 212 444 0002', city: 'Istanbul', country: 'TR', creditLimit: 50000, paymentTermDays: 15 } }),
-    prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Mavi Yazilim Koop.', code: 'C003', taxNumber: '5544332211', taxOffice: 'Ankara', email: 'finans@maviyazilim.com', phone: '+90 312 444 0003', city: 'Ankara', country: 'TR', paymentTermDays: 45 } }),
-    prisma.contact.create({ data: { tenantId: tenant.id, type: 'SUPPLIER', name: 'Global Elektronik Dagitim', code: 'S001', taxNumber: '6677889900', taxOffice: 'Umraniye', email: 'satis@globalelektronik.com', phone: '+90 216 555 0010', city: 'Istanbul', country: 'TR', paymentTermDays: 60 } }),
-    prisma.contact.create({ data: { tenantId: tenant.id, type: 'SUPPLIER', name: 'Ofis Dunyasi Toptan', code: 'S002', taxNumber: '1029384756', taxOffice: 'Bagcilar', email: 'siparis@ofisdunyasi.com', phone: '+90 212 555 0020', city: 'Istanbul', country: 'TR', paymentTermDays: 30 } }),
-    prisma.contact.create({ data: { tenantId: tenant.id, type: 'BOTH', name: 'Inovasyon Teknoloji', code: 'B001', taxNumber: '9988776655', taxOffice: 'Maslak', email: 'info@inovasyon.tech', phone: '+90 212 555 0030', city: 'Istanbul', country: 'TR', creditLimit: 75000, paymentTermDays: 30 } }),
-  ]);
-  console.log('  + Cari hesaplar');
-
-  // -- Number Sequences --
-  for (const mod of ['invoice', 'sales_quote', 'sales_order', 'journal', 'stock_count']) {
-    const prefixes: Record<string, string> = { invoice: 'INV-', sales_quote: 'TKL-', sales_order: 'SIP-', journal: 'JE-', stock_count: 'SC-' };
-    await prisma.numberSequence.create({ data: { tenantId: tenant.id, module: mod, prefix: prefixes[mod] ?? '', lastNum: 0, padding: 6 } });
-  }
-
-  // -- Sales Quotes --
-  const quote1 = await prisma.salesQuote.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[0].id, number: 'TKL-000001',
-      date: new Date('2026-03-15'), validUntil: new Date('2026-04-15'),
-      status: 'ACCEPTED', totalNet: 26297, totalTax: 5259.4, totalGross: 31556.4,
-      items: {
-        create: [
-          { tenantId: tenant.id, productId: products[0].id, description: 'Laptop Pro 15"', quantity: 1, unitPrice: 24999, discount: 0, taxRate: 20, taxAmount: 4999.8, lineTotal: 29998.8, sortOrder: 0 },
-          { tenantId: tenant.id, productId: products[2].id, description: 'Kablosuz Mouse', quantity: 2, unitPrice: 599, discount: 5, taxRate: 20, taxAmount: 114.24, lineTotal: 1251.24, sortOrder: 1 },
-        ]
-      },
-    },
-  });
-
-  // -- Sales Orders --
-  const order1 = await prisma.salesOrder.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[0].id, quoteId: quote1.id,
-      number: 'SIP-000001', date: new Date('2026-03-20'), dueDate: new Date('2026-04-20'),
-      status: 'CONFIRMED', totalNet: 26297, totalTax: 5259.4, totalGross: 31556.4,
-      items: {
-        create: [
-          { tenantId: tenant.id, productId: products[0].id, description: 'Laptop Pro 15"', quantity: 1, unitPrice: 24999, discount: 0, taxRate: 20, taxAmount: 4999.8, lineTotal: 29998.8, sortOrder: 0 },
-          { tenantId: tenant.id, productId: products[2].id, description: 'Kablosuz Mouse', quantity: 2, unitPrice: 599, discount: 5, taxRate: 20, taxAmount: 114.24, lineTotal: 1251.24, sortOrder: 1 },
-        ]
-      },
-    },
-  });
-  await prisma.salesOrder.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[1].id,
-      number: 'SIP-000002', date: new Date('2026-03-25'), dueDate: new Date('2026-04-10'),
-      status: 'DRAFT', totalNet: 6497, totalTax: 1299.4, totalGross: 7796.4,
-      items: {
-        create: [
-          { tenantId: tenant.id, productId: products[1].id, description: 'Mekanik Klavye', quantity: 5, unitPrice: 1299, discount: 0, taxRate: 20, taxAmount: 1299, lineTotal: 7794, sortOrder: 0 },
-        ]
-      },
-    },
-  });
-  console.log('  + Teklifler ve siparisler');
-
-  // -- Invoices --
-  const inv1 = await prisma.invoice.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[0].id, salesOrderId: order1.id,
-      type: 'SALES', status: 'PAID', number: 'INV-000001',
-      date: new Date('2026-03-22'), dueDate: new Date('2026-04-22'),
-      totalNet: 26297, totalTax: 5259.4, totalGross: 31556.4,
-      lines: {
-        create: [
-          { tenantId: tenant.id, productId: products[0].id, taxRateId: kdv20.id, description: 'Laptop Pro 15"', quantity: 1, unitPrice: 24999, discount: 0, taxAmount: 4999.8, lineTotal: 29998.8, sortOrder: 0 },
-          { tenantId: tenant.id, productId: products[2].id, taxRateId: kdv20.id, description: 'Kablosuz Mouse', quantity: 2, unitPrice: 599, discount: 5, taxAmount: 114.24, lineTotal: 1251.24, sortOrder: 1 },
-        ]
-      },
-    },
-  });
-  const inv2 = await prisma.invoice.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[1].id,
-      type: 'SALES', status: 'SENT', number: 'INV-000002',
-      date: new Date('2026-03-28'), dueDate: new Date('2026-04-12'),
-      totalNet: 10832, totalTax: 2166.4, totalGross: 12998.4,
-      lines: {
-        create: [
-          { tenantId: tenant.id, productId: products[3].id, taxRateId: kdv20.id, description: 'Akilli Telefon X12', quantity: 1, unitPrice: 16999, discount: 0, taxAmount: 3399.8, lineTotal: 20398.8, sortOrder: 0 },
-        ]
-      },
-    },
-  });
-  const inv3 = await prisma.invoice.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[2].id,
-      type: 'SALES', status: 'OVERDUE', number: 'INV-000003',
-      date: new Date('2026-02-15'), dueDate: new Date('2026-03-01'),
-      totalNet: 4995, totalTax: 999, totalGross: 5994,
-      lines: {
-        create: [
-          { tenantId: tenant.id, productId: products[4].id, taxRateId: kdv20.id, description: 'USB-C Hub 7 Port', quantity: 10, unitPrice: 499, discount: 0, taxAmount: 998, lineTotal: 5988, sortOrder: 0 },
-        ]
-      },
-    },
-  });
-  const inv4 = await prisma.invoice.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[3].id,
-      type: 'PURCHASE', status: 'PAID', number: 'INV-000004',
-      date: new Date('2026-03-10'), dueDate: new Date('2026-05-10'),
-      totalNet: 54000, totalTax: 10800, totalGross: 64800,
-      lines: {
-        create: [
-          { tenantId: tenant.id, productId: products[0].id, taxRateId: kdv20.id, description: 'Laptop Pro 15" (3 adet)', quantity: 3, unitPrice: 18000, discount: 0, taxAmount: 10800, lineTotal: 64800, sortOrder: 0 },
-        ]
-      },
-    },
-  });
-  console.log('  + Faturalar');
-
-  // -- Bank & Cash --
-  const bankAccount = await prisma.bankAccount.create({
-    data: { tenantId: tenant.id, name: 'Garanti Vadesiz TRY', bankName: 'Garanti BBVA', accountNumber: '1234567', iban: 'TR12 0006 2000 1234 5678 9012 34', currencyCode: 'TRY' },
-  });
-  await prisma.cashAccount.create({ data: { tenantId: tenant.id, name: 'Ana Kasa', currencyCode: 'TRY' } });
-
-  // -- Payments --
-  const pay1 = await prisma.payment.create({
-    data: { tenantId: tenant.id, contactId: contacts[0].id, bankAccountId: bankAccount.id, date: new Date('2026-03-25'), amount: 31556.4, method: 'BANK_TRANSFER', reference: 'EFT-2026-001', status: 'COMPLETED', notes: 'INV-000001 odemesi' },
-  });
-  await prisma.paymentAllocation.create({ data: { tenantId: tenant.id, paymentId: pay1.id, invoiceId: inv1.id, amount: 31556.4 } });
-  const pay2 = await prisma.payment.create({
-    data: { tenantId: tenant.id, contactId: contacts[3].id, bankAccountId: bankAccount.id, date: new Date('2026-03-12'), amount: 64800, method: 'BANK_TRANSFER', reference: 'EFT-2026-002', status: 'COMPLETED', notes: 'INV-000004 tedarikci odemesi' },
-  });
-  await prisma.paymentAllocation.create({ data: { tenantId: tenant.id, paymentId: pay2.id, invoiceId: inv4.id, amount: 64800 } });
-  console.log('  + Banka hesaplari ve odemeler');
-
-  // -- Account Entries --
-  await prisma.accountEntry.createMany({
-    data: [
-      { tenantId: tenant.id, contactId: contacts[0].id, date: new Date('2026-03-22'), debit: 31556.4, credit: 0, balance: 31556.4, description: 'INV-000001 fatura', refType: 'INVOICE', refId: inv1.id },
-      { tenantId: tenant.id, contactId: contacts[0].id, date: new Date('2026-03-25'), debit: 0, credit: 31556.4, balance: 0, description: 'EFT-2026-001 odeme', refType: 'PAYMENT', refId: pay1.id },
-      { tenantId: tenant.id, contactId: contacts[1].id, date: new Date('2026-03-28'), debit: 12998.4, credit: 0, balance: 12998.4, description: 'INV-000002 fatura', refType: 'INVOICE', refId: inv2.id },
-      { tenantId: tenant.id, contactId: contacts[2].id, date: new Date('2026-02-15'), debit: 5994, credit: 0, balance: 5994, description: 'INV-000003 fatura (gecikmis)', refType: 'INVOICE', refId: inv3.id },
-    ],
-  });
-
-  // -- Ledger Accounts --
-  const accounts = await Promise.all([
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '100', name: 'Kasa', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '102', name: 'Bankalar', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '120', name: 'Alicilar', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '153', name: 'Ticari Mallar', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '320', name: 'Saticilar', accountType: 'LIABILITY' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '391', name: 'Hesaplanan KDV', accountType: 'LIABILITY' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '600', name: 'Yurt Ici Satislar', accountType: 'REVENUE' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '621', name: 'Satilan Ticari Mallar Maliyeti', accountType: 'EXPENSE' } }),
-  ]);
-
-  // -- Fiscal Period & Journal --
-  const fiscalPeriod = await prisma.fiscalPeriod.create({
-    data: { tenantId: tenant.id, name: '2026 Q1', startDate: new Date('2026-01-01'), endDate: new Date('2026-03-31'), status: 'OPEN' },
-  });
-  await prisma.journalEntry.create({
-    data: {
-      tenantId: tenant.id, fiscalPeriodId: fiscalPeriod.id,
-      type: 'AUTO_INVOICE', number: 'JE-000001',
-      date: new Date('2026-03-22'), description: 'INV-000001 satis faturasi kaydi',
-      isPosted: true, postedAt: new Date('2026-03-22'),
-      lines: {
-        create: [
-          { tenantId: tenant.id, accountId: accounts[2].id, debit: 31556.4, credit: 0, description: 'Alici borc', sortOrder: 0 },
-          { tenantId: tenant.id, accountId: accounts[6].id, debit: 0, credit: 26297, description: 'Satis geliri', sortOrder: 1 },
-          { tenantId: tenant.id, accountId: accounts[5].id, debit: 0, credit: 5259.4, description: 'Hesaplanan KDV', sortOrder: 2 },
-        ]
-      },
-    },
-  });
-  console.log('  + Cari hareketler, hesap plani, yevmiye');
-
-  // -- Misc starter data --
-  await prisma.stockCount.create({
-    data: {
-      tenantId: tenant.id, warehouseId: warehouse.id, number: 'SC-000001', date: new Date('2026-03-31'),
-      isFinalized: false, notes: 'Mart sonu sayimi',
-      items: {
-        create: [
-          { tenantId: tenant.id, productId: products[0].id, expectedQty: 12, countedQty: 11, difference: -1 },
-          { tenantId: tenant.id, productId: products[1].id, expectedQty: 45, countedQty: 45, difference: 0 },
-        ]
-      },
-    },
-  });
-
-  const purchaseReq1 = await prisma.purchaseRequest.create({
-    data: {
-      tenantId: tenant.id, number: 'PR-000001', date: new Date('2026-03-20'), status: 'ORDERED', notes: 'Mart ayi stok takviyesi', totalEstimated: 54000,
-      items: { create: [{ tenantId: tenant.id, productId: products[0].id, quantity: 3, unitPrice: 18000 }] }
-    },
-  });
-  const po1 = await prisma.purchaseOrder.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[3].id, number: 'PO-000001',
-      date: new Date('2026-03-22'), dueDate: new Date('2026-04-05'),
-      status: 'RECEIVED', notes: 'Laptop stok takviyesi',
-      totalNet: 54000, totalTax: 10800, totalGross: 64800,
-      items: { create: [{ tenantId: tenant.id, productId: products[0].id, description: 'Laptop Pro 15"', quantity: 3, received: 3, unitPrice: 18000, taxRate: 20, taxAmount: 10800, lineTotal: 64800 }] },
-    },
-  });
-  await prisma.purchaseRequest.update({ where: { id: purchaseReq1.id }, data: { purchaseOrderId: po1.id } });
-  await prisma.numberSequence.createMany({
-    data: [
-      { tenantId: tenant.id, module: 'purchase_request', prefix: 'PR-', lastNum: 1, padding: 6 },
-      { tenantId: tenant.id, module: 'purchase_order', prefix: 'PO-', lastNum: 1, padding: 6 },
-    ],
-    skipDuplicates: true,
-  });
-
-  // Roles
-  const roleAdmin = await prisma.role.create({ data: { tenantId: tenant.id, name: 'Yonetici', description: 'Tam yetkili yonetici', isSystem: true } });
-  await prisma.role.create({ data: { tenantId: tenant.id, name: 'Muhasebeci', description: 'Muhasebe ve fatura islemleri', isSystem: true } });
-  await prisma.role.create({ data: { tenantId: tenant.id, name: 'Satis Temsilcisi', description: 'Satis ve teklif islemleri', isSystem: true } });
-  await prisma.tenantUser.update({
-    where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
-    data: { roleId: roleAdmin.id },
-  });
-
-  // Settings
-  await prisma.tenantSetting.createMany({
-    data: [
-      { tenantId: tenant.id, key: 'default_currency', value: 'TRY' },
-      { tenantId: tenant.id, key: 'invoice_prefix', value: 'INV' },
-      { tenantId: tenant.id, key: 'date_format', value: 'DD.MM.YYYY' },
-      { tenantId: tenant.id, key: 'timezone', value: 'Europe/Istanbul' },
-      { tenantId: tenant.id, key: 'language', value: 'tr' },
-    ],
-  });
-
-  // Notifications
-  await prisma.notification.createMany({
-    data: [
-      { tenantId: tenant.id, userId: user.id, title: 'Kritik Stok Uyarisi', message: 'A4 Fotokopi Kagidi stogu minimum seviyenin altina dustu (3 adet).', module: 'inventory', status: 'UNREAD' },
-      { tenantId: tenant.id, userId: user.id, title: 'Gecikmis Fatura', message: 'INV-000003 numarali fatura vadesi gecti.', module: 'invoicing', status: 'UNREAD' },
-      { tenantId: tenant.id, userId: user.id, title: 'Yeni Odeme Alindi', message: 'Teknoloji Cozumleri Ltd. tarafindan 31.556,40 TL odeme alindi.', module: 'accounting', status: 'READ', readAt: new Date('2026-03-25') },
-    ],
-  });
-
-  // Feature override
-  await prisma.tenantFeatureOverride.create({
-    data: { tenantId: tenant.id, featureKey: 'MAX_PRODUCTS', value: '1000', isEnabled: true, reason: 'Demo hesabi icin genisletilmis limit', expiresAt: new Date('2026-12-31') },
-  });
-
-  console.log('  + Starter tenant tamamlandi');
-
-  // =============================================
-  // PROFESSIONAL TENANT - Pro Ticaret A.S.
-  // =============================================
-  await seedProfessionalTenant();
-  await seedEnterpriseTenant();
-
-  console.log('\nSeed tamamlandi!');
-  console.log('  Giris bilgileri:');
-  console.log('  Starter : admin@axondemo.com  / demo1234  (axon-demo)');
-  console.log('  Pro     : pro@proticaret.com  / demo1234  (pro-ticaret)');
-  console.log('  Ent     : ent@globaluretim.com / demo1234 (global-uretim)');
-  console.log('  Admin   : admin@axonerp.com   / admin1234');
-}
-
-async function seedProfessionalTenant() {
-  console.log('\n  -- Professional Tenant --');
-
-  const tenant = await prisma.tenant.create({
-    data: {
-      slug: 'pro-ticaret',
-      companyName: 'Pro Ticaret A.S.',
-      taxNumber: '9876543210',
-      taxOffice: 'Besiktas',
-      email: 'info@proticaret.com',
-      phone: '+90 212 555 0200',
-      address: 'Levent Mah. No:10',
-      city: 'Istanbul',
-      country: 'TR',
-      sector: 'Ticaret',
-      plan: 'PROFESSIONAL',
-      status: 'ACTIVE',
-      modules: ['accounting', 'inventory', 'contacts', 'invoicing', 'reporting', 'crm', 'purchasing', 'warehouse'],
-    },
-  });
-
-  const hashedPassword = await bcrypt.hash('demo1234', 12);
-  const owner = await prisma.user.create({ data: { email: 'pro@proticaret.com', name: 'Elif Demir', phone: '+90 533 555 0201', password: hashedPassword, isActive: true } });
-  const user2 = await prisma.user.create({ data: { email: 'muhasebe@proticaret.com', name: 'Mehmet Kaya', phone: '+90 533 555 0202', password: hashedPassword, isActive: true } });
-  const user3 = await prisma.user.create({ data: { email: 'satis@proticaret.com', name: 'Ayse Celik', phone: '+90 533 555 0203', password: hashedPassword, isActive: true } });
-
-  // Roles
-  const roleAdmin = await prisma.role.create({ data: { tenantId: tenant.id, name: 'Yonetici', description: 'Tam yetkili yonetici', isSystem: true } });
-  const roleAccountant = await prisma.role.create({ data: { tenantId: tenant.id, name: 'Muhasebeci', description: 'Muhasebe ve fatura islemleri', isSystem: true } });
-  const roleSales = await prisma.role.create({ data: { tenantId: tenant.id, name: 'Satis Temsilcisi', description: 'Satis ve teklif islemleri', isSystem: true } });
-
-  const allModules = ['accounting', 'inventory', 'contacts', 'invoicing', 'reporting', 'crm', 'purchasing', 'warehouse'];
-  const allActions = ['CREATE', 'READ', 'UPDATE', 'DELETE', 'EXPORT'] as const;
-  for (const mod of allModules) { for (const action of allActions) { await prisma.rolePermission.create({ data: { roleId: roleAdmin.id, module: mod, action } }); } }
-  for (const mod of ['accounting', 'invoicing']) { for (const action of ['CREATE', 'READ', 'UPDATE'] as const) { await prisma.rolePermission.create({ data: { roleId: roleAccountant.id, module: mod, action } }); } }
-  await prisma.rolePermission.create({ data: { roleId: roleAccountant.id, module: 'reporting', action: 'READ' } });
-  for (const mod of ['contacts', 'invoicing', 'crm']) { for (const action of ['CREATE', 'READ', 'UPDATE'] as const) { await prisma.rolePermission.create({ data: { roleId: roleSales.id, module: mod, action } }); } }
-  await prisma.rolePermission.create({ data: { roleId: roleSales.id, module: 'reporting', action: 'READ' } });
-  await prisma.rolePermission.create({ data: { roleId: roleSales.id, module: 'inventory', action: 'READ' } });
-
-  await prisma.tenantUser.create({ data: { tenantId: tenant.id, userId: owner.id, isOwner: true, isActive: true, roleId: roleAdmin.id } });
-  await prisma.tenantUser.create({ data: { tenantId: tenant.id, userId: user2.id, isOwner: false, isActive: true, roleId: roleAccountant.id } });
-  await prisma.tenantUser.create({ data: { tenantId: tenant.id, userId: user3.id, isOwner: false, isActive: true, roleId: roleSales.id } });
-  console.log('  + Kullanicilar ve roller');
-
-  // Master data
-  const [unitAdet, unitKg, unitLt] = await Promise.all([
-    prisma.unit.create({ data: { tenantId: tenant.id, name: 'Adet', code: 'AD' } }),
-    prisma.unit.create({ data: { tenantId: tenant.id, name: 'Kilogram', code: 'KG' } }),
-    prisma.unit.create({ data: { tenantId: tenant.id, name: 'Litre', code: 'LT' } }),
-  ]);
-  const catGida = await prisma.category.create({ data: { tenantId: tenant.id, name: 'Gida' } });
-  const catIcecek = await prisma.category.create({ data: { tenantId: tenant.id, name: 'Icecek' } });
-  const catTemizlik = await prisma.category.create({ data: { tenantId: tenant.id, name: 'Temizlik' } });
-  const [kdv1, kdv10, kdv20] = await Promise.all([
-    prisma.taxRate.create({ data: { tenantId: tenant.id, name: 'KDV %1', rate: 1 } }),
-    prisma.taxRate.create({ data: { tenantId: tenant.id, name: 'KDV %10', rate: 10 } }),
-    prisma.taxRate.create({ data: { tenantId: tenant.id, name: 'KDV %20', rate: 20 } }),
-  ]);
-  await Promise.all([
-    prisma.currency.create({ data: { tenantId: tenant.id, code: 'TRY', name: 'Turk Lirasi', symbol: 'TL', defaultRate: 1, isBase: true } }),
-    prisma.currency.create({ data: { tenantId: tenant.id, code: 'USD', name: 'Amerikan Dolari', symbol: '$', defaultRate: 32.5 } }),
-    prisma.currency.create({ data: { tenantId: tenant.id, code: 'EUR', name: 'Euro', symbol: 'E', defaultRate: 35.2 } }),
-  ]);
-  console.log('  + Master data');
-
-  // Warehouses
-  const wh1 = await prisma.warehouse.create({ data: { tenantId: tenant.id, name: 'Merkez Depo', code: 'WH01', address: 'Maslak, Istanbul' } });
-  const wh2 = await prisma.warehouse.create({ data: { tenantId: tenant.id, name: 'Anadolu Depo', code: 'WH02', address: 'Gebze, Kocaeli' } });
-  const [loc1A, loc1B, loc2A] = await Promise.all([
-    prisma.location.create({ data: { tenantId: tenant.id, warehouseId: wh1.id, name: 'Raf A-1', code: 'A-1' } }),
-    prisma.location.create({ data: { tenantId: tenant.id, warehouseId: wh1.id, name: 'Raf B-1', code: 'B-1' } }),
-    prisma.location.create({ data: { tenantId: tenant.id, warehouseId: wh2.id, name: 'Raf A-1', code: 'A-1' } }),
-  ]);
-  console.log('  + Coklu depo ve lokasyonlar');
-
-  // Products
-  const products = await Promise.all([
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P001', name: 'Zeytinyagi 1L', unitId: unitLt.id, categoryId: catGida.id, taxRateId: kdv1.id, purchasePrice: 120, salesPrice: 180, minStockLevel: 20, averageCost: 120 } }),
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P002', name: 'Dogal Maden Suyu (6li)', unitId: unitAdet.id, categoryId: catIcecek.id, taxRateId: kdv10.id, purchasePrice: 30, salesPrice: 48, minStockLevel: 50, averageCost: 30 } }),
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P003', name: 'Organik Bal 500g', unitId: unitKg.id, categoryId: catGida.id, taxRateId: kdv1.id, purchasePrice: 200, salesPrice: 320, minStockLevel: 15, averageCost: 200 } }),
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P004', name: 'Bulasik Deterjani 1L', unitId: unitLt.id, categoryId: catTemizlik.id, taxRateId: kdv20.id, purchasePrice: 45, salesPrice: 72, minStockLevel: 30, averageCost: 45 } }),
-    prisma.product.create({ data: { tenantId: tenant.id, code: 'P005', name: 'Cay 1kg', unitId: unitKg.id, categoryId: catGida.id, taxRateId: kdv1.id, purchasePrice: 80, salesPrice: 130, minStockLevel: 25, averageCost: 80 } }),
-  ]);
-
-  const stockData = [
-    { productId: products[0].id, qty: 100, warehouseId: wh1.id, locationId: loc1A.id },
-    { productId: products[1].id, qty: 200, warehouseId: wh1.id, locationId: loc1A.id },
-    { productId: products[2].id, qty: 40, warehouseId: wh1.id, locationId: loc1B.id },
-    { productId: products[3].id, qty: 80, warehouseId: wh1.id, locationId: loc1B.id },
-    { productId: products[4].id, qty: 60, warehouseId: wh1.id, locationId: loc1A.id },
-    { productId: products[0].id, qty: 50, warehouseId: wh2.id, locationId: loc2A.id },
-    { productId: products[1].id, qty: 150, warehouseId: wh2.id, locationId: loc2A.id },
-    { productId: products[3].id, qty: 40, warehouseId: wh2.id, locationId: loc2A.id },
-  ];
-  for (const s of stockData) {
-    await prisma.stockLevel.create({ data: { tenantId: tenant.id, productId: s.productId, warehouseId: s.warehouseId, locationId: s.locationId, quantity: s.qty } });
-    await prisma.stockMovement.create({ data: { tenantId: tenant.id, productId: s.productId, type: 'OPENING', quantity: s.qty, toWarehouseId: s.warehouseId, notes: 'Acilis stogu' } });
-  }
-  console.log('  + Urunler ve stok seviyeleri');
-
-  // Product Batches & Lot/Serial Numbers
-  const batch1 = await prisma.productBatch.create({ data: { tenantId: tenant.id, productId: products[0].id, batchNumber: 'ZYT-2026-001', expiryDate: new Date('2027-06-15'), manufacturedAt: new Date('2026-01-10'), quantity: 100, notes: 'Ege bolgesinden ilk parti' } });
-  const batch2 = await prisma.productBatch.create({ data: { tenantId: tenant.id, productId: products[0].id, batchNumber: 'ZYT-2026-002', expiryDate: new Date('2027-09-20'), manufacturedAt: new Date('2026-03-05'), quantity: 50, notes: 'Ikinci parti - organik' } });
-  const batch3 = await prisma.productBatch.create({ data: { tenantId: tenant.id, productId: products[2].id, batchNumber: 'BAL-2026-001', expiryDate: new Date('2028-01-01'), manufacturedAt: new Date('2025-12-15'), quantity: 40, notes: 'Mugla cicek bali' } });
-  const batch4 = await prisma.productBatch.create({ data: { tenantId: tenant.id, productId: products[4].id, batchNumber: 'CAY-2026-001', expiryDate: new Date('2027-12-31'), manufacturedAt: new Date('2026-02-01'), quantity: 60, notes: 'Rize siyah cay' } });
-
-  // Lot/Serial Numbers
-  for (let i = 1; i <= 10; i++) {
-    await prisma.lotSerialNumber.create({ data: { tenantId: tenant.id, productId: products[0].id, batchId: batch1.id, serialNumber: `ZYT-001-${String(i).padStart(4, '0')}`, isUsed: i <= 3 } });
-  }
-  for (let i = 1; i <= 5; i++) {
-    await prisma.lotSerialNumber.create({ data: { tenantId: tenant.id, productId: products[0].id, batchId: batch2.id, serialNumber: `ZYT-002-${String(i).padStart(4, '0')}` } });
-  }
-  for (let i = 1; i <= 8; i++) {
-    await prisma.lotSerialNumber.create({ data: { tenantId: tenant.id, productId: products[2].id, batchId: batch3.id, serialNumber: `BAL-001-${String(i).padStart(4, '0')}`, isUsed: i <= 2 } });
-  }
-  for (let i = 1; i <= 6; i++) {
-    await prisma.lotSerialNumber.create({ data: { tenantId: tenant.id, productId: products[4].id, batchId: batch4.id, serialNumber: `CAY-001-${String(i).padStart(4, '0')}` } });
-  }
-  console.log('  + Urun partileri ve lot/seri numaralari');
-
-  // Contacts
-  const contacts = await Promise.all([
-    prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Market Zinciri A.S.', code: 'C001', taxNumber: '1112223344', taxOffice: 'Kadikoy', email: 'satin@marketzinciri.com', phone: '+90 212 444 0010', city: 'Istanbul', country: 'TR', creditLimit: 200000, paymentTermDays: 30 } }),
-    prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Organik Yasam Ltd.', code: 'C002', taxNumber: '5556667788', taxOffice: 'Cankaya', email: 'info@organikyasam.com', phone: '+90 312 444 0020', city: 'Ankara', country: 'TR', creditLimit: 100000, paymentTermDays: 15 } }),
-    prisma.contact.create({ data: { tenantId: tenant.id, type: 'SUPPLIER', name: 'Ege Tarim Koop.', code: 'S001', taxNumber: '9998887766', taxOffice: 'Izmir', email: 'satis@egetarim.com', phone: '+90 232 555 0010', city: 'Izmir', country: 'TR', paymentTermDays: 45 } }),
-    prisma.contact.create({ data: { tenantId: tenant.id, type: 'SUPPLIER', name: 'Temizlik Dunyasi', code: 'S002', taxNumber: '3334445566', taxOffice: 'Bagcilar', email: 'siparis@temizlikdunyasi.com', phone: '+90 212 555 0020', city: 'Istanbul', country: 'TR', paymentTermDays: 30 } }),
-    prisma.contact.create({ data: { tenantId: tenant.id, type: 'BOTH', name: 'Anadolu Gida Dagitim', code: 'B001', taxNumber: '7778889900', taxOffice: 'Umraniye', email: 'info@anadolugida.com', phone: '+90 216 555 0030', city: 'Istanbul', country: 'TR', creditLimit: 150000, paymentTermDays: 30 } }),
-  ]);
-  console.log('  + Cari hesaplar');
-
-  // Number sequences
-  await prisma.numberSequence.createMany({
-    data: [
-      { tenantId: tenant.id, module: 'invoice', prefix: 'INV-', lastNum: 3, padding: 6 },
-      { tenantId: tenant.id, module: 'sales_quote', prefix: 'TKL-', lastNum: 1, padding: 6 },
-      { tenantId: tenant.id, module: 'sales_order', prefix: 'SIP-', lastNum: 2, padding: 6 },
-      { tenantId: tenant.id, module: 'journal', prefix: 'JE-', lastNum: 1, padding: 6 },
-      { tenantId: tenant.id, module: 'purchase_request', prefix: 'PR-', lastNum: 1, padding: 6 },
-      { tenantId: tenant.id, module: 'purchase_order', prefix: 'PO-', lastNum: 1, padding: 6 },
-    ],
-  });
-
-  // Sales
-  const so1 = await prisma.salesOrder.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[0].id,
-      number: 'SIP-000001', date: new Date('2026-03-15'), dueDate: new Date('2026-04-15'),
-      status: 'CONFIRMED', totalNet: 18000, totalTax: 180, totalGross: 18180,
-      items: { create: [{ tenantId: tenant.id, productId: products[0].id, description: 'Zeytinyagi 1L', quantity: 100, unitPrice: 180, discount: 0, taxRate: 1, taxAmount: 180, lineTotal: 18180, sortOrder: 0 }] },
-    },
-  });
-  const so2 = await prisma.salesOrder.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[1].id,
-      number: 'SIP-000002', date: new Date('2026-03-25'), dueDate: new Date('2026-04-10'),
-      status: 'DRAFT', totalNet: 9600, totalTax: 960, totalGross: 10560,
-      items: { create: [{ tenantId: tenant.id, productId: products[1].id, description: 'Dogal Maden Suyu (6li)', quantity: 200, unitPrice: 48, discount: 0, taxRate: 10, taxAmount: 960, lineTotal: 10560, sortOrder: 0 }] },
-    },
-  });
-  console.log('  + Siparisler');
-
-  // Invoices
-  const inv1 = await prisma.invoice.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[0].id, salesOrderId: so1.id,
-      type: 'SALES', status: 'PAID', number: 'INV-000001',
-      date: new Date('2026-03-18'), dueDate: new Date('2026-04-18'),
-      totalNet: 18000, totalTax: 180, totalGross: 18180,
-      lines: { create: [{ tenantId: tenant.id, productId: products[0].id, taxRateId: kdv1.id, description: 'Zeytinyagi 1L', quantity: 100, unitPrice: 180, discount: 0, taxAmount: 180, lineTotal: 18180, sortOrder: 0 }] },
-    },
-  });
-  const inv2 = await prisma.invoice.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[1].id,
-      type: 'SALES', status: 'SENT', number: 'INV-000002',
-      date: new Date('2026-03-28'), dueDate: new Date('2026-04-12'),
-      totalNet: 12800, totalTax: 128, totalGross: 12928,
-      lines: { create: [{ tenantId: tenant.id, productId: products[2].id, taxRateId: kdv1.id, description: 'Organik Bal 500g', quantity: 40, unitPrice: 320, discount: 0, taxAmount: 128, lineTotal: 12928, sortOrder: 0 }] },
-    },
-  });
-  const inv3 = await prisma.invoice.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[2].id,
-      type: 'PURCHASE', status: 'PAID', number: 'INV-000003',
-      date: new Date('2026-03-05'), dueDate: new Date('2026-04-20'),
-      totalNet: 24000, totalTax: 240, totalGross: 24240,
-      lines: { create: [{ tenantId: tenant.id, productId: products[0].id, taxRateId: kdv1.id, description: 'Zeytinyagi 1L (200 adet)', quantity: 200, unitPrice: 120, discount: 0, taxAmount: 240, lineTotal: 24240, sortOrder: 0 }] },
-    },
-  });
-  console.log('  + Faturalar');
-
-  // Bank & Payments
-  const bankAccount = await prisma.bankAccount.create({
-    data: { tenantId: tenant.id, name: 'Is Bankasi Vadesiz TRY', bankName: 'Is Bankasi', accountNumber: '7654321', iban: 'TR98 0006 4000 7654 3210 9876 54', currencyCode: 'TRY' },
-  });
-  await prisma.cashAccount.create({ data: { tenantId: tenant.id, name: 'Ana Kasa', currencyCode: 'TRY' } });
-  const pay1 = await prisma.payment.create({
-    data: { tenantId: tenant.id, contactId: contacts[0].id, bankAccountId: bankAccount.id, date: new Date('2026-03-20'), amount: 18180, method: 'BANK_TRANSFER', reference: 'EFT-2026-001', status: 'COMPLETED' },
-  });
-  await prisma.paymentAllocation.create({ data: { tenantId: tenant.id, paymentId: pay1.id, invoiceId: inv1.id, amount: 18180 } });
-  const pay2 = await prisma.payment.create({
-    data: { tenantId: tenant.id, contactId: contacts[2].id, bankAccountId: bankAccount.id, date: new Date('2026-03-08'), amount: 24240, method: 'BANK_TRANSFER', reference: 'EFT-2026-002', status: 'COMPLETED' },
-  });
-  await prisma.paymentAllocation.create({ data: { tenantId: tenant.id, paymentId: pay2.id, invoiceId: inv3.id, amount: 24240 } });
-  console.log('  + Banka ve odemeler');
-
-  // Accounting
-  const accs = await Promise.all([
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '100', name: 'Kasa', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '102', name: 'Bankalar', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '120', name: 'Alicilar', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '153', name: 'Ticari Mallar', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '320', name: 'Saticilar', accountType: 'LIABILITY' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '391', name: 'Hesaplanan KDV', accountType: 'LIABILITY' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '600', name: 'Yurt Ici Satislar', accountType: 'REVENUE' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '621', name: 'Satilan Ticari Mallar Maliyeti', accountType: 'EXPENSE' } }),
-  ]);
-  const fp = await prisma.fiscalPeriod.create({ data: { tenantId: tenant.id, name: '2026 Q1', startDate: new Date('2026-01-01'), endDate: new Date('2026-03-31'), status: 'OPEN' } });
-  await prisma.journalEntry.create({
-    data: {
-      tenantId: tenant.id, fiscalPeriodId: fp.id, type: 'AUTO_INVOICE', number: 'JE-000001',
-      date: new Date('2026-03-18'), description: 'INV-000001 satis faturasi kaydi', isPosted: true, postedAt: new Date('2026-03-18'),
-      lines: {
-        create: [
-          { tenantId: tenant.id, accountId: accs[2].id, debit: 18180, credit: 0, description: 'Alici borc', sortOrder: 0 },
-          { tenantId: tenant.id, accountId: accs[6].id, debit: 0, credit: 18000, description: 'Satis geliri', sortOrder: 1 },
-          { tenantId: tenant.id, accountId: accs[5].id, debit: 0, credit: 180, description: 'Hesaplanan KDV', sortOrder: 2 },
-        ]
-      },
-    },
-  });
-  console.log('  + Muhasebe kayitlari');
-
-  // Purchase
-  const pr1 = await prisma.purchaseRequest.create({
-    data: {
-      tenantId: tenant.id, number: 'PR-000001', date: new Date('2026-03-01'), status: 'ORDERED', totalEstimated: 24000,
-      items: { create: [{ tenantId: tenant.id, productId: products[0].id, quantity: 200, unitPrice: 120 }] }
-    },
-  });
-  const po1 = await prisma.purchaseOrder.create({
-    data: {
-      tenantId: tenant.id, contactId: contacts[2].id, number: 'PO-000001',
-      date: new Date('2026-03-03'), dueDate: new Date('2026-03-15'), status: 'RECEIVED',
-      totalNet: 24000, totalTax: 240, totalGross: 24240,
-      items: { create: [{ tenantId: tenant.id, productId: products[0].id, description: 'Zeytinyagi 1L', quantity: 200, received: 200, unitPrice: 120, taxRate: 1, taxAmount: 240, lineTotal: 24240 }] },
-    },
-  });
-  await prisma.purchaseRequest.update({ where: { id: pr1.id }, data: { purchaseOrderId: po1.id } });
-  console.log('  + Satin alma');
-
-  // -- Approval Flows --
-  const flowPurchase = await prisma.approvalFlow.create({ data: { tenantId: tenant.id, name: 'Satin Alma Onayi', module: 'PURCHASE_REQUEST', isActive: true } });
-  const stepPurch1 = await prisma.approvalStep.create({ data: { flowId: flowPurchase.id, stepOrder: 1, name: 'Departman Muduru Onayi', approverRoleId: roleAccountant.id, isRequired: true } });
-  const stepPurch2 = await prisma.approvalStep.create({ data: { flowId: flowPurchase.id, stepOrder: 2, name: 'Genel Mudur Onayi', approverRoleId: roleAdmin.id, isRequired: true } });
-
-  const flowInvoice = await prisma.approvalFlow.create({ data: { tenantId: tenant.id, name: 'Fatura Onayi', module: 'INVOICE', isActive: true } });
-  await prisma.approvalStep.create({ data: { flowId: flowInvoice.id, stepOrder: 1, name: 'Muhasebe Onayi', approverRoleId: roleAccountant.id, isRequired: true } });
-
-  const flowSales = await prisma.approvalFlow.create({ data: { tenantId: tenant.id, name: 'Satis Siparisi Onayi', module: 'SALES_ORDER', isActive: true } });
-  await prisma.approvalStep.create({ data: { flowId: flowSales.id, stepOrder: 1, name: 'Satis Muduru Onayi', approverRoleId: roleSales.id, isRequired: true } });
-  await prisma.approvalStep.create({ data: { flowId: flowSales.id, stepOrder: 2, name: 'Finans Onayi', approverRoleId: roleAccountant.id, isRequired: true } });
-
-  const flowOld = await prisma.approvalFlow.create({ data: { tenantId: tenant.id, name: 'Eski Izin Onayi', module: 'LEAVE_REQUEST', isActive: false } });
-  await prisma.approvalStep.create({ data: { flowId: flowOld.id, stepOrder: 1, name: 'IK Onayi', isRequired: true } });
-
-  // -- Approval Requests --
-  const req1 = await prisma.approvalRequest.create({
-    data: { tenantId: tenant.id, flowId: flowPurchase.id, entityType: 'PURCHASE_ORDER', entityId: po1.id, status: 'APPROVED', currentStep: 2, requestedBy: user3.id, notes: 'Zeytinyagi stok takviyesi icin acil onay', resolvedAt: new Date('2026-03-04') },
-  });
-  await prisma.approvalAction.createMany({
-    data: [
-      { requestId: req1.id, stepId: stepPurch1.id, actionType: 'APPROVE', actorId: user2.id, notes: 'Butce uygun, onaylandi.', createdAt: new Date('2026-03-03T10:00:00Z') },
-      { requestId: req1.id, stepId: stepPurch2.id, actionType: 'APPROVE', actorId: owner.id, notes: 'Genel mudur onayi verildi.', createdAt: new Date('2026-03-04T09:00:00Z') },
-    ]
-  });
-
-  await prisma.approvalRequest.create({
-    data: { tenantId: tenant.id, flowId: flowInvoice.id, entityType: 'INVOICE', entityId: inv2.id, status: 'PENDING', currentStep: 1, requestedBy: user3.id, notes: 'Organik Yasam faturasi onay bekliyor' },
-  });
-
-  const req3 = await prisma.approvalRequest.create({
-    data: { tenantId: tenant.id, flowId: flowSales.id, entityType: 'SALES_ORDER', entityId: so2.id, status: 'PENDING', currentStep: 2, requestedBy: user3.id, notes: 'Maden suyu siparisi - buyuk miktar, finans onayi gerekli' },
-  });
-  await prisma.approvalAction.create({ data: { requestId: req3.id, actionType: 'APPROVE', actorId: user3.id, notes: 'Satis muduru onayladi.', createdAt: new Date('2026-03-26T14:00:00Z') } });
-
-  const req4 = await prisma.approvalRequest.create({
-    data: { tenantId: tenant.id, flowId: flowPurchase.id, entityType: 'PURCHASE_ORDER', entityId: products[3].id, status: 'REJECTED', currentStep: 1, requestedBy: user3.id, notes: 'Deterjan alimi talebi', resolvedAt: new Date('2026-03-28') },
-  });
-  await prisma.approvalAction.create({ data: { requestId: req4.id, stepId: stepPurch1.id, actionType: 'REJECT', actorId: user2.id, notes: 'Butce asimi, bu ay alim yapilamaz.', createdAt: new Date('2026-03-28T11:00:00Z') } });
-
-  await prisma.approvalRequest.create({
-    data: { tenantId: tenant.id, flowId: flowInvoice.id, entityType: 'INVOICE', entityId: inv1.id, status: 'PENDING', currentStep: 1, requestedBy: owner.id, notes: 'Market Zinciri faturasi kontrol onayi' },
-  });
-  console.log('  + Onay akislari ve talepler');
-
-  // Settings & notifications
-  await prisma.tenantSetting.createMany({
-    data: [
-      { tenantId: tenant.id, key: 'default_currency', value: 'TRY' },
-      { tenantId: tenant.id, key: 'invoice_prefix', value: 'INV' },
-      { tenantId: tenant.id, key: 'date_format', value: 'DD.MM.YYYY' },
-      { tenantId: tenant.id, key: 'timezone', value: 'Europe/Istanbul' },
-      { tenantId: tenant.id, key: 'language', value: 'tr' },
-    ],
-  });
-  await prisma.notification.createMany({
-    data: [
-      { tenantId: tenant.id, userId: owner.id, title: 'Yeni Odeme Alindi', message: 'Market Zinciri A.S. tarafindan 18.180 TL odeme alindi.', module: 'accounting', status: 'READ', readAt: new Date('2026-03-20') },
-      { tenantId: tenant.id, userId: owner.id, title: 'Bekleyen Fatura', message: 'INV-000002 numarali fatura henuz odenmedi.', module: 'invoicing', status: 'UNREAD' },
-      { tenantId: tenant.id, userId: user2.id, title: 'Mutabakat Bekliyor', message: 'Mart 2026 banka mutabakatinda eslesmeyen kalem var.', module: 'accounting', status: 'UNREAD' },
-    ],
-  });
-
-  // API Key
-  const apiKeyHash = await bcrypt.hash('sk_live_pro_ticaret_demo_key_001', 10);
-  await prisma.apiKey.create({
-    data: { tenantId: tenant.id, name: 'Production API', keyHash: apiKeyHash, keyPrefix: 'sk_live_', isActive: true, scopes: ['invoices:read', 'products:read', 'contacts:read'] },
-  });
-
-  console.log('  + Professional Tenant: Pro Ticaret A.S. (pro@proticaret.com / demo1234)');
-}
-
-main()
-  .catch((e) => { console.error(e); process.exit(1); })
-  .finally(async () => { await prisma.$disconnect(); });
-
-async function seedEnterpriseTenant() {
-  console.log('\n  -- Enterprise Tenant --');
-
-  const tenant = await prisma.tenant.create({
-    data: {
-      slug: 'global-uretim',
-      companyName: 'Global Uretim Sanayi A.S.',
-      taxNumber: '5551234567',
-      taxOffice: 'Gebze',
-      email: 'info@globaluretim.com',
-      phone: '+90 262 555 0300',
-      address: 'Organize Sanayi Bolgesi No:15',
-      city: 'Kocaeli',
-      country: 'TR',
-      sector: 'Uretim',
       plan: 'ENTERPRISE',
       status: 'ACTIVE',
       modules: [
         'accounting', 'inventory', 'contacts', 'invoicing', 'reporting',
-        'crm', 'purchasing', 'warehouse', 'production', 'service',
-        'marketplace', 'hr', 'payroll',
+        'purchasing', 'production', 'service', 'marketplace', 'payroll',
+        'hr', 'approvals', 'warehouse',
       ],
+      subscriptionStart: d('2026-01-01'),
+      subscriptionEnd: d('2026-12-31'),
     },
   });
 
-  const hashedPassword = await bcrypt.hash('demo1234', 12);
-  const owner = await prisma.user.create({ data: { email: 'ent@globaluretim.com', name: 'Can Ozturk', phone: '+90 534 555 0301', password: hashedPassword, isActive: true } });
-  const user2 = await prisma.user.create({ data: { email: 'uretim@globaluretim.com', name: 'Fatma Yildiz', phone: '+90 534 555 0302', password: hashedPassword, isActive: true } });
-  const user3 = await prisma.user.create({ data: { email: 'ik@globaluretim.com', name: 'Ali Koc', phone: '+90 534 555 0303', password: hashedPassword, isActive: true } });
+  const pw = await hash('demo1234');
 
-  // Roles
-  const roleAdmin = await prisma.role.create({ data: { tenantId: tenant.id, name: 'Yonetici', description: 'Tam yetkili', isSystem: true } });
-  const roleProd = await prisma.role.create({ data: { tenantId: tenant.id, name: 'Uretim Muduru', description: 'Uretim islemleri', isSystem: true } });
-  const roleHR = await prisma.role.create({ data: { tenantId: tenant.id, name: 'IK Muduru', description: 'Insan kaynaklari', isSystem: true } });
+  const userAdmin = await prisma.user.create({
+    data: {
+      email: 'admin@axondemo.com',
+      name: 'Ahmet Yılmaz',
+      phone: '+90 532 555 0101',
+      password: pw,
+      isActive: true,
+    },
+  });
+  await prisma.tenantUser.create({
+    data: { tenantId: tenant.id, userId: userAdmin.id, isOwner: true, isActive: true },
+  });
 
-  const allModules = ['accounting', 'inventory', 'contacts', 'invoicing', 'reporting', 'crm', 'purchasing', 'warehouse', 'production', 'service', 'marketplace', 'hr', 'payroll'];
-  for (const mod of allModules) { for (const action of ['CREATE', 'READ', 'UPDATE', 'DELETE', 'EXPORT'] as const) { await prisma.rolePermission.create({ data: { roleId: roleAdmin.id, module: mod, action } }); } }
-  for (const mod of ['production', 'inventory', 'warehouse']) { for (const action of ['CREATE', 'READ', 'UPDATE'] as const) { await prisma.rolePermission.create({ data: { roleId: roleProd.id, module: mod, action } }); } }
-  for (const mod of ['hr', 'payroll']) { for (const action of ['CREATE', 'READ', 'UPDATE'] as const) { await prisma.rolePermission.create({ data: { roleId: roleHR.id, module: mod, action } }); } }
+  const userSales = await prisma.user.create({
+    data: {
+      email: 'satis@axondemo.com',
+      name: 'Zeynep Kaya',
+      phone: '+90 532 555 0102',
+      password: pw,
+      isActive: true,
+    },
+  });
+  await prisma.tenantUser.create({
+    data: { tenantId: tenant.id, userId: userSales.id, isOwner: false, isActive: true },
+  });
 
-  await prisma.tenantUser.create({ data: { tenantId: tenant.id, userId: owner.id, isOwner: true, isActive: true, roleId: roleAdmin.id } });
-  await prisma.tenantUser.create({ data: { tenantId: tenant.id, userId: user2.id, isOwner: false, isActive: true, roleId: roleProd.id } });
-  await prisma.tenantUser.create({ data: { tenantId: tenant.id, userId: user3.id, isOwner: false, isActive: true, roleId: roleHR.id } });
-  console.log('  + Kullanicilar ve roller');
+  const userAccounting = await prisma.user.create({
+    data: {
+      email: 'muhasebe@axondemo.com',
+      name: 'Mehmet Demir',
+      phone: '+90 532 555 0103',
+      password: pw,
+      isActive: true,
+    },
+  });
+  await prisma.tenantUser.create({
+    data: { tenantId: tenant.id, userId: userAccounting.id, isOwner: false, isActive: true },
+  });
 
-  // Master data
-  const [unitAdet, unitKg] = await Promise.all([
-    prisma.unit.create({ data: { tenantId: tenant.id, name: 'Adet', code: 'AD' } }),
-    prisma.unit.create({ data: { tenantId: tenant.id, name: 'Kilogram', code: 'KG' } }),
+  const userWarehouse = await prisma.user.create({
+    data: {
+      email: 'depo@axondemo.com',
+      name: 'Ali Çelik',
+      phone: '+90 532 555 0104',
+      password: pw,
+      isActive: true,
+    },
+  });
+  await prisma.tenantUser.create({
+    data: { tenantId: tenant.id, userId: userWarehouse.id, isOwner: false, isActive: true },
+  });
+
+  return { tenant, users: [userAdmin, userSales, userAccounting, userWarehouse] };
+}
+
+// ─────────────────────────────────────────────
+// MASTER DATA
+// ─────────────────────────────────────────────
+
+async function seedMasterData(tenantId: string) {
+  // Units
+  const [unitAdet, unitKg, unitLt, unitMt, unitKutu, unitPaket] = await Promise.all([
+    prisma.unit.create({ data: { tenantId, name: 'Adet', code: 'AD' } }),
+    prisma.unit.create({ data: { tenantId, name: 'Kilogram', code: 'KG' } }),
+    prisma.unit.create({ data: { tenantId, name: 'Litre', code: 'LT' } }),
+    prisma.unit.create({ data: { tenantId, name: 'Metre', code: 'MT' } }),
+    prisma.unit.create({ data: { tenantId, name: 'Kutu', code: 'KT' } }),
+    prisma.unit.create({ data: { tenantId, name: 'Paket', code: 'PK' } }),
   ]);
-  const catHammadde = await prisma.category.create({ data: { tenantId: tenant.id, name: 'Hammadde' } });
-  const catMamul = await prisma.category.create({ data: { tenantId: tenant.id, name: 'Mamul' } });
-  const [kdv1, kdv20] = await Promise.all([
-    prisma.taxRate.create({ data: { tenantId: tenant.id, name: 'KDV %1', rate: 1 } }),
-    prisma.taxRate.create({ data: { tenantId: tenant.id, name: 'KDV %20', rate: 20 } }),
+
+  // Categories
+  const catElektronik = await prisma.category.create({ data: { tenantId, name: 'Elektronik' } });
+  const catBilgisayar = await prisma.category.create({ data: { tenantId, name: 'Bilgisayar', parentId: catElektronik.id } });
+  const catTelefon    = await prisma.category.create({ data: { tenantId, name: 'Telefon', parentId: catElektronik.id } });
+  const catAksesuar   = await prisma.category.create({ data: { tenantId, name: 'Aksesuar', parentId: catElektronik.id } });
+  const catOfis       = await prisma.category.create({ data: { tenantId, name: 'Ofis Malzemeleri' } });
+  const catHammadde   = await prisma.category.create({ data: { tenantId, name: 'Hammadde' } });
+  const catYarimMamul = await prisma.category.create({ data: { tenantId, name: 'Yarı Mamul' } });
+
+  // Tax Rates
+  const [kdv0, kdv10, kdv20] = await Promise.all([
+    prisma.taxRate.create({ data: { tenantId, name: 'KDV %0',  rate: 0  } }),
+    prisma.taxRate.create({ data: { tenantId, name: 'KDV %10', rate: 10 } }),
+    prisma.taxRate.create({ data: { tenantId, name: 'KDV %20', rate: 20 } }),
   ]);
+
+  // Currencies
   await Promise.all([
-    prisma.currency.create({ data: { tenantId: tenant.id, code: 'TRY', name: 'Turk Lirasi', symbol: 'TL', defaultRate: 1, isBase: true } }),
-    prisma.currency.create({ data: { tenantId: tenant.id, code: 'USD', name: 'Amerikan Dolari', symbol: '$', defaultRate: 32.5 } }),
+    prisma.currency.create({ data: { tenantId, code: 'TRY', name: 'Türk Lirası',     symbol: '₺', defaultRate: 1,    isBase: true } }),
+    prisma.currency.create({ data: { tenantId, code: 'USD', name: 'Amerikan Doları', symbol: '$', defaultRate: 32.5 } }),
+    prisma.currency.create({ data: { tenantId, code: 'EUR', name: 'Euro',            symbol: '€', defaultRate: 35.2 } }),
+    prisma.currency.create({ data: { tenantId, code: 'GBP', name: 'İngiliz Sterlini',symbol: '£', defaultRate: 41.0 } }),
   ]);
-  console.log('  + Master data');
 
-  // Warehouses
-  const whHammadde = await prisma.warehouse.create({ data: { tenantId: tenant.id, name: 'Hammadde Deposu', code: 'WH-HAM', address: 'OSB A Blok' } });
-  const whMamul = await prisma.warehouse.create({ data: { tenantId: tenant.id, name: 'Mamul Deposu', code: 'WH-MAM', address: 'OSB B Blok' } });
-  const locHam = await prisma.location.create({ data: { tenantId: tenant.id, warehouseId: whHammadde.id, name: 'Ana Raf', code: 'A-1' } });
-  const locMam = await prisma.location.create({ data: { tenantId: tenant.id, warehouseId: whMamul.id, name: 'Ana Raf', code: 'A-1' } });
-  console.log('  + Depolar');
+  // Currency Rates (son 3 gün)
+  await prisma.currencyRate.createMany({
+    data: [
+      { tenantId, currencyCode: 'USD', rate: 32.45, date: d('2026-05-02'), source: 'CENTRAL_BANK' },
+      { tenantId, currencyCode: 'EUR', rate: 35.18, date: d('2026-05-02'), source: 'CENTRAL_BANK' },
+      { tenantId, currencyCode: 'USD', rate: 32.50, date: d('2026-05-03'), source: 'CENTRAL_BANK' },
+      { tenantId, currencyCode: 'EUR', rate: 35.22, date: d('2026-05-03'), source: 'CENTRAL_BANK' },
+      { tenantId, currencyCode: 'USD', rate: 32.48, date: d('2026-05-04'), source: 'CENTRAL_BANK' },
+      { tenantId, currencyCode: 'EUR', rate: 35.20, date: d('2026-05-04'), source: 'CENTRAL_BANK' },
+    ],
+  });
 
-  // Products (hammadde + mamul)
-  const pAluminyum = await prisma.product.create({ data: { tenantId: tenant.id, code: 'HAM-001', name: 'Aluminyum Profil 6m', unitId: unitAdet.id, categoryId: catHammadde.id, taxRateId: kdv20.id, purchasePrice: 450, salesPrice: 0, minStockLevel: 50, averageCost: 450 } });
-  const pVida = await prisma.product.create({ data: { tenantId: tenant.id, code: 'HAM-002', name: 'Paslanmaz Vida M6 (100lu)', unitId: unitAdet.id, categoryId: catHammadde.id, taxRateId: kdv20.id, purchasePrice: 85, salesPrice: 0, minStockLevel: 100, averageCost: 85 } });
-  const pBoya = await prisma.product.create({ data: { tenantId: tenant.id, code: 'HAM-003', name: 'Endustriyel Boya 5L', unitId: unitAdet.id, categoryId: catHammadde.id, taxRateId: kdv20.id, purchasePrice: 320, salesPrice: 0, minStockLevel: 20, averageCost: 320 } });
-  const pCerceve = await prisma.product.create({ data: { tenantId: tenant.id, code: 'MAM-001', name: 'Aluminyum Pencere Cercevesi', unitId: unitAdet.id, categoryId: catMamul.id, taxRateId: kdv20.id, purchasePrice: 0, salesPrice: 2500, minStockLevel: 10, averageCost: 1200 } });
-  const pKapi = await prisma.product.create({ data: { tenantId: tenant.id, code: 'MAM-002', name: 'Aluminyum Kapi Sistemi', unitId: unitAdet.id, categoryId: catMamul.id, taxRateId: kdv20.id, purchasePrice: 0, salesPrice: 4500, minStockLevel: 5, averageCost: 2100 } });
+  // Ledger Accounts (Hesap Planı)
+  const accounts = await Promise.all([
+    prisma.ledgerAccount.create({ data: { tenantId, code: '100', name: 'Kasa',                          accountType: 'ASSET' } }),
+    prisma.ledgerAccount.create({ data: { tenantId, code: '102', name: 'Bankalar',                      accountType: 'ASSET' } }),
+    prisma.ledgerAccount.create({ data: { tenantId, code: '120', name: 'Alıcılar',                      accountType: 'ASSET' } }),
+    prisma.ledgerAccount.create({ data: { tenantId, code: '153', name: 'Ticari Mallar',                 accountType: 'ASSET' } }),
+    prisma.ledgerAccount.create({ data: { tenantId, code: '191', name: 'İndirilecek KDV',               accountType: 'ASSET' } }),
+    prisma.ledgerAccount.create({ data: { tenantId, code: '320', name: 'Satıcılar',                     accountType: 'LIABILITY' } }),
+    prisma.ledgerAccount.create({ data: { tenantId, code: '391', name: 'Hesaplanan KDV',                accountType: 'LIABILITY' } }),
+    prisma.ledgerAccount.create({ data: { tenantId, code: '500', name: 'Sermaye',                       accountType: 'EQUITY' } }),
+    prisma.ledgerAccount.create({ data: { tenantId, code: '600', name: 'Yurt İçi Satışlar',             accountType: 'REVENUE' } }),
+    prisma.ledgerAccount.create({ data: { tenantId, code: '601', name: 'Yurt Dışı Satışlar',            accountType: 'REVENUE' } }),
+    prisma.ledgerAccount.create({ data: { tenantId, code: '621', name: 'Satılan Ticari Mallar Maliyeti',accountType: 'EXPENSE' } }),
+    prisma.ledgerAccount.create({ data: { tenantId, code: '760', name: 'Pazarlama Giderleri',           accountType: 'EXPENSE' } }),
+    prisma.ledgerAccount.create({ data: { tenantId, code: '770', name: 'Genel Yönetim Giderleri',       accountType: 'EXPENSE' } }),
+  ]);
 
-  // Stock levels
-  for (const s of [
-    { productId: pAluminyum.id, qty: 200, warehouseId: whHammadde.id, locationId: locHam.id },
-    { productId: pVida.id, qty: 500, warehouseId: whHammadde.id, locationId: locHam.id },
-    { productId: pBoya.id, qty: 40, warehouseId: whHammadde.id, locationId: locHam.id },
-    { productId: pCerceve.id, qty: 25, warehouseId: whMamul.id, locationId: locMam.id },
-    { productId: pKapi.id, qty: 8, warehouseId: whMamul.id, locationId: locMam.id },
-  ]) {
-    await prisma.stockLevel.create({ data: { tenantId: tenant.id, productId: s.productId, warehouseId: s.warehouseId, locationId: s.locationId, quantity: s.qty } });
-    await prisma.stockMovement.create({ data: { tenantId: tenant.id, productId: s.productId, type: 'OPENING', quantity: s.qty, toWarehouseId: s.warehouseId, notes: 'Acilis stogu' } });
+  // Fiscal Period
+  const fiscalPeriod = await prisma.fiscalPeriod.create({
+    data: { tenantId, name: '2026 Yılı', startDate: d('2026-01-01'), endDate: d('2026-12-31'), status: 'OPEN' },
+  });
+
+  // Number Sequences
+  const seqModules = [
+    { module: 'invoice',          prefix: 'INV-' },
+    { module: 'sales_quote',      prefix: 'TKL-' },
+    { module: 'sales_order',      prefix: 'SIP-' },
+    { module: 'purchase_request', prefix: 'PR-'  },
+    { module: 'purchase_order',   prefix: 'PO-'  },
+    { module: 'journal',          prefix: 'JE-'  },
+    { module: 'stock_count',      prefix: 'SC-'  },
+    { module: 'delivery_note',    prefix: 'DN-'  },
+    { module: 'work_order',       prefix: 'WO-'  },
+    { module: 'service_request',  prefix: 'SR-'  },
+  ];
+  for (const s of seqModules) {
+    await prisma.numberSequence.create({ data: { tenantId, module: s.module, prefix: s.prefix, lastNum: 10, padding: 6 } });
   }
-  console.log('  + Urunler ve stok');
 
-  // Contacts
-  const cMusteri = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Insaat Holding A.S.', code: 'C001', taxNumber: '1231231234', taxOffice: 'Gebze', email: 'satin@insaatholding.com', phone: '+90 262 444 0010', city: 'Istanbul', creditLimit: 500000, paymentTermDays: 60 } });
-  const cTedarikci = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'SUPPLIER', name: 'Metal Sanayi Ltd.', code: 'S001', taxNumber: '4564564567', taxOffice: 'Dilovasi', email: 'satis@metalsanayi.com', phone: '+90 262 555 0010', city: 'Kocaeli', paymentTermDays: 45 } });
-  const cMusteri2 = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Yildiz Insaat Taahhut', code: 'C002', taxNumber: '7897897890', taxOffice: 'Kadikoy', email: 'muhasebe@yildizinsaat.com', phone: '+90 216 333 0020', city: 'Istanbul', creditLimit: 200000, paymentTermDays: 30 } });
-  const cMusteri3 = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Anadolu Yapi Malzemeleri', code: 'C003', taxNumber: '3213213210', taxOffice: 'Bursa', email: 'finans@anadoluyapi.com', phone: '+90 224 444 0030', city: 'Bursa', creditLimit: 100000, paymentTermDays: 45 } });
-  const cTedarikci2 = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'SUPPLIER', name: 'Ege Boya Kimya', code: 'S002', taxNumber: '6546546540', taxOffice: 'Izmir', email: 'siparis@egeboya.com', phone: '+90 232 555 0020', city: 'Izmir', paymentTermDays: 30 } });
-  const cBoth = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'BOTH', name: 'Marmara Aluminyum Tic.', code: 'B001', taxNumber: '9879879870', taxOffice: 'Gebze', email: 'info@marmaraaluminyum.com', phone: '+90 262 555 0040', city: 'Kocaeli', creditLimit: 300000, paymentTermDays: 30 } });
-  const cPasif = await prisma.contact.create({ data: { tenantId: tenant.id, type: 'CUSTOMER', name: 'Eski Musteri Ltd.', code: 'C004', taxNumber: '1111111110', taxOffice: 'Ankara', email: 'info@eskimusteri.com', phone: '+90 312 555 0050', city: 'Ankara', creditLimit: 50000, paymentTermDays: 30, isActive: false } });
-  console.log('  + Cari hesaplar (7 adet)');
+  return { unitAdet, unitKg, unitLt, unitMt, unitKutu, unitPaket, catBilgisayar, catTelefon, catAksesuar, catOfis, catHammadde, catYarimMamul, catElektronik, kdv0, kdv10, kdv20, accounts, fiscalPeriod };
+}
 
-  // ─── PRODUCTION ─────────────────────────────
+// ─────────────────────────────────────────────
+// WAREHOUSES
+// ─────────────────────────────────────────────
 
-  const wc1 = await prisma.workCenter.create({ data: { tenantId: tenant.id, code: 'WC01', name: 'Kesim Hatti', description: 'Aluminyum profil kesim', capacity: 500 } });
-  const wc2 = await prisma.workCenter.create({ data: { tenantId: tenant.id, code: 'WC02', name: 'Montaj Hatti', description: 'Cerceve ve kapi montaji', capacity: 200 } });
-  const wc3 = await prisma.workCenter.create({ data: { tenantId: tenant.id, code: 'WC03', name: 'Boyahane', description: 'Elektrostatik toz boya', capacity: 300 } });
+async function seedWarehouses(tenantId: string) {
+  const warehouse = await prisma.warehouse.create({
+    data: { tenantId, name: 'Ana Depo', code: 'WH01', address: 'Dudullu OSB, İstanbul' },
+  });
+  const warehouse2 = await prisma.warehouse.create({
+    data: { tenantId, name: 'Üretim Deposu', code: 'WH02', address: 'Dudullu OSB Blok B, İstanbul' },
+  });
 
-  // BOM — Pencere Cercevesi
-  const bomCerceve = await prisma.bOM.create({
+  const locations = await Promise.all([
+    prisma.location.create({ data: { tenantId, warehouseId: warehouse.id,  name: 'Raf A-1', code: 'A-1' } }),
+    prisma.location.create({ data: { tenantId, warehouseId: warehouse.id,  name: 'Raf A-2', code: 'A-2' } }),
+    prisma.location.create({ data: { tenantId, warehouseId: warehouse.id,  name: 'Raf B-1', code: 'B-1' } }),
+    prisma.location.create({ data: { tenantId, warehouseId: warehouse.id,  name: 'Raf B-2', code: 'B-2' } }),
+    prisma.location.create({ data: { tenantId, warehouseId: warehouse2.id, name: 'Üretim Alanı', code: 'P-1' } }),
+    prisma.location.create({ data: { tenantId, warehouseId: warehouse2.id, name: 'Hammadde Rafı', code: 'P-2' } }),
+  ]);
+
+  return { warehouse, warehouse2, locations };
+}
+
+// ─────────────────────────────────────────────
+// PRODUCTS & STOCK
+// ─────────────────────────────────────────────
+
+async function seedProducts(
+  tenantId: string,
+  master: Awaited<ReturnType<typeof seedMasterData>>,
+  warehouse: { id: string },
+  warehouse2: { id: string },
+  locations: { id: string }[],
+) {
+  const { unitAdet, unitKg, catBilgisayar, catTelefon, catAksesuar, catOfis, catHammadde, catYarimMamul, kdv10, kdv20 } = master;
+
+  const productDefs = [
+    { code: 'P001', name: 'Laptop Pro 15"',           unitId: unitAdet.id, catId: catBilgisayar.id, taxId: kdv20.id, buyPrice: 18000, sellPrice: 24999, minStock: 5,  avgCost: 18000, qty: 12, locIdx: 0 },
+    { code: 'P002', name: 'Mekanik Klavye RGB',        unitId: unitAdet.id, catId: catBilgisayar.id, taxId: kdv20.id, buyPrice: 800,   sellPrice: 1299,  minStock: 10, avgCost: 800,   qty: 45, locIdx: 0 },
+    { code: 'P003', name: 'Kablosuz Mouse Pro',        unitId: unitAdet.id, catId: catBilgisayar.id, taxId: kdv20.id, buyPrice: 350,   sellPrice: 599,   minStock: 15, avgCost: 350,   qty: 38, locIdx: 1 },
+    { code: 'P004', name: 'Akıllı Telefon X12',        unitId: unitAdet.id, catId: catTelefon.id,    taxId: kdv20.id, buyPrice: 12000, sellPrice: 16999, minStock: 8,  avgCost: 12000, qty: 7,  locIdx: 1 },
+    { code: 'P005', name: 'USB-C Hub 7 Port',          unitId: unitAdet.id, catId: catAksesuar.id,   taxId: kdv20.id, buyPrice: 280,   sellPrice: 499,   minStock: 20, avgCost: 280,   qty: 62, locIdx: 2 },
+    { code: 'P006', name: 'A4 Fotokopi Kağıdı 500 yp', unitId: unitAdet.id, catId: catOfis.id,       taxId: kdv10.id, buyPrice: 85,    sellPrice: 120,   minStock: 50, avgCost: 85,    qty: 3,  locIdx: 2 },
+    { code: 'P007', name: 'Tükenmez Kalem Seti 12li',  unitId: unitAdet.id, catId: catOfis.id,       taxId: kdv10.id, buyPrice: 45,    sellPrice: 79,    minStock: 30, avgCost: 45,    qty: 28, locIdx: 0 },
+    { code: 'P008', name: 'Monitor 27" 4K IPS',        unitId: unitAdet.id, catId: catBilgisayar.id, taxId: kdv20.id, buyPrice: 7500,  sellPrice: 10999, minStock: 3,  avgCost: 7500,  qty: 2,  locIdx: 1 },
+    { code: 'P009', name: 'Webcam 4K Otofokus',        unitId: unitAdet.id, catId: catAksesuar.id,   taxId: kdv20.id, buyPrice: 1200,  sellPrice: 1999,  minStock: 10, avgCost: 1200,  qty: 15, locIdx: 3 },
+    { code: 'P010', name: 'SSD 1TB NVMe',              unitId: unitAdet.id, catId: catBilgisayar.id, taxId: kdv20.id, buyPrice: 1800,  sellPrice: 2799,  minStock: 12, avgCost: 1800,  qty: 22, locIdx: 3 },
+    // Hammadde / Yarı Mamul (üretim için)
+    { code: 'HM001', name: 'Alüminyum Profil 1m',      unitId: unitKg.id,   catId: catHammadde.id,   taxId: kdv20.id, buyPrice: 45,    sellPrice: 0,     minStock: 100, avgCost: 45,   qty: 250, locIdx: 4 },
+    { code: 'HM002', name: 'Plastik Granül',            unitId: unitKg.id,   catId: catHammadde.id,   taxId: kdv20.id, buyPrice: 28,    sellPrice: 0,     minStock: 200, avgCost: 28,   qty: 480, locIdx: 5 },
+    { code: 'YM001', name: 'Laptop Kasası (Yarı Mamul)',unitId: unitAdet.id, catId: catYarimMamul.id, taxId: kdv20.id, buyPrice: 850,   sellPrice: 0,     minStock: 20,  avgCost: 850,  qty: 35,  locIdx: 4 },
+  ];
+
+  const products = [];
+  for (const p of productDefs) {
+    const product = await prisma.product.create({
+      data: {
+        tenantId, code: p.code, name: p.name,
+        unitId: p.unitId, categoryId: p.catId, taxRateId: p.taxId,
+        purchasePrice: p.buyPrice, salesPrice: p.sellPrice,
+        minStockLevel: p.minStock, averageCost: p.avgCost,
+      },
+    });
+
+    const warehouseId = p.locIdx >= 4 ? warehouse2.id : warehouse.id;
+    const locationId  = locations[p.locIdx]?.id ?? '';
+
+    await prisma.stockLevel.create({
+      data: { tenantId, productId: product.id, warehouseId, locationId, quantity: p.qty },
+    });
+    await prisma.stockMovement.create({
+      data: { tenantId, productId: product.id, type: 'OPENING', quantity: p.qty, toWarehouseId: warehouseId, notes: 'Açılış stoğu' },
+    });
+
+    products.push(product);
+  }
+
+  return products;
+}
+
+// ─────────────────────────────────────────────
+// CONTACTS
+// ─────────────────────────────────────────────
+
+async function seedContacts(tenantId: string) {
+  return Promise.all([
+    // Müşteriler
+    prisma.contact.create({ data: { tenantId, type: 'CUSTOMER', name: 'Teknoloji Çözümleri Ltd.', code: 'C001', taxNumber: '9876543210', taxOffice: 'Şişli',    email: 'satin@teknolojicozmler.com', phone: '+90 212 444 0001', city: 'İstanbul', creditLimit: 150000, paymentTermDays: 30 } }),
+    prisma.contact.create({ data: { tenantId, type: 'CUSTOMER', name: 'Dijital Medya A.Ş.',       code: 'C002', taxNumber: '1122334455', taxOffice: 'Beşiktaş', email: 'muhasebe@dijitalmedya.com',  phone: '+90 212 444 0002', city: 'İstanbul', creditLimit: 75000,  paymentTermDays: 15 } }),
+    prisma.contact.create({ data: { tenantId, type: 'CUSTOMER', name: 'Mavi Yazılım Koop.',       code: 'C003', taxNumber: '5544332211', taxOffice: 'Ankara',   email: 'finans@maviyazilim.com',     phone: '+90 312 444 0003', city: 'Ankara',   creditLimit: 50000,  paymentTermDays: 45 } }),
+    prisma.contact.create({ data: { tenantId, type: 'CUSTOMER', name: 'Yıldız Holding A.Ş.',     code: 'C004', taxNumber: '3344556677', taxOffice: 'Levent',   email: 'it@yildizholding.com',       phone: '+90 212 444 0004', city: 'İstanbul', creditLimit: 500000, paymentTermDays: 60 } }),
+    prisma.contact.create({ data: { tenantId, type: 'CUSTOMER', name: 'Ege Üniversitesi',         code: 'C005', taxNumber: '7788990011', taxOffice: 'Bornova',  email: 'satin@ege.edu.tr',           phone: '+90 232 444 0005', city: 'İzmir',    creditLimit: 200000, paymentTermDays: 90 } }),
+    // Tedarikçiler
+    prisma.contact.create({ data: { tenantId, type: 'SUPPLIER', name: 'Global Elektronik Dağıtım',code: 'S001', taxNumber: '6677889900', taxOffice: 'Ümraniye', email: 'satis@globalelektronik.com', phone: '+90 216 555 0010', city: 'İstanbul', paymentTermDays: 60 } }),
+    prisma.contact.create({ data: { tenantId, type: 'SUPPLIER', name: 'Ofis Dünyası Toptan',      code: 'S002', taxNumber: '1029384756', taxOffice: 'Bağcılar', email: 'siparis@ofisdunyasi.com',    phone: '+90 212 555 0020', city: 'İstanbul', paymentTermDays: 30 } }),
+    prisma.contact.create({ data: { tenantId, type: 'SUPPLIER', name: 'TechParts İthalat',        code: 'S003', taxNumber: '2233445566', taxOffice: 'Esenyurt', email: 'import@techparts.com',       phone: '+90 212 555 0030', city: 'İstanbul', paymentTermDays: 45 } }),
+    // Hem müşteri hem tedarikçi
+    prisma.contact.create({ data: { tenantId, type: 'BOTH',     name: 'İnovasyon Teknoloji',      code: 'B001', taxNumber: '9988776655', taxOffice: 'Maslak',   email: 'info@inovasyon.tech',        phone: '+90 212 555 0040', city: 'İstanbul', creditLimit: 100000, paymentTermDays: 30 } }),
+  ]);
+}
+
+// ─────────────────────────────────────────────
+// SALES (Quotes, Orders, Invoices, Payments, AccountEntries)
+// ─────────────────────────────────────────────
+
+async function seedSales(
+  tenantId: string,
+  contacts: Awaited<ReturnType<typeof seedContacts>>,
+  products: { id: string }[],
+  master: Awaited<ReturnType<typeof seedMasterData>>,
+  warehouse: { id: string },
+) {
+  const { kdv20, kdv10 } = master;
+  const [c1, c2, c3, c4, c5] = contacts;
+
+  // ── Sales Quotes ─────────────────────────────
+  const quote1 = await prisma.salesQuote.create({
     data: {
-      tenantId: tenant.id, productId: pCerceve.id, name: 'Pencere Cercevesi Recetesi', version: '1.0',
+      tenantId, contactId: c1.id, number: 'TKL-000001',
+      date: d('2026-03-15'), validUntil: d('2026-04-15'), status: 'ACCEPTED',
+      totalNet: 26297, totalTax: 5259.4, totalGross: 31556.4,
       items: { create: [
-        { tenantId: tenant.id, productId: pAluminyum.id, quantity: 2, unit: 'AD', sortOrder: 0 },
-        { tenantId: tenant.id, productId: pVida.id, quantity: 1, unit: 'AD', notes: '1 paket (100 adet)', sortOrder: 1 },
-        { tenantId: tenant.id, productId: pBoya.id, quantity: 0.5, unit: 'AD', notes: 'Yarim bidon', sortOrder: 2 },
-      ] },
-      routings: { create: [
-        { tenantId: tenant.id, workCenterId: wc1.id, name: 'Profil Kesim', stepOrder: 1, setupTime: 15, runTime: 5 },
-        { tenantId: tenant.id, workCenterId: wc2.id, name: 'Cerceve Montaj', stepOrder: 2, setupTime: 10, runTime: 12 },
-        { tenantId: tenant.id, workCenterId: wc3.id, name: 'Boya', stepOrder: 3, setupTime: 20, runTime: 3 },
-      ] },
+        { tenantId, productId: products[0].id, description: 'Laptop Pro 15"',    quantity: 1, unitPrice: 24999, discount: 0, taxRate: 20, taxAmount: 4999.8,  lineTotal: 29998.8, sortOrder: 0 },
+        { tenantId, productId: products[2].id, description: 'Kablosuz Mouse Pro', quantity: 2, unitPrice: 599,   discount: 5, taxRate: 20, taxAmount: 114.24,  lineTotal: 1251.24, sortOrder: 1 },
+      ]},
     },
   });
 
-  // BOM — Kapi Sistemi
-  const bomKapi = await prisma.bOM.create({
+  await prisma.salesQuote.create({
     data: {
-      tenantId: tenant.id, productId: pKapi.id, name: 'Kapi Sistemi Recetesi', version: '1.0',
+      tenantId, contactId: c4.id, number: 'TKL-000002',
+      date: d('2026-04-01'), validUntil: d('2026-05-01'), status: 'SENT',
+      totalNet: 87992, totalTax: 17598.4, totalGross: 105590.4,
       items: { create: [
-        { tenantId: tenant.id, productId: pAluminyum.id, quantity: 4, unit: 'AD', sortOrder: 0 },
-        { tenantId: tenant.id, productId: pVida.id, quantity: 2, unit: 'AD', sortOrder: 1 },
-        { tenantId: tenant.id, productId: pBoya.id, quantity: 1, unit: 'AD', sortOrder: 2 },
-      ] },
-      routings: { create: [
-        { tenantId: tenant.id, workCenterId: wc1.id, name: 'Profil Kesim', stepOrder: 1, setupTime: 20, runTime: 8 },
-        { tenantId: tenant.id, workCenterId: wc2.id, name: 'Kapi Montaj', stepOrder: 2, setupTime: 15, runTime: 20 },
-        { tenantId: tenant.id, workCenterId: wc3.id, name: 'Boya', stepOrder: 3, setupTime: 20, runTime: 5 },
-      ] },
+        { tenantId, productId: products[0].id, description: 'Laptop Pro 15" x4',  quantity: 4, unitPrice: 24999, discount: 5, taxRate: 20, taxAmount: 19199.04, lineTotal: 114994.24, sortOrder: 0 },
+        { tenantId, productId: products[7].id, description: 'Monitor 27" 4K x4',  quantity: 4, unitPrice: 10999, discount: 5, taxRate: 20, taxAmount: 8399.24,  lineTotal: 50395.24,  sortOrder: 1 },
+      ]},
     },
   });
 
-  // Number sequences
-  await prisma.numberSequence.createMany({
+  // ── Sales Orders ─────────────────────────────
+  const order1 = await prisma.salesOrder.create({
+    data: {
+      tenantId, contactId: c1.id, quoteId: quote1.id, number: 'SIP-000001',
+      date: d('2026-03-20'), dueDate: d('2026-04-20'), status: 'DELIVERED',
+      totalNet: 26297, totalTax: 5259.4, totalGross: 31556.4, invoicedAmount: 31556.4,
+      items: { create: [
+        { tenantId, productId: products[0].id, description: 'Laptop Pro 15"',    quantity: 1, unitPrice: 24999, discount: 0, taxRate: 20, taxAmount: 4999.8,  lineTotal: 29998.8, delivered: 1, sortOrder: 0 },
+        { tenantId, productId: products[2].id, description: 'Kablosuz Mouse Pro', quantity: 2, unitPrice: 599,   discount: 5, taxRate: 20, taxAmount: 114.24,  lineTotal: 1251.24, delivered: 2, sortOrder: 1 },
+      ]},
+    },
+  });
+  await prisma.salesOrderHistory.create({ data: { tenantId, orderId: order1.id, toStatus: 'DRAFT',     notes: 'Sipariş oluşturuldu' } });
+  await prisma.salesOrderHistory.create({ data: { tenantId, orderId: order1.id, fromStatus: 'DRAFT', toStatus: 'CONFIRMED',  notes: 'Onaylandı' } });
+  await prisma.salesOrderHistory.create({ data: { tenantId, orderId: order1.id, fromStatus: 'CONFIRMED', toStatus: 'DELIVERED', notes: 'Teslim edildi' } });
+
+  const order2 = await prisma.salesOrder.create({
+    data: {
+      tenantId, contactId: c2.id, number: 'SIP-000002',
+      date: d('2026-03-25'), dueDate: d('2026-04-10'), status: 'CONFIRMED',
+      totalNet: 6495, totalTax: 1299, totalGross: 7794,
+      items: { create: [
+        { tenantId, productId: products[1].id, description: 'Mekanik Klavye RGB x5', quantity: 5, unitPrice: 1299, discount: 0, taxRate: 20, taxAmount: 1299, lineTotal: 7794, sortOrder: 0 },
+      ]},
+    },
+  });
+  await prisma.salesOrderHistory.create({ data: { tenantId, orderId: order2.id, toStatus: 'DRAFT' } });
+  await prisma.salesOrderHistory.create({ data: { tenantId, orderId: order2.id, fromStatus: 'DRAFT', toStatus: 'CONFIRMED' } });
+
+  const order3 = await prisma.salesOrder.create({
+    data: {
+      tenantId, contactId: c3.id, number: 'SIP-000003',
+      date: d('2026-04-05'), dueDate: d('2026-05-05'), status: 'PARTIALLY_DELIVERED',
+      totalNet: 4990, totalTax: 998, totalGross: 5988,
+      items: { create: [
+        { tenantId, productId: products[4].id, description: 'USB-C Hub 7 Port x10', quantity: 10, unitPrice: 499, discount: 0, taxRate: 20, taxAmount: 998, lineTotal: 5988, delivered: 5, sortOrder: 0 },
+      ]},
+    },
+  });
+
+  const order4 = await prisma.salesOrder.create({
+    data: {
+      tenantId, contactId: c5.id, number: 'SIP-000004',
+      date: d('2026-04-15'), dueDate: d('2026-07-15'), status: 'DRAFT',
+      totalNet: 109990, totalTax: 21998, totalGross: 131988,
+      items: { create: [
+        { tenantId, productId: products[0].id, description: 'Laptop Pro 15" x4',  quantity: 4, unitPrice: 24999, discount: 0, taxRate: 20, taxAmount: 19999.2, lineTotal: 119995.2, sortOrder: 0 },
+        { tenantId, productId: products[8].id, description: 'Webcam 4K x5',       quantity: 5, unitPrice: 1999,  discount: 0, taxRate: 20, taxAmount: 1999,    lineTotal: 11994,    sortOrder: 1 },
+      ]},
+    },
+  });
+
+  // ── Delivery Notes ────────────────────────────
+  const dn1 = await prisma.deliveryNote.create({
+    data: {
+      tenantId, number: 'DN-000001', type: 'OUTBOUND', status: 'DELIVERED',
+      salesOrderId: order1.id, contactId: c1.id, warehouseId: warehouse.id,
+      date: d('2026-03-22'), shippedAt: d('2026-03-22'), deliveredAt: d('2026-03-23'),
+      carrier: 'Yurtiçi Kargo', trackingNumber: 'YK123456789',
+      items: { create: [
+        { tenantId, productId: products[0].id, description: 'Laptop Pro 15"',    orderedQty: 1, deliveredQty: 1, sortOrder: 0 },
+        { tenantId, productId: products[2].id, description: 'Kablosuz Mouse Pro', orderedQty: 2, deliveredQty: 2, sortOrder: 1 },
+      ]},
+    },
+  });
+
+  await prisma.deliveryNote.create({
+    data: {
+      tenantId, number: 'DN-000002', type: 'OUTBOUND', status: 'SHIPPED',
+      salesOrderId: order3.id, contactId: c3.id, warehouseId: warehouse.id,
+      date: d('2026-04-08'), shippedAt: d('2026-04-08'),
+      carrier: 'MNG Kargo', trackingNumber: 'MNG987654321',
+      items: { create: [
+        { tenantId, productId: products[4].id, description: 'USB-C Hub 7 Port x5', orderedQty: 5, deliveredQty: 5, sortOrder: 0 },
+      ]},
+    },
+  });
+
+  // ── Invoices ─────────────────────────────────
+  const inv1 = await prisma.invoice.create({
+    data: {
+      tenantId, contactId: c1.id, salesOrderId: order1.id,
+      type: 'SALES', status: 'PAID', number: 'INV-000001',
+      date: d('2026-03-22'), dueDate: d('2026-04-22'),
+      totalNet: 26297, totalTax: 5259.4, totalGross: 31556.4,
+      lines: { create: [
+        { tenantId, productId: products[0].id, taxRateId: kdv20.id, description: 'Laptop Pro 15"',    quantity: 1, unitPrice: 24999, discount: 0, taxAmount: 4999.8,  lineTotal: 29998.8, sortOrder: 0 },
+        { tenantId, productId: products[2].id, taxRateId: kdv20.id, description: 'Kablosuz Mouse Pro', quantity: 2, unitPrice: 599,   discount: 5, taxAmount: 114.24,  lineTotal: 1251.24, sortOrder: 1 },
+      ]},
+    },
+  });
+  await prisma.invoiceHistory.create({ data: { tenantId, invoiceId: inv1.id, toStatus: 'DRAFT' } });
+  await prisma.invoiceHistory.create({ data: { tenantId, invoiceId: inv1.id, fromStatus: 'DRAFT', toStatus: 'SENT' } });
+  await prisma.invoiceHistory.create({ data: { tenantId, invoiceId: inv1.id, fromStatus: 'SENT',  toStatus: 'PAID', notes: 'EFT ile ödendi' } });
+
+  const inv2 = await prisma.invoice.create({
+    data: {
+      tenantId, contactId: c2.id,
+      type: 'SALES', status: 'SENT', number: 'INV-000002',
+      date: d('2026-03-28'), dueDate: d('2026-04-12'),
+      totalNet: 16999, totalTax: 3399.8, totalGross: 20398.8,
+      lines: { create: [
+        { tenantId, productId: products[3].id, taxRateId: kdv20.id, description: 'Akıllı Telefon X12', quantity: 1, unitPrice: 16999, discount: 0, taxAmount: 3399.8, lineTotal: 20398.8, sortOrder: 0 },
+      ]},
+    },
+  });
+  await prisma.invoiceHistory.create({ data: { tenantId, invoiceId: inv2.id, toStatus: 'DRAFT' } });
+  await prisma.invoiceHistory.create({ data: { tenantId, invoiceId: inv2.id, fromStatus: 'DRAFT', toStatus: 'SENT' } });
+
+  const inv3 = await prisma.invoice.create({
+    data: {
+      tenantId, contactId: c3.id,
+      type: 'SALES', status: 'OVERDUE', number: 'INV-000003',
+      date: d('2026-02-15'), dueDate: d('2026-03-01'),
+      totalNet: 4990, totalTax: 998, totalGross: 5988,
+      lines: { create: [
+        { tenantId, productId: products[4].id, taxRateId: kdv20.id, description: 'USB-C Hub 7 Port x10', quantity: 10, unitPrice: 499, discount: 0, taxAmount: 998, lineTotal: 5988, sortOrder: 0 },
+      ]},
+    },
+  });
+
+  const inv4 = await prisma.invoice.create({
+    data: {
+      tenantId, contactId: c4.id,
+      type: 'SALES', status: 'DRAFT', number: 'INV-000004',
+      date: d('2026-04-20'), dueDate: d('2026-06-20'),
+      totalNet: 43996, totalTax: 8799.2, totalGross: 52795.2,
+      lines: { create: [
+        { tenantId, productId: products[0].id, taxRateId: kdv20.id, description: 'Laptop Pro 15" x2',  quantity: 2, unitPrice: 24999, discount: 5, taxAmount: 4749.81, lineTotal: 47498.1, sortOrder: 0 },
+        { tenantId, productId: products[9].id, taxRateId: kdv20.id, description: 'SSD 1TB NVMe x2',    quantity: 2, unitPrice: 2799,  discount: 0, taxAmount: 1119.6,  lineTotal: 6717.6,  sortOrder: 1 },
+      ]},
+    },
+  });
+
+  // ── Bank & Cash Accounts ──────────────────────
+  const bankAccount = await prisma.bankAccount.create({
+    data: { tenantId, name: 'Garanti Vadesiz TRY', bankName: 'Garanti BBVA', accountNumber: '1234567', iban: 'TR12 0006 2000 1234 5678 9012 34', currencyCode: 'TRY' },
+  });
+  const bankAccountUSD = await prisma.bankAccount.create({
+    data: { tenantId, name: 'Garanti USD Hesabı', bankName: 'Garanti BBVA', accountNumber: '7654321', iban: 'TR98 0006 2000 7654 3210 9876 54', currencyCode: 'USD' },
+  });
+  await prisma.cashAccount.create({ data: { tenantId, name: 'Ana Kasa TRY', currencyCode: 'TRY' } });
+  await prisma.cashAccount.create({ data: { tenantId, name: 'Döviz Kasası USD', currencyCode: 'USD' } });
+
+  // ── Payments ─────────────────────────────────
+  const pay1 = await prisma.payment.create({
+    data: { tenantId, contactId: c1.id, bankAccountId: bankAccount.id, date: d('2026-03-25'), amount: 31556.4, method: 'BANK_TRANSFER', reference: 'EFT-2026-001', status: 'COMPLETED', notes: 'INV-000001 ödemesi' },
+  });
+  await prisma.paymentAllocation.create({ data: { tenantId, paymentId: pay1.id, invoiceId: inv1.id, amount: 31556.4 } });
+
+  const pay2 = await prisma.payment.create({
+    data: { tenantId, contactId: c2.id, bankAccountId: bankAccount.id, date: d('2026-04-10'), amount: 10000, method: 'BANK_TRANSFER', reference: 'EFT-2026-003', status: 'COMPLETED', notes: 'INV-000002 kısmi ödeme' },
+  });
+  await prisma.paymentAllocation.create({ data: { tenantId, paymentId: pay2.id, invoiceId: inv2.id, amount: 10000 } });
+
+  // ── Account Entries ───────────────────────────
+  await prisma.accountEntry.createMany({
     data: [
-      { tenantId: tenant.id, module: 'work_order', prefix: 'WO-', lastNum: 2, padding: 6 },
-      { tenantId: tenant.id, module: 'service_request', prefix: 'SR-', lastNum: 2, padding: 6 },
-      { tenantId: tenant.id, module: 'invoice', prefix: 'INV-', lastNum: 1, padding: 6 },
-      { tenantId: tenant.id, module: 'sales_order', prefix: 'SIP-', lastNum: 1, padding: 6 },
-      { tenantId: tenant.id, module: 'purchase_order', prefix: 'PO-', lastNum: 1, padding: 6 },
+      { tenantId, contactId: c1.id, date: d('2026-03-22'), debit: 31556.4, credit: 0,       balance: 31556.4, description: 'INV-000001 satış faturası', refType: 'INVOICE', refId: inv1.id },
+      { tenantId, contactId: c1.id, date: d('2026-03-25'), debit: 0,       credit: 31556.4, balance: 0,       description: 'EFT-2026-001 ödeme',        refType: 'PAYMENT', refId: pay1.id },
+      { tenantId, contactId: c2.id, date: d('2026-03-28'), debit: 20398.8, credit: 0,       balance: 20398.8, description: 'INV-000002 satış faturası', refType: 'INVOICE', refId: inv2.id },
+      { tenantId, contactId: c2.id, date: d('2026-04-10'), debit: 0,       credit: 10000,   balance: 10398.8, description: 'EFT-2026-003 kısmi ödeme',  refType: 'PAYMENT', refId: pay2.id },
+      { tenantId, contactId: c3.id, date: d('2026-02-15'), debit: 5988,    credit: 0,       balance: 5988,    description: 'INV-000003 satış faturası (gecikmiş)', refType: 'INVOICE', refId: inv3.id },
     ],
   });
 
-  // Work Orders
-  const wo1 = await prisma.workOrder.create({
+  return { invoices: [inv1, inv2, inv3, inv4], payments: [pay1, pay2], bankAccount, bankAccountUSD };
+}
+
+// ─────────────────────────────────────────────
+// PURCHASING
+// ─────────────────────────────────────────────
+
+async function seedPurchasing(
+  tenantId: string,
+  contacts: Awaited<ReturnType<typeof seedContacts>>,
+  products: { id: string }[],
+  master: Awaited<ReturnType<typeof seedMasterData>>,
+  warehouse: { id: string },
+) {
+  const { kdv20 } = master;
+  const supplier1 = contacts[5]; // S001
+  const supplier2 = contacts[6]; // S002
+
+  // Purchase Request
+  const pr1 = await prisma.purchaseRequest.create({
     data: {
-      tenantId: tenant.id, productId: pCerceve.id, bomId: bomCerceve.id,
-      number: 'WO-000001', status: 'COMPLETED', plannedQty: 50, producedQty: 50,
-      startDate: new Date('2026-03-01'), endDate: new Date('2026-03-10'),
-      inputWarehouseId: whHammadde.id, outputWarehouseId: whMamul.id,
-      notes: 'Mart ayi pencere cercevesi uretimi',
+      tenantId, number: 'PR-000001', date: d('2026-04-01'), status: 'APPROVED',
+      approvedAt: d('2026-04-02'), totalEstimated: 54000,
       items: { create: [
-        { tenantId: tenant.id, productId: pAluminyum.id, requiredQty: 100, consumedQty: 100 },
-        { tenantId: tenant.id, productId: pVida.id, requiredQty: 50, consumedQty: 48 },
-        { tenantId: tenant.id, productId: pBoya.id, requiredQty: 25, consumedQty: 25 },
-      ] },
-      history: { create: [
-        { tenantId: tenant.id, toStatus: 'PLANNED', createdAt: new Date('2026-02-28') },
-        { tenantId: tenant.id, fromStatus: 'PLANNED', toStatus: 'IN_PROGRESS', createdAt: new Date('2026-03-01') },
-        { tenantId: tenant.id, fromStatus: 'IN_PROGRESS', toStatus: 'COMPLETED', createdAt: new Date('2026-03-10') },
-      ] },
+        { tenantId, productId: products[0].id, description: 'Laptop Pro 15" x3', quantity: 3, unitPrice: 18000 },
+        { tenantId, productId: products[7].id, description: 'Monitor 27" 4K x2', quantity: 2, unitPrice: 7500  },
+      ]},
     },
   });
 
-  await prisma.workOrder.create({
+  await prisma.purchaseRequest.create({
     data: {
-      tenantId: tenant.id, productId: pKapi.id, bomId: bomKapi.id,
-      number: 'WO-000002', status: 'IN_PROGRESS', plannedQty: 20, producedQty: 8,
-      startDate: new Date('2026-03-20'), endDate: new Date('2026-04-05'),
-      inputWarehouseId: whHammadde.id, outputWarehouseId: whMamul.id,
-      notes: 'Insaat Holding siparisi icin kapi uretimi',
+      tenantId, number: 'PR-000002', date: d('2026-04-10'), status: 'PENDING_APPROVAL',
+      totalEstimated: 8500,
       items: { create: [
-        { tenantId: tenant.id, productId: pAluminyum.id, requiredQty: 80, consumedQty: 32 },
-        { tenantId: tenant.id, productId: pVida.id, requiredQty: 40, consumedQty: 16 },
-        { tenantId: tenant.id, productId: pBoya.id, requiredQty: 20, consumedQty: 8 },
-      ] },
-      history: { create: [
-        { tenantId: tenant.id, toStatus: 'PLANNED', createdAt: new Date('2026-03-18') },
-        { tenantId: tenant.id, fromStatus: 'PLANNED', toStatus: 'IN_PROGRESS', createdAt: new Date('2026-03-20') },
-      ] },
+        { tenantId, productId: products[5].id, description: 'A4 Kağıt x100 paket', quantity: 100, unitPrice: 85 },
+      ]},
     },
   });
-  console.log('  + Uretim (is merkezleri, BOM, is emirleri)');
 
-  // ─── SERVICE ────────────────────────────────
-
-  const asset1 = await prisma.customerAsset.create({
-    data: { tenantId: tenant.id, contactId: cMusteri.id, name: 'CNC Kesim Makinesi', brand: 'Haas', model: 'VF-2SS', serialNo: 'HAAS-2024-001', purchaseDate: new Date('2024-06-15'), warrantyEnd: new Date('2027-06-15'), notes: 'Ana uretim hatti CNC' },
-  });
-  const asset2 = await prisma.customerAsset.create({
-    data: { tenantId: tenant.id, contactId: cMusteri.id, name: 'Elektrostatik Boya Kabini', brand: 'Wagner', model: 'PrimaSprint', serialNo: 'WAG-2025-042', purchaseDate: new Date('2025-01-10'), warrantyEnd: new Date('2028-01-10') },
-  });
-
-  const sr1 = await prisma.serviceRequest.create({
+  // Purchase Order
+  const po1 = await prisma.purchaseOrder.create({
     data: {
-      tenantId: tenant.id, contactId: cMusteri.id, customerAssetId: asset1.id,
-      number: 'SR-000001', status: 'COMPLETED', subject: 'CNC kalibrasyon bakimi',
-      description: 'Yillik periyodik bakim ve kalibrasyon', priority: 'MEDIUM',
-      assignedToId: user2.id, closedAt: new Date('2026-03-15'),
-      warrantyEnd: new Date('2027-06-15'),
+      tenantId, contactId: supplier1.id, number: 'PO-000001',
+      date: d('2026-04-03'), dueDate: d('2026-06-03'), status: 'RECEIVED',
+      totalNet: 54000, totalTax: 10800, totalGross: 64800,
       items: { create: [
-        { tenantId: tenant.id, description: 'Kalibrasyon hizmeti', quantity: 1, unitPrice: 5000, lineTotal: 5000 },
-        { tenantId: tenant.id, description: 'Yedek parca - rulman seti', quantity: 2, unitPrice: 750, lineTotal: 1500 },
-      ] },
-      activities: { create: [
-        { tenantId: tenant.id, activityType: 'NOTE', notes: 'Talep alindi, teknisyen atandi.', createdAt: new Date('2026-03-10') },
-        { tenantId: tenant.id, activityType: 'STATUS_CHANGE', notes: 'OPEN → IN_PROGRESS', createdAt: new Date('2026-03-12') },
-        { tenantId: tenant.id, activityType: 'VISIT', notes: 'Saha ziyareti yapildi, kalibrasyon tamamlandi.', createdAt: new Date('2026-03-14') },
-        { tenantId: tenant.id, activityType: 'STATUS_CHANGE', notes: 'IN_PROGRESS → COMPLETED', createdAt: new Date('2026-03-15') },
-      ] },
-      history: { create: [
-        { tenantId: tenant.id, toStatus: 'OPEN', createdAt: new Date('2026-03-10') },
-        { tenantId: tenant.id, fromStatus: 'OPEN', toStatus: 'IN_PROGRESS', createdAt: new Date('2026-03-12') },
-        { tenantId: tenant.id, fromStatus: 'IN_PROGRESS', toStatus: 'COMPLETED', createdAt: new Date('2026-03-15') },
-      ] },
+        { tenantId, productId: products[0].id, description: 'Laptop Pro 15" x3', quantity: 3, unitPrice: 18000, discount: 0, taxRate: 20, taxAmount: 10800, lineTotal: 64800, received: 3, sortOrder: 0 },
+      ]},
     },
   });
+  await prisma.purchaseOrderHistory.create({ data: { tenantId, orderId: po1.id, toStatus: 'DRAFT' } });
+  await prisma.purchaseOrderHistory.create({ data: { tenantId, orderId: po1.id, fromStatus: 'DRAFT',    toStatus: 'SENT' } });
+  await prisma.purchaseOrderHistory.create({ data: { tenantId, orderId: po1.id, fromStatus: 'SENT',     toStatus: 'RECEIVED', notes: '3 adet teslim alındı' } });
 
-  await prisma.serviceRequest.create({
+  // Purchase Invoice
+  const purchInv = await prisma.invoice.create({
     data: {
-      tenantId: tenant.id, contactId: cMusteri.id, customerAssetId: asset2.id,
-      number: 'SR-000002', status: 'IN_PROGRESS', subject: 'Boya kabini filtre degisimi',
-      description: 'Filtreler tikanmis, performans dustu', priority: 'HIGH',
-      assignedToId: user2.id, warrantyEnd: new Date('2028-01-10'),
-      activities: { create: [
-        { tenantId: tenant.id, activityType: 'NOTE', notes: 'Acil talep, filtre stogu kontrol ediliyor.', createdAt: new Date('2026-03-28') },
-        { tenantId: tenant.id, activityType: 'STATUS_CHANGE', notes: 'OPEN → IN_PROGRESS', createdAt: new Date('2026-03-29') },
-      ] },
-      history: { create: [
-        { tenantId: tenant.id, toStatus: 'OPEN', createdAt: new Date('2026-03-28') },
-        { tenantId: tenant.id, fromStatus: 'OPEN', toStatus: 'IN_PROGRESS', createdAt: new Date('2026-03-29') },
-      ] },
+      tenantId, contactId: supplier1.id, purchaseOrderId: po1.id,
+      type: 'PURCHASE', status: 'PAID', number: 'INV-000005',
+      date: d('2026-04-05'), dueDate: d('2026-06-05'),
+      totalNet: 54000, totalTax: 10800, totalGross: 64800,
+      lines: { create: [
+        { tenantId, productId: products[0].id, taxRateId: kdv20.id, description: 'Laptop Pro 15" x3', quantity: 3, unitPrice: 18000, discount: 0, taxAmount: 10800, lineTotal: 64800, sortOrder: 0 },
+      ]},
     },
   });
-  console.log('  + Teknik servis (varliklar, talepler, aktiviteler)');
 
-  // ─── MARKETPLACE ────────────────────────────
-
-  const mpTrendyol = await prisma.marketplaceIntegration.create({
-    data: { tenantId: tenant.id, channel: 'TRENDYOL', name: 'Trendyol Magaza', isActive: true, lastSyncAt: new Date('2026-03-30') },
+  // Stock movements for received goods
+  await prisma.stockMovement.create({
+    data: { tenantId, productId: products[0].id, type: 'IN', quantity: 3, toWarehouseId: warehouse.id, unitCost: 18000, refType: 'PURCHASE_ORDER', refId: po1.id, notes: `Satın alma teslimi: ${po1.number}` },
   });
-  const mpHB = await prisma.marketplaceIntegration.create({
-    data: { tenantId: tenant.id, channel: 'HEPSIBURADA', name: 'Hepsiburada Magaza', isActive: true, lastSyncAt: new Date('2026-03-29') },
+  await prisma.stockLevel.updateMany({
+    where: { tenantId, productId: products[0].id, warehouseId: warehouse.id },
+    data: { quantity: { increment: 3 } },
   });
 
-  await prisma.marketplaceListing.createMany({
+  // Account entry for purchase invoice
+  await prisma.accountEntry.create({
+    data: { tenantId, contactId: supplier1.id, date: d('2026-04-05'), debit: 0, credit: 64800, balance: -64800, description: 'INV-000005 alış faturası', refType: 'INVOICE', refId: purchInv.id },
+  });
+
+  // Second PO - partially received
+  const po2 = await prisma.purchaseOrder.create({
+    data: {
+      tenantId, contactId: supplier2.id, number: 'PO-000002',
+      date: d('2026-04-12'), dueDate: d('2026-05-12'), status: 'PARTIALLY_RECEIVED',
+      totalNet: 8500, totalTax: 850, totalGross: 9350,
+      items: { create: [
+        { tenantId, productId: products[5].id, description: 'A4 Kağıt x100', quantity: 100, unitPrice: 85, discount: 0, taxRate: 10, taxAmount: 850, lineTotal: 9350, received: 50, sortOrder: 0 },
+      ]},
+    },
+  });
+  await prisma.purchaseOrderHistory.create({ data: { tenantId, orderId: po2.id, toStatus: 'DRAFT' } });
+  await prisma.purchaseOrderHistory.create({ data: { tenantId, orderId: po2.id, fromStatus: 'DRAFT', toStatus: 'SENT' } });
+  await prisma.purchaseOrderHistory.create({ data: { tenantId, orderId: po2.id, fromStatus: 'SENT', toStatus: 'PARTIALLY_RECEIVED', notes: '50 paket teslim alındı' } });
+
+  // Update purchase request with PO link
+  await prisma.purchaseRequest.update({ where: { id: pr1.id }, data: { status: 'ORDERED', purchaseOrderId: po1.id } });
+}
+
+// ─────────────────────────────────────────────
+// ACCOUNTING
+// ─────────────────────────────────────────────
+
+async function seedAccounting(
+  tenantId: string,
+  accounts: { id: string }[],
+  invoices: { id: string }[],
+) {
+  const [accKasa, accBanka, accAlici, accMal, accIndKdv, accSatici, accHesKdv, , accSatis, , accMaliyet] = accounts;
+
+  // Fiscal Period Q1
+  const fp1 = await prisma.fiscalPeriod.create({
+    data: { tenantId, name: '2026 Q1 (Ocak-Mart)', startDate: d('2026-01-01'), endDate: d('2026-03-31'), status: 'CLOSED', closedAt: d('2026-04-05') },
+  });
+
+  // Fiscal Period Q2 (open)
+  const fp2 = await prisma.fiscalPeriod.create({
+    data: { tenantId, name: '2026 Q2 (Nisan-Haziran)', startDate: d('2026-04-01'), endDate: d('2026-06-30'), status: 'OPEN' },
+  });
+
+  // Journal Entries
+  await prisma.journalEntry.create({
+    data: {
+      tenantId, fiscalPeriodId: fp1.id, type: 'AUTO_INVOICE', number: 'JE-000001',
+      date: d('2026-03-22'), description: 'INV-000001 satış faturası kaydı', isPosted: true, postedAt: d('2026-03-22'),
+      lines: { create: [
+        { tenantId, accountId: accAlici.id,  debit: 31556.4, credit: 0,       description: 'Alıcı borç',       sortOrder: 0 },
+        { tenantId, accountId: accSatis.id,  debit: 0,       credit: 26297,   description: 'Satış geliri',     sortOrder: 1 },
+        { tenantId, accountId: accHesKdv.id, debit: 0,       credit: 5259.4,  description: 'Hesaplanan KDV',   sortOrder: 2 },
+      ]},
+    },
+  });
+
+  await prisma.journalEntry.create({
+    data: {
+      tenantId, fiscalPeriodId: fp1.id, type: 'AUTO_PAYMENT', number: 'JE-000002',
+      date: d('2026-03-25'), description: 'EFT-2026-001 tahsilat kaydı', isPosted: true, postedAt: d('2026-03-25'),
+      lines: { create: [
+        { tenantId, accountId: accBanka.id,  debit: 31556.4, credit: 0,       description: 'Banka tahsilat',   sortOrder: 0 },
+        { tenantId, accountId: accAlici.id,  debit: 0,       credit: 31556.4, description: 'Alıcı kapatma',   sortOrder: 1 },
+      ]},
+    },
+  });
+
+  await prisma.journalEntry.create({
+    data: {
+      tenantId, fiscalPeriodId: fp2.id, type: 'AUTO_INVOICE', number: 'JE-000003',
+      date: d('2026-04-05'), description: 'INV-000005 alış faturası kaydı', isPosted: true, postedAt: d('2026-04-05'),
+      lines: { create: [
+        { tenantId, accountId: accMal.id,    debit: 54000,   credit: 0,       description: 'Mal alımı',        sortOrder: 0 },
+        { tenantId, accountId: accIndKdv.id, debit: 10800,   credit: 0,       description: 'İndirilecek KDV',  sortOrder: 1 },
+        { tenantId, accountId: accSatici.id, debit: 0,       credit: 64800,   description: 'Satıcı borç',      sortOrder: 2 },
+      ]},
+    },
+  });
+
+  // Manual journal entry
+  await prisma.journalEntry.create({
+    data: {
+      tenantId, fiscalPeriodId: fp2.id, type: 'MANUAL', number: 'JE-000004',
+      date: d('2026-04-30'), description: 'Nisan kira gideri', isPosted: false,
+      lines: { create: [
+        { tenantId, accountId: accounts[12].id, debit: 15000, credit: 0,     description: 'Kira gideri',  sortOrder: 0 },
+        { tenantId, accountId: accBanka.id,      debit: 0,     credit: 15000, description: 'Banka çıkış', sortOrder: 1 },
+      ]},
+    },
+  });
+
+  // Reconciliation
+  const recon = await prisma.reconciliation.create({
+    data: { tenantId, name: 'Mart 2026 Banka Mutabakatı', date: d('2026-03-31'), isFinalized: true, finalizedAt: d('2026-04-02') },
+  });
+  await prisma.reconciliationLine.createMany({
     data: [
-      { tenantId: tenant.id, integrationId: mpTrendyol.id, productId: pCerceve.id, externalId: 'TY-CERC-001', price: 2800, stock: 25, isActive: true, lastSyncAt: new Date('2026-03-30') },
-      { tenantId: tenant.id, integrationId: mpTrendyol.id, productId: pKapi.id, externalId: 'TY-KAPI-001', price: 5200, stock: 8, isActive: true, lastSyncAt: new Date('2026-03-30') },
-      { tenantId: tenant.id, integrationId: mpHB.id, productId: pCerceve.id, externalId: 'HB-CERC-001', price: 2750, stock: 25, isActive: true, lastSyncAt: new Date('2026-03-29') },
+      { tenantId, reconciliationId: recon.id, accountId: accBanka.id, refType: 'PAYMENT', refId: invoices[0].id, amount: 31556.4, isMatched: true, notes: 'EFT-2026-001' },
     ],
   });
 
-  await prisma.marketplaceOrder.create({
-    data: {
-      tenantId: tenant.id, integrationId: mpTrendyol.id, externalId: 'TY-ORD-2026-0451',
-      channel: 'TRENDYOL', status: 'DELIVERED', customerName: 'Ahmet Yilmaz',
-      customerPhone: '+90 555 111 2233', shippingAddress: 'Kadikoy, Istanbul',
-      totalAmount: 5600, orderDate: new Date('2026-03-20'),
-      items: { create: [
-        { tenantId: tenant.id, externalProductId: 'TY-CERC-001', productId: pCerceve.id, name: 'Aluminyum Pencere Cercevesi', quantity: 2, unitPrice: 2800, lineTotal: 5600 },
-      ] },
-    },
+  // Bank Transactions
+  await prisma.bankTransaction.createMany({
+    data: [
+      { tenantId, bankAccountId: (await prisma.bankAccount.findFirst({ where: { tenantId } }))!.id, type: 'DEPOSIT',    amount: 31556.4, balanceAfter: 31556.4, date: d('2026-03-25'), description: 'EFT-2026-001 tahsilat', refType: 'PAYMENT' },
+      { tenantId, bankAccountId: (await prisma.bankAccount.findFirst({ where: { tenantId } }))!.id, type: 'WITHDRAWAL', amount: 64800,   balanceAfter: -33243.6, date: d('2026-04-06'), description: 'PO-000001 tedarikçi ödemesi', refType: 'PAYMENT' },
+      { tenantId, bankAccountId: (await prisma.bankAccount.findFirst({ where: { tenantId } }))!.id, type: 'DEPOSIT',    amount: 10000,   balanceAfter: -23243.6, date: d('2026-04-10'), description: 'EFT-2026-003 kısmi tahsilat', refType: 'PAYMENT' },
+    ],
   });
-  await prisma.marketplaceOrder.create({
-    data: {
-      tenantId: tenant.id, integrationId: mpTrendyol.id, externalId: 'TY-ORD-2026-0523',
-      channel: 'TRENDYOL', status: 'PROCESSING', customerName: 'Fatma Demir',
-      customerPhone: '+90 555 444 5566', shippingAddress: 'Cankaya, Ankara',
-      totalAmount: 5200, orderDate: new Date('2026-03-30'),
-      items: { create: [
-        { tenantId: tenant.id, externalProductId: 'TY-KAPI-001', productId: pKapi.id, name: 'Aluminyum Kapi Sistemi', quantity: 1, unitPrice: 5200, lineTotal: 5200 },
-      ] },
-    },
+
+  // Check/Promissory Notes
+  await prisma.checkPromissoryNote.createMany({
+    data: [
+      { tenantId, type: 'CHECK', number: 'CHK-001', amount: 20000, currencyCode: 'TRY', issueDate: d('2026-04-01'), dueDate: d('2026-05-01'), bankName: 'Garanti BBVA', status: 'PENDING',   notes: 'Müşteri çeki' },
+      { tenantId, type: 'CHECK', number: 'CHK-002', amount: 15000, currencyCode: 'TRY', issueDate: d('2026-03-15'), dueDate: d('2026-04-15'), bankName: 'İş Bankası',   status: 'CLEARED',   notes: 'Tahsil edildi' },
+      { tenantId, type: 'PROMISSORY_NOTE', number: 'SEN-001', amount: 50000, currencyCode: 'TRY', issueDate: d('2026-04-10'), dueDate: d('2026-07-10'), status: 'PENDING', notes: 'Yıldız Holding senedi' },
+    ],
   });
-  await prisma.marketplaceOrder.create({
-    data: {
-      tenantId: tenant.id, integrationId: mpHB.id, externalId: 'HB-ORD-2026-1102',
-      channel: 'HEPSIBURADA', status: 'PENDING', customerName: 'Mehmet Koc',
-      customerEmail: 'mehmet@email.com', shippingAddress: 'Nilufer, Bursa',
-      totalAmount: 8250, orderDate: new Date('2026-04-01'),
-      items: { create: [
-        { tenantId: tenant.id, externalProductId: 'HB-CERC-001', productId: pCerceve.id, name: 'Aluminyum Pencere Cercevesi', quantity: 3, unitPrice: 2750, lineTotal: 8250 },
-      ] },
-    },
+}
+
+// ─────────────────────────────────────────────
+// HR & PAYROLL
+// ─────────────────────────────────────────────
+
+async function seedHR(tenantId: string) {
+  const employees = await Promise.all([
+    prisma.employee.create({ data: { tenantId, firstName: 'Ahmet',   lastName: 'Yılmaz',  email: 'ahmet@axondemo.com',   phone: '+90 532 100 0001', position: 'Genel Müdür',       department: 'Yönetim',    hireDate: d('2020-01-15'), salary: 45000, isActive: true } }),
+    prisma.employee.create({ data: { tenantId, firstName: 'Zeynep',  lastName: 'Kaya',    email: 'zeynep@axondemo.com',  phone: '+90 532 100 0002', position: 'Satış Müdürü',      department: 'Satış',      hireDate: d('2021-03-01'), salary: 35000, isActive: true } }),
+    prisma.employee.create({ data: { tenantId, firstName: 'Mehmet',  lastName: 'Demir',   email: 'mehmet@axondemo.com',  phone: '+90 532 100 0003', position: 'Muhasebe Uzmanı',   department: 'Muhasebe',   hireDate: d('2021-06-15'), salary: 30000, isActive: true } }),
+    prisma.employee.create({ data: { tenantId, firstName: 'Ali',     lastName: 'Çelik',   email: 'ali@axondemo.com',     phone: '+90 532 100 0004', position: 'Depo Sorumlusu',    department: 'Lojistik',   hireDate: d('2022-02-01'), salary: 22000, isActive: true } }),
+    prisma.employee.create({ data: { tenantId, firstName: 'Fatma',   lastName: 'Şahin',   email: 'fatma@axondemo.com',   phone: '+90 532 100 0005', position: 'Yazılım Geliştirici',department: 'Teknoloji', hireDate: d('2022-09-01'), salary: 40000, isActive: true } }),
+    prisma.employee.create({ data: { tenantId, firstName: 'Mustafa', lastName: 'Arslan',  email: 'mustafa@axondemo.com', phone: '+90 532 100 0006', position: 'Satış Temsilcisi',  department: 'Satış',      hireDate: d('2023-01-10'), salary: 25000, isActive: true } }),
+    prisma.employee.create({ data: { tenantId, firstName: 'Ayşe',    lastName: 'Koç',     email: 'ayse@axondemo.com',    phone: '+90 532 100 0007', position: 'İK Uzmanı',         department: 'İnsan Kaynakları', hireDate: d('2023-05-15'), salary: 28000, isActive: true } }),
+    prisma.employee.create({ data: { tenantId, firstName: 'Hasan',   lastName: 'Öztürk',  email: 'hasan@axondemo.com',   phone: '+90 532 100 0008', position: 'Üretim Operatörü',  department: 'Üretim',     hireDate: d('2024-01-08'), salary: 20000, isActive: true } }),
+  ]);
+
+  // Leave Requests
+  await prisma.leaveRequest.createMany({
+    data: [
+      { tenantId, employeeId: employees[1].id, type: 'ANNUAL',  status: 'APPROVED', startDate: d('2026-04-14'), endDate: d('2026-04-18'), days: 5, approvedAt: d('2026-04-10'), notes: 'Yıllık izin' },
+      { tenantId, employeeId: employees[4].id, type: 'SICK',    status: 'APPROVED', startDate: d('2026-04-07'), endDate: d('2026-04-08'), days: 2, approvedAt: d('2026-04-07'), notes: 'Hastalık izni' },
+      { tenantId, employeeId: employees[2].id, type: 'ANNUAL',  status: 'PENDING',  startDate: d('2026-05-19'), endDate: d('2026-05-23'), days: 5, notes: 'Yıllık izin talebi' },
+      { tenantId, employeeId: employees[5].id, type: 'UNPAID',  status: 'REJECTED', startDate: d('2026-04-20'), endDate: d('2026-04-25'), days: 6, notes: 'Ücretsiz izin talebi' },
+    ],
   });
-  console.log('  + Pazaryeri (entegrasyonlar, listlemeler, siparisler)');
 
-  // ─── HR & PAYROLL ───────────────────────────
-
-  const emp1 = await prisma.employee.create({ data: { tenantId: tenant.id, firstName: 'Hasan', lastName: 'Celik', email: 'hasan@globaluretim.com', phone: '+90 535 111 0001', position: 'CNC Operatoru', department: 'Uretim', hireDate: new Date('2023-03-15'), salary: 22000 } });
-  const emp2 = await prisma.employee.create({ data: { tenantId: tenant.id, firstName: 'Zeynep', lastName: 'Arslan', email: 'zeynep@globaluretim.com', phone: '+90 535 111 0002', position: 'Kalite Kontrol', department: 'Uretim', hireDate: new Date('2024-01-10'), salary: 20000 } });
-  const emp3 = await prisma.employee.create({ data: { tenantId: tenant.id, firstName: 'Murat', lastName: 'Sahin', email: 'murat@globaluretim.com', phone: '+90 535 111 0003', position: 'Boyaci', department: 'Uretim', hireDate: new Date('2024-06-01'), salary: 18000 } });
-  const emp4 = await prisma.employee.create({ data: { tenantId: tenant.id, firstName: 'Selin', lastName: 'Dogan', email: 'selin@globaluretim.com', phone: '+90 535 111 0004', position: 'Muhasebe Uzmani', department: 'Finans', hireDate: new Date('2023-09-01'), salary: 25000 } });
-  const emp5 = await prisma.employee.create({ data: { tenantId: tenant.id, firstName: 'Burak', lastName: 'Yilmaz', email: 'burak@globaluretim.com', phone: '+90 535 111 0005', position: 'Depo Sorumlusu', department: 'Lojistik', hireDate: new Date('2025-02-15'), salary: 19000 } });
-
-  // Leave requests
-  await prisma.leaveRequest.create({ data: { tenantId: tenant.id, employeeId: emp1.id, type: 'ANNUAL', status: 'APPROVED', startDate: new Date('2026-04-14'), endDate: new Date('2026-04-18'), days: 5, approvedBy: user3.id, approvedAt: new Date('2026-03-28') } });
-  await prisma.leaveRequest.create({ data: { tenantId: tenant.id, employeeId: emp2.id, type: 'SICK', status: 'APPROVED', startDate: new Date('2026-03-20'), endDate: new Date('2026-03-21'), days: 2, approvedBy: user3.id, approvedAt: new Date('2026-03-20') } });
-  await prisma.leaveRequest.create({ data: { tenantId: tenant.id, employeeId: emp3.id, type: 'ANNUAL', status: 'PENDING', startDate: new Date('2026-04-21'), endDate: new Date('2026-04-25'), days: 5, notes: 'Bayram tatili uzatma' } });
-
-  // Attendance (son 5 gun)
-  const attendanceDays = ['2026-03-31', '2026-04-01', '2026-04-02', '2026-04-03', '2026-04-04'];
-  for (const day of attendanceDays) {
-    for (const emp of [emp1, emp2, emp3, emp4, emp5]) {
+  // Attendance (son 5 iş günü)
+  const workDays = ['2026-04-28', '2026-04-29', '2026-04-30', '2026-05-02', '2026-05-03'];
+  for (const emp of employees.slice(0, 5)) {
+    for (const day of workDays) {
       await prisma.attendance.create({
         data: {
-          tenantId: tenant.id, employeeId: emp.id, date: new Date(day),
-          checkIn: new Date(`${day}T08:00:00`), checkOut: new Date(`${day}T17:00:00`),
-          overtimeHours: emp.id === emp1.id ? 2 : 0,
+          tenantId, employeeId: emp.id, date: d(day),
+          checkIn: new Date(`${day}T08:30:00`),
+          checkOut: new Date(`${day}T17:30:00`),
+          overtimeHours: Math.random() > 0.7 ? 1.5 : 0,
         },
       });
     }
   }
 
-  // Payroll — Mart 2026
-  for (const emp of [emp1, emp2, emp3, emp4, emp5]) {
-    const gross = Number(emp.salary);
-    const sgk = gross * 0.14;
-    const gelirVergisi = gross * 0.15;
-    const net = gross - sgk - gelirVergisi;
+  // Payroll - Nisan 2026
+  for (const emp of employees) {
+    const payroll = await prisma.payroll.create({
+      data: {
+        tenantId, employeeId: emp.id, period: '2026-04',
+        grossSalary: emp.salary, deductions: Number(emp.salary) * 0.15, netSalary: Number(emp.salary) * 0.85,
+        paidAt: d('2026-04-30'), notes: 'Nisan 2026 maaşı',
+      },
+    });
+    await prisma.payrollItem.createMany({
+      data: [
+        { tenantId, payrollId: payroll.id, label: 'SGK İşçi Payı (%14)',  amount: Number(emp.salary) * 0.14, isDeduction: true },
+        { tenantId, payrollId: payroll.id, label: 'İşsizlik Sigortası (%1)', amount: Number(emp.salary) * 0.01, isDeduction: true },
+      ],
+    });
+  }
+
+  // Payroll - Mart 2026 (önceki ay)
+  for (const emp of employees.slice(0, 4)) {
     await prisma.payroll.create({
       data: {
-        tenantId: tenant.id, employeeId: emp.id, period: '2026-03',
-        grossSalary: gross, deductions: sgk + gelirVergisi, netSalary: net,
-        paidAt: new Date('2026-04-01'),
-        items: { create: [
-          { tenantId: tenant.id, label: 'SGK Primi (%14)', amount: sgk, isDeduction: true },
-          { tenantId: tenant.id, label: 'Gelir Vergisi (%15)', amount: gelirVergisi, isDeduction: true },
-        ] },
+        tenantId, employeeId: emp.id, period: '2026-03',
+        grossSalary: emp.salary, deductions: Number(emp.salary) * 0.15, netSalary: Number(emp.salary) * 0.85,
+        paidAt: d('2026-03-31'),
       },
     });
   }
-  console.log('  + IK & Bordro (personel, izin, puantaj, bordro)');
 
-  // ─── ACCOUNTING & FINANCE ───────────────────
+  return employees;
+}
 
-  const accs = await Promise.all([
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '100', name: 'Kasa', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '102', name: 'Bankalar', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '120', name: 'Alicilar', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '150', name: 'Ilk Madde ve Malzeme', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '152', name: 'Mamuller', accountType: 'ASSET' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '320', name: 'Saticilar', accountType: 'LIABILITY' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '391', name: 'Hesaplanan KDV', accountType: 'LIABILITY' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '600', name: 'Yurt Ici Satislar', accountType: 'REVENUE' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '710', name: 'Direkt Ilk Madde Giderleri', accountType: 'EXPENSE' } }),
-    prisma.ledgerAccount.create({ data: { tenantId: tenant.id, code: '770', name: 'Genel Yonetim Giderleri', accountType: 'EXPENSE' } }),
+// ─────────────────────────────────────────────
+// PRODUCTION
+// ─────────────────────────────────────────────
+
+async function seedProduction(
+  tenantId: string,
+  products: { id: string }[],
+  master: Awaited<ReturnType<typeof seedMasterData>>,
+  warehouse: { id: string },
+  warehouse2: { id: string },
+) {
+  // Work Centers
+  const [wcMontaj, wcTest, wcPaketleme] = await Promise.all([
+    prisma.workCenter.create({ data: { tenantId, code: 'WC01', name: 'Montaj Hattı',    description: 'Ürün montaj istasyonu',    capacity: 8,  isActive: true } }),
+    prisma.workCenter.create({ data: { tenantId, code: 'WC02', name: 'Test İstasyonu',  description: 'Kalite kontrol ve test',   capacity: 4,  isActive: true } }),
+    prisma.workCenter.create({ data: { tenantId, code: 'WC03', name: 'Paketleme Hattı', description: 'Son paketleme ve etiket',  capacity: 6,  isActive: true } }),
   ]);
 
-  const fp = await prisma.fiscalPeriod.create({ data: { tenantId: tenant.id, name: '2026 Q1', startDate: new Date('2026-01-01'), endDate: new Date('2026-03-31'), status: 'OPEN' } });
-
-  const bankAccount = await prisma.bankAccount.create({
-    data: { tenantId: tenant.id, name: 'Ziraat Bankasi Vadesiz', bankName: 'Ziraat Bankasi', accountNumber: '9876543', iban: 'TR33 0001 0000 9876 5432 1098 76', currencyCode: 'TRY' },
-  });
-  await prisma.cashAccount.create({ data: { tenantId: tenant.id, name: 'Fabrika Kasa', currencyCode: 'TRY' } });
-
-  // Invoice + Payment — zengin finansal veri
-  // Insaat Holding: Büyük müşteri, ödenen + açık faturalar
-  const inv1 = await prisma.invoice.create({
+  // BOM - Laptop Kasası üretimi
+  const bom1 = await prisma.bOM.create({
     data: {
-      tenantId: tenant.id, contactId: cMusteri.id, type: 'SALES', status: 'PAID', number: 'INV-000001',
-      date: new Date('2026-01-15'), dueDate: new Date('2026-03-15'),
-      totalNet: 125000, totalTax: 25000, totalGross: 150000,
-      lines: { create: [
-        { tenantId: tenant.id, productId: pCerceve.id, taxRateId: kdv20.id, description: 'Aluminyum Pencere Cercevesi', quantity: 50, unitPrice: 2500, discount: 0, taxAmount: 25000, lineTotal: 150000, sortOrder: 0 },
-      ] },
-    },
-  });
-  const invEnt2 = await prisma.invoice.create({
-    data: {
-      tenantId: tenant.id, contactId: cMusteri.id, type: 'SALES', status: 'SENT', number: 'INV-000002',
-      date: new Date('2026-03-10'), dueDate: new Date('2026-05-10'),
-      totalNet: 90000, totalTax: 18000, totalGross: 108000,
-      lines: { create: [
-        { tenantId: tenant.id, productId: pKapi.id, taxRateId: kdv20.id, description: 'Aluminyum Kapi Sistemi', quantity: 20, unitPrice: 4500, discount: 0, taxAmount: 18000, lineTotal: 108000, sortOrder: 0 },
-      ] },
-    },
-  });
-  const invEnt3 = await prisma.invoice.create({
-    data: {
-      tenantId: tenant.id, contactId: cMusteri.id, type: 'SALES', status: 'PARTIALLY_PAID', number: 'INV-000003',
-      date: new Date('2026-03-25'), dueDate: new Date('2026-05-25'),
-      totalNet: 62500, totalTax: 12500, totalGross: 75000,
-      lines: { create: [
-        { tenantId: tenant.id, productId: pCerceve.id, taxRateId: kdv20.id, description: 'Aluminyum Pencere Cercevesi (2. parti)', quantity: 25, unitPrice: 2500, discount: 0, taxAmount: 12500, lineTotal: 75000, sortOrder: 0 },
-      ] },
+      tenantId, productId: products[12].id, name: 'Laptop Kasası BOM v1.0', version: '1.0', isActive: true,
+      items: { create: [
+        { tenantId, productId: products[10].id, quantity: 0.5, unit: 'KG', notes: 'Alüminyum profil', sortOrder: 0 },
+        { tenantId, productId: products[11].id, quantity: 0.2, unit: 'KG', notes: 'Plastik granül',   sortOrder: 1 },
+      ]},
+      routings: { create: [
+        { tenantId, workCenterId: wcMontaj.id,    name: 'Kasa Montajı',   stepOrder: 1, setupTime: 15, runTime: 30 },
+        { tenantId, workCenterId: wcTest.id,      name: 'Kalite Kontrol', stepOrder: 2, setupTime: 5,  runTime: 10 },
+        { tenantId, workCenterId: wcPaketleme.id, name: 'Paketleme',      stepOrder: 3, setupTime: 5,  runTime: 5  },
+      ]},
     },
   });
 
-  // Yildiz Insaat: Orta müşteri, gecikmiş fatura var
-  const invEnt4 = await prisma.invoice.create({
+  // Work Orders
+  const wo1 = await prisma.workOrder.create({
     data: {
-      tenantId: tenant.id, contactId: cMusteri2.id, type: 'SALES', status: 'OVERDUE', number: 'INV-000004',
-      date: new Date('2026-02-01'), dueDate: new Date('2026-03-01'),
-      totalNet: 50000, totalTax: 10000, totalGross: 60000,
-      lines: { create: [
-        { tenantId: tenant.id, productId: pCerceve.id, taxRateId: kdv20.id, description: 'Pencere Cercevesi', quantity: 20, unitPrice: 2500, discount: 0, taxAmount: 10000, lineTotal: 60000, sortOrder: 0 },
-      ] },
-    },
-  });
-  const invEnt5 = await prisma.invoice.create({
-    data: {
-      tenantId: tenant.id, contactId: cMusteri2.id, type: 'SALES', status: 'SENT', number: 'INV-000005',
-      date: new Date('2026-03-20'), dueDate: new Date('2026-04-20'),
-      totalNet: 45000, totalTax: 9000, totalGross: 54000,
-      lines: { create: [
-        { tenantId: tenant.id, productId: pKapi.id, taxRateId: kdv20.id, description: 'Kapi Sistemi', quantity: 10, unitPrice: 4500, discount: 0, taxAmount: 9000, lineTotal: 54000, sortOrder: 0 },
-      ] },
-    },
-  });
-
-  // Anadolu Yapi: Kredi limiti aşımı riski
-  const invEnt6 = await prisma.invoice.create({
-    data: {
-      tenantId: tenant.id, contactId: cMusteri3.id, type: 'SALES', status: 'SENT', number: 'INV-000006',
-      date: new Date('2026-03-05'), dueDate: new Date('2026-04-20'),
-      totalNet: 75000, totalTax: 15000, totalGross: 90000,
-      lines: { create: [
-        { tenantId: tenant.id, productId: pCerceve.id, taxRateId: kdv20.id, description: 'Pencere Cercevesi (toplu)', quantity: 30, unitPrice: 2500, discount: 0, taxAmount: 15000, lineTotal: 90000, sortOrder: 0 },
-      ] },
+      tenantId, productId: products[12].id, bomId: bom1.id, number: 'WO-000001',
+      status: 'COMPLETED', plannedQty: 20, producedQty: 20,
+      startDate: d('2026-04-01'), endDate: d('2026-04-05'),
+      inputWarehouseId: warehouse2.id, outputWarehouseId: warehouse2.id,
+      items: { create: [
+        { tenantId, productId: products[10].id, requiredQty: 10, consumedQty: 10, sourceWarehouseId: warehouse2.id },
+        { tenantId, productId: products[11].id, requiredQty: 4,  consumedQty: 4,  sourceWarehouseId: warehouse2.id },
+      ]},
+      operations: { create: [
+        { tenantId, workCenterId: wcMontaj.id,    name: 'Kasa Montajı',   stepOrder: 1, status: 'COMPLETED', actualStartAt: d('2026-04-01'), actualEndAt: d('2026-04-03') },
+        { tenantId, workCenterId: wcTest.id,      name: 'Kalite Kontrol', stepOrder: 2, status: 'COMPLETED', actualStartAt: d('2026-04-03'), actualEndAt: d('2026-04-04') },
+        { tenantId, workCenterId: wcPaketleme.id, name: 'Paketleme',      stepOrder: 3, status: 'COMPLETED', actualStartAt: d('2026-04-04'), actualEndAt: d('2026-04-05') },
+      ]},
+      history: { create: [
+        { tenantId, toStatus: 'PLANNED' },
+        { tenantId, fromStatus: 'PLANNED',     toStatus: 'IN_PROGRESS', notes: 'Üretime başlandı' },
+        { tenantId, fromStatus: 'IN_PROGRESS', toStatus: 'COMPLETED',   notes: '20 adet üretildi' },
+      ]},
     },
   });
 
-  // Tedarikçi faturaları
-  const invEntPurch1 = await prisma.invoice.create({
+  const wo2 = await prisma.workOrder.create({
     data: {
-      tenantId: tenant.id, contactId: cTedarikci.id, type: 'PURCHASE', status: 'PAID', number: 'INV-000007',
-      date: new Date('2026-02-10'), dueDate: new Date('2026-03-25'),
-      totalNet: 90000, totalTax: 18000, totalGross: 108000,
-      lines: { create: [
-        { tenantId: tenant.id, productId: pAluminyum.id, taxRateId: kdv20.id, description: 'Aluminyum Profil 6m (200 adet)', quantity: 200, unitPrice: 450, discount: 0, taxAmount: 18000, lineTotal: 108000, sortOrder: 0 },
-      ] },
-    },
-  });
-  const invEntPurch2 = await prisma.invoice.create({
-    data: {
-      tenantId: tenant.id, contactId: cTedarikci2.id, type: 'PURCHASE', status: 'SENT', number: 'INV-000008',
-      date: new Date('2026-03-15'), dueDate: new Date('2026-04-15'),
-      totalNet: 16000, totalTax: 3200, totalGross: 19200,
-      lines: { create: [
-        { tenantId: tenant.id, productId: pBoya.id, taxRateId: kdv20.id, description: 'Endustriyel Boya 5L (50 adet)', quantity: 50, unitPrice: 320, discount: 0, taxAmount: 3200, lineTotal: 19200, sortOrder: 0 },
-      ] },
+      tenantId, productId: products[12].id, bomId: bom1.id, number: 'WO-000002',
+      status: 'IN_PROGRESS', plannedQty: 15, producedQty: 8,
+      startDate: d('2026-04-20'),
+      inputWarehouseId: warehouse2.id, outputWarehouseId: warehouse2.id,
+      items: { create: [
+        { tenantId, productId: products[10].id, requiredQty: 7.5, consumedQty: 4, sourceWarehouseId: warehouse2.id },
+        { tenantId, productId: products[11].id, requiredQty: 3,   consumedQty: 1.6, sourceWarehouseId: warehouse2.id },
+      ]},
+      history: { create: [
+        { tenantId, toStatus: 'PLANNED' },
+        { tenantId, fromStatus: 'PLANNED', toStatus: 'IN_PROGRESS', notes: 'Üretime başlandı' },
+      ]},
     },
   });
 
-  // Marmara Aluminyum (BOTH): hem alış hem satış
-  const invEntBoth1 = await prisma.invoice.create({
+  const wo3 = await prisma.workOrder.create({
     data: {
-      tenantId: tenant.id, contactId: cBoth.id, type: 'SALES', status: 'SENT', number: 'INV-000009',
-      date: new Date('2026-03-18'), dueDate: new Date('2026-04-18'),
-      totalNet: 37500, totalTax: 7500, totalGross: 45000,
-      lines: { create: [
-        { tenantId: tenant.id, productId: pCerceve.id, taxRateId: kdv20.id, description: 'Pencere Cercevesi', quantity: 15, unitPrice: 2500, discount: 0, taxAmount: 7500, lineTotal: 45000, sortOrder: 0 },
-      ] },
+      tenantId, productId: products[12].id, bomId: bom1.id, number: 'WO-000003',
+      status: 'PLANNED', plannedQty: 30, producedQty: 0,
+      startDate: d('2026-05-10'), endDate: d('2026-05-20'),
+      inputWarehouseId: warehouse2.id, outputWarehouseId: warehouse2.id,
+      history: { create: [{ tenantId, toStatus: 'PLANNED' }] },
     },
   });
 
-  // Ödemeler
-  const pay1 = await prisma.payment.create({
-    data: { tenantId: tenant.id, contactId: cMusteri.id, bankAccountId: bankAccount.id, date: new Date('2026-02-20'), amount: 150000, method: 'BANK_TRANSFER', reference: 'EFT-2026-001', status: 'COMPLETED', notes: 'INV-000001 tam odeme' },
+  // Stock movements for completed WO
+  await prisma.stockMovement.create({
+    data: { tenantId, productId: products[12].id, type: 'IN', quantity: 20, toWarehouseId: warehouse2.id, refType: 'WORK_ORDER', refId: wo1.id, notes: `İş emri ${wo1.number} üretim çıktısı` },
   });
-  await prisma.paymentAllocation.create({ data: { tenantId: tenant.id, paymentId: pay1.id, invoiceId: inv1.id, amount: 150000 } });
-
-  const payEnt2 = await prisma.payment.create({
-    data: { tenantId: tenant.id, contactId: cMusteri.id, bankAccountId: bankAccount.id, date: new Date('2026-04-01'), amount: 30000, method: 'BANK_TRANSFER', reference: 'EFT-2026-004', status: 'COMPLETED', notes: 'INV-000003 kismi odeme' },
-  });
-  await prisma.paymentAllocation.create({ data: { tenantId: tenant.id, paymentId: payEnt2.id, invoiceId: invEnt3.id, amount: 30000 } });
-
-  const payEnt3 = await prisma.payment.create({
-    data: { tenantId: tenant.id, contactId: cMusteri2.id, bankAccountId: bankAccount.id, date: new Date('2026-03-15'), amount: 20000, method: 'BANK_TRANSFER', reference: 'EFT-2026-005', status: 'COMPLETED', notes: 'INV-000004 kismi odeme' },
+  await prisma.stockLevel.updateMany({
+    where: { tenantId, productId: products[12].id, warehouseId: warehouse2.id },
+    data: { quantity: { increment: 20 } },
   });
 
-  const payEntPurch1 = await prisma.payment.create({
-    data: { tenantId: tenant.id, contactId: cTedarikci.id, bankAccountId: bankAccount.id, date: new Date('2026-03-20'), amount: 108000, method: 'BANK_TRANSFER', reference: 'EFT-2026-002', status: 'COMPLETED', notes: 'INV-000007 tedarikci odemesi' },
-  });
-  await prisma.paymentAllocation.create({ data: { tenantId: tenant.id, paymentId: payEntPurch1.id, invoiceId: invEntPurch1.id, amount: 108000 } });
+  return { bom1, workOrders: [wo1, wo2, wo3] };
+}
 
-  // ─── ACCOUNT ENTRIES (Cari Hareketler) ──────
-  // Insaat Holding (cMusteri) — bakiye: 150000 - 150000 + 108000 + 75000 - 30000 = 153000 alacak
-  await prisma.accountEntry.createMany({
+// ─────────────────────────────────────────────
+// SERVICE
+// ─────────────────────────────────────────────
+
+async function seedService(
+  tenantId: string,
+  contacts: Awaited<ReturnType<typeof seedContacts>>,
+  products: { id: string }[],
+) {
+  const [c1, c2, c3] = contacts;
+
+  // Customer Assets
+  const [asset1, asset2, asset3] = await Promise.all([
+    prisma.customerAsset.create({ data: { tenantId, contactId: c1.id, name: 'Laptop Pro 15" SN:LP001', brand: 'Axon', model: 'Pro 15', serialNo: 'LP-2024-001', purchaseDate: d('2024-06-15'), warrantyEnd: d('2026-06-15'), isActive: true } }),
+    prisma.customerAsset.create({ data: { tenantId, contactId: c2.id, name: 'Akıllı Telefon X12 SN:AT001', brand: 'Axon', model: 'X12', serialNo: 'AT-2025-001', purchaseDate: d('2025-01-10'), warrantyEnd: d('2027-01-10'), isActive: true } }),
+    prisma.customerAsset.create({ data: { tenantId, contactId: c3.id, name: 'Monitor 27" SN:MN001', brand: 'Axon', model: '27K', serialNo: 'MN-2023-001', purchaseDate: d('2023-09-20'), warrantyEnd: d('2025-09-20'), isActive: true } }),
+  ]);
+
+  // Service Requests
+  const sr1 = await prisma.serviceRequest.create({
+    data: {
+      tenantId, contactId: c1.id, customerAssetId: asset1.id,
+      number: 'SR-000001', status: 'COMPLETED', priority: 'HIGH',
+      subject: 'Laptop ekran sorunu - piksel hatası',
+      description: 'Ekranın sol alt köşesinde ölü piksel var, garanti kapsamında değişim talep ediliyor.',
+      warrantyEnd: asset1.warrantyEnd, closedAt: d('2026-04-10'),
+      items: { create: [
+        { tenantId, productId: products[0].id, description: 'Ekran değişimi işçilik', quantity: 1, unitPrice: 0, lineTotal: 0 },
+      ]},
+      activities: { create: [
+        { tenantId, activityType: 'NOTE',          notes: 'Müşteri cihazı teslim etti', createdAt: d('2026-04-05') },
+        { tenantId, activityType: 'STATUS_CHANGE',  notes: 'OPEN → IN_PROGRESS',        createdAt: d('2026-04-06') },
+        { tenantId, activityType: 'CALL',           notes: 'Müşteri bilgilendirildi, parça bekleniyor', createdAt: d('2026-04-07') },
+        { tenantId, activityType: 'STATUS_CHANGE',  notes: 'IN_PROGRESS → COMPLETED',   createdAt: d('2026-04-10') },
+      ]},
+      history: { create: [
+        { tenantId, toStatus: 'OPEN' },
+        { tenantId, fromStatus: 'OPEN',        toStatus: 'IN_PROGRESS', notes: 'Teknik inceleme başladı' },
+        { tenantId, fromStatus: 'IN_PROGRESS', toStatus: 'WAITING_PARTS', notes: 'Ekran parçası bekleniyor' },
+        { tenantId, fromStatus: 'WAITING_PARTS', toStatus: 'IN_PROGRESS', notes: 'Parça geldi, montaj yapılıyor' },
+        { tenantId, fromStatus: 'IN_PROGRESS', toStatus: 'COMPLETED', notes: 'Ekran değiştirildi, test edildi' },
+      ]},
+    },
+  });
+
+  const sr2 = await prisma.serviceRequest.create({
+    data: {
+      tenantId, contactId: c2.id, customerAssetId: asset2.id,
+      number: 'SR-000002', status: 'IN_PROGRESS', priority: 'MEDIUM',
+      subject: 'Telefon batarya şişmesi',
+      description: 'Batarya şişmiş, cihaz kapanmıyor. Garanti kapsamında değişim.',
+      warrantyEnd: asset2.warrantyEnd,
+      items: { create: [
+        { tenantId, description: 'Batarya değişimi', quantity: 1, unitPrice: 0, lineTotal: 0 },
+      ]},
+      activities: { create: [
+        { tenantId, activityType: 'NOTE',         notes: 'Cihaz teslim alındı, inceleme başladı' },
+        { tenantId, activityType: 'STATUS_CHANGE', notes: 'OPEN → IN_PROGRESS' },
+      ]},
+      history: { create: [
+        { tenantId, toStatus: 'OPEN' },
+        { tenantId, fromStatus: 'OPEN', toStatus: 'IN_PROGRESS', notes: 'Teknik inceleme başladı' },
+      ]},
+    },
+  });
+
+  const sr3 = await prisma.serviceRequest.create({
+    data: {
+      tenantId, contactId: c3.id, customerAssetId: asset3.id,
+      number: 'SR-000003', status: 'OPEN', priority: 'LOW',
+      subject: 'Monitor renk kalibrasyonu',
+      description: 'Renk kalibrasyonu bozulmuş, profesyonel kalibrasyon talep ediliyor.',
+      warrantyEnd: asset3.warrantyEnd,
+      history: { create: [{ tenantId, toStatus: 'OPEN' }] },
+    },
+  });
+
+  // Ücretli servis talebi (garanti dışı)
+  const sr4 = await prisma.serviceRequest.create({
+    data: {
+      tenantId, contactId: c1.id,
+      number: 'SR-000004', status: 'WAITING_CUSTOMER', priority: 'CRITICAL',
+      subject: 'Sunucu bakım ve güncelleme',
+      description: 'Yıllık bakım sözleşmesi kapsamında sunucu bakımı.',
+      items: { create: [
+        { tenantId, description: 'Sunucu bakım hizmeti (8 saat)', quantity: 8, unitPrice: 500, lineTotal: 4000 },
+        { tenantId, description: 'Yedek parça - RAM 32GB',        quantity: 2, unitPrice: 2500, lineTotal: 5000 },
+      ]},
+      activities: { create: [
+        { tenantId, activityType: 'CALL',  notes: 'Müşteri onayı bekleniyor - teklif gönderildi' },
+      ]},
+      history: { create: [
+        { tenantId, toStatus: 'OPEN' },
+        { tenantId, fromStatus: 'OPEN', toStatus: 'WAITING_CUSTOMER', notes: 'Teklif onayı bekleniyor' },
+      ]},
+    },
+  });
+
+  return [sr1, sr2, sr3, sr4];
+}
+
+// ─────────────────────────────────────────────
+// MARKETPLACE
+// ─────────────────────────────────────────────
+
+async function seedMarketplace(tenantId: string, products: { id: string }[]) {
+  const integration = await prisma.marketplaceIntegration.create({
+    data: {
+      tenantId, channel: 'TRENDYOL', name: 'Trendyol Mağazası',
+      apiKey: 'demo-api-key-12345', apiSecret: 'demo-secret-67890',
+      storeId: 'STORE-001', isActive: true, lastSyncAt: d('2026-05-03'),
+    },
+  });
+
+  // Listings
+  const listings = await Promise.all([
+    prisma.marketplaceListing.create({ data: { tenantId, integrationId: integration.id, productId: products[0].id, externalId: 'TY-LP001', externalSku: 'AXON-LP-001', price: 24999, stock: 10, isActive: true, lastSyncAt: d('2026-05-03') } }),
+    prisma.marketplaceListing.create({ data: { tenantId, integrationId: integration.id, productId: products[1].id, externalId: 'TY-KB001', externalSku: 'AXON-KB-001', price: 1299,  stock: 40, isActive: true, lastSyncAt: d('2026-05-03') } }),
+    prisma.marketplaceListing.create({ data: { tenantId, integrationId: integration.id, productId: products[2].id, externalId: 'TY-MS001', externalSku: 'AXON-MS-001', price: 599,   stock: 35, isActive: true, lastSyncAt: d('2026-05-03') } }),
+    prisma.marketplaceListing.create({ data: { tenantId, integrationId: integration.id, productId: products[3].id, externalId: 'TY-PH001', externalSku: 'AXON-PH-001', price: 16999, stock: 5,  isActive: true, lastSyncAt: d('2026-05-03') } }),
+    prisma.marketplaceListing.create({ data: { tenantId, integrationId: integration.id, productId: products[4].id, externalId: 'TY-HB001', externalSku: 'AXON-HB-001', price: 499,   stock: 60, isActive: true, lastSyncAt: d('2026-05-03') } }),
+  ]);
+
+  // Listing Snapshots
+  for (const listing of listings) {
+    await prisma.marketplaceListingSnapshot.create({
+      data: { tenantId, listingId: listing.id, lastSentQty: listing.stock, lastSentSalePrice: listing.price, lastSentListPrice: Number(listing.price) * 1.05, lastSentAt: d('2026-05-03'), batchRequestId: `BATCH-${listing.externalId}` },
+    });
+  }
+
+  // Marketplace Orders
+  const orders = await Promise.all([
+    prisma.marketplaceOrder.create({
+      data: {
+        tenantId, integrationId: integration.id, externalId: 'TY-ORD-001', channel: 'TRENDYOL',
+        status: 'DELIVERED', customerName: 'Burak Yıldız', customerEmail: 'burak@email.com',
+        customerPhone: '+90 555 111 0001', shippingAddress: 'Kadıköy, İstanbul',
+        totalAmount: 24999, orderDate: d('2026-04-20'), syncedAt: d('2026-04-20'),
+        items: { create: [{ tenantId, externalProductId: 'TY-LP001', productId: products[0].id, name: 'Laptop Pro 15"', quantity: 1, unitPrice: 24999, lineTotal: 24999 }] },
+      },
+    }),
+    prisma.marketplaceOrder.create({
+      data: {
+        tenantId, integrationId: integration.id, externalId: 'TY-ORD-002', channel: 'TRENDYOL',
+        status: 'SHIPPED', customerName: 'Selin Arslan', customerEmail: 'selin@email.com',
+        customerPhone: '+90 555 111 0002', shippingAddress: 'Beşiktaş, İstanbul',
+        totalAmount: 2597, orderDate: d('2026-04-28'), syncedAt: d('2026-04-28'),
+        items: { create: [
+          { tenantId, externalProductId: 'TY-KB001', productId: products[1].id, name: 'Mekanik Klavye RGB', quantity: 1, unitPrice: 1299, lineTotal: 1299 },
+          { tenantId, externalProductId: 'TY-MS001', productId: products[2].id, name: 'Kablosuz Mouse Pro', quantity: 2, unitPrice: 599,  lineTotal: 1198 },
+        ]},
+      },
+    }),
+    prisma.marketplaceOrder.create({
+      data: {
+        tenantId, integrationId: integration.id, externalId: 'TY-ORD-003', channel: 'TRENDYOL',
+        status: 'PROCESSING', customerName: 'Emre Kılıç', customerEmail: 'emre@email.com',
+        customerPhone: '+90 555 111 0003', shippingAddress: 'Ankara',
+        totalAmount: 16999, orderDate: d('2026-05-03'), syncedAt: d('2026-05-03'),
+        items: { create: [{ tenantId, externalProductId: 'TY-PH001', productId: products[3].id, name: 'Akıllı Telefon X12', quantity: 1, unitPrice: 16999, lineTotal: 16999 }] },
+      },
+    }),
+    prisma.marketplaceOrder.create({
+      data: {
+        tenantId, integrationId: integration.id, externalId: 'TY-ORD-004', channel: 'TRENDYOL',
+        status: 'CANCELLED', customerName: 'Deniz Yılmaz', customerEmail: 'deniz@email.com',
+        customerPhone: '+90 555 111 0004', shippingAddress: 'İzmir',
+        totalAmount: 499, orderDate: d('2026-04-25'), syncedAt: d('2026-04-25'),
+        items: { create: [{ tenantId, externalProductId: 'TY-HB001', productId: products[4].id, name: 'USB-C Hub 7 Port', quantity: 1, unitPrice: 499, lineTotal: 499 }] },
+      },
+    }),
+  ]);
+
+  // Sync Jobs
+  await prisma.marketplaceSyncJob.createMany({
     data: [
-      { tenantId: tenant.id, contactId: cMusteri.id, date: new Date('2026-01-15'), debit: 150000, credit: 0, balance: 150000, description: 'INV-000001 Pencere cercevesi faturasi', refType: 'INVOICE', refId: inv1.id },
-      { tenantId: tenant.id, contactId: cMusteri.id, date: new Date('2026-02-20'), debit: 0, credit: 150000, balance: 0, description: 'EFT-2026-001 Banka havalesi', refType: 'PAYMENT', refId: pay1.id },
-      { tenantId: tenant.id, contactId: cMusteri.id, date: new Date('2026-03-10'), debit: 108000, credit: 0, balance: 108000, description: 'INV-000002 Kapi sistemi faturasi', refType: 'INVOICE', refId: invEnt2.id },
-      { tenantId: tenant.id, contactId: cMusteri.id, date: new Date('2026-03-25'), debit: 75000, credit: 0, balance: 183000, description: 'INV-000003 Pencere cercevesi 2. parti', refType: 'INVOICE', refId: invEnt3.id },
-      { tenantId: tenant.id, contactId: cMusteri.id, date: new Date('2026-04-01'), debit: 0, credit: 30000, balance: 153000, description: 'EFT-2026-004 Kismi odeme', refType: 'PAYMENT', refId: payEnt2.id },
+      { tenantId, integrationId: integration.id, jobType: 'SYNC_ORDERS', status: 'DONE',    processedCount: 4, errorCount: 0, startedAt: d('2026-05-03'), finishedAt: d('2026-05-03'), params: { hoursBack: 24 }, result: { created: 2, updated: 1, skipped: 1 } },
+      { tenantId, integrationId: integration.id, jobType: 'SYNC_STOCK',  status: 'DONE',    processedCount: 5, errorCount: 0, startedAt: d('2026-05-03'), finishedAt: d('2026-05-03'), params: { force: false }, result: { sent: 5, skipped: 0 } },
+      { tenantId, integrationId: integration.id, jobType: 'SYNC_ORDERS', status: 'FAILED',  processedCount: 0, errorCount: 1, startedAt: d('2026-05-04'), finishedAt: d('2026-05-04'), params: { hoursBack: 1 }, errorMessage: 'Demo credentials - API not available' },
     ],
   });
 
-  // Yildiz Insaat (cMusteri2) — bakiye: 60000 + 54000 - 20000 = 94000 alacak (limit: 200000, risk: %47)
-  await prisma.accountEntry.createMany({
+  // Webhook Events
+  await prisma.marketplaceWebhookEvent.createMany({
     data: [
-      { tenantId: tenant.id, contactId: cMusteri2.id, date: new Date('2026-02-01'), debit: 60000, credit: 0, balance: 60000, description: 'INV-000004 Pencere cercevesi faturasi', refType: 'INVOICE', refId: invEnt4.id },
-      { tenantId: tenant.id, contactId: cMusteri2.id, date: new Date('2026-03-15'), debit: 0, credit: 20000, balance: 40000, description: 'EFT-2026-005 Kismi odeme', refType: 'PAYMENT', refId: payEnt3.id },
-      { tenantId: tenant.id, contactId: cMusteri2.id, date: new Date('2026-03-20'), debit: 54000, credit: 0, balance: 94000, description: 'INV-000005 Kapi sistemi faturasi', refType: 'INVOICE', refId: invEnt5.id },
+      { tenantId, integrationId: integration.id, eventId: 'EVT-001', eventType: 'ORDER_STATUS_CHANGED', payload: { shipmentPackageId: 'TY-ORD-001', status: 'Delivered' }, processedAt: d('2026-04-22') },
+      { tenantId, integrationId: integration.id, eventId: 'EVT-002', eventType: 'ORDER_STATUS_CHANGED', payload: { shipmentPackageId: 'TY-ORD-002', status: 'Shipped'   }, processedAt: d('2026-04-29') },
     ],
   });
 
-  // Anadolu Yapi (cMusteri3) — bakiye: 90000 alacak (limit: 100000, risk: %90 WARNING)
-  await prisma.accountEntry.createMany({
-    data: [
-      { tenantId: tenant.id, contactId: cMusteri3.id, date: new Date('2026-03-05'), debit: 90000, credit: 0, balance: 90000, description: 'INV-000006 Toplu pencere cercevesi', refType: 'INVOICE', refId: invEnt6.id },
-    ],
+  return { integration, listings, orders };
+}
+
+// ─────────────────────────────────────────────
+// ROLES & PERMISSIONS
+// ─────────────────────────────────────────────
+
+async function seedRoles(tenantId: string, users: { id: string }[]) {
+  const [, userSales, userAccounting, userWarehouse] = users;
+
+  const roleSales = await prisma.role.create({
+    data: {
+      tenantId, name: 'Satış Temsilcisi', description: 'Satış modülü tam erişim', isSystem: false,
+      permissions: { create: [
+        { module: 'invoicing', action: 'CREATE' },
+        { module: 'invoicing', action: 'READ'   },
+        { module: 'invoicing', action: 'UPDATE' },
+        { module: 'contacts',  action: 'READ'   },
+        { module: 'contacts',  action: 'CREATE' },
+        { module: 'contacts',  action: 'UPDATE' },
+        { module: 'inventory', action: 'READ'   },
+        { module: 'reporting', action: 'READ'   },
+      ]},
+    },
   });
 
-  // Metal Sanayi (cTedarikci) — bakiye: 0 (tam ödendi)
-  await prisma.accountEntry.createMany({
-    data: [
-      { tenantId: tenant.id, contactId: cTedarikci.id, date: new Date('2026-02-10'), debit: 0, credit: 108000, balance: -108000, description: 'INV-000007 Aluminyum profil alimi', refType: 'INVOICE', refId: invEntPurch1.id },
-      { tenantId: tenant.id, contactId: cTedarikci.id, date: new Date('2026-03-20'), debit: 108000, credit: 0, balance: 0, description: 'EFT-2026-002 Tedarikci odemesi', refType: 'PAYMENT', refId: payEntPurch1.id },
-    ],
+  const roleAccounting = await prisma.role.create({
+    data: {
+      tenantId, name: 'Muhasebe Uzmanı', description: 'Muhasebe ve finans tam erişim', isSystem: false,
+      permissions: { create: [
+        { module: 'accounting', action: 'CREATE' },
+        { module: 'accounting', action: 'READ'   },
+        { module: 'accounting', action: 'UPDATE' },
+        { module: 'accounting', action: 'DELETE' },
+        { module: 'invoicing',  action: 'READ'   },
+        { module: 'invoicing',  action: 'UPDATE' },
+        { module: 'reporting',  action: 'READ'   },
+        { module: 'reporting',  action: 'EXPORT' },
+      ]},
+    },
   });
 
-  // Ege Boya (cTedarikci2) — bakiye: -19200 (borçluyuz)
-  await prisma.accountEntry.createMany({
-    data: [
-      { tenantId: tenant.id, contactId: cTedarikci2.id, date: new Date('2026-03-15'), debit: 0, credit: 19200, balance: -19200, description: 'INV-000008 Boya alimi', refType: 'INVOICE', refId: invEntPurch2.id },
-    ],
+  const roleWarehouse = await prisma.role.create({
+    data: {
+      tenantId, name: 'Depo Sorumlusu', description: 'Stok ve depo yönetimi', isSystem: false,
+      permissions: { create: [
+        { module: 'inventory', action: 'CREATE' },
+        { module: 'inventory', action: 'READ'   },
+        { module: 'inventory', action: 'UPDATE' },
+        { module: 'purchasing', action: 'READ'  },
+      ]},
+    },
   });
 
-  // Marmara Aluminyum (cBoth) — bakiye: 45000 alacak
-  await prisma.accountEntry.createMany({
-    data: [
-      { tenantId: tenant.id, contactId: cBoth.id, date: new Date('2026-03-18'), debit: 45000, credit: 0, balance: 45000, description: 'INV-000009 Pencere cercevesi satisi', refType: 'INVOICE', refId: invEntBoth1.id },
-    ],
+  // Assign roles to users
+  await prisma.tenantUser.updateMany({ where: { tenantId, userId: userSales.id },      data: { roleId: roleSales.id } });
+  await prisma.tenantUser.updateMany({ where: { tenantId, userId: userAccounting.id }, data: { roleId: roleAccounting.id } });
+  await prisma.tenantUser.updateMany({ where: { tenantId, userId: userWarehouse.id },  data: { roleId: roleWarehouse.id } });
+
+  // Approval Flow
+  await prisma.approvalFlow.create({
+    data: {
+      tenantId, name: 'Satın Alma Onay Akışı', module: 'PURCHASE_REQUEST', isActive: true,
+      steps: { create: [
+        { stepOrder: 1, name: 'Departman Müdürü Onayı', approverRoleId: roleSales.id,      isRequired: true },
+        { stepOrder: 2, name: 'Finans Onayı',           approverRoleId: roleAccounting.id, isRequired: true },
+      ]},
+    },
   });
 
-  console.log('  + Faturalar (9 adet), odemeler (4 adet), cari hareketler (12 adet)');
-
-  // ─── SETTINGS & NOTIFICATIONS ───────────────
-
-  await prisma.tenantSetting.createMany({
-    data: [
-      { tenantId: tenant.id, key: 'default_currency', value: 'TRY' },
-      { tenantId: tenant.id, key: 'invoice_prefix', value: 'INV' },
-      { tenantId: tenant.id, key: 'date_format', value: 'DD.MM.YYYY' },
-      { tenantId: tenant.id, key: 'timezone', value: 'Europe/Istanbul' },
-      { tenantId: tenant.id, key: 'language', value: 'tr' },
-    ],
+  await prisma.approvalFlow.create({
+    data: {
+      tenantId, name: 'İzin Onay Akışı', module: 'LEAVE_REQUEST', isActive: true,
+      steps: { create: [
+        { stepOrder: 1, name: 'Yönetici Onayı', approverRoleId: roleSales.id, isRequired: true },
+      ]},
+    },
   });
 
+  return { roleSales, roleAccounting, roleWarehouse };
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+async function seedNotifications(tenantId: string, userId: string) {
   await prisma.notification.createMany({
     data: [
-      { tenantId: tenant.id, userId: owner.id, title: 'Is Emri Tamamlandi', message: 'WO-000001 pencere cercevesi uretimi tamamlandi (50 adet).', module: 'production', status: 'READ', readAt: new Date('2026-03-10') },
-      { tenantId: tenant.id, userId: owner.id, title: 'Yeni Pazaryeri Siparisi', message: 'Trendyol uzerinden yeni siparis alindi (TY-ORD-2026-0523).', module: 'marketplace', status: 'UNREAD' },
-      { tenantId: tenant.id, userId: user3.id, title: 'Izin Talebi Bekliyor', message: 'Murat Sahin 5 gunluk yillik izin talep etti.', module: 'hr', status: 'UNREAD' },
-      { tenantId: tenant.id, userId: user2.id, title: 'Servis Talebi Acik', message: 'SR-000002 boya kabini filtre degisimi devam ediyor.', module: 'service', status: 'UNREAD' },
+      { tenantId, userId, title: 'Yeni Sipariş Alındı',          message: 'SIP-000004 numaralı sipariş oluşturuldu.',          module: 'invoicing',  entityType: 'SALES_ORDER', status: 'UNREAD',    createdAt: d('2026-04-15') },
+      { tenantId, userId, title: 'Fatura Vadesi Yaklaşıyor',      message: 'INV-000002 faturasının vadesi 3 gün sonra.',         module: 'invoicing',  entityType: 'INVOICE',     status: 'UNREAD',    createdAt: d('2026-04-09') },
+      { tenantId, userId, title: 'Gecikmiş Fatura',               message: 'INV-000003 faturası 60 gün gecikmiş.',              module: 'invoicing',  entityType: 'INVOICE',     status: 'READ',      createdAt: d('2026-04-01'), readAt: d('2026-04-02') },
+      { tenantId, userId, title: 'Stok Uyarısı',                  message: 'P006 (A4 Kağıt) minimum stok seviyesinin altında.', module: 'inventory',  entityType: 'PRODUCT',     status: 'UNREAD',    createdAt: d('2026-05-01') },
+      { tenantId, userId, title: 'İş Emri Tamamlandı',            message: 'WO-000001 iş emri tamamlandı. 20 adet üretildi.',   module: 'production', entityType: 'WORK_ORDER',  status: 'READ',      createdAt: d('2026-04-05'), readAt: d('2026-04-06') },
+      { tenantId, userId, title: 'Servis Talebi Güncellendi',     message: 'SR-000001 servis talebi tamamlandı.',               module: 'service',    entityType: 'SERVICE_REQUEST', status: 'ARCHIVED', createdAt: d('2026-04-10') },
+      { tenantId, userId, title: 'Trendyol Senkronizasyonu',      message: '4 sipariş senkronize edildi.',                      module: 'marketplace', status: 'READ',            createdAt: d('2026-05-03'), readAt: d('2026-05-03') },
+      { tenantId, userId, title: 'Satın Alma Onayı Bekleniyor',   message: 'PR-000002 satın alma talebi onayınızı bekliyor.',   module: 'purchasing', entityType: 'PURCHASE_ORDER', status: 'UNREAD', createdAt: d('2026-04-10') },
     ],
   });
-
-  // Audit logs
-  await prisma.auditLog.createMany({
-    data: [
-      { tenantId: tenant.id, userId: owner.id, module: 'production', entityType: 'WORK_ORDER', entityId: wo1.id, action: 'CREATE', createdAt: new Date('2026-02-28') },
-      { tenantId: tenant.id, userId: user2.id, module: 'production', entityType: 'WORK_ORDER', entityId: wo1.id, action: 'UPDATE', newValues: { status: 'COMPLETED' }, createdAt: new Date('2026-03-10') },
-      { tenantId: tenant.id, userId: owner.id, module: 'invoicing', entityType: 'INVOICE', entityId: inv1.id, action: 'CREATE', createdAt: new Date('2026-03-15') },
-      { tenantId: tenant.id, userId: user3.id, module: 'hr', entityType: 'EMPLOYEE', entityId: emp1.id, action: 'UPDATE', newValues: { salary: 22000 }, createdAt: new Date('2026-03-01') },
-    ],
-  });
-
-  // API Key
-  const apiKeyHash = await bcrypt.hash('sk_live_global_uretim_demo_key_001', 10);
-  await prisma.apiKey.create({
-    data: { tenantId: tenant.id, name: 'Production API', keyHash: apiKeyHash, keyPrefix: 'sk_live_', isActive: true, scopes: ['products:read', 'products:write', 'orders:read', 'invoices:read'] },
-  });
-
-  console.log('  + Enterprise Tenant: Global Uretim Sanayi A.S. (ent@globaluretim.com / demo1234)');
 }
+
+// ─────────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────────
+
+async function seedSettings(tenantId: string) {
+  await prisma.tenantSetting.createMany({
+    data: [
+      { tenantId, key: 'company_logo',       value: 'https://axondemo.com/logo.png' },
+      { tenantId, key: 'invoice_prefix',     value: 'INV' },
+      { tenantId, key: 'default_currency',   value: 'TRY' },
+      { tenantId, key: 'fiscal_year_start',  value: '01-01' },
+      { tenantId, key: 'invoice_footer',     value: 'Axon Demo Teknoloji A.Ş. - Tüm hakları saklıdır.' },
+      { tenantId, key: 'low_stock_alert',    value: 'true' },
+      { tenantId, key: 'email_notifications',value: 'true' },
+    ],
+  });
+
+  await prisma.moduleSetting.createMany({
+    data: [
+      { tenantId, module: 'invoicing',   key: 'auto_number',       value: 'true'  },
+      { tenantId, module: 'invoicing',   key: 'default_tax_rate',  value: '20'    },
+      { tenantId, module: 'invoicing',   key: 'payment_terms',     value: '30'    },
+      { tenantId, module: 'inventory',   key: 'costing_method',    value: 'MOVING_AVERAGE' },
+      { tenantId, module: 'inventory',   key: 'negative_stock',    value: 'false' },
+      { tenantId, module: 'accounting',  key: 'auto_journal',      value: 'true'  },
+      { tenantId, module: 'marketplace', key: 'auto_sync_interval',value: '60'    },
+      { tenantId, module: 'hr',          key: 'work_hours_per_day',value: '8'     },
+      { tenantId, module: 'payroll',     key: 'sgk_rate',          value: '14'    },
+    ],
+  });
+
+  // Saved Reports
+  await prisma.savedReport.createMany({
+    data: [
+      { tenantId, name: 'Aylık Satış Özeti',     module: 'reporting', filters: { type: 'SALES', period: 'monthly' },  columns: ['date', 'number', 'contact', 'total'], isShared: true  },
+      { tenantId, name: 'Stok Durum Raporu',     module: 'reporting', filters: { belowMin: true },                    columns: ['code', 'name', 'qty', 'minStock'],    isShared: true  },
+      { tenantId, name: 'Gecikmiş Faturalar',    module: 'reporting', filters: { status: 'OVERDUE' },                 columns: ['number', 'contact', 'dueDate', 'total'], isShared: false },
+      { tenantId, name: 'Personel Bordro Özeti', module: 'reporting', filters: { period: '2026-04' },                 columns: ['name', 'department', 'gross', 'net'], isShared: false },
+    ],
+  });
+}
+
+// ─────────────────────────────────────────────
+// STOCK COUNT (Sayım)
+// ─────────────────────────────────────────────
+
+async function seedStockCount(tenantId: string, products: { id: string }[], warehouseId: string) {
+  await prisma.stockCount.create({
+    data: {
+      tenantId, warehouseId, number: 'SC-000001', date: d('2026-04-30'),
+      isFinalized: false, notes: 'Nisan sonu sayımı',
+      items: { create: [
+        { tenantId, productId: products[0].id, expectedQty: 15, countedQty: 14, difference: -1 },
+        { tenantId, productId: products[1].id, expectedQty: 45, countedQty: 45, difference: 0  },
+        { tenantId, productId: products[2].id, expectedQty: 38, countedQty: 39, difference: 1  },
+        { tenantId, productId: products[3].id, expectedQty: 7,  countedQty: 7,  difference: 0  },
+        { tenantId, productId: products[4].id, expectedQty: 62, countedQty: 60, difference: -2 },
+      ]},
+    },
+  });
+}
+
+// ─────────────────────────────────────────────
+// INVENTORY RESERVATIONS & LOT/SERIAL
+// ─────────────────────────────────────────────
+
+async function seedInventoryExtras(tenantId: string, products: { id: string }[], warehouseId: string) {
+  // Inventory Reservations
+  await prisma.inventoryReservation.createMany({
+    data: [
+      { tenantId, productId: products[0].id, warehouseId, quantity: 2, refType: 'SALES_ORDER', refId: 'SIP-000004', notes: 'SIP-000004 için rezerve' },
+      { tenantId, productId: products[3].id, warehouseId, quantity: 1, refType: 'SALES_ORDER', refId: 'SIP-000002', notes: 'SIP-000002 için rezerve' },
+    ],
+  });
+
+  // Product Batches
+  const batch1 = await prisma.productBatch.create({
+    data: { tenantId, productId: products[0].id, batchNumber: 'BATCH-2026-001', expiryDate: null, manufacturedAt: d('2026-01-15'), quantity: 5, notes: 'Ocak 2026 üretim partisi' },
+  });
+  const batch2 = await prisma.productBatch.create({
+    data: { tenantId, productId: products[3].id, batchNumber: 'BATCH-2026-002', expiryDate: null, manufacturedAt: d('2026-02-20'), quantity: 3, notes: 'Şubat 2026 üretim partisi' },
+  });
+
+  // Lot/Serial Numbers
+  await prisma.lotSerialNumber.createMany({
+    data: [
+      { tenantId, productId: products[0].id, batchId: batch1.id, serialNumber: 'SN-LP-001', isUsed: false },
+      { tenantId, productId: products[0].id, batchId: batch1.id, serialNumber: 'SN-LP-002', isUsed: false },
+      { tenantId, productId: products[0].id, batchId: batch1.id, serialNumber: 'SN-LP-003', isUsed: true, usedAt: d('2026-03-22'), usedRefType: 'SALES_ORDER', usedRefId: 'SIP-000001' },
+      { tenantId, productId: products[3].id, batchId: batch2.id, serialNumber: 'SN-PH-001', isUsed: false },
+      { tenantId, productId: products[3].id, batchId: batch2.id, serialNumber: 'SN-PH-002', isUsed: false },
+    ],
+  });
+
+  // Stock Valuations
+  await prisma.stockValuation.createMany({
+    data: [
+      { tenantId, productId: products[0].id, warehouseId, date: d('2026-04-01'), qtyIn: 3, qtyOut: 0, qtyBalance: 15, unitCost: 18000, totalValue: 270000 },
+      { tenantId, productId: products[1].id, warehouseId, date: d('2026-04-01'), qtyIn: 0, qtyOut: 5, qtyBalance: 45, unitCost: 800,   totalValue: 36000  },
+    ],
+  });
+}
+
+// ─────────────────────────────────────────────
+// MAIN — update to call new functions
+// ─────────────────────────────────────────────
+
+// Update main to include stock count and inventory extras
+const _originalMain = main;
+
+async function runSeed() {
+  console.log('\n🌱 Seed başlıyor...\n');
+
+  // 1. Admin
+  await prisma.adminUser.upsert({
+    where: { email: 'admin@axonerp.com' },
+    create: { email: 'admin@axonerp.com', name: 'Platform Admin', password: await hash('admin1234'), isActive: true },
+    update: { password: await hash('admin1234') },
+  });
+  console.log('  ✓ Admin: admin@axonerp.com / admin1234');
+
+  // 2. Plan Features
+  await seedPlanFeatures();
+  console.log('  ✓ Plan features (Starter / Professional / Enterprise)');
+
+  // 3. Tenant & Users
+  const { tenant, users } = await seedTenant();
+  console.log(`  ✓ Tenant: ${tenant.companyName} (Enterprise)`);
+  console.log(`  ✓ Kullanıcılar: ${users.map(u => u.email).join(', ')}`);
+
+  // 4. Master Data
+  const master = await seedMasterData(tenant.id);
+  console.log('  ✓ Master data (birim, kategori, KDV, döviz, hesap planı)');
+
+  // 5. Warehouses
+  const { warehouse, warehouse2, locations } = await seedWarehouses(tenant.id);
+  console.log('  ✓ Depolar ve lokasyonlar');
+
+  // 6. Products & Stock
+  const products = await seedProducts(tenant.id, master, warehouse, warehouse2, locations);
+  console.log(`  ✓ ${products.length} ürün ve stok seviyeleri`);
+
+  // 7. Contacts
+  const contacts = await seedContacts(tenant.id);
+  console.log(`  ✓ ${contacts.length} cari hesap`);
+
+  // 8. Sales
+  const { invoices, payments } = await seedSales(tenant.id, contacts, products, master, warehouse);
+  console.log(`  ✓ Satış: ${invoices.length} fatura, ${payments.length} ödeme`);
+
+  // 9. Purchasing
+  await seedPurchasing(tenant.id, contacts, products, master, warehouse);
+  console.log('  ✓ Satın alma: talepler ve siparişler');
+
+  // 10. Accounting
+  await seedAccounting(tenant.id, master.accounts, invoices);
+  console.log('  ✓ Muhasebe: yevmiye fişleri, mali dönem, mutabakat');
+
+  // 11. HR & Payroll
+  await seedHR(tenant.id);
+  console.log('  ✓ İK: personel, izin, puantaj, bordro');
+
+  // 12. Production
+  await seedProduction(tenant.id, products, master, warehouse, warehouse2);
+  console.log('  ✓ Üretim: iş merkezleri, BOM, iş emirleri');
+
+  // 13. Service
+  await seedService(tenant.id, contacts, products);
+  console.log('  ✓ Servis: müşteri varlıkları, servis talepleri');
+
+  // 14. Marketplace
+  await seedMarketplace(tenant.id, products);
+  console.log('  ✓ Pazaryeri: Trendyol entegrasyonu, siparişler');
+
+  // 15. Roles & Permissions
+  await seedRoles(tenant.id, users);
+  console.log('  ✓ Roller, izinler ve onay akışları');
+
+  // 16. Notifications
+  await seedNotifications(tenant.id, users[0].id);
+  console.log('  ✓ Bildirimler');
+
+  // 17. Settings
+  await seedSettings(tenant.id);
+  console.log('  ✓ Tenant ayarları ve kayıtlı raporlar');
+
+  // 18. Stock Count
+  await seedStockCount(tenant.id, products, warehouse.id);
+  console.log('  ✓ Stok sayımı');
+
+  // 19. Inventory Extras
+  await seedInventoryExtras(tenant.id, products, warehouse.id);
+  console.log('  ✓ Rezervasyonlar, parti/seri numaraları, stok değerleme');
+
+  console.log('\n✅ Seed tamamlandı!\n');
+  console.log('  📧 Kullanıcı girişi:');
+  console.log('     admin@axondemo.com    / demo1234  (Tenant Admin)');
+  console.log('     satis@axondemo.com    / demo1234  (Satış)');
+  console.log('     muhasebe@axondemo.com / demo1234  (Muhasebe)');
+  console.log('     depo@axondemo.com     / demo1234  (Depo)');
+  console.log('  🔑 Platform admin:');
+  console.log('     admin@axonerp.com     / admin1234\n');
+}
+
+runSeed()
+  .catch((e) => {
+    console.error('❌ Seed hatası:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

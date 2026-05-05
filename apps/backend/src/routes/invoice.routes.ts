@@ -10,6 +10,7 @@ invoiceRoutes.use('*', requireModule(MODULE_KEYS.INVOICING));
 
 invoiceRoutes.get('/', requirePermission('invoicing', 'READ'), InvoiceController.list);
 invoiceRoutes.get('/:id', requirePermission('invoicing', 'READ'), InvoiceController.getById);
+invoiceRoutes.get('/:id/history', requirePermission('invoicing', 'READ'), InvoiceController.getHistory);
 invoiceRoutes.post('/', requirePermission('invoicing', 'CREATE'), InvoiceController.create);
 invoiceRoutes.patch('/:id', requirePermission('invoicing', 'UPDATE'), InvoiceController.update);
 invoiceRoutes.post('/:id/cancel', requirePermission('invoicing', 'UPDATE'), InvoiceController.cancel);

@@ -23,10 +23,8 @@ function getCookie(name: string): string | null {
 
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = getCookie('axon_token');
-  const tenantId = getCookie('axon_tenant_id');
 
   if (token) config.headers.Authorization = `Bearer ${token}`;
-  if (tenantId) config.headers['x-tenant-id'] = tenantId;
 
   return config;
 });
@@ -42,7 +40,12 @@ apiClient.interceptors.response.use(
       const parsed = ApiErrorSchema.safeParse(error.response.data);
       if (parsed.success) {
         if (error.response.status === 401 && typeof window !== 'undefined') {
-          window.location.href = '/login';
+          // Store'u temizle ve login'e yönlendir
+          // Dinamik import ile circular dependency'den kaçın
+          import('@/store/auth.store').then(({ useAuthStore }) => {
+            useAuthStore.getState().logout();
+          }).catch(() => {});
+          window.location.replace('/login');
         }
         return Promise.reject(parsed.data);
       }

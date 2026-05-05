@@ -1,4 +1,5 @@
 import { Context } from 'hono';
+import { LotUsedRefType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
@@ -22,7 +23,7 @@ interface CreateLotSerialDTO {
 }
 
 interface AssignToMovementDTO {
-  usedRefType: string;
+  usedRefType: LotUsedRefType;
   usedRefId: string;
 }
 

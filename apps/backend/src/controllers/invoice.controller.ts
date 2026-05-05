@@ -1,9 +1,11 @@
 import { Context } from 'hono';
-import { InvoiceType, InvoiceStatus } from '@prisma/client';
+import { InvoiceType, InvoiceStatus, AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { writeInvoiceAccountEntry, reverseInvoiceAccountEntry } from '../utils/account-entry.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -21,6 +23,8 @@ interface InvoiceLineDTO {
 interface CreateInvoiceDTO {
   contactId: string;
   type: InvoiceType;
+  salesOrderId?: string;
+  purchaseOrderId?: string;
   number?: string;
   date: string;
   dueDate?: string;
@@ -178,8 +182,25 @@ export const InvoiceController = {
     return c.json({ data: invoice });
   },
 
+  async getHistory(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const invoiceId = c.req.param('id');
+
+    const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, tenantId } });
+    if (!invoice) return c.json(new NotFoundError('Fatura', invoiceId).toJSON(), 404);
+
+    const history = await prisma.invoiceHistory.findMany({
+      where: { tenantId, invoiceId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return c.json({ data: history });
+  },
+
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
 
     const body = await c.req.json<CreateInvoiceDTO>();
 
@@ -202,38 +223,76 @@ export const InvoiceController = {
       tenantId,
     );
 
-    // Otomatik numara — çakışma korumalı
     let number = body.number;
     if (!number) {
       number = await generateDocumentNumber(tenantId, 'invoice', 'INV-', 'invoice');
     }
 
-    const invoice = await prisma.invoice.create({
-      data: {
+    const invoice = await prisma.$transaction(async (tx) => {
+      const newInvoice = await tx.invoice.create({
+        data: {
+          tenantId,
+          contactId: body.contactId,
+          salesOrderId: body.salesOrderId ?? null,
+          purchaseOrderId: body.purchaseOrderId ?? null,
+          type: body.type,
+          status: InvoiceStatus.DRAFT,
+          number: number!,
+          date: new Date(body.date),
+          dueDate: body.dueDate ? new Date(body.dueDate) : null,
+          notes: body.notes ?? null,
+          totalNet,
+          totalTax,
+          totalGross,
+          lines: {
+            create: lineData.map((l) => ({ ...l, tenantId })),
+          },
+        },
+        include: {
+          lines: true,
+          contact: { select: { id: true, name: true } },
+        },
+      });
+
+      // History kaydı
+      await tx.invoiceHistory.create({
+        data: { tenantId, invoiceId: newInvoice.id, toStatus: InvoiceStatus.DRAFT, notes: 'Fatura oluşturuldu' },
+      });
+
+      // AccountEntry: cari hesap hareketi
+      await writeInvoiceAccountEntry(tx, {
         tenantId,
         contactId: body.contactId,
-        type: body.type,
-        status: InvoiceStatus.DRAFT,
-        number,
-        date: new Date(body.date),
-        dueDate: body.dueDate ? new Date(body.dueDate) : null,
-        notes: body.notes ?? null,
-        totalNet,
-        totalTax,
+        invoiceId: newInvoice.id,
+        invoiceNumber: newInvoice.number,
+        invoiceType: body.type,
         totalGross,
-        lines: {
-          create: lineData.map((l) => ({ ...l, tenantId })),
-        },
-      },
-      include: {
-        lines: true,
-        contact: { select: { id: true, name: true } },
-      },
+        date: new Date(body.date),
+        userId,
+      });
+
+      // SalesOrder.invoicedAmount güncelle
+      if (body.salesOrderId && (body.type === 'SALES' || body.type === 'RETURN_SALES')) {
+        await tx.salesOrder.update({
+          where: { id: body.salesOrderId },
+          data: { invoicedAmount: { increment: totalGross } },
+        });
+      }
+
+      return newInvoice;
     });
 
-    // History kaydı
-    await prisma.invoiceHistory.create({
-      data: { tenantId, invoiceId: invoice.id, toStatus: InvoiceStatus.DRAFT, notes: 'Fatura oluşturuldu' },
+    // Audit log (fire-and-forget)
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'invoicing',
+      entityType: EntityType.INVOICE,
+      entityId: invoice.id,
+      action: AuditAction.CREATE,
+      newValues: { number: invoice.number, type: body.type, totalGross, contactId: body.contactId },
+      ipAddress,
+      userAgent,
     });
 
     return c.json({ data: invoice }, 201);
@@ -241,6 +300,8 @@ export const InvoiceController = {
 
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
     const invoiceId = c.req.param('id');
 
     const invoice = await prisma.invoice.findFirst({
@@ -268,10 +329,18 @@ export const InvoiceController = {
       },
     });
 
-    // Status değiştiyse history kaydı
     if (body.status && body.status !== invoice.status) {
       await prisma.invoiceHistory.create({
         data: { tenantId, invoiceId: invoiceId!, fromStatus: invoice.status, toStatus: body.status },
+      });
+
+      await createAuditLog(prisma, {
+        tenantId, userId, module: 'invoicing',
+        entityType: EntityType.INVOICE, entityId: invoiceId!,
+        action: AuditAction.UPDATE,
+        oldValues: { status: invoice.status },
+        newValues: { status: body.status },
+        ipAddress, userAgent,
       });
     }
 
@@ -280,6 +349,8 @@ export const InvoiceController = {
 
   async cancel(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
     const invoiceId = c.req.param('id');
 
     const invoice = await prisma.invoice.findFirst({
@@ -297,13 +368,46 @@ export const InvoiceController = {
       return c.json(new ValidationError('Ödenmiş fatura iptal edilemez.').toJSON(), 400);
     }
 
-    const updated = await prisma.invoice.update({
-      where: { id: invoiceId },
-      data: { status: InvoiceStatus.CANCELLED },
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.invoice.update({
+        where: { id: invoiceId },
+        data: { status: InvoiceStatus.CANCELLED },
+      });
+
+      await tx.invoiceHistory.create({
+        data: { tenantId, invoiceId: invoiceId!, fromStatus: invoice.status, toStatus: InvoiceStatus.CANCELLED, notes: 'Fatura iptal edildi' },
+      });
+
+      // AccountEntry: ters kayıt
+      await reverseInvoiceAccountEntry(tx, {
+        tenantId,
+        contactId: invoice.contactId,
+        invoiceId: invoiceId!,
+        invoiceNumber: invoice.number,
+        invoiceType: invoice.type,
+        totalGross: Number(invoice.totalGross),
+        date: new Date(),
+        userId,
+      });
+
+      // SalesOrder.invoicedAmount geri al
+      if (invoice.salesOrderId && (invoice.type === 'SALES' || invoice.type === 'RETURN_SALES')) {
+        await tx.salesOrder.update({
+          where: { id: invoice.salesOrderId },
+          data: { invoicedAmount: { decrement: Number(invoice.totalGross) } },
+        });
+      }
+
+      return result;
     });
 
-    await prisma.invoiceHistory.create({
-      data: { tenantId, invoiceId: invoiceId!, fromStatus: invoice.status, toStatus: InvoiceStatus.CANCELLED, notes: 'Fatura iptal edildi' },
+    await createAuditLog(prisma, {
+      tenantId, userId, module: 'invoicing',
+      entityType: EntityType.INVOICE, entityId: invoiceId!,
+      action: AuditAction.UPDATE,
+      oldValues: { status: invoice.status },
+      newValues: { status: InvoiceStatus.CANCELLED },
+      ipAddress, userAgent,
     });
 
     return c.json({ data: updated });

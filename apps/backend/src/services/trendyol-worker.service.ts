@@ -18,7 +18,7 @@ import {
   buildTrendyolCredentials,
   mapTrendyolOrderStatus,
 } from './trendyol.service';
-import { MarketplaceOrderStatus, Prisma } from '@prisma/client';
+import { MarketplaceOrderStatus, Prisma, SyncJobType, SyncJobStatus } from '@prisma/client';
 
 // ---------------------------------------------
 // Config
@@ -32,7 +32,8 @@ const FIFTEEN_MIN_MS = 15 * 60_000;
 // Job param types
 // ---------------------------------------------
 
-export type JobType = 'SYNC_ORDERS' | 'SYNC_STOCK';
+// Re-export for backwards compatibility
+export type { SyncJobType as JobType };
 
 export interface SyncOrdersParams {
   hoursBack?: number;
@@ -70,14 +71,14 @@ export const TrendyolWorker = {
   async enqueue(
     tenantId: string,
     integrationId: string,
-    jobType: JobType,
+    jobType: SyncJobType,
     params: JobParams = {},
   ): Promise<string> {
     const job = await prisma.marketplaceSyncJob.create({
       data: {
         tenantId, integrationId, jobType,
         params: params as Prisma.InputJsonValue,
-        status: 'PENDING',
+        status: SyncJobStatus.PENDING,
       },
     });
     logger.info(`[TrendyolWorker] Enqueued ${jobType} job ${job.id}`);
@@ -125,14 +126,14 @@ async function claimNextJob() {
 
   // Single-process path -- simple findFirst + update
   const job = await prisma.marketplaceSyncJob.findFirst({
-    where: { status: 'PENDING' },
+    where: { status: SyncJobStatus.PENDING },
     orderBy: { createdAt: 'asc' },
   });
   if (!job) return null;
 
   await prisma.marketplaceSyncJob.update({
     where: { id: job.id },
-    data: { status: 'RUNNING', startedAt: new Date() },
+    data: { status: SyncJobStatus.RUNNING, startedAt: new Date() },
   });
   return job;
 }
@@ -170,14 +171,14 @@ async function processPendingJobs() {
 
   try {
     const result = await Promise.race([
-      runJob(job.tenantId, job.integrationId, job.jobType as JobType, (job.params ?? {}) as JobParams),
+      runJob(job.tenantId, job.integrationId, job.jobType, (job.params ?? {}) as JobParams),
       timeout,
     ]);
 
     await prisma.marketplaceSyncJob.update({
       where: { id: job.id },
       data: {
-        status: 'DONE',
+        status: SyncJobStatus.DONE,
         finishedAt: new Date(),
         processedCount: result.processedCount,
         errorCount: result.errorCount,
@@ -190,7 +191,7 @@ async function processPendingJobs() {
     logger.error(`[TrendyolWorker] Job ${job.id} failed: ${msg}`);
     await prisma.marketplaceSyncJob.update({
       where: { id: job.id },
-      data: { status: 'FAILED', finishedAt: new Date(), errorMessage: msg, errorCount: 1 },
+      data: { status: SyncJobStatus.FAILED, finishedAt: new Date(), errorMessage: msg, errorCount: 1 },
     });
     await prisma.marketplaceIntegration.update({
       where: { id: job.integrationId },
@@ -212,7 +213,7 @@ interface JobResult {
 async function runJob(
   tenantId: string,
   integrationId: string,
-  jobType: JobType,
+  jobType: SyncJobType,
   params: JobParams,
 ): Promise<JobResult> {
   const integration = await prisma.marketplaceIntegration.findFirst({
@@ -222,8 +223,8 @@ async function runJob(
   const creds = buildTrendyolCredentials(integration);
 
   switch (jobType) {
-    case 'SYNC_ORDERS': return runSyncOrders(tenantId, integrationId, creds, params as SyncOrdersParams);
-    case 'SYNC_STOCK':  return runSyncStock(tenantId, integrationId, creds, params as SyncStockParams);
+    case SyncJobType.SYNC_ORDERS: return runSyncOrders(tenantId, integrationId, creds, params as SyncOrdersParams);
+    case SyncJobType.SYNC_STOCK:  return runSyncStock(tenantId, integrationId, creds, params as SyncStockParams);
     default: throw new Error(`Unknown job type: ${jobType}`);
   }
 }
@@ -345,7 +346,7 @@ async function runSyncStock(
 
     if (!params.force && snap) {
       const sameValues =
-        snap.lastSentQty === qty &&
+        Number(snap.lastSentQty) === qty &&
         Number(snap.lastSentSalePrice) === salePrice &&
         Number(snap.lastSentListPrice) === listPrice;
       const withinWindow = now - snap.lastSentAt.getTime() < FIFTEEN_MIN_MS;

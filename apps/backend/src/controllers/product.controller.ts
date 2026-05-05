@@ -1,7 +1,9 @@
 import { Context } from 'hono';
+import { AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -131,6 +133,8 @@ export const ProductController = {
    */
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
 
     const body = await c.req.json<CreateProductDTO>();
 
@@ -173,6 +177,14 @@ export const ProductController = {
         unit: { select: { id: true, name: true, code: true } },
         taxRate: { select: { id: true, name: true, rate: true } },
       },
+    });
+
+    await createAuditLog(prisma, {
+      tenantId, userId, module: 'inventory',
+      entityType: EntityType.PRODUCT, entityId: product.id,
+      action: AuditAction.CREATE,
+      newValues: { code: product.code, name: product.name },
+      ipAddress, userAgent,
     });
 
     return c.json({ data: product }, 201);

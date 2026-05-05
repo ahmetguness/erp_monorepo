@@ -3,8 +3,9 @@
 // ─────────────────────────────────────────────
 
 /**
- * Uygulama modülleri — Prisma schema'daki AppModule enum ile senkron tutulur.
- * AppModule Prisma tarafından generate edilmediği için burada tanımlanır.
+ * Uygulama modülleri.
+ * NOT: Prisma schema'da AppModule enum tanımlı ama Tenant.modules String[] olduğu için
+ * Prisma client bu enum'u generate etmez. Bu enum uygulama katmanında kullanılır.
  */
 export enum AppModule {
   ACCOUNTING  = 'ACCOUNTING',
@@ -19,7 +20,7 @@ export enum AppModule {
   PAYROLL     = 'PAYROLL',
   MARKETPLACE = 'MARKETPLACE',
   REPORTING   = 'REPORTING',
-  // Ek modüller — MODULE_KEYS ile eşleşmesi için
+  // Schema ile senkron — CONTACTS, INVOICING, APPROVALS eklendi
   CONTACTS    = 'CONTACTS',
   INVOICING   = 'INVOICING',
   APPROVALS   = 'APPROVALS',
@@ -27,7 +28,7 @@ export enum AppModule {
 
 /**
  * Uygulama içinde kullanılan modül string sabitleri (lowercase).
- * Tenant.modules string[] alanıyla eşleşir.
+ * Tenant.modules String[] alanıyla eşleşir.
  */
 export const MODULE_KEYS = {
   ACCOUNTING  : 'accounting',
