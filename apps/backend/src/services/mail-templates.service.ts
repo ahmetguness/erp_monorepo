@@ -136,6 +136,40 @@ export function demoReadyEmail(
   };
 }
 
+// ── Admin tenant oluşturma – şifre belirleme ──
+export function tenantReadyEmail(
+  name: string,
+  companyName: string,
+  plan: string,
+  setPasswordUrl: string,
+) {
+  const planLabel = plan === 'STARTER' ? 'Starter' : plan === 'PROFESSIONAL' ? 'Professional' : 'Enterprise';
+
+  return {
+    subject: 'Axon ERP hesabınız hazır',
+    html: baseLayout(`
+      <h2 style="margin:0 0 16px;color:#1e293b;">Merhaba ${name},</h2>
+      <p style="color:#475569;line-height:1.6;">
+        <strong>${companyName}</strong> için Axon ERP hesabınız oluşturuldu.
+      </p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;padding:16px;border-radius:6px;margin:16px 0;">
+        <p style="margin:0;color:#334155;">Plan: <strong>${planLabel}</strong></p>
+      </div>
+      <p style="color:#475569;line-height:1.6;">
+        Hesabınıza erişmek için önce şifrenizi belirlemeniz gerekmektedir:
+      </p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${setPasswordUrl}" style="display:inline-block;padding:14px 36px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:16px;">
+          Şifremi Belirle
+        </a>
+      </div>
+      <p style="color:#94a3b8;font-size:13px;">
+        Bu link 1 saat geçerlidir.
+      </p>
+    `),
+  };
+}
+
 // ── Enterprise demo – satış ekibine bildirim ─
 export function demoEnterpriseNotifyEmail(
   fullName: string,

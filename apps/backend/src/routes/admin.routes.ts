@@ -19,6 +19,7 @@ adminRoutes.get('/auth/me', requireAdmin, AdminAuthController.me);
 
 // Tenants
 adminRoutes.get('/tenants', requireAdmin, AdminTenantController.list);
+adminRoutes.post('/tenants', requireAdmin, AdminTenantController.create);
 adminRoutes.get('/tenants/:id', requireAdmin, AdminTenantController.getById);
 adminRoutes.patch('/tenants/:id', requireAdmin, AdminTenantController.updateTenant);
 adminRoutes.post('/tenants/:id/plan', requireAdmin, AdminTenantController.updatePlan);

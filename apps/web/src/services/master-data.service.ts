@@ -17,9 +17,9 @@ export const UnitSchema = z.object({
 export const CategorySchema: z.ZodType<CategoryItem> = z.lazy(() =>
   z.object({
     id: z.string(),
-    tenantId: z.string(),
+    tenantId: z.string().optional(),
     name: z.string(),
-    parentId: z.string().nullable(),
+    parentId: z.string().nullable().optional(),
     children: z.array(CategorySchema).optional(),
   }),
 );
@@ -50,9 +50,9 @@ export type Unit = z.infer<typeof UnitSchema>;
 
 export interface CategoryItem {
   id: string;
-  tenantId: string;
+  tenantId?: string;
   name: string;
-  parentId: string | null;
+  parentId?: string | null;
   children?: CategoryItem[];
 }
 

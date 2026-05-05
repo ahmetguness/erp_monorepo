@@ -36,6 +36,25 @@ export interface TenantMetrics {
   counts: { users: number; products: number; contacts: number; invoices: number; salesOrders: number; purchaseOrders: number; payments: number; warehouses: number; stockLevels: number; journalEntries: number };
 }
 
+export interface CreateTenantInput {
+  companyName: string;
+  email: string;
+  ownerName: string;
+  slug?: string;
+  phone?: string;
+  city?: string;
+  sector?: string;
+  plan?: string;
+  status?: string;
+  maxUsers?: number | null;
+  modules?: string[];
+  notes?: string;
+  isCustomPricing?: boolean;
+  trialEndsAt?: string | null;
+  subscriptionStart?: string | null;
+  subscriptionEnd?: string | null;
+}
+
 // ─────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────
@@ -61,6 +80,11 @@ export async function getTenants(params?: { page?: number; limit?: number; statu
 
 export async function getTenantById(id: string): Promise<TenantDetail> {
   const res = await adminApiClient.get(`/api/admin/tenants/${id}`);
+  return res.data.data;
+}
+
+export async function createTenant(data: CreateTenantInput): Promise<{ id: string }> {
+  const res = await adminApiClient.post('/api/admin/tenants', data);
   return res.data.data;
 }
 

@@ -1,15 +1,104 @@
 import { Context } from 'hono';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { Plan, TenantStatus, AuditAction } from '@prisma/client';
+import { AuditAction, EntityType, Plan, Prisma, TenantStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ValidationError, NotFoundError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { sendMail } from '../services/mail.service.js';
+import { tenantReadyEmail } from '../services/mail-templates.service.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
 
 const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || JWT_SECRET + '_admin';
+const VALID_PLANS = Object.values(Plan);
+const VALID_STATUSES = Object.values(TenantStatus);
+const VALID_MODULES = [
+  'accounting', 'inventory', 'crm', 'sales', 'purchasing', 'warehouse',
+  'production', 'service', 'hr', 'payroll', 'marketplace', 'reporting',
+  'contacts', 'invoicing', 'approvals',
+];
+
+function normalizeEmail(email: string): string {
+  return email.toLowerCase().trim();
+}
+
+function createSlug(input: string): string {
+  const slug = input
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+  return slug || `tenant-${Date.now()}`;
+}
+
+function parseNullableDate(value: string | null | undefined, field: string): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new ValidationError(`${field} için geçerli bir tarih giriniz.`);
+  return date;
+}
+
+function validateModules(modules: string[] | undefined): string[] | undefined {
+  if (modules === undefined) return undefined;
+  if (!Array.isArray(modules)) throw new ValidationError('modules alanı liste olmalıdır.');
+
+  const uniqueModules = Array.from(new Set(modules.map((module) => module.trim().toLowerCase()).filter(Boolean)));
+  const invalidModules = uniqueModules.filter((module) => !VALID_MODULES.includes(module));
+  if (invalidModules.length > 0) {
+    throw new ValidationError(`Geçersiz modül: ${invalidModules.join(', ')}`);
+  }
+  return uniqueModules;
+}
+
+function formatNotificationValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return 'boş';
+  if (value instanceof Date) return value.toLocaleDateString('tr-TR');
+  if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : 'boş';
+  if (typeof value === 'boolean') return value ? 'Evet' : 'Hayır';
+  return String(value);
+}
+
+function buildChangeLine(label: string, oldValue: unknown, newValue: unknown): string | null {
+  const oldText = formatNotificationValue(oldValue);
+  const newText = formatNotificationValue(newValue);
+  if (oldText === newText) return null;
+  return `${label}: ${oldText} → ${newText}`;
+}
+
+async function notifyTenantOwners(
+  db: typeof prisma | Prisma.TransactionClient,
+  tenantId: string,
+  title: string,
+  changeLines: string[],
+): Promise<void> {
+  try {
+    const owners = await db.tenantUser.findMany({
+      where: { tenantId, isOwner: true, isActive: true },
+      select: { userId: true },
+    });
+    if (owners.length === 0 || changeLines.length === 0) return;
+
+    await db.notification.createMany({
+      data: owners.map((owner) => ({
+        tenantId,
+        userId: owner.userId,
+        title,
+        message: changeLines.join('\n'),
+        module: 'admin',
+        entityType: EntityType.OTHER,
+        entityId: tenantId,
+      })),
+    });
+  } catch {
+    // Bildirim hatası admin işlemini durdurmamalı.
+  }
+}
 
 // ─────────────────────────────────────────────
 // Admin Auth
@@ -53,6 +142,13 @@ export const AdminTenantController = {
     const plan = c.req.query('plan') as Plan | undefined;
     const search = c.req.query('search');
 
+    if (status && !VALID_STATUSES.includes(status)) {
+      return c.json(new ValidationError('Geçerli bir durum seçiniz.').toJSON(), 400);
+    }
+    if (plan && !VALID_PLANS.includes(plan)) {
+      return c.json(new ValidationError('Geçerli bir plan seçiniz.').toJSON(), 400);
+    }
+
     const where = {
       deletedAt: null,
       ...(status && { status }),
@@ -87,6 +183,141 @@ export const AdminTenantController = {
     return c.json({ data: tenants, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
   },
 
+  async create(c: Context): Promise<Response> {
+    const body = await c.req.json<{
+      companyName: string; email: string; ownerName: string;
+      slug?: string; phone?: string; city?: string; sector?: string;
+      plan?: Plan; status?: TenantStatus; maxUsers?: number | null;
+      modules?: string[]; notes?: string; isCustomPricing?: boolean;
+      trialEndsAt?: string | null; subscriptionStart?: string | null; subscriptionEnd?: string | null;
+    }>();
+
+    if (!body.companyName?.trim() || !body.email?.trim() || !body.ownerName?.trim()) {
+      return c.json(new ValidationError('companyName, email ve ownerName zorunludur.').toJSON(), 400);
+    }
+
+    const email = normalizeEmail(body.email);
+    const plan = body.plan ?? Plan.STARTER;
+    const status = body.status ?? TenantStatus.TRIAL;
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return c.json(new ValidationError('Geçerli bir e-posta adresi giriniz.').toJSON(), 400);
+    }
+    if (!VALID_PLANS.includes(plan)) return c.json(new ValidationError('Geçerli bir plan seçiniz.').toJSON(), 400);
+    if (!VALID_STATUSES.includes(status)) return c.json(new ValidationError('Geçerli bir durum seçiniz.').toJSON(), 400);
+    if (body.maxUsers !== undefined && body.maxUsers !== null && (!Number.isInteger(body.maxUsers) || body.maxUsers < 1)) {
+      return c.json(new ValidationError('maxUsers pozitif bir tam sayı veya boş olmalıdır.').toJSON(), 400);
+    }
+
+    let modules: string[] | undefined;
+    let trialEndsAt: Date | null | undefined;
+    let subscriptionStart: Date | null | undefined;
+    let subscriptionEnd: Date | null | undefined;
+    try {
+      modules = validateModules(body.modules);
+      trialEndsAt = parseNullableDate(body.trialEndsAt, 'trialEndsAt');
+      subscriptionStart = parseNullableDate(body.subscriptionStart, 'subscriptionStart');
+      subscriptionEnd = parseNullableDate(body.subscriptionEnd, 'subscriptionEnd');
+    } catch (error) {
+      if (error instanceof ValidationError) return c.json(error.toJSON(), 400);
+      throw error;
+    }
+
+    const baseSlug = createSlug(body.slug?.trim() || body.companyName);
+    const slugExists = await prisma.tenant.findUnique({ where: { slug: baseSlug } });
+    const slug = slugExists ? `${baseSlug}-${Date.now()}` : baseSlug;
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const setPasswordToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const setPasswordExpiry = new Date(Date.now() + 60 * 60 * 1000);
+    const tempPassword = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 12);
+    const meta = getRequestMeta(c);
+
+    const result = await prisma.$transaction(async (tx) => {
+      let user = await tx.user.findUnique({ where: { email } });
+
+      if (!user) {
+        user = await tx.user.create({
+          data: {
+            email,
+            name: body.ownerName.trim(),
+            phone: body.phone?.trim() || null,
+            password: tempPassword,
+            passwordResetToken: setPasswordToken,
+            passwordResetExpiry: setPasswordExpiry,
+          },
+        });
+      } else {
+        user = await tx.user.update({
+          where: { id: user.id },
+          data: {
+            name: body.ownerName.trim(),
+            phone: body.phone?.trim() || user.phone,
+            passwordResetToken: setPasswordToken,
+            passwordResetExpiry: setPasswordExpiry,
+          },
+        });
+      }
+
+      const tenant = await tx.tenant.create({
+        data: {
+          slug,
+          companyName: body.companyName.trim(),
+          email,
+          phone: body.phone?.trim() || null,
+          city: body.city?.trim() || null,
+          sector: body.sector?.trim() || null,
+          plan,
+          status,
+          maxUsers: body.maxUsers ?? null,
+          modules: modules ?? [],
+          notes: body.notes?.trim() || null,
+          isCustomPricing: body.isCustomPricing ?? false,
+          trialEndsAt,
+          subscriptionStart,
+          subscriptionEnd,
+          planChangedAt: new Date(),
+        },
+        select: {
+          id: true, slug: true, companyName: true, email: true, phone: true,
+          plan: true, status: true, city: true, sector: true,
+          maxUsers: true, trialEndsAt: true, subscriptionStart: true, subscriptionEnd: true,
+          planChangedAt: true, isCustomPricing: true, modules: true, notes: true,
+          createdAt: true, updatedAt: true,
+        },
+      });
+
+      await tx.tenantUser.create({
+        data: { tenantId: tenant.id, userId: user.id, isOwner: true, isActive: true },
+      });
+
+      await createAuditLog(tx, {
+        tenantId: tenant.id,
+        module: 'admin',
+        entityType: EntityType.OTHER,
+        entityId: tenant.id,
+        action: AuditAction.CREATE,
+        newValues: { tenantId: tenant.id, slug: tenant.slug, plan: tenant.plan, status: tenant.status },
+        ...meta,
+      });
+
+      await notifyTenantOwners(tx, tenant.id, 'Tenant hesabınız oluşturuldu', [
+        `Şirket: ${tenant.companyName}`,
+        `Plan: ${tenant.plan}`,
+        `Durum: ${tenant.status}`,
+        `Modüller: ${formatNotificationValue(tenant.modules)}`,
+      ]);
+
+      return tenant;
+    });
+
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const setPasswordUrl = `${appUrl}/set-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
+    const template = tenantReadyEmail(body.ownerName.trim(), result.companyName, result.plan, setPasswordUrl);
+    await sendMail({ to: email, ...template });
+
+    return c.json({ data: result }, 201);
+  },
+
   async getById(c: Context): Promise<Response> {
     const id = c.req.param('id')!;
     const tenant = await prisma.tenant.findFirst({
@@ -109,7 +340,7 @@ export const AdminTenantController = {
   async updatePlan(c: Context): Promise<Response> {
     const id = c.req.param('id')!;
     const body = await c.req.json<{ plan: Plan }>();
-    if (!body.plan || !['STARTER', 'PROFESSIONAL', 'ENTERPRISE'].includes(body.plan)) {
+    if (!body.plan || !VALID_PLANS.includes(body.plan)) {
       return c.json(new ValidationError('Geçerli bir plan seçiniz: STARTER, PROFESSIONAL, ENTERPRISE').toJSON(), 400);
     }
 
@@ -121,13 +352,28 @@ export const AdminTenantController = {
       data: { plan: body.plan, planChangedAt: new Date() },
     });
 
+    await createAuditLog(prisma, {
+      tenantId: id,
+      module: 'admin',
+      entityType: EntityType.OTHER,
+      entityId: id,
+      action: AuditAction.UPDATE,
+      oldValues: { plan: tenant.plan },
+      newValues: { plan: updated.plan },
+      ...getRequestMeta(c),
+    });
+
+    await notifyTenantOwners(prisma, id, 'Planınız admin tarafından değiştirildi', [
+      `Plan: ${tenant.plan} → ${updated.plan}`,
+    ]);
+
     return c.json({ data: updated });
   },
 
   async updateStatus(c: Context): Promise<Response> {
     const id = c.req.param('id')!;
     const body = await c.req.json<{ status: TenantStatus }>();
-    if (!body.status || !['TRIAL', 'ACTIVE', 'SUSPENDED', 'CANCELLED'].includes(body.status)) {
+    if (!body.status || !VALID_STATUSES.includes(body.status)) {
       return c.json(new ValidationError('Geçerli bir durum seçiniz.').toJSON(), 400);
     }
 
@@ -138,6 +384,21 @@ export const AdminTenantController = {
       where: { id },
       data: { status: body.status },
     });
+
+    await createAuditLog(prisma, {
+      tenantId: id,
+      module: 'admin',
+      entityType: EntityType.OTHER,
+      entityId: id,
+      action: AuditAction.UPDATE,
+      oldValues: { status: tenant.status },
+      newValues: { status: updated.status },
+      ...getRequestMeta(c),
+    });
+
+    await notifyTenantOwners(prisma, id, 'Tenant durumunuz admin tarafından değiştirildi', [
+      `Durum: ${tenant.status} → ${updated.status}`,
+    ]);
 
     return c.json({ data: updated });
   },
@@ -153,18 +414,72 @@ export const AdminTenantController = {
     const tenant = await prisma.tenant.findFirst({ where: { id, deletedAt: null } });
     if (!tenant) return c.json(new NotFoundError('Tenant', id).toJSON(), 404);
 
+    let modules: string[] | undefined;
+    let trialEndsAt: Date | null | undefined;
+    let subscriptionStart: Date | null | undefined;
+    let subscriptionEnd: Date | null | undefined;
+    try {
+      modules = validateModules(body.modules);
+      trialEndsAt = parseNullableDate(body.trialEndsAt, 'trialEndsAt');
+      subscriptionStart = parseNullableDate(body.subscriptionStart, 'subscriptionStart');
+      subscriptionEnd = parseNullableDate(body.subscriptionEnd, 'subscriptionEnd');
+    } catch (error) {
+      if (error instanceof ValidationError) return c.json(error.toJSON(), 400);
+      throw error;
+    }
+    if (body.maxUsers !== undefined && body.maxUsers !== null && (!Number.isInteger(body.maxUsers) || body.maxUsers < 1)) {
+      return c.json(new ValidationError('maxUsers pozitif bir tam sayı veya boş olmalıdır.').toJSON(), 400);
+    }
+
     const updated = await prisma.tenant.update({
       where: { id },
       data: {
         ...(body.maxUsers !== undefined && { maxUsers: body.maxUsers }),
-        ...(body.modules !== undefined && { modules: body.modules }),
+        ...(modules !== undefined && { modules }),
         ...(body.notes !== undefined && { notes: body.notes }),
         ...(body.isCustomPricing !== undefined && { isCustomPricing: body.isCustomPricing }),
-        ...(body.trialEndsAt !== undefined && { trialEndsAt: body.trialEndsAt ? new Date(body.trialEndsAt) : null }),
-        ...(body.subscriptionStart !== undefined && { subscriptionStart: body.subscriptionStart ? new Date(body.subscriptionStart) : null }),
-        ...(body.subscriptionEnd !== undefined && { subscriptionEnd: body.subscriptionEnd ? new Date(body.subscriptionEnd) : null }),
+        ...(trialEndsAt !== undefined && { trialEndsAt }),
+        ...(subscriptionStart !== undefined && { subscriptionStart }),
+        ...(subscriptionEnd !== undefined && { subscriptionEnd }),
       },
     });
+
+    await createAuditLog(prisma, {
+      tenantId: id,
+      module: 'admin',
+      entityType: EntityType.OTHER,
+      entityId: id,
+      action: AuditAction.UPDATE,
+      oldValues: {
+        maxUsers: tenant.maxUsers,
+        modules: tenant.modules,
+        notes: tenant.notes,
+        isCustomPricing: tenant.isCustomPricing,
+        trialEndsAt: tenant.trialEndsAt,
+        subscriptionStart: tenant.subscriptionStart,
+        subscriptionEnd: tenant.subscriptionEnd,
+      },
+      newValues: {
+        maxUsers: updated.maxUsers,
+        modules: updated.modules,
+        notes: updated.notes,
+        isCustomPricing: updated.isCustomPricing,
+        trialEndsAt: updated.trialEndsAt,
+        subscriptionStart: updated.subscriptionStart,
+        subscriptionEnd: updated.subscriptionEnd,
+      },
+      ...getRequestMeta(c),
+    });
+
+    await notifyTenantOwners(prisma, id, 'Tenant ayarlarınız admin tarafından güncellendi', [
+      buildChangeLine('Maksimum kullanıcı', tenant.maxUsers, updated.maxUsers),
+      buildChangeLine('Modüller', tenant.modules, updated.modules),
+      buildChangeLine('Notlar', tenant.notes, updated.notes),
+      buildChangeLine('Özel fiyatlandırma', tenant.isCustomPricing, updated.isCustomPricing),
+      buildChangeLine('Deneme bitiş tarihi', tenant.trialEndsAt, updated.trialEndsAt),
+      buildChangeLine('Abonelik başlangıcı', tenant.subscriptionStart, updated.subscriptionStart),
+      buildChangeLine('Abonelik bitişi', tenant.subscriptionEnd, updated.subscriptionEnd),
+    ].filter((line): line is string => Boolean(line)));
 
     return c.json({ data: updated });
   },
@@ -205,6 +520,10 @@ export const AdminFeatureController = {
       return c.json(new ValidationError('tenantId, featureKey ve value zorunludur.').toJSON(), 400);
     }
 
+    const existingOverride = await prisma.tenantFeatureOverride.findUnique({
+      where: { tenantId_featureKey: { tenantId: body.tenantId, featureKey: body.featureKey as never } },
+    });
+
     const override = await prisma.tenantFeatureOverride.upsert({
       where: { tenantId_featureKey: { tenantId: body.tenantId, featureKey: body.featureKey as never } },
       create: {
@@ -223,12 +542,27 @@ export const AdminFeatureController = {
       },
     });
 
+    await notifyTenantOwners(prisma, body.tenantId, 'Tenant özellik ayarınız admin tarafından değiştirildi', [
+      `Özellik: ${body.featureKey}`,
+      buildChangeLine('Değer', existingOverride?.value, override.value),
+      buildChangeLine('Aktiflik', existingOverride?.isEnabled, override.isEnabled),
+      buildChangeLine('Gerekçe', existingOverride?.reason, override.reason),
+      buildChangeLine('Bitiş tarihi', existingOverride?.expiresAt, override.expiresAt),
+    ].filter((line): line is string => Boolean(line)));
+
     return c.json({ data: override });
   },
 
   async deleteOverride(c: Context): Promise<Response> {
     const id = c.req.param('id')!;
+    const override = await prisma.tenantFeatureOverride.findUnique({ where: { id } });
     await prisma.tenantFeatureOverride.delete({ where: { id } }).catch(() => null);
+    if (override) {
+      await notifyTenantOwners(prisma, override.tenantId, 'Tenant özellik ayarınız admin tarafından kaldırıldı', [
+        `Özellik: ${override.featureKey}`,
+        `Kaldırılan değer: ${formatNotificationValue(override.value)}`,
+      ]);
+    }
     return c.json({ data: { success: true } });
   },
 };

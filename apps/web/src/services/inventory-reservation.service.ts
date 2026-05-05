@@ -11,9 +11,10 @@ export const ReservationSchema = z.object({
   id: z.string(), tenantId: z.string(), productId: z.string(), warehouseId: z.string(),
   quantity: z.coerce.number(),
   refType: z.enum(['SALES_ORDER', 'WORK_ORDER', 'PURCHASE_REQUEST', 'OTHER']),
-  refId: z.string(), notes: z.string().nullable(),
-  reservedAt: z.string(), releasedAt: z.string().nullable(), expiresAt: z.string().nullable(),
-  createdAt: z.string(),
+  refId: z.string(), notes: z.string().nullable().optional(),
+  reservedAt: z.string(), releasedAt: z.string().nullable().optional(),
+  expiresAt: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
   product: ProductRef.optional(), warehouse: WarehouseRef.optional(),
 });
 
