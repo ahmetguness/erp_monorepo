@@ -98,13 +98,32 @@ const ENTERPRISE_FEATURES: PlanFeatures = {
 export function usePlanFeatures(): PlanFeatures {
   const tenant = useAuthStore((s) => s.tenant);
   const plan = tenant?.plan ?? null;
+  const modules = tenant?.modules ?? [];
 
+  let baseFeatures: PlanFeatures;
   switch (plan) {
-    case Plan.ENTERPRISE: return ENTERPRISE_FEATURES;
-    case Plan.PROFESSIONAL: return PROFESSIONAL_FEATURES;
+    case Plan.ENTERPRISE: baseFeatures = ENTERPRISE_FEATURES; break;
+    case Plan.PROFESSIONAL: baseFeatures = PROFESSIONAL_FEATURES; break;
     case Plan.STARTER:
-    default: return STARTER_FEATURES;
+    default: baseFeatures = STARTER_FEATURES; break;
   }
+
+  if (modules.length > 0) {
+    const overrideFeatures: Partial<PlanFeatures> = {};
+    if (modules.includes('inventory') || modules.includes('warehouse')) overrideFeatures.multiWarehouse = true;
+    if (modules.includes('roles')) overrideFeatures.roleManagement = true;
+    if (modules.includes('purchasing')) overrideFeatures.purchasing = true;
+    if (modules.includes('production')) overrideFeatures.production = true;
+    if (modules.includes('service')) overrideFeatures.service = true;
+    if (modules.includes('marketplace')) overrideFeatures.marketplace = true;
+    if (modules.includes('payroll')) overrideFeatures.payroll = true;
+    if (modules.includes('hr')) overrideFeatures.hr = true;
+    if (modules.includes('approvals')) overrideFeatures.approvals = true;
+    
+    return { ...baseFeatures, ...overrideFeatures };
+  }
+
+  return baseFeatures;
 }
 
 /**

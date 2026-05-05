@@ -61,6 +61,17 @@ export const NotificationController = {
     return c.json({ data: { success: true } });
   },
 
+  async deleteAll(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+
+    await prisma.notification.deleteMany({
+      where: { tenantId, ...(userId && { userId }) },
+    });
+
+    return c.json({ data: { success: true } });
+  },
+
   async archive(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const id = c.req.param('id')!;

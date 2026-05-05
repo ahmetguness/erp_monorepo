@@ -64,6 +64,31 @@ function formatNotificationValue(value: unknown): string {
   return String(value);
 }
 
+const MODULE_TRANSLATIONS: Record<string, string> = {
+  accounting: 'Muhasebe',
+  inventory: 'Stok & Depo',
+  crm: 'CRM',
+  sales: 'Satış',
+  purchasing: 'Satın Alma',
+  warehouse: 'Depo Yönetimi',
+  production: 'Üretim',
+  service: 'Teknik Servis',
+  hr: 'İnsan Kaynakları',
+  payroll: 'Bordro',
+  marketplace: 'Pazaryeri',
+  reporting: 'Raporlama',
+  contacts: 'Cari Hesaplar',
+  invoicing: 'Fatura',
+  approvals: 'Onay Akışları',
+};
+
+function translateModules(modules: unknown): unknown {
+  if (Array.isArray(modules)) {
+    return modules.map(m => MODULE_TRANSLATIONS[m as string] || m);
+  }
+  return modules;
+}
+
 function buildChangeLine(label: string, oldValue: unknown, newValue: unknown): string | null {
   const oldText = formatNotificationValue(oldValue);
   const newText = formatNotificationValue(newValue);
@@ -304,7 +329,7 @@ export const AdminTenantController = {
         `Şirket: ${tenant.companyName}`,
         `Plan: ${tenant.plan}`,
         `Durum: ${tenant.status}`,
-        `Modüller: ${formatNotificationValue(tenant.modules)}`,
+        `Modüller: ${formatNotificationValue(translateModules(tenant.modules))}`,
       ]);
 
       return tenant;
@@ -409,6 +434,7 @@ export const AdminTenantController = {
       maxUsers?: number | null; modules?: string[]; notes?: string;
       isCustomPricing?: boolean; trialEndsAt?: string | null;
       subscriptionStart?: string | null; subscriptionEnd?: string | null;
+      notify?: boolean;
     }>();
 
     const tenant = await prisma.tenant.findFirst({ where: { id, deletedAt: null } });
@@ -471,15 +497,18 @@ export const AdminTenantController = {
       ...getRequestMeta(c),
     });
 
-    await notifyTenantOwners(prisma, id, 'Tenant ayarlarınız admin tarafından güncellendi', [
-      buildChangeLine('Maksimum kullanıcı', tenant.maxUsers, updated.maxUsers),
-      buildChangeLine('Modüller', tenant.modules, updated.modules),
-      buildChangeLine('Notlar', tenant.notes, updated.notes),
-      buildChangeLine('Özel fiyatlandırma', tenant.isCustomPricing, updated.isCustomPricing),
-      buildChangeLine('Deneme bitiş tarihi', tenant.trialEndsAt, updated.trialEndsAt),
-      buildChangeLine('Abonelik başlangıcı', tenant.subscriptionStart, updated.subscriptionStart),
-      buildChangeLine('Abonelik bitişi', tenant.subscriptionEnd, updated.subscriptionEnd),
-    ].filter((line): line is string => Boolean(line)));
+    // notify: false gönderilmişse bildirim atlanır (varsayılan: true)
+    if (body.notify !== false) {
+      await notifyTenantOwners(prisma, id, 'Tenant ayarlarınız admin tarafından güncellendi', [
+        buildChangeLine('Maksimum kullanıcı', tenant.maxUsers, updated.maxUsers),
+        buildChangeLine('Modüller', translateModules(tenant.modules), translateModules(updated.modules)),
+        buildChangeLine('Notlar', tenant.notes, updated.notes),
+        buildChangeLine('Özel fiyatlandırma', tenant.isCustomPricing, updated.isCustomPricing),
+        buildChangeLine('Deneme bitiş tarihi', tenant.trialEndsAt, updated.trialEndsAt),
+        buildChangeLine('Abonelik başlangıcı', tenant.subscriptionStart, updated.subscriptionStart),
+        buildChangeLine('Abonelik bitişi', tenant.subscriptionEnd, updated.subscriptionEnd),
+      ].filter((line): line is string => Boolean(line)));
+    }
 
     return c.json({ data: updated });
   },

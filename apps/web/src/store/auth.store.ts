@@ -17,6 +17,8 @@ interface AuthActions {
   login: (user: AuthUser, token: string, tenant: TenantInfo, rememberMe?: boolean) => void;
   logout: () => void;
   updateUser: (user: Partial<AuthUser>) => void;
+  /** Sunucudan gelen güncel tenant + user bilgisini store'a yazar (cookie'ye dokunmaz). */
+  syncFromServer: (user: AuthUser, tenant: TenantInfo) => void;
 }
 
 type AuthStore = AuthState & AuthActions;
@@ -57,6 +59,9 @@ export const useAuthStore = create<AuthStore>()(
         set((state) => ({
           user: state.user ? { ...state.user, ...partial } : null,
         })),
+
+      syncFromServer: (user, tenant) =>
+        set({ user, tenant }),
     }),
     {
       name: 'axon-auth',

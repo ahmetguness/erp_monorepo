@@ -8,6 +8,7 @@ notificationRoutes.get('/', NotificationController.list);
 notificationRoutes.post('/read-all', NotificationController.markAllAsRead);
 notificationRoutes.post('/:id/read', NotificationController.markAsRead);
 notificationRoutes.post('/:id/archive', NotificationController.archive);
+notificationRoutes.delete('/all', NotificationController.deleteAll);
 notificationRoutes.delete('/:id', NotificationController.delete);
 
 export { notificationRoutes };

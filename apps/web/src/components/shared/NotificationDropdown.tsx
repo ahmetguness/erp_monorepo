@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Bell, Check, CheckCheck, Trash2, X } from 'lucide-react';
-import { useNotifications, useMarkAsRead, useMarkAllAsRead, useDeleteNotification } from '@/hooks/useNotifications';
+import { useNotifications, useMarkAsRead, useMarkAllAsRead, useDeleteNotification, useDeleteAllNotifications } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 
 export function NotificationDropdown() {
@@ -12,6 +12,7 @@ export function NotificationDropdown() {
   const markRead = useMarkAsRead();
   const markAllRead = useMarkAllAsRead();
   const deleteNotif = useDeleteNotification();
+  const deleteAll = useDeleteAllNotifications();
 
   const notifications = data?.data ?? [];
   const unreadCount = data?.meta.unreadCount ?? 0;
@@ -55,6 +56,12 @@ export function NotificationDropdown() {
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/60">
             <span className="text-sm font-semibold text-white">Bildirimler</span>
             <div className="flex items-center gap-1">
+              {notifications.length > 0 && (
+                <button onClick={() => deleteAll.mutate()}
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Tümünü temizle">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
               {unreadCount > 0 && (
                 <button onClick={() => markAllRead.mutate()}
                   className="p-1.5 rounded-lg text-slate-500 hover:text-sky-400 hover:bg-sky-500/10 transition-colors" title="Tümünü okundu yap">

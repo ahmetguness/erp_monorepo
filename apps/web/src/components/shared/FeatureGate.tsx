@@ -36,18 +36,20 @@ export function FeatureGate({ feature, plan, children, fallback }: FeatureGatePr
 
   const currentPlan = features.plan ?? 'STARTER';
 
-  // Plan kontrolü
-  if (plan && (PLAN_RANK[currentPlan] ?? 0) < (PLAN_RANK[plan] ?? 0)) {
-    return <>{fallback ?? <UpgradeMessage requiredPlan={plan} />}</>;
-  }
-
-  // Feature kontrolü
+  // 1. Önce Feature kontrolü yap. Eğer feature belirtilmişse ve yetki varsa, plan'ı bypass et.
   if (feature) {
     const flags = Array.isArray(feature) ? feature : [feature];
     const hasAccess = flags.some((f) => features[f] as boolean);
     if (!hasAccess) {
       return <>{fallback ?? <UpgradeMessage requiredPlan={plan ?? 'PROFESSIONAL'} />}</>;
     }
+    // Feature var ve erişim varsa İZİN VER (plan kontrolünü atla)
+    return <>{children}</>;
+  }
+
+  // 2. Eğer sadece plan kısıtı varsa onu kontrol et
+  if (plan && (PLAN_RANK[currentPlan] ?? 0) < (PLAN_RANK[plan] ?? 0)) {
+    return <>{fallback ?? <UpgradeMessage requiredPlan={plan} />}</>;
   }
 
   return <>{children}</>;

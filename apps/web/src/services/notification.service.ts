@@ -36,6 +36,10 @@ export async function deleteNotification(id: string): Promise<void> {
   await apiClient.delete(`/api/notifications/${id}`);
 }
 
+export async function deleteAllNotifications(): Promise<void> {
+  await apiClient.delete('/api/notifications/all');
+}
+
 export async function archiveNotification(id: string): Promise<Notification> {
   const res = await apiClient.post(`/api/notifications/${id}/archive`);
   return safeParse(SingleResponseSchema(NotificationSchema), res.data, 'archiveNotification').data;

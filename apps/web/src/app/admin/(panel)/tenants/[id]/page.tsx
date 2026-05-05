@@ -2,14 +2,17 @@
 
 import { use, useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Users, Package, Receipt, ShoppingCart, Truck, CreditCard, Warehouse, Layers, BookOpen } from 'lucide-react';
+import { ArrowLeft, Users, Package, Receipt, ShoppingCart, Truck, CreditCard, Warehouse, Layers, BookOpen, Plus, Minus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getTenantById, getTenantMetrics, updateTenant, updateTenantPlan, updateTenantStatus } from '@/services/admin.service';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
+import { toast } from '@/store/ui.store';
 
 const PLANS = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'] as const;
+type PlanKey = typeof PLANS[number];
 const STATUSES = ['TRIAL', 'ACTIVE', 'SUSPENDED', 'CANCELLED'] as const;
+
 const MODULE_OPTIONS = [
   { key: 'accounting', label: 'Muhasebe' },
   { key: 'inventory', label: 'Stok' },
@@ -27,6 +30,13 @@ const MODULE_OPTIONS = [
   { key: 'invoicing', label: 'Faturalama' },
   { key: 'approvals', label: 'Onaylar' },
 ] as const;
+
+// Plan bazlı varsayılan modüller
+const PLAN_DEFAULT_MODULES: Record<PlanKey, string[]> = {
+  STARTER: ['accounting', 'inventory', 'sales', 'contacts', 'invoicing', 'reporting'],
+  PROFESSIONAL: ['accounting', 'inventory', 'crm', 'sales', 'purchasing', 'warehouse', 'reporting', 'contacts', 'invoicing', 'approvals'],
+  ENTERPRISE: MODULE_OPTIONS.map((m) => m.key),
+};
 
 const MODULE_LABELS: Record<string, string> = Object.fromEntries(
   MODULE_OPTIONS.map((module) => [module.key, module.label]),
@@ -52,14 +62,26 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
     subscriptionStart: '',
     subscriptionEnd: '',
   });
+  const [currentPlan, setCurrentPlan] = useState<PlanKey>('STARTER');
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [confirmSave, setConfirmSave] = useState(false);
+  const [sendNotify, setSendNotify] = useState(true);
 
   const { data: tenant, isLoading } = useQuery({ queryKey: ['admin', 'tenant', id], queryFn: () => getTenantById(id) });
   const { data: metrics } = useQuery({ queryKey: ['admin', 'tenant-metrics', id], queryFn: () => getTenantMetrics(id) });
 
   const changePlan = useMutation({
     mutationFn: (plan: string) => updateTenantPlan(id, plan),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] }),
+    onSuccess: (_, plan) => {
+      const planKey = plan as PlanKey;
+      setCurrentPlan(planKey);
+      setSettings((prev) => ({
+        ...prev,
+        modules: PLAN_DEFAULT_MODULES[planKey] ?? prev.modules,
+      }));
+      qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] });
+      toast.success(`Plan ${plan} olarak güncellendi.`);
+    },
   });
 
   const changeStatus = useMutation({
@@ -68,7 +90,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
   });
 
   const saveSettings = useMutation({
-    mutationFn: () => updateTenant(id, {
+    mutationFn: (notify: boolean) => updateTenant(id, {
       maxUsers: settings.maxUsers ? Number(settings.maxUsers) : null,
       modules: settings.modules,
       notes: settings.notes,
@@ -76,10 +98,14 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
       trialEndsAt: settings.trialEndsAt || null,
       subscriptionStart: settings.subscriptionStart || null,
       subscriptionEnd: settings.subscriptionEnd || null,
+      notify,
     }),
     onSuccess: () => {
       setSettingsError(null);
+      setConfirmSave(false);
+      qc.invalidateQueries({ queryKey: ['admin', 'tenants'] });
       qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] });
+      toast.success('Tenant ayarları kaydedildi.');
     },
     onError: (error: { response?: { data?: { error?: { message?: string } } } }) => {
       setSettingsError(error.response?.data?.error?.message ?? 'Tenant ayarları kaydedilemedi.');
@@ -88,6 +114,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
 
   useEffect(() => {
     if (!tenant) return;
+    setCurrentPlan(tenant.plan as PlanKey);
     setSettings({
       maxUsers: tenant.maxUsers?.toString() ?? '',
       modules: tenant.modules ?? [],
@@ -187,16 +214,65 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
       )}
 
       {/* Settings */}
-      <form onSubmit={(e) => { e.preventDefault(); saveSettings.mutate(); }} className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+      <form onSubmit={(e) => { e.preventDefault(); saveSettings.mutate(sendNotify); }} className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-semibold text-slate-400">Tenant Ayarları</p>
-          <button type="submit" disabled={saveSettings.isPending}
-            className="rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-400 disabled:opacity-60">
-            {saveSettings.isPending ? 'Kaydediliyor...' : 'Ayarları Kaydet'}
+          <button
+            type="button"
+            onClick={() => setConfirmSave(true)}
+            disabled={confirmSave}
+            className="rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-400 disabled:opacity-40 transition-opacity">
+            Ayarları Kaydet
           </button>
         </div>
 
         {settingsError && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{settingsError}</div>}
+
+        {confirmSave && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-amber-400 text-base leading-none">⚠</span>
+                <div>
+                  <p className="text-xs font-semibold text-amber-300">Değişiklikler kaydedilecek</p>
+                  <p className="text-[11px] text-amber-400/70 mt-0.5">Bu işlem tenant ayarlarını kalıcı olarak günceller.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setConfirmSave(false)}
+                  className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:border-slate-600 transition-colors">
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  disabled={saveSettings.isPending}
+                  className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-amber-400 disabled:opacity-60 transition-colors">
+                  {saveSettings.isPending ? 'Kaydediliyor...' : 'Evet, Kaydet'}
+                </button>
+              </div>
+            </div>
+            {/* Bildirim toggle */}
+            <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+              <div
+                onClick={() => setSendNotify((v) => !v)}
+                className={cn(
+                  'relative w-8 h-4 rounded-full transition-colors shrink-0',
+                  sendNotify ? 'bg-sky-500' : 'bg-slate-700',
+                )}
+              >
+                <span className={cn(
+                  'absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform',
+                  sendNotify ? 'translate-x-4' : 'translate-x-0.5',
+                )} />
+              </div>
+              <span className="text-[11px] text-slate-400">
+                {sendNotify ? 'Tenant liderine bildirim gönderilecek' : 'Bildirim gönderilmeyecek'}
+              </span>
+            </label>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
           <input type="number" min={1} value={settings.maxUsers} onChange={(e) => setSettings({ ...settings, maxUsers: e.target.value })} placeholder="Max kullanıcı" className="bg-slate-950 border border-slate-800 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/50" />
@@ -213,14 +289,74 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
           <textarea value={settings.notes} onChange={(e) => setSettings({ ...settings, notes: e.target.value })} placeholder="Notlar" rows={2} className="bg-slate-950 border border-slate-800 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/50" />
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {MODULE_OPTIONS.map((module) => (
-            <button key={module.key} type="button" onClick={() => toggleModule(module.key)}
-              className={cn('px-2.5 py-1 rounded-full border text-[11px] font-medium transition-colors',
-                settings.modules.includes(module.key) ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-slate-800 text-slate-500 hover:text-slate-300')}>
-              {module.label}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-slate-400">
+              Modüller
+              <span className="ml-2 text-slate-600 font-normal">
+                {settings.modules.length} aktif
+              </span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setSettings((prev) => ({ ...prev, modules: PLAN_DEFAULT_MODULES[currentPlan] ?? [] }))}
+              className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              Plana göre sıfırla
             </button>
-          ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {MODULE_OPTIONS.map((module) => {
+              const isActive = settings.modules.includes(module.key);
+              const isPlanDefault = PLAN_DEFAULT_MODULES[currentPlan]?.includes(module.key) ?? false;
+              const isCustomAdded = isActive && !isPlanDefault;
+              const isCustomRemoved = !isActive && isPlanDefault;
+
+              return (
+                <button
+                  key={module.key}
+                  type="button"
+                  onClick={() => toggleModule(module.key)}
+                  title={
+                    isCustomAdded
+                      ? 'Custom eklendi (plan dışı)'
+                      : isCustomRemoved
+                      ? 'Plana dahil ama devre dışı'
+                      : isPlanDefault
+                      ? 'Plana dahil'
+                      : 'Plana dahil değil'
+                  }
+                  className={cn(
+                    'group relative flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium transition-all',
+                    isActive && isPlanDefault && 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20',
+                    isCustomAdded && 'border-violet-500/40 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20',
+                    isCustomRemoved && 'border-slate-700 bg-slate-800/50 text-slate-600 hover:border-amber-500/40 hover:text-amber-400',
+                    !isActive && !isPlanDefault && 'border-slate-800 text-slate-600 hover:border-slate-700 hover:text-slate-400',
+                  )}
+                >
+                  {isCustomAdded && <Plus className="w-2.5 h-2.5 shrink-0" />}
+                  {isActive && isPlanDefault && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
+                  {isCustomRemoved && <Minus className="w-2.5 h-2.5 shrink-0" />}
+                  {!isActive && !isPlanDefault && <span className="w-1.5 h-1.5 rounded-full bg-slate-700 shrink-0" />}
+                  {module.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-4 pt-1">
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />Plana dahil
+            </span>
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-600">
+              <Plus className="w-2.5 h-2.5 text-violet-400" />Custom eklendi
+            </span>
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-600">
+              <Minus className="w-2.5 h-2.5 text-slate-500" />Devre dışı
+            </span>
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-700" />Plana dahil değil
+            </span>
+          </div>
         </div>
       </form>
 
@@ -232,7 +368,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
           <div><span className="text-slate-500 text-xs">Sektör</span><p className="text-slate-200">{tenant.sector ?? '—'}</p></div>
           <div><span className="text-slate-500 text-xs">Max Kullanıcı</span><p className="text-slate-200">{tenant.maxUsers ?? 'Sınırsız'}</p></div>
           <div><span className="text-slate-500 text-xs">Özel Fiyat</span><p className="text-slate-200">{tenant.isCustomPricing ? 'Evet' : 'Hayır'}</p></div>
-          <div><span className="text-slate-500 text-xs">Mod�ller</span><p className="text-slate-200">{tenant.modules.map((module) => MODULE_LABELS[module] ?? module).join(', ') || '�'}</p></div>
+          <div><span className="text-slate-500 text-xs">Modüller</span><p className="text-slate-200">{tenant.modules.map((module) => MODULE_LABELS[module] ?? module).join(', ') || '—'}</p></div>
           <div><span className="text-slate-500 text-xs">Notlar</span><p className="text-slate-200">{tenant.notes ?? '—'}</p></div>
         </div>
       </div>

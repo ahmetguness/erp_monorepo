@@ -10,14 +10,42 @@ import { useCurrentUser, useLogout } from '@/hooks/useAuth';
 import { useUIStore } from '@/store/ui.store';
 
 // ─────────────────────────────────────────────
+// Nav item types — NavGroup burada tanımlanıyor
+// ─────────────────────────────────────────────
+
+type NavGroup = import('@/lib/nav-config').NavGroup;
+
+// ─────────────────────────────────────────────
 // Plan rank — yüksek rank düşük rank'ı kapsar
 // ─────────────────────────────────────────────
 
 const PLAN_RANK: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
 
 function hasPlanAccess(tenantPlan: string, requiredPlan?: string): boolean {
-  if (!requiredPlan) return true; // plan belirtilmemişse herkese açık
+  if (!requiredPlan) return true;
   return (PLAN_RANK[tenantPlan] ?? 0) >= (PLAN_RANK[requiredPlan] ?? 0);
+}
+
+function hasModuleAccess(tenantModules: string[], requiredModule?: string): boolean {
+  if (!requiredModule) return true;           // modül kısıtı yok → her zaman görünür
+  if (tenantModules.length === 0) return true; // boş liste → kısıtlama yok (legacy)
+  return tenantModules.includes(requiredModule);
+}
+
+function hasAccess(tenantPlan: string, tenantModules: string[], item: { plan?: string; module?: string }): boolean {
+  // Eğer modül listesi doluysa -> Kısıtlayıcı Model: SADECE listedeki modüller (ve modülsüzler) gösterilir
+  if (tenantModules.length > 0) {
+    if (!item.module) {
+      // Dashboard, Rol Yönetimi, Ayarlar vb. modül bağımsızlar için planı yeterli mi kontrol et
+      return hasPlanAccess(tenantPlan, item.plan);
+    }
+    // "warehouse" modülü açıldıysa nav-config'deki "inventory" menüsünün görünmesini sağla
+    if (tenantModules.includes('warehouse') && item.module === 'inventory') return true;
+    return tenantModules.includes(item.module);
+  }
+
+  // Eğer özel modül tanımlanmamışsa -> Normal Plan Kontrolü
+  return hasPlanAccess(tenantPlan, item.plan);
 }
 
 // ─────────────────────────────────────────────
@@ -68,17 +96,16 @@ function isPathMatch(pathname: string, href: string): boolean {
 interface NavItemProps {
   item: NavItem;
   tenantPlan: string;
+  tenantModules: string[];
   depth?: number;
 }
 
-function NavItemRow({ item, tenantPlan, depth = 0 }: NavItemProps) {
+function NavItemRow({ item, tenantPlan, tenantModules, depth = 0 }: NavItemProps) {
   const pathname = usePathname();
 
-  // Plan kontrolü — erişim yoksa render etme
-  if (!hasPlanAccess(tenantPlan, item.plan)) return null;
+  if (!hasAccess(tenantPlan, tenantModules, item)) return null;
 
-  // Children'ları plan'a göre filtrele
-  const visibleChildren = item.children?.filter((c) => hasPlanAccess(tenantPlan, c.plan));
+  const visibleChildren = item.children?.filter((c) => hasAccess(tenantPlan, tenantModules, c));
 
   const [open, setOpen] = useState(() => {
     if (!visibleChildren) return false;
@@ -115,7 +142,7 @@ function NavItemRow({ item, tenantPlan, depth = 0 }: NavItemProps) {
         {open && (
           <div className="mt-0.5 space-y-0.5">
             {visibleChildren.map((child) => (
-              <NavItemRow key={child.href} item={child} tenantPlan={tenantPlan} depth={depth + 1} />
+              <NavItemRow key={child.href} item={child} tenantPlan={tenantPlan} tenantModules={tenantModules} depth={depth + 1} />
             ))}
           </div>
         )}
@@ -150,6 +177,7 @@ export function Sidebar() {
   const logout = useLogout();
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const tenantPlan = tenant?.plan ?? 'STARTER';
+  const tenantModules = tenant?.modules ?? [];
 
   return (
     <aside
@@ -173,7 +201,7 @@ export function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
         {NAV_GROUPS.map((group, gi) => {
-          const visibleItems = group.items.filter((item) => hasPlanAccess(tenantPlan, item.plan));
+          const visibleItems = group.items.filter((item) => hasAccess(tenantPlan, tenantModules, item));
           if (visibleItems.length === 0) return null;
 
           return (
@@ -185,7 +213,7 @@ export function Sidebar() {
               )}
               <div className="space-y-0.5">
                 {visibleItems.map((item) => (
-                  <NavItemRow key={item.href} item={item} tenantPlan={tenantPlan} />
+                  <NavItemRow key={item.href} item={item} tenantPlan={tenantPlan} tenantModules={tenantModules} />
                 ))}
               </div>
             </div>

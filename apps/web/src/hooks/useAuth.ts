@@ -1,10 +1,10 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
-import { useUIStore } from '@/store/ui.store';
-import { login, register, getMe } from '@/services/auth.service';
+import { useUIStore } from '@/store/ui.store';import { login, register, getMe } from '@/services/auth.service';
 import { getErrorMessage } from '@/types/api.types';
 import type { LoginCredentials, RegisterData } from '@/services/auth.service';
 
@@ -59,16 +59,14 @@ export function useRegister() {
 // ─────────────────────────────────────────────
 
 export function useLogout() {
-  const router = useRouter();
   const { logout: storeLogout } = useAuthStore();
-  const { toast } = useUIStore();
 
   return () => {
     storeLogout();
-    toast.info('Çıkış yapıldı.');
-    // replace kullan — history'den dashboard'u temizler,
-    // geri tuşuyla dashboard'a dönülmesini önler
-    router.replace('/login');
+    // Hard redirect — React layout'un spinner render etmesini önler.
+    // router.replace yerine window.location kullanılır; böylece
+    // isAuthenticated=false olduğunda layout hiç re-render etmez.
+    window.location.replace('/login');
   };
 }
 
@@ -77,15 +75,24 @@ export function useLogout() {
 // ─────────────────────────────────────────────
 
 export function useMe() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, syncFromServer } = useAuthStore();
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: getMe,
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 min
     retry: false,
   });
+
+  // Sunucudan gelen güncel user + tenant'ı store'a yaz
+  // (plan, modules gibi admin tarafından değiştirilen alanlar yansısın)
+  const { data } = query;
+  useEffect(() => {
+    if (data) syncFromServer(data.user, data.tenant);
+  }, [data, syncFromServer]);
+
+  return query;
 }
 
 // ─────────────────────────────────────────────

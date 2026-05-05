@@ -3,15 +3,20 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
+import { useMe } from '@/hooks/useAuth';
 import { Sidebar } from '@/components/shared/Sidebar';
 import { Header } from '@/components/shared/Header';
 import { ChatBot } from '@/components/shared/ChatBot';
 import { DemoBanner } from '@/components/shared/DemoBanner';
 import { Spinner } from '@/components/ui/Spinner';
+import { OnboardingTooltip } from '@/components/shared/OnboardingTooltip';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  // Sayfa yüklendiğinde /api/auth/me'den güncel plan + modules çek → store'a yaz
+  useMe();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -39,6 +44,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
       </div>
       <ChatBot />
+      <OnboardingTooltip />
     </div>
   );
 }

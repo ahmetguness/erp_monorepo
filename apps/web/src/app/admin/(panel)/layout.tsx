@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { cn } from '@/lib/utils';
+import { ToastContainer } from '@/components/ui/Toast';
 
 const NAV = [
   { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
@@ -132,6 +133,7 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
           {children}
         </main>
       </div>
+      <ToastContainer />
     </div>
   );
 }

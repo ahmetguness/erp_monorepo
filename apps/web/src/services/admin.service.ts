@@ -102,7 +102,6 @@ export async function updateTenant(id: string, data: Record<string, unknown>) {
   const res = await adminApiClient.patch(`/api/admin/tenants/${id}`, data);
   return res.data.data;
 }
-
 // ─────────────────────────────────────────────
 // Features
 // ─────────────────────────────────────────────
