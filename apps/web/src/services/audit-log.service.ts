@@ -14,6 +14,17 @@ export const AuditLogSchema = z.object({
 
 export type AuditLog = z.infer<typeof AuditLogSchema>;
 
+export const AuditLogExportSchema = z.object({
+  data: z.array(AuditLogSchema),
+  meta: z.object({
+    total: z.number(),
+    exportedAt: z.string(),
+    format: z.literal('json'),
+  }),
+});
+
+export type AuditLogExport = z.infer<typeof AuditLogExportSchema>;
+
 export interface AuditLogParams extends PaginationParams {
   module?: string; entityType?: string; action?: string; userId?: string;
 }
@@ -26,4 +37,9 @@ export async function getAuditLogs(params: AuditLogParams) {
 export async function getAuditLogById(id: string): Promise<AuditLog> {
   const res = await apiClient.get(`/api/audit-logs/${id}`);
   return safeParse(SingleResponseSchema(AuditLogSchema), res.data, 'getAuditLogById').data;
+}
+
+export async function exportAuditLogs(params?: Pick<AuditLogParams, 'module'> & { dateFrom?: string; dateTo?: string }): Promise<AuditLogExport> {
+  const res = await apiClient.get('/api/audit-logs/export', { params });
+  return safeParse(AuditLogExportSchema, res.data, 'exportAuditLogs');
 }

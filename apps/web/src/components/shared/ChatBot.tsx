@@ -8,6 +8,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAuthStore } from '@/store/auth.store';
+import { clearChatHistory, openChatStream } from '@/services/chat.service';
 
 // ─────────────────────────────────────────────
 // Types
@@ -24,7 +25,6 @@ interface Message {
 }
 
 const STORAGE_KEY_PREFIX = 'axon_chat_messages_';
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 // ─────────────────────────────────────────────
 // rAF-based smooth streaming hook
@@ -261,17 +261,7 @@ export function ChatBot() {
 
     // Backend conversation history'yi de temizle
     try {
-      const token = document.cookie.match(/axon_token=([^;]+)/)?.[1];
-      const tenantId = document.cookie.match(/axon_tenant_id=([^;]+)/)?.[1];
-      if (token && tenantId) {
-        fetch(`${API_URL}/api/chat/history`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'x-tenant-id': tenantId,
-          },
-        }).catch(() => {});
-      }
+      clearChatHistory().catch(() => {});
     } catch { /* sessizce geç */ }
   }, [user]);
 
@@ -287,32 +277,12 @@ export function ChatBot() {
     resetStream();
     setFetchingData(false);
 
-    const token = document.cookie.match(/axon_token=([^;]+)/)?.[1];
-    const tenantId = document.cookie.match(/axon_tenant_id=([^;]+)/)?.[1];
-
-    if (!token || !tenantId) {
-      setMessages((prev) => [...prev, {
-        id: `a-${Date.now()}`, role: 'assistant', timestamp: new Date(),
-        content: 'Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapın.', error: true,
-      }]);
-      setLoading(false);
-      return;
-    }
 
     const abort = new AbortController();
     abortRef.current = abort;
 
     try {
-      const res = await fetch(`${API_URL}/api/chat/stream`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'x-tenant-id': tenantId,
-        },
-        body: JSON.stringify({ message: msg }),
-        signal: abort.signal,
-      });
+      const res = await openChatStream(msg, abort.signal);
 
       // Non-streaming hata yanıtları
       if (!res.ok) {

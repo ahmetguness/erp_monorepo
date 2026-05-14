@@ -52,6 +52,17 @@ export const PurchaseOrderSchema = z.object({
   _count: z.object({ items: z.coerce.number() }).optional(),
 });
 
+export const PurchaseOrderHistorySchema = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  orderId: z.string(),
+  fromStatus: z.enum(['DRAFT', 'SENT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED']).nullable(),
+  toStatus: z.enum(['DRAFT', 'SENT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED']),
+  notes: z.string().nullable(),
+  createdAt: z.string(),
+  createdById: z.string().nullable(),
+});
+
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
@@ -59,6 +70,7 @@ export const PurchaseOrderSchema = z.object({
 export type PurchaseRequest = z.infer<typeof PurchaseRequestSchema>;
 export type PurchaseOrder = z.infer<typeof PurchaseOrderSchema>;
 export type PurchaseOrderItem = z.infer<typeof PurchaseOrderItemSchema>;
+export type PurchaseOrderHistory = z.infer<typeof PurchaseOrderHistorySchema>;
 export type PurchaseRequestStatus = PurchaseRequest['status'];
 export type PurchaseOrderStatus = PurchaseOrder['status'];
 
@@ -119,6 +131,11 @@ export async function getPurchaseOrders(params: ListParams) {
 export async function getPurchaseOrderById(id: string): Promise<PurchaseOrder> {
   const res = await apiClient.get(`/api/purchase-orders/${id}`);
   return safeParse(SingleResponseSchema(PurchaseOrderSchema), res.data, 'getPurchaseOrderById').data;
+}
+
+export async function getPurchaseOrderHistory(id: string): Promise<PurchaseOrderHistory[]> {
+  const res = await apiClient.get(`/api/purchase-orders/${id}/history`);
+  return safeParse(SingleResponseSchema(z.array(PurchaseOrderHistorySchema)), res.data, 'getPurchaseOrderHistory').data;
 }
 
 export async function createPurchaseOrder(data: CreatePurchaseOrderDTO): Promise<PurchaseOrder> {

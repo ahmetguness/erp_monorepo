@@ -15,6 +15,7 @@ import { apiClient } from "@/lib/api-client";
 import { safeParse } from "@/lib/safe-parse";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/useAuth";
+import { getTcmbRates } from "@/services/currency-rates.service";
 import { SingleResponseSchema, PaginatedResponseSchema } from "@/types/api.types";
 import { z } from "zod";
 
@@ -122,7 +123,7 @@ export function DashboardOverview() {
   const { data: stk } = useQuery({ queryKey: ["d", "stk"], queryFn: async () => safeParse(StockSummary, (await apiClient.get("/api/reports/stock-summary")).data, "stk").data });
   const { data: bal } = useQuery({ queryKey: ["d", "bal"], queryFn: async () => safeParse(BalanceSummary, (await apiClient.get("/api/reports/contact-balance")).data, "bal").data });
   const { data: invs } = useQuery({ queryKey: ["d", "invs"], queryFn: async () => safeParse(PaginatedResponseSchema(InvSchema), (await apiClient.get("/api/invoices", { params: { limit: 6 } })).data, "invs") });
-  const { data: tcmb } = useQuery<{ currencies?: CurrencyRate[] }>({ queryKey: ["d", "tcmb"], queryFn: async () => (await apiClient.get("/api/currency-rates/tcmb")).data?.data, staleTime: 3e5 });
+  const { data: tcmb } = useQuery({ queryKey: ["d", "tcmb"], queryFn: getTcmbRates, staleTime: 3e5 });
   const { data: notifs } = useQuery({ queryKey: ["d", "notifs"], queryFn: async () => { try { return safeParse(SingleResponseSchema(NotifSchema), (await apiClient.get("/api/notifications", { params: { limit: 5 } })).data, "n").data; } catch { return []; } } });
   const { data: appr } = useQuery({ queryKey: ["d", "appr"], queryFn: async () => { try { return safeParse(SingleResponseSchema(ApprSchema), (await apiClient.get("/api/approvals/requests", { params: { limit: 5 } })).data, "a").data; } catch { return []; } } });
 

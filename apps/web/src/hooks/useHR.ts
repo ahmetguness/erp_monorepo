@@ -123,6 +123,16 @@ export function useCheckOut() {
 
 // ─── Payroll ──────────────────────────────────
 
+export function useUpdateAttendance(id: string) {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (data: { checkIn?: string | null; checkOut?: string | null; overtimeHours?: number; notes?: string }) => svc.updateAttendance(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['attendance'] }); toast.success('Puantaj güncellendi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
 export function usePayrolls(params?: { page?: number; limit?: number; period?: string; employeeId?: string }) {
   return useQuery({ queryKey: ['payrolls', params], queryFn: () => svc.getPayrolls(params) });
 }

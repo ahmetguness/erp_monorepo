@@ -4,19 +4,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
-  getLedgerAccounts, createLedgerAccount,
+  getLedgerAccounts, createLedgerAccount, getLedgerAccountById, updateLedgerAccount,
   getFiscalPeriods, createFiscalPeriod, closeFiscalPeriod, deleteFiscalPeriod,
   getJournalEntries, getJournalEntryById, createJournalEntry, postJournalEntry,
-  getBankAccounts, createBankAccount, getCashAccounts, createCashAccount,
+  getBankAccounts, createBankAccount, updateBankAccount, deleteBankAccount,
+  getCashAccounts, createCashAccount, updateCashAccount, deleteCashAccount,
   getPayments, getPaymentById, createPayment,
-  type CreateLedgerAccountDTO, type CreateFiscalPeriodDTO,
+  type CreateLedgerAccountDTO, type UpdateLedgerAccountDTO, type CreateFiscalPeriodDTO,
   type CreateJournalEntryDTO, type JournalEntryListParams,
-  type CreateBankAccountDTO, type CreateCashAccountDTO,
+  type CreateBankAccountDTO, type UpdateBankAccountDTO, type CreateCashAccountDTO, type UpdateCashAccountDTO,
   type CreatePaymentDTO, type PaymentListParams, type AccountType,
 } from '@/services/accounting.service';
 
 const KEYS = {
   accounts: (p?: { type?: AccountType }) => ['accounting', 'accounts', p] as const,
+  account: (id: string) => ['accounting', 'accounts', id] as const,
   periods: ['accounting', 'fiscal-periods'] as const,
   entries: (p: JournalEntryListParams) => ['accounting', 'journal-entries', p] as const,
   entry: (id: string) => ['accounting', 'journal-entries', id] as const,
@@ -38,6 +40,24 @@ export function useCreateLedgerAccount() {
   return useMutation({
     mutationFn: (data: CreateLedgerAccountDTO) => createLedgerAccount(data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['accounting', 'accounts'] }); toast.success('Hesap oluşturuldu.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useLedgerAccount(id: string) {
+  return useQuery({ queryKey: KEYS.account(id), queryFn: () => getLedgerAccountById(id), enabled: !!id });
+}
+
+export function useUpdateLedgerAccount(id: string) {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (data: UpdateLedgerAccountDTO) => updateLedgerAccount(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounting', 'accounts'] });
+      qc.invalidateQueries({ queryKey: KEYS.account(id) });
+      toast.success('Hesap güncellendi.');
+    },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
@@ -128,6 +148,26 @@ export function useCreateBankAccount() {
   });
 }
 
+export function useUpdateBankAccount(id: string) {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (data: UpdateBankAccountDTO) => updateBankAccount(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.bankAccounts }); toast.success('Banka hesabı güncellendi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useDeleteBankAccount() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (id: string) => deleteBankAccount(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.bankAccounts }); toast.success('Banka hesabı silindi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
 export function useCashAccounts() {
   return useQuery({ queryKey: KEYS.cashAccounts, queryFn: getCashAccounts, staleTime: 5 * 60 * 1000 });
 }
@@ -138,6 +178,26 @@ export function useCreateCashAccount() {
   return useMutation({
     mutationFn: (data: CreateCashAccountDTO) => createCashAccount(data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.cashAccounts }); toast.success('Kasa hesabı oluşturuldu.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useUpdateCashAccount(id: string) {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (data: UpdateCashAccountDTO) => updateCashAccount(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.cashAccounts }); toast.success('Kasa hesabı güncellendi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useDeleteCashAccount() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (id: string) => deleteCashAccount(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.cashAccounts }); toast.success('Kasa hesabı silindi.'); },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }

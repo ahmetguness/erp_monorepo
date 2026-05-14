@@ -11,7 +11,7 @@ import { Eye, EyeOff, Mail, Lock, Loader2 } from 'lucide-react';
 const loginSchema = z.object({
   email: z.string().min(1, 'E-posta zorunludur').email('Geçerli bir e-posta girin'),
   password: z.string().min(1, 'Şifre zorunludur'),
-  rememberMe: z.boolean().default(false),
+  rememberMe: z.boolean(),
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -26,8 +26,8 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors },
   } = useForm<LoginForm>({
-    // @ts-expect-error -- zodResolver type mismatch with react-hook-form generics
     resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '', rememberMe: false },
   });
 
   const onSubmit = (data: LoginForm) => {

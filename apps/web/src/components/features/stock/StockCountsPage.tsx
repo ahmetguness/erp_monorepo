@@ -29,8 +29,8 @@ const countItemSchema = z.object({
   productId: z.string(),
   productName: z.string(),
   productCode: z.string(),
-  expectedQty: z.coerce.number(),
-  countedQty: z.string().default('0'),
+  expectedQty: z.number(),
+  countedQty: z.string(),
 });
 
 const newCountSchema = z.object({
@@ -62,7 +62,6 @@ export function StockCountsPage() {
   const today = new Date().toISOString().split('T')[0];
 
   const { register, handleSubmit, control, reset, setValue, watch, formState: { errors } } = useForm<NewCountForm>({
-    // @ts-expect-error -- zodResolver type mismatch with react-hook-form generics
     resolver: zodResolver(newCountSchema),
     defaultValues: { warehouseId: '', date: today, notes: '', items: [] },
   });

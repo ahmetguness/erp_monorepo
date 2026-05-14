@@ -5,8 +5,8 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getSalesQuotes, getSalesQuoteById, createSalesQuote, convertQuoteToOrder,
-  getSalesOrders, getSalesOrderById, createSalesOrder, updateSalesOrder, cancelSalesOrder,
-  getInvoices, getInvoiceById, createInvoice, updateInvoice, cancelInvoice,
+  getSalesOrders, getSalesOrderById, getSalesOrderHistory, createSalesOrder, updateSalesOrder, cancelSalesOrder,
+  getInvoices, getInvoiceById, getInvoiceHistory, createInvoice, updateInvoice, cancelInvoice,
   type ListParams, type CreateSalesQuoteDTO, type CreateSalesOrderDTO,
   type CreateInvoiceDTO, type OrderStatus, type InvoiceStatus,
 } from '@/services/sales.service';
@@ -21,12 +21,14 @@ const ORDER_KEYS = {
   all: ['sales-orders'] as const,
   list: (p: ListParams) => ['sales-orders', 'list', p] as const,
   detail: (id: string) => ['sales-orders', id] as const,
+  history: (id: string) => ['sales-orders', id, 'history'] as const,
 };
 
 const INVOICE_KEYS = {
   all: ['invoices'] as const,
   list: (p: ListParams) => ['invoices', 'list', p] as const,
   detail: (id: string) => ['invoices', id] as const,
+  history: (id: string) => ['invoices', id, 'history'] as const,
 };
 
 // ── Quotes ───────────────────────────────────
@@ -71,6 +73,10 @@ export function useSalesOrders(params: ListParams) {
 
 export function useSalesOrder(id: string) {
   return useQuery({ queryKey: ORDER_KEYS.detail(id), queryFn: () => getSalesOrderById(id), enabled: !!id });
+}
+
+export function useSalesOrderHistory(id: string) {
+  return useQuery({ queryKey: ORDER_KEYS.history(id), queryFn: () => getSalesOrderHistory(id), enabled: !!id });
 }
 
 export function useCreateSalesOrder() {
@@ -119,6 +125,10 @@ export function useInvoices(params: ListParams) {
 
 export function useInvoice(id: string) {
   return useQuery({ queryKey: INVOICE_KEYS.detail(id), queryFn: () => getInvoiceById(id), enabled: !!id });
+}
+
+export function useInvoiceHistory(id: string) {
+  return useQuery({ queryKey: INVOICE_KEYS.history(id), queryFn: () => getInvoiceHistory(id), enabled: !!id });
 }
 
 export function useCreateInvoice() {

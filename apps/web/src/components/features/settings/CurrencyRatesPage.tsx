@@ -1,15 +1,14 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp, TrendingDown, Search, RefreshCw,
   DollarSign, Euro, PoundSterling, Banknote,
   ArrowLeftRight, Building2, Clock, Shield,
   Copy, Check, Repeat2,
 } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import { useTcmbRates } from '@/hooks/useCurrencyRates';
 
 interface TcmbCurrency {
   code: string; name: string; unit: number;
@@ -17,8 +16,6 @@ interface TcmbCurrency {
   banknoteBuying: number; banknoteSelling: number;
   crossRateUSD: number | null;
 }
-
-interface TcmbData { date: string; currencies: TcmbCurrency[] }
 
 const POPULAR = ['USD', 'EUR', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'SAR', 'RUB', 'CNY'];
 
@@ -155,14 +152,7 @@ export function CurrencyRatesPage() {
   const [tab, setTab] = useState<'popular' | 'all'>('popular');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  const { data, isLoading, refetch, isFetching, dataUpdatedAt } = useQuery({
-    queryKey: ['tcmb-rates'],
-    queryFn: async () => {
-      const res = await apiClient.get('/api/currency-rates/tcmb');
-      return res.data?.data as TcmbData;
-    },
-    staleTime: 15 * 60 * 1000,
-  });
+  const { data, isLoading, refetch, isFetching, dataUpdatedAt } = useTcmbRates();
 
   const currencies = data?.currencies ?? [];
   const filtered = useMemo(() => {

@@ -5,7 +5,7 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getPurchaseRequests, createPurchaseRequest, approvePurchaseRequest, convertRequestToOrder,
-  getPurchaseOrders, getPurchaseOrderById, createPurchaseOrder,
+  getPurchaseOrders, getPurchaseOrderById, getPurchaseOrderHistory, createPurchaseOrder,
   sendPurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder,
   type ListParams, type CreatePurchaseRequestDTO, type CreatePurchaseOrderDTO, type ReceiveOrderDTO,
 } from '@/services/purchase.service';
@@ -14,6 +14,7 @@ const KEYS = {
   requests: (p: ListParams) => ['purchase', 'requests', p] as const,
   orders: (p: ListParams) => ['purchase', 'orders', p] as const,
   order: (id: string) => ['purchase', 'orders', id] as const,
+  orderHistory: (id: string) => ['purchase', 'orders', id, 'history'] as const,
 };
 
 // ── Purchase Requests ────────────────────────
@@ -63,6 +64,10 @@ export function usePurchaseOrders(params: ListParams) {
 
 export function usePurchaseOrder(id: string) {
   return useQuery({ queryKey: KEYS.order(id), queryFn: () => getPurchaseOrderById(id), enabled: !!id });
+}
+
+export function usePurchaseOrderHistory(id: string) {
+  return useQuery({ queryKey: KEYS.orderHistory(id), queryFn: () => getPurchaseOrderHistory(id), enabled: !!id });
 }
 
 export function useCreatePurchaseOrder() {

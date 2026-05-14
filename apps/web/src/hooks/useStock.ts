@@ -5,7 +5,7 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getWarehouses, getWarehouseById, createWarehouse, updateWarehouse, transferStock,
-  getLocations, createLocation,
+  getLocations, createLocation, deleteLocation,
   getStockLevels, getStockMovements, createManualMovement,
   getStockCounts, getStockCountById, createStockCount, finalizeStockCount,
   type StockLevelParams, type StockMovementParams, type CreateManualMovementDTO,
@@ -85,6 +85,19 @@ export function useCreateLocation(warehouseId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: STOCK_KEYS.locations(warehouseId) });
       toast.success('Lokasyon oluşturuldu.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useDeleteLocation(warehouseId: string) {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (locationId: string) => deleteLocation(warehouseId, locationId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: STOCK_KEYS.locations(warehouseId) });
+      toast.success('Lokasyon silindi.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

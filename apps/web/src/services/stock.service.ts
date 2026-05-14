@@ -165,6 +165,10 @@ export async function createLocation(warehouseId: string, data: CreateLocationDT
   return safeParse(SingleResponseSchema(LocationSchema), res.data, 'createLocation').data;
 }
 
+export async function deleteLocation(warehouseId: string, locationId: string): Promise<void> {
+  await apiClient.delete(`/api/warehouses/${warehouseId}/locations/${locationId}`);
+}
+
 // ─────────────────────────────────────────────
 // Stock service
 // ─────────────────────────────────────────────

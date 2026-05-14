@@ -83,11 +83,14 @@ export type PaymentMethod = Payment['method'];
 // ─────────────────────────────────────────────
 
 export interface CreateLedgerAccountDTO { code: string; name: string; type: AccountType; parentId?: string; }
+export interface UpdateLedgerAccountDTO { code?: string; name?: string; type?: AccountType; parentId?: string | null; isActive?: boolean; }
 export interface CreateFiscalPeriodDTO { name: string; startDate: string; endDate: string; }
 export interface JournalEntryLineDTO { accountId: string; debit: number; credit: number; description?: string; }
 export interface CreateJournalEntryDTO { date: string; description?: string; lines: JournalEntryLineDTO[]; }
 export interface CreateBankAccountDTO { name: string; accountNumber?: string; iban?: string; bankName?: string; currencyCode?: string; }
+export type UpdateBankAccountDTO = Partial<CreateBankAccountDTO> & { type?: BankAccount['type']; isActive?: boolean };
 export interface CreateCashAccountDTO { name: string; currencyCode?: string; }
+export type UpdateCashAccountDTO = Partial<CreateCashAccountDTO> & { isActive?: boolean };
 export interface CreatePaymentDTO {
   contactId?: string; bankAccountId?: string; cashAccountId?: string;
   date: string; amount: number; method: PaymentMethod; reference?: string; notes?: string;
@@ -108,6 +111,16 @@ export async function getLedgerAccounts(params?: { type?: AccountType; search?: 
 export async function createLedgerAccount(data: CreateLedgerAccountDTO): Promise<LedgerAccount> {
   const res = await apiClient.post('/api/accounting/accounts', data);
   return safeParse(SingleResponseSchema(LedgerAccountSchema), res.data, 'createLedgerAccount').data;
+}
+
+export async function getLedgerAccountById(id: string): Promise<LedgerAccount> {
+  const res = await apiClient.get(`/api/accounting/accounts/${id}`);
+  return safeParse(SingleResponseSchema(LedgerAccountSchema), res.data, 'getLedgerAccountById').data;
+}
+
+export async function updateLedgerAccount(id: string, data: UpdateLedgerAccountDTO): Promise<LedgerAccount> {
+  const res = await apiClient.patch(`/api/accounting/accounts/${id}`, data);
+  return safeParse(SingleResponseSchema(LedgerAccountSchema), res.data, 'updateLedgerAccount').data;
 }
 
 export async function getFiscalPeriods(): Promise<FiscalPeriod[]> {
@@ -169,6 +182,15 @@ export async function createBankAccount(data: CreateBankAccountDTO): Promise<Ban
   return safeParse(SingleResponseSchema(BankAccountSchema), res.data, 'createBankAccount').data;
 }
 
+export async function updateBankAccount(id: string, data: UpdateBankAccountDTO): Promise<BankAccount> {
+  const res = await apiClient.patch(`/api/payments/bank-accounts/${id}`, data);
+  return safeParse(SingleResponseSchema(BankAccountSchema), res.data, 'updateBankAccount').data;
+}
+
+export async function deleteBankAccount(id: string): Promise<void> {
+  await apiClient.delete(`/api/payments/bank-accounts/${id}`);
+}
+
 export async function getCashAccounts(): Promise<CashAccount[]> {
   const res = await apiClient.get('/api/payments/cash-accounts');
   return safeParse(SingleResponseSchema(z.array(CashAccountSchema)), res.data, 'getCashAccounts').data;
@@ -177,6 +199,15 @@ export async function getCashAccounts(): Promise<CashAccount[]> {
 export async function createCashAccount(data: CreateCashAccountDTO): Promise<CashAccount> {
   const res = await apiClient.post('/api/payments/cash-accounts', data);
   return safeParse(SingleResponseSchema(CashAccountSchema), res.data, 'createCashAccount').data;
+}
+
+export async function updateCashAccount(id: string, data: UpdateCashAccountDTO): Promise<CashAccount> {
+  const res = await apiClient.patch(`/api/payments/cash-accounts/${id}`, data);
+  return safeParse(SingleResponseSchema(CashAccountSchema), res.data, 'updateCashAccount').data;
+}
+
+export async function deleteCashAccount(id: string): Promise<void> {
+  await apiClient.delete(`/api/payments/cash-accounts/${id}`);
 }
 
 export async function getPayments(params: PaymentListParams) {

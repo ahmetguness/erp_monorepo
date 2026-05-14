@@ -97,6 +97,9 @@ export const checkIn = (data: { employeeId: string; date?: string; checkIn?: str
 export const checkOut = (data: { employeeId: string; date?: string; checkOut?: string; overtimeHours?: number }) =>
   apiClient.post<{ data: Attendance }>('/api/hr/attendance/check-out', data).then((r) => r.data.data);
 
+export const updateAttendance = (id: string, data: { checkIn?: string | null; checkOut?: string | null; overtimeHours?: number; notes?: string }) =>
+  apiClient.patch<{ data: Attendance }>(`/api/hr/attendance/${id}`, data).then((r) => r.data.data);
+
 export const deleteAttendance = (id: string) => apiClient.delete(`/api/hr/attendance/${id}`);
 
 // ─── Payroll ──────────────────────────────────
