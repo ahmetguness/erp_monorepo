@@ -1145,8 +1145,8 @@ async function seedMarketplace(tenantId: string, products: { id: string }[]) {
   const integration = await prisma.marketplaceIntegration.create({
     data: {
       tenantId, channel: 'TRENDYOL', name: 'Trendyol Mağazası',
-      apiKey: 'demo-api-key-12345', apiSecret: 'demo-secret-67890',
-      storeId: 'STORE-001', isActive: true, lastSyncAt: d('2026-05-03'),
+      apiKey: 'test-key', apiSecret: 'test-secret',
+      storeId: '12345', isActive: true, lastSyncAt: d('2026-05-03'),
     },
   });
 

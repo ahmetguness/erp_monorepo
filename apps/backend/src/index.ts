@@ -138,6 +138,7 @@ app.post('/api/public/set-password', SetPasswordController.setPassword);
 app.post('/api/public/set-password/validate', SetPasswordController.validateToken);
 // Trendyol webhook (public — validated by secret header inside controller)
 app.post('/api/public/trendyol/webhook/:integrationId', TrendyolWebhookController.handle);
+app.post('/api/public/marketplace/webhook/:integrationId', TrendyolWebhookController.handle);
 
 // ── Admin Panel ──────────────────────────────
 app.route('/api/admin', adminRoutes);

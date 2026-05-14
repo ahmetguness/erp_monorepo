@@ -9,7 +9,30 @@ export interface MarketplaceIntegration {
   apiKey: string | null; apiSecret: string | null; storeId: string | null;
   isActive: boolean; lastSyncAt: string | null; syncErrors: number;
   createdAt: string; updatedAt: string;
+  hasApiKey?: boolean; hasApiSecret?: boolean;
   _count?: { listings: number; orders: number };
+}
+
+export interface CreateIntegrationDTO {
+  channel: string;
+  name: string;
+  apiKey?: string;
+  apiSecret?: string;
+  storeId?: string;
+}
+
+export interface UpdateIntegrationDTO {
+  name?: string;
+  apiKey?: string;
+  apiSecret?: string;
+  storeId?: string;
+  isActive?: boolean;
+}
+
+export interface MarketplaceHealth {
+  label: 'Sağlıklı' | 'Uyarı' | 'Hatalı';
+  tone: 'success' | 'warning' | 'danger';
+  reasons: string[];
 }
 
 export interface MarketplaceListing {
@@ -48,13 +71,43 @@ export const getIntegrations = () =>
 export const getIntegration = (id: string) =>
   apiClient.get<{ data: MarketplaceIntegration }>(`/api/marketplace/integrations/${id}`).then((r) => r.data.data);
 
-export const createIntegration = (data: { channel: string; name: string; apiKey?: string; apiSecret?: string; storeId?: string }) =>
+export const createIntegration = (data: CreateIntegrationDTO) =>
   apiClient.post<{ data: MarketplaceIntegration }>('/api/marketplace/integrations', data).then((r) => r.data.data);
 
-export const updateIntegration = (id: string, data: { name?: string; apiKey?: string; apiSecret?: string; storeId?: string; isActive?: boolean }) =>
+export const updateIntegration = (id: string, data: UpdateIntegrationDTO) =>
   apiClient.patch<{ data: MarketplaceIntegration }>(`/api/marketplace/integrations/${id}`, data).then((r) => r.data.data);
 
 export const deleteIntegration = (id: string) => apiClient.delete(`/api/marketplace/integrations/${id}`);
+
+export function getIntegrationHealth(integration: MarketplaceIntegration): MarketplaceHealth {
+  const reasons: string[] = [];
+
+  if (!integration.isActive) reasons.push('Entegrasyon pasif.');
+  if (!integration.hasApiKey || !integration.hasApiSecret || !integration.storeId) {
+    reasons.push('Kimlik bilgileri eksik.');
+  }
+  if (integration.syncErrors > 0) {
+    reasons.push(`${integration.syncErrors} senkronizasyon hatası var.`);
+  }
+  if (!integration.lastSyncAt) {
+    reasons.push('Henüz başarılı senkronizasyon yok.');
+  }
+
+  if (!integration.isActive || !integration.hasApiKey || !integration.hasApiSecret || !integration.storeId) {
+    return { label: 'Hatalı', tone: 'danger', reasons };
+  }
+
+  if (integration.syncErrors > 0 || !integration.lastSyncAt) {
+    return { label: 'Uyarı', tone: 'warning', reasons };
+  }
+
+  return { label: 'Sağlıklı', tone: 'success', reasons: ['Entegrasyon aktif ve kimlik bilgileri tanımlı.'] };
+}
+
+export function buildMarketplaceWebhookUrl(integrationId: string): string {
+  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+  return `${apiBase.replace(/\/$/, '')}/api/public/marketplace/webhook/${integrationId}`;
+}
 
 // ─── Listings ─────────────────────────────────
 
@@ -112,6 +165,9 @@ export const getSyncJobs = (params?: { page?: number; limit?: number; integratio
 
 export const getSyncJob = (id: string) =>
   apiClient.get<{ data: MarketplaceSyncJobRecord }>(`/api/marketplace/sync-jobs/${id}`).then((r) => r.data.data);
+
+export const retrySyncJob = (id: string) =>
+  apiClient.post<{ data: TrendyolJobEnqueueResult }>(`/api/marketplace/sync-jobs/${id}/retry`).then((r) => r.data.data);
 
 export const getWebhookEvents = (params?: { page?: number; limit?: number; integrationId?: string; eventType?: string; processed?: string }) =>
   apiClient.get<Paginated<MarketplaceWebhookEventRecord>>('/api/marketplace/webhook-events', { params }).then((r) => r.data);

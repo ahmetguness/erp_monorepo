@@ -63,17 +63,21 @@ export function useCreateListing() {
 
 export function useUpdateListing() {
   const qc = useQueryClient();
+  const { toast } = useUIStore();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Parameters<typeof svc.updateListing>[1] }) => svc.updateListing(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['mp-listings'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['mp-listings'] }); toast.success('Listeleme güncellendi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
 
 export function useDeleteListing() {
   const qc = useQueryClient();
+  const { toast } = useUIStore();
   return useMutation({
     mutationFn: svc.deleteListing,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['mp-listings'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['mp-listings'] }); toast.success('Listeleme silindi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
 
@@ -123,6 +127,20 @@ export function useSyncJob(id: string) {
       if (data && (data.status === 'DONE' || data.status === 'FAILED')) return false;
       return 3_000; // poll every 3s while PENDING/RUNNING
     },
+  });
+}
+
+export function useRetrySyncJob() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (id: string) => svc.retrySyncJob(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['mp-sync-jobs'] });
+      qc.invalidateQueries({ queryKey: ['mp-integrations'] });
+      toast.success('Sync job tekrar kuyruğa alındı.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
 

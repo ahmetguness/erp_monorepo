@@ -34,6 +34,8 @@ function getEnabledChannels(): string[] {
   // Geriye uyumluluk: TRENDYOL_MOCK=true
   if (process.env.TRENDYOL_MOCK === 'true') return ['trendyol'];
 
+  if (process.env.NODE_ENV !== 'production') return ['trendyol'];
+
   return [];
 }
 

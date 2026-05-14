@@ -22,6 +22,7 @@ import { logger } from '../lib/logger';
 
 export const MOCK_PORT = 3099;
 export const MOCK_BASE_URL = `http://localhost:${MOCK_PORT}`;
+const DEFAULT_BACKEND_URL = 'http://localhost:3001';
 
 // ─────────────────────────────────────────────
 // In-memory state
@@ -158,6 +159,18 @@ const MOCK_PRODUCTS = Array.from({ length: 3 }, (_, i) => ({
   ],
 }));
 
+interface MockWebhookRequest {
+  targetUrl?: string;
+  apiKey?: string;
+  packageIds?: number[];
+}
+
+interface MockWebhookResult {
+  targetUrl: string;
+  status: number;
+  response: unknown;
+}
+
 // Batch state: batchId -> status
 const batches = new Map<string, { status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'; items: unknown[] }>();
 
@@ -169,6 +182,11 @@ const mock = new Hono();
 
 // Auth check (loose — just verify header exists)
 mock.use('*', async (c, next) => {
+  if (c.req.path.startsWith('/mock/')) {
+    await next();
+    return;
+  }
+
   const auth = c.req.header('Authorization');
   if (!auth?.startsWith('Basic ')) {
     return c.json({ error: 'Unauthorized', exception: 'ClientApiAuthenticationException' }, 401);
@@ -222,6 +240,43 @@ mock.get('/integration/order/sellers/:sellerId/orders', (c) => {
     totalElements: orders.length,
     content,
   });
+});
+
+// GET /mock/webhook-payload?packageId=1000000
+mock.get('/mock/webhook-payload', (c) => {
+  const packageIds = readPackageIds(c.req.queries('packageId'));
+  return c.json(buildWebhookPayload(packageIds));
+});
+
+// POST /mock/webhook/:integrationId
+// Body: { "apiKey": "test-secret", "targetUrl": "http://localhost:3001", "packageIds": [1000000] }
+mock.post('/mock/webhook/:integrationId', async (c) => {
+  const integrationId = c.req.param('integrationId');
+  const rawBody = await c.req.json<unknown>().catch((): unknown => ({}));
+
+  if (!isMockWebhookRequest(rawBody)) {
+    return c.json({
+      error: 'Invalid request body',
+      expected: { targetUrl: 'string?', apiKey: 'string?', packageIds: 'number[]?' },
+    }, 400);
+  }
+
+  const targetBase = (rawBody.targetUrl ?? DEFAULT_BACKEND_URL).replace(/\/$/, '');
+  const targetUrl = `${targetBase}/api/public/marketplace/webhook/${integrationId}`;
+  const payload = buildWebhookPayload(rawBody.packageIds);
+
+  const res = await fetch(targetUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(rawBody.apiKey ? { 'x-api-key': rawBody.apiKey } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const response = await res.json().catch((): unknown => null);
+  const result: MockWebhookResult = { targetUrl, status: res.status, response };
+  return c.json(result, res.ok ? 200 : 502);
 });
 
 // POST /integration/inventory/sellers/:sellerId/products/price-and-inventory
@@ -317,6 +372,54 @@ mock.put('/integration/order/sellers/:sellerId/shipment-packages/:packageId/item
   return c.json({}, 200);
 });
 
+function readPackageIds(values: string[] | undefined): number[] | undefined {
+  if (!values?.length) return undefined;
+
+  const packageIds = values
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value));
+
+  return packageIds.length > 0 ? packageIds : undefined;
+}
+
+function buildWebhookPayload(packageIds?: number[]) {
+  const selectedOrders = packageIds?.length
+    ? MOCK_ORDERS.filter((order) => packageIds.includes(order.shipmentPackageId))
+    : MOCK_ORDERS.slice(0, 1);
+
+  return {
+    page: 0,
+    size: selectedOrders.length,
+    totalPages: selectedOrders.length > 0 ? 1 : 0,
+    totalElements: selectedOrders.length,
+    content: selectedOrders,
+  };
+}
+
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isNumberArray(value: unknown): value is number[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isInteger(item));
+}
+
+function isMockWebhookRequest(value: unknown): value is MockWebhookRequest {
+  if (!isUnknownRecord(value)) return false;
+
+  const targetUrl = value.targetUrl;
+  const apiKey = value.apiKey;
+  const packageIds = value.packageIds;
+
+  return (targetUrl === undefined || typeof targetUrl === 'string')
+    && (apiKey === undefined || typeof apiKey === 'string')
+    && (packageIds === undefined || isNumberArray(packageIds));
+}
+
+function hasClose(value: unknown): value is { close(): void } {
+  return isUnknownRecord(value) && typeof value.close === 'function';
+}
+
 // 404 fallback
 mock.notFound((c) => {
   logger.warn(`[TrendyolMock] 404: ${c.req.method} ${c.req.path}`);
@@ -338,8 +441,6 @@ export function startTrendyolMock(): void {
 }
 
 export function stopTrendyolMock(): void {
-  if (mockServer) {
-    (mockServer as unknown as { close(): void }).close();
-    mockServer = null;
-  }
+  if (mockServer && hasClose(mockServer)) mockServer.close();
+  mockServer = null;
 }

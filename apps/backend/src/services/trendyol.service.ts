@@ -20,9 +20,40 @@ import { logger } from '../lib/logger';
 // Constants
 // ─────────────────────────────────────────────
 
-const BASE_URL = process.env.TRENDYOL_MOCK === 'true'
-  ? 'http://localhost:3099'
-  : 'https://apigw.trendyol.com';
+function isTrendyolMockEnabled(): boolean {
+  if (process.env.TRENDYOL_MOCK === 'true') return true;
+
+  const marketplaceMock = process.env.MARKETPLACE_MOCK?.toLowerCase();
+  if (!marketplaceMock) return false;
+
+  return marketplaceMock
+    .split(',')
+    .map((channel) => channel.trim())
+    .some((channel) => channel === 'all' || channel === 'trendyol');
+}
+
+function isKnownMockCredentials(creds: TrendyolCredentials): boolean {
+  if (process.env.NODE_ENV === 'production') return false;
+
+  return (
+    creds.sellerId === '12345' &&
+    creds.apiKey === 'test-key' &&
+    creds.apiSecret === 'test-secret'
+  ) || (
+    creds.sellerId === 'STORE-001' &&
+    creds.apiKey === 'demo-api-key-12345' &&
+    creds.apiSecret === 'demo-secret-67890'
+  );
+}
+
+function getBaseUrl(creds: TrendyolCredentials): string {
+  if (isTrendyolMockEnabled() || isKnownMockCredentials(creds)) {
+    return 'http://localhost:3099';
+  }
+
+  return 'https://apigw.trendyol.com';
+}
+
 const INTEGRATOR = 'AxonERP';
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 3;
@@ -427,7 +458,7 @@ async function trendyolFetch<T>(
   path: string,
   options: RequestInit & { timeoutMs?: number } = {},
 ): Promise<T> {
-  const url = `${BASE_URL}${path}`;
+  const url = `${getBaseUrl(creds)}${path}`;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const headers = buildHeaders(creds);
 
@@ -511,6 +542,12 @@ export const TrendyolService = {
       await this.getAddresses(creds);
       return { success: true, message: 'Trendyol bağlantısı başarılı.' };
     } catch (err) {
+      if (err instanceof TrendyolApiError && err.statusCode === 401) {
+        return {
+          success: false,
+          message: 'Trendyol kimlik bilgileri geçersiz. Satıcı ID, API Key ve API Secret bilgilerini kontrol edin.',
+        };
+      }
       return { success: false, message: err instanceof Error ? err.message : String(err) };
     }
   },

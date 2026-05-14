@@ -1,5 +1,5 @@
 import { Context } from 'hono';
-import { MarketplaceChannel, MarketplaceOrderStatus, SyncJobType, SyncJobStatus } from '@prisma/client';
+import { MarketplaceChannel, MarketplaceOrderStatus, Prisma, SyncJobType, SyncJobStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import {
@@ -7,8 +7,40 @@ import {
   buildTrendyolCredentials,
 } from '../services/trendyol.service';
 import { TrendyolWorker } from '../services/trendyol-worker.service';
+import type { JobParams } from '../services/trendyol-worker.service';
 import { requireTenantId } from '../utils/context.js';
 import { getPaginationParams } from '../utils/pagination.js';
+
+type IntegrationWithSecrets = {
+  apiKey: string | null;
+  apiSecret: string | null;
+};
+
+function hideIntegrationSecrets<T extends IntegrationWithSecrets>(
+  integration: T,
+): Omit<T, 'apiKey' | 'apiSecret'> & {
+  apiKey: null;
+  apiSecret: null;
+  hasApiKey: boolean;
+  hasApiSecret: boolean;
+} {
+  const { apiKey, apiSecret, ...rest } = integration;
+  return {
+    ...rest,
+    apiKey: null,
+    apiSecret: null,
+    hasApiKey: Boolean(apiKey),
+    hasApiSecret: Boolean(apiSecret),
+  };
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function toJobParams(value: Prisma.JsonValue): JobParams {
+  return isJsonObject(value) ? value : {};
+}
 
 // ─────────────────────────────────────────────
 // Marketplace Controller — Entegrasyon, Listeleme, Sipariş
@@ -23,7 +55,7 @@ export const MarketplaceIntegrationController = {
       include: { _count: { select: { listings: true, orders: true } } },
       orderBy: { createdAt: 'desc' },
     });
-    return c.json({ data });
+    return c.json({ data: data.map(hideIntegrationSecrets) });
   },
 
   async getById(c: Context): Promise<Response> {
@@ -38,7 +70,7 @@ export const MarketplaceIntegrationController = {
       },
     });
     if (!integration) return c.json(new NotFoundError('Entegrasyon', id).toJSON(), 404);
-    return c.json({ data: integration });
+    return c.json({ data: hideIntegrationSecrets(integration) });
   },
 
   async create(c: Context): Promise<Response> {
@@ -61,7 +93,7 @@ export const MarketplaceIntegrationController = {
         apiKey: body.apiKey ?? null, apiSecret: body.apiSecret ?? null, storeId: body.storeId ?? null,
       },
     });
-    return c.json({ data: integration }, 201);
+    return c.json({ data: hideIntegrationSecrets(integration) }, 201);
   },
 
   async update(c: Context): Promise<Response> {
@@ -82,7 +114,7 @@ export const MarketplaceIntegrationController = {
         ...(body.isActive !== undefined && { isActive: body.isActive }),
       },
     });
-    return c.json({ data: updated });
+    return c.json({ data: hideIntegrationSecrets(updated) });
   },
 
   async remove(c: Context): Promise<Response> {
@@ -410,6 +442,26 @@ export const MarketplaceMonitoringController = {
     if (!job) return c.json(new NotFoundError('Sync Job', id).toJSON(), 404);
 
     return c.json({ data: job });
+  },
+
+  async retrySyncJob(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const job = await prisma.marketplaceSyncJob.findFirst({ where: { id, tenantId } });
+    if (!job) return c.json(new NotFoundError('Sync Job', id).toJSON(), 404);
+    if (job.status !== SyncJobStatus.FAILED) {
+      return c.json(new ValidationError('Sadece başarısız job tekrar kuyruğa alınabilir.').toJSON(), 400);
+    }
+
+    const jobId = await TrendyolWorker.enqueue(
+      tenantId,
+      job.integrationId,
+      job.jobType,
+      toJobParams(job.params ?? {}),
+    );
+
+    return c.json({ data: { jobId, message: 'Sync job tekrar kuyruğa alındı.' } }, 202);
   },
 
   // ── Webhook Events ────────────────────────────
