@@ -1,6 +1,7 @@
 import { Context } from 'hono';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { deleteCookie, setCookie } from 'hono/cookie';
 import { prisma } from '../lib/prisma';
 import { ValidationError, ForbiddenError, NotFoundError } from '../errors';
 import { Prisma } from '@prisma/client';
@@ -15,6 +16,8 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
 
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '7d';
+const AUTH_COOKIE_NAME = 'axon_token';
+const REMEMBER_ME_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 // ─────────────────────────────────────────────
 // Rate limiter (register + login brute force koruması)
@@ -42,6 +45,7 @@ interface LoginDTO {
   email: string;
   password: string;
   tenantSlug?: string;
+  rememberMe?: boolean;
 }
 
 interface RegisterDTO {
@@ -57,6 +61,24 @@ interface JwtPayload {
   tenantId: string;
   iat?: number;
   exp?: number;
+}
+
+function setAuthCookie(c: Context, token: string, rememberMe = true): void {
+  setCookie(c, AUTH_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'Lax',
+    path: '/',
+    ...(rememberMe ? { maxAge: REMEMBER_ME_MAX_AGE_SECONDS } : {}),
+  });
+}
+
+function clearAuthCookie(c: Context): void {
+  deleteCookie(c, AUTH_COOKIE_NAME, {
+    path: '/',
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'Lax',
+  });
 }
 
 // ─────────────────────────────────────────────
@@ -164,6 +186,7 @@ export const AuthController = {
     const token = jwt.sign(payload, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
     });
+    setAuthCookie(c, token, body.rememberMe ?? true);
 
     // lastLoginAt güncelle
     await prisma.user.update({
@@ -295,6 +318,7 @@ export const AuthController = {
     const token = jwt.sign(payload, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
     });
+    setAuthCookie(c, token, true);
 
     return c.json(
       {
@@ -320,6 +344,15 @@ export const AuthController = {
       },
       201,
     );
+  },
+
+  /**
+   * POST /api/auth/logout
+   * HttpOnly auth cookie'sini temizler.
+   */
+  async logout(c: Context): Promise<Response> {
+    clearAuthCookie(c);
+    return c.json({ data: { success: true } });
   },
 
   /**

@@ -6,6 +6,7 @@ const authRoutes = new Hono();
 
 authRoutes.post('/login', AuthController.login);
 authRoutes.post('/register', AuthController.register);
+authRoutes.post('/logout', AuthController.logout);
 authRoutes.get('/me', requireAuth, AuthController.me);
 authRoutes.patch('/me/preferences', requireAuth, AuthController.updatePreferences);
 

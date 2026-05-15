@@ -4,7 +4,8 @@ import { useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
-import { useUIStore } from '@/store/ui.store';import { login, register, getMe } from '@/services/auth.service';
+import { useUIStore } from '@/store/ui.store';
+import { login, logout, register, getMe } from '@/services/auth.service';
 import { getErrorMessage } from '@/types/api.types';
 import type { LoginCredentials, RegisterData } from '@/services/auth.service';
 
@@ -19,7 +20,7 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: (vars: { credentials: LoginCredentials; rememberMe: boolean }) =>
-      login(vars.credentials),
+      login({ ...vars.credentials, rememberMe: vars.rememberMe }),
     onSuccess: (data, vars) => {
       console.log('LOGIN TENANT DATA:', JSON.stringify(data.tenant));
       storeLogin(data.user, data.token, data.tenant, vars.rememberMe);
@@ -62,6 +63,7 @@ export function useLogout() {
   const { logout: storeLogout } = useAuthStore();
 
   return () => {
+    logout().catch(() => {});
     storeLogout();
     // Hard redirect — React layout'un spinner render etmesini önler.
     // router.replace yerine window.location kullanılır; böylece

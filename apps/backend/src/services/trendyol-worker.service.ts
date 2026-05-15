@@ -4,11 +4,8 @@
  * In-process job queue -- persisted in marketplace_sync_jobs table.
  *
  * Concurrency note:
- *   Single process: findFirst + update is safe (no race condition).
- *   Multi-process/pod: use claimNextJob() which does an atomic
- *   UPDATE ... WHERE status='PENDING' ... RETURNING to prevent
- *   double-processing. Enabled automatically when WORKER_CONCURRENCY
- *   env var is set or when multiple pods are detected.
+ *   claimNextJob() uses an atomic UPDATE ... RETURNING with row locking so
+ *   multiple API instances can safely run the worker without double-processing.
  */
 
 import { prisma } from '../lib/prisma';
@@ -96,46 +93,24 @@ export const TrendyolWorker = {
 
 /**
  * Atomically claim the next PENDING job using a raw UPDATE...RETURNING.
- * Safe for multi-process/pod deployments -- no two workers can claim
- * the same job because the WHERE clause filters on status='PENDING'
- * and the UPDATE sets it to 'RUNNING' in a single statement.
- *
- * Falls back to findFirst+update for single-process when
- * WORKER_CONCURRENCY is not set (avoids raw SQL overhead).
+ * Safe for multi-process/pod deployments because the row is locked and status
+ * is changed to RUNNING in a single statement.
  */
 async function claimNextJob() {
-  const multiProcess = !!process.env.WORKER_CONCURRENCY;
-
-  if (multiProcess) {
-    // Atomic claim via raw SQL -- PostgreSQL only
-    const rows = await prisma.$queryRaw<Array<{ id: string }>>`
-      UPDATE marketplace_sync_jobs
-      SET    status = 'RUNNING', "startedAt" = NOW(), "updatedAt" = NOW()
-      WHERE  id = (
-        SELECT id FROM marketplace_sync_jobs
-        WHERE  status = 'PENDING'
-        ORDER  BY "createdAt" ASC
-        LIMIT  1
-        FOR UPDATE SKIP LOCKED
-      )
-      RETURNING id
-    `;
-    if (!rows.length) return null;
-    return prisma.marketplaceSyncJob.findUnique({ where: { id: rows[0].id } });
-  }
-
-  // Single-process path -- simple findFirst + update
-  const job = await prisma.marketplaceSyncJob.findFirst({
-    where: { status: SyncJobStatus.PENDING },
-    orderBy: { createdAt: 'asc' },
-  });
-  if (!job) return null;
-
-  await prisma.marketplaceSyncJob.update({
-    where: { id: job.id },
-    data: { status: SyncJobStatus.RUNNING, startedAt: new Date() },
-  });
-  return job;
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+    UPDATE marketplace_sync_jobs
+    SET    status = 'RUNNING', "startedAt" = NOW(), "updatedAt" = NOW()
+    WHERE  id = (
+      SELECT id FROM marketplace_sync_jobs
+      WHERE  status = 'PENDING'
+      ORDER  BY "createdAt" ASC
+      LIMIT  1
+      FOR UPDATE SKIP LOCKED
+    )
+    RETURNING id
+  `;
+  if (!rows.length) return null;
+  return prisma.marketplaceSyncJob.findUnique({ where: { id: rows[0].id } });
 }
 
 // ---------------------------------------------

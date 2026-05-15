@@ -1,16 +1,17 @@
 import { Hono } from 'hono';
 import { SettingsController } from '../controllers/settings.controller';
+import { requirePermission } from '../middleware/requirePermission';
 
 // Settings tüm planlara açık — requireAuth zaten tenantApi seviyesinde uygulanıyor
 const settingsRoutes = new Hono();
 
 // Tenant settings
-settingsRoutes.get('/', SettingsController.listTenantSettings);
-settingsRoutes.put('/', SettingsController.upsertTenantSetting);
-settingsRoutes.delete('/:key', SettingsController.deleteTenantSetting);
+settingsRoutes.get('/', requirePermission('settings', 'READ'), SettingsController.listTenantSettings);
+settingsRoutes.put('/', requirePermission('settings', 'UPDATE'), SettingsController.upsertTenantSetting);
+settingsRoutes.delete('/:key', requirePermission('settings', 'DELETE'), SettingsController.deleteTenantSetting);
 
 // Module settings
-settingsRoutes.get('/modules', SettingsController.listModuleSettings);
-settingsRoutes.put('/modules', SettingsController.upsertModuleSetting);
+settingsRoutes.get('/modules', requirePermission('settings', 'READ'), SettingsController.listModuleSettings);
+settingsRoutes.put('/modules', requirePermission('settings', 'UPDATE'), SettingsController.upsertModuleSetting);
 
 export { settingsRoutes };

@@ -35,17 +35,8 @@ export const useAuthStore = create<AuthStore>()(
     (set) => ({
       ...initialState,
 
-      login: (user, token, tenant, rememberMe = true) => {
-        if (typeof window !== 'undefined') {
-          if (rememberMe) {
-            const maxAge = 7 * 24 * 60 * 60;
-            document.cookie = `axon_token=${token}; path=/; max-age=${maxAge}; SameSite=Lax`;
-          } else {
-            // Session cookie — tarayıcı kapanınca silinir
-            document.cookie = `axon_token=${token}; path=/; SameSite=Lax`;
-          }
-        }
-        set({ user, token, tenant, isAuthenticated: true });
+      login: (user, _token, tenant, _rememberMe = true) => {
+        set({ user, token: null, tenant, isAuthenticated: true });
       },
 
       logout: () => {
@@ -67,7 +58,6 @@ export const useAuthStore = create<AuthStore>()(
       name: 'axon-auth',
       partialize: (state) => ({
         user: state.user,
-        token: state.token,
         tenant: state.tenant,
         isAuthenticated: state.isAuthenticated,
       }),

@@ -1,14 +1,15 @@
 import { Hono } from 'hono';
 import { NotificationController } from '../controllers/notification.controller';
+import { requirePermission } from '../middleware/requirePermission';
 
 // Notifications tüm planlara açık — requireAuth zaten tenantApi seviyesinde uygulanıyor
 const notificationRoutes = new Hono();
 
-notificationRoutes.get('/', NotificationController.list);
-notificationRoutes.post('/read-all', NotificationController.markAllAsRead);
-notificationRoutes.post('/:id/read', NotificationController.markAsRead);
-notificationRoutes.post('/:id/archive', NotificationController.archive);
-notificationRoutes.delete('/all', NotificationController.deleteAll);
-notificationRoutes.delete('/:id', NotificationController.delete);
+notificationRoutes.get('/', requirePermission('notifications', 'READ'), NotificationController.list);
+notificationRoutes.post('/read-all', requirePermission('notifications', 'UPDATE'), NotificationController.markAllAsRead);
+notificationRoutes.post('/:id/read', requirePermission('notifications', 'UPDATE'), NotificationController.markAsRead);
+notificationRoutes.post('/:id/archive', requirePermission('notifications', 'UPDATE'), NotificationController.archive);
+notificationRoutes.delete('/all', requirePermission('notifications', 'DELETE'), NotificationController.deleteAll);
+notificationRoutes.delete('/:id', requirePermission('notifications', 'DELETE'), NotificationController.delete);
 
 export { notificationRoutes };

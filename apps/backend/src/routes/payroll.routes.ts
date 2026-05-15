@@ -3,6 +3,7 @@ import { FeatureKey, Plan } from '@prisma/client';
 import { requirePlan } from '../middleware/requirePlan';
 import { requireFeature } from '../middleware/requireFeature';
 import { requireModule } from '../middleware/requireModule';
+import { requirePermission } from '../middleware/requirePermission';
 import { MODULE_KEYS } from '../types/module.types';
 import { PayrollController } from '../controllers/payroll.controller';
 
@@ -12,13 +13,13 @@ payrollRoutes.use('*', requirePlan(Plan.ENTERPRISE));
 payrollRoutes.use('*', requireFeature(FeatureKey.PAYROLL));
 payrollRoutes.use('*', requireModule(MODULE_KEYS.PAYROLL));
 
-payrollRoutes.get('/', PayrollController.list);
-payrollRoutes.post('/', PayrollController.create);
-payrollRoutes.post('/generate-bulk', PayrollController.generateBulk);
-payrollRoutes.get('/:id', PayrollController.getById);
-payrollRoutes.post('/:id/items', PayrollController.addItem);
-payrollRoutes.delete('/:id/items/:itemId', PayrollController.removeItem);
-payrollRoutes.post('/:id/pay', PayrollController.markPaid);
-payrollRoutes.delete('/:id', PayrollController.remove);
+payrollRoutes.get('/', requirePermission('payroll', 'READ'), PayrollController.list);
+payrollRoutes.post('/', requirePermission('payroll', 'CREATE'), PayrollController.create);
+payrollRoutes.post('/generate-bulk', requirePermission('payroll', 'CREATE'), PayrollController.generateBulk);
+payrollRoutes.get('/:id', requirePermission('payroll', 'READ'), PayrollController.getById);
+payrollRoutes.post('/:id/items', requirePermission('payroll', 'UPDATE'), PayrollController.addItem);
+payrollRoutes.delete('/:id/items/:itemId', requirePermission('payroll', 'UPDATE'), PayrollController.removeItem);
+payrollRoutes.post('/:id/pay', requirePermission('payroll', 'UPDATE'), PayrollController.markPaid);
+payrollRoutes.delete('/:id', requirePermission('payroll', 'DELETE'), PayrollController.remove);
 
 export { payrollRoutes };

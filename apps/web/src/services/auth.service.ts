@@ -88,6 +88,7 @@ export interface LoginCredentials {
   email: string;
   password: string;
   tenantSlug?: string;
+  rememberMe?: boolean;
 }
 
 export interface RegisterData {
@@ -112,6 +113,10 @@ export async function register(data: RegisterData): Promise<RegisterResponse> {
   const res = await apiClient.post('/api/auth/register', data);
   const parsed = safeParse(RegisterResponseSchema, res.data, 'register').data;
   return parsed as RegisterResponse;
+}
+
+export async function logout(): Promise<void> {
+  await apiClient.post('/api/auth/logout');
 }
 
 export async function getMe(): Promise<{ user: AuthUser; tenant: TenantInfo; preferences: Record<string, unknown> | null }> {
