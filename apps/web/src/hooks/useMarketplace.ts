@@ -81,6 +81,48 @@ export function useDeleteListing() {
   });
 }
 
+export function usePublishListingToMarketplace() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof svc.publishListingToMarketplace>[1] }) =>
+      svc.publishListingToMarketplace(id, data),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['mp-listings'] });
+      toast.success(`Ürün pazaryerine gönderildi. Batch: ${result.batchRequestId}`);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useUpdateMarketplaceProduct() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof svc.updateMarketplaceProduct>[1] }) =>
+      svc.updateMarketplaceProduct(id, data),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['mp-listings'] });
+      toast.success(`Pazaryeri ürünü güncellendi. Batch: ${result.batchRequestId}`);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useDeleteMarketplaceProduct() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data?: Parameters<typeof svc.deleteMarketplaceProduct>[1] }) =>
+      svc.deleteMarketplaceProduct(id, data),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['mp-listings'] });
+      toast.success(`Pazaryeri silme isteği gönderildi. Batch: ${result.batchRequestId}`);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
 // ─── Orders ───────────────────────────────────
 
 export function useMarketplaceOrders(params?: { page?: number; limit?: number; status?: string; channel?: string }) {

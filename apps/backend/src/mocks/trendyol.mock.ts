@@ -11,6 +11,9 @@
  * Mock'un desteklediği endpoint'ler:
  *   GET  /integration/sellers/:sellerId/addresses
  *   GET  /integration/order/sellers/:sellerId/orders
+ *   POST /integration/product/sellers/:sellerId/products
+ *   PUT  /integration/product/sellers/:sellerId/products
+ *   DELETE /integration/product/sellers/:sellerId/products
  *   POST /integration/inventory/sellers/:sellerId/products/price-and-inventory
  *   GET  /integration/product/sellers/:sellerId/products/batch-requests/:batchId
  *   GET  /integration/product/sellers/:sellerId/products
@@ -171,6 +174,10 @@ interface MockWebhookResult {
   response: unknown;
 }
 
+interface MockBatchBody {
+  items?: unknown[];
+}
+
 // Batch state: batchId -> status
 const batches = new Map<string, { status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'; items: unknown[] }>();
 
@@ -312,6 +319,21 @@ mock.post('/integration/inventory/sellers/:sellerId/products/price-and-inventory
   return c.json({ batchRequestId });
 });
 
+mock.post('/integration/product/sellers/:sellerId/products', async (c) => {
+  const body = await c.req.json<MockBatchBody>();
+  return c.json(createMockBatch(body.items ?? [], 'PRODUCT_CREATE'));
+});
+
+mock.put('/integration/product/sellers/:sellerId/products', async (c) => {
+  const body = await c.req.json<MockBatchBody>();
+  return c.json(createMockBatch(body.items ?? [], 'PRODUCT_UPDATE'));
+});
+
+mock.delete('/integration/product/sellers/:sellerId/products', async (c) => {
+  const body = await c.req.json<MockBatchBody>();
+  return c.json(createMockBatch(body.items ?? [], 'PRODUCT_DELETE'));
+});
+
 // GET /integration/product/sellers/:sellerId/products/batch-requests/:batchId
 mock.get('/integration/product/sellers/:sellerId/products/batch-requests/:batchId', (c) => {
   const batchId = c.req.param('batchId');
@@ -394,6 +416,23 @@ function buildWebhookPayload(packageIds?: number[]) {
     totalElements: selectedOrders.length,
     content: selectedOrders,
   };
+}
+
+function createMockBatch(items: unknown[], sourceType: string): { batchRequestId: string } {
+  const batchRequestId = `mock-${sourceType.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  batches.set(batchRequestId, { status: 'IN_PROGRESS', items });
+  setTimeout(() => {
+    const batch = batches.get(batchRequestId);
+    if (batch) {
+      batch.status = 'COMPLETED';
+      batch.items = items.map((item) => ({
+        requestItem: item,
+        status: 'SUCCESS',
+        failureReasons: [],
+      }));
+    }
+  }, 1_000);
+  return { batchRequestId };
 }
 
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {

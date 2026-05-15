@@ -36,6 +36,9 @@ marketplaceRoutes.get('/integrations/:id/trendyol/batch/:batchRequestId', requir
 // Listlemeler
 marketplaceRoutes.get('/listings', requirePermission('marketplace', 'READ'), MarketplaceListingController.list);
 marketplaceRoutes.post('/listings', requirePermission('marketplace', 'CREATE'), MarketplaceListingController.create);
+marketplaceRoutes.post('/listings/:id/publish', requirePermission('marketplace', 'UPDATE'), MarketplaceListingController.publishToMarketplace);
+marketplaceRoutes.post('/listings/:id/update-marketplace', requirePermission('marketplace', 'UPDATE'), MarketplaceListingController.updateMarketplaceProduct);
+marketplaceRoutes.post('/listings/:id/delete-marketplace', requirePermission('marketplace', 'DELETE'), MarketplaceListingController.deleteMarketplaceProduct);
 marketplaceRoutes.patch('/listings/:id', requirePermission('marketplace', 'UPDATE'), MarketplaceListingController.update);
 marketplaceRoutes.delete('/listings/:id', requirePermission('marketplace', 'DELETE'), MarketplaceListingController.remove);
 

@@ -70,6 +70,27 @@ if (!process.env.OPENAI_API_KEY) {
 const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const APP_ROLE = process.env.APP_ROLE ?? 'api';
+
+function shouldStartHttpServer(): boolean {
+  return APP_ROLE !== 'worker';
+}
+
+function shouldStartMarketplaceWorker(): boolean {
+  if (process.env.MARKETPLACE_WORKER_ENABLED === 'true') return true;
+  if (process.env.MARKETPLACE_WORKER_ENABLED === 'false') return false;
+
+  return APP_ROLE === 'worker' || APP_ROLE === 'all';
+}
+
+function startBackgroundServices(): void {
+  if (shouldStartMarketplaceWorker()) {
+    TrendyolWorker.start();
+  } else {
+    logger.info('[TrendyolWorker] Disabled. Set MARKETPLACE_WORKER_ENABLED=true or APP_ROLE=worker to enable.');
+  }
+  startMarketplaceMocks();
+}
 
 // ── CORS ─────────────────────────────────────
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
@@ -225,8 +246,12 @@ app.notFound((c) => {
 });
 
 // ── Başlangıç ────────────────────────────────
-serve({ fetch: app.fetch, port: PORT }, () => {
-  printBanner(PORT);
-  TrendyolWorker.start();
-  startMarketplaceMocks();
-});
+if (shouldStartHttpServer()) {
+  serve({ fetch: app.fetch, port: PORT }, () => {
+    printBanner(PORT);
+    startBackgroundServices();
+  });
+} else {
+  logger.info('[Startup] APP_ROLE=worker; HTTP API server disabled.');
+  startBackgroundServices();
+}

@@ -35,17 +35,17 @@ export function SearchInput({
 
   return (
     <div className={cn('relative flex items-center', className)}>
-      <Search className="absolute left-3 w-4 h-4 text-slate-600 pointer-events-none" />
+      <Search className="absolute left-3 w-4 h-4 text-slate-500 pointer-events-none" />
       <input
         type="search"
         value={local}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl text-sm text-white placeholder-slate-600 pl-9 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500/40 transition-all"
+        className="w-full rounded-xl border border-slate-700/75 bg-slate-950/35 py-2.5 pl-9 pr-8 text-sm text-white placeholder-slate-600 shadow-sm transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-sky-500/35 focus:border-sky-500/60"
       />
       {local && (
         <button onClick={handleClear} aria-label="Temizle"
-          className="absolute right-2.5 p-0.5 rounded-md text-slate-600 hover:text-slate-300 hover:bg-slate-700/50 transition-colors">
+          className="absolute right-2.5 p-0.5 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-700/70 transition-colors">
           <X className="w-3.5 h-3.5" />
         </button>
       )}

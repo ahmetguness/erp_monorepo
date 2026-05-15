@@ -6,6 +6,7 @@ import {
   TrendyolService,
   buildTrendyolCredentials,
 } from '../services/trendyol.service';
+import type { TrendyolProductItemInput } from '../services/trendyol.service';
 import { TrendyolWorker } from '../services/trendyol-worker.service';
 import type { JobParams } from '../services/trendyol-worker.service';
 import { requireTenantId } from '../utils/context.js';
@@ -15,6 +16,42 @@ type IntegrationWithSecrets = {
   apiKey: string | null;
   apiSecret: string | null;
 };
+
+interface TrendyolListingProductDTO {
+  barcode?: string;
+  title?: string;
+  productMainId?: string;
+  brandId: number;
+  categoryId: number;
+  quantity?: number;
+  stockCode?: string;
+  dimensionalWeight?: number;
+  description?: string;
+  listPrice?: number;
+  salePrice?: number;
+  vatRate?: number;
+  cargoCompanyId: number;
+  shipmentAddressId?: number;
+  returningAddressId?: number;
+  images?: string[];
+  attributes?: Array<{
+    attributeId: number;
+    attributeValueId?: number;
+    customAttributeValue?: string;
+  }>;
+}
+
+type MarketplaceListingActionListing = Prisma.MarketplaceListingGetPayload<{
+  include: {
+    product: { select: { id: true; code: true; name: true; salesPrice: true } };
+    integration: { select: { id: true; channel: true; name: true } };
+  };
+}>;
+
+interface MarketplaceListingActionResult {
+  batchRequestId: string;
+  listing: MarketplaceListingActionListing;
+}
 
 function hideIntegrationSecrets<T extends IntegrationWithSecrets>(
   integration: T,
@@ -40,6 +77,61 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 
 function toJobParams(value: Prisma.JsonValue): JobParams {
   return isJsonObject(value) ? value : {};
+}
+
+function parsePositiveNumber(value: number | undefined, fallback: number): number {
+  return value !== undefined && Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function toTrendyolProductItem(
+  listing: {
+    externalId: string;
+    externalSku: string | null;
+    price: Prisma.Decimal;
+    stock: Prisma.Decimal;
+    product: {
+      code: string;
+      name: string;
+      barcode: string | null;
+      description: string | null;
+      imageUrl: string | null;
+    };
+  },
+  body: TrendyolListingProductDTO,
+): TrendyolProductItemInput {
+  const barcode = (body.barcode ?? listing.externalId ?? listing.product.barcode ?? '').trim();
+  const title = (body.title ?? listing.product.name).trim();
+  const productMainId = (body.productMainId ?? listing.product.code).trim();
+  const stockCode = (body.stockCode ?? listing.externalSku ?? listing.product.code).trim();
+  const description = (body.description ?? listing.product.description ?? title).trim();
+  const salePrice = parsePositiveNumber(body.salePrice, Number(listing.price));
+  const listPrice = parsePositiveNumber(body.listPrice, salePrice);
+  const quantity = parsePositiveNumber(body.quantity, Number(listing.stock));
+  const dimensionalWeight = parsePositiveNumber(body.dimensionalWeight, 1);
+  const vatRate = parsePositiveNumber(body.vatRate, 20);
+  const imageUrls = body.images?.filter((url) => url.trim().length > 0)
+    ?? (listing.product.imageUrl ? [listing.product.imageUrl] : []);
+
+  return {
+    barcode,
+    title,
+    productMainId,
+    brandId: body.brandId,
+    categoryId: body.categoryId,
+    quantity,
+    stockCode,
+    dimensionalWeight,
+    description,
+    currencyType: 'TRY',
+    listPrice,
+    salePrice,
+    vatRate,
+    cargoCompanyId: body.cargoCompanyId,
+    ...(body.shipmentAddressId !== undefined && { shipmentAddressId: body.shipmentAddressId }),
+    ...(body.returningAddressId !== undefined && { returningAddressId: body.returningAddressId }),
+    images: imageUrls.map((url) => ({ url })),
+    attributes: body.attributes ?? [],
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -170,6 +262,13 @@ export const MarketplaceListingController = {
       return c.json(new ValidationError('integrationId, productId, externalId ve price zorunludur.').toJSON(), 400);
     }
 
+    const [integration, product] = await prisma.$transaction([
+      prisma.marketplaceIntegration.findFirst({ where: { id: body.integrationId, tenantId } }),
+      prisma.product.findFirst({ where: { id: body.productId, tenantId } }),
+    ]);
+    if (!integration) return c.json(new NotFoundError('Entegrasyon', body.integrationId).toJSON(), 404);
+    if (!product) return c.json(new NotFoundError('Ürün', body.productId).toJSON(), 404);
+
     const listing = await prisma.marketplaceListing.create({
       data: {
         tenantId, integrationId: body.integrationId, productId: body.productId,
@@ -179,6 +278,140 @@ export const MarketplaceListingController = {
       include: { product: { select: { id: true, code: true, name: true } } },
     });
     return c.json({ data: listing }, 201);
+  },
+
+  async publishToMarketplace(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const listing = await prisma.marketplaceListing.findFirst({
+      where: { id, tenantId },
+      include: {
+        integration: true,
+        product: {
+          select: { code: true, name: true, barcode: true, description: true, imageUrl: true },
+        },
+      },
+    });
+    if (!listing) return c.json(new NotFoundError('Listeleme', id).toJSON(), 404);
+    if (listing.integration.channel !== MarketplaceChannel.TRENDYOL) {
+      return c.json(new ValidationError('Bu aksiyon şu anda sadece Trendyol entegrasyonu için desteklenir.').toJSON(), 400);
+    }
+    if (!listing.integration.isActive) return c.json(new ValidationError('Entegrasyon pasif.').toJSON(), 400);
+
+    const body = await c.req.json<TrendyolListingProductDTO>();
+    const item = toTrendyolProductItem(listing, body);
+
+    try {
+      const creds = buildTrendyolCredentials(listing.integration);
+      const batch = await TrendyolService.createProducts(creds, [item]);
+      const updated = await prisma.marketplaceListing.update({
+        where: { id },
+        data: {
+          externalId: item.barcode,
+          externalSku: item.stockCode,
+          price: item.salePrice,
+          stock: item.quantity,
+          isActive: true,
+          lastSyncAt: new Date(),
+          syncError: null,
+        },
+        include: {
+          product: { select: { id: true, code: true, name: true, salesPrice: true } },
+          integration: { select: { id: true, channel: true, name: true } },
+        },
+      });
+      const result: MarketplaceListingActionResult = { batchRequestId: batch.batchRequestId, listing: updated };
+      return c.json({ data: result }, 202);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await prisma.marketplaceListing.update({ where: { id }, data: { syncError: message } });
+      return c.json(new ValidationError(message).toJSON(), 502);
+    }
+  },
+
+  async updateMarketplaceProduct(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const listing = await prisma.marketplaceListing.findFirst({
+      where: { id, tenantId },
+      include: {
+        integration: true,
+        product: {
+          select: { code: true, name: true, barcode: true, description: true, imageUrl: true },
+        },
+      },
+    });
+    if (!listing) return c.json(new NotFoundError('Listeleme', id).toJSON(), 404);
+    if (listing.integration.channel !== MarketplaceChannel.TRENDYOL) {
+      return c.json(new ValidationError('Bu aksiyon şu anda sadece Trendyol entegrasyonu için desteklenir.').toJSON(), 400);
+    }
+
+    const body = await c.req.json<TrendyolListingProductDTO>();
+    const item = toTrendyolProductItem(listing, body);
+
+    try {
+      const creds = buildTrendyolCredentials(listing.integration);
+      const batch = await TrendyolService.updateProducts(creds, [item]);
+      const updated = await prisma.marketplaceListing.update({
+        where: { id },
+        data: {
+          externalId: item.barcode,
+          externalSku: item.stockCode,
+          price: item.salePrice,
+          stock: item.quantity,
+          lastSyncAt: new Date(),
+          syncError: null,
+        },
+        include: {
+          product: { select: { id: true, code: true, name: true, salesPrice: true } },
+          integration: { select: { id: true, channel: true, name: true } },
+        },
+      });
+      const result: MarketplaceListingActionResult = { batchRequestId: batch.batchRequestId, listing: updated };
+      return c.json({ data: result }, 202);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await prisma.marketplaceListing.update({ where: { id }, data: { syncError: message } });
+      return c.json(new ValidationError(message).toJSON(), 502);
+    }
+  },
+
+  async deleteMarketplaceProduct(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const listing = await prisma.marketplaceListing.findFirst({
+      where: { id, tenantId },
+      include: { integration: true, product: { select: { barcode: true } } },
+    });
+    if (!listing) return c.json(new NotFoundError('Listeleme', id).toJSON(), 404);
+    if (listing.integration.channel !== MarketplaceChannel.TRENDYOL) {
+      return c.json(new ValidationError('Bu aksiyon şu anda sadece Trendyol entegrasyonu için desteklenir.').toJSON(), 400);
+    }
+
+    const body = await c.req.json<{ barcode?: string }>().catch((): { barcode?: string } => ({}));
+    const barcode = (body.barcode ?? listing.externalId ?? listing.product.barcode ?? '').trim();
+
+    try {
+      const creds = buildTrendyolCredentials(listing.integration);
+      const batch = await TrendyolService.deleteProducts(creds, [{ barcode }]);
+      const updated = await prisma.marketplaceListing.update({
+        where: { id },
+        data: { isActive: false, lastSyncAt: new Date(), syncError: null },
+        include: {
+          product: { select: { id: true, code: true, name: true, salesPrice: true } },
+          integration: { select: { id: true, channel: true, name: true } },
+        },
+      });
+      const result: MarketplaceListingActionResult = { batchRequestId: batch.batchRequestId, listing: updated };
+      return c.json({ data: result }, 202);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await prisma.marketplaceListing.update({ where: { id }, data: { syncError: message } });
+      return c.json(new ValidationError(message).toJSON(), 502);
+    }
   },
 
   async update(c: Context): Promise<Response> {

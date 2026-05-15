@@ -44,6 +44,35 @@ export interface MarketplaceListing {
   integration?: { id: string; channel: string; name: string };
 }
 
+export interface TrendyolListingProductDTO {
+  barcode?: string;
+  title?: string;
+  productMainId?: string;
+  brandId: number;
+  categoryId: number;
+  quantity?: number;
+  stockCode?: string;
+  dimensionalWeight?: number;
+  description?: string;
+  listPrice?: number;
+  salePrice?: number;
+  vatRate?: number;
+  cargoCompanyId: number;
+  shipmentAddressId?: number;
+  returningAddressId?: number;
+  images?: string[];
+  attributes?: Array<{
+    attributeId: number;
+    attributeValueId?: number;
+    customAttributeValue?: string;
+  }>;
+}
+
+export interface MarketplaceListingActionResult {
+  batchRequestId: string;
+  listing: MarketplaceListing;
+}
+
 export interface MarketplaceOrderItem {
   id: string; externalProductId: string; productId: string | null;
   name: string; quantity: number; unitPrice: number; lineTotal: number;
@@ -121,6 +150,15 @@ export const updateListing = (id: string, data: { price?: number; stock?: number
   apiClient.patch<{ data: MarketplaceListing }>(`/api/marketplace/listings/${id}`, data).then((r) => r.data.data);
 
 export const deleteListing = (id: string) => apiClient.delete(`/api/marketplace/listings/${id}`);
+
+export const publishListingToMarketplace = (id: string, data: TrendyolListingProductDTO) =>
+  apiClient.post<{ data: MarketplaceListingActionResult }>(`/api/marketplace/listings/${id}/publish`, data).then((r) => r.data.data);
+
+export const updateMarketplaceProduct = (id: string, data: TrendyolListingProductDTO) =>
+  apiClient.post<{ data: MarketplaceListingActionResult }>(`/api/marketplace/listings/${id}/update-marketplace`, data).then((r) => r.data.data);
+
+export const deleteMarketplaceProduct = (id: string, data?: { barcode?: string }) =>
+  apiClient.post<{ data: MarketplaceListingActionResult }>(`/api/marketplace/listings/${id}/delete-marketplace`, data ?? {}).then((r) => r.data.data);
 
 // ─── Orders ───────────────────────────────────
 

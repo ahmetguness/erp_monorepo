@@ -227,6 +227,41 @@ export interface TrendyolProductsResponse {
   content: TrendyolProduct[];
 }
 
+export interface TrendyolProductAttributeInput {
+  attributeId: number;
+  attributeValueId?: number;
+  customAttributeValue?: string;
+}
+
+export interface TrendyolProductImageInput {
+  url: string;
+}
+
+export interface TrendyolProductItemInput {
+  barcode: string;
+  title: string;
+  productMainId: string;
+  brandId: number;
+  categoryId: number;
+  quantity: number;
+  stockCode: string;
+  dimensionalWeight: number;
+  description: string;
+  currencyType: 'TRY';
+  listPrice: number;
+  salePrice: number;
+  vatRate: number;
+  cargoCompanyId: number;
+  shipmentAddressId?: number;
+  returningAddressId?: number;
+  images: TrendyolProductImageInput[];
+  attributes: TrendyolProductAttributeInput[];
+}
+
+export interface TrendyolProductDeleteItem {
+  barcode: string;
+}
+
 // ── Stock & Price ─────────────────────────────
 
 export interface TrendyolPriceInventoryItem {
@@ -678,6 +713,46 @@ export const TrendyolService = {
     );
   },
 
+  async createProducts(
+    creds: TrendyolCredentials,
+    items: TrendyolProductItemInput[],
+  ): Promise<TrendyolBatchResponse> {
+    validateProductItems(items);
+    return trendyolFetch<TrendyolBatchResponse>(
+      creds,
+      `/integration/product/sellers/${creds.sellerId}/products`,
+      { method: 'POST', body: JSON.stringify({ items }) },
+    );
+  },
+
+  async updateProducts(
+    creds: TrendyolCredentials,
+    items: TrendyolProductItemInput[],
+  ): Promise<TrendyolBatchResponse> {
+    validateProductItems(items);
+    return trendyolFetch<TrendyolBatchResponse>(
+      creds,
+      `/integration/product/sellers/${creds.sellerId}/products`,
+      { method: 'PUT', body: JSON.stringify({ items }) },
+    );
+  },
+
+  async deleteProducts(
+    creds: TrendyolCredentials,
+    items: TrendyolProductDeleteItem[],
+  ): Promise<TrendyolBatchResponse> {
+    if (items.length === 0) throw new Error('En az 1 ürün gereklidir.');
+    if (items.length > 1000) throw new Error('Maksimum 1000 ürün silinebilir.');
+    for (const item of items) {
+      if (!item.barcode.trim()) throw new Error('Silme için barkod zorunludur.');
+    }
+    return trendyolFetch<TrendyolBatchResponse>(
+      creds,
+      `/integration/product/sellers/${creds.sellerId}/products`,
+      { method: 'DELETE', body: JSON.stringify({ items }) },
+    );
+  },
+
   // ── Stock & Price ─────────────────────────────
 
   async updatePriceAndInventory(
@@ -759,6 +834,23 @@ export const TrendyolService = {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function validateProductItems(items: TrendyolProductItemInput[]): void {
+  if (items.length === 0) throw new Error('En az 1 ürün gereklidir.');
+  if (items.length > 1000) throw new Error('Maksimum 1000 ürün gönderilebilir.');
+
+  for (const item of items) {
+    if (!item.barcode.trim()) throw new Error('Barkod zorunludur.');
+    if (!item.title.trim()) throw new Error(`Barkod ${item.barcode}: başlık zorunludur.`);
+    if (!item.productMainId.trim()) throw new Error(`Barkod ${item.barcode}: productMainId zorunludur.`);
+    if (!item.stockCode.trim()) throw new Error(`Barkod ${item.barcode}: stockCode zorunludur.`);
+    if (!Number.isInteger(item.brandId) || item.brandId <= 0) throw new Error(`Barkod ${item.barcode}: brandId geçersiz.`);
+    if (!Number.isInteger(item.categoryId) || item.categoryId <= 0) throw new Error(`Barkod ${item.barcode}: categoryId geçersiz.`);
+    if (item.listPrice < item.salePrice) {
+      throw new Error(`Barkod ${item.barcode}: listPrice (${item.listPrice}) < salePrice (${item.salePrice})`);
+    }
+  }
 }
 
 /**

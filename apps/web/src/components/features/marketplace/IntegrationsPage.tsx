@@ -1,19 +1,21 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   Check,
   CheckCircle2,
+  Clock3,
   Clipboard,
-  Eye,
   KeyRound,
   Link2,
   Loader2,
   Package,
   Plus,
   RefreshCw,
+  Search,
   Settings,
+  ShieldCheck,
   ShoppingCart,
   ToggleLeft,
   ToggleRight,
@@ -74,8 +76,21 @@ type IntegrationForm = {
   storeId: string;
 };
 
+type StatusFilter = "ALL" | "ACTIVE" | "PASSIVE";
+type HealthFilter = "ALL" | "success" | "warning" | "danger";
+
 function emptyForm(): IntegrationForm {
   return { channel: "TRENDYOL", name: "", apiKey: "", apiSecret: "", storeId: "" };
+}
+
+function formFromIntegration(integration: MarketplaceIntegration): IntegrationForm {
+  return {
+    channel: integration.channel,
+    name: integration.name,
+    apiKey: "",
+    apiSecret: "",
+    storeId: integration.storeId ?? "",
+  };
 }
 
 function getChannelInfo(channel: string) {
@@ -94,6 +109,10 @@ function buildUpdateDTO(form: IntegrationForm): UpdateIntegrationDTO {
     apiSecret: toOptional(form.apiSecret),
     storeId: toOptional(form.storeId),
   };
+}
+
+function isCredentialComplete(integration: MarketplaceIntegration): boolean {
+  return Boolean(integration.hasApiKey && integration.hasApiSecret && integration.storeId);
 }
 
 interface TrendyolActionsProps {
@@ -289,6 +308,42 @@ function MiniMetric({
   );
 }
 
+function SummaryTile({
+  icon,
+  label,
+  value,
+  detail,
+  tone = "neutral",
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  detail: string;
+  tone?: "neutral" | "success" | "warning" | "danger";
+}) {
+  const toneClass = {
+    neutral: "text-sky-300 bg-sky-500/10 border-sky-500/20",
+    success: "text-emerald-300 bg-emerald-500/10 border-emerald-500/20",
+    warning: "text-amber-300 bg-amber-500/10 border-amber-500/20",
+    danger: "text-red-300 bg-red-500/10 border-red-500/20",
+  }[tone];
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-medium text-slate-500">{label}</div>
+          <div className="text-xl font-semibold text-white tabular-nums mt-1">{value}</div>
+        </div>
+        <div className={`w-9 h-9 rounded-lg border flex items-center justify-center ${toneClass}`}>
+          {icon}
+        </div>
+      </div>
+      <div className="text-[11px] text-slate-500 mt-2 truncate">{detail}</div>
+    </div>
+  );
+}
+
 function CredentialsModal({
   integration,
   isOpen,
@@ -299,18 +354,9 @@ function CredentialsModal({
   onClose: () => void;
 }) {
   const update = useUpdateIntegration();
-  const [form, setForm] = useState<IntegrationForm>(emptyForm);
-
-  useEffect(() => {
-    if (!integration) return;
-    setForm({
-      channel: integration.channel,
-      name: integration.name,
-      apiKey: "",
-      apiSecret: "",
-      storeId: integration.storeId ?? "",
-    });
-  }, [integration]);
+  const [form, setForm] = useState<IntegrationForm>(() =>
+    integration ? formFromIntegration(integration) : emptyForm(),
+  );
 
   return (
     <Modal
@@ -392,12 +438,48 @@ export function IntegrationsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [credentialTarget, setCredentialTarget] = useState<MarketplaceIntegration | null>(null);
   const [webhookTarget, setWebhookTarget] = useState<MarketplaceIntegration | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MarketplaceIntegration | null>(null);
+  const [search, setSearch] = useState("");
+  const [channelFilter, setChannelFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [healthFilter, setHealthFilter] = useState<HealthFilter>("ALL");
   const [form, setForm] = useState<IntegrationForm>(emptyForm);
 
   const { data: integrations = [], isLoading } = useIntegrations();
   const create = useCreateIntegration();
   const update = useUpdateIntegration();
   const remove = useDeleteIntegration();
+
+  const summary = useMemo(() => {
+    const active = integrations.filter((integration) => integration.isActive).length;
+    const healthy = integrations.filter((integration) => getIntegrationHealth(integration).tone === "success").length;
+    const syncErrors = integrations.reduce((total, integration) => total + integration.syncErrors, 0);
+    const listings = integrations.reduce((total, integration) => total + (integration._count?.listings ?? 0), 0);
+    const orders = integrations.reduce((total, integration) => total + (integration._count?.orders ?? 0), 0);
+
+    return { active, healthy, syncErrors, listings, orders };
+  }, [integrations]);
+
+  const filteredIntegrations = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return integrations.filter((integration) => {
+      const channel = getChannelInfo(integration.channel);
+      const health = getIntegrationHealth(integration);
+      const matchesSearch =
+        query.length === 0 ||
+        integration.name.toLowerCase().includes(query) ||
+        channel.label.toLowerCase().includes(query) ||
+        (integration.storeId ?? "").toLowerCase().includes(query);
+      const matchesChannel = channelFilter === "ALL" || integration.channel === channelFilter;
+      const matchesStatus =
+        statusFilter === "ALL" ||
+        (statusFilter === "ACTIVE" ? integration.isActive : !integration.isActive);
+      const matchesHealth = healthFilter === "ALL" || health.tone === healthFilter;
+
+      return matchesSearch && matchesChannel && matchesStatus && matchesHealth;
+    });
+  }, [channelFilter, healthFilter, integrations, search, statusFilter]);
 
   return (
     <div>
@@ -412,6 +494,52 @@ export function IntegrationsPage() {
         }
       />
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 mb-4">
+        <SummaryTile icon={<Link2 className="w-4 h-4" />} label="Toplam" value={String(integrations.length)} detail={`${summary.active} aktif entegrasyon`} />
+        <SummaryTile icon={<ShieldCheck className="w-4 h-4" />} label="Saglikli" value={String(summary.healthy)} detail="Eksiksiz ve hatasiz kanal" tone="success" />
+        <SummaryTile icon={<AlertCircle className="w-4 h-4" />} label="Sync Hatasi" value={String(summary.syncErrors)} detail="Mudahale bekleyen hata" tone={summary.syncErrors > 0 ? "danger" : "neutral"} />
+        <SummaryTile icon={<Package className="w-4 h-4" />} label="Listeleme" value={String(summary.listings)} detail="Pazaryerine bagli urun" tone="warning" />
+        <SummaryTile icon={<ShoppingCart className="w-4 h-4" />} label="Siparis" value={String(summary.orders)} detail="Senkronize edilen siparis" />
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_180px_150px_150px] gap-3">
+          <Input
+            placeholder="Entegrasyon, kanal veya magaza ID ara"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            prefixIcon={<Search className="w-4 h-4" />}
+          />
+          <Select
+            options={[
+              { value: "ALL", label: "Tüm Kanallar" },
+              ...CHANNELS.map((channel) => ({ value: channel.value, label: channel.label })),
+            ]}
+            value={channelFilter}
+            onChange={(event) => setChannelFilter(event.target.value)}
+          />
+          <Select
+            options={[
+              { value: "ALL", label: "Tüm Durumlar" },
+              { value: "ACTIVE", label: "Aktif" },
+              { value: "PASSIVE", label: "Pasif" },
+            ]}
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+          />
+          <Select
+            options={[
+              { value: "ALL", label: "Sağlık Durumu" },
+              { value: "success", label: "Sağlıklı" },
+              { value: "warning", label: "Uyarı" },
+              { value: "danger", label: "Hatalı" },
+            ]}
+            value={healthFilter}
+            onChange={(event) => setHealthFilter(event.target.value as HealthFilter)}
+          />
+        </div>
+      </div>
+
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
@@ -422,9 +550,28 @@ export function IntegrationsPage() {
           <p className="text-slate-400 text-sm">Henüz entegrasyon yok.</p>
           <p className="text-slate-600 text-xs mt-1">Bir pazaryeri kanalı bağlayarak başlayın.</p>
         </div>
+      ) : filteredIntegrations.length === 0 ? (
+        <div className="text-center py-16 bg-slate-900 border border-slate-800 rounded-xl">
+          <Search className="w-9 h-9 text-slate-600 mx-auto mb-3" />
+          <p className="text-slate-300 text-sm font-medium">Filtrelerle eslesen entegrasyon yok.</p>
+          <p className="text-slate-600 text-xs mt-1">Arama veya filtreleri temizleyip tekrar deneyin.</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4"
+            onClick={() => {
+              setSearch("");
+              setChannelFilter("ALL");
+              setStatusFilter("ALL");
+              setHealthFilter("ALL");
+            }}
+          >
+            Filtreleri Temizle
+          </Button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {integrations.map((integration) => {
+          {filteredIntegrations.map((integration) => {
             const channel = getChannelInfo(integration.channel);
             const health = getIntegrationHealth(integration);
 
@@ -450,6 +597,22 @@ export function IntegrationsPage() {
                 </div>
 
                 <Badge variant={HEALTH_VARIANT[health.tone]}>{health.label}</Badge>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-2 rounded-lg bg-slate-800/30 border border-slate-700/40 px-3 py-2">
+                    <KeyRound className={`w-3.5 h-3.5 ${isCredentialComplete(integration) ? "text-emerald-400" : "text-amber-400"}`} />
+                    <div className="min-w-0">
+                      <div className="text-[10px] text-slate-500">Kimlik</div>
+                      <div className="text-xs text-slate-200 truncate">{isCredentialComplete(integration) ? "Hazir" : "Eksik"}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg bg-slate-800/30 border border-slate-700/40 px-3 py-2">
+                    <Clock3 className="w-3.5 h-3.5 text-sky-400" />
+                    <div className="min-w-0">
+                      <div className="text-[10px] text-slate-500">Son Sync</div>
+                      <div className="text-xs text-slate-200 truncate">{integration.lastSyncAt ? formatDate(integration.lastSyncAt) : "Yok"}</div>
+                    </div>
+                  </div>
+                </div>
                 <div className="mt-2 space-y-1">
                   {health.reasons.slice(0, 2).map((reason) => (
                     <div key={reason} className="flex items-center gap-1.5 text-[11px] text-slate-500">
@@ -471,7 +634,7 @@ export function IntegrationsPage() {
                       onClick={() => update.mutate({ id: integration.id, data: { isActive: !integration.isActive } })}
                       icon={integration.isActive ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
                     />
-                    <IconButton title="Sil" danger onClick={() => remove.mutate(integration.id)} icon={<Trash2 className="w-3.5 h-3.5" />} />
+                    <IconButton title="Sil" danger onClick={() => setDeleteTarget(integration)} icon={<Trash2 className="w-3.5 h-3.5" />} />
                   </div>
                 </div>
 
@@ -527,8 +690,46 @@ export function IntegrationsPage() {
         </div>
       </Modal>
 
-      <CredentialsModal integration={credentialTarget} isOpen={!!credentialTarget} onClose={() => setCredentialTarget(null)} />
+      <CredentialsModal
+        key={credentialTarget?.id ?? "credentials-modal-empty"}
+        integration={credentialTarget}
+        isOpen={!!credentialTarget}
+        onClose={() => setCredentialTarget(null)}
+      />
       <WebhookModal integration={webhookTarget} isOpen={!!webhookTarget} onClose={() => setWebhookTarget(null)} />
+      <Modal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Entegrasyonu Sil"
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(null)}>Vazgec</Button>
+            <Button
+              variant="danger"
+              size="sm"
+              loading={remove.isPending}
+              disabled={!deleteTarget}
+              onClick={() => {
+                if (!deleteTarget) return;
+                remove.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) });
+              }}
+            >
+              Sil
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-3">
+            <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm text-slate-200">{deleteTarget?.name} entegrasyonu silinecek.</p>
+              <p className="text-xs text-slate-500 mt-1">Bagli listeleme, siparis ve sync gecmisi etkilenebilir. Bu islem geri alinamaz.</p>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

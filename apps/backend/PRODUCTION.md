@@ -37,3 +37,12 @@ For larger deployments, run worker capacity intentionally:
 - API instances handle user traffic.
 - Worker instances handle marketplace sync load.
 - Both count toward the database connection budget above.
+
+By default, the backend process does not start the marketplace worker. Enable it only for the process that should process jobs:
+
+```text
+APP_ROLE=worker
+MARKETPLACE_WORKER_ENABLED=true
+```
+
+Use `APP_ROLE=api` for pure API instances, and `APP_ROLE=all` only for small deployments where one process intentionally handles both API traffic and background jobs.

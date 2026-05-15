@@ -27,28 +27,42 @@ export function Pagination({ page, total, totalPages, onChange }: PaginationProp
 
   return (
     <div className="flex items-center justify-between gap-4">
-      <p className="text-xs text-slate-600">
-        <span className="text-slate-400 font-medium">{total}</span> kayıt
+      <p className="text-xs text-slate-500">
+        <span className="font-semibold text-slate-300">{total}</span> kayıt
       </p>
       <div className="flex items-center gap-0.5">
-        <button onClick={() => onChange(page - 1)} disabled={page === 1}
-          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 disabled:opacity-20 disabled:cursor-not-allowed transition-colors" aria-label="Önceki">
+        <button
+          onClick={() => onChange(page - 1)}
+          disabled={page === 1}
+          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+          aria-label="Önceki"
+        >
           <ChevronLeft className="w-4 h-4" />
         </button>
         {pages.map((p, i) =>
           p === '...' ? (
-            <span key={`e-${i}`} className="px-1.5 text-slate-600 text-xs">…</span>
+            <span key={`e-${i}`} className="px-1.5 text-slate-600 text-xs">...</span>
           ) : (
-            <button key={p} onClick={() => onChange(p)}
-              className={cn('w-7 h-7 rounded-lg text-xs font-medium transition-all',
-                p === page ? 'bg-sky-500/15 text-sky-400 border border-sky-500/20' : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800',
-              )}>
+            <button
+              key={p}
+              onClick={() => onChange(p)}
+              className={cn(
+                'w-7 h-7 rounded-lg text-xs font-medium transition-all',
+                p === page
+                  ? 'bg-sky-500/15 text-sky-300 border border-sky-500/25 shadow-sm shadow-sky-950/20'
+                  : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800',
+              )}
+            >
               {p}
             </button>
           ),
         )}
-        <button onClick={() => onChange(page + 1)} disabled={page === totalPages}
-          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 disabled:opacity-20 disabled:cursor-not-allowed transition-colors" aria-label="Sonraki">
+        <button
+          onClick={() => onChange(page + 1)}
+          disabled={page === totalPages}
+          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+          aria-label="Sonraki"
+        >
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>

@@ -32,22 +32,22 @@ export function RowActions({ actions }: RowActionsProps) {
     <div ref={ref} className="relative">
       <button
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
-        className="p-1 rounded-md hover:bg-slate-800 text-slate-500 hover:text-slate-300 transition-colors"
+        className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-800/90 hover:text-slate-200"
       >
         <MoreHorizontal className="w-4 h-4" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 w-48 bg-slate-900 border border-slate-800 rounded-lg shadow-xl shadow-black/20 py-1">
+        <div className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-xl border border-slate-800/90 bg-slate-950/95 py-1.5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.03]">
           {actions.map((action, i) => (
             <div key={i}>
               {action.separator && i > 0 && <div className="border-t border-slate-800 my-1" />}
               <button
                 onClick={(e) => { e.stopPropagation(); action.onClick(); setOpen(false); }}
                 className={cn(
-                  'w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors',
+                  'w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors',
                   action.variant === 'danger'
                     ? 'text-red-400 hover:bg-red-500/10'
-                    : 'text-slate-300 hover:bg-slate-800',
+                    : 'text-slate-300 hover:bg-slate-800/90',
                 )}
               >
                 {action.icon && <span className="w-4 h-4 shrink-0">{action.icon}</span>}

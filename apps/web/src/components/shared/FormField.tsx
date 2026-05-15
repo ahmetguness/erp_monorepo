@@ -26,7 +26,7 @@ export function FormField({
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
       {label && (
-        <label htmlFor={htmlFor} className="text-sm font-medium text-slate-300">
+        <label htmlFor={htmlFor} className="text-[13px] font-medium text-slate-300">
           {label}
           {required && <span className="text-red-400 ml-0.5">*</span>}
         </label>
@@ -77,7 +77,7 @@ export interface FormSectionProps {
 export function FormSection({ title, description, children, className }: FormSectionProps) {
   return (
     <div className={cn('space-y-4', className)}>
-      <div className="pb-2 border-b border-slate-800">
+      <div className="pb-2 border-b border-slate-800/80">
         <h3 className="text-sm font-semibold text-slate-200">{title}</h3>
         {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
       </div>
