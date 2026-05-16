@@ -1,8 +1,10 @@
 import { Context } from 'hono';
 import crypto from 'crypto';
+import { AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireUserId } from '../utils/context.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -18,6 +20,39 @@ interface ApiKeyListQuery {
   page?: string;
   limit?: string;
   isActive?: string;
+}
+
+const VALID_API_KEY_SCOPES = new Set([
+  'products:read',
+  'products:write',
+  'products:delete',
+  'contacts:read',
+  'contacts:write',
+  'contacts:delete',
+  'invoices:read',
+  'invoices:write',
+  'invoices:delete',
+  'inventory:read',
+  'inventory:write',
+  'orders:read',
+  'orders:write',
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseCreateApiKeyBody(value: unknown): CreateApiKeyDTO | ValidationError {
+  if (!isRecord(value)) return new ValidationError('Geçersiz istek gövdesi.');
+
+  const name = typeof value.name === 'string' ? value.name.trim() : '';
+  const scopes = Array.isArray(value.scopes) && value.scopes.every((scope) => typeof scope === 'string')
+    ? value.scopes
+    : undefined;
+  const expiresAt = typeof value.expiresAt === 'string' && value.expiresAt.trim() ? value.expiresAt : undefined;
+
+  if (!name) return new ValidationError('name alanı zorunludur.');
+  return { name, scopes, expiresAt };
 }
 
 // ─────────────────────────────────────────────
@@ -72,11 +107,20 @@ export const ApiKeyController = {
 
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
 
-    const body = await c.req.json<CreateApiKeyDTO>();
+    const parsed = parseCreateApiKeyBody(await c.req.json<unknown>().catch(() => null));
+    if (parsed instanceof ValidationError) return c.json(parsed.toJSON(), 400);
+    const body = parsed;
 
-    if (!body.name) {
-      return c.json(new ValidationError('name alanı zorunludur.').toJSON(), 400);
+    const scopes = body.scopes ?? [];
+    if (scopes.length === 0) {
+      return c.json(new ValidationError('En az bir API scope secilmelidir.').toJSON(), 400);
+    }
+
+    const invalidScopes = scopes.filter((scope) => !VALID_API_KEY_SCOPES.has(scope));
+    if (invalidScopes.length > 0) {
+      return c.json(new ValidationError(`Gecersiz API scope: ${invalidScopes.join(', ')}`).toJSON(), 400);
     }
 
     // Generate random key
@@ -90,8 +134,9 @@ export const ApiKeyController = {
         name: body.name,
         keyHash,
         keyPrefix,
-        scopes: body.scopes ?? [],
+        scopes,
         expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+        createdById: userId,
       },
       select: {
         id: true,
@@ -105,12 +150,24 @@ export const ApiKeyController = {
       },
     });
 
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'api_keys',
+      entityType: EntityType.OTHER,
+      entityId: apiKey.id,
+      action: AuditAction.CREATE,
+      newValues: { id: apiKey.id, name: apiKey.name, keyPrefix: apiKey.keyPrefix, scopes: apiKey.scopes, expiresAt: apiKey.expiresAt },
+      ...getRequestMeta(c),
+    });
+
     // Return raw key ONCE — it cannot be retrieved again
     return c.json({ data: { ...apiKey, rawKey } }, 201);
   },
 
   async revoke(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = c.req.param('id')!;
 
     const existing = await prisma.apiKey.findFirst({
@@ -121,7 +178,7 @@ export const ApiKeyController = {
 
     const updated = await prisma.apiKey.update({
       where: { id },
-      data: { isActive: false, revokedAt: new Date() },
+      data: { isActive: false, revokedAt: new Date(), revokedById: userId },
       select: {
         id: true,
         name: true,
@@ -131,11 +188,24 @@ export const ApiKeyController = {
       },
     });
 
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'api_keys',
+      entityType: EntityType.OTHER,
+      entityId: id,
+      action: AuditAction.UPDATE,
+      oldValues: { id, name: existing.name, isActive: existing.isActive, scopes: existing.scopes },
+      newValues: { id: updated.id, name: updated.name, isActive: updated.isActive, revokedAt: updated.revokedAt },
+      ...getRequestMeta(c),
+    });
+
     return c.json({ data: updated });
   },
 
   async delete(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = c.req.param('id')!;
 
     const existing = await prisma.apiKey.findFirst({
@@ -147,6 +217,17 @@ export const ApiKeyController = {
     await prisma.apiKey.update({
       where: { id },
       data: { deletedAt: new Date() },
+    });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'api_keys',
+      entityType: EntityType.OTHER,
+      entityId: id,
+      action: AuditAction.DELETE,
+      oldValues: { id, name: existing.name, keyPrefix: existing.keyPrefix, scopes: existing.scopes },
+      ...getRequestMeta(c),
     });
 
     return c.json({ data: { success: true } });

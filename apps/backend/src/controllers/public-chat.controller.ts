@@ -6,88 +6,65 @@ import { handlePublicChat, handlePublicChatStream } from '../services/ai-chat.se
 import { createDemoRequest } from '../services/demo.service';
 import { prisma } from '../lib/prisma';
 import { sanitizeOutput } from '../lib/output-sanitizer';
-
-// ─────────────────────────────────────────────
-// Config
-// ─────────────────────────────────────────────
+import { rateLimiter } from '../lib/rateLimiter';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-/** Public chatbot rate limit — IP başına dakikada max mesaj */
 const PUBLIC_RATE_LIMIT_PER_MINUTE = 10;
 const PUBLIC_RATE_LIMIT_DAILY = 100;
+const PUBLIC_SESSION_DAILY_LIMIT = Number(process.env.PUBLIC_CHAT_SESSION_DAILY_LIMIT ?? '30');
+const PUBLIC_DAILY_REQUEST_BUDGET = Number(process.env.PUBLIC_CHAT_DAILY_REQUEST_BUDGET ?? '1000');
 const MAX_MESSAGE_LENGTH = 500;
 
-// ─────────────────────────────────────────────
-// In-memory rate limiter (IP bazlı)
-// ─────────────────────────────────────────────
-
-interface RateEntry {
-  minuteCount: number;
-  minuteResetAt: number;
-  dailyCount: number;
-  dailyResetAt: number;
+function getClientIp(c: Context): string {
+  return c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'unknown';
 }
 
-const rateLimits = new Map<string, RateEntry>();
+async function checkPublicRateLimit(ip: string, sessionId: string): Promise<{ allowed: boolean; reason?: string }> {
+  const dayKey = new Date().toISOString().slice(0, 10);
 
-// Rate limit entry'lerini periyodik temizle
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of rateLimits) {
-    if (now > entry.dailyResetAt) rateLimits.delete(key);
-  }
-}, 10 * 60 * 1000);
+  const budgetExceeded = await rateLimiter.check(`pubchat_budget:${dayKey}`, PUBLIC_DAILY_REQUEST_BUDGET, 86_400_000);
+  if (budgetExceeded) return { allowed: false, reason: 'Gunluk asistan kapasitesi doldu. Lutfen daha sonra tekrar deneyin.' };
 
-function checkPublicRateLimit(ip: string): { allowed: boolean; reason?: string } {
-  const now = Date.now();
-  let entry = rateLimits.get(ip);
+  const dailyExceeded = await rateLimiter.check(`pubchat_d:${ip}`, PUBLIC_RATE_LIMIT_DAILY, 86_400_000);
+  if (dailyExceeded) return { allowed: false, reason: 'Gunluk mesaj limitine ulastiniz.' };
 
-  if (!entry) {
-    entry = {
-      minuteCount: 0,
-      minuteResetAt: now + 60_000,
-      dailyCount: 0,
-      dailyResetAt: now + 86_400_000,
-    };
-    rateLimits.set(ip, entry);
-  }
+  const minuteExceeded = await rateLimiter.check(`pubchat_m:${ip}`, PUBLIC_RATE_LIMIT_PER_MINUTE, 60_000);
+  if (minuteExceeded) return { allowed: false, reason: 'Cok fazla mesaj gonderdiniz. Biraz bekleyin.' };
 
-  if (now > entry.minuteResetAt) {
-    entry.minuteCount = 0;
-    entry.minuteResetAt = now + 60_000;
-  }
+  const sessionExceeded = await rateLimiter.check(`pubchat_s:${sessionId}`, PUBLIC_SESSION_DAILY_LIMIT, 86_400_000);
+  if (sessionExceeded) return { allowed: false, reason: 'Bu sohbet icin gunluk mesaj limitine ulastiniz.' };
 
-  if (now > entry.dailyResetAt) {
-    entry.dailyCount = 0;
-    entry.dailyResetAt = now + 86_400_000;
-  }
-
-  if (entry.minuteCount >= PUBLIC_RATE_LIMIT_PER_MINUTE) {
-    return { allowed: false, reason: 'Çok fazla mesaj gönderdiniz. Biraz bekleyin.' };
-  }
-
-  if (entry.dailyCount >= PUBLIC_RATE_LIMIT_DAILY) {
-    return { allowed: false, reason: 'Günlük mesaj limitine ulaştınız.' };
-  }
-
-  entry.minuteCount++;
-  entry.dailyCount++;
   return { allowed: true };
 }
 
-// ─────────────────────────────────────────────
-// Shared helpers
-// ─────────────────────────────────────────────
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parsePublicChatBody(value: unknown): { message: string; sessionId: string } | ValidationError {
+  if (!isRecord(value)) return new ValidationError('Gecersiz istek govdesi.');
+
+  const message = typeof value.message === 'string' ? value.message.trim() : '';
+  const rawSessionId = typeof value.sessionId === 'string' && value.sessionId.trim()
+    ? value.sessionId.trim()
+    : `pub-${Date.now()}`;
+  const sessionId = rawSessionId.slice(0, 64).replace(/[^a-zA-Z0-9\-_]/g, '') || `pub-${Date.now()}`;
+
+  if (!message) return new ValidationError('Mesaj bos olamaz.');
+  if (message.length > MAX_MESSAGE_LENGTH) return new ValidationError(`Mesaj en fazla ${MAX_MESSAGE_LENGTH} karakter olabilir.`);
+
+  return { message, sessionId };
+}
 
 async function buildChatDeps() {
   const createDemoFn = async (data: { fullName: string; companyName: string; email: string; phone: string; plan: string }) => {
+    const plan = data.plan === 'PROFESSIONAL' || data.plan === 'ENTERPRISE' ? data.plan : 'STARTER';
     return createDemoRequest({
       fullName: data.fullName,
       companyName: data.companyName,
       email: data.email,
       phone: data.phone || undefined,
-      plan: data.plan as 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE',
+      plan,
     });
   };
 
@@ -99,97 +76,71 @@ async function buildChatDeps() {
       include: { tenants: { where: { isActive: true }, include: { tenant: { select: { status: true } } } } },
     });
     if (existingUser?.tenants.some((tu) => tu.tenant.status === 'ACTIVE' || tu.tenant.status === 'TRIAL')) {
-      return { available: false, message: 'Bu e-posta adresi ile zaten aktif bir hesap bulunmaktadır. Giriş yapmayı deneyin.' };
+      return { available: false, message: 'Bu e-posta adresi ile zaten aktif bir hesap bulunmaktadir. Giris yapmayi deneyin.' };
     }
 
     const activeDemo = await prisma.demoRequest.findFirst({ where: { email: normalized, status: 'PROVISIONED' } });
-    if (activeDemo) return { available: false, message: 'Bu e-posta adresi için zaten aktif bir demo hesabı mevcut.' };
+    if (activeDemo) return { available: false, message: 'Bu e-posta adresi icin zaten aktif bir demo hesabi mevcut.' };
 
     const pending = await prisma.demoRequest.findFirst({
       where: { email: normalized, status: { in: ['PENDING', 'APPROVED', 'PROVISIONING'] } },
     });
-    if (pending) return { available: false, message: 'Bu e-posta adresi için bekleyen bir demo talebi zaten bulunuyor.' };
+    if (pending) return { available: false, message: 'Bu e-posta adresi icin bekleyen bir demo talebi zaten bulunuyor.' };
 
     const recent = await prisma.demoRequest.findFirst({
       where: { email: normalized, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
     });
-    if (recent) return { available: false, message: 'Bu e-posta ile son 24 saat içinde zaten bir demo talebi oluşturulmuş.' };
+    if (recent) return { available: false, message: 'Bu e-posta ile son 24 saat icinde zaten bir demo talebi olusturulmus.' };
 
-    return { available: true, message: 'E-posta adresi müsait.' };
+    return { available: true, message: 'E-posta adresi musait.' };
   };
 
   return { createDemoFn, checkEmailFn };
 }
 
-function validatePublicRequest(c: Context): { error: Response } | { message: string; sessionId: string } {
-  if (!OPENAI_API_KEY) return { error: c.json({ error: 'Chatbot yapılandırılmamış.' }, 503) };
-
-  const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'unknown';
-  const rateCheck = checkPublicRateLimit(ip);
-  if (!rateCheck.allowed) return { error: c.json({ error: rateCheck.reason }, 429) };
-
-  return { message: '', sessionId: '' }; // placeholder — body parsed separately
-}
-
-// ─────────────────────────────────────────────
-// Controller
-// ─────────────────────────────────────────────
-
 export const PublicChatController = {
   async send(c: Context): Promise<Response> {
     if (!OPENAI_API_KEY) {
-      logger.error('PublicChat: OPENAI_API_KEY tanımlı değil.');
-      return c.json({ error: 'Chatbot yapılandırılmamış.' }, 503);
+      logger.error('PublicChat: OPENAI_API_KEY tanimli degil.');
+      return c.json({ error: 'Chatbot yapilandirilmamis.' }, 503);
     }
 
-    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'unknown';
-    const rateCheck = checkPublicRateLimit(ip);
+    const parsed = parsePublicChatBody(await c.req.json<unknown>().catch(() => null));
+    if (parsed instanceof ValidationError) return c.json(parsed.toJSON(), 400);
+
+    const rateCheck = await checkPublicRateLimit(getClientIp(c), parsed.sessionId);
     if (!rateCheck.allowed) return c.json({ error: rateCheck.reason }, 429);
-
-    const body = await c.req.json<{ message?: string; sessionId?: string }>().catch(() => ({} as { message?: string; sessionId?: string }));
-    const message = body.message?.trim();
-    const rawSessionId = body.sessionId ?? `pub-${Date.now()}`;
-    const sessionId = rawSessionId.slice(0, 64).replace(/[^a-zA-Z0-9\-_]/g, '');
-
-    if (!message || message.length === 0) return c.json(new ValidationError('Mesaj boş olamaz.').toJSON(), 400);
-    if (message.length > MAX_MESSAGE_LENGTH) return c.json(new ValidationError(`Mesaj en fazla ${MAX_MESSAGE_LENGTH} karakter olabilir.`).toJSON(), 400);
 
     try {
       const { createDemoFn, checkEmailFn } = await buildChatDeps();
-      const result = await handlePublicChat({ message, sessionId: `public:${sessionId}` }, createDemoFn, checkEmailFn);
+      const result = await handlePublicChat({ message: parsed.message, sessionId: `public:${parsed.sessionId}` }, createDemoFn, checkEmailFn);
       const sanitized = sanitizeOutput(result.output, true);
       return c.json({ output: sanitized.text });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error(`PublicChat: OpenAI hatası — ${errMsg}`);
-      return c.json({ error: 'Asistan şu an yanıt veremiyor.' }, 502);
+      logger.error(`PublicChat: OpenAI hatasi - ${errMsg}`);
+      return c.json({ error: 'Asistan su an yanit veremiyor.' }, 502);
     }
   },
 
   async sendStream(c: Context): Promise<Response> {
     if (!OPENAI_API_KEY) {
-      logger.error('PublicChat: OPENAI_API_KEY tanımlı değil.');
-      return c.json({ error: 'Chatbot yapılandırılmamış.' }, 503);
+      logger.error('PublicChat: OPENAI_API_KEY tanimli degil.');
+      return c.json({ error: 'Chatbot yapilandirilmamis.' }, 503);
     }
 
-    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'unknown';
-    const rateCheck = checkPublicRateLimit(ip);
+    const parsed = parsePublicChatBody(await c.req.json<unknown>().catch(() => null));
+    if (parsed instanceof ValidationError) return c.json(parsed.toJSON(), 400);
+
+    const rateCheck = await checkPublicRateLimit(getClientIp(c), parsed.sessionId);
     if (!rateCheck.allowed) return c.json({ error: rateCheck.reason }, 429);
-
-    const body = await c.req.json<{ message?: string; sessionId?: string }>().catch(() => ({} as { message?: string; sessionId?: string }));
-    const message = body.message?.trim();
-    const rawSessionId = body.sessionId ?? `pub-${Date.now()}`;
-    const sessionId = rawSessionId.slice(0, 64).replace(/[^a-zA-Z0-9\-_]/g, '');
-
-    if (!message || message.length === 0) return c.json(new ValidationError('Mesaj boş olamaz.').toJSON(), 400);
-    if (message.length > MAX_MESSAGE_LENGTH) return c.json(new ValidationError(`Mesaj en fazla ${MAX_MESSAGE_LENGTH} karakter olabilir.`).toJSON(), 400);
 
     const { createDemoFn, checkEmailFn } = await buildChatDeps();
 
     return streamSSE(c, async (s) => {
       try {
         await handlePublicChatStream(
-          { message, sessionId: `public:${sessionId}` },
+          { message: parsed.message, sessionId: `public:${parsed.sessionId}` },
           createDemoFn,
           checkEmailFn,
           {
@@ -197,21 +148,23 @@ export const PublicChatController = {
               const sanitized = sanitizeOutput(token, true);
               await s.writeSSE({ event: 'token', data: JSON.stringify({ token: sanitized.text }) });
             },
-            async onToolStart() { /* public chat'te tool_start göstermiyoruz */ },
+            async onToolStart() {
+              // Public chat does not expose tool internals.
+            },
             async onDone(fullText) {
               const sanitized = sanitizeOutput(fullText, true);
               await s.writeSSE({ event: 'done', data: JSON.stringify({ output: sanitized.text }) });
             },
             async onError(error) {
               logger.error(`PublicChat stream: ${error}`);
-              await s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan şu an yanıt veremiyor.' }) });
+              await s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan su an yanit veremiyor.' }) });
             },
           },
         );
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         logger.error(`PublicChat stream unhandled: ${errMsg}`);
-        await s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan şu an yanıt veremiyor.' }) });
+        await s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan su an yanit veremiyor.' }) });
       }
     });
   },

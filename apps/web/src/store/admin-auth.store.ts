@@ -1,39 +1,24 @@
 'use client';
 
 import { create } from 'zustand';
-import { adminLogin, adminMe, type AdminUser } from '@/services/admin.service';
+import { adminLogin, adminLogout, adminMe, type AdminUser } from '@/services/admin.service';
 
 interface AdminAuthState {
   admin: AdminUser | null;
   isLoading: boolean;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   fetchMe: () => Promise<void>;
-}
-
-function setCookie(name: string, value: string, days: number) {
-  const d = new Date(); d.setTime(d.getTime() + days * 86400000);
-  document.cookie = `${name}=${encodeURIComponent(value)};expires=${d.toUTCString()};path=/`;
-}
-
-function deleteCookie(name: string) {
-  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
 }
 
 export const useAdminAuthStore = create<AdminAuthState>((set) => ({
   admin: null,
   isLoading: false,
 
-  login: async (email, password, rememberMe = false) => {
+  login: async (email, password) => {
     set({ isLoading: true });
     try {
-      const { token, admin } = await adminLogin(email, password);
-      if (rememberMe) {
-        setCookie('admin-token', token, 7);
-      } else {
-        // Session cookie — tarayıcı kapanınca silinir
-        document.cookie = `admin-token=${encodeURIComponent(token)};path=/`;
-      }
+      const { admin } = await adminLogin(email, password);
       set({ admin, isLoading: false });
     } catch {
       set({ isLoading: false });
@@ -42,7 +27,7 @@ export const useAdminAuthStore = create<AdminAuthState>((set) => ({
   },
 
   logout: () => {
-    deleteCookie('admin-token');
+    adminLogout().catch(() => {});
     set({ admin: null });
     window.location.href = '/admin/login';
   },
@@ -52,8 +37,8 @@ export const useAdminAuthStore = create<AdminAuthState>((set) => ({
       const admin = await adminMe();
       set({ admin });
     } catch {
-      deleteCookie('admin-token');
       set({ admin: null });
+      throw new Error('Admin oturumu bulunamadı');
     }
   },
 }));

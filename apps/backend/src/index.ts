@@ -23,6 +23,8 @@ import { attachmentRoutes } from './routes/attachment.routes';
 import { CurrencyRatesController } from './controllers/currency-rates.controller';
 import { adminRoutes } from './routes/admin.routes';
 import { requireAuth } from './middleware/requireAuth';
+import { requirePermission } from './middleware/requirePermission';
+import { csrfProtection } from './middleware/csrfProtection';
 import { BaseError } from './errors';
 
 // Professional Plan Route Imports
@@ -55,11 +57,15 @@ import { TrendyolWorker } from './services/trendyol-worker.service';
 import { startMarketplaceMocks } from './mocks';
 
 // ── Startup env var kontrolü ─────────────────
-const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET'] as const;
+const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET', 'ADMIN_JWT_SECRET'] as const;
 for (const key of REQUIRED_ENV_VARS) {
   if (!process.env[key]) {
     throw new Error(`Zorunlu ortam değişkeni eksik: ${key}. Uygulama başlatılamaz.`);
   }
+}
+
+if (process.env.NODE_ENV === 'production' && !process.env.ENCRYPTION_KEY) {
+  throw new Error('Zorunlu ortam değişkeni eksik: ENCRYPTION_KEY. Uygulama başlatılamaz.');
 }
 
 // OpenAI opsiyonel — sadece chat aktifse gerekli
@@ -148,6 +154,13 @@ app.get('/health', async (c) => {
   return c.json({ status, checks, uptime: process.uptime() }, hasError ? 503 : 200);
 });
 
+// ── Public webhooks (CSRF'den önce — harici çağrıcılar Origin göndermez) ──
+app.post('/api/public/trendyol/webhook/:integrationId', TrendyolWebhookController.handle);
+app.post('/api/public/marketplace/webhook/:integrationId', TrendyolWebhookController.handle);
+
+// ── CSRF koruması (state-changing isteklerde Origin/Referer doğrulaması) ──
+app.use('*', csrfProtection);
+
 // ── Auth (public) ────────────────────────────
 app.route('/api/auth', authRoutes);
 
@@ -157,9 +170,6 @@ app.route('/api/public', invitationPublicRoutes);
 app.route('/api/public', publicChatRoutes);
 app.post('/api/public/set-password', SetPasswordController.setPassword);
 app.post('/api/public/set-password/validate', SetPasswordController.validateToken);
-// Trendyol webhook (public — validated by secret header inside controller)
-app.post('/api/public/trendyol/webhook/:integrationId', TrendyolWebhookController.handle);
-app.post('/api/public/marketplace/webhook/:integrationId', TrendyolWebhookController.handle);
 
 // ── Admin Panel ──────────────────────────────
 app.route('/api/admin', adminRoutes);
@@ -187,9 +197,9 @@ tenantApi.route('/notifications', notificationRoutes);
 tenantApi.route('/audit-logs', auditLogRoutes);
 tenantApi.route('/attachments', attachmentRoutes);
 tenantApi.route('/invitations', invitationRoutes);
-tenantApi.get('/currency-rates/tcmb', CurrencyRatesController.getTcmbRates);
-tenantApi.get('/currency-rates', CurrencyRatesController.listRates);
-tenantApi.post('/currency-rates', CurrencyRatesController.createRate);
+tenantApi.get('/currency-rates/tcmb', requirePermission('settings', 'READ'), CurrencyRatesController.getTcmbRates);
+tenantApi.get('/currency-rates', requirePermission('settings', 'READ'), CurrencyRatesController.listRates);
+tenantApi.post('/currency-rates', requirePermission('settings', 'UPDATE'), CurrencyRatesController.createRate);
 
 // Professional Plan Routes
 tenantApi.route('/api-keys', apiKeyRoutes);

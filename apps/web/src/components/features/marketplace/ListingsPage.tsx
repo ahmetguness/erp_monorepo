@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { Textarea } from "@/components/ui/Textarea";
 import { FormRow } from "@/components/shared/FormField";
 import {
@@ -20,9 +21,14 @@ import {
   usePublishListingToMarketplace,
   useUpdateMarketplaceProduct,
   useDeleteMarketplaceProduct,
+  useTrendyolAttributes,
+  useTrendyolBrands,
+  useTrendyolCargoProviders,
+  useTrendyolCategories,
 } from "@/hooks/useMarketplace";
 import { useProducts } from "@/hooks/useProducts";
 import { formatCurrency } from "@/lib/utils";
+import { getFieldErrors, type FieldErrors } from "@/lib/form-errors";
 import type { MarketplaceListing, TrendyolListingProductDTO } from "@/services/marketplace.service";
 import type { Product } from "@/services/product.service";
 
@@ -58,6 +64,8 @@ type TrendyolProductForm = {
 };
 
 type MarketplaceAction = "publish" | "update";
+type ListingField = keyof ListingForm;
+type TrendyolField = keyof TrendyolProductForm;
 
 const emptyListingForm: ListingForm = {
   integrationId: "",
@@ -157,7 +165,9 @@ export function ListingsPage() {
   const [marketplaceTarget, setMarketplaceTarget] = useState<MarketplaceListing | null>(null);
   const [marketplaceAction, setMarketplaceAction] = useState<MarketplaceAction>("publish");
   const [form, setForm] = useState<ListingForm>(emptyListingForm);
+  const [formErrors, setFormErrors] = useState<FieldErrors<ListingField>>({});
   const [editForm, setEditForm] = useState({ price: "", stock: "" });
+  const [editErrors, setEditErrors] = useState<FieldErrors<"price" | "stock">>({});
   const [trendyolForm, setTrendyolForm] = useState<TrendyolProductForm>(() => buildTrendyolForm({
     id: "",
     tenantId: "",
@@ -171,6 +181,9 @@ export function ListingsPage() {
     lastSyncAt: null,
     syncError: null,
   }));
+  const [trendyolErrors, setTrendyolErrors] = useState<FieldErrors<TrendyolField>>({});
+  const [brandQuery, setBrandQuery] = useState("");
+  const [categoryQuery, setCategoryQuery] = useState("");
 
   const { data, isLoading } = useListings({ page, limit: 20 });
   const { data: integrations = [] } = useIntegrations();
@@ -185,6 +198,12 @@ export function ListingsPage() {
   const products = productsData?.data ?? emptyProducts;
   const selectedProduct = products.find((product) => product.id === form.productId);
   const trendPayload = buildTrendyolPayload(trendyolForm);
+  const selectedMarketplaceIntegrationId = marketplaceTarget?.integrationId ?? "";
+  const selectedCategoryId = toRequiredNumber(trendyolForm.categoryId);
+  const { data: brandOptionsData = [], isLoading: brandsLoading } = useTrendyolBrands(selectedMarketplaceIntegrationId, brandQuery);
+  const { data: categoryOptionsData = [], isLoading: categoriesLoading } = useTrendyolCategories(selectedMarketplaceIntegrationId, categoryQuery);
+  const { data: cargoProviders = [], isLoading: cargoLoading } = useTrendyolCargoProviders(selectedMarketplaceIntegrationId);
+  const { data: categoryAttributes = [] } = useTrendyolAttributes(selectedMarketplaceIntegrationId, selectedCategoryId);
 
   const integrationOptions = useMemo(
     () => integrations.map((integration) => ({
@@ -200,10 +219,39 @@ export function ListingsPage() {
     [products],
   );
 
+  const brandOptions = useMemo(
+    () => brandOptionsData.map((option) => ({ value: String(option.id), label: option.name, helperText: `ID ${option.id}` })),
+    [brandOptionsData],
+  );
+  const categoryOptions = useMemo(
+    () => categoryOptionsData.map((option) => ({ value: String(option.id), label: option.name, helperText: `ID ${option.id}` })),
+    [categoryOptionsData],
+  );
+  const cargoOptions = useMemo(
+    () => cargoProviders.map((option) => ({ value: String(option.id), label: option.name, helperText: `ID ${option.id}` })),
+    [cargoProviders],
+  );
+  const attributeOptions = useMemo(
+    () => categoryAttributes.map((attribute) => ({
+      value: String(attribute.id),
+      label: attribute.required ? `${attribute.name} *` : attribute.name,
+      helperText: attribute.allowCustom ? "Özel değer destekler" : undefined,
+    })),
+    [categoryAttributes],
+  );
+  const selectedAttribute = categoryAttributes.find((attribute) => String(attribute.id) === trendyolForm.attributeId);
+  const attributeValueOptions = useMemo(
+    () => (selectedAttribute?.values ?? []).map((option) => ({ value: String(option.id), label: option.name, helperText: `ID ${option.id}` })),
+    [selectedAttribute],
+  );
+
   const openMarketplaceAction = (listing: MarketplaceListing, action: MarketplaceAction) => {
     setMarketplaceTarget(listing);
     setMarketplaceAction(action);
     setTrendyolForm(buildTrendyolForm(listing));
+    setTrendyolErrors({});
+    setBrandQuery("");
+    setCategoryQuery("");
   };
 
   const columns: ColumnDef<MarketplaceListing>[] = [
@@ -370,7 +418,9 @@ export function ListingsPage() {
                     onSuccess: () => {
                       setCreateOpen(false);
                       setForm(emptyListingForm);
+                      setFormErrors({});
                     },
+                    onError: (error) => setFormErrors(getFieldErrors(error, ["integrationId", "productId", "externalId", "price", "stock"])),
                   },
                 )
               }
@@ -387,7 +437,11 @@ export function ListingsPage() {
             placeholder="Entegrasyon seçin"
             options={integrationOptions}
             value={form.integrationId}
-            onChange={(e) => setForm((p) => ({ ...p, integrationId: e.target.value }))}
+            error={formErrors.integrationId}
+            onChange={(e) => {
+              setFormErrors((p) => ({ ...p, integrationId: undefined }));
+              setForm((p) => ({ ...p, integrationId: e.target.value }));
+            }}
           />
           <Select
             label="Ürün"
@@ -395,8 +449,10 @@ export function ListingsPage() {
             placeholder="Ürün seçin"
             options={productOptions}
             value={form.productId}
+            error={formErrors.productId}
             onChange={(e) => {
               const product = products.find((item) => item.id === e.target.value);
+              setFormErrors((p) => ({ ...p, productId: undefined }));
               setForm((p) => ({
                 ...p,
                 productId: e.target.value,
@@ -411,7 +467,11 @@ export function ListingsPage() {
               label="Barkod"
               required
               value={form.externalId}
-              onChange={(e) => setForm((p) => ({ ...p, externalId: e.target.value }))}
+              error={formErrors.externalId}
+              onChange={(e) => {
+                setFormErrors((p) => ({ ...p, externalId: undefined }));
+                setForm((p) => ({ ...p, externalId: e.target.value }));
+              }}
             />
             <Input
               label="Stok Kodu"
@@ -421,7 +481,10 @@ export function ListingsPage() {
             />
           </FormRow>
           <FormRow cols={2}>
-            <Input label="Fiyat" required type="number" value={form.price} onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))} />
+            <Input label="Fiyat" required type="number" value={form.price} error={formErrors.price} onChange={(e) => {
+              setFormErrors((p) => ({ ...p, price: undefined }));
+              setForm((p) => ({ ...p, price: e.target.value }));
+            }} />
             <Input label="Stok" type="number" value={form.stock} onChange={(e) => setForm((p) => ({ ...p, stock: e.target.value }))} />
           </FormRow>
         </div>
@@ -444,7 +507,13 @@ export function ListingsPage() {
                 const mutation = marketplaceAction === "publish" ? publish : updateMarketplace;
                 mutation.mutate(
                   { id: marketplaceTarget.id, data: trendPayload },
-                  { onSuccess: () => setMarketplaceTarget(null) },
+                  {
+                    onSuccess: () => {
+                      setMarketplaceTarget(null);
+                      setTrendyolErrors({});
+                    },
+                    onError: (error) => setTrendyolErrors(getFieldErrors(error, ["brandId", "categoryId", "cargoCompanyId", "attributeId", "attributeValueId"])),
+                  },
                 );
               }}
             >
@@ -462,9 +531,52 @@ export function ListingsPage() {
           <Input label="Başlık" value={trendyolForm.title} onChange={(e) => setTrendyolForm((p) => ({ ...p, title: e.target.value }))} />
           <Textarea label="Açıklama" value={trendyolForm.description} onChange={(e) => setTrendyolForm((p) => ({ ...p, description: e.target.value }))} />
           <FormRow cols={3}>
-            <Input label="Marka ID" required type="number" value={trendyolForm.brandId} onChange={(e) => setTrendyolForm((p) => ({ ...p, brandId: e.target.value }))} />
-            <Input label="Kategori ID" required type="number" value={trendyolForm.categoryId} onChange={(e) => setTrendyolForm((p) => ({ ...p, categoryId: e.target.value }))} />
-            <Input label="Kargo Firma ID" required type="number" value={trendyolForm.cargoCompanyId} onChange={(e) => setTrendyolForm((p) => ({ ...p, cargoCompanyId: e.target.value }))} />
+            <SearchableSelect
+              label="Marka"
+              required
+              value={trendyolForm.brandId}
+              query={brandQuery}
+              placeholder="Marka ara"
+              options={brandOptions}
+              isLoading={brandsLoading}
+              error={trendyolErrors.brandId}
+              helperText="En az 2 karakter yazın"
+              onQueryChange={setBrandQuery}
+              onChange={(value) => {
+                setTrendyolErrors((p) => ({ ...p, brandId: undefined }));
+                setTrendyolForm((p) => ({ ...p, brandId: value }));
+              }}
+            />
+            <SearchableSelect
+              label="Kategori"
+              required
+              value={trendyolForm.categoryId}
+              query={categoryQuery}
+              placeholder="Kategori ara"
+              options={categoryOptions}
+              isLoading={categoriesLoading}
+              error={trendyolErrors.categoryId}
+              onQueryChange={setCategoryQuery}
+              onChange={(value) => {
+                setTrendyolErrors((p) => ({ ...p, categoryId: undefined, attributeId: undefined, attributeValueId: undefined }));
+                setTrendyolForm((p) => ({ ...p, categoryId: value, attributeId: "", attributeValueId: "", customAttributeValue: "" }));
+              }}
+            />
+            <SearchableSelect
+              label="Kargo firması"
+              required
+              value={trendyolForm.cargoCompanyId}
+              query={cargoOptions.find((item) => item.value === trendyolForm.cargoCompanyId)?.label ?? ""}
+              placeholder="Kargo firması seç"
+              options={cargoOptions}
+              isLoading={cargoLoading}
+              error={trendyolErrors.cargoCompanyId}
+              onQueryChange={() => undefined}
+              onChange={(value) => {
+                setTrendyolErrors((p) => ({ ...p, cargoCompanyId: undefined }));
+                setTrendyolForm((p) => ({ ...p, cargoCompanyId: value }));
+              }}
+            />
           </FormRow>
           <FormRow cols={4}>
             <Input label="Satış Fiyatı" type="number" value={trendyolForm.salePrice} onChange={(e) => setTrendyolForm((p) => ({ ...p, salePrice: e.target.value }))} />
@@ -480,10 +592,25 @@ export function ListingsPage() {
           <FormRow cols={3}>
             <Input label="Adres ID" type="number" value={trendyolForm.shipmentAddressId} onChange={(e) => setTrendyolForm((p) => ({ ...p, shipmentAddressId: e.target.value }))} />
             <Input label="İade Adres ID" type="number" value={trendyolForm.returningAddressId} onChange={(e) => setTrendyolForm((p) => ({ ...p, returningAddressId: e.target.value }))} />
-            <Input label="Özellik ID" type="number" value={trendyolForm.attributeId} onChange={(e) => setTrendyolForm((p) => ({ ...p, attributeId: e.target.value }))} />
+            <Select
+              label="Kategori özelliği"
+              placeholder="Özellik seç"
+              options={attributeOptions}
+              value={trendyolForm.attributeId}
+              error={trendyolErrors.attributeId}
+              onChange={(e) => setTrendyolForm((p) => ({ ...p, attributeId: e.target.value, attributeValueId: "", customAttributeValue: "" }))}
+            />
           </FormRow>
           <FormRow cols={2}>
-            <Input label="Özellik Değer ID" type="number" value={trendyolForm.attributeValueId} onChange={(e) => setTrendyolForm((p) => ({ ...p, attributeValueId: e.target.value }))} />
+            <Select
+              label="Özellik değeri"
+              placeholder="Değer seç"
+              options={attributeValueOptions}
+              value={trendyolForm.attributeValueId}
+              error={trendyolErrors.attributeValueId}
+              disabled={!selectedAttribute || attributeValueOptions.length === 0}
+              onChange={(e) => setTrendyolForm((p) => ({ ...p, attributeValueId: e.target.value }))}
+            />
             <Input label="Özel Özellik Değeri" value={trendyolForm.customAttributeValue} onChange={(e) => setTrendyolForm((p) => ({ ...p, customAttributeValue: e.target.value }))} />
           </FormRow>
         </div>
@@ -504,7 +631,13 @@ export function ListingsPage() {
                 if (!editTarget) return;
                 update.mutate(
                   { id: editTarget.id, data: { price: Number(editForm.price), stock: Number(editForm.stock) } },
-                  { onSuccess: () => setEditTarget(null) },
+                  {
+                    onSuccess: () => {
+                      setEditTarget(null);
+                      setEditErrors({});
+                    },
+                    onError: (error) => setEditErrors(getFieldErrors(error, ["price", "stock"])),
+                  },
                 );
               }}
             >
@@ -514,8 +647,14 @@ export function ListingsPage() {
         }
       >
         <div className="space-y-4">
-          <Input label="Fiyat" type="number" value={editForm.price} onChange={(e) => setEditForm((p) => ({ ...p, price: e.target.value }))} />
-          <Input label="Stok" type="number" value={editForm.stock} onChange={(e) => setEditForm((p) => ({ ...p, stock: e.target.value }))} />
+          <Input label="Fiyat" type="number" value={editForm.price} error={editErrors.price} onChange={(e) => {
+            setEditErrors((p) => ({ ...p, price: undefined }));
+            setEditForm((p) => ({ ...p, price: e.target.value }));
+          }} />
+          <Input label="Stok" type="number" value={editForm.stock} error={editErrors.stock} onChange={(e) => {
+            setEditErrors((p) => ({ ...p, stock: undefined }));
+            setEditForm((p) => ({ ...p, stock: e.target.value }));
+          }} />
         </div>
       </Modal>
     </div>

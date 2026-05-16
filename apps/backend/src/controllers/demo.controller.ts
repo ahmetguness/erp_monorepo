@@ -8,25 +8,11 @@ import { prisma } from '../lib/prisma';
 import { DemoRequestStatus } from '@prisma/client';
 import { getPaginationParams } from '../utils/pagination.js';
 
+import { rateLimiter } from '../lib/rateLimiter';
+
 export class DemoController {
-  // Basit in-memory rate limiter (IP bazlı)
-  private static rateLimitMap = new Map<string, { count: number; resetAt: number }>();
   private static readonly RATE_LIMIT = 5; // 15 dakikada max 5 talep
   private static readonly RATE_WINDOW = 15 * 60 * 1000; // 15 dakika
-
-  private static checkRateLimit(ip: string): boolean {
-    const now = Date.now();
-    const entry = DemoController.rateLimitMap.get(ip);
-
-    if (!entry || now > entry.resetAt) {
-      DemoController.rateLimitMap.set(ip, { count: 1, resetAt: now + DemoController.RATE_WINDOW });
-      return true;
-    }
-
-    if (entry.count >= DemoController.RATE_LIMIT) return false;
-    entry.count++;
-    return true;
-  }
 
   /**
    * POST /public/demo-requests
@@ -35,7 +21,7 @@ export class DemoController {
   static async create(c: Context) {
     // Rate limit kontrolü
     const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
-    if (!DemoController.checkRateLimit(ip)) {
+    if (await rateLimiter.check(`demo:${ip}`, DemoController.RATE_LIMIT, DemoController.RATE_WINDOW)) {
       return c.json({ success: false, code: 'RATE_LIMITED', message: 'Çok fazla talep gönderdiniz. Lütfen 15 dakika sonra tekrar deneyin.' }, 429);
     }
 

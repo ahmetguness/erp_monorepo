@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Trendyol Partner API — Production-grade Integration Service
  *
  * Improvements applied:
@@ -15,6 +15,7 @@
  */
 
 import { logger } from '../lib/logger';
+import { decrypt } from '../utils/encryption.js';
 
 // ─────────────────────────────────────────────
 // Constants
@@ -260,6 +261,43 @@ export interface TrendyolProductItemInput {
 
 export interface TrendyolProductDeleteItem {
   barcode: string;
+}
+
+export interface TrendyolLookupOption {
+  id: number;
+  name: string;
+}
+
+export interface TrendyolCategoryAttributeValue extends TrendyolLookupOption {}
+
+export interface TrendyolCategoryAttribute {
+  id: number;
+  name: string;
+  required: boolean;
+  allowCustom: boolean;
+  values: TrendyolCategoryAttributeValue[];
+}
+
+interface TrendyolCategoriesResponse {
+  categories?: Array<{ id: number; name: string; subCategories?: TrendyolCategoriesResponse['categories'] }>;
+}
+
+interface TrendyolBrandsResponse {
+  brands?: Array<{ id: number; name: string }>;
+}
+
+interface TrendyolCategoryAttributesResponse {
+  categoryAttributes?: Array<{
+    attribute: { id: number; name: string };
+    required?: boolean;
+    allowCustom?: boolean;
+    attributeValues?: Array<{ id: number; name: string }>;
+  }>;
+}
+
+interface TrendyolCargoProvidersResponse {
+  shipmentProviders?: Array<{ id?: number; code?: number | string; name: string }>;
+  cargoCompanies?: Array<{ id?: number; code?: number | string; name: string }>;
 }
 
 // ── Stock & Price ─────────────────────────────
@@ -593,6 +631,48 @@ export const TrendyolService = {
     );
   },
 
+  async searchCategories(creds: TrendyolCredentials, query?: string): Promise<TrendyolLookupOption[]> {
+    const response = await trendyolFetch<TrendyolCategoriesResponse>(creds, '/integration/product/product-categories');
+    const needle = query?.trim().toLowerCase();
+    const flattened = flattenCategories(response.categories ?? []);
+    return needle ? flattened.filter((item) => item.name.toLowerCase().includes(needle)).slice(0, 50) : flattened.slice(0, 50);
+  },
+
+  async searchBrands(creds: TrendyolCredentials, query: string): Promise<TrendyolLookupOption[]> {
+    const qs = new URLSearchParams({ name: query.trim() });
+    const response = await trendyolFetch<TrendyolBrandsResponse>(creds, `/integration/product/brands/by-name?${qs}`);
+    return (response.brands ?? []).map((brand) => ({ id: brand.id, name: brand.name })).slice(0, 50);
+  },
+
+  async getCategoryAttributes(creds: TrendyolCredentials, categoryId: number): Promise<TrendyolCategoryAttribute[]> {
+    const response = await trendyolFetch<TrendyolCategoryAttributesResponse>(
+      creds,
+      `/integration/product/product-categories/${categoryId}/attributes`,
+    );
+    return (response.categoryAttributes ?? []).map((item) => ({
+      id: item.attribute.id,
+      name: item.attribute.name,
+      required: item.required ?? false,
+      allowCustom: item.allowCustom ?? false,
+      values: (item.attributeValues ?? []).map((value) => ({ id: value.id, name: value.name })),
+    }));
+  },
+
+  async getCargoProviders(creds: TrendyolCredentials): Promise<TrendyolLookupOption[]> {
+    const response = await trendyolFetch<TrendyolCargoProvidersResponse>(creds, '/integration/shipment-providers');
+    const providers = response.shipmentProviders ?? response.cargoCompanies ?? [];
+    return providers
+      .map((provider) => {
+        const id = typeof provider.id === 'number'
+          ? provider.id
+          : typeof provider.code === 'number'
+            ? provider.code
+            : Number(provider.code);
+        return Number.isFinite(id) ? { id, name: provider.name } : null;
+      })
+      .filter((provider): provider is TrendyolLookupOption => provider !== null);
+  },
+
   // ── Orders ────────────────────────────────────
 
   async getOrders(
@@ -836,6 +916,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function flattenCategories(categories: NonNullable<TrendyolCategoriesResponse['categories']>): TrendyolLookupOption[] {
+  const result: TrendyolLookupOption[] = [];
+  for (const category of categories) {
+    result.push({ id: category.id, name: category.name });
+    if (category.subCategories?.length) {
+      result.push(...flattenCategories(category.subCategories));
+    }
+  }
+  return result;
+}
+
 function validateProductItems(items: TrendyolProductItemInput[]): void {
   if (items.length === 0) throw new Error('En az 1 ürün gereklidir.');
   if (items.length > 1000) throw new Error('Maksimum 1000 ürün gönderilebilir.');
@@ -929,8 +1020,8 @@ export function buildTrendyolCredentials(integration: {
   }
   return {
     sellerId: integration.storeId,
-    apiKey: integration.apiKey,
-    apiSecret: integration.apiSecret,
+    apiKey: decrypt(integration.apiKey),
+    apiSecret: decrypt(integration.apiSecret),
     storeFrontCode: 'TR',
   };
 }

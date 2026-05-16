@@ -218,7 +218,7 @@ export const PaymentController = {
           bankAccount: { select: { id: true, name: true } },
           cashAccount: { select: { id: true, name: true } },
           allocations: {
-            include: { invoice: { select: { id: true, number: true } } },
+            include: { invoice: { select: { id: true, number: true, totalGross: true } } },
           },
         },
         orderBy: { date: 'desc' },

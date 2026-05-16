@@ -10,6 +10,7 @@ import {
   MarketplaceListingController,
   MarketplaceOrderController,
   TrendyolSyncController,
+  TrendyolLookupController,
   MarketplaceMonitoringController,
 } from '../controllers/marketplace.controller';
 
@@ -32,6 +33,10 @@ marketplaceRoutes.post('/integrations/:id/trendyol/sync-orders', requirePermissi
 marketplaceRoutes.post('/integrations/:id/trendyol/sync-stock', requirePermission('marketplace', 'UPDATE'), TrendyolSyncController.syncStock);
 marketplaceRoutes.get('/integrations/:id/trendyol/jobs/:jobId', requirePermission('marketplace', 'READ'), TrendyolSyncController.getJobStatus);
 marketplaceRoutes.get('/integrations/:id/trendyol/batch/:batchRequestId', requirePermission('marketplace', 'READ'), TrendyolSyncController.getBatchResult);
+marketplaceRoutes.get('/integrations/:id/trendyol/categories', requirePermission('marketplace', 'READ'), TrendyolLookupController.categories);
+marketplaceRoutes.get('/integrations/:id/trendyol/brands', requirePermission('marketplace', 'READ'), TrendyolLookupController.brands);
+marketplaceRoutes.get('/integrations/:id/trendyol/attributes', requirePermission('marketplace', 'READ'), TrendyolLookupController.attributes);
+marketplaceRoutes.get('/integrations/:id/trendyol/cargo-providers', requirePermission('marketplace', 'READ'), TrendyolLookupController.cargoProviders);
 
 // Listlemeler
 marketplaceRoutes.get('/listings', requirePermission('marketplace', 'READ'), MarketplaceListingController.list);

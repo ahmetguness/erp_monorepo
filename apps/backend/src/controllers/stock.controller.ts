@@ -1,9 +1,10 @@
 import { Context } from 'hono';
-import { MovementType } from '@prisma/client';
+import { AuditAction, EntityType, MovementType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireUserId } from '../utils/context.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -135,6 +136,7 @@ export const StockController = {
 
   async createManualMovement(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
 
     const body = await c.req.json<{
       productId: string;
@@ -239,6 +241,23 @@ export const StockController = {
       return stockMovement;
     });
 
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'inventory',
+      entityType: EntityType.PRODUCT,
+      entityId: body.productId,
+      action: AuditAction.CREATE,
+      newValues: {
+        movementId: movement.id,
+        type: movement.type,
+        quantity: movement.quantity,
+        warehouseId: body.warehouseId,
+        unitCost: movement.unitCost,
+      },
+      ...getRequestMeta(c),
+    });
+
     return c.json({ data: movement }, 201);
   },
 
@@ -261,7 +280,7 @@ export const StockController = {
 
   async getStockCount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const countId = c.req.param('id');
+    const countId = c.req.param('id')!;
 
     const stockCount = await prisma.stockCount.findFirst({
       where: { id: countId, tenantId },
@@ -282,6 +301,7 @@ export const StockController = {
 
   async createStockCount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
 
     const body = await c.req.json<CreateStockCountDTO>();
 
@@ -318,12 +338,24 @@ export const StockController = {
       },
     });
 
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'inventory',
+      entityType: EntityType.OTHER,
+      entityId: stockCount.id,
+      action: AuditAction.CREATE,
+      newValues: { id: stockCount.id, number: stockCount.number, warehouseId: stockCount.warehouseId, itemCount: stockCount.items.length },
+      ...getRequestMeta(c),
+    });
+
     return c.json({ data: stockCount }, 201);
   },
 
   async finalizeStockCount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const countId = c.req.param('id');
+    const userId = requireUserId(c);
+    const countId = c.req.param('id')!;
 
     const stockCount = await prisma.stockCount.findFirst({
       where: { id: countId, tenantId },
@@ -391,6 +423,18 @@ export const StockController = {
         where: { id: countId },
         data: { isFinalized: true, finalizedAt: new Date() },
       });
+    });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'inventory',
+      entityType: EntityType.OTHER,
+      entityId: countId,
+      action: AuditAction.UPDATE,
+      oldValues: { id: countId, isFinalized: stockCount.isFinalized },
+      newValues: { id: countId, isFinalized: true, applyAdjustments: body.applyAdjustments },
+      ...getRequestMeta(c),
     });
 
     return c.json({ data: { success: true } });

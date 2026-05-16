@@ -123,6 +123,38 @@ export function useDeleteMarketplaceProduct() {
   });
 }
 
+export function useTrendyolCategories(integrationId: string, query: string) {
+  return useQuery({
+    queryKey: ['mp-trendyol-categories', integrationId, query],
+    queryFn: () => svc.searchTrendyolCategories(integrationId, query),
+    enabled: !!integrationId,
+  });
+}
+
+export function useTrendyolBrands(integrationId: string, query: string) {
+  return useQuery({
+    queryKey: ['mp-trendyol-brands', integrationId, query],
+    queryFn: () => svc.searchTrendyolBrands(integrationId, query),
+    enabled: !!integrationId && query.trim().length >= 2,
+  });
+}
+
+export function useTrendyolAttributes(integrationId: string, categoryId: number | null) {
+  return useQuery({
+    queryKey: ['mp-trendyol-attributes', integrationId, categoryId],
+    queryFn: () => svc.getTrendyolAttributes(integrationId, categoryId ?? 0),
+    enabled: !!integrationId && categoryId !== null,
+  });
+}
+
+export function useTrendyolCargoProviders(integrationId: string) {
+  return useQuery({
+    queryKey: ['mp-trendyol-cargo-providers', integrationId],
+    queryFn: () => svc.getTrendyolCargoProviders(integrationId),
+    enabled: !!integrationId,
+  });
+}
+
 // ─── Orders ───────────────────────────────────
 
 export function useMarketplaceOrders(params?: { page?: number; limit?: number; status?: string; channel?: string }) {

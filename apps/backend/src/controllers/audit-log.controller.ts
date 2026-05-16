@@ -1,5 +1,5 @@
 import { Context } from 'hono';
-import { FeatureKey } from '@prisma/client';
+import { AuditAction, EntityType, FeatureKey } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ForbiddenError } from '../errors';
 import { TenantFeatureService } from '../services/tenant-feature.service';
@@ -11,6 +11,16 @@ import { requireTenantId } from '../utils/context.js';
 // ─────────────────────────────────────────────
 
 const tenantFeatureService = new TenantFeatureService(prisma);
+const VALID_AUDIT_ACTIONS: readonly string[] = Object.values(AuditAction);
+const VALID_ENTITY_TYPES: readonly string[] = Object.values(EntityType);
+
+function isAuditAction(value: string): value is AuditAction {
+  return VALID_AUDIT_ACTIONS.includes(value);
+}
+
+function isEntityType(value: string): value is EntityType {
+  return VALID_ENTITY_TYPES.includes(value);
+}
 
 /** AUDIT_LOG feature value'suna göre tarih filtresi döner */
 function getAuditDateFilter(auditLevel: string): Date | null {
@@ -48,6 +58,8 @@ export const AuditLogController = {
     const entityType = c.req.query('entityType');
     const action = c.req.query('action');
     const userId = c.req.query('userId');
+    const filteredEntityType = entityType && isEntityType(entityType) ? entityType : undefined;
+    const filteredAction = action && isAuditAction(action) ? action : undefined;
 
     // Plan bazlı tarih kısıtlaması
     const feature = await tenantFeatureService.resolveFeature(tenantId, FeatureKey.AUDIT_LOG);
@@ -57,8 +69,8 @@ export const AuditLogController = {
       tenantId,
       ...(dateLimit && { createdAt: { gte: dateLimit } }),
       ...(module && { module }),
-      ...(entityType && { entityType: entityType as never }),
-      ...(action && { action: action as never }),
+      ...(filteredEntityType && { entityType: filteredEntityType }),
+      ...(filteredAction && { action: filteredAction }),
       ...(userId && { userId }),
     };
 

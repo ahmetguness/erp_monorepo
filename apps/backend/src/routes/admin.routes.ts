@@ -7,11 +7,13 @@ import {
   AdminMetricsController,
   AdminAuditController,
 } from '../controllers/admin.controller';
+import { AdminSecurityController } from '../controllers/admin-security.controller';
 
 const adminRoutes = new Hono();
 
 // ── Public (no auth) ─────────────────────────
 adminRoutes.post('/auth/login', AdminAuthController.login);
+adminRoutes.post('/auth/logout', AdminAuthController.logout);
 
 // ── Protected routes ─────────────────────────
 // Auth
@@ -37,5 +39,8 @@ adminRoutes.get('/metrics/tenants/:id', requireAdmin, AdminMetricsController.ten
 
 // Audit
 adminRoutes.get('/audit-logs', requireAdmin, AdminAuditController.list);
+
+// Security checklist
+adminRoutes.get('/security/checklist', requireAdmin, AdminSecurityController.checklist);
 
 export { adminRoutes };

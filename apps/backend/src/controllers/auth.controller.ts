@@ -7,6 +7,7 @@ import { ValidationError, ForbiddenError, NotFoundError } from '../errors';
 import { Prisma } from '@prisma/client';
 import { requireTenantId } from '../utils/context.js';
 import { logger } from '../lib/logger';
+import { rateLimiter } from '../lib/rateLimiter';
 
 // ─────────────────────────────────────────────
 // Config
@@ -22,20 +23,6 @@ const REMEMBER_ME_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 // ─────────────────────────────────────────────
 // Rate limiter (register + login brute force koruması)
 // ─────────────────────────────────────────────
-
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(key: string, maxAttempts: number, windowMs: number): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(key);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-  if (entry.count >= maxAttempts) return false;
-  entry.count++;
-  return true;
-}
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -93,7 +80,7 @@ export const AuthController = {
   async login(c: Context): Promise<Response> {
     // Rate limit: IP başına 15 dakikada max 10 giriş denemesi
     const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
-    if (!checkRateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
+    if (await rateLimiter.check(`login:${ip}`, 10, 15 * 60 * 1000)) {
       return c.json({ error: { code: 'RATE_LIMITED', message: 'Çok fazla giriş denemesi. Lütfen 15 dakika sonra tekrar deneyin.' } }, 429);
     }
 
@@ -196,7 +183,6 @@ export const AuthController = {
 
     return c.json({
       data: {
-        token,
         user: {
           id: user.id,
           email: user.email,
@@ -231,7 +217,7 @@ export const AuthController = {
   async register(c: Context): Promise<Response> {
     // Rate limit: IP başına 15 dakikada max 5 kayıt
     const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
-    if (!checkRateLimit(`register:${ip}`, 5, 15 * 60 * 1000)) {
+    if (await rateLimiter.check(`register:${ip}`, 5, 15 * 60 * 1000)) {
       return c.json({ error: { code: 'RATE_LIMITED', message: 'Çok fazla kayıt denemesi. Lütfen 15 dakika sonra tekrar deneyin.' } }, 429);
     }
 
@@ -323,7 +309,6 @@ export const AuthController = {
     return c.json(
       {
         data: {
-          token,
           user: {
             id: result.user.id,
             email: result.user.email,

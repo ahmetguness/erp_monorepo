@@ -5,22 +5,10 @@ import { prisma } from '../lib/prisma';
 import { ValidationError } from '../errors';
 import { logger } from '../lib/logger';
 
-// ── Rate limiter (IP bazlı, 15 dakikada max 5 deneme) ──
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+import { rateLimiter } from '../lib/rateLimiter';
+
 const RATE_LIMIT = 5;
 const RATE_WINDOW = 15 * 60 * 1000;
-
-function checkRateLimit(key: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(key);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_WINDOW });
-    return true;
-  }
-  if (entry.count >= RATE_LIMIT) return false;
-  entry.count++;
-  return true;
-}
 
 /** Timing-safe token karşılaştırma */
 function tokensMatch(storedHash: string | null, rawToken: string): boolean {
@@ -51,7 +39,7 @@ export class SetPasswordController {
    */
   static async setPassword(c: Context) {
     const ip = c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'unknown';
-    if (!checkRateLimit(`set-password:${ip}`)) {
+    if (await rateLimiter.check(`set-password:${ip}`, RATE_LIMIT, RATE_WINDOW)) {
       return c.json({ error: 'Çok fazla deneme. Lütfen 15 dakika sonra tekrar deneyin.' }, 429);
     }
 
@@ -109,7 +97,7 @@ export class SetPasswordController {
    */
   static async validateToken(c: Context) {
     const ip = c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'unknown';
-    if (!checkRateLimit(`validate-token:${ip}`)) {
+    if (await rateLimiter.check(`validate-token:${ip}`, RATE_LIMIT, RATE_WINDOW)) {
       return c.json({ error: 'Çok fazla deneme. Lütfen 15 dakika sonra tekrar deneyin.' }, 429);
     }
 

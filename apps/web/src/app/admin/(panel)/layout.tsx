@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
   Shield, LayoutDashboard, Building2, Sliders,
-  FileText, LogOut,
+  FileText, LogOut, ShieldCheck,
 } from 'lucide-react';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ const NAV = [
   { href: '/admin/tenants', icon: Building2, label: 'Tenantlar' },
   { href: '/admin/features', icon: Sliders, label: 'Özellikler' },
   { href: '/admin/audit', icon: FileText, label: 'Denetim' },
+  { href: '/admin/security', icon: ShieldCheck, label: 'Güvenlik' },
 ];
 
 function AdminNavLinks({ pathname }: { pathname: string }) {
@@ -49,12 +50,9 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
   const { admin, fetchMe, logout } = useAdminAuthStore();
 
   useEffect(() => {
-    const hasCookie = document.cookie.includes('admin-token=');
-    if (!hasCookie) {
-      router.push('/admin/login');
-      return;
+    if (!admin) {
+      fetchMe().catch(() => router.push('/admin/login'));
     }
-    if (!admin) fetchMe();
   }, [admin, fetchMe, router]);
 
   if (!admin) {

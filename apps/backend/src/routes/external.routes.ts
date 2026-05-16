@@ -5,6 +5,7 @@ import { requireFeature } from '../middleware/requireFeature';
 import { prisma } from '../lib/prisma';
 import { ValidationError, NotFoundError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
+import { validateTenantOwnership, buildOwnershipChecks } from '../utils/validateTenantOwnership';
 
 const externalRoutes = new Hono();
 
@@ -72,15 +73,24 @@ externalRoutes.post('/products', requireScope('products:write'), async (c) => {
     return c.json(new ValidationError('code, name ve unitId zorunludur.').toJSON(), 400);
   }
 
-  const product = await prisma.product.create({
-    data: {
-      tenantId, code: body.code, name: body.name, unitId: body.unitId,
-      barcode: body.barcode ?? null, description: body.description ?? null,
-      categoryId: body.categoryId ?? null, taxRateId: body.taxRateId ?? null,
-      purchasePrice: body.purchasePrice ?? 0, salesPrice: body.salesPrice ?? 0,
-      minStockLevel: body.minStockLevel ?? 0,
-    },
-    select: { id: true, code: true, name: true, createdAt: true },
+  const product = await prisma.$transaction(async (tx) => {
+    // Body'deki ilişkili ID'lerin bu tenant'a ait olduğunu doğrula
+    await validateTenantOwnership(tenantId, buildOwnershipChecks([
+      { model: 'unit', id: body.unitId, label: 'Birim' },
+      { model: 'category', id: body.categoryId, label: 'Kategori' },
+      { model: 'taxRate', id: body.taxRateId, label: 'Vergi oranı' },
+    ]), tx);
+
+    return tx.product.create({
+      data: {
+        tenantId, code: body.code, name: body.name, unitId: body.unitId,
+        barcode: body.barcode ?? null, description: body.description ?? null,
+        categoryId: body.categoryId ?? null, taxRateId: body.taxRateId ?? null,
+        purchasePrice: body.purchasePrice ?? 0, salesPrice: body.salesPrice ?? 0,
+        minStockLevel: body.minStockLevel ?? 0,
+      },
+      select: { id: true, code: true, name: true, createdAt: true },
+    });
   });
 
   return c.json({ data: product }, 201);
@@ -311,40 +321,51 @@ externalRoutes.post('/invoices', requireScope('invoices:write'), async (c) => {
     return c.json(new ValidationError('contactId, type, number, date ve en az bir satır zorunludur.').toJSON(), 400);
   }
 
-  // Calculate totals
-  let totalNet = 0;
-  let totalTax = 0;
-  const lineData = body.lines.map((line, i) => {
-    const discount = line.discount ?? 0;
-    const net = line.quantity * line.unitPrice * (1 - discount / 100);
-    // Tax will be calculated if taxRateId is provided, for now estimate 0
-    totalNet += net;
-    return {
-      tenantId,
-      description: line.description,
-      quantity: line.quantity,
-      unitPrice: line.unitPrice,
-      discount,
-      taxAmount: 0,
-      lineTotal: net,
-      productId: line.productId ?? null,
-      taxRateId: line.taxRateId ?? null,
-      sortOrder: i,
-    };
-  });
+  const invoice = await prisma.$transaction(async (tx) => {
+    // Body'deki ilişkili ID'lerin bu tenant'a ait olduğunu doğrula
+    const lineProductIds = body.lines.map((l) => l.productId).filter((id): id is string => typeof id === 'string');
+    const lineTaxRateIds = body.lines.map((l) => l.taxRateId).filter((id): id is string => typeof id === 'string');
+    await validateTenantOwnership(tenantId, buildOwnershipChecks([
+      { model: 'contact', id: body.contactId, label: 'Cari hesap' },
+      ...lineProductIds.map((id) => ({ model: 'product' as const, id, label: 'Ürün' })),
+      ...lineTaxRateIds.map((id) => ({ model: 'taxRate' as const, id, label: 'Vergi oranı' })),
+    ]), tx);
 
-  const totalGross = totalNet + totalTax;
+    // Calculate totals
+    let totalNet = 0;
+    let totalTax = 0;
+    const lineData = body.lines.map((line, i) => {
+      const discount = line.discount ?? 0;
+      const net = line.quantity * line.unitPrice * (1 - discount / 100);
+      // Tax will be calculated if taxRateId is provided, for now estimate 0
+      totalNet += net;
+      return {
+        tenantId,
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        discount,
+        taxAmount: 0,
+        lineTotal: net,
+        productId: line.productId ?? null,
+        taxRateId: line.taxRateId ?? null,
+        sortOrder: i,
+      };
+    });
 
-  const invoice = await prisma.invoice.create({
-    data: {
-      tenantId, contactId: body.contactId, type: body.type,
-      number: body.number, date: new Date(body.date),
-      dueDate: body.dueDate ? new Date(body.dueDate) : null,
-      notes: body.notes ?? null, currencyCode: body.currencyCode ?? 'TRY',
-      totalNet, totalTax, totalGross,
-      lines: { create: lineData },
-    },
-    select: { id: true, number: true, type: true, status: true, totalGross: true, createdAt: true },
+    const totalGross = totalNet + totalTax;
+
+    return tx.invoice.create({
+      data: {
+        tenantId, contactId: body.contactId, type: body.type,
+        number: body.number, date: new Date(body.date),
+        dueDate: body.dueDate ? new Date(body.dueDate) : null,
+        notes: body.notes ?? null, currencyCode: body.currencyCode ?? 'TRY',
+        totalNet, totalTax, totalGross,
+        lines: { create: lineData },
+      },
+      select: { id: true, number: true, type: true, status: true, totalGross: true, createdAt: true },
+    });
   });
 
   return c.json({ data: invoice }, 201);
@@ -416,6 +437,12 @@ externalRoutes.post('/stock-movements', requireScope('inventory:write'), async (
 
   // Transaction: movement + stockLevel güncelleme
   const result = await prisma.$transaction(async (tx) => {
+    // Body'deki ilişkili ID'lerin bu tenant'a ait olduğunu doğrula
+    await validateTenantOwnership(tenantId, buildOwnershipChecks([
+      { model: 'product', id: body.productId, label: 'Ürün' },
+      { model: 'warehouse', id: body.toWarehouseId, label: 'Hedef depo' },
+      { model: 'warehouse', id: body.fromWarehouseId, label: 'Kaynak depo' },
+    ]), tx);
     const movement = await tx.stockMovement.create({
       data: {
         tenantId, productId: body.productId,
@@ -499,31 +526,40 @@ externalRoutes.post('/sales-orders', requireScope('orders:write'), async (c) => 
     return c.json(new ValidationError('contactId, number, date ve en az bir kalem zorunludur.').toJSON(), 400);
   }
 
-  let totalNet = 0;
-  let totalTax = 0;
-  const itemData = body.items.map((item, i) => {
-    const discount = item.discount ?? 0;
-    const taxRate = item.taxRate ?? 0;
-    const net = item.quantity * item.unitPrice * (1 - discount / 100);
-    const tax = net * taxRate / 100;
-    totalNet += net;
-    totalTax += tax;
-    return {
-      tenantId, productId: item.productId, description: item.description,
-      quantity: item.quantity, unitPrice: item.unitPrice,
-      discount, taxRate, taxAmount: tax, lineTotal: net + tax, sortOrder: i,
-    };
-  });
+  const order = await prisma.$transaction(async (tx) => {
+    const itemProductIds = body.items.map((item) => item.productId).filter(Boolean);
+    // Body'deki ilişkili ID'lerin bu tenant'a ait olduğunu doğrula
+    await validateTenantOwnership(tenantId, buildOwnershipChecks([
+      { model: 'contact', id: body.contactId, label: 'Cari hesap' },
+      ...itemProductIds.map((id) => ({ model: 'product' as const, id, label: 'Ürün' })),
+    ]), tx);
 
-  const order = await prisma.salesOrder.create({
-    data: {
-      tenantId, contactId: body.contactId, number: body.number,
-      date: new Date(body.date), dueDate: body.dueDate ? new Date(body.dueDate) : null,
-      notes: body.notes ?? null,
-      totalNet, totalTax, totalGross: totalNet + totalTax,
-      items: { create: itemData },
-    },
-    select: { id: true, number: true, status: true, totalGross: true, createdAt: true },
+    let totalNet = 0;
+    let totalTax = 0;
+    const itemData = body.items.map((item, i) => {
+      const discount = item.discount ?? 0;
+      const taxRate = item.taxRate ?? 0;
+      const net = item.quantity * item.unitPrice * (1 - discount / 100);
+      const tax = net * taxRate / 100;
+      totalNet += net;
+      totalTax += tax;
+      return {
+        tenantId, productId: item.productId, description: item.description,
+        quantity: item.quantity, unitPrice: item.unitPrice,
+        discount, taxRate, taxAmount: tax, lineTotal: net + tax, sortOrder: i,
+      };
+    });
+
+    return tx.salesOrder.create({
+      data: {
+        tenantId, contactId: body.contactId, number: body.number,
+        date: new Date(body.date), dueDate: body.dueDate ? new Date(body.dueDate) : null,
+        notes: body.notes ?? null,
+        totalNet, totalTax, totalGross: totalNet + totalTax,
+        items: { create: itemData },
+      },
+      select: { id: true, number: true, status: true, totalGross: true, createdAt: true },
+    });
   });
 
   return c.json({ data: order }, 201);

@@ -56,12 +56,12 @@ export const PaymentSchema = z.object({
   method: z.enum(['CASH', 'BANK_TRANSFER', 'CREDIT_CARD', 'CHECK', 'PROMISSORY_NOTE', 'OTHER']),
   reference: z.string().nullable(), status: z.enum(['PENDING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED']),
   notes: z.string().nullable(), createdAt: z.string(), updatedAt: z.string(),
-  contact: z.object({ id: z.string(), name: z.string() }).optional(),
-  bankAccount: z.object({ id: z.string(), name: z.string() }).optional(),
-  cashAccount: z.object({ id: z.string(), name: z.string() }).optional(),
+  contact: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+  bankAccount: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+  cashAccount: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
   allocations: z.array(z.object({
     id: z.string(), invoiceId: z.string(), amount: z.coerce.number(),
-    invoice: z.object({ id: z.string(), number: z.string(), totalGross: z.coerce.number() }).optional(),
+    invoice: z.object({ id: z.string(), number: z.string(), totalGross: z.coerce.number() }).nullable().optional(),
   })).optional(),
 });
 

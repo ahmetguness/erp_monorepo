@@ -38,7 +38,7 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setError('');
     try {
-      await login(email, password, rememberMe);
+      await login(email, password);
       setIsRedirecting(true);
       router.push('/admin');
     } catch {

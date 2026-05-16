@@ -8,13 +8,12 @@ import type { AuthUser, TenantInfo } from '@repo/types';
 
 interface AuthState {
   user: AuthUser | null;
-  token: string | null;
   tenant: TenantInfo | null;
   isAuthenticated: boolean;
 }
 
 interface AuthActions {
-  login: (user: AuthUser, token: string, tenant: TenantInfo, rememberMe?: boolean) => void;
+  login: (user: AuthUser, tenant: TenantInfo, rememberMe?: boolean) => void;
   logout: () => void;
   updateUser: (user: Partial<AuthUser>) => void;
   /** Sunucudan gelen güncel tenant + user bilgisini store'a yazar (cookie'ye dokunmaz). */
@@ -25,7 +24,6 @@ type AuthStore = AuthState & AuthActions;
 
 const initialState: AuthState = {
   user: null,
-  token: null,
   tenant: null,
   isAuthenticated: false,
 };
@@ -35,8 +33,8 @@ export const useAuthStore = create<AuthStore>()(
     (set) => ({
       ...initialState,
 
-      login: (user, _token, tenant, _rememberMe = true) => {
-        set({ user, token: null, tenant, isAuthenticated: true });
+      login: (user, tenant) => {
+        set({ user, tenant, isAuthenticated: true });
       },
 
       logout: () => {

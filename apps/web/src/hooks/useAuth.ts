@@ -22,8 +22,7 @@ export function useLogin() {
     mutationFn: (vars: { credentials: LoginCredentials; rememberMe: boolean }) =>
       login({ ...vars.credentials, rememberMe: vars.rememberMe }),
     onSuccess: (data, vars) => {
-      console.log('LOGIN TENANT DATA:', JSON.stringify(data.tenant));
-      storeLogin(data.user, data.token, data.tenant, vars.rememberMe);
+      storeLogin(data.user, data.tenant);
       toast.success(`Hoş geldiniz, ${data.user.name}`);
       router.push('/dashboard');
     },
@@ -45,7 +44,7 @@ export function useRegister() {
   return useMutation({
     mutationFn: (data: RegisterData) => register(data),
     onSuccess: (data) => {
-      storeLogin(data.user, data.token, data.tenant);
+      storeLogin(data.user, data.tenant);
       toast.success('Hesabınız oluşturuldu. Hoş geldiniz!');
       router.push('/dashboard');
     },
@@ -77,12 +76,11 @@ export function useLogout() {
 // ─────────────────────────────────────────────
 
 export function useMe() {
-  const { isAuthenticated, syncFromServer } = useAuthStore();
+  const { syncFromServer } = useAuthStore();
 
   const query = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: getMe,
-    enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 min
     retry: false,
   });

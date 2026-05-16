@@ -39,7 +39,6 @@ const AvailableTenantSchema = z.object({
 
 const LoginResponseSchema = SingleResponseSchema(
   z.object({
-    token: z.string(),
     user: AuthUserSchema,
     tenant: TenantInfoSchema,
     availableTenants: z.array(AvailableTenantSchema),
@@ -48,7 +47,6 @@ const LoginResponseSchema = SingleResponseSchema(
 
 const RegisterResponseSchema = SingleResponseSchema(
   z.object({
-    token: z.string(),
     user: AuthUserSchema,
     tenant: TenantInfoSchema,
   }),
@@ -69,13 +67,11 @@ const MeResponseSchema = SingleResponseSchema(
 export type { AuthUser, TenantInfo };
 export type AvailableTenant = z.infer<typeof AvailableTenantSchema>;
 export type LoginResponse = {
-  token: string;
   user: AuthUser;
   tenant: TenantInfo;
   availableTenants: AvailableTenant[];
 };
 export type RegisterResponse = {
-  token: string;
   user: AuthUser;
   tenant: TenantInfo;
 };

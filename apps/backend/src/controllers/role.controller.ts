@@ -1,8 +1,9 @@
 import { Context } from 'hono';
-import { PermissionAction } from '@prisma/client';
+import { AuditAction, EntityType, PermissionAction } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireUserId } from '../utils/context.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -92,6 +93,7 @@ export const RoleController = {
 
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
 
     const body = await c.req.json<CreateRoleDTO>();
 
@@ -116,11 +118,23 @@ export const RoleController = {
       include: { permissions: true },
     });
 
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'roles',
+      entityType: EntityType.OTHER,
+      entityId: role.id,
+      action: AuditAction.CREATE,
+      newValues: { id: role.id, name: role.name, description: role.description, permissions: role.permissions },
+      ...getRequestMeta(c),
+    });
+
     return c.json({ data: role }, 201);
   },
 
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = c.req.param('id')!;
 
     const existing = await prisma.role.findFirst({ where: { id, tenantId } });
@@ -141,11 +155,24 @@ export const RoleController = {
       include: { permissions: true },
     });
 
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'roles',
+      entityType: EntityType.OTHER,
+      entityId: id,
+      action: AuditAction.UPDATE,
+      oldValues: { id, name: existing.name, description: existing.description },
+      newValues: { id: updated.id, name: updated.name, description: updated.description },
+      ...getRequestMeta(c),
+    });
+
     return c.json({ data: updated });
   },
 
   async delete(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = c.req.param('id')!;
 
     const existing = await prisma.role.findFirst({ where: { id, tenantId } });
@@ -156,6 +183,16 @@ export const RoleController = {
     }
 
     await prisma.role.delete({ where: { id } });
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'roles',
+      entityType: EntityType.OTHER,
+      entityId: id,
+      action: AuditAction.DELETE,
+      oldValues: { id, name: existing.name, description: existing.description },
+      ...getRequestMeta(c),
+    });
     return c.json({ data: { success: true } });
   },
 
@@ -163,6 +200,7 @@ export const RoleController = {
 
   async addPermission(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const roleId = c.req.param('id')!;
 
     const role = await prisma.role.findFirst({ where: { id: roleId, tenantId } });
@@ -182,11 +220,23 @@ export const RoleController = {
       },
     });
 
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'roles',
+      entityType: EntityType.OTHER,
+      entityId: roleId,
+      action: AuditAction.UPDATE,
+      newValues: { permissionId: permission.id, module: permission.module, action: permission.action },
+      ...getRequestMeta(c),
+    });
+
     return c.json({ data: permission }, 201);
   },
 
   async removePermission(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const roleId = c.req.param('id')!;
     const permissionId = c.req.param('permissionId')!;
 
@@ -199,6 +249,16 @@ export const RoleController = {
     if (!permission) return c.json(new NotFoundError('İzin', permissionId).toJSON(), 404);
 
     await prisma.rolePermission.delete({ where: { id: permissionId } });
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'roles',
+      entityType: EntityType.OTHER,
+      entityId: roleId,
+      action: AuditAction.UPDATE,
+      oldValues: { permissionId: permission.id, module: permission.module, action: permission.action },
+      ...getRequestMeta(c),
+    });
     return c.json({ data: { success: true } });
   },
 };

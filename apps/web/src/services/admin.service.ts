@@ -36,6 +36,21 @@ export interface TenantMetrics {
   counts: { users: number; products: number; contacts: number; invoices: number; salesOrders: number; purchaseOrders: number; payments: number; warehouses: number; stockLevels: number; journalEntries: number };
 }
 
+export type SecurityCheckStatus = 'pass' | 'warn' | 'fail';
+
+export interface SecurityChecklistItem {
+  key: string;
+  label: string;
+  status: SecurityCheckStatus;
+  message: string;
+  details?: string[];
+}
+
+export interface SecurityChecklist {
+  summary: SecurityCheckStatus;
+  checks: SecurityChecklistItem[];
+}
+
 export interface CreateTenantInput {
   companyName: string;
   email: string;
@@ -59,9 +74,13 @@ export interface CreateTenantInput {
 // Auth
 // ─────────────────────────────────────────────
 
-export async function adminLogin(email: string, password: string): Promise<{ token: string; admin: AdminUser }> {
+export async function adminLogin(email: string, password: string): Promise<{ admin: AdminUser }> {
   const res = await adminApiClient.post('/api/admin/auth/login', { email, password });
   return res.data.data;
+}
+
+export async function adminLogout(): Promise<void> {
+  await adminApiClient.post('/api/admin/auth/logout');
 }
 
 export async function adminMe(): Promise<AdminUser> {
@@ -146,4 +165,9 @@ export async function getTenantMetrics(id: string): Promise<TenantMetrics> {
 export async function getAdminAuditLogs(params?: { page?: number; limit?: number; tenantId?: string; module?: string; action?: string }) {
   const res = await adminApiClient.get('/api/admin/audit-logs', { params });
   return res.data as { data: Array<Record<string, unknown>>; meta: { total: number; page: number; pageSize: number; totalPages: number } };
+}
+
+export async function getSecurityChecklist(): Promise<SecurityChecklist> {
+  const res = await adminApiClient.get('/api/admin/security/checklist');
+  return res.data.data;
 }

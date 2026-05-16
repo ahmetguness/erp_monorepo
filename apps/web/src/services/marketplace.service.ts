@@ -249,6 +249,19 @@ export interface TrendyolBatchSummary {
   failures: Array<{ barcode: string; reasons: string[] }>;
 }
 
+export interface TrendyolLookupOption {
+  id: number;
+  name: string;
+}
+
+export interface TrendyolCategoryAttribute {
+  id: number;
+  name: string;
+  required: boolean;
+  allowCustom: boolean;
+  values: TrendyolLookupOption[];
+}
+
 // Test connection
 export const testTrendyolConnection = (integrationId: string) =>
   apiClient.post<{ data: { success: boolean; message: string } }>(
@@ -282,4 +295,27 @@ export const getTrendyolJobStatus = (integrationId: string, jobId: string) =>
 export const getTrendyolBatchResult = (integrationId: string, batchRequestId: string) =>
   apiClient.get<{ data: TrendyolBatchSummary }>(
     `/api/marketplace/integrations/${integrationId}/trendyol/batch/${batchRequestId}`,
+  ).then((r) => r.data.data);
+
+export const searchTrendyolCategories = (integrationId: string, query: string) =>
+  apiClient.get<{ data: TrendyolLookupOption[] }>(
+    `/api/marketplace/integrations/${integrationId}/trendyol/categories`,
+    { params: { q: query } },
+  ).then((r) => r.data.data);
+
+export const searchTrendyolBrands = (integrationId: string, query: string) =>
+  apiClient.get<{ data: TrendyolLookupOption[] }>(
+    `/api/marketplace/integrations/${integrationId}/trendyol/brands`,
+    { params: { q: query } },
+  ).then((r) => r.data.data);
+
+export const getTrendyolAttributes = (integrationId: string, categoryId: number) =>
+  apiClient.get<{ data: TrendyolCategoryAttribute[] }>(
+    `/api/marketplace/integrations/${integrationId}/trendyol/attributes`,
+    { params: { categoryId } },
+  ).then((r) => r.data.data);
+
+export const getTrendyolCargoProviders = (integrationId: string) =>
+  apiClient.get<{ data: TrendyolLookupOption[] }>(
+    `/api/marketplace/integrations/${integrationId}/trendyol/cargo-providers`,
   ).then((r) => r.data.data);

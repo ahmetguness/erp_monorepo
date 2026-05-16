@@ -10,6 +10,7 @@ import { MarketplaceOrderStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { mapTrendyolOrderStatus } from '../services/trendyol.service';
+import { decrypt } from '../utils/encryption.js';
 
 const WEBHOOK_API_KEY_HEADER = 'x-api-key';
 const LEGACY_WEBHOOK_SECRET_HEADER = 'x-webhook-secret';
@@ -51,7 +52,13 @@ export const TrendyolWebhookController = {
       return c.json({ error: { code: 'NOT_FOUND', message: 'Integration not found' } }, 404);
     }
 
-    if (!isAuthorizedWebhook(c, integration.apiSecret)) {
+    if (!integration.apiSecret) {
+      logger.warn(`[TrendyolWebhook] Integration ${integrationId} has no webhook secret configured. Rejecting request.`);
+      return c.json({ error: { code: 'WEBHOOK_SECRET_MISSING', message: 'Bu entegrasyona webhook secret tanımlanmamış. Yönetici ile iletişime geçin.' } }, 403);
+    }
+
+    const webhookSecret = decrypt(integration.apiSecret);
+    if (!isAuthorizedWebhook(c, webhookSecret)) {
       logger.warn(`[TrendyolWebhook] Unauthorized request for integration ${integrationId}`);
       return c.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, 401);
     }
@@ -124,7 +131,7 @@ export const TrendyolWebhookController = {
 };
 
 function isAuthorizedWebhook(c: Context, expectedSecret: string | null): boolean {
-  if (!expectedSecret) return true;
+  if (!expectedSecret) return false;
 
   const incomingApiKey = c.req.header(WEBHOOK_API_KEY_HEADER);
   const legacySecret = c.req.header(LEGACY_WEBHOOK_SECRET_HEADER);

@@ -2,7 +2,8 @@ import { Context } from 'hono';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { AuditAction, EntityType, Plan, Prisma, TenantStatus } from '@prisma/client';
+import { setCookie, deleteCookie } from 'hono/cookie';
+import { AuditAction, EntityType, FeatureKey, Plan, Prisma, TenantStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ValidationError, NotFoundError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
@@ -13,9 +14,19 @@ import { tenantReadyEmail } from '../services/mail-templates.service.js';
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
 
-const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || JWT_SECRET + '_admin';
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+if (!ADMIN_JWT_SECRET) {
+  throw new Error('ADMIN_JWT_SECRET ortam değişkeni zorunludur.');
+}
+const RESOLVED_ADMIN_SECRET = ADMIN_JWT_SECRET;
+
+const ADMIN_COOKIE_NAME = 'axon_admin_token';
+const ADMIN_COOKIE_MAX_AGE = 24 * 60 * 60; // 24h
+
 const VALID_PLANS = Object.values(Plan);
 const VALID_STATUSES = Object.values(TenantStatus);
+const VALID_FEATURE_KEYS: readonly string[] = Object.values(FeatureKey);
 const VALID_MODULES = [
   'accounting', 'inventory', 'crm', 'sales', 'purchasing', 'warehouse',
   'production', 'service', 'hr', 'payroll', 'marketplace', 'reporting',
@@ -24,6 +35,10 @@ const VALID_MODULES = [
 
 function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
+}
+
+function isFeatureKey(value: string): value is FeatureKey {
+  return VALID_FEATURE_KEYS.includes(value);
 }
 
 function createSlug(input: string): string {
@@ -142,9 +157,26 @@ export const AdminAuthController = {
 
     await prisma.adminUser.update({ where: { id: admin.id }, data: { lastLoginAt: new Date() } });
 
-    const token = jwt.sign({ adminId: admin.id, email: admin.email, role: 'admin' }, ADMIN_JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign({ adminId: admin.id, email: admin.email, role: 'admin' }, RESOLVED_ADMIN_SECRET, { expiresIn: '24h' });
 
-    return c.json({ data: { token, admin: { id: admin.id, email: admin.email, name: admin.name } } });
+    setCookie(c, ADMIN_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: IS_PRODUCTION,
+      sameSite: 'Lax',
+      path: '/',
+      maxAge: ADMIN_COOKIE_MAX_AGE,
+    });
+
+    return c.json({ data: { admin: { id: admin.id, email: admin.email, name: admin.name } } });
+  },
+
+  async logout(c: Context): Promise<Response> {
+    deleteCookie(c, ADMIN_COOKIE_NAME, {
+      path: '/',
+      secure: IS_PRODUCTION,
+      sameSite: 'Lax',
+    });
+    return c.json({ data: { success: true } });
   },
 
   async me(c: Context): Promise<Response> {
@@ -549,15 +581,21 @@ export const AdminFeatureController = {
       return c.json(new ValidationError('tenantId, featureKey ve value zorunludur.').toJSON(), 400);
     }
 
+    if (!isFeatureKey(body.featureKey)) {
+      return c.json(new ValidationError('Gecersiz featureKey.').toJSON(), 400);
+    }
+
+    const featureKey = body.featureKey;
+
     const existingOverride = await prisma.tenantFeatureOverride.findUnique({
-      where: { tenantId_featureKey: { tenantId: body.tenantId, featureKey: body.featureKey as never } },
+      where: { tenantId_featureKey: { tenantId: body.tenantId, featureKey } },
     });
 
     const override = await prisma.tenantFeatureOverride.upsert({
-      where: { tenantId_featureKey: { tenantId: body.tenantId, featureKey: body.featureKey as never } },
+      where: { tenantId_featureKey: { tenantId: body.tenantId, featureKey } },
       create: {
         tenantId: body.tenantId,
-        featureKey: body.featureKey as never,
+        featureKey,
         value: body.value,
         isEnabled: body.isEnabled ?? true,
         reason: body.reason ?? null,

@@ -35,64 +35,22 @@ const MAX_MESSAGE_LENGTH = 1000;
 const MAX_RESPONSE_LENGTH = 4000;
 
 // ─────────────────────────────────────────────
-// In-memory rate limiter (production'da Redis kullan)
-// ─────────────────────────────────────────────
+import { rateLimiter } from '../lib/rateLimiter';
 
-interface RateEntry {
-  minuteCount: number;
-  minuteResetAt: number;
-  dailyCount: number;
-  dailyResetAt: number;
-}
-
-const rateLimits = new Map<string, RateEntry>();
-
-// Rate limit entry'lerini periyodik temizle
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of rateLimits) {
-    if (now > entry.dailyResetAt) rateLimits.delete(key);
-  }
-}, 10 * 60 * 1000);
-
-function checkChatRateLimit(userId: string, plan: Plan): { allowed: boolean; reason?: string } {
-  const now = Date.now();
-  const key = `chat:${userId}`;
-  let entry = rateLimits.get(key);
-
+async function checkChatRateLimit(userId: string, plan: Plan): Promise<{ allowed: boolean; reason?: string }> {
   const minuteLimit = PLAN_RATE_LIMITS[plan];
   const dailyLimit = PLAN_DAILY_LIMITS[plan];
 
-  if (!entry) {
-    entry = {
-      minuteCount: 0,
-      minuteResetAt: now + 60_000,
-      dailyCount: 0,
-      dailyResetAt: now + 86_400_000,
-    };
-    rateLimits.set(key, entry);
-  }
-
-  if (now > entry.minuteResetAt) {
-    entry.minuteCount = 0;
-    entry.minuteResetAt = now + 60_000;
-  }
-
-  if (now > entry.dailyResetAt) {
-    entry.dailyCount = 0;
-    entry.dailyResetAt = now + 86_400_000;
-  }
-
-  if (entry.minuteCount >= minuteLimit) {
-    return { allowed: false, reason: `Dakika limiti aşıldı (${minuteLimit}/dk). Biraz bekleyin.` };
-  }
-
-  if (entry.dailyCount >= dailyLimit) {
+  const dailyExceeded = await rateLimiter.check(`chat_d:${userId}`, dailyLimit, 86_400_000);
+  if (dailyExceeded) {
     return { allowed: false, reason: `Günlük limit aşıldı (${dailyLimit}/gün). Yarın tekrar deneyin.` };
   }
 
-  entry.minuteCount++;
-  entry.dailyCount++;
+  const minuteExceeded = await rateLimiter.check(`chat_m:${userId}`, minuteLimit, 60_000);
+  if (minuteExceeded) {
+    return { allowed: false, reason: `Dakika limiti aşıldı (${minuteLimit}/dk). Biraz bekleyin.` };
+  }
+
   return { allowed: true };
 }
 
@@ -132,7 +90,7 @@ async function validateChatRequest(c: Context): Promise<
     return { error: c.json({ error: 'Tenant hesabı aktif değil.' }, 403) };
   }
 
-  const rateCheck = checkChatRateLimit(userId, tenant.plan);
+  const rateCheck = await checkChatRateLimit(userId, tenant.plan);
   if (!rateCheck.allowed) return { error: c.json({ error: rateCheck.reason }, 429) };
 
   const body = await c.req.json<{ message?: string }>().catch(() => ({} as { message?: string }));

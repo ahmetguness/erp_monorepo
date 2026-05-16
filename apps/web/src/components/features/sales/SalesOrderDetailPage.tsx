@@ -36,7 +36,7 @@ export function SalesOrderDetailPage({ id }: Props) {
 
   const invoiceColumns: ColumnDef<InvoiceRef>[] = [
     { key: 'number', header: 'Fatura No', render: (r) => <span className="font-mono text-sky-400 cursor-pointer hover:underline" onClick={() => router.push(`/dashboard/invoices/${r.id}`)}>{r.number}</span> },
-    { key: 'status', header: 'Durum', width: '120px', render: (r) => <InvoiceStatusBadge status={r.status as never} /> },
+    { key: 'status', header: 'Durum', width: '120px', render: (r) => <InvoiceStatusBadge status={r.status} /> },
     { key: 'totalGross', header: 'Tutar', width: '130px', align: 'right', render: (r) => <span className="font-medium text-slate-200">{formatCurrency(r.totalGross)}</span> },
   ];
 

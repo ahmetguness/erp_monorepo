@@ -1,5 +1,5 @@
 import { Context } from 'hono';
-import { MarketplaceChannel, MarketplaceOrderStatus, Prisma, SyncJobType, SyncJobStatus } from '@prisma/client';
+import { AuditAction, EntityType, MarketplaceChannel, MarketplaceOrderStatus, Prisma, SyncJobType, SyncJobStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import {
@@ -9,8 +9,10 @@ import {
 import type { TrendyolProductItemInput } from '../services/trendyol.service';
 import { TrendyolWorker } from '../services/trendyol-worker.service';
 import type { JobParams } from '../services/trendyol-worker.service';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireUserId } from '../utils/context.js';
 import { getPaginationParams } from '../utils/pagination.js';
+import { encrypt } from '../utils/encryption.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 type IntegrationWithSecrets = {
   apiKey: string | null;
@@ -73,6 +75,57 @@ function hideIntegrationSecrets<T extends IntegrationWithSecrets>(
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isMarketplaceChannel(value: unknown): value is MarketplaceChannel {
+  return typeof value === 'string' && Object.values(MarketplaceChannel).includes(value as MarketplaceChannel);
+}
+
+interface CreateIntegrationBody {
+  channel: MarketplaceChannel;
+  name: string;
+  apiKey?: string;
+  apiSecret?: string;
+  storeId?: string;
+}
+
+interface UpdateIntegrationBody {
+  name?: string;
+  apiKey?: string;
+  apiSecret?: string;
+  storeId?: string | null;
+  isActive?: boolean;
+}
+
+function readOptionalString(body: Record<string, unknown>, key: string): string | undefined {
+  const value = body[key];
+  return typeof value === 'string' ? value.trim() : undefined;
+}
+
+function parseCreateIntegrationBody(value: unknown): CreateIntegrationBody | ValidationError {
+  if (!isJsonObject(value)) return new ValidationError('Geçersiz istek gövdesi.');
+  const channel = value.channel;
+  const name = readOptionalString(value, 'name') ?? '';
+  if (!isMarketplaceChannel(channel) || !name) return new ValidationError('channel ve name zorunludur.');
+  return {
+    channel,
+    name,
+    apiKey: readOptionalString(value, 'apiKey'),
+    apiSecret: readOptionalString(value, 'apiSecret'),
+    storeId: readOptionalString(value, 'storeId'),
+  };
+}
+
+function parseUpdateIntegrationBody(value: unknown): UpdateIntegrationBody | ValidationError {
+  if (!isJsonObject(value)) return new ValidationError('Geçersiz istek gövdesi.');
+  const body: UpdateIntegrationBody = {};
+  if ('name' in value) body.name = readOptionalString(value, 'name') ?? '';
+  if ('apiKey' in value) body.apiKey = readOptionalString(value, 'apiKey') ?? '';
+  if ('apiSecret' in value) body.apiSecret = readOptionalString(value, 'apiSecret') ?? '';
+  if ('storeId' in value) body.storeId = readOptionalString(value, 'storeId') ?? null;
+  if ('isActive' in value && typeof value.isActive === 'boolean') body.isActive = value.isActive;
+  if (body.name !== undefined && body.name.length === 0) return new ValidationError('name boş olamaz.');
+  return body;
 }
 
 function toJobParams(value: Prisma.JsonValue): JobParams {
@@ -167,12 +220,11 @@ export const MarketplaceIntegrationController = {
 
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
 
-    const body = await c.req.json<{
-      channel: MarketplaceChannel; name: string;
-      apiKey?: string; apiSecret?: string; storeId?: string;
-    }>();
-    if (!body.channel || !body.name) return c.json(new ValidationError('channel ve name zorunludur.').toJSON(), 400);
+    const parsed = parseCreateIntegrationBody(await c.req.json<unknown>().catch(() => null));
+    if (parsed instanceof ValidationError) return c.json(parsed.toJSON(), 400);
+    const body = parsed;
 
     const exists = await prisma.marketplaceIntegration.findUnique({
       where: { tenantId_channel: { tenantId, channel: body.channel } },
@@ -182,41 +234,111 @@ export const MarketplaceIntegrationController = {
     const integration = await prisma.marketplaceIntegration.create({
       data: {
         tenantId, channel: body.channel, name: body.name,
-        apiKey: body.apiKey ?? null, apiSecret: body.apiSecret ?? null, storeId: body.storeId ?? null,
+        apiKey: body.apiKey ? encrypt(body.apiKey) : null, apiSecret: body.apiSecret ? encrypt(body.apiSecret) : null, storeId: body.storeId ?? null,
       },
     });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'marketplace',
+      entityType: EntityType.OTHER,
+      entityId: integration.id,
+      action: AuditAction.CREATE,
+      newValues: {
+        id: integration.id,
+        channel: integration.channel,
+        name: integration.name,
+        storeId: integration.storeId,
+        hasApiKey: Boolean(integration.apiKey),
+        hasApiSecret: Boolean(integration.apiSecret),
+      },
+      ...getRequestMeta(c),
+    });
+
     return c.json({ data: hideIntegrationSecrets(integration) }, 201);
   },
 
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = c.req.param('id')!;
 
     const existing = await prisma.marketplaceIntegration.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Entegrasyon', id).toJSON(), 404);
 
-    const body = await c.req.json<{ name?: string; apiKey?: string; apiSecret?: string; storeId?: string; isActive?: boolean }>();
+    const parsed = parseUpdateIntegrationBody(await c.req.json<unknown>().catch(() => null));
+    if (parsed instanceof ValidationError) return c.json(parsed.toJSON(), 400);
+    const body = parsed;
     const updated = await prisma.marketplaceIntegration.update({
       where: { id },
       data: {
         ...(body.name !== undefined && { name: body.name }),
-        ...(body.apiKey !== undefined && { apiKey: body.apiKey }),
-        ...(body.apiSecret !== undefined && { apiSecret: body.apiSecret }),
+        ...(body.apiKey !== undefined && { apiKey: body.apiKey ? encrypt(body.apiKey) : null }),
+        ...(body.apiSecret !== undefined && { apiSecret: body.apiSecret ? encrypt(body.apiSecret) : null }),
         ...(body.storeId !== undefined && { storeId: body.storeId }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
       },
     });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'marketplace',
+      entityType: EntityType.OTHER,
+      entityId: id,
+      action: AuditAction.UPDATE,
+      oldValues: {
+        id,
+        channel: existing.channel,
+        name: existing.name,
+        storeId: existing.storeId,
+        isActive: existing.isActive,
+        hasApiKey: Boolean(existing.apiKey),
+        hasApiSecret: Boolean(existing.apiSecret),
+      },
+      newValues: {
+        id: updated.id,
+        channel: updated.channel,
+        name: updated.name,
+        storeId: updated.storeId,
+        isActive: updated.isActive,
+        hasApiKey: Boolean(updated.apiKey),
+        hasApiSecret: Boolean(updated.apiSecret),
+      },
+      ...getRequestMeta(c),
+    });
+
     return c.json({ data: hideIntegrationSecrets(updated) });
   },
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = c.req.param('id')!;
 
     const existing = await prisma.marketplaceIntegration.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Entegrasyon', id).toJSON(), 404);
 
     await prisma.marketplaceIntegration.delete({ where: { id } });
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'marketplace',
+      entityType: EntityType.OTHER,
+      entityId: id,
+      action: AuditAction.DELETE,
+      oldValues: {
+        id,
+        channel: existing.channel,
+        name: existing.name,
+        storeId: existing.storeId,
+        isActive: existing.isActive,
+        hasApiKey: Boolean(existing.apiKey),
+        hasApiSecret: Boolean(existing.apiSecret),
+      },
+      ...getRequestMeta(c),
+    });
     return c.json({ data: { success: true } });
   },
 };
@@ -624,6 +746,57 @@ export const TrendyolSyncController = {
     } catch (err) {
       return c.json(new ValidationError(err instanceof Error ? err.message : String(err)).toJSON(), 502);
     }
+  },
+};
+
+export const TrendyolLookupController = {
+  async categories(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+    const query = c.req.query('q');
+    const integration = await prisma.marketplaceIntegration.findFirst({ where: { id, tenantId, channel: 'TRENDYOL' } });
+    if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
+
+    const data = await TrendyolService.searchCategories(buildTrendyolCredentials(integration), query);
+    return c.json({ data });
+  },
+
+  async brands(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+    const query = c.req.query('q')?.trim() ?? '';
+    if (query.length < 2) return c.json({ data: [] });
+
+    const integration = await prisma.marketplaceIntegration.findFirst({ where: { id, tenantId, channel: 'TRENDYOL' } });
+    if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
+
+    const data = await TrendyolService.searchBrands(buildTrendyolCredentials(integration), query);
+    return c.json({ data });
+  },
+
+  async attributes(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+    const categoryId = Number(c.req.query('categoryId'));
+    if (!Number.isInteger(categoryId) || categoryId <= 0) {
+      return c.json(new ValidationError('Geçerli categoryId zorunludur.').toJSON(), 400);
+    }
+
+    const integration = await prisma.marketplaceIntegration.findFirst({ where: { id, tenantId, channel: 'TRENDYOL' } });
+    if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
+
+    const data = await TrendyolService.getCategoryAttributes(buildTrendyolCredentials(integration), categoryId);
+    return c.json({ data });
+  },
+
+  async cargoProviders(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+    const integration = await prisma.marketplaceIntegration.findFirst({ where: { id, tenantId, channel: 'TRENDYOL' } });
+    if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
+
+    const data = await TrendyolService.getCargoProviders(buildTrendyolCredentials(integration));
+    return c.json({ data });
   },
 };
 

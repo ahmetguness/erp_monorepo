@@ -1,4 +1,4 @@
-import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, type AxiosInstance } from 'axios';
 import { ApiErrorSchema, type ApiError } from '@/types/api.types';
 
 const apiClient: AxiosInstance = axios.create({
@@ -6,28 +6,6 @@ const apiClient: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
   withCredentials: true,
-});
-
-// ─────────────────────────────────────────────
-// Cookie reader
-// ─────────────────────────────────────────────
-
-function getCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-// ─────────────────────────────────────────────
-// Request interceptor — reads from cookies
-// ─────────────────────────────────────────────
-
-apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = getCookie('axon_token');
-
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-
-  return config;
 });
 
 // ─────────────────────────────────────────────
