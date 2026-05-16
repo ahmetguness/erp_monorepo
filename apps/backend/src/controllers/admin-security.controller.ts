@@ -1,5 +1,6 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
+import { getStorageStatus } from '../services/storage.service.js';
 
 type SecurityStatus = 'pass' | 'warn' | 'fail';
 
@@ -75,6 +76,32 @@ function redisCheck(): SecurityCheck {
   };
 }
 
+function storageCheck(): SecurityCheck {
+  const status = getStorageStatus();
+  if (status.driver === 'r2') {
+    return {
+      key: 'uploads:storage',
+      label: 'Attachment storage',
+      status: status.ready ? 'pass' : 'fail',
+      message: status.ready ? 'R2 object storage yapılandırılmış.' : 'R2 object storage env değerleri eksik.',
+      details: [
+        `STORAGE_DRIVER=${status.driver}`,
+        `missing=${status.missing.join(', ') || 'none'}`,
+      ],
+    };
+  }
+
+  return {
+    key: 'uploads:storage',
+    label: 'Attachment storage',
+    status: status.productionLocalAllowed ? 'warn' : 'pass',
+    message: status.productionLocalAllowed
+      ? 'Production local upload açık; R2 object storage önerilir.'
+      : 'Local upload yalnızca dev varsayılanı olarak kullanılıyor.',
+    details: [`STORAGE_DRIVER=${status.driver}`],
+  };
+}
+
 export const AdminSecurityController = {
   async checklist(c: Context): Promise<Response> {
     const missingWebhookSecretCount = await prisma.marketplaceIntegration.count({
@@ -97,14 +124,7 @@ export const AdminSecurityController = {
           ? 'Aktif Trendyol entegrasyonlarında secret mevcut.'
           : `${missingWebhookSecretCount} aktif Trendyol entegrasyonunda webhook/API secret eksik.`,
       },
-      {
-        key: 'uploads:production',
-        label: 'Attachment storage',
-        status: process.env.NODE_ENV === 'production' && process.env.ALLOW_LOCAL_UPLOADS_IN_PRODUCTION === 'true' ? 'warn' : 'pass',
-        message: process.env.NODE_ENV === 'production' && process.env.ALLOW_LOCAL_UPLOADS_IN_PRODUCTION === 'true'
-          ? 'Production local upload açık; object storage/AV katmanını doğrulayın.'
-          : 'Production local upload güvenli varsayılanla kapalı veya dev ortamındasınız.',
-      },
+      storageCheck(),
     ];
 
     const hasFail = checks.some((check) => check.status === 'fail');

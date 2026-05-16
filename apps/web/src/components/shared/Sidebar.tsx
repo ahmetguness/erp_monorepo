@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { NAV_GROUPS, type NavItem } from '@/lib/nav-config';
 import { useCurrentUser, useLogout } from '@/hooks/useAuth';
 import { useUIStore } from '@/store/ui.store';
+import { TenantLogo } from './TenantLogo';
 
 // ─────────────────────────────────────────────
 // Nav item types — NavGroup burada tanımlanıyor
@@ -188,8 +189,9 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="h-14 flex items-center px-4 border-b border-slate-800 shrink-0">
-        <span className="text-base font-bold text-white tracking-tight">
-          Axon <span className="text-sky-400">ERP</span>
+        <TenantLogo className="w-8 h-8 rounded-lg shrink-0 mr-2" />
+        <span className="text-base font-bold text-white tracking-tight truncate">
+          {tenant?.companyName ?? 'Axon ERP'}
         </span>
         {tenant && (
           <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 uppercase tracking-wide">

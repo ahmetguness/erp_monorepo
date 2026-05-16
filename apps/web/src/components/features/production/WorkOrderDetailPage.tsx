@@ -10,6 +10,7 @@ import {
   Package,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useWorkOrder, useChangeWorkOrderStatus } from "@/hooks/useProduction";
@@ -251,6 +252,10 @@ export function WorkOrderDetailPage({ id }: { id: string }) {
           </div>
         </div>
       )}
+
+      <div className="mt-6">
+        <AttachmentPanel entityType="WORK_ORDER" entityId={id} />
+      </div>
     </div>
   );
 }

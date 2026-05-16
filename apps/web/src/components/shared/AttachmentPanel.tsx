@@ -1,10 +1,9 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Paperclip, Upload, Trash2, Download, FileText, Image, File } from 'lucide-react';
 import { useAttachments, useUploadAttachment, useDeleteAttachment } from '@/hooks/useAttachments';
-import { downloadAttachment } from '@/services/attachment.service';
-import { cn } from '@/lib/utils';
+import { downloadAttachment, type Attachment } from '@/services/attachment.service';
 
 function fileIcon(mime: string | null) {
   if (mime?.startsWith('image/')) return <Image className="w-4 h-4 text-violet-400" />;
@@ -20,6 +19,50 @@ function fmtSize(bytes: number | null): string {
 }
 
 interface Props { entityType: string; entityId: string; }
+
+function isImageAttachment(attachment: Attachment): boolean {
+  return attachment.mimeType?.startsWith('image/') ?? false;
+}
+
+function AttachmentThumbnail({ attachment }: { attachment: Attachment }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let mounted = true;
+
+    downloadAttachment(attachment.id)
+      .then((blob) => {
+        if (!mounted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      })
+      .catch(() => {
+        if (mounted) setUrl(null);
+      });
+
+    return () => {
+      mounted = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [attachment.id]);
+
+  return (
+    <div className="w-12 h-12 rounded-lg border border-slate-800 bg-slate-950 overflow-hidden shrink-0">
+      {url ? (
+        <div
+          className="w-full h-full bg-center bg-cover"
+          style={{ backgroundImage: `url("${url}")` }}
+          aria-label={attachment.fileName}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <Image className="w-4 h-4 text-slate-600" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function AttachmentPanel({ entityType, entityId }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -64,7 +107,7 @@ export function AttachmentPanel({ entityType, entityId }: Props) {
         <div className="divide-y divide-slate-800/40">
           {attachments.map((a) => (
             <div key={a.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800/20 transition-colors group">
-              {fileIcon(a.mimeType)}
+              {isImageAttachment(a) ? <AttachmentThumbnail attachment={a} /> : fileIcon(a.mimeType)}
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-slate-300 truncate">{a.fileName}</p>
                 <p className="text-[10px] text-slate-600">{fmtSize(a.fileSize)}</p>

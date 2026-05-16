@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,7 +22,9 @@ import {
   Layers,
   AlertCircle,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { FormRow } from "@/components/shared/FormField";
+import { ImageUploadBox, type ImageUploadStatus } from "@/components/shared/ImageUploadBox";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Combobox } from "@/components/ui/Combobox";
@@ -34,6 +36,7 @@ import {
   useCreateProduct,
   useUpdateProduct,
 } from "@/hooks/useProducts";
+import { useAttachments } from "@/hooks/useAttachments";
 import {
   useUnits,
   useCategories,
@@ -42,6 +45,7 @@ import {
 } from "@/hooks/useMasterData";
 import { useWarehouses } from "@/hooks/useStock";
 import { createManualMovement } from "@/services/stock.service";
+import { deleteAttachment, downloadAttachment, uploadAttachment, type Attachment } from "@/services/attachment.service";
 import { useUIStore } from "@/store/ui.store";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -65,6 +69,10 @@ const productSchema = z.object({
 });
 
 type ProductForm = z.infer<typeof productSchema>;
+
+function isImageAttachment(attachment: Attachment): boolean {
+  return attachment.mimeType?.startsWith("image/") ?? false;
+}
 
 // ─────────────────────────────────────────────
 // Sub-components
@@ -132,6 +140,7 @@ function LivePreview({
   purchasePrice,
   salesPrice,
   unit,
+  imagePreviewUrl,
 }: {
   name: string;
   code: string;
@@ -139,6 +148,7 @@ function LivePreview({
   purchasePrice: string;
   salesPrice: string;
   unit: string;
+  imagePreviewUrl: string | null;
 }) {
   const hasData = name || code;
   const margin = Number(salesPrice || 0) - Number(purchasePrice || 0);
@@ -168,8 +178,12 @@ function LivePreview({
             {/* Product card preview */}
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
-                  <Package className="w-5 h-5 text-sky-400" />
+                <div className="w-10 h-10 rounded-lg bg-slate-950 border border-slate-700/70 flex items-center justify-center shrink-0 overflow-hidden">
+                  {imagePreviewUrl ? (
+                    <div className="w-full h-full bg-center bg-cover" style={{ backgroundImage: `url("${imagePreviewUrl}")` }} />
+                  ) : (
+                    <Package className="w-5 h-5 text-sky-400" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">
@@ -249,6 +263,7 @@ interface Props {
 
 export function ProductFormPage({ editId }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const isEdit = !!editId;
 
   const { data: existing, isLoading: loadingExisting } = useProduct(
@@ -261,7 +276,13 @@ export function ProductFormPage({ editId }: Props) {
   const { data: categories = [] } = useCategories();
   const { data: taxRates = [] } = useTaxRates();
   const { data: warehouses = [] } = useWarehouses();
+  const { data: productAttachments = [] } = useAttachments("PRODUCT", editId ?? "");
   const { toast } = useUIStore();
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [selectedImagePreviewUrl, setSelectedImagePreviewUrl] = useState<string | null>(null);
+  const [existingImagePreviewUrl, setExistingImagePreviewUrl] = useState<string | null>(null);
+  const [imageStatus, setImageStatus] = useState<ImageUploadStatus>("idle");
 
   const unitOptions = units.map((u) => ({
     value: u.id,
@@ -321,6 +342,93 @@ export function ProductFormPage({ editId }: Props) {
     () => categories.find((c) => c.id === watchAll.categoryId),
     [categories, watchAll.categoryId],
   );
+  const productImage = useMemo(
+    () => productAttachments.find(isImageAttachment) ?? null,
+    [productAttachments],
+  );
+  const visibleImagePreviewUrl = selectedImagePreviewUrl ?? existingImagePreviewUrl;
+  const hasProductImage = !!imageFile || !!productImage;
+
+  useEffect(() => {
+    if (!imageFile) {
+      setSelectedImagePreviewUrl(null);
+      return undefined;
+    }
+
+    const objectUrl = URL.createObjectURL(imageFile);
+    setSelectedImagePreviewUrl(objectUrl);
+    setImageStatus("selected");
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [imageFile]);
+
+  useEffect(() => {
+    if (!productImage || imageFile) {
+      if (!productImage) setExistingImagePreviewUrl(null);
+      return undefined;
+    }
+
+    let mounted = true;
+    let objectUrl: string | null = null;
+
+    downloadAttachment(productImage.id)
+      .then((blob) => {
+        if (!mounted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setExistingImagePreviewUrl(objectUrl);
+      })
+      .catch(() => {
+        if (mounted) setExistingImagePreviewUrl(null);
+      });
+
+    return () => {
+      mounted = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [productImage, imageFile]);
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setImageFile(file);
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  };
+
+  const clearSelectedImage = () => {
+    setImageFile(null);
+    setImageStatus(productImage ? "idle" : "idle");
+  };
+
+  const invalidateProductAttachments = async (productId: string) => {
+    await queryClient.invalidateQueries({ queryKey: ["attachments", "PRODUCT", productId] });
+  };
+
+  const uploadProductImage = async (productId: string, previousImageId?: string) => {
+    if (!imageFile) return;
+    setImageStatus("uploading");
+    await uploadAttachment("PRODUCT", productId, imageFile);
+    if (previousImageId) {
+      await deleteAttachment(previousImageId);
+    }
+    await invalidateProductAttachments(productId);
+    setImageFile(null);
+    setImageStatus("uploaded");
+  };
+
+  const removeProductImage = async () => {
+    if (!productImage || !editId) return;
+
+    try {
+      setImageStatus("removing");
+      await deleteAttachment(productImage.id);
+      await invalidateProductAttachments(editId);
+      setImageFile(null);
+      setExistingImagePreviewUrl(null);
+      setImageStatus("idle");
+      toast.success("Ürün görseli kaldırıldı.");
+    } catch {
+      setImageStatus("error");
+      toast.error("Ürün görseli kaldırılamadı.");
+    }
+  };
 
   useEffect(() => {
     if (existing) {
@@ -355,11 +463,31 @@ export function ProductFormPage({ editId }: Props) {
 
     if (isEdit) {
       updateProduct.mutate(payload, {
-        onSuccess: () => router.push(`/dashboard/products/${editId}`),
+        onSuccess: async () => {
+          if (editId && imageFile) {
+            try {
+              await uploadProductImage(editId, productImage?.id);
+              toast.success(productImage ? "Ürün görseli güncellendi." : "Ürün görseli yüklendi.");
+            } catch {
+              setImageStatus("error");
+              toast.warning("Ürün güncellendi ama görsel yüklenemedi.");
+            }
+          }
+          router.push(`/dashboard/products/${editId}`);
+        },
       });
     } else {
       createProduct.mutate(payload, {
         onSuccess: async (p) => {
+          if (imageFile) {
+            try {
+              await uploadProductImage(p.id);
+              toast.success("Ürün görseli yüklendi.");
+            } catch {
+              setImageStatus("error");
+              toast.warning("Ürün oluşturuldu ama görsel yüklenemedi.");
+            }
+          }
           const qty = Number(data.initialStock);
           const wId = data.warehouseId;
           if (qty > 0 && wId) {
@@ -385,7 +513,8 @@ export function ProductFormPage({ editId }: Props) {
 
   if (isEdit && loadingExisting) return <FullPageSpinner />;
 
-  const isPending = createProduct.isPending || updateProduct.isPending;
+  const isImageBusy = imageStatus === "uploading" || imageStatus === "removing";
+  const isPending = createProduct.isPending || updateProduct.isPending || isImageBusy;
   const errorCount = Object.keys(errors).length;
 
   return (
@@ -532,6 +661,29 @@ export function ProductFormPage({ editId }: Props) {
               placeholder="Ürün hakkında kısa bir açıklama…"
               {...register("description")}
             />
+            <ImageUploadBox
+              label="Ürün görseli"
+              description={
+                isEdit
+                  ? "Mevcut görseli güncelleyin veya kaldırın."
+                  : "Ürün kaydedildiğinde bu görsel otomatik yüklenecek."
+              }
+              previewUrl={visibleImagePreviewUrl}
+              fileName={imageFile?.name ?? null}
+              status={imageStatus}
+              hasImage={hasProductImage}
+              disabled={isPending}
+              onSelect={() => imageInputRef.current?.click()}
+              onClearSelection={imageFile ? clearSelectedImage : undefined}
+              onRemove={isEdit && productImage ? removeProductImage : undefined}
+            />
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleImageChange}
+            />
           </SectionCard>
 
           {/* ── Step 2: Fiyatlandırma ───────────── */}
@@ -652,12 +804,13 @@ export function ProductFormPage({ editId }: Props) {
                   ? `${selectedUnit.name} (${selectedUnit.code})`
                   : ""
               }
+              imagePreviewUrl={visibleImagePreviewUrl}
             />
 
             {/* Tips card */}
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
               <p className="text-xs font-semibold text-slate-400 mb-2">
-                💡 İpuçları
+                İpuçları
               </p>
               <ul className="space-y-1.5 text-[11px] text-slate-500 leading-relaxed">
                 <li>• Ürün kodu benzersiz olmalıdır</li>

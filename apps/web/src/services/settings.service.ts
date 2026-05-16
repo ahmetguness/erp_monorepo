@@ -30,6 +30,28 @@ export async function deleteTenantSetting(key: string): Promise<void> {
   await apiClient.delete(`/api/settings/${key}`);
 }
 
+export async function uploadTenantLogo(file: File): Promise<TenantSetting> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await apiClient.post('/api/settings/logo', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return safeParse(SingleResponseSchema(TenantSettingSchema), res.data, 'uploadTenantLogo').data;
+}
+
+export async function downloadTenantLogo(): Promise<Blob | null> {
+  const res = await apiClient.get('/api/settings/logo', {
+    responseType: 'blob',
+    validateStatus: (status) => status === 200 || status === 204,
+  });
+  if (res.status === 204) return null;
+  return res.data as Blob;
+}
+
+export async function deleteTenantLogo(): Promise<void> {
+  await apiClient.delete('/api/settings/logo');
+}
+
 export async function getModuleSettings(module?: string): Promise<ModuleSetting[]> {
   const res = await apiClient.get('/api/settings/modules', { params: module ? { module } : {} });
   return safeParse(SingleResponseSchema(z.array(ModuleSettingSchema)), res.data, 'getModuleSettings').data;

@@ -1,17 +1,14 @@
 import { Context } from 'hono';
 import { AuditAction, EntityType } from '@prisma/client';
 import { randomUUID } from 'crypto';
-import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
-import { basename, extname, join, resolve } from 'path';
+import { basename, extname } from 'path';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { bufferToArrayBuffer, storageService } from '../services/storage.service.js';
 
-const UPLOAD_DIR = resolve(process.cwd(), 'uploads');
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-const LOCAL_UPLOADS_ALLOWED_IN_PRODUCTION = process.env.ALLOW_LOCAL_UPLOADS_IN_PRODUCTION === 'true';
 
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
@@ -46,11 +43,6 @@ function sanitizeFileName(fileName: string): string {
   return basename(fileName).replace(/[^\w.\- ]/g, '_').slice(0, 180) || 'file';
 }
 
-function validateLocalStoragePolicy(): void {
-  if (IS_PRODUCTION && !LOCAL_UPLOADS_ALLOWED_IN_PRODUCTION) {
-    throw new ValidationError('Production ortamında local dosya yükleme kapalı. Object storage/AV entegrasyonu yapılandırılmalı.');
-  }
-}
 
 async function ensureEntityBelongsToTenant(tenantId: string, entityType: EntityType, entityId: string): Promise<void> {
   const count = await countEntity(tenantId, entityType, entityId);
@@ -65,10 +57,14 @@ async function countEntity(tenantId: string, entityType: EntityType, entityId: s
       return prisma.invoice.count({ where: { id: entityId, tenantId } });
     case EntityType.PRODUCT:
       return prisma.product.count({ where: { id: entityId, tenantId } });
+    case EntityType.CATEGORY:
+      return prisma.category.count({ where: { id: entityId, tenantId } });
     case EntityType.CONTACT:
       return prisma.contact.count({ where: { id: entityId, tenantId } });
     case EntityType.EMPLOYEE:
       return prisma.employee.count({ where: { id: entityId, tenantId } });
+    case EntityType.CUSTOMER_ASSET:
+      return prisma.customerAsset.count({ where: { id: entityId, tenantId, deletedAt: null } });
     case EntityType.SERVICE_REQUEST:
       return prisma.serviceRequest.count({ where: { id: entityId, tenantId } });
     case EntityType.PURCHASE_ORDER:
@@ -123,8 +119,6 @@ export const AttachmentController = {
   },
 
   async upload(c: Context): Promise<Response> {
-    validateLocalStoragePolicy();
-
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
     const formData = await c.req.formData();
@@ -141,22 +135,10 @@ export const AttachmentController = {
 
     await ensureEntityBelongsToTenant(tenantId, rawEntityType, rawEntityId);
     const { safeName, extension, mimeType } = validateFile(fileValue);
-
-    const tenantDir = resolve(UPLOAD_DIR, tenantId);
-    if (!tenantDir.startsWith(UPLOAD_DIR)) {
-      return c.json(new ValidationError('Geçersiz dosya yolu.').toJSON(), 400);
-    }
-
-    await mkdir(tenantDir, { recursive: true });
-
     const storageName = `${randomUUID()}${extension}`;
-    const storagePath = resolve(tenantDir, storageName);
-    if (!storagePath.startsWith(tenantDir)) {
-      return c.json(new ValidationError('Geçersiz dosya yolu.').toJSON(), 400);
-    }
-
+    const storagePath = `${tenantId}/${storageName}`;
     const buffer = Buffer.from(await fileValue.arrayBuffer());
-    await writeFile(storagePath, buffer, { flag: 'wx' });
+    await storageService.put({ key: storagePath, body: buffer, contentType: mimeType });
 
     const attachment = await prisma.attachment.create({
       data: {
@@ -164,7 +146,7 @@ export const AttachmentController = {
         entityType: rawEntityType,
         entityId: rawEntityId,
         fileName: safeName,
-        storagePath: `uploads/${tenantId}/${storageName}`,
+        storagePath,
         mimeType,
         fileSize: fileValue.size,
         uploadedById: userId,
@@ -194,23 +176,18 @@ export const AttachmentController = {
 
     await ensureEntityBelongsToTenant(tenantId, attachment.entityType, attachment.entityId);
 
-    const filePath = resolve(process.cwd(), attachment.storagePath);
-    if (!filePath.startsWith(UPLOAD_DIR)) {
-      return c.json(new ValidationError('Geçersiz dosya yolu.').toJSON(), 400);
-    }
+    const storedObject = await storageService.get(attachment.storagePath);
+    if (!storedObject) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
 
-    try {
-      const buffer = await readFile(filePath);
-      return new Response(buffer, {
-        headers: {
-          'Content-Type': attachment.mimeType ?? 'application/octet-stream',
-          'Content-Disposition': `attachment; filename="${sanitizeFileName(attachment.fileName)}"`,
-          'Content-Length': String(buffer.length),
-        },
-      });
-    } catch {
-      return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
-    }
+    const body = new Blob([bufferToArrayBuffer(storedObject.body)]);
+
+    return new Response(body, {
+      headers: {
+        'Content-Type': attachment.mimeType ?? storedObject.contentType,
+        'Content-Disposition': `attachment; filename="${sanitizeFileName(attachment.fileName)}"`,
+        'Content-Length': String(storedObject.contentLength),
+      },
+    });
   },
 
   async rename(c: Context): Promise<Response> {
@@ -259,14 +236,7 @@ export const AttachmentController = {
     if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
     await ensureEntityBelongsToTenant(tenantId, attachment.entityType, attachment.entityId);
 
-    const filePath = resolve(process.cwd(), attachment.storagePath);
-    if (filePath.startsWith(UPLOAD_DIR)) {
-      try {
-        await unlink(filePath);
-      } catch {
-        // File may already be deleted; DB ownership has already been verified.
-      }
-    }
+    await storageService.delete(attachment.storagePath);
 
     await prisma.attachment.delete({ where: { id } });
 

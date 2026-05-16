@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Pencil, Trash2, ChevronRight } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { EntityImage } from '@/components/shared/EntityImage';
+import { EntityImageManager } from '@/components/shared/EntityImageManager';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
@@ -46,6 +48,7 @@ function CategoryRow({ category, depth, onEdit, onDelete }: CategoryRowProps) {
         style={{ paddingLeft: `${16 + depth * 20}px` }}
       >
         {depth > 0 && <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />}
+        <EntityImage entityType="CATEGORY" entityId={category.id} className="w-8 h-8 rounded-lg shrink-0" />
         <span className="flex-1 text-sm text-slate-300">{category.name}</span>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
@@ -86,7 +89,7 @@ export function CategoriesManager() {
   });
   const [deleteTarget, setDeleteTarget] = useState<CategoryItem | null>(null);
 
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<CategoryForm>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<CategoryForm>({
     resolver: zodResolver(categorySchema),
   });
 
@@ -161,6 +164,14 @@ export function CategoriesManager() {
             options={parentOptions}
             {...register('parentId')}
           />
+          {modalState.editing && (
+            <EntityImageManager
+              entityType="CATEGORY"
+              entityId={modalState.editing.id}
+              label="Kategori görseli"
+              description="Kategori listelerinde ve ürün sınıflandırmasında kullanılacak görsel."
+            />
+          )}
         </form>
       </Modal>
 

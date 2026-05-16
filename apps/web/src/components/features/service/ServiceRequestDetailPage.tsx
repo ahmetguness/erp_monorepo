@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Play, CheckCircle, Clock, User, MessageSquare } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
+import { EntityImageManager } from '@/components/shared/EntityImageManager';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useServiceRequest, useChangeServiceRequestStatus } from '@/hooks/useService';
@@ -111,6 +113,19 @@ export function ServiceRequestDetailPage({ id }: { id: string }) {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="mt-6">
+        <EntityImageManager
+          entityType="SERVICE_REQUEST"
+          entityId={id}
+          label="Servis fotoğrafı"
+          description="Arıza, bakım öncesi veya bakım sonrası görseli yükleyin."
+        />
+      </div>
+
+      <div className="mt-6">
+        <AttachmentPanel entityType="SERVICE_REQUEST" entityId={id} />
       </div>
     </div>
   );

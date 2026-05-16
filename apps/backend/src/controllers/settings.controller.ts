@@ -1,7 +1,35 @@
 import { Context } from 'hono';
+import { randomUUID } from 'crypto';
+import { basename, extname } from 'path';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
+import { bufferToArrayBuffer, storageService } from '../services/storage.service.js';
+
+const TENANT_LOGO_SETTING_KEY = 'tenant_logo_storage_path';
+const LEGACY_TENANT_LOGO_SETTING_KEY = 'company_logo';
+const TENANT_LOGO_SETTING_KEYS = [TENANT_LOGO_SETTING_KEY, LEGACY_TENANT_LOGO_SETTING_KEY] as const;
+const MAX_LOGO_SIZE = 2 * 1024 * 1024;
+const ALLOWED_LOGO_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_LOGO_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
+function sanitizeFileName(fileName: string): string {
+  return basename(fileName).replace(/[^\w.\- ]/g, '_').slice(0, 180) || 'logo';
+}
+
+function validateLogoFile(file: File): { extension: string; mimeType: string } {
+  const safeName = sanitizeFileName(file.name);
+  const extension = extname(safeName).toLowerCase();
+  const mimeType = file.type || 'application/octet-stream';
+
+  if (file.size <= 0) throw new ValidationError('Boş logo yüklenemez.');
+  if (file.size > MAX_LOGO_SIZE) throw new ValidationError('Logo boyutu 2MB sınırını aşamaz.');
+  if (!ALLOWED_LOGO_EXTENSIONS.has(extension) || !ALLOWED_LOGO_MIME_TYPES.has(mimeType)) {
+    throw new ValidationError('Logo için JPG, PNG veya WebP dosyası yükleyin.');
+  }
+
+  return { extension, mimeType };
+}
 
 // ─────────────────────────────────────────────
 // Settings Controller
@@ -15,7 +43,13 @@ export const SettingsController = {
   async listTenantSettings(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const settings = await prisma.tenantSetting.findMany({ where: { tenantId }, orderBy: { key: 'asc' } });
+    const settings = await prisma.tenantSetting.findMany({
+      where: {
+        tenantId,
+        key: { notIn: [...TENANT_LOGO_SETTING_KEYS] },
+      },
+      orderBy: { key: 'asc' },
+    });
     return c.json({ data: settings });
   },
 
@@ -46,6 +80,74 @@ export const SettingsController = {
 
   // ── Module Settings ──────────────────────────
 
+  async uploadTenantLogo(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const formData = await c.req.formData();
+    const fileValue = formData.get('file');
+
+    if (!(fileValue instanceof File)) {
+      return c.json(new ValidationError('file zorunludur.').toJSON(), 400);
+    }
+
+    const previous = await prisma.tenantSetting.findUnique({
+      where: { tenantId_key: { tenantId, key: TENANT_LOGO_SETTING_KEY } },
+    });
+    const { extension, mimeType } = validateLogoFile(fileValue);
+    const storagePath = `${tenantId}/tenant-logo/${randomUUID()}${extension}`;
+    const buffer = Buffer.from(await fileValue.arrayBuffer());
+    await storageService.put({ key: storagePath, body: buffer, contentType: mimeType });
+
+    const setting = await prisma.tenantSetting.upsert({
+      where: { tenantId_key: { tenantId, key: TENANT_LOGO_SETTING_KEY } },
+      create: { tenantId, key: TENANT_LOGO_SETTING_KEY, value: storagePath },
+      update: { value: storagePath },
+    });
+
+    if (previous?.value && previous.value !== storagePath) {
+      await storageService.delete(previous.value);
+    }
+    await prisma.tenantSetting.deleteMany({
+      where: { tenantId, key: LEGACY_TENANT_LOGO_SETTING_KEY },
+    });
+
+    return c.json({ data: setting });
+  },
+
+  async downloadTenantLogo(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const setting = await prisma.tenantSetting.findUnique({
+      where: { tenantId_key: { tenantId, key: TENANT_LOGO_SETTING_KEY } },
+    });
+
+    if (!setting) return new Response(null, { status: 204 });
+
+    const storedObject = await storageService.get(setting.value);
+    if (!storedObject) return new Response(null, { status: 204 });
+
+    return new Response(new Blob([bufferToArrayBuffer(storedObject.body)]), {
+      headers: {
+        'Content-Type': storedObject.contentType,
+        'Content-Length': String(storedObject.contentLength),
+        'Cache-Control': 'private, max-age=300',
+      },
+    });
+  },
+
+  async deleteTenantLogo(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const setting = await prisma.tenantSetting.findUnique({
+      where: { tenantId_key: { tenantId, key: TENANT_LOGO_SETTING_KEY } },
+    });
+
+    if (!setting) return c.json(new NotFoundError('Logo').toJSON(), 404);
+
+    await storageService.delete(setting.value);
+    await prisma.tenantSetting.delete({ where: { id: setting.id } });
+    await prisma.tenantSetting.deleteMany({
+      where: { tenantId, key: LEGACY_TENANT_LOGO_SETTING_KEY },
+    });
+    return c.json({ data: { success: true } });
+  },
   async listModuleSettings(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 

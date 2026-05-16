@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Package } from "lucide-react";
+import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { EntityImage } from "@/components/shared/EntityImage";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { useProducts } from "@/hooks/useProducts";
@@ -38,9 +39,12 @@ export function ProductsListPage() {
       key: "code",
       header: "Kod / Ad",
       render: (r) => (
-        <div>
-          <p className="font-medium text-slate-200">{r.name}</p>
-          <p className="text-xs text-slate-500 font-mono">{r.code}</p>
+        <div className="flex items-center gap-3">
+          <EntityImage entityType="PRODUCT" entityId={r.id} fallback="package" className="w-10 h-10 rounded-lg shrink-0" />
+          <div className="min-w-0">
+            <p className="font-medium text-slate-200 truncate">{r.name}</p>
+            <p className="text-xs text-slate-500 font-mono">{r.code}</p>
+          </div>
         </div>
       ),
     },

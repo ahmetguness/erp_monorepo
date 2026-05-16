@@ -8,6 +8,9 @@ const settingsRoutes = new Hono();
 // Tenant settings
 settingsRoutes.get('/', requirePermission('settings', 'READ'), SettingsController.listTenantSettings);
 settingsRoutes.put('/', requirePermission('settings', 'UPDATE'), SettingsController.upsertTenantSetting);
+settingsRoutes.get('/logo', requirePermission('settings', 'READ'), SettingsController.downloadTenantLogo);
+settingsRoutes.post('/logo', requirePermission('settings', 'UPDATE'), SettingsController.uploadTenantLogo);
+settingsRoutes.delete('/logo', requirePermission('settings', 'DELETE'), SettingsController.deleteTenantLogo);
 settingsRoutes.delete('/:key', requirePermission('settings', 'DELETE'), SettingsController.deleteTenantSetting);
 
 // Module settings

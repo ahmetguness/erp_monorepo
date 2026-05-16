@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
+import { EntityImage } from "@/components/shared/EntityImage";
+import { EntityImageManager } from "@/components/shared/EntityImageManager";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useEmployee } from "@/hooks/useHR";
@@ -47,6 +50,24 @@ export function EmployeeDetailPage({ id }: { id: string }) {
           </Button>
         }
       />
+
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-6">
+        <div className="flex items-center gap-4">
+          <EntityImage entityType="EMPLOYEE" entityId={id} className="w-20 h-20 rounded-xl shrink-0" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold text-white">Profil fotoğrafı</h2>
+            <p className="text-xs text-slate-500 mt-1">Personel kartları ve detay ekranlarında kullanılacak görsel.</p>
+          </div>
+        </div>
+        <div className="mt-4">
+          <EntityImageManager
+            entityType="EMPLOYEE"
+            entityId={id}
+            label="Profil fotoğrafı"
+            description="Personel için tek ana görsel yükleyin, güncelleyin veya kaldırın."
+          />
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
@@ -127,6 +148,10 @@ export function EmployeeDetailPage({ id }: { id: string }) {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="mt-6">
+        <AttachmentPanel entityType="EMPLOYEE" entityId={id} />
       </div>
     </div>
   );

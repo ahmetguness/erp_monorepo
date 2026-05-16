@@ -1,11 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Truck, ArrowRight } from 'lucide-react';
+import { Plus, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
+import { EntityImageManager } from '@/components/shared/EntityImageManager';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { useDeliveryNotes, useUpdateDeliveryNoteStatus } from '@/hooks/useDeliveryNotes';
 import { formatDate } from '@/lib/utils';
@@ -25,6 +29,7 @@ export function DeliveryNotesPage() {
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [detailNote, setDetailNote] = useState<DeliveryNote | null>(null);
   const { data, isLoading } = useDeliveryNotes({ page, limit: 20, type: typeFilter || undefined, status: statusFilter || undefined });
   const updateStatus = useUpdateDeliveryNoteStatus();
 
@@ -74,8 +79,41 @@ export function DeliveryNotesPage() {
           value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} />
       </div>
       <DataTable columns={columns} data={data?.data ?? []} keyExtractor={(r) => r.id} isLoading={isLoading}
+        onRowClick={(r) => setDetailNote(r)}
         emptyTitle="İrsaliye bulunamadı" emptyDescription="Yeni bir irsaliye oluşturarak başlayın."
         pagination={data ? { page, pageSize: 20, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined} />
+      <Modal
+        isOpen={!!detailNote}
+        onClose={() => setDetailNote(null)}
+        title={detailNote ? `İrsaliye ${detailNote.number}` : 'İrsaliye'}
+        size="lg"
+        footer={<Button variant="ghost" size="sm" onClick={() => setDetailNote(null)}>Kapat</Button>}
+      >
+        {detailNote && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Tip', value: TYPE_MAP[detailNote.type] ?? detailNote.type },
+                { label: 'Durum', value: STATUS_MAP[detailNote.status]?.label ?? detailNote.status },
+                { label: 'Cari', value: detailNote.contact?.name ?? '—' },
+                { label: 'Tarih', value: formatDate(detailNote.date) },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-3">
+                  <p className="text-[10px] text-slate-500">{item.label}</p>
+                  <p className="mt-1 text-sm text-slate-200">{item.value}</p>
+                </div>
+              ))}
+            </div>
+            <EntityImageManager
+              entityType="DELIVERY_NOTE"
+              entityId={detailNote.id}
+              label="İrsaliye görseli"
+              description="Teslimat evrakı, sevk belgesi veya imzalı irsaliye fotoğrafı yükleyin."
+            />
+            <AttachmentPanel entityType="DELIVERY_NOTE" entityId={detailNote.id} />
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

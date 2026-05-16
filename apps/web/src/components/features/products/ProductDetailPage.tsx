@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { EntityImage } from "@/components/shared/EntityImage";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/Button";
@@ -105,8 +106,11 @@ export function ProductDetailPage({ id }: Props) {
       />
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
-        <div className="mb-4">
-          <ActiveBadge isActive={product.isActive} />
+        <div className="flex items-start gap-5 mb-4">
+          <EntityImage entityType="PRODUCT" entityId={id} fallback="package" className="w-24 h-24 rounded-xl shrink-0" />
+          <div className="pt-1">
+            <ActiveBadge isActive={product.isActive} />
+          </div>
         </div>
         <InfoRow label="Kategori" value={product.category?.name} />
         <InfoRow

@@ -1,17 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  Save, Plus, Trash2, X, Building2, Layers, Pencil,
+  Save, Plus, X, Building2, Layers, Pencil,
   Globe, Calendar, Receipt, DollarSign, Clock,
-  Calculator, Package, AlertTriangle, FileText, CreditCard,
+  Calculator, Package, FileText,
 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { ImageUploadBox, type ImageUploadStatus } from '@/components/shared/ImageUploadBox';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { useTenantSettings, useUpsertTenantSetting, useDeleteTenantSetting, useModuleSettings, useUpsertModuleSetting } from '@/hooks/useSettings';
+import {
+  useTenantSettings,
+  useUpsertTenantSetting,
+  useDeleteTenantSetting,
+  useModuleSettings,
+  useUpsertModuleSetting,
+  useTenantLogo,
+  useUploadTenantLogo,
+  useDeleteTenantLogo,
+} from '@/hooks/useSettings';
 import { cn } from '@/lib/utils';
 import type { TenantSetting, ModuleSetting } from '@/services/settings.service';
 
@@ -41,6 +51,8 @@ const MODULE_LABELS: Record<string, { label: string; icon: React.ReactNode }> = 
   inventory: { label: 'Envanter', icon: <Package className="w-3.5 h-3.5 text-sky-400" /> },
   invoicing: { label: 'Faturalama', icon: <FileText className="w-3.5 h-3.5 text-violet-400" /> },
 };
+
+const LOGO_SETTING_KEYS = new Set(['company_logo', 'tenant_logo_storage_path']);
 
 function getValueDisplay(key: string, value: string): string {
   if (value === 'true') return 'Açık';
@@ -131,9 +143,16 @@ function hasOptions(key: string): boolean {
 export function SettingsPage() {
   const { data: tenantSettings = [], isLoading: loadingTenant } = useTenantSettings();
   const { data: moduleSettings = [], isLoading: loadingModule } = useModuleSettings();
+  const { data: logoBlob } = useTenantLogo();
   const upsertTenant = useUpsertTenantSetting();
   const deleteTenant = useDeleteTenantSetting();
   const upsertModule = useUpsertModuleSetting();
+  const uploadLogo = useUploadTenantLogo();
+  const deleteLogo = useDeleteTenantLogo();
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const [logoStatus, setLogoStatus] = useState<ImageUploadStatus>('idle');
 
   const [addOpen, setAddOpen] = useState(false);
   const [addType, setAddType] = useState<'tenant' | 'module'>('tenant');
@@ -160,10 +179,50 @@ export function SettingsPage() {
     }
   };
 
+  useEffect(() => {
+    const logoSource = logoFile ?? logoBlob;
+    if (!logoSource) {
+      setLogoPreviewUrl(null);
+      return undefined;
+    }
+
+    const objectUrl = URL.createObjectURL(logoSource);
+    setLogoPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [logoBlob, logoFile]);
+
+  const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    if (file) {
+      setLogoFile(file);
+      setLogoStatus('uploading');
+      uploadLogo.mutate(file, {
+        onSuccess: () => {
+          setLogoFile(null);
+          setLogoStatus('uploaded');
+        },
+        onError: () => setLogoStatus('error'),
+      });
+    }
+    if (logoInputRef.current) logoInputRef.current.value = '';
+  };
+
+  const removeLogo = () => {
+    setLogoStatus('removing');
+    deleteLogo.mutate(undefined, {
+      onSuccess: () => {
+        setLogoFile(null);
+        setLogoStatus('idle');
+      },
+      onError: () => setLogoStatus('error'),
+    });
+  };
+
   const moduleGroups = moduleSettings.reduce<Record<string, ModuleSetting[]>>((acc, s) => {
     (acc[s.module] ??= []).push(s);
     return acc;
   }, {});
+  const visibleTenantSettings = tenantSettings.filter((setting) => !LOGO_SETTING_KEYS.has(setting.key));
 
   return (
     <div className="space-y-5">
@@ -177,6 +236,28 @@ export function SettingsPage() {
         }
       />
 
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <ImageUploadBox
+          label="Şirket logosu"
+          description="Logo sidebar ve tenant görünümlerinde kullanılır."
+          previewUrl={logoPreviewUrl}
+          fileName={logoFile?.name ?? null}
+          status={logoStatus}
+          hasImage={!!logoFile || !!logoBlob}
+          disabled={uploadLogo.isPending || deleteLogo.isPending}
+          maxSizeLabel="JPG, PNG veya WebP, en fazla 2MB"
+          onSelect={() => logoInputRef.current?.click()}
+          onRemove={logoBlob ? removeLogo : undefined}
+        />
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handleLogoChange}
+        />
+      </div>
+
       {/* ── Tenant Settings ─────────────────────── */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-800/60">
@@ -188,11 +269,11 @@ export function SettingsPage() {
         </div>
         {loadingTenant ? (
           <div className="py-8 text-center text-sm text-slate-600">Yükleniyor…</div>
-        ) : tenantSettings.length === 0 ? (
+        ) : visibleTenantSettings.length === 0 ? (
           <div className="py-8 text-center text-sm text-slate-600">Henüz ayar eklenmemiş.</div>
         ) : (
           <div className="divide-y divide-slate-800/40">
-            {tenantSettings.map((s) => {
+            {visibleTenantSettings.map((s) => {
               const meta = TENANT_KEY_META[s.key];
               const isEditing = editingId === s.id;
 

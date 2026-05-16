@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, UserCheck, Eye, Trash2, Pencil } from "lucide-react";
+import { Plus, Eye, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { EntityImage } from "@/components/shared/EntityImage";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -55,10 +56,18 @@ export function EmployeesPage() {
       header: "Personel",
       render: (r) => (
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs font-bold flex-shrink-0">
-            {r.firstName.charAt(0)}
-            {r.lastName.charAt(0)}
-          </div>
+          <EntityImage
+            entityType="EMPLOYEE"
+            entityId={r.id}
+            fallback="none"
+            className="w-8 h-8 rounded-full bg-sky-500/20 text-sky-400 text-xs font-bold shrink-0"
+            fallbackContent={
+              <>
+                {r.firstName.charAt(0)}
+                {r.lastName.charAt(0)}
+              </>
+            }
+          />
           <div>
             <span className="text-white font-medium text-sm">
               {r.firstName} {r.lastName}

@@ -6,6 +6,7 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   getTenantSettings, upsertTenantSetting, deleteTenantSetting,
   getModuleSettings, upsertModuleSetting,
+  downloadTenantLogo, uploadTenantLogo, deleteTenantLogo,
 } from '@/services/settings.service';
 
 export function useTenantSettings() {
@@ -28,6 +29,38 @@ export function useDeleteTenantSetting() {
   return useMutation({
     mutationFn: (key: string) => deleteTenantSetting(key),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['settings', 'tenant'] }); toast.success('Ayar silindi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useTenantLogo() {
+  return useQuery({ queryKey: ['settings', 'tenant-logo'], queryFn: downloadTenantLogo, staleTime: 5 * 60 * 1000 });
+}
+
+export function useUploadTenantLogo() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (file: File) => uploadTenantLogo(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
+      qc.invalidateQueries({ queryKey: ['settings', 'tenant-logo'] });
+      toast.success('Logo yüklendi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useDeleteTenantLogo() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: deleteTenantLogo,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
+      qc.invalidateQueries({ queryKey: ['settings', 'tenant-logo'] });
+      toast.success('Logo silindi.');
+    },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }

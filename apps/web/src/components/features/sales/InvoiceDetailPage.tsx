@@ -12,6 +12,7 @@ import { FullPageSpinner } from '@/components/ui/Spinner';
 import { useInvoice, useCancelInvoice } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
+import { EntityImageManager } from '@/components/shared/EntityImageManager';
 
 interface LineRow {
   id: string; description: string; quantity: number; unitPrice: number;
@@ -86,6 +87,13 @@ export function InvoiceDetailPage({ id }: Props) {
         data={(invoice.lines ?? []) as LineRow[]}
         keyExtractor={(r) => r.id}
         emptyTitle="Fatura kalemi bulunamadı"
+      />
+
+      <EntityImageManager
+        entityType="INVOICE"
+        entityId={id}
+        label="Belge görseli"
+        description="Taranmış fatura, fiş veya belge fotoğrafı yükleyin."
       />
 
       {/* Attachments */}

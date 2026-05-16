@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Monitor, Trash2, Pencil, Eye } from 'lucide-react';
+import { Plus, Trash2, Eye } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
+import { EntityImage } from '@/components/shared/EntityImage';
+import { EntityImageManager } from '@/components/shared/EntityImageManager';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -36,9 +39,7 @@ export function CustomerAssetsPage() {
       key: 'name', header: 'Varlık',
       render: (r) => (
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-teal-500/10 flex items-center justify-center flex-shrink-0">
-            <Monitor className="w-3.5 h-3.5 text-teal-400" />
-          </div>
+          <EntityImage entityType="CUSTOMER_ASSET" entityId={r.id} className="w-8 h-8 rounded-lg shrink-0" />
           <div>
             <span className="text-white font-medium text-sm">{r.name}</span>
             <span className="block text-xs text-slate-500">
@@ -125,6 +126,12 @@ export function CustomerAssetsPage() {
         footer={<Button variant="ghost" size="sm" onClick={() => setDetailAsset(null)}>Kapat</Button>}>
         {detailAsset && (
           <div className="space-y-5">
+            <EntityImageManager
+              entityType="CUSTOMER_ASSET"
+              entityId={detailAsset.id}
+              label="Cihaz fotoğrafı"
+              description="Servis varlığı için cihaz veya ekipman fotoğrafı yükleyin."
+            />
             <div className="grid grid-cols-2 gap-3">
               {[
                 { label: 'Müşteri', value: detailAsset.contact?.name ?? '—' },
@@ -138,6 +145,7 @@ export function CustomerAssetsPage() {
                 </div>
               ))}
             </div>
+            <AttachmentPanel entityType="CUSTOMER_ASSET" entityId={detailAsset.id} />
           </div>
         )}
       </Modal>
