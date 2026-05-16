@@ -27,6 +27,7 @@ import { PaymentStatusBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { Select } from "@/components/ui/Select";
 import { FormRow } from "@/components/shared/FormField";
 import {
@@ -175,6 +176,7 @@ export function PaymentsListPage() {
   });
 
   const selectedMethod = watch("method");
+  const selectedDate = watch("date");
   const isBankMethod =
     selectedMethod === "BANK_TRANSFER" || selectedMethod === "CREDIT_CARD";
   const isCashMethod = selectedMethod === "CASH";
@@ -605,13 +607,13 @@ export function PaymentsListPage() {
               )}
             </div>
             <FormRow cols={2}>
-              <Input
+              <DatePicker
                 label="Tarih"
                 required
-                type="date"
+                value={selectedDate}
                 error={errors.date?.message}
-                prefixIcon={<CalendarDays className="w-3.5 h-3.5" />}
-                {...register("date")}
+                onValueChange={(value) => setValue("date", value ?? "", { shouldDirty: true, shouldValidate: true })}
+                clearable={false}
               />
               <Select
                 label="Cari"

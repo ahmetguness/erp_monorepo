@@ -13,7 +13,6 @@ import {
   Save,
   X,
   FileText,
-  CalendarDays,
   StickyNote,
   BookOpen,
   ArrowUpRight,
@@ -32,6 +31,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { DatePicker } from "@/components/ui/DatePicker";
 import {
   useJournalEntries,
   useCreateJournalEntry,
@@ -141,6 +141,7 @@ export function JournalEntriesPage() {
     control,
     handleSubmit,
     watch,
+    setValue,
     reset,
     formState: { errors },
   } = useForm<EntryForm>({
@@ -156,6 +157,7 @@ export function JournalEntriesPage() {
 
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
   const watchedLines = watch("lines");
+  const watchedDate = watch("date");
 
   const totalDebit = watchedLines.reduce(
     (s, l) => s + (Number(l.debit) || 0),
@@ -490,13 +492,13 @@ export function JournalEntriesPage() {
               </span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Input
+              <DatePicker
                 label="Tarih"
                 required
-                type="date"
+                value={watchedDate}
                 error={errors.date?.message}
-                prefixIcon={<CalendarDays className="w-3.5 h-3.5" />}
-                {...register("date")}
+                onValueChange={(value) => setValue("date", value ?? "", { shouldDirty: true, shouldValidate: true })}
+                clearable={false}
               />
               <Input
                 label="Açıklama"
@@ -779,6 +781,7 @@ function EditJournalEntryModal({
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<EditForm>({
     resolver: zodResolver(editSchema),
@@ -799,6 +802,7 @@ function EditJournalEntryModal({
 
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
   const watchedLines = watch("lines");
+  const watchedDate = watch("date");
 
   const totalDebit = watchedLines.reduce(
     (s, l) => s + (Number(l.debit) || 0),
@@ -879,12 +883,13 @@ function EditJournalEntryModal({
             </Badge>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input
+            <DatePicker
               label="Tarih"
               required
-              type="date"
-              prefixIcon={<CalendarDays className="w-3.5 h-3.5" />}
-              {...register("date")}
+              value={watchedDate}
+              error={errors.date?.message}
+              onValueChange={(value) => setValue("date", value ?? "", { shouldDirty: true, shouldValidate: true })}
+              clearable={false}
             />
             <Input
               label="Açıklama"

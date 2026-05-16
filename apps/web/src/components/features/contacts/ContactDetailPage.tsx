@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import {
@@ -626,25 +627,23 @@ export function ContactDetailPage({ id }: Props) {
 
         {showEntryFilters && (
           <div className="flex flex-wrap gap-2 mb-3 p-3 bg-slate-900/50 border border-slate-800/60 rounded-xl">
-            <Input
-              type="date"
+            <DatePicker
               value={dateFrom}
-              onChange={(e) => {
-                setDateFrom(e.target.value);
+              onValueChange={(value) => {
+                setDateFrom(value ?? "");
                 setEntryPage(1);
               }}
-              placeholder="Başlangıç"
-              className="w-40 !py-1.5 text-xs"
+              aria-label="Başlangıç"
+              className="w-40"
             />
-            <Input
-              type="date"
+            <DatePicker
               value={dateTo}
-              onChange={(e) => {
-                setDateTo(e.target.value);
+              onValueChange={(value) => {
+                setDateTo(value ?? "");
                 setEntryPage(1);
               }}
-              placeholder="Bitiş"
-              className="w-40 !py-1.5 text-xs"
+              aria-label="Bitiş"
+              className="w-40"
             />
             <Select
               options={REF_TYPE_OPTIONS}

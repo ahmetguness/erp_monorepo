@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
-import { Input } from '@/components/ui/Input';
+import { ProductSelect } from '@/components/shared/EntitySelect';
 import { useStockValuations } from '@/hooks/useStockValuation';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import type { StockValuation } from '@/services/stock-valuation.service';
@@ -33,7 +33,7 @@ export function StockValuationPage() {
     <div>
       <PageHeader title="Stok Değerleme" subtitle="Ürün bazlı stok değerleme kayıtlarını inceleyin." />
       <div className="mb-4 max-w-xs">
-        <Input label="" placeholder="Ürün ID ile filtrele" value={productId} onChange={(e) => { setProductId(e.target.value); setPage(1); }} />
+        <ProductSelect label="" value={productId} onChange={(value) => { setProductId(value); setPage(1); }} />
       </div>
       <DataTable columns={columns} data={data?.data ?? []} keyExtractor={(r) => r.id} isLoading={isLoading}
         emptyTitle="Değerleme kaydı bulunamadı" emptyDescription="Stok hareketleri oluştukça değerleme kayıtları otomatik oluşur."

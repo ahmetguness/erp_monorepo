@@ -6,9 +6,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   ArrowLeft, ShoppingCart, Users, Plus, Trash2, Save, X,
-  CalendarDays, Hash, DollarSign, Percent, Package, Receipt,
+  Hash, DollarSign, Percent, Package, Receipt,
 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
@@ -54,6 +55,8 @@ export function PurchaseOrderFormPage() {
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const watchItems = watch('items');
   const watchContact = watch('contactId');
+  const watchDate = watch('date');
+  const watchDueDate = watch('dueDate');
   const selectedContact = contacts.find((c) => c.id === watchContact);
 
   const handleProductChange = (idx: number, productId: string) => {
@@ -120,8 +123,8 @@ export function PurchaseOrderFormPage() {
               <div className="p-5 space-y-4">
                 <Select label="Tedarikçi" required options={contactOptions} error={errors.contactId?.message} {...register('contactId')} />
                 <FormRow cols={2}>
-                  <Input label="Sipariş Tarihi" required type="date" prefixIcon={<CalendarDays className="w-3.5 h-3.5" />} {...register('date')} />
-                  <Input label="Teslim Tarihi" type="date" prefixIcon={<CalendarDays className="w-3.5 h-3.5" />} {...register('dueDate')} />
+                  <DatePicker label="Sipariş Tarihi" required value={watchDate} onValueChange={(value) => setValue('date', value ?? '', { shouldDirty: true, shouldValidate: true })} error={errors.date?.message} clearable={false} />
+                  <DatePicker label="Teslim Tarihi" value={watchDueDate ?? ''} onValueChange={(value) => setValue('dueDate', value ?? '', { shouldDirty: true, shouldValidate: true })} />
                 </FormRow>
                 <Textarea label="Notlar" placeholder="Sipariş notları…" {...register('notes')} />
               </div>

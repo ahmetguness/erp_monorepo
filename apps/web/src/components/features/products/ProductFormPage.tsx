@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -24,7 +24,10 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FormRow } from "@/components/shared/FormField";
-import { ImageUploadBox, type ImageUploadStatus } from "@/components/shared/ImageUploadBox";
+import {
+  ImageUploadBox,
+  type ImageUploadStatus,
+} from "@/components/shared/ImageUploadBox";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Combobox } from "@/components/ui/Combobox";
@@ -45,7 +48,12 @@ import {
 } from "@/hooks/useMasterData";
 import { useWarehouses } from "@/hooks/useStock";
 import { createManualMovement } from "@/services/stock.service";
-import { deleteAttachment, downloadAttachment, uploadAttachment, type Attachment } from "@/services/attachment.service";
+import {
+  deleteAttachment,
+  downloadAttachment,
+  uploadAttachment,
+  type Attachment,
+} from "@/services/attachment.service";
 import { useUIStore } from "@/store/ui.store";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -180,7 +188,10 @@ function LivePreview({
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-slate-950 border border-slate-700/70 flex items-center justify-center shrink-0 overflow-hidden">
                   {imagePreviewUrl ? (
-                    <div className="w-full h-full bg-center bg-cover" style={{ backgroundImage: `url("${imagePreviewUrl}")` }} />
+                    <div
+                      className="w-full h-full bg-center bg-cover"
+                      style={{ backgroundImage: `url("${imagePreviewUrl}")` }}
+                    />
                   ) : (
                     <Package className="w-5 h-5 text-sky-400" />
                   )}
@@ -276,12 +287,16 @@ export function ProductFormPage({ editId }: Props) {
   const { data: categories = [] } = useCategories();
   const { data: taxRates = [] } = useTaxRates();
   const { data: warehouses = [] } = useWarehouses();
-  const { data: productAttachments = [] } = useAttachments("PRODUCT", editId ?? "");
+  const { data: productAttachments = [] } = useAttachments(
+    "PRODUCT",
+    editId ?? "",
+  );
   const { toast } = useUIStore();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [selectedImagePreviewUrl, setSelectedImagePreviewUrl] = useState<string | null>(null);
-  const [existingImagePreviewUrl, setExistingImagePreviewUrl] = useState<string | null>(null);
+  const [existingImagePreviewUrl, setExistingImagePreviewUrl] = useState<
+    string | null
+  >(null);
   const [imageStatus, setImageStatus] = useState<ImageUploadStatus>("idle");
 
   const unitOptions = units.map((u) => ({
@@ -308,14 +323,14 @@ export function ProductFormPage({ editId }: Props) {
     handleSubmit,
     reset,
     setValue,
-    watch,
+    control,
     formState: { errors },
   } = useForm<ProductForm>({
     resolver: zodResolver(productSchema),
     defaultValues: { purchasePrice: "0", salesPrice: "0", minStockLevel: "0" },
   });
 
-  const watchAll = watch();
+  const watchAll = useWatch({ control });
 
   // Section completion checks
   const step1Done = !!(watchAll.code && watchAll.name && watchAll.unitId);
@@ -346,24 +361,22 @@ export function ProductFormPage({ editId }: Props) {
     () => productAttachments.find(isImageAttachment) ?? null,
     [productAttachments],
   );
-  const visibleImagePreviewUrl = selectedImagePreviewUrl ?? existingImagePreviewUrl;
+  const selectedImagePreviewUrl = useMemo(
+    () => (imageFile ? URL.createObjectURL(imageFile) : null),
+    [imageFile],
+  );
+  const visibleImagePreviewUrl =
+    selectedImagePreviewUrl ??
+    (productImage && !imageFile ? existingImagePreviewUrl : null);
   const hasProductImage = !!imageFile || !!productImage;
 
   useEffect(() => {
-    if (!imageFile) {
-      setSelectedImagePreviewUrl(null);
-      return undefined;
-    }
-
-    const objectUrl = URL.createObjectURL(imageFile);
-    setSelectedImagePreviewUrl(objectUrl);
-    setImageStatus("selected");
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [imageFile]);
+    if (!selectedImagePreviewUrl) return undefined;
+    return () => URL.revokeObjectURL(selectedImagePreviewUrl);
+  }, [selectedImagePreviewUrl]);
 
   useEffect(() => {
     if (!productImage || imageFile) {
-      if (!productImage) setExistingImagePreviewUrl(null);
       return undefined;
     }
 
@@ -389,19 +402,25 @@ export function ProductFormPage({ editId }: Props) {
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
     setImageFile(file);
+    setImageStatus(file ? "selected" : "idle");
     if (imageInputRef.current) imageInputRef.current.value = "";
   };
 
   const clearSelectedImage = () => {
     setImageFile(null);
-    setImageStatus(productImage ? "idle" : "idle");
+    setImageStatus("idle");
   };
 
   const invalidateProductAttachments = async (productId: string) => {
-    await queryClient.invalidateQueries({ queryKey: ["attachments", "PRODUCT", productId] });
+    await queryClient.invalidateQueries({
+      queryKey: ["attachments", "PRODUCT", productId],
+    });
   };
 
-  const uploadProductImage = async (productId: string, previousImageId?: string) => {
+  const uploadProductImage = async (
+    productId: string,
+    previousImageId?: string,
+  ) => {
     if (!imageFile) return;
     setImageStatus("uploading");
     await uploadAttachment("PRODUCT", productId, imageFile);
@@ -467,7 +486,11 @@ export function ProductFormPage({ editId }: Props) {
           if (editId && imageFile) {
             try {
               await uploadProductImage(editId, productImage?.id);
-              toast.success(productImage ? "Ürün görseli güncellendi." : "Ürün görseli yüklendi.");
+              toast.success(
+                productImage
+                  ? "Ürün görseli güncellendi."
+                  : "Ürün görseli yüklendi.",
+              );
             } catch {
               setImageStatus("error");
               toast.warning("Ürün güncellendi ama görsel yüklenemedi.");
@@ -514,7 +537,8 @@ export function ProductFormPage({ editId }: Props) {
   if (isEdit && loadingExisting) return <FullPageSpinner />;
 
   const isImageBusy = imageStatus === "uploading" || imageStatus === "removing";
-  const isPending = createProduct.isPending || updateProduct.isPending || isImageBusy;
+  const isPending =
+    createProduct.isPending || updateProduct.isPending || isImageBusy;
   const errorCount = Object.keys(errors).length;
 
   return (
@@ -631,7 +655,7 @@ export function ProductFormPage({ editId }: Props) {
               <Combobox
                 label="Kategori"
                 options={categoryOptions}
-                value={watch("categoryId") ?? ""}
+                value={watchAll.categoryId ?? ""}
                 onChange={(v) => setValue("categoryId", v)}
                 onCreateNew={(name) => {
                   createCategory.mutate(

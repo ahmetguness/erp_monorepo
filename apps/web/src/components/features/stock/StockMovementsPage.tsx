@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Plus, ArrowDownToLine, ArrowUpFromLine, RotateCcw, FolderOpen,
-  Package, Warehouse as WarehouseIcon, Hash, StickyNote, Coins, Save, X,
+  Hash, StickyNote, Coins, Save, X,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,12 +10,12 @@ import { z } from 'zod';
 import Link from 'next/link';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { ProductSelect, WarehouseSelect } from '@/components/shared/EntitySelect';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { FormRow } from '@/components/shared/FormField';
-import { useStockMovements, useCreateManualMovement, useWarehouses } from '@/hooks/useStock';
+import { useStockMovements, useCreateManualMovement } from '@/hooks/useStock';
 import { cn, formatDate } from '@/lib/utils';
 import type { StockMovement, StockMovementType } from '@/services/stock.service';
 
@@ -45,7 +45,7 @@ const MOVE_TYPES = [
 // ─────────────────────────────────────────────
 
 const manualMovementSchema = z.object({
-  productId: z.string().min(1, 'Ürün ID zorunludur'),
+  productId: z.string().min(1, 'Ürün seçiniz'),
   type: z.enum(['IN', 'OUT', 'ADJUSTMENT', 'OPENING']),
   quantity: z.string().min(1, 'Miktar zorunludur'),
   warehouseId: z.string().min(1, 'Depo seçiniz'),
@@ -62,11 +62,8 @@ export function StockMovementsPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
 
-  const { data: warehouses = [] } = useWarehouses();
   const { data, isLoading } = useStockMovements({ page, limit: 20 });
   const createMovement = useCreateManualMovement();
-
-  const warehouseOptions = warehouses.map((w) => ({ value: w.id, label: w.name }));
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<ManualMovementForm>({
     resolver: zodResolver(manualMovementSchema),
@@ -74,6 +71,8 @@ export function StockMovementsPage() {
   });
 
   const selectedType = watch('type');
+  const selectedProductId = watch('productId');
+  const selectedWarehouseId = watch('warehouseId');
 
   const onSubmit = (formData: ManualMovementForm) => {
     createMovement.mutate(
@@ -193,10 +192,20 @@ export function StockMovementsPage() {
           <div>
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5 block">Ürün & Depo</label>
             <div className="space-y-3">
-              <Input label="Ürün ID" required placeholder="Ürün ID'sini girin" error={errors.productId?.message}
-                prefixIcon={<Package className="w-3.5 h-3.5" />} {...register('productId')} />
-              <Select label="Depo" required options={warehouseOptions} placeholder="Depo seçin"
-                error={errors.warehouseId?.message} {...register('warehouseId')} />
+              <ProductSelect
+                label="Ürün"
+                required
+                value={selectedProductId ?? ''}
+                onChange={(value) => setValue('productId', value, { shouldDirty: true, shouldValidate: true })}
+                error={errors.productId?.message}
+              />
+              <WarehouseSelect
+                label="Depo"
+                required
+                value={selectedWarehouseId ?? ''}
+                onChange={(value) => setValue('warehouseId', value, { shouldDirty: true, shouldValidate: true })}
+                error={errors.warehouseId?.message}
+              />
             </div>
           </div>
 

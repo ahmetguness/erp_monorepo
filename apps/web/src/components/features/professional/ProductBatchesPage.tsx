@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { Plus, Boxes } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { ProductSelect } from '@/components/shared/EntitySelect';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { useProductBatches, useCreateProductBatch } from '@/hooks/useProductBatches';
 import { formatDate } from '@/lib/utils';
 import type { ProductBatch } from '@/services/product-batch.service';
@@ -61,11 +63,11 @@ export function ProductBatchesPage() {
           }}>Oluştur</Button>
         </>}>
         <div className="space-y-4">
-          <Input label="Ürün ID" required value={form.productId} onChange={(e) => setForm((p) => ({ ...p, productId: e.target.value }))} />
+          <ProductSelect label="Ürün" required value={form.productId} onChange={(value) => setForm((p) => ({ ...p, productId: value }))} />
           <Input label="Parti Numarası" required value={form.batchNumber} onChange={(e) => setForm((p) => ({ ...p, batchNumber: e.target.value }))} />
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Üretim Tarihi" type="date" value={form.manufacturedAt} onChange={(e) => setForm((p) => ({ ...p, manufacturedAt: e.target.value }))} />
-            <Input label="Son Kullanma Tarihi" type="date" value={form.expiryDate} onChange={(e) => setForm((p) => ({ ...p, expiryDate: e.target.value }))} />
+            <DatePicker label="Üretim Tarihi" value={form.manufacturedAt} onValueChange={(value) => setForm((p) => ({ ...p, manufacturedAt: value ?? '' }))} />
+            <DatePicker label="Son Kullanma Tarihi" value={form.expiryDate} onValueChange={(value) => setForm((p) => ({ ...p, expiryDate: value ?? '' }))} />
           </div>
           <Input label="Miktar" type="number" step="1" value={form.quantity} onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))} />
           <Input label="Notlar" value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />

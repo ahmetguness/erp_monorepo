@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Plus, Hash } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { ProductBatchSelect, ProductSelect } from '@/components/shared/EntitySelect';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -67,9 +68,9 @@ export function LotSerialsPage() {
           }}>Oluştur</Button>
         </>}>
         <div className="space-y-4">
-          <Input label="Ürün ID" required value={form.productId} onChange={(e) => setForm((p) => ({ ...p, productId: e.target.value }))} />
+          <ProductSelect label="Ürün" required value={form.productId} onChange={(value) => setForm((p) => ({ ...p, productId: value, batchId: '' }))} />
           <Input label="Seri Numarası" required value={form.serialNumber} onChange={(e) => setForm((p) => ({ ...p, serialNumber: e.target.value }))} />
-          <Input label="Parti ID" placeholder="Opsiyonel" value={form.batchId} onChange={(e) => setForm((p) => ({ ...p, batchId: e.target.value }))} />
+          <ProductBatchSelect label="Parti" value={form.batchId} productId={form.productId || undefined} onChange={(value) => setForm((p) => ({ ...p, batchId: value }))} />
         </div>
       </Modal>
     </div>

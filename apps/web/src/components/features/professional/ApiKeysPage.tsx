@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { DatePicker } from "@/components/ui/DatePicker";
 import {
   useApiKeys,
   useCreateApiKey,
@@ -440,14 +441,11 @@ export function ApiKeysPage() {
                   setForm((p) => ({ ...p, name: e.target.value }))
                 }
               />
-              <Input
+              <DatePicker
                 label="Bitiş Tarihi"
-                type="date"
                 helperText="Boş bırakırsanız süresiz olur."
                 value={form.expiresAt}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, expiresAt: e.target.value }))
-                }
+                onValueChange={(value) => setForm((p) => ({ ...p, expiresAt: value ?? "" }))}
               />
             </div>
 

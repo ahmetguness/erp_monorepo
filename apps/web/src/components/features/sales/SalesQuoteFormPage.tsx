@@ -6,10 +6,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   ArrowLeft, FileSignature, Users, Plus, Trash2,
-  Save, X, Package, Receipt, CalendarDays, Percent,
+  Save, X, Package, Receipt, Percent,
   Hash, DollarSign, ShoppingCart,
 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
@@ -70,6 +71,8 @@ export function SalesQuoteFormPage() {
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const watchItems = watch('items');
   const watchContact = watch('contactId');
+  const watchDate = watch('date');
+  const watchValidUntil = watch('validUntil');
 
   const handleProductChange = (idx: number, productId: string) => {
     setValue(`items.${idx}.productId`, productId);
@@ -160,8 +163,8 @@ export function SalesQuoteFormPage() {
               <div className="p-5 space-y-4">
                 <Select label="Müşteri" required options={contactOptions} error={errors.contactId?.message} {...register('contactId')} />
                 <FormRow cols={2}>
-                  <Input label="Teklif Tarihi" required type="date" prefixIcon={<CalendarDays className="w-3.5 h-3.5" />} {...register('date')} />
-                  <Input label="Geçerlilik Tarihi" type="date" prefixIcon={<CalendarDays className="w-3.5 h-3.5" />} {...register('validUntil')} />
+                  <DatePicker label="Teklif Tarihi" required value={watchDate} onValueChange={(value) => setValue('date', value ?? '', { shouldDirty: true, shouldValidate: true })} error={errors.date?.message} clearable={false} />
+                  <DatePicker label="Geçerlilik Tarihi" value={watchValidUntil ?? ''} onValueChange={(value) => setValue('validUntil', value ?? '', { shouldDirty: true, shouldValidate: true })} />
                 </FormRow>
                 <Textarea label="Notlar" placeholder="Teklif ile ilgili notlar…" {...register('notes')} />
               </div>

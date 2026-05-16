@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Modal } from '@/components/ui/Modal';
 import { useStockCounts, useCreateStockCount, useWarehouses, useStockLevels } from '@/hooks/useStock';
 import { cn, formatDate } from '@/lib/utils';
@@ -68,6 +69,7 @@ export function StockCountsPage() {
 
   const { fields } = useFieldArray({ control, name: 'items' });
   const watchWarehouse = watch('warehouseId');
+  const watchDate = watch('date');
 
   // When warehouse changes, load stock levels as items
   useEffect(() => {
@@ -184,7 +186,7 @@ export function StockCountsPage() {
             <div className="grid grid-cols-2 gap-3">
               <Select label="Depo" required options={[{ value: '', label: '— Depo seçin —' }, ...warehouseOptions]}
                 error={errors.warehouseId?.message} {...register('warehouseId')} />
-              <Input label="Tarih" required type="date" {...register('date')} />
+              <DatePicker label="Tarih" required value={watchDate} onValueChange={(value) => setValue('date', value ?? '', { shouldDirty: true, shouldValidate: true })} error={errors.date?.message} clearable={false} />
             </div>
             <Input label="Notlar" placeholder="Sayım açıklaması (opsiyonel)…" {...register('notes')} />
           </div>

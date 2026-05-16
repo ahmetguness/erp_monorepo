@@ -4,10 +4,12 @@ import { useState } from "react";
 import { Plus, CheckCircle, XCircle, Ban } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { EmployeeSelect } from "@/components/shared/EntitySelect";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { Select } from "@/components/ui/Select";
 import { FormRow } from "@/components/shared/FormField";
 import {
@@ -271,14 +273,11 @@ export function LeaveRequestsPage() {
         }
       >
         <div className="space-y-4">
-          <Input
-            label="Personel ID"
+          <EmployeeSelect
+            label="Personel"
             required
-            placeholder="Personel ID'si"
             value={form.employeeId}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, employeeId: e.target.value }))
-            }
+            onChange={(value) => setForm((p) => ({ ...p, employeeId: value }))}
           />
           <Select
             label="İzin Türü"
@@ -291,23 +290,23 @@ export function LeaveRequestsPage() {
             onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}
           />
           <FormRow cols={2}>
-            <Input
+            <DatePicker
               label="Başlangıç"
               required
-              type="date"
               value={form.startDate}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, startDate: e.target.value }))
+              onValueChange={(value) =>
+                setForm((p) => ({ ...p, startDate: value ?? "" }))
               }
+              clearable={false}
             />
-            <Input
+            <DatePicker
               label="Bitiş"
               required
-              type="date"
               value={form.endDate}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, endDate: e.target.value }))
+              onValueChange={(value) =>
+                setForm((p) => ({ ...p, endDate: value ?? "" }))
               }
+              clearable={false}
             />
           </FormRow>
           <Input

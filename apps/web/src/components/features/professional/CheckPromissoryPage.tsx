@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Select } from '@/components/ui/Select';
 import { useCheckPromissoryNotes, useCreateCheckPromissory, useUpdateCheckStatus } from '@/hooks/useCheckPromissory';
 import { formatDate, formatCurrency } from '@/lib/utils';
@@ -104,8 +105,8 @@ export function CheckPromissoryPage() {
           <Input label="Numara" required value={form.number} onChange={(e) => setForm((p) => ({ ...p, number: e.target.value }))} />
           <Input label="Tutar" required type="number" step="0.01" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} />
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Düzenleme Tarihi" required type="date" value={form.issueDate} onChange={(e) => setForm((p) => ({ ...p, issueDate: e.target.value }))} />
-            <Input label="Vade Tarihi" required type="date" value={form.dueDate} onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))} />
+            <DatePicker label="Düzenleme Tarihi" required value={form.issueDate} onValueChange={(value) => setForm((p) => ({ ...p, issueDate: value ?? '' }))} clearable={false} />
+            <DatePicker label="Vade Tarihi" required value={form.dueDate} onValueChange={(value) => setForm((p) => ({ ...p, dueDate: value ?? '' }))} clearable={false} />
           </div>
           <Input label="Banka" value={form.bankName} onChange={(e) => setForm((p) => ({ ...p, bankName: e.target.value }))} />
           <Input label="Notlar" value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />

@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { BomSelect, ProductSelect, WarehouseSelect } from "@/components/shared/EntitySelect";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { FormRow } from "@/components/shared/FormField";
 import { Textarea } from "@/components/ui/Textarea";
 import { useCreateWorkOrder } from "@/hooks/useProduction";
@@ -49,20 +51,16 @@ export function WorkOrderFormPage() {
 
       <div className="space-y-6 bg-slate-900 border border-slate-800 rounded-xl p-6">
         <FormRow cols={2}>
-          <Input
-            label="Ürün ID"
+          <ProductSelect
+            label="Ürün"
             required
-            placeholder="Üretilecek ürün"
             value={form.productId}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, productId: e.target.value }))
-            }
+            onChange={(value) => setForm((p) => ({ ...p, productId: value }))}
           />
-          <Input
-            label="BOM ID"
-            placeholder="Opsiyonel — BOM seçilirse malzemeler otomatik eklenir"
+          <BomSelect
+            label="BOM"
             value={form.bomId}
-            onChange={(e) => setForm((p) => ({ ...p, bomId: e.target.value }))}
+            onChange={(value) => setForm((p) => ({ ...p, bomId: value }))}
           />
         </FormRow>
 
@@ -72,46 +70,32 @@ export function WorkOrderFormPage() {
           type="number"
           placeholder="ör. 100"
           value={form.plannedQty}
-          onChange={(e) =>
-            setForm((p) => ({ ...p, plannedQty: e.target.value }))
-          }
+          onChange={(e) => setForm((p) => ({ ...p, plannedQty: e.target.value }))}
         />
 
         <FormRow cols={2}>
-          <Input
+          <DatePicker
             label="Başlangıç Tarihi"
-            type="date"
             value={form.startDate}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, startDate: e.target.value }))
-            }
+            onValueChange={(value) => setForm((p) => ({ ...p, startDate: value ?? "" }))}
           />
-          <Input
+          <DatePicker
             label="Bitiş Tarihi"
-            type="date"
             value={form.endDate}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, endDate: e.target.value }))
-            }
+            onValueChange={(value) => setForm((p) => ({ ...p, endDate: value ?? "" }))}
           />
         </FormRow>
 
         <FormRow cols={2}>
-          <Input
-            label="Girdi Deposu ID"
-            placeholder="Hammadde deposu"
+          <WarehouseSelect
+            label="Girdi Deposu"
             value={form.inputWarehouseId}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, inputWarehouseId: e.target.value }))
-            }
+            onChange={(value) => setForm((p) => ({ ...p, inputWarehouseId: value }))}
           />
-          <Input
-            label="Çıktı Deposu ID"
-            placeholder="Mamul deposu"
+          <WarehouseSelect
+            label="Çıktı Deposu"
             value={form.outputWarehouseId}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, outputWarehouseId: e.target.value }))
-            }
+            onChange={(value) => setForm((p) => ({ ...p, outputWarehouseId: value }))}
           />
         </FormRow>
 

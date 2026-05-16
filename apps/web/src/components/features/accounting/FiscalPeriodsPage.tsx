@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { FormRow } from "@/components/shared/FormField";
 import {
   useFiscalPeriods,
@@ -545,19 +546,21 @@ export function FiscalPeriodsPage() {
                 {...register("name")}
               />
               <FormRow cols={2}>
-                <Input
+                <DatePicker
                   label="Başlangıç Tarihi"
                   required
-                  type="date"
+                  value={watchStart}
                   error={errors.startDate?.message}
-                  {...register("startDate")}
+                  onValueChange={(value) => setValue("startDate", value ?? "", { shouldDirty: true, shouldValidate: true })}
+                  clearable={false}
                 />
-                <Input
+                <DatePicker
                   label="Bitiş Tarihi"
                   required
-                  type="date"
+                  value={watchEnd}
                   error={errors.endDate?.message}
-                  {...register("endDate")}
+                  onValueChange={(value) => setValue("endDate", value ?? "", { shouldDirty: true, shouldValidate: true })}
+                  clearable={false}
                 />
               </FormRow>
             </div>

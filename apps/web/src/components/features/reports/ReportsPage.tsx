@@ -6,7 +6,7 @@ import { TrendingUp, TrendingDown, Package, Users, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormRow } from '@/components/shared/FormField';
 import { FeatureGate } from '@/components/shared/FeatureGate';
@@ -119,8 +119,8 @@ export function ReportsPage() {
       {/* Date range filter */}
       <div className="flex flex-wrap items-end gap-3">
         <FormRow cols={2} className="w-auto">
-          <Input label="Başlangıç" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-          <Input label="Bitiş" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          <DatePicker label="Başlangıç" value={dateFrom} onValueChange={(value) => setDateFrom(value ?? '')} />
+          <DatePicker label="Bitiş" value={dateTo} onValueChange={(value) => setDateTo(value ?? '')} />
         </FormRow>
       </div>
 

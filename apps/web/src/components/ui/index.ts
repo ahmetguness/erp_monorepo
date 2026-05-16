@@ -4,6 +4,9 @@ export type { ButtonProps, ButtonVariant, ButtonSize } from './Button';
 export { Input } from './Input';
 export type { InputProps } from './Input';
 
+export { DatePicker } from './DatePicker';
+export type { DatePickerProps } from './DatePicker';
+
 export { Select } from './Select';
 export type { SelectProps } from './Select';
 

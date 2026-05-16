@@ -32,27 +32,54 @@ import type { TenantSetting, ModuleSetting } from '@/services/settings.service';
 const TENANT_KEY_META: Record<string, { label: string; description: string; icon: React.ReactNode }> = {
   date_format: { label: 'Tarih Formatı', description: 'Tarih gösterim biçimi', icon: <Calendar className="w-3.5 h-3.5 text-sky-400" /> },
   default_currency: { label: 'Varsayılan Para Birimi', description: 'Sistem genelinde kullanılan para birimi', icon: <DollarSign className="w-3.5 h-3.5 text-emerald-400" /> },
+  email_notifications: { label: 'E-posta Bildirimleri', description: 'Sistem bildirimleri e-posta ile gönderilsin', icon: <Globe className="w-3.5 h-3.5 text-sky-400" /> },
+  fiscal_year_start: { label: 'Mali Yıl Başlangıcı', description: 'Mali yılın başladığı ay-gün', icon: <Calendar className="w-3.5 h-3.5 text-amber-400" /> },
+  invoice_footer: { label: 'Fatura Alt Bilgisi', description: 'Fatura çıktılarında gösterilecek alt metin', icon: <FileText className="w-3.5 h-3.5 text-violet-400" /> },
   invoice_prefix: { label: 'Fatura Ön Eki', description: 'Otomatik fatura numarası ön eki', icon: <Receipt className="w-3.5 h-3.5 text-violet-400" /> },
   language: { label: 'Dil', description: 'Arayüz dili', icon: <Globe className="w-3.5 h-3.5 text-amber-400" /> },
+  low_stock_alert: { label: 'Düşük Stok Uyarısı', description: 'Minimum stok altına düşünce uyarı verilsin', icon: <Package className="w-3.5 h-3.5 text-red-400" /> },
   timezone: { label: 'Saat Dilimi', description: 'Tarih/saat hesaplamaları için', icon: <Clock className="w-3.5 h-3.5 text-pink-400" /> },
 };
 
 const MODULE_KEY_META: Record<string, { label: string; description: string }> = {
+  auto_journal: { label: 'Otomatik Muhasebe Fişi', description: 'İşlemler için muhasebe kayıtları otomatik oluşturulsun' },
+  auto_number: { label: 'Otomatik Numara', description: 'Belgeler için numara otomatik oluşturulsun' },
+  auto_sync_interval: { label: 'Otomatik Senkron Aralığı', description: 'Pazaryeri senkronizasyon aralığı (dakika)' },
   default_vat_rate: { label: 'Varsayılan KDV Oranı', description: 'Yeni kalem eklerken kullanılacak KDV oranı (%)' },
+  default_tax_rate: { label: 'Varsayılan Vergi Oranı', description: 'Faturalarda kullanılacak varsayılan vergi oranı (%)' },
   fiscal_year_start: { label: 'Mali Yıl Başlangıcı', description: 'Mali yılın başladığı ay-gün' },
   costing_method: { label: 'Maliyetlendirme Yöntemi', description: 'Stok maliyeti hesaplama yöntemi' },
   low_stock_alert: { label: 'Düşük Stok Uyarısı', description: 'Minimum stok altına düşünce uyarı' },
+  negative_stock: { label: 'Negatif Stok', description: 'Stok eksiye düşebilsin mi' },
   auto_invoice_number: { label: 'Otomatik Fatura Numarası', description: 'Fatura numarası otomatik oluşturulsun mu' },
+  payment_terms: { label: 'Ödeme Vadesi', description: 'Varsayılan ödeme vadesi (gün)' },
   payment_terms_days: { label: 'Ödeme Vadesi (Gün)', description: 'Varsayılan ödeme vadesi' },
+  sgk_rate: { label: 'SGK Oranı', description: 'Bordro hesaplamalarında kullanılan SGK oranı (%)' },
+  work_hours_per_day: { label: 'Günlük Çalışma Saati', description: 'Mesai ve bordro hesaplamalarında kullanılan günlük saat' },
 };
 
 const MODULE_LABELS: Record<string, { label: string; icon: React.ReactNode }> = {
   accounting: { label: 'Muhasebe', icon: <Calculator className="w-3.5 h-3.5 text-emerald-400" /> },
+  hr: { label: 'İnsan Kaynakları', icon: <Building2 className="w-3.5 h-3.5 text-pink-400" /> },
   inventory: { label: 'Envanter', icon: <Package className="w-3.5 h-3.5 text-sky-400" /> },
   invoicing: { label: 'Faturalama', icon: <FileText className="w-3.5 h-3.5 text-violet-400" /> },
+  marketplace: { label: 'Pazaryeri', icon: <Globe className="w-3.5 h-3.5 text-amber-400" /> },
+  payroll: { label: 'Bordro', icon: <Receipt className="w-3.5 h-3.5 text-emerald-400" /> },
 };
 
 const LOGO_SETTING_KEYS = new Set(['company_logo', 'tenant_logo_storage_path']);
+
+function humanizeKey(key: string): string {
+  return key
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toLocaleUpperCase('tr-TR') + part.slice(1))
+    .join(' ');
+}
+
+function getModuleLabel(module: string): string {
+  return MODULE_LABELS[module]?.label ?? humanizeKey(module);
+}
 
 function getValueDisplay(key: string, value: string): string {
   if (value === 'true') return 'Açık';
@@ -61,6 +88,14 @@ function getValueDisplay(key: string, value: string): string {
     const map: Record<string, string> = { MOVING_AVERAGE: 'Hareketli Ortalama', FIFO: 'İlk Giren İlk Çıkar', LIFO: 'Son Giren İlk Çıkar', STANDARD: 'Standart Maliyet' };
     return map[value] ?? value;
   }
+  if (key === 'fiscal_year_start') {
+    const map: Record<string, string> = { '01-01': '1 Ocak', '04-01': '1 Nisan', '07-01': '1 Temmuz', '10-01': '1 Ekim' };
+    return map[value] ?? value;
+  }
+  if (key === 'auto_sync_interval') return `${value} dakika`;
+  if (key === 'default_tax_rate' || key === 'default_vat_rate' || key === 'sgk_rate') return `%${value}`;
+  if (key === 'payment_terms' || key === 'payment_terms_days') return value === '0' ? 'Peşin' : `${value} Gün`;
+  if (key === 'work_hours_per_day') return `${value} saat`;
   if (key === 'language') return value === 'tr' ? 'Türkçe' : value === 'en' ? 'İngilizce' : value;
   if (key === 'timezone') return value.replace('_', ' ').replace('/', ' / ');
   if (key === 'date_format') {
@@ -111,7 +146,23 @@ const KEY_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
     { value: 'true', label: 'Açık' },
     { value: 'false', label: 'Kapalı' },
   ],
+  email_notifications: [
+    { value: 'true', label: 'Açık' },
+    { value: 'false', label: 'Kapalı' },
+  ],
+  auto_journal: [
+    { value: 'true', label: 'Açık' },
+    { value: 'false', label: 'Kapalı' },
+  ],
+  auto_number: [
+    { value: 'true', label: 'Açık' },
+    { value: 'false', label: 'Kapalı' },
+  ],
   auto_invoice_number: [
+    { value: 'true', label: 'Açık' },
+    { value: 'false', label: 'Kapalı' },
+  ],
+  negative_stock: [
     { value: 'true', label: 'Açık' },
     { value: 'false', label: 'Kapalı' },
   ],
@@ -129,6 +180,27 @@ const KEY_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
     { value: '45', label: '45 Gün' },
     { value: '60', label: '60 Gün' },
     { value: '90', label: '90 Gün' },
+  ],
+  payment_terms: [
+    { value: '0', label: 'Peşin' },
+    { value: '7', label: '7 Gün' },
+    { value: '15', label: '15 Gün' },
+    { value: '30', label: '30 Gün' },
+    { value: '45', label: '45 Gün' },
+    { value: '60', label: '60 Gün' },
+    { value: '90', label: '90 Gün' },
+  ],
+  default_tax_rate: [
+    { value: '0', label: '%0 (KDV Yok)' },
+    { value: '1', label: '%1' },
+    { value: '10', label: '%10' },
+    { value: '20', label: '%20' },
+  ],
+  auto_sync_interval: [
+    { value: '15', label: '15 dakika' },
+    { value: '30', label: '30 dakika' },
+    { value: '60', label: '60 dakika' },
+    { value: '120', label: '120 dakika' },
   ],
 };
 
@@ -286,9 +358,8 @@ export function SettingsPage() {
 
                   {/* Label + description */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-200">{meta?.label ?? s.key}</p>
+                    <p className="text-sm font-medium text-slate-200">{meta?.label ?? humanizeKey(s.key)}</p>
                     {meta?.description && <p className="text-[10px] text-slate-500 mt-0.5">{meta.description}</p>}
-                    {!meta && <p className="text-[10px] text-slate-600 font-mono">{s.key}</p>}
                   </div>
 
                   {/* Value / edit */}
@@ -330,7 +401,7 @@ export function SettingsPage() {
                 {modMeta?.icon ?? <Layers className="w-4 h-4 text-violet-400" />}
               </div>
               <div>
-                <h2 className="text-sm font-semibold text-white">{modMeta?.label ?? mod}</h2>
+                <h2 className="text-sm font-semibold text-white">{getModuleLabel(mod)}</h2>
                 <p className="text-xs text-slate-500">Modül ayarları</p>
               </div>
               <span className="ml-auto text-[10px] font-medium text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-full">{items.length}</span>
@@ -343,9 +414,8 @@ export function SettingsPage() {
                 return (
                   <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-800/20 transition-colors group">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-200">{meta?.label ?? s.key}</p>
+                      <p className="text-sm font-medium text-slate-200">{meta?.label ?? humanizeKey(s.key)}</p>
                       {meta?.description && <p className="text-[10px] text-slate-500 mt-0.5">{meta.description}</p>}
-                      {!meta && <p className="text-[10px] text-slate-600 font-mono">{s.key}</p>}
                     </div>
 
                     {isEditing ? (

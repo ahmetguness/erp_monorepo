@@ -4,9 +4,11 @@ import { useState } from "react";
 import { LogIn, LogOut, Clock } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { EmployeeSelect } from "@/components/shared/EntitySelect";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { FormRow } from "@/components/shared/FormField";
 import { useAttendance, useCheckIn, useCheckOut } from "@/hooks/useHR";
 import { formatDate } from "@/lib/utils";
@@ -140,21 +142,19 @@ export function AttendancePage() {
 
       <div className="flex items-end gap-3 mb-5">
         <FormRow cols={2} className="w-auto">
-          <Input
+          <DatePicker
             label="Başlangıç"
-            type="date"
             value={dateFrom}
-            onChange={(e) => {
-              setDateFrom(e.target.value);
+            onValueChange={(value) => {
+              setDateFrom(value ?? "");
               setPage(1);
             }}
           />
-          <Input
+          <DatePicker
             label="Bitiş"
-            type="date"
             value={dateTo}
-            onChange={(e) => {
-              setDateTo(e.target.value);
+            onValueChange={(value) => {
+              setDateTo(value ?? "");
               setPage(1);
             }}
           />
@@ -221,13 +221,11 @@ export function AttendancePage() {
         }
       >
         <div className="space-y-4">
-          <Input
-            label="Personel ID"
+          <EmployeeSelect
+            label="Personel"
             required
             value={form.employeeId}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, employeeId: e.target.value }))
-            }
+            onChange={(value) => setForm((p) => ({ ...p, employeeId: value }))}
           />
           <Input
             label="Not"
@@ -280,13 +278,11 @@ export function AttendancePage() {
         }
       >
         <div className="space-y-4">
-          <Input
-            label="Personel ID"
+          <EmployeeSelect
+            label="Personel"
             required
             value={outForm.employeeId}
-            onChange={(e) =>
-              setOutForm((p) => ({ ...p, employeeId: e.target.value }))
-            }
+            onChange={(value) => setOutForm((p) => ({ ...p, employeeId: value }))}
           />
           <Input
             label="Mesai Saati"

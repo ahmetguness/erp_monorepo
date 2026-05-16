@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Plus, Unlock } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { ProductSelect, WarehouseSelect } from '@/components/shared/EntitySelect';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -75,8 +76,8 @@ export function ReservationsPage() {
           }}>Oluştur</Button>
         </>}>
         <div className="space-y-4">
-          <Input label="Ürün ID" required value={form.productId} onChange={(e) => setForm((p) => ({ ...p, productId: e.target.value }))} />
-          <Input label="Depo ID" required value={form.warehouseId} onChange={(e) => setForm((p) => ({ ...p, warehouseId: e.target.value }))} />
+          <ProductSelect label="Ürün" required value={form.productId} onChange={(value) => setForm((p) => ({ ...p, productId: value }))} />
+          <WarehouseSelect label="Depo" required value={form.warehouseId} onChange={(value) => setForm((p) => ({ ...p, warehouseId: value }))} />
           <Input label="Miktar" required type="number" step="1" value={form.quantity} onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))} />
           <Select label="Kaynak Tipi" required options={Object.entries(REF_MAP).map(([k, v]) => ({ value: k, label: v }))}
             value={form.refType} onChange={(e) => setForm((p) => ({ ...p, refType: e.target.value as ReservationRefType }))} />

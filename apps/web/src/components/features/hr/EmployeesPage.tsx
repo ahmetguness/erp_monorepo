@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { FormRow } from "@/components/shared/FormField";
 import {
   useEmployees,
@@ -298,14 +299,14 @@ export function EmployeesPage() {
             />
           </FormRow>
           <FormRow cols={2}>
-            <Input
+            <DatePicker
               label="İşe Giriş Tarihi"
               required
-              type="date"
               value={form.hireDate}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, hireDate: e.target.value }))
+              onValueChange={(value) =>
+                setForm((p) => ({ ...p, hireDate: value ?? "" }))
               }
+              clearable={false}
             />
             <Input
               label="Maaş"

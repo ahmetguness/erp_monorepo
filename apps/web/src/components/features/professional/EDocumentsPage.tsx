@@ -4,11 +4,11 @@ import { useState } from 'react';
 import { Plus, FileCheck, RefreshCw } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { DeliveryNoteSelect, InvoiceSelect } from '@/components/shared/EntitySelect';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
-import { Input } from '@/components/ui/Input';
 import { useEDocuments, useCreateEDocument, useUpdateEDocumentStatus } from '@/hooks/useEDocuments';
 import { formatDate } from '@/lib/utils';
 import type { EDocument, EDocumentStatus } from '@/services/e-document.service';
@@ -24,12 +24,19 @@ const STATUS_MAP: Record<string, { label: string; variant: 'neutral' | 'success'
   ERROR: { label: 'Hata', variant: 'danger' },
 };
 
+type EDocumentFormType = 'E_INVOICE' | 'E_ARCHIVE' | 'E_WAYBILL';
+const TYPE_OPTIONS: Array<{ value: EDocumentFormType; label: string }> = [
+  { value: 'E_INVOICE', label: TYPE_MAP.E_INVOICE },
+  { value: 'E_ARCHIVE', label: TYPE_MAP.E_ARCHIVE },
+  { value: 'E_WAYBILL', label: TYPE_MAP.E_WAYBILL },
+];
+
 export function EDocumentsPage() {
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ type: 'E_INVOICE' as string, invoiceId: '', deliveryNoteId: '' });
+  const [form, setForm] = useState<{ type: EDocumentFormType; invoiceId: string; deliveryNoteId: string }>({ type: 'E_INVOICE', invoiceId: '', deliveryNoteId: '' });
 
   const { data, isLoading } = useEDocuments({ page, limit: 20, type: typeFilter || undefined, status: statusFilter || undefined });
   const createDoc = useCreateEDocument();
@@ -81,20 +88,23 @@ export function EDocumentsPage() {
           <Button variant="ghost" size="sm" onClick={() => setCreateOpen(false)}>İptal</Button>
           <Button size="sm" loading={createDoc.isPending} onClick={() => {
             createDoc.mutate({
-              type: form.type as 'E_INVOICE' | 'E_ARCHIVE' | 'E_WAYBILL',
+              type: form.type,
               invoiceId: form.type !== 'E_WAYBILL' ? (form.invoiceId || undefined) : undefined,
               deliveryNoteId: form.type === 'E_WAYBILL' ? (form.deliveryNoteId || undefined) : undefined,
             }, { onSuccess: () => setCreateOpen(false) });
           }}>Oluştur</Button>
         </>}>
         <div className="space-y-4">
-          <Select label="Belge Tipi" required options={Object.entries(TYPE_MAP).map(([k, v]) => ({ value: k, label: v }))}
-            value={form.type} onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))} />
+          <Select label="Belge Tipi" required options={TYPE_OPTIONS}
+            value={form.type} onChange={(e) => {
+              const nextType = TYPE_OPTIONS.find((option) => option.value === e.target.value)?.value ?? 'E_INVOICE';
+              setForm((p) => ({ ...p, type: nextType, invoiceId: '', deliveryNoteId: '' }));
+            }} />
           {(form.type === 'E_INVOICE' || form.type === 'E_ARCHIVE') && (
-            <Input label="Fatura ID" placeholder="Fatura ID giriniz" value={form.invoiceId} onChange={(e) => setForm((p) => ({ ...p, invoiceId: e.target.value }))} />
+            <InvoiceSelect label="Fatura" value={form.invoiceId} onChange={(value) => setForm((p) => ({ ...p, invoiceId: value }))} />
           )}
           {form.type === 'E_WAYBILL' && (
-            <Input label="İrsaliye ID" placeholder="İrsaliye ID giriniz" value={form.deliveryNoteId} onChange={(e) => setForm((p) => ({ ...p, deliveryNoteId: e.target.value }))} />
+            <DeliveryNoteSelect label="İrsaliye" value={form.deliveryNoteId} onChange={(value) => setForm((p) => ({ ...p, deliveryNoteId: value }))} />
           )}
         </div>
       </Modal>

@@ -56,6 +56,18 @@ function formatFeatureValue(value: string): string {
   return VALUE_LABELS[value] ?? value;
 }
 
+function humanizeKey(key: string): string {
+  return key
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toLocaleUpperCase('tr-TR') + part.slice(1))
+    .join(' ');
+}
+
+function getFeatureLabel(feature: PlanFeature): string {
+  return FEATURE_LABELS[feature.key] ?? (feature.featureKey ? FEATURE_LABELS[feature.featureKey.toLowerCase()] : undefined) ?? humanizeKey(feature.key);
+}
+
 export default function AdminFeaturesPage() {
   const [planFilter, setPlanFilter] = useState('');
   const { data: features = [], isLoading } = useQuery({
@@ -115,7 +127,7 @@ export default function AdminFeaturesPage() {
                 return (
                   <div key={feature.id} className="grid gap-2 px-5 py-3 sm:grid-cols-[minmax(0,1fr)_120px_90px_24px] sm:items-center">
                     <span className="text-sm font-medium text-slate-200">
-                      {FEATURE_LABELS[feature.key] ?? feature.key}
+                      {getFeatureLabel(feature)}
                     </span>
                     <span className={cn('text-sm font-medium', isBoolean ? (isOn ? 'text-emerald-300' : 'text-slate-400') : 'text-white')}>
                       {formatFeatureValue(feature.value)}

@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Select } from '@/components/ui/Select';
 import {
   usePurchaseRequests, useCreatePurchaseRequest,
@@ -67,12 +68,13 @@ export function PurchaseRequestsPage() {
   const contactOptions = [{ value: '', label: '— Tedarikçi seçin —' }, ...contacts.filter((c) => c.type === 'SUPPLIER' || c.type === 'BOTH').map((c) => ({ value: c.id, label: `${c.name} (${c.code})` }))];
 
   const today = new Date().toISOString().split('T')[0];
-  const { register, handleSubmit, control, reset, watch, formState: { errors } } = useForm<RequestForm>({
+  const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<RequestForm>({
     resolver: zodResolver(requestSchema),
     defaultValues: { date: today, items: [{ productId: '', quantity: '1', unitPrice: '' }] },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const watchItems = watch('items');
+  const watchDate = watch('date');
 
   const closeModal = () => { setCreateOpen(false); reset({ date: today, items: [{ productId: '', quantity: '1', unitPrice: '' }] }); };
 
@@ -150,7 +152,7 @@ export function PurchaseRequestsPage() {
               <span className="text-xs font-semibold text-white">Talep Bilgileri</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Input label="Talep Tarihi" required type="date" prefixIcon={<CalendarDays className="w-3.5 h-3.5" />} {...register('date')} />
+              <DatePicker label="Talep Tarihi" required value={watchDate} onValueChange={(value) => setValue('date', value ?? '', { shouldDirty: true, shouldValidate: true })} error={errors.date?.message} clearable={false} />
               <Input label="Notlar / Açıklama" placeholder="Neden bu ürünlere ihtiyaç var?"
                 prefixIcon={<StickyNote className="w-3.5 h-3.5" />} {...register('notes')} />
             </div>

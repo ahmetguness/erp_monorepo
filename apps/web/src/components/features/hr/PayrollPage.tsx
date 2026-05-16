@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, Eye, Trash2, DollarSign, CheckCircle, Zap } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { EmployeeSelect } from "@/components/shared/EntitySelect";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -257,13 +258,11 @@ export function PayrollPage() {
         }
       >
         <div className="space-y-4">
-          <Input
-            label="Personel ID"
+          <EmployeeSelect
+            label="Personel"
             required
             value={form.employeeId}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, employeeId: e.target.value }))
-            }
+            onChange={(value) => setForm((p) => ({ ...p, employeeId: value }))}
           />
           <FormRow cols={2}>
             <Input

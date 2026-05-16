@@ -7,10 +7,12 @@ import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
 import { EntityImage } from '@/components/shared/EntityImage';
 import { EntityImageManager } from '@/components/shared/EntityImageManager';
+import { ContactSelect } from '@/components/shared/EntitySelect';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { FormRow } from '@/components/shared/FormField';
 import { useCustomerAssets, useCreateCustomerAsset, useUpdateCustomerAsset, useDeleteCustomerAsset } from '@/hooks/useService';
 import { formatDate } from '@/lib/utils';
@@ -107,7 +109,12 @@ export function CustomerAssetsPage() {
               purchaseDate: form.purchaseDate || undefined, warrantyEnd: form.warrantyEnd || undefined,
             }, { onSuccess: () => { setCreateOpen(false); resetForm(); } })}>Oluştur</Button></>}>
         <div className="space-y-4">
-          <Input label="Müşteri ID" required placeholder="Müşteri cari hesap ID'si" value={form.contactId} onChange={(e) => setForm((p) => ({ ...p, contactId: e.target.value }))} />
+          <ContactSelect
+            label="Müşteri"
+            required
+            value={form.contactId}
+            onChange={(value) => setForm((p) => ({ ...p, contactId: value }))}
+          />
           <Input label="Varlık Adı" required placeholder="ör. HP LaserJet Pro" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
           <FormRow cols={2}>
             <Input label="Marka" placeholder="ör. HP" value={form.brand} onChange={(e) => setForm((p) => ({ ...p, brand: e.target.value }))} />
@@ -115,8 +122,8 @@ export function CustomerAssetsPage() {
           </FormRow>
           <Input label="Seri No" placeholder="ör. SN12345678" value={form.serialNo} onChange={(e) => setForm((p) => ({ ...p, serialNo: e.target.value }))} />
           <FormRow cols={2}>
-            <Input label="Satın Alma Tarihi" type="date" value={form.purchaseDate} onChange={(e) => setForm((p) => ({ ...p, purchaseDate: e.target.value }))} />
-            <Input label="Garanti Bitiş" type="date" value={form.warrantyEnd} onChange={(e) => setForm((p) => ({ ...p, warrantyEnd: e.target.value }))} />
+            <DatePicker label="Satın Alma Tarihi" value={form.purchaseDate} onValueChange={(value) => setForm((p) => ({ ...p, purchaseDate: value ?? '' }))} />
+            <DatePicker label="Garanti Bitiş" value={form.warrantyEnd} onValueChange={(value) => setForm((p) => ({ ...p, warrantyEnd: value ?? '' }))} />
           </FormRow>
         </div>
       </Modal>

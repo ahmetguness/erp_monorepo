@@ -5,6 +5,7 @@ import { Plus, Wrench, Eye } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { ContactSelect, CustomerAssetSelect } from '@/components/shared/EntitySelect';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -116,8 +117,17 @@ export function ServiceRequestsPage() {
           <Textarea label="Açıklama" placeholder="Detaylı açıklama" value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
           <Select label="Öncelik" options={[{ value: 'LOW', label: 'Düşük' }, { value: 'MEDIUM', label: 'Orta' }, { value: 'HIGH', label: 'Yüksek' }, { value: 'CRITICAL', label: 'Kritik' }]}
             value={form.priority} onChange={(e) => setForm((p) => ({ ...p, priority: e.target.value }))} />
-          <Input label="Müşteri ID" placeholder="Opsiyonel" value={form.contactId} onChange={(e) => setForm((p) => ({ ...p, contactId: e.target.value }))} />
-          <Input label="Varlık ID" placeholder="Opsiyonel" value={form.customerAssetId} onChange={(e) => setForm((p) => ({ ...p, customerAssetId: e.target.value }))} />
+          <ContactSelect
+            label="Müşteri"
+            value={form.contactId}
+            onChange={(value) => setForm((p) => ({ ...p, contactId: value, customerAssetId: '' }))}
+          />
+          <CustomerAssetSelect
+            label="Varlık"
+            value={form.customerAssetId}
+            contactId={form.contactId || undefined}
+            onChange={(value) => setForm((p) => ({ ...p, customerAssetId: value }))}
+          />
         </div>
       </Modal>
     </div>

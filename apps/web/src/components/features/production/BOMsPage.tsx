@@ -5,6 +5,7 @@ import { Plus, Layers, Eye, ToggleLeft, ToggleRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { ProductSelect } from "@/components/shared/EntitySelect";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -200,14 +201,11 @@ export function BOMsPage() {
         }
       >
         <div className="space-y-4">
-          <Input
-            label="Ürün ID"
+          <ProductSelect
+            label="Ürün"
             required
-            placeholder="Üretilecek ürünün ID'si"
             value={form.productId}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, productId: e.target.value }))
-            }
+            onChange={(value) => setForm((p) => ({ ...p, productId: value }))}
           />
           <Input
             label="BOM Adı"

@@ -1,17 +1,28 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Users, Package, Receipt, ShoppingCart, Truck, CreditCard, Warehouse, Layers, BookOpen, Plus, Minus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getTenantById, getTenantMetrics, updateTenant, updateTenantPlan, updateTenantStatus } from '@/services/admin.service';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { cn } from '@/lib/utils';
 import { toast } from '@/store/ui.store';
 
 const PLANS = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'] as const;
 type PlanKey = typeof PLANS[number];
 const STATUSES = ['TRIAL', 'ACTIVE', 'SUSPENDED', 'CANCELLED'] as const;
+
+type TenantSettingsForm = {
+  maxUsers: string;
+  modules: string[];
+  notes: string;
+  isCustomPricing: boolean;
+  trialEndsAt: string;
+  subscriptionStart: string;
+  subscriptionEnd: string;
+};
 
 const MODULE_OPTIONS = [
   { key: 'accounting', label: 'Muhasebe' },
@@ -42,6 +53,25 @@ const MODULE_LABELS: Record<string, string> = Object.fromEntries(
   MODULE_OPTIONS.map((module) => [module.key, module.label]),
 );
 
+const FEATURE_LABELS: Record<string, string> = {
+  MAX_USERS: 'Maksimum Kullanıcı',
+  MAX_PRODUCTS: 'Maksimum Ürün',
+  MULTI_WAREHOUSE: 'Çoklu Depo',
+  ROLE_MANAGEMENT: 'Rol Yönetimi',
+  APPROVALS: 'Onay Akışları',
+  CRM: 'CRM',
+  SALES: 'Satış',
+  PURCHASING: 'Satın Alma',
+  PRODUCTION: 'Üretim',
+  SERVICE: 'Servis',
+  MARKETPLACE: 'Pazaryeri',
+  PAYROLL: 'Bordro',
+  HR: 'İnsan Kaynakları',
+  API_ACCESS: 'API Erişimi',
+  AUDIT_LOG: 'Denetim Kaydı',
+  CUSTOM_REPORTING: 'Özel Raporlama',
+};
+
 const STATUS_VARIANT: Record<string, BadgeVariant> = { TRIAL: 'warning', ACTIVE: 'success', SUSPENDED: 'danger', CANCELLED: 'neutral' };
 const PLAN_COLOR: Record<string, string> = { STARTER: 'text-sky-400 bg-sky-500/10 border-sky-500/30', PROFESSIONAL: 'text-violet-400 bg-violet-500/10 border-violet-500/30', ENTERPRISE: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
 
@@ -49,36 +79,81 @@ function toDateInput(value: string | null | undefined): string {
   return value ? new Date(value).toISOString().slice(0, 10) : '';
 }
 
-export default function AdminTenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const router = useRouter();
-  const qc = useQueryClient();
-  const [settings, setSettings] = useState({
+function isPlanKey(value: string | undefined): value is PlanKey {
+  return value !== undefined && PLANS.some((plan) => plan === value);
+}
+
+function createEmptySettings(): TenantSettingsForm {
+  return {
     maxUsers: '',
-    modules: [] as string[],
+    modules: [],
     notes: '',
     isCustomPricing: false,
     trialEndsAt: '',
     subscriptionStart: '',
     subscriptionEnd: '',
-  });
-  const [currentPlan, setCurrentPlan] = useState<PlanKey>('STARTER');
+  };
+}
+
+function humanizeKey(key: string): string {
+  return key
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toLocaleUpperCase('tr-TR') + part.slice(1).toLocaleLowerCase('tr-TR'))
+    .join(' ');
+}
+
+function getModuleLabel(module: string): string {
+  return MODULE_LABELS[module] ?? humanizeKey(module);
+}
+
+function getFeatureLabel(featureKey: string): string {
+  return FEATURE_LABELS[featureKey] ?? humanizeKey(featureKey);
+}
+
+export default function AdminTenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const router = useRouter();
+  const qc = useQueryClient();
+  const [settingsDraft, setSettingsDraft] = useState<TenantSettingsForm | null>(null);
+  const [currentPlanOverride, setCurrentPlanOverride] = useState<PlanKey | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [confirmSave, setConfirmSave] = useState(false);
   const [sendNotify, setSendNotify] = useState(true);
 
   const { data: tenant, isLoading } = useQuery({ queryKey: ['admin', 'tenant', id], queryFn: () => getTenantById(id) });
   const { data: metrics } = useQuery({ queryKey: ['admin', 'tenant-metrics', id], queryFn: () => getTenantMetrics(id) });
+  const tenantSettings: TenantSettingsForm = tenant
+    ? {
+        maxUsers: tenant.maxUsers?.toString() ?? '',
+        modules: tenant.modules ?? [],
+        notes: tenant.notes ?? '',
+        isCustomPricing: tenant.isCustomPricing,
+        trialEndsAt: toDateInput(tenant.trialEndsAt),
+        subscriptionStart: toDateInput(tenant.subscriptionStart),
+        subscriptionEnd: toDateInput(tenant.subscriptionEnd),
+      }
+    : createEmptySettings();
+  const settings = settingsDraft ?? tenantSettings;
+  const currentPlan = currentPlanOverride ?? (isPlanKey(tenant?.plan) ? tenant.plan : 'STARTER');
+
+  const setSettings = (next: TenantSettingsForm | ((current: TenantSettingsForm) => TenantSettingsForm)) => {
+    setSettingsDraft((current) => {
+      const currentSettings = current ?? settings;
+      return typeof next === 'function' ? next(currentSettings) : next;
+    });
+  };
 
   const changePlan = useMutation({
     mutationFn: (plan: string) => updateTenantPlan(id, plan),
     onSuccess: (_, plan) => {
-      const planKey = plan as PlanKey;
-      setCurrentPlan(planKey);
-      setSettings((prev) => ({
-        ...prev,
-        modules: PLAN_DEFAULT_MODULES[planKey] ?? prev.modules,
-      }));
+      if (isPlanKey(plan)) {
+        setCurrentPlanOverride(plan);
+        setSettings((prev) => ({
+          ...prev,
+          modules: PLAN_DEFAULT_MODULES[plan] ?? prev.modules,
+        }));
+      }
       qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] });
       toast.success(`Plan ${plan} olarak güncellendi.`);
     },
@@ -101,6 +176,8 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
       notify,
     }),
     onSuccess: () => {
+      setSettingsDraft(null);
+      setCurrentPlanOverride(null);
       setSettingsError(null);
       setConfirmSave(false);
       qc.invalidateQueries({ queryKey: ['admin', 'tenants'] });
@@ -111,20 +188,6 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
       setSettingsError(error.response?.data?.error?.message ?? 'Tenant ayarları kaydedilemedi.');
     },
   });
-
-  useEffect(() => {
-    if (!tenant) return;
-    setCurrentPlan(tenant.plan as PlanKey);
-    setSettings({
-      maxUsers: tenant.maxUsers?.toString() ?? '',
-      modules: tenant.modules ?? [],
-      notes: tenant.notes ?? '',
-      isCustomPricing: tenant.isCustomPricing,
-      trialEndsAt: toDateInput(tenant.trialEndsAt),
-      subscriptionStart: toDateInput(tenant.subscriptionStart),
-      subscriptionEnd: toDateInput(tenant.subscriptionEnd),
-    });
-  }, [tenant]);
 
   const toggleModule = (module: string) => {
     setSettings((current) => ({
@@ -280,12 +343,12 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
             <input type="checkbox" checked={settings.isCustomPricing} onChange={(e) => setSettings({ ...settings, isCustomPricing: e.target.checked })} className="accent-red-500" />
             Özel fiyat
           </label>
-          <input type="date" value={settings.trialEndsAt} onChange={(e) => setSettings({ ...settings, trialEndsAt: e.target.value })} className="bg-slate-950 border border-slate-800 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/50" />
-          <input type="date" value={settings.subscriptionEnd} onChange={(e) => setSettings({ ...settings, subscriptionEnd: e.target.value })} className="bg-slate-950 border border-slate-800 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/50" />
+          <DatePicker label="Deneme Bitişi" value={settings.trialEndsAt} onValueChange={(value) => setSettings({ ...settings, trialEndsAt: value ?? '' })} />
+          <DatePicker label="Abonelik Bitişi" value={settings.subscriptionEnd} onValueChange={(value) => setSettings({ ...settings, subscriptionEnd: value ?? '' })} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <input type="date" value={settings.subscriptionStart} onChange={(e) => setSettings({ ...settings, subscriptionStart: e.target.value })} className="bg-slate-950 border border-slate-800 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/50" />
+          <DatePicker label="Abonelik Başlangıcı" value={settings.subscriptionStart} onValueChange={(value) => setSettings({ ...settings, subscriptionStart: value ?? '' })} />
           <textarea value={settings.notes} onChange={(e) => setSettings({ ...settings, notes: e.target.value })} placeholder="Notlar" rows={2} className="bg-slate-950 border border-slate-800 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/50" />
         </div>
 
@@ -368,7 +431,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
           <div><span className="text-slate-500 text-xs">Sektör</span><p className="text-slate-200">{tenant.sector ?? '—'}</p></div>
           <div><span className="text-slate-500 text-xs">Max Kullanıcı</span><p className="text-slate-200">{tenant.maxUsers ?? 'Sınırsız'}</p></div>
           <div><span className="text-slate-500 text-xs">Özel Fiyat</span><p className="text-slate-200">{tenant.isCustomPricing ? 'Evet' : 'Hayır'}</p></div>
-          <div><span className="text-slate-500 text-xs">Modüller</span><p className="text-slate-200">{tenant.modules.map((module) => MODULE_LABELS[module] ?? module).join(', ') || '—'}</p></div>
+          <div><span className="text-slate-500 text-xs">Modüller</span><p className="text-slate-200">{tenant.modules.map(getModuleLabel).join(', ') || '—'}</p></div>
           <div><span className="text-slate-500 text-xs">Notlar</span><p className="text-slate-200">{tenant.notes ?? '—'}</p></div>
         </div>
       </div>
@@ -376,11 +439,11 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
       {/* Feature Overrides */}
       {tenant.featureOverrides.length > 0 && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <p className="text-xs font-semibold text-slate-400 mb-3">Feature Override'lar</p>
+          <p className="text-xs font-semibold text-slate-400 mb-3">Feature Override&apos;lar</p>
           <div className="space-y-2">
             {tenant.featureOverrides.map((o) => (
               <div key={o.id} className="flex items-center gap-3 text-sm bg-slate-800/30 rounded-lg px-3 py-2">
-                <span className="text-xs font-mono text-violet-400">{o.featureKey}</span>
+                <span className="text-xs font-medium text-violet-400">{getFeatureLabel(o.featureKey)}</span>
                 <span className="text-slate-300">{o.value}</span>
                 <Badge variant={o.isEnabled ? 'success' : 'neutral'}>{o.isEnabled ? 'Aktif' : 'Pasif'}</Badge>
                 {o.reason && <span className="text-xs text-slate-500 ml-auto">{o.reason}</span>}

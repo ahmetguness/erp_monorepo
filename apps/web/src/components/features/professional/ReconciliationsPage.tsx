@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { useReconciliations, useCreateReconciliation, useFinalizeReconciliation } from '@/hooks/useReconciliation';
 import { formatDate } from '@/lib/utils';
 import type { Reconciliation } from '@/services/reconciliation.service';
@@ -73,7 +74,7 @@ export function ReconciliationsPage() {
         <div className="space-y-4">
           <Input label="Mutabakat Adı" required value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
           <Input label="Açıklama" value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
-          <Input label="Tarih" required type="date" value={form.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} />
+          <DatePicker label="Tarih" required value={form.date} onValueChange={(value) => setForm((p) => ({ ...p, date: value ?? '' }))} clearable={false} />
         </div>
       </Modal>
     </div>

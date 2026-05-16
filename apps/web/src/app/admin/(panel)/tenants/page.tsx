@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { createTenant, getTenants, type CreateTenantInput } from '@/services/admin.service';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { cn } from '@/lib/utils';
 
 const STATUS_MAP: Record<string, { label: string; variant: BadgeVariant }> = {
@@ -69,13 +70,6 @@ function addDaysToInputDate(value: string, days: number): string {
   return toDateInput(addDays(new Date(year, month - 1, day), days));
 }
 
-function formatDateDisplay(value?: string | null): string {
-  if (!value) return 'gg.aa.yyyy';
-  const [year, month, day] = value.split('-');
-  if (!year || !month || !day) return value;
-  return `${day}.${month}.${year}`;
-}
-
 function createDefaultTenantForm(): CreateTenantInput {
   const startDate = new Date();
   const endDate = addDays(startDate, 372);
@@ -98,33 +92,6 @@ function createDefaultTenantForm(): CreateTenantInput {
     subscriptionStart: toDateInput(startDate),
     subscriptionEnd: toDateInput(endDate),
   };
-}
-
-function DatePickerField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value?: string | null;
-  onChange: (value: string | null) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-medium text-slate-400">{label}</span>
-      <span className="relative flex h-10 w-full items-center rounded-lg border border-slate-800 bg-slate-950 px-3 text-sm text-white transition-colors focus-within:ring-2 focus-within:ring-red-500/50">
-        <CalendarDays className="mr-2 h-3.5 w-3.5 shrink-0 text-slate-500" />
-        <span>{formatDateDisplay(value)}</span>
-        <input
-          aria-label={label}
-          type="date"
-          value={value ?? ''}
-          onChange={(e) => onChange(e.target.value || null)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        />
-      </span>
-    </label>
-  );
 }
 
 function FormSection({
@@ -269,10 +236,10 @@ export default function AdminTenantsPage() {
 
           <FormSection icon={<CalendarDays className="h-4 w-4" />} title="Abonelik Tarihleri">
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <DatePickerField
+            <DatePicker
               label="Başlangıç Tarihi"
               value={form.subscriptionStart ?? ''}
-              onChange={(start) => {
+              onValueChange={(start) => {
                 setForm({
                   ...form,
                   subscriptionStart: start,
@@ -280,10 +247,10 @@ export default function AdminTenantsPage() {
                 });
               }}
             />
-            <DatePickerField
+            <DatePicker
               label="Bitiş Tarihi"
               value={form.subscriptionEnd ?? ''}
-              onChange={(end) => setForm({ ...form, subscriptionEnd: end })}
+              onValueChange={(end) => setForm({ ...form, subscriptionEnd: end })}
             />
           </div>
           </FormSection>

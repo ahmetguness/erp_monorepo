@@ -4,10 +4,12 @@ import { useState } from "react";
 import { Plus, ArrowDownLeft, ArrowUpRight, Minus } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { BankAccountSelect } from "@/components/shared/EntitySelect";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { Select } from "@/components/ui/Select";
 import {
   useBankTransactions,
@@ -227,13 +229,11 @@ export function BankTransactionsPage() {
         }
       >
         <div className="space-y-4">
-          <Input
-            label="Banka Hesap ID"
+          <BankAccountSelect
+            label="Banka Hesabı"
             required
             value={form.bankAccountId}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, bankAccountId: e.target.value }))
-            }
+            onChange={(value) => setForm((p) => ({ ...p, bankAccountId: value }))}
           />
           <Select
             label="İşlem Tipi"
@@ -272,12 +272,14 @@ export function BankTransactionsPage() {
               }
             />
           </div>
-          <Input
+          <DatePicker
             label="Tarih"
             required
-            type="date"
             value={form.date}
-            onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
+            onValueChange={(value) =>
+              setForm((p) => ({ ...p, date: value ?? "" }))
+            }
+            clearable={false}
           />
           <Input
             label="Açıklama"

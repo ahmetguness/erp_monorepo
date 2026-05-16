@@ -6,10 +6,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   ArrowLeft, Receipt, Users, Plus, Trash2, Save, X,
-  CalendarDays, Hash, DollarSign, Percent, ShoppingCart,
+  Hash, DollarSign, Percent, ShoppingCart,
   FileText, ArrowDownToLine, ArrowUpFromLine,
 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
@@ -86,6 +87,8 @@ export function InvoiceFormPage() {
   const watchedLines = watch('lines');
   const watchType = watch('type');
   const watchContact = watch('contactId');
+  const watchDate = watch('date');
+  const watchDueDate = watch('dueDate');
 
   const selectedContact = contacts.find((c) => c.id === watchContact);
   const activeType = INVOICE_TYPES.find((t) => t.value === watchType) ?? INVOICE_TYPES[0];
@@ -199,8 +202,8 @@ export function InvoiceFormPage() {
               <div className="p-5 space-y-4">
                 <Select label="Cari" required options={contactOptions} error={errors.contactId?.message} {...register('contactId')} />
                 <FormRow cols={2}>
-                  <Input label="Fatura Tarihi" required type="date" prefixIcon={<CalendarDays className="w-3.5 h-3.5" />} {...register('date')} />
-                  <Input label="Vade Tarihi" type="date" prefixIcon={<CalendarDays className="w-3.5 h-3.5" />} {...register('dueDate')} />
+                  <DatePicker label="Fatura Tarihi" required value={watchDate} onValueChange={(value) => setValue('date', value ?? '', { shouldDirty: true, shouldValidate: true })} error={errors.date?.message} clearable={false} />
+                  <DatePicker label="Vade Tarihi" value={watchDueDate ?? ''} onValueChange={(value) => setValue('dueDate', value ?? '', { shouldDirty: true, shouldValidate: true })} />
                 </FormRow>
                 <Textarea label="Notlar" placeholder="Fatura ile ilgili notlar…" {...register('notes')} />
               </div>
