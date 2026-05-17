@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FormRow } from "@/components/shared/FormField";
+import { WarehouseSelect } from "@/components/shared/EntitySelect";
 import {
   ImageUploadBox,
   type ImageUploadStatus,
@@ -46,7 +47,6 @@ import {
   useTaxRates,
   useCreateCategory,
 } from "@/hooks/useMasterData";
-import { useWarehouses } from "@/hooks/useStock";
 import { createManualMovement } from "@/services/stock.service";
 import {
   deleteAttachment,
@@ -286,7 +286,6 @@ export function ProductFormPage({ editId }: Props) {
   const { data: units = [] } = useUnits();
   const { data: categories = [] } = useCategories();
   const { data: taxRates = [] } = useTaxRates();
-  const { data: warehouses = [] } = useWarehouses();
   const { data: productAttachments = [] } = useAttachments(
     "PRODUCT",
     editId ?? "",
@@ -311,11 +310,6 @@ export function ProductFormPage({ editId }: Props) {
     { value: "", label: "— KDV yok —" },
     ...taxRates.map((t) => ({ value: t.id, label: `${t.name} (%${t.rate})` })),
   ];
-  const warehouseOptions = [
-    { value: "", label: "— Depo seçin —" },
-    ...warehouses.map((w) => ({ value: w.id, label: `${w.name} (${w.code})` })),
-  ];
-
   const createCategory = useCreateCategory();
 
   const {
@@ -755,10 +749,10 @@ export function ProductFormPage({ editId }: Props) {
               done={step3Done}
             >
               <FormRow cols={2}>
-                <Select
+                <WarehouseSelect
                   label="Depo"
-                  options={warehouseOptions}
-                  {...register("warehouseId")}
+                  value={watchAll.warehouseId ?? ""}
+                  onChange={(value) => setValue("warehouseId", value, { shouldDirty: true, shouldValidate: true })}
                 />
                 <Input
                   label="Miktar"

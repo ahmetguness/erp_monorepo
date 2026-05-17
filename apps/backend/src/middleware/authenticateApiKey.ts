@@ -1,7 +1,9 @@
 import { Context, Next } from 'hono';
 import crypto from 'crypto';
+import { AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ForbiddenError } from '../errors';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 /**
  * API Key authentication middleware.
@@ -73,5 +75,33 @@ export function requireScope(scope: string) {
     }
 
     await next();
+
+    const tenantId = c.get('tenantId');
+    const apiKeyId = c.get('apiKeyId');
+    if (typeof tenantId !== 'string' || typeof apiKeyId !== 'string') return;
+
+    const method = c.req.method.toUpperCase();
+    const action =
+      method === 'GET' ? AuditAction.OTHER :
+      method === 'POST' ? AuditAction.CREATE :
+      method === 'PATCH' || method === 'PUT' ? AuditAction.UPDATE :
+      method === 'DELETE' ? AuditAction.DELETE :
+      AuditAction.OTHER;
+
+    void createAuditLog(prisma, {
+      tenantId,
+      userId: null,
+      module: 'api_keys',
+      entityType: EntityType.OTHER,
+      entityId: apiKeyId,
+      action,
+      newValues: {
+        scope,
+        method,
+        path: c.req.path,
+        status: c.res.status,
+      },
+      ...getRequestMeta(c),
+    });
   };
 }

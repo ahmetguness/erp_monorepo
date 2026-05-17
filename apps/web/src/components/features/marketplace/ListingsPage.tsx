@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { PackagePlus, Pencil, Plus, Send, Trash2, UploadCloud, XCircle } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { ProductSelect } from "@/components/shared/EntitySelect";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -87,10 +88,6 @@ function toNumber(value: string): number | undefined {
 function toRequiredNumber(value: string): number | null {
   const parsed = toNumber(value);
   return parsed === undefined ? null : parsed;
-}
-
-function productLabel(product: Product): string {
-  return `${product.code} - ${product.name}`;
 }
 
 function buildTrendyolForm(listing: MarketplaceListing): TrendyolProductForm {
@@ -212,11 +209,6 @@ export function ListingsPage() {
       disabled: !integration.isActive,
     })),
     [integrations],
-  );
-
-  const productOptions = useMemo(
-    () => products.map((product) => ({ value: product.id, label: productLabel(product) })),
-    [products],
   );
 
   const brandOptions = useMemo(
@@ -443,19 +435,18 @@ export function ListingsPage() {
               setForm((p) => ({ ...p, integrationId: e.target.value }));
             }}
           />
-          <Select
+          <ProductSelect
             label="Ürün"
             required
             placeholder="Ürün seçin"
-            options={productOptions}
             value={form.productId}
             error={formErrors.productId}
-            onChange={(e) => {
-              const product = products.find((item) => item.id === e.target.value);
+            onChange={(value) => {
+              const product = products.find((item) => item.id === value);
               setFormErrors((p) => ({ ...p, productId: undefined }));
               setForm((p) => ({
                 ...p,
-                productId: e.target.value,
+                productId: value,
                 externalId: product?.barcode ?? product?.code ?? p.externalId,
                 externalSku: product?.code ?? p.externalSku,
                 price: product ? String(product.salesPrice) : p.price,
@@ -585,7 +576,7 @@ export function ListingsPage() {
             <Input label="KDV" type="number" value={trendyolForm.vatRate} onChange={(e) => setTrendyolForm((p) => ({ ...p, vatRate: e.target.value }))} />
           </FormRow>
           <FormRow cols={3}>
-            <Input label="Ana Ürün ID" value={trendyolForm.productMainId} onChange={(e) => setTrendyolForm((p) => ({ ...p, productMainId: e.target.value }))} />
+            <Input label="Ana Ürün Kodu" value={trendyolForm.productMainId} onChange={(e) => setTrendyolForm((p) => ({ ...p, productMainId: e.target.value }))} />
             <Input label="Desi" type="number" value={trendyolForm.dimensionalWeight} onChange={(e) => setTrendyolForm((p) => ({ ...p, dimensionalWeight: e.target.value }))} />
             <Input label="Görsel URL" value={trendyolForm.imageUrl} onChange={(e) => setTrendyolForm((p) => ({ ...p, imageUrl: e.target.value }))} />
           </FormRow>

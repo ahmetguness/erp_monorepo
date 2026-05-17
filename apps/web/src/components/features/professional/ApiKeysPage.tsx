@@ -25,6 +25,7 @@ import {
   useCreateApiKey,
   useRevokeApiKey,
   useDeleteApiKey,
+  useApiKeyActivity,
 } from "@/hooks/useApiKeys";
 import { formatDate } from "@/lib/utils";
 import type { ApiKey } from "@/services/api-key.service";
@@ -116,6 +117,20 @@ const ACTION_LABELS: Record<string, string> = {
   delete: "Silme",
 };
 
+type ActivityField = "method" | "path" | "scope" | "status";
+
+function isActivityRecord(values: unknown): values is Partial<Record<ActivityField, string | number>> {
+  return typeof values === "object" && values !== null && !Array.isArray(values);
+}
+
+function readActivityField(values: unknown, key: ActivityField): string {
+  if (!isActivityRecord(values)) return "-";
+  const value = values[key];
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return "-";
+}
+
 export function ApiKeysPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
@@ -132,6 +147,7 @@ export function ApiKeysPage() {
   const createKey = useCreateApiKey();
   const revokeKey = useRevokeApiKey();
   const deleteKey = useDeleteApiKey();
+  const { data: activity = [] } = useApiKeyActivity(detailKey?.id ?? "");
 
   const toggleScope = (scope: string) => {
     setForm((p) => ({
@@ -674,6 +690,43 @@ export function ApiKeysPage() {
                 <div className="bg-slate-800/30 border border-slate-700/40 rounded-xl px-4 py-3">
                   <span className="text-sm text-slate-400">
                     Kapsam tanımlanmamış
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h4 className="text-xs font-medium text-slate-400 mb-3">
+                Son Endpoint Kullanımları
+              </h4>
+              {activity.length > 0 ? (
+                <div className="space-y-2">
+                  {activity.slice(0, 8).map((item) => (
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-[64px_minmax(0,1fr)_64px] items-center gap-2 bg-slate-800/30 border border-slate-700/40 rounded-xl px-3 py-2"
+                    >
+                      <span className="text-[10px] font-mono text-sky-400">
+                        {readActivityField(item.newValues, "method")}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs text-slate-200">
+                          {readActivityField(item.newValues, "path")}
+                        </p>
+                        <p className="truncate text-[10px] text-slate-600">
+                          {readActivityField(item.newValues, "scope")}
+                        </p>
+                      </div>
+                      <span className="text-right text-[10px] text-slate-500">
+                        {readActivityField(item.newValues, "status")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-slate-800/30 border border-slate-700/40 rounded-xl px-4 py-3">
+                  <span className="text-sm text-slate-400">
+                    Henüz endpoint kullanımı yok
                   </span>
                 </div>
               )}

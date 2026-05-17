@@ -103,7 +103,7 @@ export async function reverseInvoiceAccountEntry(
 
 /**
  * Ödeme yapıldığında cari hesap hareketi yazar.
- * Ödeme → alacak (credit) — borcu azaltır
+ * Tahsilat alacak, tediye borç hareketi oluşturur.
  */
 export async function writePaymentAccountEntry(
   tx: TxClient,
@@ -114,6 +114,7 @@ export async function writePaymentAccountEntry(
     reference?: string | null;
     amount: number;
     date: Date;
+    direction?: 'RECEIVE' | 'SEND';
     userId?: string | null;
   },
 ): Promise<void> {
@@ -124,15 +125,18 @@ export async function writePaymentAccountEntry(
   });
 
   const prevBalance = lastEntry ? Number(lastEntry.balance) : 0;
-  const balance = prevBalance - params.amount; // ödeme borcu azaltır
+  const isOutgoingPayment = params.direction === 'SEND';
+  const debit = isOutgoingPayment ? params.amount : 0;
+  const credit = isOutgoingPayment ? 0 : params.amount;
+  const balance = prevBalance + debit - credit;
 
   await tx.accountEntry.create({
     data: {
       tenantId: params.tenantId,
       contactId: params.contactId,
       date: params.date,
-      debit: 0,
-      credit: params.amount,
+      debit,
+      credit,
       balance,
       description: params.reference ? `Ödeme: ${params.reference}` : 'Ödeme',
       refType: 'PAYMENT',

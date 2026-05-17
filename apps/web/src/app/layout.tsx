@@ -5,7 +5,7 @@ import "./globals.css";
 
 const ibmPlexSans = IBM_Plex_Sans({
   variable: "--font-ibm-plex",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   weight: ["300", "400", "500", "600", "700"],
 });
 
@@ -30,6 +30,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="tr" data-scroll-behavior="smooth" className={`${ibmPlexSans.variable} scroll-smooth`}>
+      <head>
+        <meta charSet="utf-8" />
+      </head>
       <body className="font-sans relative text-slate-900 bg-white selection:bg-blue-50 selection:text-blue-900">
         <main id="main-content" role="main">
           <Providers>{children}</Providers>

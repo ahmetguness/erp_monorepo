@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
-import { useBankAccounts } from '@/hooks/useAccounting';
+import { useBankAccounts, useCashAccounts } from '@/hooks/useAccounting';
 import { useContacts } from '@/hooks/useContacts';
 import { useEmployees } from '@/hooks/useHR';
 import { useBOMs } from '@/hooks/useProduction';
@@ -13,6 +13,7 @@ import { useCustomerAssets } from '@/hooks/useService';
 import { useProducts } from '@/hooks/useProducts';
 import { useWarehouses } from '@/hooks/useStock';
 import type { ContactType } from '@/services/contact.service';
+import type { InvoiceStatus, InvoiceType } from '@/services/sales.service';
 
 const SELECT_LIMIT = 200;
 
@@ -54,11 +55,16 @@ export function WarehouseSelect(props: EntitySelectProps) {
   return <Combobox placeholder="Depo ara..." options={options} {...props} />;
 }
 
-export function ContactSelect({ type, ...props }: EntitySelectProps & { type?: ContactType }) {
-  const { data } = useContacts({ page: 1, limit: SELECT_LIMIT, type, isActive: true });
+export function ContactSelect({ type, ...props }: EntitySelectProps & { type?: ContactType | ContactType[] }) {
+  const queryType = typeof type === 'string' ? type : undefined;
+  const allowedTypes = Array.isArray(type) ? type : undefined;
+  const { data } = useContacts({ page: 1, limit: SELECT_LIMIT, type: queryType, isActive: true });
   const options = useMemo(
-    () => data?.data.map((contact) => option(contact.id, compactLabel([contact.code, contact.name]))) ?? [],
-    [data],
+    () =>
+      data?.data
+        .filter((contact) => !allowedTypes || allowedTypes.includes(contact.type))
+        .map((contact) => option(contact.id, compactLabel([contact.code, contact.name]))) ?? [],
+    [allowedTypes, data],
   );
 
   return <Combobox placeholder="Cari ara..." options={options} {...props} />;
@@ -87,6 +93,16 @@ export function BankAccountSelect(props: EntitySelectProps) {
   return <Combobox placeholder="Banka hesabı ara..." options={options} {...props} />;
 }
 
+export function CashAccountSelect(props: EntitySelectProps) {
+  const { data = [] } = useCashAccounts();
+  const options = useMemo(
+    () => data.filter((account) => account.isActive).map((account) => option(account.id, compactLabel([account.name, account.currencyCode]))),
+    [data],
+  );
+
+  return <Combobox placeholder="Kasa hesabı ara..." options={options} {...props} />;
+}
+
 export function BomSelect(props: EntitySelectProps) {
   const { data } = useBOMs({ page: 1, limit: SELECT_LIMIT });
   const options = useMemo(
@@ -107,11 +123,19 @@ export function ProductBatchSelect({ productId, ...props }: EntitySelectProps & 
   return <Combobox placeholder="Parti ara..." options={options} {...props} />;
 }
 
-export function InvoiceSelect(props: EntitySelectProps) {
-  const { data } = useInvoices({ page: 1, limit: SELECT_LIMIT });
+export function InvoiceSelect({
+  contactId,
+  type,
+  statuses,
+  ...props
+}: EntitySelectProps & { contactId?: string; type?: InvoiceType; statuses?: InvoiceStatus[] }) {
+  const { data } = useInvoices({ page: 1, limit: SELECT_LIMIT, ...(contactId ? { contactId } : {}), ...(type ? { type } : {}) });
   const options = useMemo(
-    () => data?.data.map((invoice) => option(invoice.id, compactLabel([invoice.number, invoice.contact?.name]))) ?? [],
-    [data],
+    () =>
+      data?.data
+        .filter((invoice) => !statuses || statuses.includes(invoice.status))
+        .map((invoice) => option(invoice.id, compactLabel([invoice.number, invoice.contact?.name]))) ?? [],
+    [data, statuses],
   );
 
   return <Combobox placeholder="Fatura ara..." options={options} {...props} />;

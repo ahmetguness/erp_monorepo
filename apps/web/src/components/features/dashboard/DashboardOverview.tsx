@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   TrendingUp, TrendingDown, Package, Users, ArrowUpRight, ArrowDownRight, Plus,
   Clock, Building2, Wallet, DollarSign, Bell, CheckCircle2, FileText,
+  Sparkles, Mail, ShieldAlert, ScrollText, ListChecks,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -38,13 +39,29 @@ interface ApprovalItem {
   requestedBy?: { name?: string } | null; createdAt: string;
 }
 
+interface TaskItem {
+  id: string; type: string; title: string; detail: string | null;
+  priority: string; dueAt: string | null; href: string;
+}
+
 /* ── Schemas ────────────────────────────────── */
 
 const RevSummary = SingleResponseSchema(
   z.object({ period: z.unknown(), invoiceCount: z.coerce.number(), totalNet: z.coerce.number(), totalTax: z.coerce.number(), totalGross: z.coerce.number() }),
 );
 const StockSummary = SingleResponseSchema(
-  z.object({ summary: z.object({ totalLines: z.coerce.number(), belowMinStockCount: z.coerce.number(), totalStockValue: z.coerce.number() }), belowMinStock: z.array(z.unknown()), stockLevels: z.array(z.unknown()) }),
+  z.object({
+    summary: z.object({ totalLines: z.coerce.number(), belowMinStockCount: z.coerce.number(), totalStockValue: z.coerce.number() }),
+    belowMinStock: z.array(z.object({
+      productId: z.string(),
+      productCode: z.string(),
+      productName: z.string(),
+      warehouseName: z.string(),
+      quantity: z.coerce.number(),
+      minStockLevel: z.coerce.number(),
+    })),
+    stockLevels: z.array(z.unknown()),
+  }),
 );
 const BalanceSummary = SingleResponseSchema(
   z.object({ contacts: z.array(z.unknown()), summary: z.object({ totalReceivable: z.coerce.number(), totalPayable: z.coerce.number() }) }),
@@ -55,11 +72,21 @@ const InvSchema = z.object({
 });
 const NotifSchema = z.object({ id: z.string(), title: z.string(), message: z.string().nullable(), status: z.string(), createdAt: z.string(), module: z.string().nullable() }).array();
 const ApprSchema = z.object({ id: z.string(), module: z.string(), status: z.string(), requestedBy: z.object({ name: z.string().optional() }).nullable().optional(), createdAt: z.string() }).array();
+const TaskSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  title: z.string(),
+  detail: z.string().nullable(),
+  priority: z.string(),
+  dueAt: z.string().nullable(),
+  href: z.string(),
+});
 
 /* ── Constants ──────────────────────────────── */
 
 const STATUS_DOT: Record<string, string> = { DRAFT: "bg-slate-500", SENT: "bg-blue-400", PAID: "bg-emerald-400", PARTIALLY_PAID: "bg-amber-400", OVERDUE: "bg-red-400", CANCELLED: "bg-slate-600" };
 const STATUS_LABEL: Record<string, string> = { DRAFT: "Taslak", SENT: "Gönderildi", PAID: "Ödendi", PARTIALLY_PAID: "Kısmi", OVERDUE: "Gecikmiş", CANCELLED: "İptal" };
+const TASK_TONE: Record<string, string> = { CRITICAL: "text-red-400", HIGH: "text-amber-400", MEDIUM: "text-sky-400", LOW: "text-slate-500" };
 const PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#64748b"];
 const TOOLTIP_STYLE = { background: "#1e293b", border: "none", borderRadius: 8, fontSize: 12 } as const;
 
@@ -96,6 +123,10 @@ function CardHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
   return <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-800/80">{icon}<h2 className="text-sm font-semibold text-slate-200">{title}</h2></div>;
 }
 
+function openAssistant(message: string) {
+  window.dispatchEvent(new CustomEvent<string>("axon-chat-action", { detail: message }));
+}
+
 /* ── MAIN ───────────────────────────────────── */
 
 export function DashboardOverview() {
@@ -126,6 +157,7 @@ export function DashboardOverview() {
   const { data: tcmb } = useQuery({ queryKey: ["d", "tcmb"], queryFn: getTcmbRates, staleTime: 3e5 });
   const { data: notifs } = useQuery({ queryKey: ["d", "notifs"], queryFn: async () => { try { return safeParse(SingleResponseSchema(NotifSchema), (await apiClient.get("/api/notifications", { params: { limit: 5 } })).data, "n").data; } catch { return []; } } });
   const { data: appr } = useQuery({ queryKey: ["d", "appr"], queryFn: async () => { try { return safeParse(SingleResponseSchema(ApprSchema), (await apiClient.get("/api/approvals/requests", { params: { limit: 5 } })).data, "a").data; } catch { return []; } } });
+  const { data: tasks } = useQuery({ queryKey: ["d", "tasks"], queryFn: async () => { try { return safeParse(SingleResponseSchema(z.array(TaskSchema)), (await apiClient.get("/api/tasks")).data, "tasks").data; } catch { return []; } } });
 
   /* ── Derived ── */
   const profit = (rev?.totalGross ?? 0) - (exp?.totalGross ?? 0);
@@ -144,6 +176,61 @@ export function DashboardOverview() {
     invs.data.forEach((i: InvoiceItem) => { m[i.status] = (m[i.status] ?? 0) + 1; });
     return Object.entries(m).map(([s, v]) => ({ name: STATUS_LABEL[s] ?? s, value: v }));
   })();
+
+  const overdueInvoiceCount = invs?.data?.filter((i: InvoiceItem) => i.status === "OVERDUE").length ?? 0;
+  const lowStockItems = stk?.belowMinStock ?? [];
+  const actionItems = [
+    {
+      key: "low-stock",
+      title: "Kritik stok",
+      value: stk?.summary.belowMinStockCount ?? 0,
+      detail: lowStockItems[0] ? `${lowStockItems[0].productName} ilk sırada` : "Minimum altı ürün yok",
+      icon: <Package className="w-4 h-4 text-amber-400" />,
+      actionLabel: "Talep oluştur",
+      message: "Stokta kritik ürünleri bul ve bunlar için taslak satın alma talebi oluştur",
+      disabled: (stk?.summary.belowMinStockCount ?? 0) === 0,
+    },
+    {
+      key: "overdue",
+      title: "Geciken fatura",
+      value: overdueInvoiceCount,
+      detail: "Tahsilat hatırlatması hazırlat",
+      icon: <Mail className="w-4 h-4 text-red-400" />,
+      actionLabel: "Mail hazırla",
+      message: "Vadesi geçmiş faturaları listele ve müşterilere gönderilecek kısa hatırlatma metni hazırla",
+      disabled: overdueInvoiceCount === 0,
+    },
+    {
+      key: "margin",
+      title: "Kâr marjı riski",
+      value: profit < 0 ? 1 : 0,
+      detail: profit < 0 ? "Bu ay zarar görünüyor" : "Bu ay net kâr pozitif",
+      icon: <ShieldAlert className="w-4 h-4 text-violet-400" />,
+      actionLabel: "Analiz et",
+      message: "Ürünleri alım ve satış fiyatlarına göre incele, negatif veya düşük kâr marjı riski olanları özetle",
+      disabled: false,
+    },
+    {
+      key: "cash",
+      title: "Nakit akışı",
+      value: profit < 0 || overdueInvoiceCount > 0 ? 1 : 0,
+      detail: "Gelir, gider ve tahsilat riskini yorumla",
+      icon: <Wallet className="w-4 h-4 text-sky-400" />,
+      actionLabel: "Risk tahmini",
+      message: "Bu ay gelir, gider, bekleyen ödeme ve gecikmiş faturaya göre nakit akışı riskini yorumla",
+      disabled: false,
+    },
+    {
+      key: "checks",
+      title: "Çek / senet",
+      value: 0,
+      detail: "Yaklaşan vadeleri ve aksiyonları çıkar",
+      icon: <ScrollText className="w-4 h-4 text-emerald-400" />,
+      actionLabel: "Aksiyon çıkar",
+      message: "Vadesi yaklaşan veya geçmiş çek/senetleri listele; bankaya verilecek, tahsil edildi işaretlenecek veya takip edilecek kayıtları öner",
+      disabled: false,
+    },
+  ];
 
   /* ── JSX ── */
   return (
@@ -225,6 +312,40 @@ export function DashboardOverview() {
           </div>
         </Card>
       </div>
+
+      {/* Action center */}
+      <Card>
+        <CardHeader icon={<Sparkles className="w-4 h-4 text-sky-400" />} title="Öneriler ve Aksiyonlar" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 p-4">
+          {actionItems.map((item) => (
+            <div key={item.key} className="rounded-xl border border-slate-800 bg-slate-950/30 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="p-2 rounded-lg bg-slate-800/80 shrink-0">{item.icon}</div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-200 truncate">{item.title}</p>
+                    <p className="text-xs text-slate-500 truncate">{item.detail}</p>
+                  </div>
+                </div>
+                <span className={cn(
+                  "min-w-7 h-7 px-2 rounded-lg inline-flex items-center justify-center text-xs font-bold tabular-nums",
+                  item.value > 0 ? "bg-amber-500/10 text-amber-400" : "bg-slate-800 text-slate-500",
+                )}>
+                  {item.value}
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={item.disabled}
+                onClick={() => openAssistant(item.message)}
+                className="mt-3 w-full h-8 rounded-lg border border-slate-700 text-xs font-medium text-slate-300 transition-colors hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-slate-700 disabled:hover:bg-transparent disabled:hover:text-slate-300"
+              >
+                {item.actionLabel}
+              </button>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       {/* ── Charts ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -331,7 +452,27 @@ export function DashboardOverview() {
       </div>
 
       {/* ── Notifications + Approvals ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card className="flex flex-col max-h-[360px]">
+          <CardHeader icon={<ListChecks className="w-4 h-4 text-violet-400" />} title="Görevlerim" />
+          <div className="flex-1 overflow-auto divide-y divide-slate-800/50">
+            {tasks && tasks.length > 0 ? tasks.slice(0, 8).map((task: TaskItem) => (
+              <Link key={task.id} href={task.href} className="block px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-slate-200 leading-snug truncate">{task.title}</p>
+                  <span className={cn("text-[10px] font-semibold shrink-0", TASK_TONE[task.priority] ?? "text-slate-500")}>
+                    {task.priority}
+                  </span>
+                </div>
+                {task.detail && <p className="text-xs text-slate-500 mt-1 line-clamp-1">{task.detail}</p>}
+                {task.dueAt && <p className="text-[10px] text-slate-600 mt-1.5">{formatDate(task.dueAt)}</p>}
+              </Link>
+            )) : (
+              <div className="p-8 text-center text-sm text-slate-500">Görev yok</div>
+            )}
+          </div>
+        </Card>
+
         <Card className="flex flex-col max-h-[360px]">
           <CardHeader icon={<Bell className="w-4 h-4 text-sky-400" />} title="Bildirimler" />
           <div className="flex-1 overflow-auto divide-y divide-slate-800/50">

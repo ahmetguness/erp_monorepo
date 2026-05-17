@@ -12,18 +12,17 @@ import {
 import Link from 'next/link';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { ContactSelect, ProductSelect } from '@/components/shared/EntitySelect';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { Select } from '@/components/ui/Select';
 import {
   usePurchaseRequests, useCreatePurchaseRequest,
   useApprovePurchaseRequest, useConvertRequestToOrder,
 } from '@/hooks/usePurchase';
 import { useProducts } from '@/hooks/useProducts';
-import { useContacts } from '@/hooks/useContacts';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import type { PurchaseRequest } from '@/services/purchase.service';
 
@@ -60,12 +59,7 @@ export function PurchaseRequestsPage() {
   const convertReq = useConvertRequestToOrder();
 
   const { data: productsData } = useProducts({ page: 1, limit: 200 });
-  const { data: contactsData } = useContacts({ page: 1, limit: 200 });
   const products = productsData?.data ?? [];
-  const contacts = contactsData?.data ?? [];
-
-  const productOptions = [{ value: '', label: '— Ürün seçin —' }, ...products.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` }))];
-  const contactOptions = [{ value: '', label: '— Tedarikçi seçin —' }, ...contacts.filter((c) => c.type === 'SUPPLIER' || c.type === 'BOTH').map((c) => ({ value: c.id, label: `${c.name} (${c.code})` }))];
 
   const today = new Date().toISOString().split('T')[0];
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<RequestForm>({
@@ -189,15 +183,11 @@ export function PurchaseRequestsPage() {
                             <span className="w-5 h-5 rounded-md bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-500">{idx + 1}</span>
                             <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Ürün</label>
                           </div>
-                          <select
-                            className={cn(
-                              'w-full bg-slate-800 border rounded-lg text-sm text-white px-3 py-2.5',
-                              'focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-colors',
-                              errors.items?.[idx]?.productId ? 'border-red-500' : 'border-slate-700',
-                            )}
-                            {...register(`items.${idx}.productId`)}>
-                            {productOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
+                          <ProductSelect
+                            value={watchItems?.[idx]?.productId ?? ''}
+                            onChange={(value) => setValue(`items.${idx}.productId`, value, { shouldDirty: true, shouldValidate: true })}
+                            error={errors.items?.[idx]?.productId?.message}
+                          />
 
                           {/* Product info chips */}
                           {selectedProduct && (
@@ -326,7 +316,7 @@ export function PurchaseRequestsPage() {
             Dönüştür
           </Button>
         </>}>
-        <Select label="Tedarikçi" required options={contactOptions} value={convertContactId} onChange={(e) => setConvertContactId(e.target.value)} />
+        <ContactSelect label="Tedarikçi" required type={['SUPPLIER', 'BOTH']} value={convertContactId} onChange={setConvertContactId} />
       </Modal>
     </div>
   );

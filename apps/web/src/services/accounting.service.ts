@@ -77,6 +77,7 @@ export type CashAccount = z.infer<typeof CashAccountSchema>;
 export type Payment = z.infer<typeof PaymentSchema>;
 export type AccountType = LedgerAccount['accountType'];
 export type PaymentMethod = Payment['method'];
+export type PaymentDirection = 'RECEIVE' | 'SEND';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -94,6 +95,7 @@ export type UpdateCashAccountDTO = Partial<CreateCashAccountDTO> & { isActive?: 
 export interface CreatePaymentDTO {
   contactId?: string; bankAccountId?: string; cashAccountId?: string;
   date: string; amount: number; method: PaymentMethod; reference?: string; notes?: string;
+  direction?: PaymentDirection;
   allocations?: Array<{ invoiceId: string; amount: number }>;
 }
 export interface PaymentListParams extends PaginationParams, DateRangeParams { contactId?: string; status?: string; }

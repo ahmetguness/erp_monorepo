@@ -12,13 +12,13 @@ import {
 import Link from 'next/link';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { WarehouseSelect } from '@/components/shared/EntitySelect';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Modal } from '@/components/ui/Modal';
-import { useStockCounts, useCreateStockCount, useWarehouses, useStockLevels } from '@/hooks/useStock';
+import { useStockCounts, useCreateStockCount, useStockLevels } from '@/hooks/useStock';
 import { cn, formatDate } from '@/lib/utils';
 import type { StockCount } from '@/services/stock.service';
 
@@ -50,15 +50,12 @@ type NewCountForm = z.infer<typeof newCountSchema>;
 export function StockCountsPage() {
   const router = useRouter();
   const { data: counts = [], isLoading } = useStockCounts();
-  const { data: warehouses = [] } = useWarehouses();
   const createCount = useCreateStockCount();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
 
   const { data: levels = [] } = useStockLevels({ warehouseId: selectedWarehouse || undefined });
-
-  const warehouseOptions = warehouses.map((w) => ({ value: w.id, label: `${w.name} (${w.code})` }));
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -184,8 +181,7 @@ export function StockCountsPage() {
               <span className="text-xs font-semibold text-white">Sayım Bilgileri</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Select label="Depo" required options={[{ value: '', label: '— Depo seçin —' }, ...warehouseOptions]}
-                error={errors.warehouseId?.message} {...register('warehouseId')} />
+              <WarehouseSelect label="Depo" required value={watchWarehouse ?? ''} onChange={(value) => setValue('warehouseId', value, { shouldDirty: true, shouldValidate: true })} error={errors.warehouseId?.message} />
               <DatePicker label="Tarih" required value={watchDate} onValueChange={(value) => setValue('date', value ?? '', { shouldDirty: true, shouldValidate: true })} error={errors.date?.message} clearable={false} />
             </div>
             <Input label="Notlar" placeholder="Sayım açıklaması (opsiyonel)…" {...register('notes')} />

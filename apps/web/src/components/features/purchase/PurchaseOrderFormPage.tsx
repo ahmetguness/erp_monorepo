@@ -8,12 +8,11 @@ import {
   ArrowLeft, ShoppingCart, Users, Plus, Trash2, Save, X,
   Hash, DollarSign, Percent, Package, Receipt,
 } from 'lucide-react';
-import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { FormRow } from '@/components/shared/FormField';
+import { ContactSelect, ProductSelect } from '@/components/shared/EntitySelect';
 import { useContacts } from '@/hooks/useContacts';
 import { useProducts } from '@/hooks/useProducts';
 import { useCreatePurchaseOrder } from '@/hooks/usePurchase';
@@ -44,9 +43,6 @@ export function PurchaseOrderFormPage() {
 
   const contacts = contactsData?.data ?? [];
   const products = productsData?.data ?? [];
-  const contactOptions = [{ value: '', label: '— Tedarikçi seçin —' }, ...contacts.filter((c) => c.type === 'SUPPLIER' || c.type === 'BOTH').map((c) => ({ value: c.id, label: `${c.name} (${c.code})` }))];
-  const productOptions = [{ value: '', label: '— Ürün seçin —' }, ...products.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` }))];
-
   const today = new Date().toISOString().split('T')[0];
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm<OrderForm>({
     resolver: zodResolver(orderSchema),
@@ -121,7 +117,7 @@ export function PurchaseOrderFormPage() {
                 <h3 className="text-sm font-semibold text-white">Sipariş Bilgileri</h3>
               </div>
               <div className="p-5 space-y-4">
-                <Select label="Tedarikçi" required options={contactOptions} error={errors.contactId?.message} {...register('contactId')} />
+                <ContactSelect label="Tedarikçi" required type={['SUPPLIER', 'BOTH']} value={watchContact ?? ''} onChange={(value) => setValue('contactId', value, { shouldDirty: true, shouldValidate: true })} error={errors.contactId?.message} />
                 <FormRow cols={2}>
                   <DatePicker label="Sipariş Tarihi" required value={watchDate} onValueChange={(value) => setValue('date', value ?? '', { shouldDirty: true, shouldValidate: true })} error={errors.date?.message} clearable={false} />
                   <DatePicker label="Teslim Tarihi" value={watchDueDate ?? ''} onValueChange={(value) => setValue('dueDate', value ?? '', { shouldDirty: true, shouldValidate: true })} />
@@ -150,11 +146,11 @@ export function PurchaseOrderFormPage() {
                       <div className="flex items-start gap-3 ml-4">
                         <div className="flex-1">
                           <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Ürün</label>
-                          <select className={cn('w-full bg-slate-800 border rounded-lg text-sm text-white px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-500',
-                            errors.items?.[idx]?.productId ? 'border-red-500' : 'border-slate-700')}
-                            value={watchItems[idx]?.productId ?? ''} onChange={(e) => handleProductChange(idx, e.target.value)}>
-                            {productOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
+                          <ProductSelect
+                            value={watchItems[idx]?.productId ?? ''}
+                            onChange={(value) => handleProductChange(idx, value)}
+                            error={errors.items?.[idx]?.productId?.message}
+                          />
                         </div>
                         {fields.length > 1 && (
                           <button type="button" onClick={() => remove(idx)} className="mt-6 p-2 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">

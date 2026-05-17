@@ -4,9 +4,8 @@ import { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
-import { Select } from '@/components/ui/Select';
+import { WarehouseSelect } from '@/components/shared/EntitySelect';
 import { useStockLevels } from '@/hooks/useStock';
-import { useWarehouses } from '@/hooks/useStock';
 import { cn } from '@/lib/utils';
 import type { StockLevel } from '@/services/stock.service';
 
@@ -14,16 +13,10 @@ export function StockLevelsPage() {
   const [warehouseId, setWarehouseId] = useState('');
   const [belowMin, setBelowMin] = useState(false);
 
-  const { data: warehouses = [] } = useWarehouses();
   const { data: levels = [], isLoading } = useStockLevels({
     warehouseId: warehouseId || undefined,
     belowMin: belowMin || undefined,
   });
-
-  const warehouseOptions = [
-    { value: '', label: 'Tüm Depolar' },
-    ...warehouses.map((w) => ({ value: w.id, label: w.name })),
-  ];
 
   const columns: ColumnDef<StockLevel>[] = [
     {
@@ -67,7 +60,7 @@ export function StockLevelsPage() {
       <PageHeader title="Stok Seviyeleri" subtitle="Ürünlerin depo bazlı stok durumu." />
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <Select options={warehouseOptions} value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="w-48" />
+        <WarehouseSelect value={warehouseId} onChange={setWarehouseId} className="w-48" placeholder="Tüm depolar" />
         <button
           type="button"
           onClick={() => setBelowMin((v) => !v)}

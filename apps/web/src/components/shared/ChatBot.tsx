@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   MessageCircle, X, Send, Bot, User, Loader2, Minimize2, Maximize2,
-  Trash2, Database, Copy, Check, RefreshCw,
+  Trash2, Database, Copy, Check, RefreshCw, Sparkles,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -71,10 +71,10 @@ function useSmoothStream() {
 }
 
 const QUICK_ACTIONS = [
-  { label: 'Bugünkü özet', message: 'Bugünkü genel durumu özetle: satış, gider, gecikmiş faturalar, bekleyen ödemeler ve stok uyarıları' },
-  { label: 'Gecikmiş faturalar', message: 'Vadesi geçmiş tüm faturaları listele, kaç gün geciktiğini ve toplam tutarı göster' },
-  { label: 'Riskli cariler', message: 'Kredi limitini aşan riskli cari hesapları göster' },
-  { label: 'Stok uyarıları', message: 'Minimum stok seviyesinin altındaki ürünleri listele' },
+  { label: 'Aksiyon merkezi', message: 'Bugünkü en önemli aksiyonları sırala: kritik stok, gecikmiş faturalar, bekleyen ödemeler ve yaklaşan çek/senetler' },
+  { label: 'Satın alma taslağı', message: 'Stokta kritik ürünleri bul ve bunlar için taslak satın alma talebi oluştur' },
+  { label: 'Gecikmiş tahsilat', message: 'Vadesi geçmiş faturaları listele ve müşterilere gönderilecek kısa hatırlatma metni hazırla' },
+  { label: 'Nakit akışı riski', message: 'Bu ay gelir, gider, bekleyen ödeme ve gecikmiş faturaya göre nakit akışı riskini yorumla' },
 ];
 
 // ─────────────────────────────────────────────
@@ -379,7 +379,7 @@ export function ChatBot() {
         resetStream();
       }
     } catch (err) {
-      if ((err as Error).name === 'AbortError') {
+      if (err instanceof DOMException && err.name === 'AbortError') {
         // Kullanıcı iptal etti
         if (streamingContent) {
           setMessages((prev) => [...prev, {
@@ -401,6 +401,19 @@ export function ChatBot() {
       abortRef.current = null;
     }
   }, [input, loading, streamingContent, appendStream, resetStream]);
+
+  useEffect(() => {
+    const handleAction = (event: Event) => {
+      if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return;
+      const detail = event.detail.trim();
+      if (!detail) return;
+      setOpen(true);
+      setTimeout(() => sendMessage(detail), 150);
+    };
+
+    window.addEventListener('axon-chat-action', handleAction);
+    return () => window.removeEventListener('axon-chat-action', handleAction);
+  }, [sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -518,7 +531,10 @@ export function ChatBot() {
         {/* Quick actions */}
         {showQuickActions && (
           <div className="space-y-1.5 pt-1">
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Hızlı İşlemler</p>
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-sky-400" />
+              Aksiyon Akışları
+            </p>
             <div className="grid grid-cols-2 gap-1.5">
               {QUICK_ACTIONS.map((q) => (
                 <button key={q.label} onClick={() => sendMessage(q.message)}

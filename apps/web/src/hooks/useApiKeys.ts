@@ -2,9 +2,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
-import { getApiKeys, createApiKey, revokeApiKey, deleteApiKey, type ListParams, type CreateApiKeyDTO } from '@/services/api-key.service';
+import { getApiKeys, createApiKey, revokeApiKey, deleteApiKey, getApiKeyActivity, type ListParams, type CreateApiKeyDTO } from '@/services/api-key.service';
 
-const KEYS = { list: (p: ListParams) => ['api-keys', p] as const };
+const KEYS = {
+  list: (p: ListParams) => ['api-keys', p] as const,
+  activity: (id: string) => ['api-keys', id, 'activity'] as const,
+};
 
 export function useApiKeys(params: ListParams) {
   return useQuery({ queryKey: KEYS.list(params), queryFn: () => getApiKeys(params) });
@@ -16,6 +19,9 @@ export function useCreateApiKey() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['api-keys'] }); toast.success('API anahtarı oluşturuldu.'); },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
+}
+export function useApiKeyActivity(id: string) {
+  return useQuery({ queryKey: KEYS.activity(id), queryFn: () => getApiKeyActivity(id), enabled: Boolean(id) });
 }
 export function useRevokeApiKey() {
   const qc = useQueryClient(); const { toast } = useUIStore();

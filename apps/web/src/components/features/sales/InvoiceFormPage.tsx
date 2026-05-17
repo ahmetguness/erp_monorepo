@@ -15,6 +15,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { FormRow } from '@/components/shared/FormField';
+import { ContactSelect, ProductSelect } from '@/components/shared/EntitySelect';
 import { useCreateInvoice } from '@/hooks/useSales';
 import { useContacts } from '@/hooks/useContacts';
 import { useProducts } from '@/hooks/useProducts';
@@ -70,7 +71,6 @@ export function InvoiceFormPage() {
   const contacts = contactsData?.data ?? [];
   const products = productsData?.data ?? [];
 
-  const contactOptions = [{ value: '', label: '— Cari seçin —' }, ...contacts.map((c) => ({ value: c.id, label: `${c.name} (${c.code})` }))];
   const taxRateOptions = [{ value: '', label: '— KDV yok —' }, ...taxRates.map((t) => ({ value: t.id, label: `${t.name} (%${t.rate})` }))];
 
   const today = new Date().toISOString().split('T')[0];
@@ -108,9 +108,9 @@ export function InvoiceFormPage() {
   const totalGross = totalNet + totalTax;
 
   const handleProductSelect = (idx: number, productId: string) => {
+    setValue(`lines.${idx}.productId`, productId, { shouldDirty: true, shouldValidate: true });
     const product = products.find((p) => p.id === productId);
     if (product) {
-      setValue(`lines.${idx}.productId`, productId);
       setValue(`lines.${idx}.description`, product.name);
       setValue(`lines.${idx}.unitPrice`, String(product.salesPrice));
     }
@@ -200,7 +200,7 @@ export function InvoiceFormPage() {
                 </div>
               </div>
               <div className="p-5 space-y-4">
-                <Select label="Cari" required options={contactOptions} error={errors.contactId?.message} {...register('contactId')} />
+                <ContactSelect label="Cari" required value={watchContact ?? ''} onChange={(value) => setValue('contactId', value, { shouldDirty: true, shouldValidate: true })} error={errors.contactId?.message} />
                 <FormRow cols={2}>
                   <DatePicker label="Fatura Tarihi" required value={watchDate} onValueChange={(value) => setValue('date', value ?? '', { shouldDirty: true, shouldValidate: true })} error={errors.date?.message} clearable={false} />
                   <DatePicker label="Vade Tarihi" value={watchDueDate ?? ''} onValueChange={(value) => setValue('dueDate', value ?? '', { shouldDirty: true, shouldValidate: true })} />
@@ -251,14 +251,7 @@ export function InvoiceFormPage() {
                             </div>
                             <div className="w-48 shrink-0">
                               <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Ürün (opsiyonel)</label>
-                              <select
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-2.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
-                                value=""
-                                onChange={(e) => { if (e.target.value) handleProductSelect(idx, e.target.value); }}
-                              >
-                                <option value="">Hızlı doldur…</option>
-                                {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                              </select>
+                              <ProductSelect value={watchedLines[idx]?.productId ?? ''} onChange={(value) => handleProductSelect(idx, value)} />
                             </div>
                           </div>
                         </div>

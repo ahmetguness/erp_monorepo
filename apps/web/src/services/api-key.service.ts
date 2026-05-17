@@ -13,9 +13,18 @@ export const ApiKeySchema = z.object({
 });
 
 export const ApiKeyWithRawSchema = ApiKeySchema.extend({ rawKey: z.string().optional() });
+export const ApiKeyActivitySchema = z.object({
+  id: z.string(),
+  action: z.string(),
+  newValues: z.unknown().nullable(),
+  ipAddress: z.string().nullable(),
+  userAgent: z.string().nullable(),
+  createdAt: z.string(),
+});
 
 export type ApiKey = z.infer<typeof ApiKeySchema>;
 export type ApiKeyWithRaw = z.infer<typeof ApiKeyWithRawSchema>;
+export type ApiKeyActivity = z.infer<typeof ApiKeyActivitySchema>;
 
 export interface CreateApiKeyDTO { name: string; scopes?: string[]; expiresAt?: string }
 export interface ListParams extends PaginationParams { isActive?: string }
@@ -37,4 +46,9 @@ export async function revokeApiKey(id: string): Promise<ApiKey> {
 
 export async function deleteApiKey(id: string) {
   await apiClient.delete(`/api/api-keys/${id}`);
+}
+
+export async function getApiKeyActivity(id: string): Promise<ApiKeyActivity[]> {
+  const res = await apiClient.get(`/api/api-keys/${id}/activity`);
+  return safeParse(SingleResponseSchema(z.array(ApiKeyActivitySchema)), res.data, 'getApiKeyActivity').data;
 }

@@ -23,6 +23,7 @@ import {
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { BankAccountSelect, CashAccountSelect, ContactSelect } from "@/components/shared/EntitySelect";
 import { PaymentStatusBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -33,8 +34,6 @@ import { FormRow } from "@/components/shared/FormField";
 import {
   usePayments,
   useCreatePayment,
-  useBankAccounts,
-  useCashAccounts,
 } from "@/hooks/useAccounting";
 import { useContacts } from "@/hooks/useContacts";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
@@ -144,22 +143,8 @@ export function PaymentsListPage() {
   const createPayment = useCreatePayment();
 
   const { data: contactsData } = useContacts({ page: 1, limit: 200 });
-  const { data: bankAccounts = [] } = useBankAccounts();
-  const { data: cashAccounts = [] } = useCashAccounts();
 
   const contacts = contactsData?.data ?? [];
-  const contactOptions = [
-    { value: "", label: "— Cari seçin (opsiyonel) —" },
-    ...contacts.map((c) => ({ value: c.id, label: `${c.name} (${c.code})` })),
-  ];
-  const bankOptions = [
-    { value: "", label: "— Banka hesabı —" },
-    ...bankAccounts.map((b) => ({ value: b.id, label: b.name })),
-  ];
-  const cashOptions = [
-    { value: "", label: "— Kasa hesabı —" },
-    ...cashAccounts.map((c) => ({ value: c.id, label: c.name })),
-  ];
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -177,6 +162,9 @@ export function PaymentsListPage() {
 
   const selectedMethod = watch("method");
   const selectedDate = watch("date");
+  const selectedContactId = watch("contactId") ?? "";
+  const selectedBankAccountId = watch("bankAccountId") ?? "";
+  const selectedCashAccountId = watch("cashAccountId") ?? "";
   const isBankMethod =
     selectedMethod === "BANK_TRANSFER" || selectedMethod === "CREDIT_CARD";
   const isCashMethod = selectedMethod === "CASH";
@@ -615,10 +603,10 @@ export function PaymentsListPage() {
                 onValueChange={(value) => setValue("date", value ?? "", { shouldDirty: true, shouldValidate: true })}
                 clearable={false}
               />
-              <Select
+              <ContactSelect
                 label="Cari"
-                options={contactOptions}
-                {...register("contactId")}
+                value={selectedContactId}
+                onChange={(value) => setValue("contactId", value, { shouldDirty: true, shouldValidate: true })}
               />
             </FormRow>
           </div>
@@ -635,30 +623,30 @@ export function PaymentsListPage() {
             </div>
             <div className="space-y-3">
               {isBankMethod && (
-                <Select
+                <BankAccountSelect
                   label="Banka Hesabı"
-                  options={bankOptions}
-                  {...register("bankAccountId")}
+                  value={selectedBankAccountId}
+                  onChange={(value) => setValue("bankAccountId", value, { shouldDirty: true, shouldValidate: true })}
                 />
               )}
               {isCashMethod && (
-                <Select
+                <CashAccountSelect
                   label="Kasa Hesabı"
-                  options={cashOptions}
-                  {...register("cashAccountId")}
+                  value={selectedCashAccountId}
+                  onChange={(value) => setValue("cashAccountId", value, { shouldDirty: true, shouldValidate: true })}
                 />
               )}
               {!isBankMethod && !isCashMethod && (
                 <FormRow cols={2}>
-                  <Select
+                  <BankAccountSelect
                     label="Banka Hesabı"
-                    options={bankOptions}
-                    {...register("bankAccountId")}
+                    value={selectedBankAccountId}
+                    onChange={(value) => setValue("bankAccountId", value, { shouldDirty: true, shouldValidate: true })}
                   />
-                  <Select
+                  <CashAccountSelect
                     label="Kasa Hesabı"
-                    options={cashOptions}
-                    {...register("cashAccountId")}
+                    value={selectedCashAccountId}
+                    onChange={(value) => setValue("cashAccountId", value, { shouldDirty: true, shouldValidate: true })}
                   />
                 </FormRow>
               )}

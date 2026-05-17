@@ -165,6 +165,33 @@ export const ApiKeyController = {
     return c.json({ data: { ...apiKey, rawKey } }, 201);
   },
 
+  async activity(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const existing = await prisma.apiKey.findFirst({
+      where: { id, tenantId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) return c.json(new NotFoundError('API Key', id).toJSON(), 404);
+
+    const logs = await prisma.auditLog.findMany({
+      where: { tenantId, module: 'api_keys', entityType: EntityType.OTHER, entityId: id },
+      select: {
+        id: true,
+        action: true,
+        newValues: true,
+        ipAddress: true,
+        userAgent: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+    });
+
+    return c.json({ data: logs });
+  },
+
   async revoke(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);

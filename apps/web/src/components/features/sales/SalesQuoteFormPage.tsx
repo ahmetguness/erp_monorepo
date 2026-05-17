@@ -9,12 +9,11 @@ import {
   Save, X, Package, Receipt, Percent,
   Hash, DollarSign, ShoppingCart,
 } from 'lucide-react';
-import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { FormRow } from '@/components/shared/FormField';
+import { ContactSelect, ProductSelect } from '@/components/shared/EntitySelect';
 import { useContacts } from '@/hooks/useContacts';
 import { useProducts } from '@/hooks/useProducts';
 import { useCreateSalesQuote } from '@/hooks/useSales';
@@ -56,9 +55,6 @@ export function SalesQuoteFormPage() {
 
   const contacts = contactsData?.data ?? [];
   const products = productsData?.data ?? [];
-
-  const contactOptions = [{ value: '', label: '— Cari seçin —' }, ...contacts.map((c) => ({ value: c.id, label: `${c.name} (${c.code})` }))];
-  const productOptions = [{ value: '', label: '— Ürün seçin —' }, ...products.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` }))];
 
   const today = new Date().toISOString().split('T')[0];
   const defaultValid = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
@@ -161,7 +157,7 @@ export function SalesQuoteFormPage() {
                 </div>
               </div>
               <div className="p-5 space-y-4">
-                <Select label="Müşteri" required options={contactOptions} error={errors.contactId?.message} {...register('contactId')} />
+                <ContactSelect label="Müşteri" required value={watchContact ?? ''} onChange={(value) => setValue('contactId', value, { shouldDirty: true, shouldValidate: true })} error={errors.contactId?.message} />
                 <FormRow cols={2}>
                   <DatePicker label="Teklif Tarihi" required value={watchDate} onValueChange={(value) => setValue('date', value ?? '', { shouldDirty: true, shouldValidate: true })} error={errors.date?.message} clearable={false} />
                   <DatePicker label="Geçerlilik Tarihi" value={watchValidUntil ?? ''} onValueChange={(value) => setValue('validUntil', value ?? '', { shouldDirty: true, shouldValidate: true })} />
@@ -202,17 +198,11 @@ export function SalesQuoteFormPage() {
                       <div className="flex items-start gap-3 ml-4">
                         <div className="flex-1">
                           <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Ürün</label>
-                          <select
-                            className={cn(
-                              'w-full bg-slate-800 border rounded-lg text-sm text-white px-3 py-2.5',
-                              'focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-colors',
-                              errors.items?.[idx]?.productId ? 'border-red-500' : 'border-slate-700',
-                            )}
+                          <ProductSelect
                             value={watchItems[idx]?.productId ?? ''}
-                            onChange={(e) => handleProductChange(idx, e.target.value)}
-                          >
-                            {productOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
+                            onChange={(value) => handleProductChange(idx, value)}
+                            error={errors.items?.[idx]?.productId?.message}
+                          />
                           {product && (
                             <p className="text-[10px] text-slate-500 mt-1">
                               Katalog fiyatı: <span className="text-slate-400">{formatCurrency(product.salesPrice)}</span>
