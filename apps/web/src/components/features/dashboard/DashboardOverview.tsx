@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   TrendingUp, TrendingDown, Package, Users, ArrowUpRight, ArrowDownRight, Plus,
   Clock, Building2, Wallet, DollarSign, Bell, CheckCircle2, FileText,
@@ -17,6 +17,8 @@ import { safeParse } from "@/lib/safe-parse";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { getTcmbRates } from "@/services/currency-rates.service";
+import { getRecommendations, type Recommendation } from "@/services/intelligence.service";
+import { updateTaskStatus } from "@/services/task.service";
 import { SingleResponseSchema, PaginatedResponseSchema } from "@/types/api.types";
 import { z } from "zod";
 
@@ -41,7 +43,7 @@ interface ApprovalItem {
 
 interface TaskItem {
   id: string; type: string; title: string; detail: string | null;
-  priority: string; dueAt: string | null; href: string;
+  priority: string; status?: string; dueAt: string | null; href: string;
 }
 
 /* ── Schemas ────────────────────────────────── */
@@ -78,6 +80,7 @@ const TaskSchema = z.object({
   title: z.string(),
   detail: z.string().nullable(),
   priority: z.string(),
+  status: z.string().optional(),
   dueAt: z.string().nullable(),
   href: z.string(),
 });
@@ -87,6 +90,7 @@ const TaskSchema = z.object({
 const STATUS_DOT: Record<string, string> = { DRAFT: "bg-slate-500", SENT: "bg-blue-400", PAID: "bg-emerald-400", PARTIALLY_PAID: "bg-amber-400", OVERDUE: "bg-red-400", CANCELLED: "bg-slate-600" };
 const STATUS_LABEL: Record<string, string> = { DRAFT: "Taslak", SENT: "Gönderildi", PAID: "Ödendi", PARTIALLY_PAID: "Kısmi", OVERDUE: "Gecikmiş", CANCELLED: "İptal" };
 const TASK_TONE: Record<string, string> = { CRITICAL: "text-red-400", HIGH: "text-amber-400", MEDIUM: "text-sky-400", LOW: "text-slate-500" };
+const RECOMMENDATION_TONE: Record<string, string> = { CRITICAL: "border-red-500/30 bg-red-500/5", HIGH: "border-amber-500/30 bg-amber-500/5", MEDIUM: "border-sky-500/25 bg-sky-500/5", LOW: "border-slate-700 bg-slate-950/30" };
 const PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#64748b"];
 const TOOLTIP_STYLE = { background: "#1e293b", border: "none", borderRadius: 8, fontSize: 12 } as const;
 
@@ -131,6 +135,7 @@ function openAssistant(message: string) {
 
 export function DashboardOverview() {
   const { user, tenant } = useCurrentUser();
+  const queryClient = useQueryClient();
 
   const [clock, setClock] = useState("");
   useEffect(() => {
@@ -158,6 +163,11 @@ export function DashboardOverview() {
   const { data: notifs } = useQuery({ queryKey: ["d", "notifs"], queryFn: async () => { try { return safeParse(SingleResponseSchema(NotifSchema), (await apiClient.get("/api/notifications", { params: { limit: 5 } })).data, "n").data; } catch { return []; } } });
   const { data: appr } = useQuery({ queryKey: ["d", "appr"], queryFn: async () => { try { return safeParse(SingleResponseSchema(ApprSchema), (await apiClient.get("/api/approvals/requests", { params: { limit: 5 } })).data, "a").data; } catch { return []; } } });
   const { data: tasks } = useQuery({ queryKey: ["d", "tasks"], queryFn: async () => { try { return safeParse(SingleResponseSchema(z.array(TaskSchema)), (await apiClient.get("/api/tasks")).data, "tasks").data; } catch { return []; } } });
+  const { data: recommendations = [] } = useQuery({ queryKey: ["d", "recommendations"], queryFn: async () => { try { return await getRecommendations(); } catch { return []; } } });
+  const completeTask = useMutation({
+    mutationFn: (taskId: string) => updateTaskStatus(taskId, "DONE"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["d", "tasks"] }),
+  });
 
   /* ── Derived ── */
   const profit = (rev?.totalGross ?? 0) - (exp?.totalGross ?? 0);
@@ -316,34 +326,88 @@ export function DashboardOverview() {
       {/* Action center */}
       <Card>
         <CardHeader icon={<Sparkles className="w-4 h-4 text-sky-400" />} title="Öneriler ve Aksiyonlar" />
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 p-4">
-          {actionItems.map((item) => (
-            <div key={item.key} className="rounded-xl border border-slate-800 bg-slate-950/30 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="p-2 rounded-lg bg-slate-800/80 shrink-0">{item.icon}</div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-200 truncate">{item.title}</p>
-                    <p className="text-xs text-slate-500 truncate">{item.detail}</p>
-                  </div>
-                </div>
-                <span className={cn(
-                  "min-w-7 h-7 px-2 rounded-lg inline-flex items-center justify-center text-xs font-bold tabular-nums",
-                  item.value > 0 ? "bg-amber-500/10 text-amber-400" : "bg-slate-800 text-slate-500",
-                )}>
-                  {item.value}
-                </span>
+        <div className="p-4 space-y-4">
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-300">Akıllı öneriler</p>
+                <p className="text-[11px] text-slate-500">Veriye göre önceliklendirilen aksiyonlar</p>
               </div>
-              <button
-                type="button"
-                disabled={item.disabled}
-                onClick={() => openAssistant(item.message)}
-                className="mt-3 w-full h-8 rounded-lg border border-slate-700 text-xs font-medium text-slate-300 transition-colors hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-slate-700 disabled:hover:bg-transparent disabled:hover:text-slate-300"
-              >
-                {item.actionLabel}
-              </button>
+              {recommendations.length > 0 && (
+                <span className="h-6 px-2 inline-flex items-center rounded-lg bg-amber-500/10 text-[10px] font-bold text-amber-400">
+                  {recommendations.length} aktif
+                </span>
+              )}
             </div>
-          ))}
+
+            {recommendations.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                {recommendations.slice(0, 4).map((rec: Recommendation) => (
+                  <div key={rec.id} className={cn("rounded-xl border p-4", RECOMMENDATION_TONE[rec.severity] ?? RECOMMENDATION_TONE.LOW)}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-100 truncate">{rec.title}</p>
+                        <p className="text-xs text-slate-400 mt-1 line-clamp-2 min-h-8">{rec.detail}</p>
+                      </div>
+                      <span className={cn("text-[10px] font-bold shrink-0", TASK_TONE[rec.severity] ?? "text-slate-500")}>{rec.value}</span>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Link href={rec.href} className="flex-1 h-8 inline-flex items-center justify-center rounded-lg border border-slate-700 text-xs font-medium text-slate-300 hover:border-slate-600 hover:bg-slate-800/50">
+                        Ac
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => openAssistant(rec.assistantPrompt)}
+                        className="flex-1 h-8 rounded-lg border border-sky-500/30 bg-sky-500/10 text-xs font-medium text-sky-300 hover:bg-sky-500/15"
+                      >
+                        {rec.actionLabel}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-800 bg-slate-950/30 px-4 py-5 text-center text-sm text-slate-500">
+                Yetkili olduğunuz modüllerde aktif öneri yok
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-slate-800/70 pt-4">
+            <div className="mb-3">
+              <p className="text-xs font-semibold text-slate-300">Hızlı aksiyonlar</p>
+              <p className="text-[11px] text-slate-500">Sık kullanılan AI iş akışları</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+              {actionItems.map((item) => (
+                <div key={item.key} className="rounded-xl border border-slate-800 bg-slate-950/30 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="p-2 rounded-lg bg-slate-800/80 shrink-0">{item.icon}</div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-200 truncate">{item.title}</p>
+                        <p className="text-xs text-slate-500 truncate">{item.detail}</p>
+                      </div>
+                    </div>
+                    <span className={cn(
+                      "min-w-7 h-7 px-2 rounded-lg inline-flex items-center justify-center text-xs font-bold tabular-nums",
+                      item.value > 0 ? "bg-amber-500/10 text-amber-400" : "bg-slate-800 text-slate-500",
+                    )}>
+                      {item.value}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={item.disabled}
+                    onClick={() => openAssistant(item.message)}
+                    className="mt-3 w-full h-8 rounded-lg border border-slate-700 text-xs font-medium text-slate-300 transition-colors hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-slate-700 disabled:hover:bg-transparent disabled:hover:text-slate-300"
+                  >
+                    {item.actionLabel}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </Card>
 

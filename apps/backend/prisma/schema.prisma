@@ -257,6 +257,39 @@ enum NotificationStatus {
   ARCHIVED
 }
 
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum TaskType {
+  APPROVAL
+  COLLECTION
+  SERVICE
+  NOTIFICATION
+  CHECK
+  AUTOMATION
+  GENERAL
+}
+
+enum AutomationTrigger {
+  LOW_STOCK
+  OVERDUE_INVOICE
+  HIGH_VALUE_INVOICE
+  LOW_MARGIN
+  CHECK_DUE_SOON
+}
+
+enum AutomationAction {
+  CREATE_TASK
+  CREATE_NOTIFICATION
+  DRAFT_REMINDER_EMAIL
+  REQUEST_APPROVAL
+  CREATE_PURCHASE_REQUEST_DRAFT
+}
+
 enum AccountType {
   ASSET
   LIABILITY
@@ -536,6 +569,8 @@ model Tenant {
   approvalFlows          ApprovalFlow[]
   approvalRequests       ApprovalRequest[]
   notifications          Notification[]
+  tasks                  Task[]
+  automationRules        AutomationRule[]
   tenantSettings         TenantSetting[]
   moduleSettings         ModuleSetting[]
   // Back-relations for models with tenantId
@@ -931,6 +966,63 @@ model Notification {
   @@index([tenantId, userId, status])
   @@index([tenantId, createdAt])
   @@map("notifications")
+}
+
+model Task {
+  id           String     @id @default(cuid())
+  tenantId     String
+  title        String
+  detail       String?
+  type         TaskType   @default(GENERAL)
+  priority     Priority   @default(MEDIUM)
+  status       TaskStatus @default(TODO)
+  module       String?
+  entityType   EntityType?
+  entityId     String?
+  href         String?
+  source       String?
+  assignedToId String?
+  createdById  String?
+  dueAt        DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, source])
+  @@index([tenantId, assignedToId, status])
+  @@index([tenantId, status, dueAt])
+  @@index([tenantId, entityType, entityId])
+  @@map("tasks")
+}
+
+model AutomationRule {
+  id           String            @id @default(cuid())
+  tenantId     String
+  name         String
+  description  String?
+  trigger      AutomationTrigger
+  action       AutomationAction
+  module       String
+  conditions   Json?
+  actionConfig Json?
+  isActive     Boolean           @default(true)
+  lastRunAt    DateTime?
+  lastResult   Json?
+  createdById  String?
+  updatedById  String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  deletedAt    DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive])
+  @@index([tenantId, trigger])
+  @@index([deletedAt])
+  @@map("automation_rules")
 }
 
 // ═════════════════════════════════════════════

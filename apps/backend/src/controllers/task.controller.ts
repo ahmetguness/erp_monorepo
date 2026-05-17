@@ -1,21 +1,51 @@
 import { Context } from 'hono';
-import { ApprovalStatus, InvoiceStatus, PermissionAction, Priority } from '@prisma/client';
+import { AuditAction, EntityType, ApprovalStatus, InvoiceStatus, PermissionAction, Priority, TaskStatus, TaskType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { ForbiddenError } from '../errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../errors';
+import { createTask } from '../services/task.service.js';
 import { requireTenantId, requireUserId } from '../utils/context.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-type TaskType = 'APPROVAL' | 'COLLECTION' | 'SERVICE' | 'NOTIFICATION' | 'CHECK';
+type DashboardTaskType = 'APPROVAL' | 'COLLECTION' | 'SERVICE' | 'NOTIFICATION' | 'CHECK' | 'AUTOMATION' | 'GENERAL';
 
 interface TaskItem {
   id: string;
-  type: TaskType;
+  type: DashboardTaskType;
   title: string;
   detail: string | null;
   priority: TaskPriority;
+  status?: TaskStatus;
   dueAt: Date | null;
   href: string;
   sourceId: string;
+}
+
+const PRIORITIES: readonly Priority[] = Object.values(Priority);
+const STATUSES: readonly TaskStatus[] = Object.values(TaskStatus);
+const TASK_TYPES: readonly TaskType[] = Object.values(TaskType);
+
+function isPriority(value: unknown): value is Priority {
+  return typeof value === 'string' && PRIORITIES.includes(value as Priority);
+}
+
+function isStatus(value: unknown): value is TaskStatus {
+  return typeof value === 'string' && STATUSES.includes(value as TaskStatus);
+}
+
+function isTaskType(value: unknown): value is TaskType {
+  return typeof value === 'string' && TASK_TYPES.includes(value as TaskType);
+}
+
+async function readBody(c: Context): Promise<Record<string, unknown>> {
+  const body = await c.req.json<unknown>().catch(() => null);
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return {};
+  return Object.fromEntries(Object.entries(body));
+}
+
+function readString(body: Record<string, unknown>, key: string): string | undefined {
+  const value = body[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function invoicePriority(daysLate: number): TaskPriority {
@@ -47,6 +77,16 @@ export const TaskController = {
     const canRead = (module: string): boolean =>
       tenantUser.isOwner ||
       (tenantUser.roleRef?.permissions.some((permission) => permission.module === module && permission.action === PermissionAction.READ) ?? false);
+
+    const permanentTasks = await prisma.task.findMany({
+      where: {
+        tenantId,
+        status: { in: [TaskStatus.TODO, TaskStatus.IN_PROGRESS] },
+        OR: [{ assignedToId: userId }, { assignedToId: null }],
+      },
+      orderBy: [{ priority: 'desc' }, { dueAt: 'asc' }, { createdAt: 'desc' }],
+      take: 30,
+    });
 
     const notifications = canRead('notifications')
       ? await prisma.notification.findMany({
@@ -131,6 +171,17 @@ export const TaskController = {
       : [];
 
     const tasks: TaskItem[] = [
+      ...permanentTasks.map((task): TaskItem => ({
+        id: `task:${task.id}`,
+        type: task.type,
+        title: task.title,
+        detail: task.detail,
+        priority: task.priority,
+        status: task.status,
+        dueAt: task.dueAt,
+        href: task.href ?? '/dashboard',
+        sourceId: task.id,
+      })),
       ...notifications.map((notification): TaskItem => ({
         id: `notification:${notification.id}`,
         type: 'NOTIFICATION',
@@ -201,14 +252,99 @@ export const TaskController = {
       data: tasks.slice(0, 30),
       meta: {
         total: tasks.length,
-        counts: tasks.reduce<Record<TaskType, number>>(
+        counts: tasks.reduce<Record<DashboardTaskType, number>>(
           (acc, task) => {
             acc[task.type] = (acc[task.type] ?? 0) + 1;
             return acc;
           },
-          { APPROVAL: 0, COLLECTION: 0, SERVICE: 0, NOTIFICATION: 0, CHECK: 0 },
+          { APPROVAL: 0, COLLECTION: 0, SERVICE: 0, NOTIFICATION: 0, CHECK: 0, AUTOMATION: 0, GENERAL: 0 },
         ),
       },
     });
+  },
+
+  async create(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const body = await readBody(c);
+    const title = readString(body, 'title');
+    if (!title) return c.json(new ValidationError('title zorunludur.').toJSON(), 400);
+
+    const assignedToId = readString(body, 'assignedToId') ?? userId;
+    const assignee = await prisma.tenantUser.findFirst({ where: { tenantId, userId: assignedToId, isActive: true }, select: { userId: true } });
+    if (!assignee) return c.json(new ValidationError('Atanacak kullanici bu tenant icinde bulunamadi.').toJSON(), 400);
+
+    const priority = isPriority(body.priority) ? body.priority : Priority.MEDIUM;
+    const type = isTaskType(body.type) ? body.type : TaskType.GENERAL;
+    const dueAtValue = readString(body, 'dueAt');
+    const dueAt = dueAtValue ? new Date(dueAtValue) : null;
+    if (dueAtValue && Number.isNaN(dueAt?.getTime())) return c.json(new ValidationError('dueAt gecersiz.').toJSON(), 400);
+
+    const task = await createTask(tenantId, {
+      title,
+      detail: readString(body, 'detail') ?? null,
+      type,
+      priority,
+      module: readString(body, 'module') ?? null,
+      href: readString(body, 'href') ?? null,
+      assignedToId,
+      createdById: userId,
+      dueAt,
+    });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'tasks',
+      entityType: EntityType.OTHER,
+      entityId: task.id,
+      action: AuditAction.CREATE,
+      newValues: { id: task.id, title: task.title, assignedToId: task.assignedToId },
+      ...getRequestMeta(c),
+    });
+
+    return c.json({ data: task }, 201);
+  },
+
+  async update(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const id = c.req.param('id')!;
+    const existing = await prisma.task.findFirst({ where: { id, tenantId } });
+    if (!existing) return c.json(new NotFoundError('Gorev', id).toJSON(), 404);
+
+    const body = await readBody(c);
+    const status = body.status;
+    if (status !== undefined && !isStatus(status)) return c.json(new ValidationError('status gecersiz.').toJSON(), 400);
+    const assignedToId = readString(body, 'assignedToId');
+    if (assignedToId) {
+      const assignee = await prisma.tenantUser.findFirst({ where: { tenantId, userId: assignedToId, isActive: true }, select: { userId: true } });
+      if (!assignee) return c.json(new ValidationError('Atanacak kullanici bu tenant icinde bulunamadi.').toJSON(), 400);
+    }
+
+    const updated = await prisma.task.update({
+      where: { id },
+      data: {
+        ...(readString(body, 'title') !== undefined && { title: readString(body, 'title') }),
+        ...(readString(body, 'detail') !== undefined && { detail: readString(body, 'detail') }),
+        ...(isPriority(body.priority) && { priority: body.priority }),
+        ...(status !== undefined && { status, completedAt: status === TaskStatus.DONE ? new Date() : null }),
+        ...(assignedToId !== undefined && { assignedToId }),
+      },
+    });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'tasks',
+      entityType: EntityType.OTHER,
+      entityId: id,
+      action: AuditAction.UPDATE,
+      oldValues: { status: existing.status, assignedToId: existing.assignedToId },
+      newValues: { status: updated.status, assignedToId: updated.assignedToId },
+      ...getRequestMeta(c),
+    });
+
+    return c.json({ data: updated });
   },
 };
