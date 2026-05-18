@@ -175,6 +175,9 @@ export async function deleteLocation(warehouseId: string, locationId: string): P
 
 const StockLevelListSchema = SingleResponseSchema(z.array(StockLevelSchema));
 const StockMovementListSchema = PaginatedResponseSchema(StockMovementSchema);
+const StockMovementCreateSchema = SingleResponseSchema(StockMovementSchema).extend({
+  meta: z.object({ warnings: z.array(z.string()) }).optional(),
+});
 const StockCountListSchema = SingleResponseSchema(z.array(StockCountSchema));
 
 export async function getStockLevels(params: StockLevelParams): Promise<StockLevel[]> {
@@ -187,9 +190,9 @@ export async function getStockMovements(params: StockMovementParams) {
   return safeParse(StockMovementListSchema, res.data, 'getStockMovements');
 }
 
-export async function createManualMovement(data: CreateManualMovementDTO) {
+export async function createManualMovement(data: CreateManualMovementDTO): Promise<z.infer<typeof StockMovementCreateSchema>> {
   const res = await apiClient.post('/api/stock/movements', data);
-  return res.data;
+  return safeParse(StockMovementCreateSchema, res.data, 'createManualMovement');
 }
 
 export async function getStockCounts(): Promise<StockCount[]> {

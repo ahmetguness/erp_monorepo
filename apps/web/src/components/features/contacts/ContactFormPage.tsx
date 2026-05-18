@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ArrowLeft, Tag, X, Save } from "lucide-react";
@@ -102,22 +102,24 @@ export function ContactFormPage({ editId }: Props) {
 
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
-  const [usePresetTerm, setUsePresetTerm] = useState(true);
+  const [paymentTermMode, setPaymentTermMode] = useState<"preset" | "custom" | null>(null);
 
   const {
     register,
     handleSubmit,
     reset,
     setValue,
-    watch,
+    control,
     formState: { errors, isDirty },
   } = useForm<ContactFormData>({
     resolver: zodResolver(contactSchema),
     defaultValues: { type: "CUSTOMER", country: "TR", paymentTermDays: "30" },
   });
 
-  const watchType = watch("type");
-  const watchPaymentTerm = watch("paymentTermDays");
+  const watchType = useWatch({ control, name: "type" });
+  const watchPaymentTerm = useWatch({ control, name: "paymentTermDays" });
+  const isPresetPaymentTerm = PAYMENT_TERM_PRESETS.some((p) => p.value === (watchPaymentTerm ?? ""));
+  const usePresetTerm = paymentTermMode ? paymentTermMode === "preset" : isPresetPaymentTerm;
 
   // Populate form when editing
   useEffect(() => {
@@ -126,8 +128,6 @@ export function ContactFormPage({ editId }: Props) {
         existing.paymentTermDays != null
           ? String(existing.paymentTermDays)
           : "";
-      const isPreset = PAYMENT_TERM_PRESETS.some((p) => p.value === termStr);
-      setUsePresetTerm(isPreset);
 
       reset({
         type: existing.type,
@@ -338,7 +338,7 @@ export function ContactFormPage({ editId }: Props) {
                       onChange={(e) => {
                         const v = e.target.value;
                         if (v === "") {
-                          setUsePresetTerm(false);
+                          setPaymentTermMode("custom");
                           setValue("paymentTermDays", "", {
                             shouldDirty: true,
                           });
@@ -359,7 +359,12 @@ export function ContactFormPage({ editId }: Props) {
                       />
                       <button
                         type="button"
-                        onClick={() => setUsePresetTerm(true)}
+                        onClick={() => {
+                          setPaymentTermMode("preset");
+                          if (!isPresetPaymentTerm) {
+                            setValue("paymentTermDays", "30", { shouldDirty: true });
+                          }
+                        }}
                         className="text-[10px] text-sky-400 hover:text-sky-300 mt-1"
                       >
                         Hazır seçeneklerden seç →

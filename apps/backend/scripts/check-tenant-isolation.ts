@@ -14,6 +14,8 @@ const rules: readonly ControllerRule[] = [
   { file: 'payment.controller.ts', delegates: ['payment', 'paymentAllocation', 'contact', 'invoice', 'bankAccount', 'cashAccount'] },
   { file: 'role.controller.ts', delegates: ['role', 'tenantUser'] },
   { file: 'attachment.controller.ts', delegates: ['attachment', 'invoice', 'product', 'category', 'contact', 'employee', 'customerAsset', 'serviceRequest', 'purchaseOrder', 'salesOrder', 'workOrder', 'deliveryNote'] },
+  { file: 'search.controller.ts', delegates: ['product', 'stockMovement', 'contact', 'invoice', 'salesOrder', 'purchaseOrder', 'payment', 'tenantUser'] },
+  { file: 'data-exchange.controller.ts', delegates: ['product', 'contact', 'stockLevel', 'invoice', 'tenantUser'] },
 ];
 
 const readOperations = ['findMany', 'findFirst', 'count'] as const;

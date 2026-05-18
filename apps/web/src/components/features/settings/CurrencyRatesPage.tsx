@@ -154,7 +154,7 @@ export function CurrencyRatesPage() {
 
   const { data, isLoading, refetch, isFetching, dataUpdatedAt } = useTcmbRates();
 
-  const currencies = data?.currencies ?? [];
+  const currencies = useMemo(() => data?.currencies ?? [], [data?.currencies]);
   const filtered = useMemo(() => {
     let list = tab === 'popular' ? currencies.filter((c) => POPULAR.includes(c.code)) : currencies;
     if (search) { const q = search.toLowerCase(); list = list.filter((c) => c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)); }

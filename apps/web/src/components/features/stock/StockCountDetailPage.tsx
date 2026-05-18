@@ -31,7 +31,7 @@ export function StockCountDetailPage({ id }: Props) {
   const [applyAdjustments, setApplyAdjustments] = useState(true);
   const [filter, setFilter] = useState<DiffFilter>('all');
 
-  const items = count?.items ?? [];
+  const items = useMemo(() => count?.items ?? [], [count?.items]);
 
   // Stats
   const stats = useMemo(() => {

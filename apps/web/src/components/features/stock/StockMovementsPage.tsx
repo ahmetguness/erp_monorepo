@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Plus, ArrowDownToLine, ArrowUpFromLine, RotateCcw, FolderOpen,
   Hash, StickyNote, Coins, Save, X,
 } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
@@ -65,14 +65,14 @@ export function StockMovementsPage() {
   const { data, isLoading } = useStockMovements({ page, limit: 20 });
   const createMovement = useCreateManualMovement();
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<ManualMovementForm>({
+  const { register, handleSubmit, reset, control, setValue, formState: { errors } } = useForm<ManualMovementForm>({
     resolver: zodResolver(manualMovementSchema),
     defaultValues: { type: 'IN' },
   });
 
-  const selectedType = watch('type');
-  const selectedProductId = watch('productId');
-  const selectedWarehouseId = watch('warehouseId');
+  const selectedType = useWatch({ control, name: 'type' });
+  const selectedProductId = useWatch({ control, name: 'productId' });
+  const selectedWarehouseId = useWatch({ control, name: 'warehouseId' });
 
   const onSubmit = (formData: ManualMovementForm) => {
     createMovement.mutate(

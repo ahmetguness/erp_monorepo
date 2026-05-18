@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -62,13 +62,13 @@ export function PurchaseRequestsPage() {
   const products = productsData?.data ?? [];
 
   const today = new Date().toISOString().split('T')[0];
-  const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<RequestForm>({
+  const { register, handleSubmit, control, reset, setValue, formState: { errors } } = useForm<RequestForm>({
     resolver: zodResolver(requestSchema),
     defaultValues: { date: today, items: [{ productId: '', quantity: '1', unitPrice: '' }] },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
-  const watchItems = watch('items');
-  const watchDate = watch('date');
+  const watchItems = useWatch({ control, name: 'items' }) ?? [];
+  const watchDate = useWatch({ control, name: 'date' });
 
   const closeModal = () => { setCreateOpen(false); reset({ date: today, items: [{ productId: '', quantity: '1', unitPrice: '' }] }); };
 

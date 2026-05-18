@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -75,7 +75,7 @@ export function InvoiceFormPage() {
 
   const today = new Date().toISOString().split('T')[0];
 
-  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<InvoiceForm>({
+  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<InvoiceForm>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       type: 'SALES', date: today,
@@ -84,11 +84,11 @@ export function InvoiceFormPage() {
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
-  const watchedLines = watch('lines');
-  const watchType = watch('type');
-  const watchContact = watch('contactId');
-  const watchDate = watch('date');
-  const watchDueDate = watch('dueDate');
+  const watchedLines = useWatch({ control, name: 'lines' }) ?? [];
+  const watchType = useWatch({ control, name: 'type' });
+  const watchContact = useWatch({ control, name: 'contactId' });
+  const watchDate = useWatch({ control, name: 'date' });
+  const watchDueDate = useWatch({ control, name: 'dueDate' });
 
   const selectedContact = contacts.find((c) => c.id === watchContact);
   const activeType = INVOICE_TYPES.find((t) => t.value === watchType) ?? INVOICE_TYPES[0];

@@ -42,6 +42,50 @@ interface FinalizeStockCountDTO {
   applyAdjustments: boolean;
 }
 
+type NegativeStockPolicy = 'ALLOW' | 'WARN' | 'BLOCK';
+
+const NEGATIVE_STOCK_POLICY_KEY = 'negative_stock_policy';
+const LEGACY_NEGATIVE_STOCK_KEY = 'negative_stock';
+
+function parseNegativeStockPolicy(value: string | null | undefined): NegativeStockPolicy | null {
+  if (value === 'ALLOW' || value === 'WARN' || value === 'BLOCK') return value;
+  if (value === 'true') return 'ALLOW';
+  if (value === 'false') return 'BLOCK';
+  return null;
+}
+
+async function getNegativeStockPolicy(tenantId: string): Promise<NegativeStockPolicy> {
+  const settings = await prisma.moduleSetting.findMany({
+    where: {
+      tenantId,
+      module: 'inventory',
+      key: { in: [NEGATIVE_STOCK_POLICY_KEY, LEGACY_NEGATIVE_STOCK_KEY] },
+    },
+    select: { key: true, value: true },
+  });
+
+  const policySetting = settings.find((setting) => setting.key === NEGATIVE_STOCK_POLICY_KEY);
+  const legacySetting = settings.find((setting) => setting.key === LEGACY_NEGATIVE_STOCK_KEY);
+  return parseNegativeStockPolicy(policySetting?.value) ?? parseNegativeStockPolicy(legacySetting?.value) ?? 'ALLOW';
+}
+
+async function getStockShortageWarning(
+  tenantId: string,
+  productId: string,
+  warehouseId: string,
+  quantity: number,
+): Promise<string | null> {
+  const stockLevel = await prisma.stockLevel.findFirst({
+    where: { tenantId, productId, warehouseId },
+    select: { quantity: true },
+  });
+  const currentQuantity = Number(stockLevel?.quantity ?? 0);
+  const nextQuantity = currentQuantity - quantity;
+
+  if (nextQuantity >= 0) return null;
+  return `Stok eksiye dusecek. Mevcut: ${currentQuantity.toFixed(3)}, cikis: ${quantity.toFixed(3)}.`;
+}
+
 // ─────────────────────────────────────────────
 // Stock Controller
 // StockMovement, StockLevel, StockCount
@@ -174,6 +218,15 @@ export const StockController = {
       return c.json(new ValidationError('Miktar 0\'dan büyük olmalıdır.').toJSON(), 400);
     }
 
+    const negativeStockPolicy = await getNegativeStockPolicy(tenantId);
+    const negativeStockWarning = body.type === MovementType.OUT
+      ? await getStockShortageWarning(tenantId, body.productId, body.warehouseId, body.quantity)
+      : null;
+
+    if (negativeStockPolicy === 'BLOCK' && negativeStockWarning) {
+      return c.json(new ValidationError(negativeStockWarning).toJSON(), 400);
+    }
+
     const movement = await prisma.$transaction(async (tx) => {
       const stockMovement = await tx.stockMovement.create({
         data: {
@@ -214,9 +267,22 @@ export const StockController = {
           update: { quantity: { increment: body.quantity } },
         });
       } else if (body.type === MovementType.OUT) {
-        await tx.stockLevel.updateMany({
-          where: { tenantId, productId: body.productId, warehouseId: body.warehouseId },
-          data: { quantity: { decrement: body.quantity } },
+        await tx.stockLevel.upsert({
+          where: {
+            productId_warehouseId_locationId: {
+              productId: body.productId,
+              warehouseId: body.warehouseId,
+              locationId: locId,
+            },
+          },
+          create: {
+            tenantId,
+            productId: body.productId,
+            warehouseId: body.warehouseId,
+            locationId: locId,
+            quantity: -body.quantity,
+          },
+          update: { quantity: { decrement: body.quantity } },
         });
       } else if (body.type === MovementType.ADJUSTMENT) {
         await tx.stockLevel.upsert({
@@ -258,7 +324,12 @@ export const StockController = {
       ...getRequestMeta(c),
     });
 
-    return c.json({ data: movement }, 201);
+    return c.json({
+      data: movement,
+      ...(negativeStockPolicy === 'WARN' && negativeStockWarning
+        ? { meta: { warnings: [negativeStockWarning] } }
+        : {}),
+    }, 201);
   },
 
   // ── Stock Counts ─────────────────────────────

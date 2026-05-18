@@ -51,6 +51,7 @@ const MODULE_KEY_META: Record<string, { label: string; description: string }> = 
   costing_method: { label: 'Maliyetlendirme Yöntemi', description: 'Stok maliyeti hesaplama yöntemi' },
   low_stock_alert: { label: 'Düşük Stok Uyarısı', description: 'Minimum stok altına düşünce uyarı' },
   negative_stock: { label: 'Negatif Stok', description: 'Stok eksiye düşebilsin mi' },
+  negative_stock_policy: { label: 'Negatif Stok Politikası', description: 'Stok çıkışı eksi bakiyeye düşerse uygulanacak davranış' },
   auto_invoice_number: { label: 'Otomatik Fatura Numarası', description: 'Fatura numarası otomatik oluşturulsun mu' },
   payment_terms: { label: 'Ödeme Vadesi', description: 'Varsayılan ödeme vadesi (gün)' },
   payment_terms_days: { label: 'Ödeme Vadesi (Gün)', description: 'Varsayılan ödeme vadesi' },
@@ -68,6 +69,12 @@ const MODULE_LABELS: Record<string, { label: string; icon: React.ReactNode }> = 
 };
 
 const LOGO_SETTING_KEYS = new Set(['company_logo', 'tenant_logo_storage_path']);
+const NEGATIVE_STOCK_POLICY_KEY = 'negative_stock_policy';
+const NEGATIVE_STOCK_POLICY_OPTIONS = [
+  { value: 'BLOCK', label: 'Engelle', description: 'Stok çıkışı eksi bakiyeye düşüyorsa işlem durdurulur.' },
+  { value: 'WARN', label: 'Uyar, izin ver', description: 'İşlem kaydedilir, fakat kullanıcıya stok uyarısı döner.' },
+  { value: 'ALLOW', label: 'İzin ver', description: 'Eski davranış korunur; eksi stok hareketine izin verilir.' },
+] as const;
 
 function humanizeKey(key: string): string {
   return key
@@ -84,6 +91,9 @@ function getModuleLabel(module: string): string {
 function getValueDisplay(key: string, value: string): string {
   if (value === 'true') return 'Açık';
   if (value === 'false') return 'Kapalı';
+  if (key === NEGATIVE_STOCK_POLICY_KEY) {
+    return NEGATIVE_STOCK_POLICY_OPTIONS.find((option) => option.value === value)?.label ?? value;
+  }
   if (key === 'costing_method') {
     const map: Record<string, string> = { MOVING_AVERAGE: 'Hareketli Ortalama', FIFO: 'İlk Giren İlk Çıkar', LIFO: 'Son Giren İlk Çıkar', STANDARD: 'Standart Maliyet' };
     return map[value] ?? value;
@@ -166,6 +176,10 @@ const KEY_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
     { value: 'true', label: 'Açık' },
     { value: 'false', label: 'Kapalı' },
   ],
+  negative_stock_policy: NEGATIVE_STOCK_POLICY_OPTIONS.map((option) => ({
+    value: option.value,
+    label: option.label,
+  })),
   fiscal_year_start: [
     { value: '01-01', label: '1 Ocak' },
     { value: '04-01', label: '1 Nisan' },
@@ -291,10 +305,14 @@ export function SettingsPage() {
   };
 
   const moduleGroups = moduleSettings.reduce<Record<string, ModuleSetting[]>>((acc, s) => {
+    if (s.module === 'inventory' && s.key === NEGATIVE_STOCK_POLICY_KEY) return acc;
     (acc[s.module] ??= []).push(s);
     return acc;
   }, {});
   const visibleTenantSettings = tenantSettings.filter((setting) => !LOGO_SETTING_KEYS.has(setting.key));
+  const negativeStockPolicy = moduleSettings.find(
+    (setting) => setting.module === 'inventory' && setting.key === NEGATIVE_STOCK_POLICY_KEY,
+  )?.value ?? 'ALLOW';
 
   return (
     <div className="space-y-5">
@@ -328,6 +346,46 @@ export function SettingsPage() {
           className="hidden"
           onChange={handleLogoChange}
         />
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-800/60">
+          <div className="p-2 rounded-lg bg-sky-500/10"><Package className="w-4 h-4 text-sky-400" /></div>
+          <div>
+            <h2 className="text-sm font-semibold text-white">Stok Politikası</h2>
+            <p className="text-xs text-slate-500">Eksi stok oluştuğunda uygulanacak envanter davranışı</p>
+          </div>
+          <span className="ml-auto text-xs font-medium text-sky-300 bg-sky-500/10 px-2.5 py-1 rounded-lg">
+            {getValueDisplay(NEGATIVE_STOCK_POLICY_KEY, negativeStockPolicy)}
+          </span>
+        </div>
+        <div className="grid gap-3 p-5 md:grid-cols-3">
+          {NEGATIVE_STOCK_POLICY_OPTIONS.map((option) => {
+            const selected = option.value === negativeStockPolicy;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                disabled={upsertModule.isPending}
+                onClick={() => upsertModule.mutate({
+                  module: 'inventory',
+                  key: NEGATIVE_STOCK_POLICY_KEY,
+                  value: option.value,
+                })}
+                className={cn(
+                  'min-h-24 rounded-xl border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                  selected
+                    ? 'border-sky-500/50 bg-sky-500/10 text-white'
+                    : 'border-slate-800 bg-slate-950/30 text-slate-300 hover:border-slate-700 hover:bg-slate-800/40',
+                )}
+              >
+                <span className="block text-sm font-semibold">{option.label}</span>
+                <span className="mt-2 block text-xs leading-5 text-slate-500">{option.description}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Tenant Settings ─────────────────────── */}

@@ -18,6 +18,7 @@ interface EntityImageManagerProps {
   description: string;
   maxSizeLabel?: string;
   disabled?: boolean;
+  variant?: 'inline' | 'avatar';
 }
 
 export function EntityImageManager({
@@ -27,6 +28,7 @@ export function EntityImageManager({
   description,
   maxSizeLabel,
   disabled = false,
+  variant = 'inline',
 }: EntityImageManagerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -140,6 +142,7 @@ export function EntityImageManager({
         onSelect={() => inputRef.current?.click()}
         onClearSelection={file ? clearSelection : undefined}
         onRemove={image ? removeImage : undefined}
+        variant={variant}
       />
       {file && (
         <button

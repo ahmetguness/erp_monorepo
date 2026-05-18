@@ -1,13 +1,14 @@
 import { Context } from 'hono';
 import { AuditAction, EntityType, ApprovalStatus, InvoiceStatus, PermissionAction, Priority, TaskStatus, TaskType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { getTenantPermissionContext } from '../lib/tenant-permissions';
 import { ForbiddenError, NotFoundError, ValidationError } from '../errors';
 import { createTask } from '../services/task.service.js';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-type DashboardTaskType = 'APPROVAL' | 'COLLECTION' | 'SERVICE' | 'NOTIFICATION' | 'CHECK' | 'AUTOMATION' | 'GENERAL';
+type DashboardTaskType = 'APPROVAL' | 'COLLECTION' | 'SERVICE' | 'NOTIFICATION' | 'CHECK' | 'AUTOMATION' | 'STOCK' | 'FISCAL' | 'GENERAL';
 
 interface TaskItem {
   id: string;
@@ -61,22 +62,14 @@ export const TaskController = {
     const now = new Date();
     const soon = new Date(now.getTime() + 7 * 86_400_000);
 
-    const tenantUser = await prisma.tenantUser.findFirst({
-      where: { tenantId, userId, isActive: true },
-      select: {
-        roleId: true,
-        isOwner: true,
-        roleRef: { select: { permissions: { select: { module: true, action: true } } } },
-      },
-    });
+    const tenantUser = await getTenantPermissionContext(tenantId, userId);
 
     if (!tenantUser) {
       return c.json(new ForbiddenError("Bu tenant'a erisiminiz yok.").toJSON(), 403);
     }
 
     const canRead = (module: string): boolean =>
-      tenantUser.isOwner ||
-      (tenantUser.roleRef?.permissions.some((permission) => permission.module === module && permission.action === PermissionAction.READ) ?? false);
+      tenantUser.can(PermissionAction.READ, module);
 
     const permanentTasks = await prisma.task.findMany({
       where: {
@@ -170,6 +163,30 @@ export const TaskController = {
         })
       : [];
 
+    const lowStockProducts = canRead('inventory')
+      ? await prisma.product.findMany({
+          where: { tenantId, deletedAt: null, isActive: true, minStockLevel: { gt: 0 } },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            minStockLevel: true,
+            stockLevels: { select: { quantity: true } },
+          },
+          orderBy: { updatedAt: 'desc' },
+          take: 100,
+        })
+      : [];
+
+    const openFiscalPeriods = canRead('accounting')
+      ? await prisma.fiscalPeriod.findMany({
+          where: { tenantId, status: 'OPEN', endDate: { lt: now } },
+          select: { id: true, name: true, startDate: true, endDate: true },
+          orderBy: { endDate: 'asc' },
+          take: 10,
+        })
+      : [];
+
     const tasks: TaskItem[] = [
       ...permanentTasks.map((task): TaskItem => ({
         id: `task:${task.id}`,
@@ -241,6 +258,33 @@ export const TaskController = {
         href: '/dashboard/check-promissory',
         sourceId: check.id,
       })),
+      ...lowStockProducts
+        .map((product) => {
+          const totalQuantity = product.stockLevels.reduce((total, level) => total + Number(level.quantity), 0);
+          return { product, totalQuantity, minStockLevel: Number(product.minStockLevel) };
+        })
+        .filter((item) => item.totalQuantity <= item.minStockLevel)
+        .slice(0, 10)
+        .map(({ product, totalQuantity, minStockLevel }): TaskItem => ({
+          id: `stock:${product.id}`,
+          type: 'STOCK',
+          title: `${product.code} dusuk stok`,
+          detail: `${product.name} - mevcut ${totalQuantity.toFixed(3)}, minimum ${minStockLevel.toFixed(3)}`,
+          priority: totalQuantity <= 0 ? 'CRITICAL' : 'HIGH',
+          dueAt: now,
+          href: `/dashboard/products/${product.id}`,
+          sourceId: product.id,
+        })),
+      ...openFiscalPeriods.map((period): TaskItem => ({
+        id: `fiscal:${period.id}`,
+        type: 'FISCAL',
+        title: `${period.name} donemi acik`,
+        detail: `${period.startDate.toISOString().slice(0, 10)} - ${period.endDate.toISOString().slice(0, 10)} kapanmamis`,
+        priority: 'MEDIUM',
+        dueAt: period.endDate,
+        href: '/dashboard/accounting/fiscal-periods',
+        sourceId: period.id,
+      })),
     ].sort((a, b) => {
       const rank: Record<TaskPriority, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
       const priorityDiff = rank[a.priority] - rank[b.priority];
@@ -257,7 +301,7 @@ export const TaskController = {
             acc[task.type] = (acc[task.type] ?? 0) + 1;
             return acc;
           },
-          { APPROVAL: 0, COLLECTION: 0, SERVICE: 0, NOTIFICATION: 0, CHECK: 0, AUTOMATION: 0, GENERAL: 0 },
+          { APPROVAL: 0, COLLECTION: 0, SERVICE: 0, NOTIFICATION: 0, CHECK: 0, AUTOMATION: 0, STOCK: 0, FISCAL: 0, GENERAL: 0 },
         ),
       },
     });

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -53,27 +53,21 @@ export function StockCountsPage() {
   const createCount = useCreateStockCount();
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedWarehouse, setSelectedWarehouse] = useState('');
-
-  const { data: levels = [] } = useStockLevels({ warehouseId: selectedWarehouse || undefined });
 
   const today = new Date().toISOString().split('T')[0];
 
-  const { register, handleSubmit, control, reset, setValue, watch, formState: { errors } } = useForm<NewCountForm>({
+  const { register, handleSubmit, control, reset, setValue, formState: { errors } } = useForm<NewCountForm>({
     resolver: zodResolver(newCountSchema),
     defaultValues: { warehouseId: '', date: today, notes: '', items: [] },
   });
 
   const { fields } = useFieldArray({ control, name: 'items' });
-  const watchWarehouse = watch('warehouseId');
-  const watchDate = watch('date');
+  const watchWarehouse = useWatch({ control, name: 'warehouseId' });
+  const watchDate = useWatch({ control, name: 'date' });
+  const watchedItems = useWatch({ control, name: 'items' }) ?? [];
+  const selectedWarehouse = watchWarehouse ?? '';
 
-  // When warehouse changes, load stock levels as items
-  useEffect(() => {
-    if (watchWarehouse) {
-      setSelectedWarehouse(watchWarehouse);
-    }
-  }, [watchWarehouse]);
+  const { data: levels = [] } = useStockLevels({ warehouseId: selectedWarehouse || undefined });
 
   useEffect(() => {
     if (levels.length > 0 && selectedWarehouse) {
@@ -90,7 +84,6 @@ export function StockCountsPage() {
 
   const closeModal = () => {
     setCreateOpen(false);
-    setSelectedWarehouse('');
     reset({ warehouseId: '', date: today, notes: '', items: [] });
   };
 
@@ -227,7 +220,7 @@ export function StockCountsPage() {
                 {/* Rows */}
                 <div className="divide-y divide-slate-800/40 max-h-80 overflow-y-auto">
                   {fields.map((field, idx) => {
-                    const counted = Number(watch(`items.${idx}.countedQty`) || 0);
+                    const counted = Number(watchedItems[idx]?.countedQty || 0);
                     const expected = field.expectedQty;
                     const diff = counted - expected;
                     const hasCounted = true;
@@ -290,12 +283,12 @@ export function StockCountsPage() {
           {fields.length > 0 && (() => {
             const filledCount = fields.length;
             const totalDiffPlus = fields.reduce((sum, f, i) => {
-              const c = Number(watch(`items.${i}.countedQty`) || 0);
+              const c = Number(watchedItems[i]?.countedQty || 0);
               const d = c - f.expectedQty;
               return d > 0 ? sum + d : sum;
             }, 0);
             const totalDiffMinus = fields.reduce((sum, f, i) => {
-              const c = Number(watch(`items.${i}.countedQty`) || 0);
+              const c = Number(watchedItems[i]?.countedQty || 0);
               const d = c - f.expectedQty;
               return d < 0 ? sum + d : sum;
             }, 0);

@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Paperclip, Upload, Trash2, Download, FileText, Image, File } from 'lucide-react';
-import { useAttachments, useUploadAttachment, useDeleteAttachment } from '@/hooks/useAttachments';
+import { Check, Download, File, FileText, Image as ImageIcon, Pencil, Paperclip, Trash2, Upload, X } from 'lucide-react';
+import { useAttachments, useUploadAttachment, useDeleteAttachment, useRenameAttachment } from '@/hooks/useAttachments';
 import { downloadAttachment, type Attachment } from '@/services/attachment.service';
 
 function fileIcon(mime: string | null) {
-  if (mime?.startsWith('image/')) return <Image className="w-4 h-4 text-violet-400" />;
+  if (mime?.startsWith('image/')) return <ImageIcon className="w-4 h-4 text-violet-400" />;
   if (mime?.includes('pdf')) return <FileText className="w-4 h-4 text-red-400" />;
   return <File className="w-4 h-4 text-slate-400" />;
 }
@@ -57,7 +57,7 @@ function AttachmentThumbnail({ attachment }: { attachment: Attachment }) {
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center">
-          <Image className="w-4 h-4 text-slate-600" />
+          <ImageIcon className="w-4 h-4 text-slate-600" />
         </div>
       )}
     </div>
@@ -69,6 +69,9 @@ export function AttachmentPanel({ entityType, entityId }: Props) {
   const { data: attachments = [], isLoading } = useAttachments(entityType, entityId);
   const upload = useUploadAttachment();
   const remove = useDeleteAttachment();
+  const rename = useRenameAttachment();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -82,6 +85,27 @@ export function AttachmentPanel({ entityType, entityId }: Props) {
     const a = document.createElement('a');
     a.href = url; a.download = fileName; a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const startRename = (attachment: Attachment) => {
+    setEditingId(attachment.id);
+    setEditingName(attachment.fileName);
+  };
+
+  const cancelRename = () => {
+    setEditingId(null);
+    setEditingName('');
+  };
+
+  const submitRename = async (attachment: Attachment) => {
+    const fileName = editingName.trim();
+    if (!fileName || fileName === attachment.fileName) {
+      cancelRename();
+      return;
+    }
+
+    await rename.mutateAsync({ id: attachment.id, fileName });
+    cancelRename();
   };
 
   return (
@@ -109,13 +133,52 @@ export function AttachmentPanel({ entityType, entityId }: Props) {
             <div key={a.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800/20 transition-colors group">
               {isImageAttachment(a) ? <AttachmentThumbnail attachment={a} /> : fileIcon(a.mimeType)}
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-slate-300 truncate">{a.fileName}</p>
+                {editingId === a.id ? (
+                  <form
+                    className="flex min-w-0 items-center gap-1"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void submitRename(a);
+                    }}
+                  >
+                    <input
+                      value={editingName}
+                      onChange={(event) => setEditingName(event.target.value)}
+                      autoFocus
+                      className="h-7 min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-950 px-2 text-xs text-slate-200 outline-none focus:border-sky-500/70"
+                    />
+                    <button
+                      type="submit"
+                      disabled={rename.isPending}
+                      aria-label="Dosya adini kaydet"
+                      className="p-1 rounded text-slate-500 hover:text-emerald-400 disabled:opacity-50"
+                    >
+                      <Check className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelRename}
+                      disabled={rename.isPending}
+                      aria-label="Vazgec"
+                      className="p-1 rounded text-slate-500 hover:text-slate-300 disabled:opacity-50"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </form>
+                ) : (
+                  <p className="text-xs text-slate-300 truncate">{a.fileName}</p>
+                )}
                 <p className="text-[10px] text-slate-600">{fmtSize(a.fileSize)}</p>
               </div>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+                <button onClick={() => startRename(a)}
+                  aria-label="Dosya adini degistir"
+                  className="p-1 rounded text-slate-600 hover:text-emerald-400"><Pencil className="w-3 h-3" /></button>
                 <button onClick={() => handleDownload(a.id, a.fileName)}
+                  aria-label="Dosyayi indir"
                   className="p-1 rounded text-slate-600 hover:text-sky-400"><Download className="w-3 h-3" /></button>
                 <button onClick={() => remove.mutate(a.id)}
+                  aria-label="Dosyayi sil"
                   className="p-1 rounded text-slate-600 hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
               </div>
             </div>

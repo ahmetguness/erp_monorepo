@@ -120,8 +120,13 @@ export function useCreateManualMovement() {
   const { toast } = useUIStore();
   return useMutation({
     mutationFn: (data: CreateManualMovementDTO) => createManualMovement(data),
-    onSuccess: () => {
+    onSuccess: (response) => {
       qc.invalidateQueries({ queryKey: ['stock'] });
+      const warning = response.meta?.warnings[0];
+      if (warning) {
+        toast.warning(warning);
+        return;
+      }
       toast.success('Stok hareketi oluşturuldu.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),

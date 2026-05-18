@@ -1,10 +1,18 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import {
+  ArrowLeft,
+  BriefcaseBusiness,
+  Building2,
+  CalendarDays,
+  Mail,
+  Phone,
+  Wallet,
+} from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
-import { EntityImage } from "@/components/shared/EntityImage";
 import { EntityImageManager } from "@/components/shared/EntityImageManager";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -16,129 +24,154 @@ const LEAVE_STATUS: Record<
   { label: string; variant: "neutral" | "success" | "warning" | "danger" }
 > = {
   PENDING: { label: "Bekliyor", variant: "warning" },
-  APPROVED: { label: "Onaylı", variant: "success" },
+  APPROVED: { label: "Onayli", variant: "success" },
   REJECTED: { label: "Reddedildi", variant: "danger" },
-  CANCELLED: { label: "İptal", variant: "neutral" },
+  CANCELLED: { label: "Iptal", variant: "neutral" },
 };
+
+function InfoTile({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-3">
+      <div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+        {icon}
+        {label}
+      </div>
+      <div className="truncate text-sm font-medium text-slate-100">{value}</div>
+    </div>
+  );
+}
+
+function EmptyPanel({ title }: { title: string }) {
+  return (
+    <div className="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 px-5 py-8 text-center text-xs text-slate-500">
+      {title}
+    </div>
+  );
+}
 
 export function EmployeeDetailPage({ id }: { id: string }) {
   const router = useRouter();
   const { data: emp, isLoading } = useEmployee(id);
 
-  if (isLoading)
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-sky-500 border-t-transparent" />
       </div>
     );
-  if (!emp)
+  }
+
+  if (!emp) {
     return (
-      <div className="text-center py-20 text-slate-400">
-        Personel bulunamadı.
+      <div className="py-20 text-center text-slate-400">
+        Personel bulunamadi.
       </div>
     );
+  }
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={`${emp.firstName} ${emp.lastName}`}
-        subtitle={[emp.position, emp.department].filter(Boolean).join(" — ")}
+        subtitle={[emp.position, emp.department].filter(Boolean).join(" - ")}
         action={
           <Button variant="ghost" size="sm" onClick={() => router.back()}>
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="h-4 w-4" />
             Geri
           </Button>
         }
       />
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-6">
-        <div className="flex items-center gap-4">
-          <EntityImage entityType="EMPLOYEE" entityId={id} className="w-20 h-20 rounded-xl shrink-0" />
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-white">Profil fotoğrafı</h2>
-            <p className="text-xs text-slate-500 mt-1">Personel kartları ve detay ekranlarında kullanılacak görsel.</p>
+      <section className="grid gap-6 lg:grid-cols-[300px_1fr]">
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-slate-500">Personel</p>
+              <h2 className="mt-1 truncate text-lg font-semibold text-white">
+                {emp.firstName} {emp.lastName}
+              </h2>
+            </div>
+            <Badge variant={emp.isActive ? "success" : "neutral"}>
+              {emp.isActive ? "Aktif" : "Pasif"}
+            </Badge>
           </div>
-        </div>
-        <div className="mt-4">
+
           <EntityImageManager
             entityType="EMPLOYEE"
             entityId={id}
-            label="Profil fotoğrafı"
-            description="Personel için tek ana görsel yükleyin, güncelleyin veya kaldırın."
+            label="Profil fotografi"
+            description=""
+            variant="avatar"
           />
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        {[
-          { label: "E-posta", value: emp.email ?? "—" },
-          { label: "Telefon", value: emp.phone ?? "—" },
-          { label: "İşe Giriş", value: formatDate(emp.hireDate) },
-          { label: "Maaş", value: formatCurrency(emp.salary) },
-        ].map((item) => (
-          <div
-            key={item.label}
-            className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3"
-          >
-            <div className="text-[10px] text-slate-500 mb-1">{item.label}</div>
-            <div className="text-sm text-white">{item.value}</div>
+        <div className="grid content-start gap-4 sm:grid-cols-2">
+          <InfoTile icon={<Mail className="h-3.5 w-3.5" />} label="E-posta" value={emp.email ?? "-"} />
+          <InfoTile icon={<Phone className="h-3.5 w-3.5" />} label="Telefon" value={emp.phone ?? "-"} />
+          <InfoTile icon={<CalendarDays className="h-3.5 w-3.5" />} label="Ise Giris" value={formatDate(emp.hireDate)} />
+          <InfoTile icon={<Wallet className="h-3.5 w-3.5" />} label="Maas" value={formatCurrency(emp.salary)} />
+          <InfoTile icon={<BriefcaseBusiness className="h-3.5 w-3.5" />} label="Pozisyon" value={emp.position ?? "-"} />
+          <InfoTile icon={<Building2 className="h-3.5 w-3.5" />} label="Departman" value={emp.department ?? "-"} />
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">Izin Talepleri</h3>
+            <Badge variant="neutral">{emp.leaveRequests?.length ?? 0}</Badge>
           </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Leave Requests */}
-        {emp.leaveRequests && emp.leaveRequests.length > 0 && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">
-              İzin Talepleri
-            </h3>
+          {emp.leaveRequests && emp.leaveRequests.length > 0 ? (
             <div className="space-y-3">
               {emp.leaveRequests.map((lr) => {
-                const ls = LEAVE_STATUS[lr.status];
+                const status = LEAVE_STATUS[lr.status];
                 return (
-                  <div
-                    key={lr.id}
-                    className="flex items-center justify-between"
-                  >
-                    <div>
+                  <div key={lr.id} className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
                       <span className="text-sm text-white">{lr.type}</span>
-                      <span className="block text-xs text-slate-500">
-                        {formatDate(lr.startDate)} — {formatDate(lr.endDate)} (
-                        {lr.days} gün)
+                      <span className="block truncate text-xs text-slate-500">
+                        {formatDate(lr.startDate)} - {formatDate(lr.endDate)} ({lr.days} gun)
                       </span>
                     </div>
-                    {ls && <Badge variant={ls.variant}>{ls.label}</Badge>}
+                    {status && <Badge variant={status.variant}>{status.label}</Badge>}
                   </div>
                 );
               })}
             </div>
-          </div>
-        )}
+          ) : (
+            <EmptyPanel title="Bu personel icin izin talebi yok." />
+          )}
+        </div>
 
-        {/* Payrolls */}
-        {emp.payrolls && emp.payrolls.length > 0 && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">
-              Bordro Geçmişi
-            </h3>
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">Bordro Gecmisi</h3>
+            <Badge variant="neutral">{emp.payrolls?.length ?? 0}</Badge>
+          </div>
+          {emp.payrolls && emp.payrolls.length > 0 ? (
             <div className="space-y-3">
-              {emp.payrolls.map((pr) => (
-                <div key={pr.id} className="flex items-center justify-between">
-                  <div>
-                    <span className="text-sm text-sky-400 font-mono">
-                      {pr.period}
-                    </span>
-                    <span className="block text-xs text-slate-500">
-                      Brüt: {formatCurrency(pr.grossSalary)}
+              {emp.payrolls.map((payroll) => (
+                <div key={payroll.id} className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <span className="font-mono text-sm text-sky-400">{payroll.period}</span>
+                    <span className="block truncate text-xs text-slate-500">
+                      Brut: {formatCurrency(payroll.grossSalary)}
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className="text-sm text-white font-medium">
-                      {formatCurrency(pr.netSalary)}
+                    <span className="block text-sm font-medium text-white">
+                      {formatCurrency(payroll.netSalary)}
                     </span>
-                    {pr.paidAt ? (
-                      <Badge variant="success">Ödendi</Badge>
+                    {payroll.paidAt ? (
+                      <Badge variant="success">Odendi</Badge>
                     ) : (
                       <Badge variant="warning">Bekliyor</Badge>
                     )}
@@ -146,13 +179,13 @@ export function EmployeeDetailPage({ id }: { id: string }) {
                 </div>
               ))}
             </div>
-          </div>
-        )}
-      </div>
+          ) : (
+            <EmptyPanel title="Bu personel icin bordro kaydi yok." />
+          )}
+        </div>
+      </section>
 
-      <div className="mt-6">
-        <AttachmentPanel entityType="EMPLOYEE" entityId={id} />
-      </div>
+      <AttachmentPanel entityType="EMPLOYEE" entityId={id} />
     </div>
   );
 }

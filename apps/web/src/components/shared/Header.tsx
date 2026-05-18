@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '@/store/ui.store';
 import { useCurrentUser, useLogout } from '@/hooks/useAuth';
 import { cn, initials } from '@/lib/utils';
+import { GlobalSearch } from './GlobalSearch';
 import { NotificationDropdown } from './NotificationDropdown';
 
 // ─────────────────────────────────────────────
@@ -83,8 +84,9 @@ export function Header() {
         <Menu className="w-5 h-5" />
       </button>
 
-      {/* Spacer */}
-      <div className="flex-1" />
+      <div className="flex-1">
+        <GlobalSearch />
+      </div>
 
       {/* Notifications */}
       <NotificationDropdown />

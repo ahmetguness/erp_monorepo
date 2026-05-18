@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -178,7 +178,7 @@ export function PaymentFormPage() {
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     formState: { errors },
   } = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
@@ -198,16 +198,16 @@ export function PaymentFormPage() {
     },
   });
 
-  const direction = watch("direction");
-  const contactId = watch("contactId");
-  const invoiceId = watch("invoiceId") ?? "";
-  const accountType = watch("accountType");
-  const method = watch("method");
-  const date = watch("date");
-  const amount = watch("amount");
-  const allocationAmount = watch("allocationAmount") ?? "";
-  const cashAccountId = watch("cashAccountId") ?? "";
-  const bankAccountId = watch("bankAccountId") ?? "";
+  const direction = useWatch({ control, name: "direction" });
+  const contactId = useWatch({ control, name: "contactId" });
+  const invoiceId = useWatch({ control, name: "invoiceId" }) ?? "";
+  const accountType = useWatch({ control, name: "accountType" });
+  const method = useWatch({ control, name: "method" });
+  const date = useWatch({ control, name: "date" });
+  const amount = useWatch({ control, name: "amount" });
+  const allocationAmount = useWatch({ control, name: "allocationAmount" }) ?? "";
+  const cashAccountId = useWatch({ control, name: "cashAccountId" }) ?? "";
+  const bankAccountId = useWatch({ control, name: "bankAccountId" }) ?? "";
   const invoiceType = invoiceTypeForDirection(direction);
 
   const { data: invoicesData } = useInvoices({

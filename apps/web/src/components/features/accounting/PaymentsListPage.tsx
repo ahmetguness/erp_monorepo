@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -152,7 +152,7 @@ export function PaymentsListPage() {
     register,
     handleSubmit,
     reset,
-    watch,
+    control,
     setValue,
     formState: { errors },
   } = useForm<PaymentForm>({
@@ -160,11 +160,12 @@ export function PaymentsListPage() {
     defaultValues: { method: "CASH", date: today, amount: "" },
   });
 
-  const selectedMethod = watch("method");
-  const selectedDate = watch("date");
-  const selectedContactId = watch("contactId") ?? "";
-  const selectedBankAccountId = watch("bankAccountId") ?? "";
-  const selectedCashAccountId = watch("cashAccountId") ?? "";
+  const selectedMethod = useWatch({ control, name: "method" });
+  const selectedDate = useWatch({ control, name: "date" });
+  const selectedContactId = useWatch({ control, name: "contactId" }) ?? "";
+  const selectedBankAccountId = useWatch({ control, name: "bankAccountId" }) ?? "";
+  const selectedCashAccountId = useWatch({ control, name: "cashAccountId" }) ?? "";
+  const selectedAmount = useWatch({ control, name: "amount" }) ?? "";
   const isBankMethod =
     selectedMethod === "BANK_TRANSFER" || selectedMethod === "CREDIT_CARD";
   const isCashMethod = selectedMethod === "CASH";
@@ -308,6 +309,7 @@ export function PaymentsListPage() {
 
   const activeMethod =
     METHODS.find((m) => m.value === selectedMethod) ?? METHODS[0];
+  const selectedContact = contacts.find((contact) => contact.id === selectedContactId);
 
   const STATUS_FILTERS = [
     {
@@ -687,17 +689,17 @@ export function PaymentsListPage() {
                 </span>{" "}
                 yöntemiyle ödeme
               </p>
-              {Number(watch("amount") || 0) > 0 && (
+              {Number(selectedAmount || 0) > 0 && (
                 <p className="text-lg font-bold text-white tabular-nums mt-0.5">
-                  {formatCurrency(Number(watch("amount")))}
+                  {formatCurrency(Number(selectedAmount))}
                 </p>
               )}
             </div>
-            {contacts.find((c) => c.id === watch("contactId")) && (
+            {selectedContact && (
               <div className="text-right">
                 <p className="text-[10px] text-slate-500">Cari</p>
                 <p className="text-xs text-slate-300 font-medium">
-                  {contacts.find((c) => c.id === watch("contactId"))?.name}
+                  {selectedContact.name}
                 </p>
               </div>
             )}

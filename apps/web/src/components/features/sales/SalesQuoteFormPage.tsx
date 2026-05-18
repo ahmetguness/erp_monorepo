@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -56,19 +57,27 @@ export function SalesQuoteFormPage() {
   const contacts = contactsData?.data ?? [];
   const products = productsData?.data ?? [];
 
-  const today = new Date().toISOString().split('T')[0];
-  const defaultValid = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+  const [defaultDates] = useState(() => {
+    const today = new Date();
+    const validUntil = new Date(today);
+    validUntil.setDate(validUntil.getDate() + 30);
 
-  const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm<QuoteForm>({
+    return {
+      today: today.toISOString().split('T')[0],
+      validUntil: validUntil.toISOString().split('T')[0],
+    };
+  });
+
+  const { register, handleSubmit, control, setValue, formState: { errors } } = useForm<QuoteForm>({
     resolver: zodResolver(quoteSchema),
-    defaultValues: { contactId: '', date: today, validUntil: defaultValid, notes: '', items: [{ productId: '', quantity: '1', unitPrice: '0', discount: '0', taxRate: '0' }] },
+    defaultValues: { contactId: '', date: defaultDates.today, validUntil: defaultDates.validUntil, notes: '', items: [{ productId: '', quantity: '1', unitPrice: '0', discount: '0', taxRate: '0' }] },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
-  const watchItems = watch('items');
-  const watchContact = watch('contactId');
-  const watchDate = watch('date');
-  const watchValidUntil = watch('validUntil');
+  const watchItems = useWatch({ control, name: 'items' }) ?? [];
+  const watchContact = useWatch({ control, name: 'contactId' });
+  const watchDate = useWatch({ control, name: 'date' });
+  const watchValidUntil = useWatch({ control, name: 'validUntil' });
 
   const handleProductChange = (idx: number, productId: string) => {
     setValue(`items.${idx}.productId`, productId);

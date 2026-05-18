@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -126,7 +126,7 @@ export function LedgerAccountsPage() {
     register,
     handleSubmit,
     reset,
-    watch,
+    control,
     setValue,
     formState: { errors },
   } = useForm<FormData>({
@@ -134,7 +134,7 @@ export function LedgerAccountsPage() {
     defaultValues: { type: "ASSET" },
   });
 
-  const selectedType = watch("type");
+  const selectedType = useWatch({ control, name: "type" });
 
   const parentOptions = [
     { value: "", label: "— Üst hesap yok —" },

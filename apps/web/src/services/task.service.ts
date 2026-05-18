@@ -27,6 +27,46 @@ export const TaskSchema = z.object({
 export type Task = z.infer<typeof TaskSchema>;
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED';
 
+export const WorkflowTaskSchema = z.object({
+  id: z.string(),
+  type: z.enum(['APPROVAL', 'COLLECTION', 'SERVICE', 'NOTIFICATION', 'CHECK', 'AUTOMATION', 'STOCK', 'FISCAL', 'GENERAL']),
+  title: z.string(),
+  detail: z.string().nullable(),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
+  status: z.enum(['TODO', 'IN_PROGRESS', 'DONE', 'CANCELLED']).optional(),
+  dueAt: z.string().nullable(),
+  href: z.string(),
+  sourceId: z.string(),
+});
+
+export const WorkflowCountsSchema = z.object({
+  APPROVAL: z.coerce.number(),
+  COLLECTION: z.coerce.number(),
+  SERVICE: z.coerce.number(),
+  NOTIFICATION: z.coerce.number(),
+  CHECK: z.coerce.number(),
+  AUTOMATION: z.coerce.number(),
+  STOCK: z.coerce.number(),
+  FISCAL: z.coerce.number(),
+  GENERAL: z.coerce.number(),
+});
+
+const WorkflowResponseSchema = z.object({
+  data: z.array(WorkflowTaskSchema),
+  meta: z.object({
+    total: z.coerce.number(),
+    counts: WorkflowCountsSchema,
+  }),
+});
+
+export type WorkflowTask = z.infer<typeof WorkflowTaskSchema>;
+export type WorkflowCounts = z.infer<typeof WorkflowCountsSchema>;
+
+export async function getWorkflowTasks(): Promise<{ data: WorkflowTask[]; meta: { total: number; counts: WorkflowCounts } }> {
+  const res = await apiClient.get('/api/tasks');
+  return safeParse(WorkflowResponseSchema, res.data, 'getWorkflowTasks');
+}
+
 export async function updateTaskStatus(id: string, status: TaskStatus): Promise<Task> {
   const res = await apiClient.patch(`/api/tasks/${id}`, { status });
   return safeParse(SingleResponseSchema(TaskSchema), res.data, 'updateTaskStatus').data;

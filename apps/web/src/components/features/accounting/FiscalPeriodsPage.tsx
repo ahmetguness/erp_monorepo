@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -264,13 +264,13 @@ export function FiscalPeriodsPage() {
     register,
     handleSubmit,
     reset,
-    watch,
+    control,
     setValue,
     formState: { errors },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
-  const watchStart = watch("startDate");
-  const watchEnd = watch("endDate");
+  const watchStart = useWatch({ control, name: "startDate" });
+  const watchEnd = useWatch({ control, name: "endDate" });
 
   // Check overlap with existing periods
   const { hasOverlap, overlapPeriod } = useMemo(() => {

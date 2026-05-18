@@ -17,6 +17,7 @@ interface ImageUploadBoxProps {
   onSelect: () => void;
   onClearSelection?: () => void;
   onRemove?: () => void;
+  variant?: 'inline' | 'avatar';
 }
 
 function getStatusLabel(status: ImageUploadStatus, hasImage: boolean, fileName?: string | null): string {
@@ -41,10 +42,96 @@ export function ImageUploadBox({
   onSelect,
   onClearSelection,
   onRemove,
+  variant = 'inline',
 }: ImageUploadBoxProps) {
   const isBusy = status === 'uploading' || status === 'removing';
   const canRemove = hasImage && !!onRemove;
   const canClearSelection = !!fileName && !!onClearSelection;
+
+  if (variant === 'avatar') {
+    return (
+      <div className="rounded-xl border border-slate-800 bg-slate-950/30 p-3">
+        <div
+          className={cn(
+            'relative aspect-square w-full rounded-xl border flex items-center justify-center overflow-hidden',
+            status === 'uploaded' ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-slate-800 bg-slate-950',
+          )}
+        >
+          {previewUrl ? (
+            <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url("${previewUrl}")` }} />
+          ) : (
+            <div className="flex flex-col items-center gap-2 text-slate-600">
+              <ImageIcon className="h-8 w-8" />
+              <span className="text-xs">Gorsel yok</span>
+            </div>
+          )}
+          {isBusy && (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/75">
+              <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
+            </div>
+          )}
+          {status === 'uploaded' && (
+            <div className="absolute right-2 top-2 rounded-full bg-emerald-500/90 p-1">
+              <CheckCircle2 className="h-4 w-4 text-white" />
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p
+            className={cn(
+              'min-w-0 truncate text-xs',
+              status === 'error' ? 'text-red-400' : status === 'selected' ? 'text-sky-400' : 'text-slate-500',
+            )}
+          >
+            {getStatusLabel(status, hasImage, fileName)}
+          </p>
+          <span className="shrink-0 text-[10px] text-slate-600">{maxSizeLabel}</span>
+        </div>
+
+        {isBusy && (
+          <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-800">
+            <div className="h-full w-1/2 animate-pulse rounded-full bg-sky-400" />
+          </div>
+        )}
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onSelect}
+            disabled={disabled || isBusy}
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-sky-500/20 bg-sky-500/10 px-2.5 text-xs font-medium text-sky-400 transition-colors hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {hasImage ? 'Guncelle' : 'Sec'}
+          </button>
+          {canRemove ? (
+            <button
+              type="button"
+              onClick={onRemove}
+              disabled={disabled || isBusy}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Kaldir
+            </button>
+          ) : canClearSelection ? (
+            <button
+              type="button"
+              onClick={onClearSelection}
+              disabled={disabled || isBusy}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <X className="h-3.5 w-3.5" />
+              Vazgec
+            </button>
+          ) : (
+            <div />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950/30 p-3">

@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
@@ -138,9 +138,8 @@ export function JournalEntriesPage() {
 
   const {
     register,
-    control,
     handleSubmit,
-    watch,
+    control,
     setValue,
     reset,
     formState: { errors },
@@ -156,8 +155,8 @@ export function JournalEntriesPage() {
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
-  const watchedLines = watch("lines");
-  const watchedDate = watch("date");
+  const watchedLines = useWatch({ control, name: "lines" }) ?? [];
+  const watchedDate = useWatch({ control, name: "date" });
 
   const totalDebit = watchedLines.reduce(
     (s, l) => s + (Number(l.debit) || 0),
@@ -778,9 +777,8 @@ function EditJournalEntryModal({
 
   const {
     register,
-    control,
     handleSubmit,
-    watch,
+    control,
     setValue,
     formState: { errors },
   } = useForm<EditForm>({
@@ -801,8 +799,8 @@ function EditJournalEntryModal({
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
-  const watchedLines = watch("lines");
-  const watchedDate = watch("date");
+  const watchedLines = useWatch({ control, name: "lines" }) ?? [];
+  const watchedDate = useWatch({ control, name: "date" });
 
   const totalDebit = watchedLines.reduce(
     (s, l) => s + (Number(l.debit) || 0),
