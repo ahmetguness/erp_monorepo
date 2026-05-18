@@ -405,7 +405,7 @@ export function InvoiceFormPage() {
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
                 <p className="text-xs font-semibold text-slate-400 mb-2">💡 İpuçları</p>
                 <ul className="space-y-1.5 text-[11px] text-slate-500 leading-relaxed">
-                  <li>• "Hızlı doldur" ile ürün seçerek otomatik doldurun</li>
+                  <li>• &quot;Hızlı doldur&quot; ile ürün seçerek otomatik doldurun</li>
                   <li>• KDV oranı kalem bazında seçilebilir</li>
                   <li>• Vade tarihi ödeme takibi için önemlidir</li>
                 </ul>

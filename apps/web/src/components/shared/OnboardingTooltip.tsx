@@ -164,7 +164,9 @@ export function OnboardingTooltip() {
   useEffect(() => {
     if (!user?.id) return;
     const done = localStorage.getItem(`${STORAGE_KEY_PREFIX}${user.id}`);
-    if (!done) setVisible(true);
+    if (done) return;
+    const timeout = window.setTimeout(() => setVisible(true), 0);
+    return () => window.clearTimeout(timeout);
   }, [user?.id]);
 
   function dismiss() {

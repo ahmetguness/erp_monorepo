@@ -21,30 +21,31 @@ interface EntityImageProps {
 export function EntityImage({ entityType, entityId, className, fallback = 'image', fallbackContent }: EntityImageProps) {
   const { data: attachments = [] } = useAttachments(entityType, entityId);
   const image = attachments.find(isImageAttachment);
-  const [url, setUrl] = useState<string | null>(null);
+  const imageId = image?.id;
+  const [imageUrl, setImageUrl] = useState<{ imageId: string; url: string } | null>(null);
+  const url = imageId && imageUrl?.imageId === imageId ? imageUrl.url : null;
 
   useEffect(() => {
     let objectUrl: string | null = null;
     let mounted = true;
 
-    setUrl(null);
-    if (!image) return undefined;
+    if (!imageId) return undefined;
 
-    downloadAttachment(image.id)
+    downloadAttachment(imageId)
       .then((blob) => {
         if (!mounted) return;
         objectUrl = URL.createObjectURL(blob);
-        setUrl(objectUrl);
+        setImageUrl({ imageId, url: objectUrl });
       })
       .catch(() => {
-        if (mounted) setUrl(null);
+        if (mounted) setImageUrl(null);
       });
 
     return () => {
       mounted = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [image?.id]);
+  }, [imageId]);
 
   return (
     <div className={cn('bg-slate-950 border border-slate-800 flex items-center justify-center overflow-hidden', className)}>

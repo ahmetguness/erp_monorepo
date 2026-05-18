@@ -30,8 +30,11 @@ function SetPasswordContent() {
   const token = searchParams.get('token') || '';
   const email = searchParams.get('email') || '';
 
-  const [status, setStatus] = useState<Status>('validating');
-  const [errorMsg, setErrorMsg] = useState('');
+  const hasPasswordParams = Boolean(token && email);
+  const [status, setStatus] = useState<Status>(hasPasswordParams ? 'validating' : 'error');
+  const [errorMsg, setErrorMsg] = useState(
+    hasPasswordParams ? '' : 'Geçersiz link. Lütfen e-postanızdaki linke tekrar tıklayın.',
+  );
   const [userName, setUserName] = useState('');
 
   const [password, setPassword] = useState('');
@@ -42,11 +45,7 @@ function SetPasswordContent() {
 
   // Token doğrulama
   useEffect(() => {
-    if (!token || !email) {
-      setStatus('error');
-      setErrorMsg('Geçersiz link. Lütfen e-postanızdaki linke tekrar tıklayın.');
-      return;
-    }
+    if (!token || !email) return;
 
     axios
       .post(`${API_URL}/api/public/set-password/validate`, { token, email })

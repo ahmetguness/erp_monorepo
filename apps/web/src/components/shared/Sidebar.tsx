@@ -104,14 +104,14 @@ interface NavItemProps {
 function NavItemRow({ item, tenantPlan, tenantModules, depth = 0 }: NavItemProps) {
   const pathname = usePathname();
 
-  if (!hasAccess(tenantPlan, tenantModules, item)) return null;
-
   const visibleChildren = item.children?.filter((c) => hasAccess(tenantPlan, tenantModules, c));
 
   const [open, setOpen] = useState(() => {
     if (!visibleChildren) return false;
     return visibleChildren.some((c) => isPathMatch(pathname, c.href));
   });
+
+  if (!hasAccess(tenantPlan, tenantModules, item)) return null;
 
   const isActive = visibleChildren
     ? visibleChildren.some((c) => isPathMatch(pathname, c.href))

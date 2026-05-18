@@ -2,14 +2,16 @@
 
 import { useAuthStore } from '@/store/auth.store';
 import { FlaskConical, Clock } from 'lucide-react';
+import { useState } from 'react';
 
 export function DemoBanner() {
   const tenant = useAuthStore((s) => s.tenant);
+  const [now] = useState(() => Date.now());
 
   if (!tenant || tenant.status !== 'TRIAL') return null;
 
   const daysLeft = tenant.trialEndsAt
-    ? Math.max(0, Math.ceil((new Date(tenant.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    ? Math.max(0, Math.ceil((new Date(tenant.trialEndsAt).getTime() - now) / (1000 * 60 * 60 * 24)))
     : null;
 
   return (

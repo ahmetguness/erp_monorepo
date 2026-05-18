@@ -33,42 +33,32 @@ export function EntityImageManager({
   const { toast } = useUIStore();
   const { data: attachments = [] } = useAttachments(entityType, entityId);
   const image = useMemo(() => attachments.find(isImageAttachment) ?? null, [attachments]);
+  const imageId = image?.id;
 
   const [file, setFile] = useState<File | null>(null);
   const [selectedPreviewUrl, setSelectedPreviewUrl] = useState<string | null>(null);
-  const [storedPreviewUrl, setStoredPreviewUrl] = useState<string | null>(null);
+  const [storedPreviewUrl, setStoredPreviewUrl] = useState<{ imageId: string; url: string } | null>(null);
   const [status, setStatus] = useState<ImageUploadStatus>('idle');
 
-  const previewUrl = selectedPreviewUrl ?? storedPreviewUrl;
+  const previewUrl = selectedPreviewUrl ?? (imageId && storedPreviewUrl?.imageId === imageId ? storedPreviewUrl.url : null);
   const hasImage = !!file || !!image;
   const isBusy = status === 'uploading' || status === 'removing';
 
-  useEffect(() => {
-    if (!file) {
-      setSelectedPreviewUrl(null);
-      return undefined;
-    }
-
-    const objectUrl = URL.createObjectURL(file);
-    setSelectedPreviewUrl(objectUrl);
-    setStatus('selected');
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [file]);
+  useEffect(() => () => {
+    if (selectedPreviewUrl) URL.revokeObjectURL(selectedPreviewUrl);
+  }, [selectedPreviewUrl]);
 
   useEffect(() => {
-    if (!image || file) {
-      if (!image) setStoredPreviewUrl(null);
-      return undefined;
-    }
+    if (!imageId || file) return undefined;
 
     let mounted = true;
     let objectUrl: string | null = null;
 
-    downloadAttachment(image.id)
+    downloadAttachment(imageId)
       .then((blob) => {
         if (!mounted) return;
         objectUrl = URL.createObjectURL(blob);
-        setStoredPreviewUrl(objectUrl);
+        setStoredPreviewUrl({ imageId, url: objectUrl });
       })
       .catch(() => {
         if (mounted) setStoredPreviewUrl(null);
@@ -78,7 +68,7 @@ export function EntityImageManager({
       mounted = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [image, file]);
+  }, [imageId, file]);
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: ['attachments', entityType, entityId] });
@@ -86,12 +76,17 @@ export function EntityImageManager({
 
   const handleSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const nextFile = event.target.files?.[0] ?? null;
+    if (selectedPreviewUrl) URL.revokeObjectURL(selectedPreviewUrl);
     setFile(nextFile);
+    setSelectedPreviewUrl(nextFile ? URL.createObjectURL(nextFile) : null);
+    setStatus(nextFile ? 'selected' : 'idle');
     if (inputRef.current) inputRef.current.value = '';
   };
 
   const clearSelection = () => {
+    if (selectedPreviewUrl) URL.revokeObjectURL(selectedPreviewUrl);
     setFile(null);
+    setSelectedPreviewUrl(null);
     setStatus('idle');
   };
 
@@ -103,7 +98,9 @@ export function EntityImageManager({
       await uploadAttachment(entityType, entityId, file);
       if (image) await deleteAttachment(image.id);
       await invalidate();
+      if (selectedPreviewUrl) URL.revokeObjectURL(selectedPreviewUrl);
       setFile(null);
+      setSelectedPreviewUrl(null);
       setStatus('uploaded');
       toast.success(`${label} yüklendi.`);
     } catch {

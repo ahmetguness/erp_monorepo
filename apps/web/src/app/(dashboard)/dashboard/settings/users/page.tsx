@@ -30,6 +30,7 @@ export default function UsersAndInvitesPage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [now] = useState(() => Date.now());
 
   const { data: users = [], isLoading: usersLoading } = useTenantUsers();
   const { data: rolesData } = useRoles({ page: 1, limit: 50 });
@@ -141,8 +142,8 @@ export default function UsersAndInvitesPage() {
                 <div className="flex-1">
                   <p className="text-sm text-slate-200">{inv.email}</p>
                   <p className="text-xs text-slate-500">
-                    {new Date(inv.expiresAt) > new Date()
-                      ? `${Math.ceil((new Date(inv.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60))} saat kaldı`
+                    {new Date(inv.expiresAt).getTime() > now
+                      ? `${Math.ceil((new Date(inv.expiresAt).getTime() - now) / (1000 * 60 * 60))} saat kaldı`
                       : 'Süresi doldu'}
                   </p>
                 </div>

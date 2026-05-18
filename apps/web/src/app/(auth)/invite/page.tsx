@@ -30,8 +30,9 @@ function InviteContent() {
   const token = searchParams.get('token') || '';
   const email = searchParams.get('email') || '';
 
-  const [status, setStatus] = useState<Status>('validating');
-  const [errorMsg, setErrorMsg] = useState('');
+  const hasInviteParams = Boolean(token && email);
+  const [status, setStatus] = useState<Status>(hasInviteParams ? 'validating' : 'error');
+  const [errorMsg, setErrorMsg] = useState(hasInviteParams ? '' : 'Geçersiz davet linki.');
   const [tenantName, setTenantName] = useState('');
 
   const [name, setName] = useState('');
@@ -41,11 +42,7 @@ function InviteContent() {
   const [formError, setFormError] = useState('');
 
   useEffect(() => {
-    if (!token || !email) {
-      setStatus('error');
-      setErrorMsg('Geçersiz davet linki.');
-      return;
-    }
+    if (!token || !email) return;
     axios
       .post(`${API_URL}/api/public/invitations/validate`, { token, email })
       .then((res) => {

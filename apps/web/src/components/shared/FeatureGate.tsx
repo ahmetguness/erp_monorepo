@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { usePlanFeatures, type PlanFeatures } from '@/hooks/usePlanFeatures';
 import { useAuthStore } from '@/store/auth.store';
 import { Lock } from 'lucide-react';
@@ -23,14 +22,8 @@ const PLAN_RANK: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPR
 export function FeatureGate({ feature, plan, children, fallback }: FeatureGateProps) {
   const features = usePlanFeatures();
   const tenant = useAuthStore((s) => s.tenant);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
-
   // Store henüz hydrate olmadıysa loading göster, upgrade mesajı değil
-  if (!hydrated || tenant === null) {
+  if (tenant === null) {
     return null;
   }
 
@@ -39,7 +32,7 @@ export function FeatureGate({ feature, plan, children, fallback }: FeatureGatePr
   // 1. Önce Feature kontrolü yap. Eğer feature belirtilmişse ve yetki varsa, plan'ı bypass et.
   if (feature) {
     const flags = Array.isArray(feature) ? feature : [feature];
-    const hasAccess = flags.some((f) => features[f] as boolean);
+    const hasAccess = flags.some((f) => Boolean(features[f]));
     if (!hasAccess) {
       return <>{fallback ?? <UpgradeMessage requiredPlan={plan ?? 'PROFESSIONAL'} />}</>;
     }
@@ -76,3 +69,4 @@ function UpgradeMessage({ requiredPlan }: { requiredPlan: string }) {
     </div>
   );
 }
+

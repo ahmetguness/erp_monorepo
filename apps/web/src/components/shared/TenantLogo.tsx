@@ -12,17 +12,21 @@ interface TenantLogoProps {
 
 export function TenantLogo({ className, fallbackClassName }: TenantLogoProps) {
   const { data: logoBlob } = useTenantLogo();
-  const [url, setUrl] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<{ blob: Blob; url: string } | null>(null);
+  const url = logoBlob && logoUrl?.blob === logoBlob ? logoUrl.url : null;
 
   useEffect(() => {
-    if (!logoBlob) {
-      setUrl(null);
-      return undefined;
-    }
+    if (!logoBlob) return undefined;
 
     const objectUrl = URL.createObjectURL(logoBlob);
-    setUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
+    let active = true;
+    queueMicrotask(() => {
+      if (active) setLogoUrl({ blob: logoBlob, url: objectUrl });
+    });
+    return () => {
+      active = false;
+      URL.revokeObjectURL(objectUrl);
+    };
   }, [logoBlob]);
 
   return (
