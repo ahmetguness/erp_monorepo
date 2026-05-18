@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Image, Package } from 'lucide-react';
+import { Image as ImageIcon, Package } from 'lucide-react';
 import { useAttachments } from '@/hooks/useAttachments';
 import { downloadAttachment, type Attachment } from '@/services/attachment.service';
 import { cn } from '@/lib/utils';
@@ -56,7 +56,7 @@ export function EntityImage({ entityType, entityId, className, fallback = 'image
       ) : fallback === 'package' ? (
         <Package className="w-4 h-4 text-slate-600" />
       ) : fallback === 'image' ? (
-        <Image className="w-4 h-4 text-slate-600" />
+        <ImageIcon className="w-4 h-4 text-slate-600" />
       ) : null}
     </div>
   );

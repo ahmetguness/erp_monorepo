@@ -1,30 +1,60 @@
--- Migration: add_plan_features_and_user_pricing
--- Changes:
---   1. Tenant.maxUsers: NOT NULL DEFAULT 3 -> nullable (drop default + drop not null)
---   2. Tenant.userPrice: new nullable Decimal(10,2) column
---   3. PlanFeature: new table for plan-based feature management
+-- Historical compatibility migration.
+--
+-- This repository later introduced 20260403134435_add_plan_features_and_user_pricing,
+-- which creates the full multi-tenant schema from scratch. On a clean shadow
+-- database, this earlier migration runs before the tenants table and Plan enum
+-- exist, so it must be a no-op in that case. On older local databases where
+-- tenants already exists, keep the original intent idempotent and guarded.
 
--- 1. Make maxUsers nullable (remove default and not-null constraint)
-ALTER TABLE "tenants" ALTER COLUMN "max_users" DROP DEFAULT;
-ALTER TABLE "tenants" ALTER COLUMN "max_users" DROP NOT NULL;
+DO $$
+BEGIN
+  IF to_regclass('public.tenants') IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'tenants'
+        AND column_name = 'max_users'
+    ) THEN
+      ALTER TABLE "tenants" ALTER COLUMN "max_users" DROP DEFAULT;
+      ALTER TABLE "tenants" ALTER COLUMN "max_users" DROP NOT NULL;
+    END IF;
 
--- 2. Add userPrice column
-ALTER TABLE "tenants" ADD COLUMN "user_price" DECIMAL(10,2);
+    IF EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'tenants'
+        AND column_name = 'maxUsers'
+    ) THEN
+      ALTER TABLE "tenants" ALTER COLUMN "maxUsers" DROP DEFAULT;
+      ALTER TABLE "tenants" ALTER COLUMN "maxUsers" DROP NOT NULL;
+    END IF;
 
--- 3. Create plan_features table
-CREATE TABLE "plan_features" (
-    "id"         TEXT NOT NULL,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-    "plan"        "Plan" NOT NULL,
-    "key"         TEXT NOT NULL,
-    "value"       TEXT NOT NULL,
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'tenants'
+        AND column_name IN ('user_price', 'userPrice')
+    ) THEN
+      ALTER TABLE "tenants" ADD COLUMN "userPrice" DECIMAL(10,2);
+    END IF;
+  END IF;
 
-    CONSTRAINT "plan_features_pkey" PRIMARY KEY ("id")
-);
+  IF to_regtype('public."Plan"') IS NOT NULL
+     AND to_regclass('public.plan_features') IS NULL THEN
+    CREATE TABLE "plan_features" (
+      "id" TEXT NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      "plan" "Plan" NOT NULL,
+      "key" TEXT NOT NULL,
+      "value" TEXT NOT NULL,
+      CONSTRAINT "plan_features_pkey" PRIMARY KEY ("id")
+    );
 
--- 4. Unique constraint on (plan, key)
-CREATE UNIQUE INDEX "plan_features_plan_key_key" ON "plan_features"("plan", "key");
-
--- 5. Index on plan
-CREATE INDEX "plan_features_plan_idx" ON "plan_features"("plan");
+    CREATE UNIQUE INDEX "plan_features_plan_key_key" ON "plan_features"("plan", "key");
+    CREATE INDEX "plan_features_plan_idx" ON "plan_features"("plan");
+  END IF;
+END $$;
