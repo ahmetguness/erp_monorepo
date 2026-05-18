@@ -14,9 +14,15 @@ export interface SendMailDTO {
   to: string | string[];
   subject: string;
   html: string;
+  from?: string;
   replyTo?: string;
   cc?: string | string[];
   bcc?: string | string[];
+  attachments?: Array<{
+    filename: string;
+    content: string;
+    contentType?: string;
+  }>;
 }
 
 export interface WelcomeMailDTO { to: string; name: string }

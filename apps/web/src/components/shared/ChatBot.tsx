@@ -72,7 +72,7 @@ function useSmoothStream() {
 
 const QUICK_ACTIONS = [
   { label: 'Aksiyon merkezi', message: 'Bugünkü en önemli aksiyonları sırala: kritik stok, gecikmiş faturalar, bekleyen ödemeler ve yaklaşan çek/senetler' },
-  { label: 'Satın alma taslağı', message: 'Stokta kritik ürünleri bul ve bunlar için taslak satın alma talebi oluştur' },
+  { label: 'Satın alma taslağı', message: 'Stokta kritik ürünleri bul; taslak satın alma talebi için kalem sayısı ve tahmini toplam TL önizlemesi hazırla, onay almadan kayıt oluşturma' },
   { label: 'Gecikmiş tahsilat', message: 'Vadesi geçmiş faturaları listele ve müşterilere gönderilecek kısa hatırlatma metni hazırla' },
   { label: 'Nakit akışı riski', message: 'Bu ay gelir, gider, bekleyen ödeme ve gecikmiş faturaya göre nakit akışı riskini yorumla' },
 ];

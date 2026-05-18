@@ -10,12 +10,26 @@ export interface SendMailOptions {
   replyTo?: string;
   cc?: string | string[];
   bcc?: string | string[];
+  attachments?: Array<{
+    filename: string;
+    content: string;
+    contentType?: string;
+  }>;
 }
 
 export interface MailResult {
   success: boolean;
   id?: string;
   error?: string;
+}
+
+function cleanBase64(content: string): string {
+  const trimmed = content.trim();
+  const dataUrlSeparator = trimmed.indexOf(',');
+  const withoutPrefix = trimmed.startsWith('data:') && dataUrlSeparator >= 0
+    ? trimmed.slice(dataUrlSeparator + 1)
+    : trimmed;
+  return withoutPrefix.replace(/\s/g, '');
 }
 
 // ── Genel mail gönderme ──────────────────────
@@ -34,6 +48,13 @@ export async function sendMail(options: SendMailOptions): Promise<MailResult> {
       ...(options.replyTo && { replyTo: options.replyTo }),
       ...(options.cc && { cc: Array.isArray(options.cc) ? options.cc : [options.cc] }),
       ...(options.bcc && { bcc: Array.isArray(options.bcc) ? options.bcc : [options.bcc] }),
+      ...(options.attachments?.length && {
+        attachments: options.attachments.map((attachment) => ({
+          filename: attachment.filename,
+          content: cleanBase64(attachment.content),
+          ...(attachment.contentType && { contentType: attachment.contentType }),
+        })),
+      }),
     });
 
     if (error) {

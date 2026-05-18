@@ -2,6 +2,18 @@ import { prisma } from '../lib/prisma';
 import { InvoiceStatus, InvoiceType, PaymentStatus, Prisma, PurchaseRequestStatus } from '@prisma/client';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 
+interface LowStockPurchaseAdjustment {
+  productCode: string;
+  quantity: number;
+}
+
+interface LowStockPurchaseRequestOptions {
+  limit?: number;
+  note?: string;
+  confirmed?: boolean;
+  adjustments?: LowStockPurchaseAdjustment[];
+}
+
 /**
  * Chatbot'un ERP verilerine erişimi için servis katmanı.
  * Doğrudan Prisma kullanarak ERP verilerine erişir.
@@ -380,8 +392,8 @@ export const ChatDataService = {
   },
 
   /** Kritik stoktan taslak satın alma talebi oluşturur */
-  async createPurchaseRequestFromLowStock(tenantId: string, limit = 10, note?: string) {
-    const safeLimit = Math.max(1, Math.min(limit, 25));
+  async createPurchaseRequestFromLowStock(tenantId: string, options: LowStockPurchaseRequestOptions = {}) {
+    const safeLimit = Math.max(1, Math.min(options.limit ?? 10, 25));
 
     const stockLevels = await prisma.stockLevel.findMany({
       where: {
@@ -439,10 +451,16 @@ export const ChatDataService = {
       }
     }
 
+    const quantityOverrides = new Map(
+      (options.adjustments ?? [])
+        .filter((adjustment) => adjustment.productCode.trim() && Number.isFinite(adjustment.quantity))
+        .map((adjustment) => [adjustment.productCode.trim().toLowerCase(), Math.max(0, Math.ceil(adjustment.quantity))]),
+    );
+
     const items = [...byProduct.values()]
       .map((item) => ({
         ...item,
-        suggestedQuantity: Math.max(0, Math.ceil(item.minStockLevel - item.quantity)),
+        suggestedQuantity: quantityOverrides.get(item.code.toLowerCase()) ?? Math.max(0, Math.ceil(item.minStockLevel - item.quantity)),
       }))
       .filter((item) => item.suggestedQuantity > 0)
       .sort((a, b) => b.suggestedQuantity - a.suggestedQuantity)
@@ -455,8 +473,34 @@ export const ChatDataService = {
       };
     }
 
-    const number = await generateDocumentNumber(tenantId, 'purchase_request', 'PR-', 'purchaseRequest');
     const totalEstimated = items.reduce((sum, item) => sum + item.purchasePrice * item.suggestedQuantity, 0);
+    const previewItems = items.map((item) => ({
+      product: item.name,
+      code: item.code,
+      currentQuantity: item.quantity,
+      minStockLevel: item.minStockLevel,
+      suggestedQuantity: item.suggestedQuantity,
+      unitPrice: item.purchasePrice,
+      lineEstimated: item.purchasePrice * item.suggestedQuantity,
+    }));
+
+    if (!options.confirmed) {
+      return {
+        created: false,
+        confirmationRequired: true,
+        summary: {
+          itemCount: items.length,
+          totalEstimated: totalEstimated > 0 ? totalEstimated : null,
+        },
+        items: previewItems,
+        message:
+          `${items.length} kalem icin toplam tahmini ${totalEstimated.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })} tutarinda taslak satin alma talebi hazirlanacak. ` +
+          'Olusturmadan once onaylayin; isterseniz kalem sayisini veya urun adetlerini degistirebilirsiniz.',
+        nextAction: 'Onayliyorsaniz "Onayla ve taslagi olustur" yazin. Degisiklik icin ornek: "Ilk 4 kalem olsun" veya "P004 adetini 6 yap".',
+      };
+    }
+
+    const number = await generateDocumentNumber(tenantId, 'purchase_request', 'PR-', 'purchaseRequest');
 
     const request = await prisma.purchaseRequest.create({
       data: {
@@ -464,7 +508,7 @@ export const ChatDataService = {
         number,
         date: new Date(),
         status: PurchaseRequestStatus.DRAFT,
-        notes: note?.trim() || 'AI önerisi: kritik stok seviyesinin altındaki ürünler için otomatik taslak.',
+        notes: options.note?.trim() || 'AI önerisi: kritik stok seviyesinin altındaki ürünler için otomatik taslak.',
         totalEstimated: totalEstimated > 0 ? totalEstimated : null,
         items: {
           create: items.map((item) => ({
@@ -494,13 +538,7 @@ export const ChatDataService = {
         itemCount: request.items.length,
         totalEstimated: request.totalEstimated ? Number(request.totalEstimated) : null,
       },
-      items: items.map((item) => ({
-        product: item.name,
-        code: item.code,
-        currentQuantity: item.quantity,
-        minStockLevel: item.minStockLevel,
-        suggestedQuantity: item.suggestedQuantity,
-      })),
+      items: previewItems,
       nextAction: 'Satın alma talepleri ekranında taslağı inceleyip onay akışına gönderebilirsiniz.',
     };
   },

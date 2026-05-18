@@ -208,7 +208,7 @@ export const IntelligenceService = {
           module: 'inventory',
           href: '/dashboard/stock/levels',
           actionLabel: 'Satin alma taslagi',
-          assistantPrompt: 'Stokta kritik urunleri bul ve bunlar icin taslak satin alma talebi olustur',
+          assistantPrompt: 'Stokta kritik urunleri bul; taslak satin alma talebi icin kalem sayisi ve tahmini toplam TL onizlemesi hazirla, onay almadan kayit olusturma',
           value: lowStock.length,
         });
       }

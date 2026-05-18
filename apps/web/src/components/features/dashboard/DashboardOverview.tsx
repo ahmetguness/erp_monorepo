@@ -197,7 +197,7 @@ export function DashboardOverview() {
       detail: lowStockItems[0] ? `${lowStockItems[0].productName} ilk sırada` : "Minimum altı ürün yok",
       icon: <Package className="w-4 h-4 text-amber-400" />,
       actionLabel: "Talep oluştur",
-      message: "Stokta kritik ürünleri bul ve bunlar için taslak satın alma talebi oluştur",
+      message: "Stokta kritik ürünleri bul; taslak satın alma talebi için kalem sayısı ve tahmini toplam TL önizlemesi hazırla, onay almadan kayıt oluşturma",
       disabled: (stk?.summary.belowMinStockCount ?? 0) === 0,
     },
     {
