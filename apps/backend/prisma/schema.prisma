@@ -366,6 +366,7 @@ enum EntityType {
   CUSTOMER_ASSET
   SERVICE_REQUEST
   PURCHASE_ORDER
+  SALES_QUOTE
   SALES_ORDER
   WORK_ORDER
   DELIVERY_NOTE
@@ -939,20 +940,28 @@ model AuditLog {
 // ═════════════════════════════════════════════
 
 model Attachment {
-  id           String   @id @default(cuid())
-  tenantId     String
-  entityType   EntityType
-  entityId     String
-  fileName     String
-  storagePath  String
-  mimeType     String?
-  fileSize     Int?     // bytes
-  uploadedById String?
-  createdAt    DateTime @default(now())
+  id              String   @id @default(cuid())
+  tenantId        String
+  entityType      EntityType
+  entityId        String
+  fileName        String
+  storagePath     String
+  mimeType        String?
+  fileSize        Int?     // bytes
+  category        String?
+  tags            String[] @default([])
+  documentKind    String?
+  confidentiality String?
+  validFrom       DateTime?
+  validUntil      DateTime?
+  version         Int      @default(1)
+  uploadedById    String?
+  createdAt       DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, entityType, entityId])
+  @@index([tenantId, category])
   @@index([tenantId, uploadedById])
   @@map("attachments")
 }

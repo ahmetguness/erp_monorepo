@@ -8,6 +8,13 @@ export const AttachmentSchema = z.object({
   entityType: z.string(), entityId: z.string(),
   fileName: z.string(), storagePath: z.string(),
   mimeType: z.string().nullable(), fileSize: z.coerce.number().nullable(),
+  category: z.string().nullable().optional(),
+  tags: z.array(z.string()).optional(),
+  documentKind: z.string().nullable().optional(),
+  confidentiality: z.string().nullable().optional(),
+  validFrom: z.string().nullable().optional(),
+  validUntil: z.string().nullable().optional(),
+  version: z.coerce.number().optional(),
   uploadedById: z.string().nullable(), createdAt: z.string(),
 });
 
@@ -24,7 +31,7 @@ export const DocumentCenterItemSchema = z.object({
   uploadedById: z.string().nullable(),
   uploadedByLabel: z.string().nullable(),
   entityType: z.union([
-    z.enum(['INVOICE', 'PRODUCT', 'CATEGORY', 'CONTACT', 'EMPLOYEE', 'CUSTOMER_ASSET', 'SERVICE_REQUEST', 'PURCHASE_ORDER', 'SALES_ORDER', 'WORK_ORDER', 'DELIVERY_NOTE', 'OTHER']),
+    z.enum(['INVOICE', 'PRODUCT', 'CATEGORY', 'CONTACT', 'EMPLOYEE', 'CUSTOMER_ASSET', 'SERVICE_REQUEST', 'PURCHASE_ORDER', 'SALES_QUOTE', 'SALES_ORDER', 'WORK_ORDER', 'DELIVERY_NOTE', 'OTHER']),
     z.literal('MAIL'),
   ]),
   entityId: z.string(),
@@ -32,6 +39,19 @@ export const DocumentCenterItemSchema = z.object({
   href: z.string().nullable(),
   downloadUrl: z.string().nullable(),
   tags: z.array(z.string()),
+  documentKind: z.enum(['GENERAL', 'EMPLOYEE_DOCUMENT', 'CONTRACT']).nullable(),
+  confidentiality: z.enum(['PUBLIC', 'INTERNAL', 'CONFIDENTIAL']).nullable(),
+  validFrom: z.string().nullable(),
+  validUntil: z.string().nullable(),
+  version: z.coerce.number().nullable(),
+  isExpired: z.boolean(),
+  expiresSoon: z.boolean(),
+});
+
+export const AttachmentEntityOptionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  detail: z.string().nullable(),
 });
 
 export const DocumentCenterSummarySchema = z.object({
@@ -50,6 +70,10 @@ const DocumentCenterResponseSchema = PaginatedResponseSchema(DocumentCenterItemS
 export type DocumentCenterItem = z.infer<typeof DocumentCenterItemSchema>;
 export type DocumentCenterCategory = DocumentCenterItem['category'];
 export type DocumentCenterSource = DocumentCenterItem['source'];
+export type DocumentKind = NonNullable<DocumentCenterItem['documentKind']>;
+export type DocumentConfidentiality = NonNullable<DocumentCenterItem['confidentiality']>;
+export type AttachmentEntityType = Exclude<DocumentCenterItem['entityType'], 'MAIL'>;
+export type AttachmentEntityOption = z.infer<typeof AttachmentEntityOptionSchema>;
 export type DocumentCenterResponse = z.infer<typeof DocumentCenterResponseSchema>;
 
 export interface DocumentCenterParams {
@@ -58,7 +82,17 @@ export interface DocumentCenterParams {
   search?: string;
   category?: DocumentCenterCategory;
   source?: DocumentCenterSource;
-  entityType?: Exclude<DocumentCenterItem['entityType'], 'MAIL'>;
+  entityType?: AttachmentEntityType;
+}
+
+export interface AttachmentMetadataInput {
+  category?: DocumentCenterCategory | null;
+  tags?: string[];
+  documentKind?: DocumentKind | null;
+  confidentiality?: DocumentConfidentiality | null;
+  validFrom?: string | null;
+  validUntil?: string | null;
+  version?: number;
 }
 
 export async function getAttachments(entityType: string, entityId: string): Promise<Attachment[]> {
@@ -71,11 +105,23 @@ export async function getDocumentCenter(params: DocumentCenterParams): Promise<D
   return safeParse(DocumentCenterResponseSchema, res.data, 'getDocumentCenter');
 }
 
-export async function uploadAttachment(entityType: string, entityId: string, file: File): Promise<Attachment> {
+export async function getAttachmentEntityOptions(entityType: AttachmentEntityType, search?: string): Promise<AttachmentEntityOption[]> {
+  const res = await apiClient.get('/api/attachments/entity-options', { params: { entityType, search } });
+  return safeParse(SingleResponseSchema(z.array(AttachmentEntityOptionSchema)), res.data, 'getAttachmentEntityOptions').data;
+}
+
+export async function uploadAttachment(entityType: string, entityId: string, file: File, metadata?: AttachmentMetadataInput): Promise<Attachment> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('entityType', entityType);
   formData.append('entityId', entityId);
+  if (metadata?.category) formData.append('category', metadata.category);
+  if (metadata?.tags?.length) formData.append('tags', metadata.tags.join(','));
+  if (metadata?.documentKind) formData.append('documentKind', metadata.documentKind);
+  if (metadata?.confidentiality) formData.append('confidentiality', metadata.confidentiality);
+  if (metadata?.validFrom) formData.append('validFrom', metadata.validFrom);
+  if (metadata?.validUntil) formData.append('validUntil', metadata.validUntil);
+  if (metadata?.version) formData.append('version', String(metadata.version));
   const res = await apiClient.post('/api/attachments/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
@@ -84,7 +130,7 @@ export async function uploadAttachment(entityType: string, entityId: string, fil
 
 export async function downloadAttachment(id: string): Promise<Blob> {
   const res = await apiClient.get(`/api/attachments/${id}/download`, { responseType: 'blob' });
-  return res.data as Blob;
+  return res.data instanceof Blob ? res.data : new Blob([res.data]);
 }
 
 export async function deleteAttachment(id: string): Promise<void> {
@@ -94,4 +140,9 @@ export async function deleteAttachment(id: string): Promise<void> {
 export async function renameAttachment(id: string, fileName: string): Promise<Attachment> {
   const res = await apiClient.patch(`/api/attachments/${id}`, { fileName });
   return safeParse(SingleResponseSchema(AttachmentSchema), res.data, 'renameAttachment').data;
+}
+
+export async function updateAttachmentMetadata(id: string, input: AttachmentMetadataInput & { fileName?: string }): Promise<Attachment> {
+  const res = await apiClient.patch(`/api/attachments/${id}`, input);
+  return safeParse(SingleResponseSchema(AttachmentSchema), res.data, 'updateAttachmentMetadata').data;
 }

@@ -14,6 +14,8 @@ import { useProduct, useDeleteProduct } from "@/hooks/useProducts";
 import { useStockLevels } from "@/hooks/useStock";
 import { formatCurrency } from "@/lib/utils";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
+import { EntityActivityTimeline } from "@/components/shared/EntityActivityTimeline";
+import { EntityTaskActions } from "@/components/shared/EntityTaskActions";
 import type { StockLevel } from "@/services/stock.service";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -161,6 +163,8 @@ export function ProductDetailPage({ id }: Props) {
 
       {/* Attachments */}
       <AttachmentPanel entityType="PRODUCT" entityId={id} />
+      <EntityTaskActions entityType="PRODUCT" entityId={id} entityLabel={product.name} module="inventory" />
+      <EntityActivityTimeline entityType="PRODUCT" entityId={id} />
 
       <ConfirmDialog
         isOpen={deleteOpen}

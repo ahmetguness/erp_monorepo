@@ -10,6 +10,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
+import { EntityActivityTimeline } from '@/components/shared/EntityActivityTimeline';
+import { EntityTaskActions } from '@/components/shared/EntityTaskActions';
 import { usePurchaseOrder, useSendPurchaseOrder, useReceivePurchaseOrder, useCancelPurchaseOrder } from '@/hooks/usePurchase';
 import { useWarehouses } from '@/hooks/useStock';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -156,6 +158,8 @@ export function PurchaseOrderDetailPage({ id }: Props) {
 
       {/* Attachments */}
       <AttachmentPanel entityType="PURCHASE_ORDER" entityId={id} />
+      <EntityTaskActions entityType="PURCHASE_ORDER" entityId={id} entityLabel={`Satın Alma ${order.number}`} module="purchasing" />
+      <EntityActivityTimeline entityType="PURCHASE_ORDER" entityId={id} />
 
       {/* Send Confirm */}
       <ConfirmDialog

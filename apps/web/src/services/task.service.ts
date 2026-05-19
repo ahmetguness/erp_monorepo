@@ -3,14 +3,18 @@ import { apiClient } from '@/lib/api-client';
 import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema } from '@/types/api.types';
 
+export const TaskStatusSchema = z.enum(['TODO', 'IN_PROGRESS', 'DONE', 'CANCELLED']);
+export const TaskPrioritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+export const TaskTypeSchema = z.enum(['APPROVAL', 'COLLECTION', 'SERVICE', 'NOTIFICATION', 'CHECK', 'AUTOMATION', 'GENERAL']);
+
 export const TaskSchema = z.object({
   id: z.string(),
   tenantId: z.string(),
   title: z.string(),
   detail: z.string().nullable(),
-  type: z.string(),
-  priority: z.string(),
-  status: z.string(),
+  type: TaskTypeSchema,
+  priority: TaskPrioritySchema,
+  status: TaskStatusSchema,
   module: z.string().nullable(),
   entityType: z.string().nullable(),
   entityId: z.string().nullable(),
@@ -25,7 +29,23 @@ export const TaskSchema = z.object({
 });
 
 export type Task = z.infer<typeof TaskSchema>;
-export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED';
+export type TaskStatus = z.infer<typeof TaskStatusSchema>;
+export type TaskPriority = z.infer<typeof TaskPrioritySchema>;
+export type TaskType = z.infer<typeof TaskTypeSchema>;
+
+export interface CreateTaskDTO {
+  title: string;
+  detail?: string | null;
+  type?: TaskType;
+  priority?: TaskPriority;
+  module?: string | null;
+  entityType?: string | null;
+  entityId?: string | null;
+  href?: string | null;
+  source?: string | null;
+  assignedToId?: string | null;
+  dueAt?: string | null;
+}
 
 export const WorkflowTaskSchema = z.object({
   id: z.string(),
@@ -70,4 +90,9 @@ export async function getWorkflowTasks(): Promise<{ data: WorkflowTask[]; meta: 
 export async function updateTaskStatus(id: string, status: TaskStatus): Promise<Task> {
   const res = await apiClient.patch(`/api/tasks/${id}`, { status });
   return safeParse(SingleResponseSchema(TaskSchema), res.data, 'updateTaskStatus').data;
+}
+
+export async function createTask(data: CreateTaskDTO): Promise<Task> {
+  const res = await apiClient.post('/api/tasks', data);
+  return safeParse(SingleResponseSchema(TaskSchema), res.data, 'createTask').data;
 }

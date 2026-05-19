@@ -1,10 +1,22 @@
 'use client';
 
-import { Activity, CheckCircle2, CircleDot, Download, Pencil, PlusCircle, Trash2, XCircle } from 'lucide-react';
+import {
+  Activity,
+  Bell,
+  CheckCircle2,
+  CircleDot,
+  ClipboardCheck,
+  CreditCard,
+  FileText,
+  Mail,
+  Paperclip,
+  Wrench,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
-import { useAuditLogs } from '@/hooks/useAuditLogs';
+import { useActivity } from '@/hooks/useActivity';
 import { formatDateTime } from '@/lib/utils';
-import type { AuditEntityType, AuditLog } from '@/services/audit-log.service';
+import type { AuditEntityType } from '@/services/audit-log.service';
+import type { ActivityItem, ActivitySource, ActivityTone } from '@/services/activity.service';
 
 interface EntityActivityTimelineProps {
   entityType: AuditEntityType;
@@ -14,77 +26,57 @@ interface EntityActivityTimelineProps {
   limit?: number;
 }
 
-const ACTION_LABELS: Record<string, string> = {
-  CREATE: 'Oluşturuldu',
-  UPDATE: 'Güncellendi',
-  DELETE: 'Silindi',
-  APPROVE: 'Onaylandı',
-  REJECT: 'Reddedildi',
-  EXPORT: 'Dışa aktarıldı',
-  LOGIN: 'Giriş yapıldı',
-  LOGOUT: 'Çıkış yapıldı',
-  OTHER: 'İşlem yapıldı',
+const SOURCE_LABELS: Record<ActivitySource, string> = {
+  AUDIT: 'İşlem',
+  ATTACHMENT: 'Dosya',
+  MAIL: 'Mail',
+  TASK: 'Görev',
+  NOTIFICATION: 'Bildirim',
+  APPROVAL: 'Onay',
+  PAYMENT: 'Ödeme',
+  SERVICE: 'Servis',
 };
 
-const ACTION_BADGES: Record<string, 'neutral' | 'success' | 'danger' | 'warning' | 'info'> = {
-  CREATE: 'success',
-  UPDATE: 'info',
-  DELETE: 'danger',
-  APPROVE: 'success',
-  REJECT: 'danger',
-  EXPORT: 'warning',
-  LOGIN: 'neutral',
-  LOGOUT: 'neutral',
-  OTHER: 'neutral',
+const TONE_BADGES: Record<ActivityTone, 'neutral' | 'success' | 'danger' | 'warning' | 'info'> = {
+  neutral: 'neutral',
+  success: 'success',
+  danger: 'danger',
+  warning: 'warning',
+  info: 'info',
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+function getActivityIcon(item: ActivityItem) {
+  if (item.source === 'ATTACHMENT') return <Paperclip className="h-4 w-4 text-cyan-400" />;
+  if (item.source === 'MAIL') return <Mail className="h-4 w-4 text-sky-400" />;
+  if (item.source === 'TASK') return <ClipboardCheck className="h-4 w-4 text-amber-400" />;
+  if (item.source === 'NOTIFICATION') return <Bell className="h-4 w-4 text-indigo-400" />;
+  if (item.source === 'APPROVAL') return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
+  if (item.source === 'PAYMENT') return <CreditCard className="h-4 w-4 text-emerald-400" />;
+  if (item.source === 'SERVICE') return <Wrench className="h-4 w-4 text-orange-400" />;
+  if (item.tone === 'success') return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
+  if (item.tone === 'danger') return <CircleDot className="h-4 w-4 text-red-400" />;
+  return <FileText className="h-4 w-4 text-slate-400" />;
 }
 
-function getValueKeys(value: unknown): string[] {
-  if (!isRecord(value)) return [];
-  return Object.keys(value).filter((key) => value[key] !== null && value[key] !== undefined);
-}
-
-function getChangedFields(item: AuditLog): string[] {
-  const oldKeys = getValueKeys(item.oldValues);
-  const newKeys = getValueKeys(item.newValues);
-  return Array.from(new Set([...oldKeys, ...newKeys])).slice(0, 5);
-}
-
-function getActivityIcon(action: string) {
-  if (action === 'CREATE') return <PlusCircle className="h-4 w-4 text-emerald-400" />;
-  if (action === 'UPDATE') return <Pencil className="h-4 w-4 text-sky-400" />;
-  if (action === 'DELETE') return <Trash2 className="h-4 w-4 text-red-400" />;
-  if (action === 'APPROVE') return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
-  if (action === 'REJECT') return <XCircle className="h-4 w-4 text-red-400" />;
-  if (action === 'EXPORT') return <Download className="h-4 w-4 text-amber-400" />;
-  return <CircleDot className="h-4 w-4 text-slate-400" />;
-}
-
-function ActivityItem({ item }: { item: AuditLog }) {
-  const changedFields = getChangedFields(item);
-
+function ActivityItemRow({ item }: { item: ActivityItem }) {
   return (
     <li className="relative pl-8">
       <span className="absolute left-0 top-0.5 flex h-7 w-7 items-center justify-center rounded-full border border-slate-800 bg-slate-950">
-        {getActivityIcon(item.action)}
+        {getActivityIcon(item)}
       </span>
       <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium text-slate-200">{ACTION_LABELS[item.action] ?? item.action}</p>
-              <Badge variant={ACTION_BADGES[item.action] ?? 'neutral'}>{item.module}</Badge>
+              <p className="text-sm font-medium text-slate-200">{item.title}</p>
+              <Badge variant={TONE_BADGES[item.tone]}>{SOURCE_LABELS[item.source]}</Badge>
+              {item.module && <span className="text-[11px] text-slate-500">{item.module}</span>}
             </div>
-            {changedFields.length > 0 && (
-              <p className="mt-1 line-clamp-2 text-xs text-slate-500">
-                Alanlar: {changedFields.join(', ')}
-              </p>
+            {item.description && (
+              <p className="mt-1 line-clamp-2 text-xs text-slate-500">{item.description}</p>
             )}
           </div>
-          <time className="shrink-0 text-right text-[11px] text-slate-500">{formatDateTime(item.createdAt)}</time>
+          <time className="shrink-0 text-right text-[11px] text-slate-500">{formatDateTime(item.occurredAt)}</time>
         </div>
       </div>
     </li>
@@ -94,17 +86,10 @@ function ActivityItem({ item }: { item: AuditLog }) {
 export function EntityActivityTimeline({
   entityType,
   entityId,
-  module,
   title = 'Aktivite Geçmişi',
-  limit = 8,
+  limit = 12,
 }: EntityActivityTimelineProps) {
-  const { data, isLoading, isError } = useAuditLogs({
-    page: 1,
-    limit,
-    entityType,
-    entityId,
-    ...(module && { module }),
-  });
+  const { data, isLoading, isError } = useActivity({ entityType, entityId, limit });
   const items = data?.data ?? [];
 
   if (isError) return null;
@@ -128,7 +113,7 @@ export function EntityActivityTimeline({
       ) : items.length > 0 ? (
         <ol className="space-y-3">
           {items.map((item) => (
-            <ActivityItem key={item.id} item={item} />
+            <ActivityItemRow key={item.id} item={item} />
           ))}
         </ol>
       ) : (

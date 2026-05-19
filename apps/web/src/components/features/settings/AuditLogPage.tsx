@@ -46,6 +46,7 @@ const ENTITY_LABELS: Record<string, string> = {
   CUSTOMER_ASSET: 'Müşteri Varlığı',
   SERVICE_REQUEST: 'Servis Talebi',
   PURCHASE_ORDER: 'Satın Alma Siparişi',
+  SALES_QUOTE: 'Teklif',
   SALES_ORDER: 'Satış Siparişi',
   WORK_ORDER: 'İş Emri',
   DELIVERY_NOTE: 'İrsaliye',

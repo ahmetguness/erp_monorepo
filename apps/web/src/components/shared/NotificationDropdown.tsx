@@ -3,8 +3,16 @@
 import { useState, useRef, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Bell, Check, CheckCheck, Info, Trash2, X } from 'lucide-react';
-import { useNotifications, useSmartNotifications, useMarkAsRead, useMarkAllAsRead, useDeleteNotification, useDeleteAllNotifications } from '@/hooks/useNotifications';
+import { AlertTriangle, Bell, Check, CheckCheck, Clock3, EyeOff, Info, Trash2, X } from 'lucide-react';
+import {
+  useNotifications,
+  useSmartNotifications,
+  useMarkAsRead,
+  useMarkAllAsRead,
+  useDeleteNotification,
+  useDeleteAllNotifications,
+  useSmartNotificationAction,
+} from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 import type { SmartNotification } from '@/services/notification.service';
 
@@ -14,15 +22,20 @@ const SMART_TONE: Record<SmartNotification['severity'], { icon: ReactNode; text:
     text: 'text-red-300',
     bg: 'bg-red-500/[0.06] hover:bg-red-500/[0.1]',
   },
-  warning: {
+  high: {
     icon: <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />,
     text: 'text-amber-300',
     bg: 'bg-amber-500/[0.05] hover:bg-amber-500/[0.09]',
   },
-  info: {
+  medium: {
     icon: <Info className="h-3.5 w-3.5 text-sky-400" />,
     text: 'text-sky-300',
     bg: 'bg-sky-500/[0.04] hover:bg-sky-500/[0.08]',
+  },
+  low: {
+    icon: <Info className="h-3.5 w-3.5 text-slate-400" />,
+    text: 'text-slate-300',
+    bg: 'bg-slate-500/[0.04] hover:bg-slate-500/[0.08]',
   },
 };
 
@@ -35,6 +48,7 @@ export function NotificationDropdown() {
   const markAllRead = useMarkAllAsRead();
   const deleteNotif = useDeleteNotification();
   const deleteAll = useDeleteAllNotifications();
+  const smartAction = useSmartNotificationAction();
 
   const notifications = data?.data ?? [];
   const unreadCount = data?.meta.unreadCount ?? 0;
@@ -60,6 +74,12 @@ export function NotificationDropdown() {
     const diffH = Math.floor(diffMin / 60);
     if (diffH < 24) return `${diffH} sa`;
     return `${Math.floor(diffH / 24)} gün`;
+  };
+
+  const snoozeTomorrow = (id: string) => {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    smartAction.mutate({ id, action: 'snooze', snoozedUntil: date.toISOString() });
   };
 
   return (
@@ -112,21 +132,43 @@ export function NotificationDropdown() {
                   {smartItems.map((item) => {
                     const tone = SMART_TONE[item.severity];
                     return (
-                      <Link
+                      <div
                         key={item.id}
-                        href={item.href}
-                        onClick={() => setOpen(false)}
                         className={cn('flex items-start gap-3 px-4 py-3 transition-colors', tone.bg)}
                       >
                         <div className="mt-0.5 shrink-0">{tone.icon}</div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
-                            <p className={cn('text-xs font-semibold line-clamp-1', tone.text)}>{item.title}</p>
+                            <Link href={item.actionHref} onClick={() => setOpen(false)} className={cn('text-xs font-semibold line-clamp-1 hover:underline', tone.text)}>
+                              {item.title}
+                            </Link>
                             <span className="rounded-md bg-slate-950/70 px-1.5 py-0.5 text-[10px] font-bold text-slate-300">{item.count}</span>
                           </div>
                           <p className="mt-0.5 line-clamp-2 text-[10px] text-slate-500">{item.message}</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            {item.lifecycleStatus === 'acknowledged' && (
+                              <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-300">Ele alındı</span>
+                            )}
+                            <Link href={item.suggestedAction.href} onClick={() => setOpen(false)} className="rounded-md bg-slate-950/70 px-1.5 py-0.5 text-[9px] font-medium text-slate-300 hover:text-white">
+                              {item.suggestedAction.label}
+                            </Link>
+                            {item.lifecycleStatus !== 'acknowledged' && (
+                              <button onClick={() => smartAction.mutate({ id: item.id, action: 'acknowledge' })} className="rounded-md bg-slate-950/70 p-1 text-slate-500 hover:text-emerald-400" title="Ele al">
+                                <Check className="h-3 w-3" />
+                              </button>
+                            )}
+                            <button onClick={() => snoozeTomorrow(item.id)} className="rounded-md bg-slate-950/70 p-1 text-slate-500 hover:text-amber-400" title="1 gün ertele">
+                              <Clock3 className="h-3 w-3" />
+                            </button>
+                            <button onClick={() => smartAction.mutate({ id: item.id, action: 'complete' })} className="rounded-md bg-slate-950/70 p-1 text-slate-500 hover:text-sky-400" title="Tamamla">
+                              <CheckCheck className="h-3 w-3" />
+                            </button>
+                            <button onClick={() => smartAction.mutate({ id: item.id, action: 'hide' })} className="rounded-md bg-slate-950/70 p-1 text-slate-500 hover:text-red-400" title="Gizle">
+                              <EyeOff className="h-3 w-3" />
+                            </button>
+                          </div>
                         </div>
-                      </Link>
+                      </div>
                     );
                   })}
                 </div>

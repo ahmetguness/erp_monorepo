@@ -57,6 +57,7 @@ import { invitationRoutes, invitationPublicRoutes } from './routes/invitation.ro
 import { SetPasswordController } from './controllers/set-password.controller';
 import { chatRoutes } from './routes/chat.routes';
 import { publicChatRoutes } from './routes/public-chat.routes';
+import { activityRoutes } from './routes/activity.routes';
 import { TrendyolWebhookController } from './controllers/trendyol-webhook.controller';
 import { TrendyolWorker } from './services/trendyol-worker.service';
 import { startMarketplaceMocks } from './mocks';
@@ -205,6 +206,7 @@ tenantApi.route('/data-exchange', dataExchangeRoutes);
 tenantApi.route('/intelligence', intelligenceRoutes);
 tenantApi.route('/automation-rules', automationRuleRoutes);
 tenantApi.route('/audit-logs', auditLogRoutes);
+tenantApi.route('/activity', activityRoutes);
 tenantApi.route('/attachments', attachmentRoutes);
 tenantApi.route('/invitations', invitationRoutes);
 tenantApi.get('/currency-rates/tcmb', requirePermission('settings', 'READ'), CurrencyRatesController.getTcmbRates);

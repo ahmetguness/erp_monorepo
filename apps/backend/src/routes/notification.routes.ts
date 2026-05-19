@@ -6,6 +6,7 @@ import { requirePermission } from '../middleware/requirePermission';
 const notificationRoutes = new Hono();
 
 notificationRoutes.get('/smart', requirePermission('notifications', 'READ'), NotificationController.smart);
+notificationRoutes.post('/smart/:id/action', requirePermission('notifications', 'UPDATE'), NotificationController.smartAction);
 notificationRoutes.get('/', requirePermission('notifications', 'READ'), NotificationController.list);
 notificationRoutes.post('/read-all', requirePermission('notifications', 'UPDATE'), NotificationController.markAllAsRead);
 notificationRoutes.post('/:id/read', requirePermission('notifications', 'UPDATE'), NotificationController.markAsRead);

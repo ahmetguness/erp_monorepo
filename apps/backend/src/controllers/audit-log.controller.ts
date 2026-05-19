@@ -137,6 +137,15 @@ async function resolveEntityLabels(
     orders.forEach((order) => labels.set(entityKey(EntityType.PURCHASE_ORDER, order.id), order.number));
   }
 
+  const salesQuoteIds = collectEntityIds(logs, EntityType.SALES_QUOTE);
+  if (salesQuoteIds.length > 0) {
+    const quotes = await prisma.salesQuote.findMany({
+      where: { tenantId, id: { in: salesQuoteIds }, deletedAt: null },
+      select: { id: true, number: true },
+    });
+    quotes.forEach((quote) => labels.set(entityKey(EntityType.SALES_QUOTE, quote.id), quote.number));
+  }
+
   const salesOrderIds = collectEntityIds(logs, EntityType.SALES_ORDER);
   if (salesOrderIds.length > 0) {
     const orders = await prisma.salesOrder.findMany({

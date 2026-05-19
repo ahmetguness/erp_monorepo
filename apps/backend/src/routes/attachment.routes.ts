@@ -6,6 +6,7 @@ import { requirePermission } from '../middleware/requirePermission';
 const attachmentRoutes = new Hono();
 
 attachmentRoutes.get('/library', requirePermission('attachments', 'READ'), AttachmentController.library);
+attachmentRoutes.get('/entity-options', requirePermission('attachments', 'READ'), AttachmentController.entityOptions);
 attachmentRoutes.get('/', requirePermission('attachments', 'READ'), AttachmentController.listByEntity);
 attachmentRoutes.post('/upload', requirePermission('attachments', 'CREATE'), AttachmentController.upload);
 attachmentRoutes.get('/:id/download', requirePermission('attachments', 'READ'), AttachmentController.download);

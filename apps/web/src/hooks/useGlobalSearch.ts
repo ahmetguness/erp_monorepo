@@ -3,12 +3,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { searchGlobal } from '@/services/search.service';
 
-export function useGlobalSearch(query: string) {
+export function useGlobalSearch(query: string, enabled = true) {
   const normalized = query.trim();
   return useQuery({
     queryKey: ['global-search', normalized],
     queryFn: () => searchGlobal(normalized),
-    enabled: normalized.length >= 2,
+    enabled,
     staleTime: 30_000,
   });
 }

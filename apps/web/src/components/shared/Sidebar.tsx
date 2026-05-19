@@ -21,6 +21,7 @@ type NavGroup = import('@/lib/nav-config').NavGroup;
 // ─────────────────────────────────────────────
 
 const PLAN_RANK: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
+const EMPTY_MODULES: string[] = [];
 
 function hasPlanAccess(tenantPlan: string, requiredPlan?: string): boolean {
   if (!requiredPlan) return true;
@@ -143,7 +144,9 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0 }: NavItemProps
   });
 
   useEffect(() => {
-    if (hasActiveChild) setOpen(true);
+    if (!hasActiveChild) return;
+    const timer = window.setTimeout(() => setOpen(true), 0);
+    return () => window.clearTimeout(timer);
   }, [hasActiveChild]);
 
   if (!hasAccess(tenantPlan, tenantModules, item)) return null;
@@ -211,7 +214,7 @@ export function Sidebar() {
   const logout = useLogout();
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const tenantPlan = tenant?.plan ?? 'STARTER';
-  const tenantModules = tenant?.modules ?? [];
+  const tenantModules = tenant?.modules ?? EMPTY_MODULES;
   const [menuSearch, setMenuSearch] = useState('');
   const searchTerm = normalizeSearchText(menuSearch);
   const visibleGroups = useMemo(

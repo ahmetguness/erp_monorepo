@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
+import { EntityActivityTimeline } from "@/components/shared/EntityActivityTimeline";
+import { EntityTaskActions } from "@/components/shared/EntityTaskActions";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useWorkOrder, useChangeWorkOrderStatus } from "@/hooks/useProduction";
@@ -255,6 +257,12 @@ export function WorkOrderDetailPage({ id }: { id: string }) {
 
       <div className="mt-6">
         <AttachmentPanel entityType="WORK_ORDER" entityId={id} />
+      </div>
+      <div className="mt-6">
+        <EntityTaskActions entityType="WORK_ORDER" entityId={id} entityLabel={`İş Emri ${wo.number}`} module="production" />
+      </div>
+      <div className="mt-6">
+        <EntityActivityTimeline entityType="WORK_ORDER" entityId={id} />
       </div>
     </div>
   );

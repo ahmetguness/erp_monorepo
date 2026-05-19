@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
+import { EntityActivityTimeline } from '@/components/shared/EntityActivityTimeline';
+import { EntityTaskActions } from '@/components/shared/EntityTaskActions';
 import { useSalesOrder, useCancelSalesOrder, useUpdateSalesOrder } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
@@ -87,6 +89,8 @@ export function SalesOrderDetailPage({ id }: Props) {
 
       {/* Attachments */}
       <AttachmentPanel entityType="SALES_ORDER" entityId={id} />
+      <EntityTaskActions entityType="SALES_ORDER" entityId={id} entityLabel={`Sipariş ${order.number}`} module="sales" />
+      <EntityActivityTimeline entityType="SALES_ORDER" entityId={id} />
 
       {/* Confirm Order */}
       <ConfirmDialog

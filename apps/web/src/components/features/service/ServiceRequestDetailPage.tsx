@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Play, CheckCircle, Clock, User, MessageSquare } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
+import { EntityActivityTimeline } from '@/components/shared/EntityActivityTimeline';
+import { EntityTaskActions } from '@/components/shared/EntityTaskActions';
 import { EntityImageManager } from '@/components/shared/EntityImageManager';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -126,6 +128,12 @@ export function ServiceRequestDetailPage({ id }: { id: string }) {
 
       <div className="mt-6">
         <AttachmentPanel entityType="SERVICE_REQUEST" entityId={id} />
+      </div>
+      <div className="mt-6">
+        <EntityTaskActions entityType="SERVICE_REQUEST" entityId={id} entityLabel={`${sr.number} - ${sr.subject}`} module="service" />
+      </div>
+      <div className="mt-6">
+        <EntityActivityTimeline entityType="SERVICE_REQUEST" entityId={id} />
       </div>
     </div>
   );

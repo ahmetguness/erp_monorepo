@@ -95,13 +95,15 @@ const TASK_TONE: Record<string, string> = { CRITICAL: "text-red-400", HIGH: "tex
 const RECOMMENDATION_TONE: Record<string, string> = { CRITICAL: "border-red-500/30 bg-red-500/5", HIGH: "border-amber-500/30 bg-amber-500/5", MEDIUM: "border-sky-500/25 bg-sky-500/5", LOW: "border-slate-700 bg-slate-950/30" };
 const SMART_NOTIFICATION_TONE: Record<SmartNotification["severity"], string> = {
   critical: "border-red-500/25 bg-red-500/[0.04]",
-  warning: "border-amber-500/25 bg-amber-500/[0.04]",
-  info: "border-sky-500/25 bg-sky-500/[0.04]",
+  high: "border-amber-500/25 bg-amber-500/[0.04]",
+  medium: "border-sky-500/25 bg-sky-500/[0.04]",
+  low: "border-slate-700 bg-slate-950/30",
 };
 const SMART_NOTIFICATION_TEXT: Record<SmartNotification["severity"], string> = {
   critical: "text-red-300",
-  warning: "text-amber-300",
-  info: "text-sky-300",
+  high: "text-amber-300",
+  medium: "text-sky-300",
+  low: "text-slate-300",
 };
 const PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#64748b"];
 const TOOLTIP_STYLE = { background: "#1e293b", border: "none", borderRadius: 8, fontSize: 12 } as const;
@@ -534,13 +536,17 @@ export function DashboardOverview() {
           <CardHeader icon={<Bell className="w-4 h-4 text-amber-400" />} title="Akıllı Bildirim Merkezi" />
           <div className="flex-1 overflow-auto divide-y divide-slate-800/50">
             {smartNotifications && smartNotifications.items.length > 0 ? smartNotifications.items.slice(0, 8).map((item) => (
-              <Link key={item.id} href={item.href} className="block px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
+              <Link key={item.id} href={item.actionHref} className="block px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
                 <div className={cn("rounded-xl border px-3 py-2.5", SMART_NOTIFICATION_TONE[item.severity])}>
                   <div className="flex items-start justify-between gap-3">
                     <p className={cn("text-sm font-semibold leading-snug", SMART_NOTIFICATION_TEXT[item.severity])}>{item.title}</p>
                     <span className="rounded-lg bg-slate-950/70 px-2 py-0.5 text-xs font-bold text-slate-200">{item.count}</span>
                   </div>
                   <p className="mt-1 text-xs text-slate-500 line-clamp-2">{item.message}</p>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="rounded-md bg-slate-950/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">{item.suggestedAction.label}</span>
+                    {item.lifecycleStatus === "acknowledged" && <span className="text-[10px] font-medium text-emerald-300">Ele alındı</span>}
+                  </div>
                 </div>
               </Link>
             )) : (

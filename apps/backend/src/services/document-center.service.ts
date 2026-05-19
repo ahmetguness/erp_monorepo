@@ -11,6 +11,8 @@ export type DocumentCenterCategory =
   | 'CONTRACT'
   | 'MAIL'
   | 'OTHER';
+export type DocumentKind = 'GENERAL' | 'EMPLOYEE_DOCUMENT' | 'CONTRACT';
+export type DocumentConfidentiality = 'PUBLIC' | 'INTERNAL' | 'CONFIDENTIAL';
 
 export interface DocumentCenterFilters {
   tenantId: string;
@@ -39,6 +41,13 @@ export interface DocumentCenterItem {
   href: string | null;
   downloadUrl: string | null;
   tags: string[];
+  documentKind: DocumentKind | null;
+  confidentiality: DocumentConfidentiality | null;
+  validFrom: string | null;
+  validUntil: string | null;
+  version: number | null;
+  isExpired: boolean;
+  expiresSoon: boolean;
 }
 
 export interface DocumentCenterSummary {
@@ -66,6 +75,13 @@ interface AttachmentRow {
   fileName: string;
   mimeType: string | null;
   fileSize: number | null;
+  category: string | null;
+  tags: string[];
+  documentKind: string | null;
+  confidentiality: string | null;
+  validFrom: Date | null;
+  validUntil: Date | null;
+  version: number;
   uploadedById: string | null;
   createdAt: Date;
 }
@@ -94,6 +110,8 @@ const ALL_CATEGORIES: readonly DocumentCenterCategory[] = [
 ];
 
 const ALL_SOURCES: readonly DocumentCenterSource[] = ['ATTACHMENT', 'MAIL'];
+const ALL_DOCUMENT_KINDS: readonly DocumentKind[] = ['GENERAL', 'EMPLOYEE_DOCUMENT', 'CONTRACT'];
+const ALL_CONFIDENTIALITIES: readonly DocumentConfidentiality[] = ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL'];
 
 const CONTRACT_TERMS = ['contract', 'sozlesme', 'sözleşme'];
 
@@ -105,12 +123,28 @@ function isDocumentCenterSource(value: string | undefined): value is DocumentCen
   return Boolean(value && ALL_SOURCES.includes(value as DocumentCenterSource));
 }
 
+function isDocumentKind(value: string | undefined): value is DocumentKind {
+  return Boolean(value && ALL_DOCUMENT_KINDS.includes(value as DocumentKind));
+}
+
+function isDocumentConfidentiality(value: string | undefined): value is DocumentConfidentiality {
+  return Boolean(value && ALL_CONFIDENTIALITIES.includes(value as DocumentConfidentiality));
+}
+
 export function parseDocumentCenterCategory(value: string | undefined): DocumentCenterCategory | undefined {
   return isDocumentCenterCategory(value) ? value : undefined;
 }
 
 export function parseDocumentCenterSource(value: string | undefined): DocumentCenterSource | undefined {
   return isDocumentCenterSource(value) ? value : undefined;
+}
+
+export function parseDocumentKind(value: string | undefined): DocumentKind | undefined {
+  return isDocumentKind(value) ? value : undefined;
+}
+
+export function parseDocumentConfidentiality(value: string | undefined): DocumentConfidentiality | undefined {
+  return isDocumentConfidentiality(value) ? value : undefined;
 }
 
 function normalizeSearch(value: string | undefined): string | undefined {
@@ -137,6 +171,7 @@ function categoryForAttachment(entityType: EntityType, fileName: string): Docume
     case EntityType.EMPLOYEE:
       return 'EMPLOYEE';
     case EntityType.INVOICE:
+    case EntityType.SALES_QUOTE:
     case EntityType.SALES_ORDER:
     case EntityType.DELIVERY_NOTE:
       return 'SALES';
@@ -170,7 +205,29 @@ function mimeTag(mimeType: string | null): string {
 }
 
 function compactTags(values: Array<string | null | undefined>): string[] {
-  return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
+  return Array.from(new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
+}
+
+function metadataCategory(row: AttachmentRow): DocumentCenterCategory {
+  return parseDocumentCenterCategory(row.category ?? undefined) ?? categoryForAttachment(row.entityType, row.fileName);
+}
+
+function metadataDocumentKind(row: AttachmentRow, category: DocumentCenterCategory): DocumentKind | null {
+  const explicitKind = parseDocumentKind(row.documentKind ?? undefined);
+  if (explicitKind) return explicitKind;
+  if (category === 'CONTRACT') return 'CONTRACT';
+  if (row.entityType === EntityType.EMPLOYEE) return 'EMPLOYEE_DOCUMENT';
+  return null;
+}
+
+function metadataConfidentiality(value: string | null): DocumentConfidentiality | null {
+  return parseDocumentConfidentiality(value ?? undefined) ?? null;
+}
+
+function expiresSoon(validUntil: Date | null, now: Date): boolean {
+  if (!validUntil) return false;
+  const soon = new Date(now.getTime() + 30 * 86_400_000);
+  return validUntil > now && validUntil <= soon;
 }
 
 async function getTenantUserEmail(db: PrismaClient, tenantId: string, userId: string): Promise<string | null> {
@@ -247,6 +304,12 @@ async function resolveEntityLabels(
     invoices.forEach((invoice) => labels.set(entityKey(EntityType.INVOICE, invoice.id), invoice.number));
   }
 
+  const salesQuoteIds = collectEntityIds(rows, EntityType.SALES_QUOTE);
+  if (salesQuoteIds.length > 0) {
+    const quotes = await db.salesQuote.findMany({ where: { tenantId, id: { in: salesQuoteIds }, deletedAt: null }, select: { id: true, number: true } });
+    quotes.forEach((quote) => labels.set(entityKey(EntityType.SALES_QUOTE, quote.id), quote.number));
+  }
+
   const productIds = collectEntityIds(rows, EntityType.PRODUCT);
   if (productIds.length > 0) {
     const products = await db.product.findMany({ where: { tenantId, id: { in: productIds } }, select: { id: true, name: true, code: true } });
@@ -306,6 +369,8 @@ function hrefForAttachment(entityType: EntityType, entityId: string): string | n
       return `/dashboard/hr/employees/${entityId}`;
     case EntityType.INVOICE:
       return `/dashboard/invoices/${entityId}`;
+    case EntityType.SALES_QUOTE:
+      return `/dashboard/sales-orders/quotes/${entityId}`;
     case EntityType.PRODUCT:
       return `/dashboard/products/${entityId}`;
     case EntityType.SALES_ORDER:
@@ -371,6 +436,13 @@ export class DocumentCenterService {
               fileName: true,
               mimeType: true,
               fileSize: true,
+              category: true,
+              tags: true,
+              documentKind: true,
+              confidentiality: true,
+              validFrom: true,
+              validUntil: true,
+              version: true,
               uploadedById: true,
               createdAt: true,
             },
@@ -416,8 +488,10 @@ export class DocumentCenterService {
       ]),
     ]);
 
+    const now = new Date();
     const attachmentItems = attachmentRows.map<DocumentCenterItem>((row) => {
-      const category = categoryForAttachment(row.entityType, row.fileName);
+      const category = metadataCategory(row);
+      const documentKind = metadataDocumentKind(row, category);
       return {
         id: row.id,
         source: 'ATTACHMENT',
@@ -433,7 +507,14 @@ export class DocumentCenterService {
         entityLabel: entityLabels.get(entityKey(row.entityType, row.entityId)) ?? null,
         href: hrefForAttachment(row.entityType, row.entityId),
         downloadUrl: `/api/attachments/${row.id}/download`,
-        tags: compactTags([category, mimeTag(row.mimeType), extensionTag(row.fileName)]),
+        tags: compactTags([...row.tags, category, mimeTag(row.mimeType), extensionTag(row.fileName)]),
+        documentKind,
+        confidentiality: metadataConfidentiality(row.confidentiality),
+        validFrom: row.validFrom?.toISOString() ?? null,
+        validUntil: row.validUntil?.toISOString() ?? null,
+        version: row.version,
+        isExpired: row.validUntil ? row.validUntil < now : false,
+        expiresSoon: expiresSoon(row.validUntil, now),
       };
     });
 
@@ -453,6 +534,13 @@ export class DocumentCenterService {
       href: '/dashboard/mail',
       downloadUrl: null,
       tags: compactTags(['MAIL', mimeTag(row.contentType), extensionTag(row.filename)]),
+      documentKind: null,
+      confidentiality: null,
+      validFrom: null,
+      validUntil: null,
+      version: null,
+      isExpired: false,
+      expiresSoon: false,
     }));
 
     const normalizedSearch = search ? normalizeForSearch(search) : null;
@@ -460,7 +548,14 @@ export class DocumentCenterService {
       .filter((item) => !filters.category || item.category === filters.category)
       .filter((item) => {
         if (!normalizedSearch) return true;
-        return [item.fileName, item.entityLabel ?? '', item.uploadedByLabel ?? '', ...item.tags]
+        return [
+          item.fileName,
+          item.entityLabel ?? '',
+          item.uploadedByLabel ?? '',
+          item.documentKind ?? '',
+          item.confidentiality ?? '',
+          ...item.tags,
+        ]
           .some((value) => normalizeForSearch(value).includes(normalizedSearch));
       })
       .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));

@@ -13,6 +13,7 @@ export const AuditEntityTypeSchema = z.enum([
   'CUSTOMER_ASSET',
   'SERVICE_REQUEST',
   'PURCHASE_ORDER',
+  'SALES_QUOTE',
   'SALES_ORDER',
   'WORK_ORDER',
   'DELIVERY_NOTE',

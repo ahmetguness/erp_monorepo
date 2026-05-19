@@ -13,6 +13,8 @@ import { useInvoice, useCancelInvoice } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
 import { EntityImageManager } from '@/components/shared/EntityImageManager';
+import { EntityActivityTimeline } from '@/components/shared/EntityActivityTimeline';
+import { EntityTaskActions } from '@/components/shared/EntityTaskActions';
 
 interface LineRow {
   id: string; description: string; quantity: number; unitPrice: number;
@@ -98,6 +100,8 @@ export function InvoiceDetailPage({ id }: Props) {
 
       {/* Attachments */}
       <AttachmentPanel entityType="INVOICE" entityId={id} />
+      <EntityTaskActions entityType="INVOICE" entityId={id} entityLabel={`Fatura ${invoice.number}`} module="invoicing" />
+      <EntityActivityTimeline entityType="INVOICE" entityId={id} />
 
       <ConfirmDialog
         isOpen={cancelOpen}

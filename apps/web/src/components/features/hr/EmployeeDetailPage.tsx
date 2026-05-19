@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
+import { EntityActivityTimeline } from "@/components/shared/EntityActivityTimeline";
+import { EntityTaskActions } from "@/components/shared/EntityTaskActions";
 import { EntityImageManager } from "@/components/shared/EntityImageManager";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -605,6 +607,8 @@ export function EmployeeDetailPage({ id }: { id: string }) {
       </section>
 
       <AttachmentPanel entityType="EMPLOYEE" entityId={id} />
+      <EntityTaskActions entityType="EMPLOYEE" entityId={id} entityLabel={`${emp.firstName} ${emp.lastName}`} module="hr" />
+      <EntityActivityTimeline entityType="EMPLOYEE" entityId={id} />
 
       {emp.email && (
         <EmployeeMailComposer

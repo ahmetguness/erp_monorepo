@@ -25,6 +25,7 @@ interface TaskItem {
 const PRIORITIES: readonly Priority[] = Object.values(Priority);
 const STATUSES: readonly TaskStatus[] = Object.values(TaskStatus);
 const TASK_TYPES: readonly TaskType[] = Object.values(TaskType);
+const ENTITY_TYPES: readonly EntityType[] = Object.values(EntityType);
 
 function isPriority(value: unknown): value is Priority {
   return typeof value === 'string' && PRIORITIES.includes(value as Priority);
@@ -38,6 +39,10 @@ function isTaskType(value: unknown): value is TaskType {
   return typeof value === 'string' && TASK_TYPES.includes(value as TaskType);
 }
 
+function isEntityType(value: unknown): value is EntityType {
+  return typeof value === 'string' && ENTITY_TYPES.includes(value as EntityType);
+}
+
 async function readBody(c: Context): Promise<Record<string, unknown>> {
   const body = await c.req.json<unknown>().catch(() => null);
   if (typeof body !== 'object' || body === null || Array.isArray(body)) return {};
@@ -47,6 +52,44 @@ async function readBody(c: Context): Promise<Record<string, unknown>> {
 function readString(body: Record<string, unknown>, key: string): string | undefined {
   const value = body[key];
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+async function ensureEntityBelongsToTenant(tenantId: string, entityType: EntityType, entityId: string): Promise<void> {
+  const count = await countEntity(tenantId, entityType, entityId);
+  if (count === 0) {
+    throw new ValidationError('Görev bağlanacak kayıt bu tenant içinde bulunamadı.');
+  }
+}
+
+async function countEntity(tenantId: string, entityType: EntityType, entityId: string): Promise<number> {
+  switch (entityType) {
+    case EntityType.INVOICE:
+      return prisma.invoice.count({ where: { id: entityId, tenantId, deletedAt: null } });
+    case EntityType.PRODUCT:
+      return prisma.product.count({ where: { id: entityId, tenantId, deletedAt: null } });
+    case EntityType.CATEGORY:
+      return prisma.category.count({ where: { id: entityId, tenantId } });
+    case EntityType.CONTACT:
+      return prisma.contact.count({ where: { id: entityId, tenantId, deletedAt: null } });
+    case EntityType.EMPLOYEE:
+      return prisma.employee.count({ where: { id: entityId, tenantId, deletedAt: null } });
+    case EntityType.CUSTOMER_ASSET:
+      return prisma.customerAsset.count({ where: { id: entityId, tenantId, deletedAt: null } });
+    case EntityType.SERVICE_REQUEST:
+      return prisma.serviceRequest.count({ where: { id: entityId, tenantId, deletedAt: null } });
+    case EntityType.PURCHASE_ORDER:
+      return prisma.purchaseOrder.count({ where: { id: entityId, tenantId, deletedAt: null } });
+    case EntityType.SALES_QUOTE:
+      return prisma.salesQuote.count({ where: { id: entityId, tenantId, deletedAt: null } });
+    case EntityType.SALES_ORDER:
+      return prisma.salesOrder.count({ where: { id: entityId, tenantId, deletedAt: null } });
+    case EntityType.WORK_ORDER:
+      return prisma.workOrder.count({ where: { id: entityId, tenantId } });
+    case EntityType.DELIVERY_NOTE:
+      return prisma.deliveryNote.count({ where: { id: entityId, tenantId } });
+    case EntityType.OTHER:
+      return 1;
+  }
 }
 
 function invoicePriority(daysLate: number): TaskPriority {
@@ -320,9 +363,19 @@ export const TaskController = {
 
     const priority = isPriority(body.priority) ? body.priority : Priority.MEDIUM;
     const type = isTaskType(body.type) ? body.type : TaskType.GENERAL;
+    const entityType = isEntityType(body.entityType) ? body.entityType : null;
+    const entityId = readString(body, 'entityId') ?? null;
+    if ((entityType && !entityId) || (!entityType && entityId)) {
+      return c.json(new ValidationError('entityType ve entityId birlikte gönderilmelidir.').toJSON(), 400);
+    }
+    if (entityType && entityId) {
+      await ensureEntityBelongsToTenant(tenantId, entityType, entityId);
+    }
+
     const dueAtValue = readString(body, 'dueAt');
     const dueAt = dueAtValue ? new Date(dueAtValue) : null;
     if (dueAtValue && Number.isNaN(dueAt?.getTime())) return c.json(new ValidationError('dueAt gecersiz.').toJSON(), 400);
+    const source = readString(body, 'source') ?? null;
 
     const task = await createTask(tenantId, {
       title,
@@ -330,7 +383,10 @@ export const TaskController = {
       type,
       priority,
       module: readString(body, 'module') ?? null,
+      entityType,
+      entityId,
       href: readString(body, 'href') ?? null,
+      source,
       assignedToId,
       createdById: userId,
       dueAt,
@@ -340,10 +396,10 @@ export const TaskController = {
       tenantId,
       userId,
       module: 'tasks',
-      entityType: EntityType.OTHER,
-      entityId: task.id,
+      entityType: entityType ?? EntityType.OTHER,
+      entityId: entityId ?? task.id,
       action: AuditAction.CREATE,
-      newValues: { id: task.id, title: task.title, assignedToId: task.assignedToId },
+      newValues: { id: task.id, title: task.title, assignedToId: task.assignedToId, source: task.source },
       ...getRequestMeta(c),
     });
 

@@ -1,5 +1,5 @@
 import { Context } from 'hono';
-import { AuditAction, EntityType } from '@prisma/client';
+import { AuditAction, EntityType, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { basename, extname } from 'path';
 import { prisma } from '../lib/prisma';
@@ -9,8 +9,13 @@ import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { bufferToArrayBuffer, storageService } from '../services/storage.service.js';
 import {
   DocumentCenterService,
+  type DocumentCenterCategory,
+  type DocumentConfidentiality,
+  type DocumentKind,
   parseDocumentCenterCategory,
   parseDocumentCenterSource,
+  parseDocumentConfidentiality,
+  parseDocumentKind,
 } from '../services/document-center.service.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -48,6 +53,80 @@ function sanitizeFileName(fileName: string): string {
   return basename(fileName).replace(/[^\w.\- ]/g, '_').slice(0, 180) || 'file';
 }
 
+function sanitizeTag(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').slice(0, 40);
+}
+
+function readFormString(formData: FormData, key: string): string | undefined {
+  const value = formData.get(key);
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function parseTagList(value: string | undefined): string[] {
+  if (!value) return [];
+  return Array.from(new Set(value.split(',').map(sanitizeTag).filter(Boolean))).slice(0, 12);
+}
+
+function parseDateField(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new ValidationError('Geçerli bir tarih girin.');
+  }
+  return date;
+}
+
+function parsePositiveVersion(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const version = Number.parseInt(value, 10);
+  if (!Number.isInteger(version) || version < 1 || version > 999) {
+    throw new ValidationError('Versiyon 1 ile 999 arasında olmalıdır.');
+  }
+  return version;
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value));
+}
+
+function readBodyString(body: Record<string, unknown>, key: string): string | undefined {
+  const value = body[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function readStringArray(body: Record<string, unknown>, key: string): string[] | undefined {
+  const value = body[key];
+  if (!Array.isArray(value)) return undefined;
+  return Array.from(new Set(value.map((item) => (typeof item === 'string' ? sanitizeTag(item) : '')).filter(Boolean))).slice(0, 12);
+}
+
+function parseCategoryInput(value: string | undefined): DocumentCenterCategory | null {
+  if (!value) return null;
+  const category = parseDocumentCenterCategory(value);
+  if (!category) throw new ValidationError('Geçerli bir kategori seçin.');
+  return category;
+}
+
+function parseKindInput(value: string | undefined): DocumentKind | null {
+  if (!value) return null;
+  const documentKind = parseDocumentKind(value);
+  if (!documentKind) throw new ValidationError('Geçerli bir doküman tipi seçin.');
+  return documentKind;
+}
+
+function parseConfidentialityInput(value: string | undefined): DocumentConfidentiality | null {
+  if (!value) return null;
+  const confidentiality = parseDocumentConfidentiality(value);
+  if (!confidentiality) throw new ValidationError('Geçerli bir gizlilik seviyesi seçin.');
+  return confidentiality;
+}
+
+function validateDocumentDates(validFrom: Date | null | undefined, validUntil: Date | null | undefined): void {
+  if (validFrom && validUntil && validFrom > validUntil) {
+    throw new ValidationError('Başlangıç tarihi bitiş tarihinden sonra olamaz.');
+  }
+}
 
 async function ensureEntityBelongsToTenant(tenantId: string, entityType: EntityType, entityId: string): Promise<void> {
   const count = await countEntity(tenantId, entityType, entityId);
@@ -74,6 +153,8 @@ async function countEntity(tenantId: string, entityType: EntityType, entityId: s
       return prisma.serviceRequest.count({ where: { id: entityId, tenantId } });
     case EntityType.PURCHASE_ORDER:
       return prisma.purchaseOrder.count({ where: { id: entityId, tenantId } });
+    case EntityType.SALES_QUOTE:
+      return prisma.salesQuote.count({ where: { id: entityId, tenantId, deletedAt: null } });
     case EntityType.SALES_ORDER:
       return prisma.salesOrder.count({ where: { id: entityId, tenantId } });
     case EntityType.WORK_ORDER:
@@ -82,6 +163,122 @@ async function countEntity(tenantId: string, entityType: EntityType, entityId: s
       return prisma.deliveryNote.count({ where: { id: entityId, tenantId } });
     case EntityType.OTHER:
       return 0;
+  }
+}
+
+interface EntityOption {
+  id: string;
+  label: string;
+  detail: string | null;
+}
+
+async function findEntityOptions(tenantId: string, entityType: EntityType, search: string | undefined): Promise<EntityOption[]> {
+  const take = 20;
+  const contains = search ? { contains: search, mode: 'insensitive' as const } : undefined;
+
+  switch (entityType) {
+    case EntityType.CONTACT: {
+      const rows = await prisma.contact.findMany({
+        where: { tenantId, deletedAt: null, ...(contains && { OR: [{ name: contains }, { code: contains }, { email: contains }] }) },
+        select: { id: true, name: true, code: true, email: true },
+        orderBy: { name: 'asc' },
+        take,
+      });
+      return rows.map((row) => ({ id: row.id, label: row.code ? `${row.code} - ${row.name}` : row.name, detail: row.email }));
+    }
+    case EntityType.EMPLOYEE: {
+      const rows = await prisma.employee.findMany({
+        where: { tenantId, deletedAt: null, ...(contains && { OR: [{ firstName: contains }, { lastName: contains }, { email: contains }] }) },
+        select: { id: true, firstName: true, lastName: true, email: true },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        take,
+      });
+      return rows.map((row) => ({ id: row.id, label: `${row.firstName} ${row.lastName}`, detail: row.email }));
+    }
+    case EntityType.INVOICE: {
+      const rows = await prisma.invoice.findMany({
+        where: { tenantId, deletedAt: null, ...(contains && { number: contains }) },
+        select: { id: true, number: true, status: true },
+        orderBy: { createdAt: 'desc' },
+        take,
+      });
+      return rows.map((row) => ({ id: row.id, label: row.number, detail: row.status }));
+    }
+    case EntityType.SALES_QUOTE: {
+      const rows = await prisma.salesQuote.findMany({
+        where: { tenantId, deletedAt: null, ...(contains && { number: contains }) },
+        select: { id: true, number: true, status: true },
+        orderBy: { createdAt: 'desc' },
+        take,
+      });
+      return rows.map((row) => ({ id: row.id, label: row.number, detail: row.status }));
+    }
+    case EntityType.SALES_ORDER: {
+      const rows = await prisma.salesOrder.findMany({
+        where: { tenantId, deletedAt: null, ...(contains && { number: contains }) },
+        select: { id: true, number: true, status: true },
+        orderBy: { createdAt: 'desc' },
+        take,
+      });
+      return rows.map((row) => ({ id: row.id, label: row.number, detail: row.status }));
+    }
+    case EntityType.PURCHASE_ORDER: {
+      const rows = await prisma.purchaseOrder.findMany({
+        where: { tenantId, deletedAt: null, ...(contains && { number: contains }) },
+        select: { id: true, number: true, status: true },
+        orderBy: { createdAt: 'desc' },
+        take,
+      });
+      return rows.map((row) => ({ id: row.id, label: row.number, detail: row.status }));
+    }
+    case EntityType.PRODUCT: {
+      const rows = await prisma.product.findMany({
+        where: { tenantId, deletedAt: null, ...(contains && { OR: [{ name: contains }, { code: contains }] }) },
+        select: { id: true, name: true, code: true },
+        orderBy: { name: 'asc' },
+        take,
+      });
+      return rows.map((row) => ({ id: row.id, label: `${row.code} - ${row.name}`, detail: null }));
+    }
+    case EntityType.SERVICE_REQUEST: {
+      const rows = await prisma.serviceRequest.findMany({
+        where: { tenantId, deletedAt: null, ...(contains && { OR: [{ number: contains }, { subject: contains }] }) },
+        select: { id: true, number: true, subject: true },
+        orderBy: { createdAt: 'desc' },
+        take,
+      });
+      return rows.map((row) => ({ id: row.id, label: `${row.number} - ${row.subject}`, detail: null }));
+    }
+    case EntityType.WORK_ORDER: {
+      const rows = await prisma.workOrder.findMany({
+        where: { tenantId, ...(contains && { number: contains }) },
+        select: { id: true, number: true, status: true },
+        orderBy: { createdAt: 'desc' },
+        take,
+      });
+      return rows.map((row) => ({ id: row.id, label: row.number, detail: row.status }));
+    }
+    case EntityType.DELIVERY_NOTE: {
+      const rows = await prisma.deliveryNote.findMany({
+        where: { tenantId, ...(contains && { number: contains }) },
+        select: { id: true, number: true, status: true },
+        orderBy: { createdAt: 'desc' },
+        take,
+      });
+      return rows.map((row) => ({ id: row.id, label: row.number, detail: row.status }));
+    }
+    case EntityType.CUSTOMER_ASSET: {
+      const rows = await prisma.customerAsset.findMany({
+        where: { tenantId, deletedAt: null, ...(contains && { OR: [{ name: contains }, { serialNo: contains }] }) },
+        select: { id: true, name: true, serialNo: true },
+        orderBy: { name: 'asc' },
+        take,
+      });
+      return rows.map((row) => ({ id: row.id, label: row.serialNo ? `${row.name} - ${row.serialNo}` : row.name, detail: null }));
+    }
+    case EntityType.CATEGORY:
+    case EntityType.OTHER:
+      return [];
   }
 }
 
@@ -129,6 +326,19 @@ export const AttachmentController = {
     return c.json(result);
   },
 
+  async entityOptions(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const rawEntityType = c.req.query('entityType');
+    const search = c.req.query('search')?.trim() || undefined;
+
+    if (!rawEntityType || !isEntityType(rawEntityType)) {
+      return c.json(new ValidationError('Geçerli entityType zorunludur.').toJSON(), 400);
+    }
+
+    const data = await findEntityOptions(tenantId, rawEntityType, search);
+    return c.json({ data });
+  },
+
   async listByEntity(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const rawEntityType = c.req.query('entityType');
@@ -165,6 +375,15 @@ export const AttachmentController = {
 
     await ensureEntityBelongsToTenant(tenantId, rawEntityType, rawEntityId);
     const { safeName, extension, mimeType } = validateFile(fileValue);
+    const category = parseCategoryInput(readFormString(formData, 'category'));
+    const tags = parseTagList(readFormString(formData, 'tags'));
+    const documentKind = parseKindInput(readFormString(formData, 'documentKind'));
+    const confidentiality = parseConfidentialityInput(readFormString(formData, 'confidentiality'));
+    const validFrom = parseDateField(readFormString(formData, 'validFrom'));
+    const validUntil = parseDateField(readFormString(formData, 'validUntil'));
+    const version = parsePositiveVersion(readFormString(formData, 'version')) ?? 1;
+    validateDocumentDates(validFrom, validUntil);
+
     const storageName = `${randomUUID()}${extension}`;
     const storagePath = `${tenantId}/${storageName}`;
     const buffer = Buffer.from(await fileValue.arrayBuffer());
@@ -179,6 +398,13 @@ export const AttachmentController = {
         storagePath,
         mimeType,
         fileSize: fileValue.size,
+        category,
+        tags,
+        documentKind,
+        confidentiality,
+        validFrom,
+        validUntil,
+        version,
         uploadedById: userId,
       },
     });
@@ -190,7 +416,7 @@ export const AttachmentController = {
       entityType: rawEntityType,
       entityId: rawEntityId,
       action: AuditAction.CREATE,
-      newValues: { attachmentId: attachment.id, fileName: safeName, mimeType, fileSize: fileValue.size },
+      newValues: { attachmentId: attachment.id, fileName: safeName, mimeType, fileSize: fileValue.size, category, tags, documentKind, confidentiality, validFrom, validUntil, version },
       ...getRequestMeta(c),
     });
 
@@ -229,18 +455,43 @@ export const AttachmentController = {
     if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
     await ensureEntityBelongsToTenant(tenantId, attachment.entityType, attachment.entityId);
 
-    const body = await c.req.json<unknown>().catch(() => null);
-    const fileName = typeof body === 'object' && body !== null && 'fileName' in body && typeof body.fileName === 'string'
-      ? sanitizeFileName(body.fileName.trim())
-      : '';
-    if (!fileName) {
-      return c.json(new ValidationError('fileName zorunludur.').toJSON(), 400);
+    const body = readRecord(await c.req.json<unknown>().catch(() => null));
+    const rawFileName = readBodyString(body, 'fileName');
+    const fileName = rawFileName ? sanitizeFileName(rawFileName) : undefined;
+    const category = 'category' in body ? parseCategoryInput(readBodyString(body, 'category')) : undefined;
+    const tags = 'tags' in body ? readStringArray(body, 'tags') ?? [] : undefined;
+    const documentKind = 'documentKind' in body ? parseKindInput(readBodyString(body, 'documentKind')) : undefined;
+    const confidentiality = 'confidentiality' in body ? parseConfidentialityInput(readBodyString(body, 'confidentiality')) : undefined;
+    const validFrom = 'validFrom' in body ? parseDateField(readBodyString(body, 'validFrom')) ?? null : undefined;
+    const validUntil = 'validUntil' in body ? parseDateField(readBodyString(body, 'validUntil')) ?? null : undefined;
+    const version = 'version' in body ? parsePositiveVersion(readBodyString(body, 'version')) ?? 1 : undefined;
+
+    validateDocumentDates(
+      validFrom !== undefined ? validFrom : attachment.validFrom,
+      validUntil !== undefined ? validUntil : attachment.validUntil,
+    );
+
+    const data: Prisma.AttachmentUpdateInput = {};
+    if (fileName) data.fileName = fileName;
+    if (category !== undefined) data.category = category;
+    if (tags !== undefined) data.tags = tags;
+    if (documentKind !== undefined) data.documentKind = documentKind;
+    if (confidentiality !== undefined) data.confidentiality = confidentiality;
+    if (validFrom !== undefined) data.validFrom = validFrom;
+    if (validUntil !== undefined) data.validUntil = validUntil;
+    if (version !== undefined) data.version = version;
+
+    if (Object.keys(data).length === 0) {
+      return c.json(new ValidationError('Güncellenecek en az bir alan gönderilmelidir.').toJSON(), 400);
     }
 
-    const updated = await prisma.attachment.update({
-      where: { id },
-      data: { fileName },
+    await prisma.attachment.updateMany({
+      where: { id, tenantId },
+      data,
     });
+
+    const updated = await prisma.attachment.findFirst({ where: { id, tenantId } });
+    if (!updated) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
 
     await createAuditLog(prisma, {
       tenantId,
@@ -249,8 +500,28 @@ export const AttachmentController = {
       entityType: attachment.entityType,
       entityId: attachment.entityId,
       action: AuditAction.UPDATE,
-      oldValues: { attachmentId: id, fileName: attachment.fileName },
-      newValues: { attachmentId: id, fileName },
+      oldValues: {
+        attachmentId: id,
+        fileName: attachment.fileName,
+        category: attachment.category,
+        tags: attachment.tags,
+        documentKind: attachment.documentKind,
+        confidentiality: attachment.confidentiality,
+        validFrom: attachment.validFrom,
+        validUntil: attachment.validUntil,
+        version: attachment.version,
+      },
+      newValues: {
+        attachmentId: id,
+        fileName: updated.fileName,
+        category: updated.category,
+        tags: updated.tags,
+        documentKind: updated.documentKind,
+        confidentiality: updated.confidentiality,
+        validFrom: updated.validFrom,
+        validUntil: updated.validUntil,
+        version: updated.version,
+      },
       ...getRequestMeta(c),
     });
 
