@@ -30,6 +30,10 @@ export interface PlanFeatures {
   apiAccess: boolean;
   advancedAuditLog: boolean;
   customReporting: boolean;
+  documentCenter: boolean;
+  smartNotifications: boolean;
+  workflowCenter: boolean;
+  mailCenter: boolean;
 }
 
 const STARTER_FEATURES: PlanFeatures = {
@@ -51,6 +55,10 @@ const STARTER_FEATURES: PlanFeatures = {
   apiAccess: false,
   advancedAuditLog: false,
   customReporting: false,
+  documentCenter: true,
+  smartNotifications: true,
+  workflowCenter: false,
+  mailCenter: false,
 };
 
 const PROFESSIONAL_FEATURES: PlanFeatures = {
@@ -72,6 +80,10 @@ const PROFESSIONAL_FEATURES: PlanFeatures = {
   apiAccess: true,
   advancedAuditLog: true,
   customReporting: true,
+  documentCenter: true,
+  smartNotifications: true,
+  workflowCenter: true,
+  mailCenter: false,
 };
 
 const ENTERPRISE_FEATURES: PlanFeatures = {
@@ -93,6 +105,10 @@ const ENTERPRISE_FEATURES: PlanFeatures = {
   apiAccess: true,
   advancedAuditLog: true,
   customReporting: true,
+  documentCenter: true,
+  smartNotifications: true,
+  workflowCenter: true,
+  mailCenter: true,
 };
 
 export function usePlanFeatures(): PlanFeatures {
@@ -119,6 +135,9 @@ export function usePlanFeatures(): PlanFeatures {
     if (modules.includes('payroll')) overrideFeatures.payroll = true;
     if (modules.includes('hr')) overrideFeatures.hr = true;
     if (modules.includes('approvals')) overrideFeatures.approvals = true;
+    if (modules.includes('documents')) overrideFeatures.documentCenter = true;
+    if (modules.includes('workflow')) overrideFeatures.workflowCenter = true;
+    if (modules.includes('mail')) overrideFeatures.mailCenter = true;
     
     return { ...baseFeatures, ...overrideFeatures };
   }

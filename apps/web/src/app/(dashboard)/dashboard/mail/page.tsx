@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: 'Mail Merkezi - Axon ERP' };
 
 export default function Page() {
   return (
-    <FeatureGate feature="hr" plan="ENTERPRISE">
+    <FeatureGate feature="mailCenter" plan="ENTERPRISE">
       <MailCenterPage />
     </FeatureGate>
   );

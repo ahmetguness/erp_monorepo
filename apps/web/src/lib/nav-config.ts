@@ -45,6 +45,7 @@ import {
   Wallet,
   UploadCloud,
   Mail,
+  FolderOpen,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -213,7 +214,8 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Yönetim',
     items: [
       { label: 'Onay Akışları', href: '/dashboard/approvals', icon: GitBranch, plan: 'PROFESSIONAL', module: 'approvals' },
-      { label: 'İş Akışı Merkezi', href: '/dashboard/workflow', icon: ClipboardCheck },
+      { label: 'İş Akışı Merkezi', href: '/dashboard/workflow', icon: ClipboardCheck, plan: 'PROFESSIONAL' },
+      { label: 'Doküman Merkezi', href: '/dashboard/documents', icon: FolderOpen },
       { label: 'İçe / Dışa Aktarma', href: '/dashboard/data-exchange', icon: UploadCloud },
       { label: 'Rol Yönetimi', href: '/dashboard/roles', icon: Shield, plan: 'PROFESSIONAL' },
       { label: 'API Anahtarları', href: '/dashboard/api-keys', icon: Key, plan: 'PROFESSIONAL' },

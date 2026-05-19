@@ -16,8 +16,10 @@ import { apiClient } from "@/lib/api-client";
 import { safeParse } from "@/lib/safe-parse";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/useAuth";
+import { useSmartNotifications } from "@/hooks/useNotifications";
 import { getTcmbRates } from "@/services/currency-rates.service";
 import { getRecommendations, type Recommendation } from "@/services/intelligence.service";
+import type { SmartNotification } from "@/services/notification.service";
 import { updateTaskStatus } from "@/services/task.service";
 import { SingleResponseSchema, PaginatedResponseSchema } from "@/types/api.types";
 import { z } from "zod";
@@ -91,6 +93,16 @@ const STATUS_DOT: Record<string, string> = { DRAFT: "bg-slate-500", SENT: "bg-bl
 const STATUS_LABEL: Record<string, string> = { DRAFT: "Taslak", SENT: "Gönderildi", PAID: "Ödendi", PARTIALLY_PAID: "Kısmi", OVERDUE: "Gecikmiş", CANCELLED: "İptal" };
 const TASK_TONE: Record<string, string> = { CRITICAL: "text-red-400", HIGH: "text-amber-400", MEDIUM: "text-sky-400", LOW: "text-slate-500" };
 const RECOMMENDATION_TONE: Record<string, string> = { CRITICAL: "border-red-500/30 bg-red-500/5", HIGH: "border-amber-500/30 bg-amber-500/5", MEDIUM: "border-sky-500/25 bg-sky-500/5", LOW: "border-slate-700 bg-slate-950/30" };
+const SMART_NOTIFICATION_TONE: Record<SmartNotification["severity"], string> = {
+  critical: "border-red-500/25 bg-red-500/[0.04]",
+  warning: "border-amber-500/25 bg-amber-500/[0.04]",
+  info: "border-sky-500/25 bg-sky-500/[0.04]",
+};
+const SMART_NOTIFICATION_TEXT: Record<SmartNotification["severity"], string> = {
+  critical: "text-red-300",
+  warning: "text-amber-300",
+  info: "text-sky-300",
+};
 const PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#64748b"];
 const TOOLTIP_STYLE = { background: "#1e293b", border: "none", borderRadius: 8, fontSize: 12 } as const;
 
@@ -164,6 +176,7 @@ export function DashboardOverview() {
   const { data: appr } = useQuery({ queryKey: ["d", "appr"], queryFn: async () => { try { return safeParse(SingleResponseSchema(ApprSchema), (await apiClient.get("/api/approvals/requests", { params: { limit: 5 } })).data, "a").data; } catch { return []; } } });
   const { data: tasks } = useQuery({ queryKey: ["d", "tasks"], queryFn: async () => { try { return safeParse(SingleResponseSchema(z.array(TaskSchema)), (await apiClient.get("/api/tasks")).data, "tasks").data; } catch { return []; } } });
   const { data: recommendations = [] } = useQuery({ queryKey: ["d", "recommendations"], queryFn: async () => { try { return await getRecommendations(); } catch { return []; } } });
+  const { data: smartNotifications } = useSmartNotifications();
   const completeTask = useMutation({
     mutationFn: (taskId: string) => updateTaskStatus(taskId, "DONE"),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["d", "tasks"] }),
@@ -516,7 +529,26 @@ export function DashboardOverview() {
       </div>
 
       {/* ── Notifications + Approvals ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+        <Card className="flex flex-col max-h-[360px]">
+          <CardHeader icon={<Bell className="w-4 h-4 text-amber-400" />} title="Akıllı Bildirim Merkezi" />
+          <div className="flex-1 overflow-auto divide-y divide-slate-800/50">
+            {smartNotifications && smartNotifications.items.length > 0 ? smartNotifications.items.slice(0, 8).map((item) => (
+              <Link key={item.id} href={item.href} className="block px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
+                <div className={cn("rounded-xl border px-3 py-2.5", SMART_NOTIFICATION_TONE[item.severity])}>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className={cn("text-sm font-semibold leading-snug", SMART_NOTIFICATION_TEXT[item.severity])}>{item.title}</p>
+                    <span className="rounded-lg bg-slate-950/70 px-2 py-0.5 text-xs font-bold text-slate-200">{item.count}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500 line-clamp-2">{item.message}</p>
+                </div>
+              </Link>
+            )) : (
+              <div className="p-8 text-center text-sm text-slate-500">Kritik akıllı uyarı yok</div>
+            )}
+          </div>
+        </Card>
+
         <Card className="flex flex-col max-h-[360px]">
           <CardHeader icon={<ListChecks className="w-4 h-4 text-violet-400" />} title="Görevlerim" />
           <div className="flex-1 overflow-auto divide-y divide-slate-800/50">

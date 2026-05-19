@@ -1,8 +1,9 @@
 import { Context } from 'hono';
-import { ContactType, Prisma } from '@prisma/client';
+import { AuditAction, ContactType, EntityType, Prisma, type Contact } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireUserId } from '../utils/context.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -39,6 +40,26 @@ interface ContactListQuery {
   balanceFilter?: 'receivable' | 'payable' | 'risky';
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
+}
+
+function toContactAuditSnapshot(contact: Contact): Prisma.InputJsonObject {
+  return {
+    type: contact.type,
+    name: contact.name,
+    code: contact.code,
+    taxNumber: contact.taxNumber,
+    taxOffice: contact.taxOffice,
+    email: contact.email,
+    phone: contact.phone,
+    website: contact.website,
+    address: contact.address,
+    city: contact.city,
+    country: contact.country,
+    notes: contact.notes,
+    creditLimit: contact.creditLimit === null ? null : Number(contact.creditLimit),
+    paymentTermDays: contact.paymentTermDays,
+    isActive: contact.isActive,
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -300,6 +321,7 @@ export const ContactController = {
 
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
 
     const body = await c.req.json<CreateContactDTO>();
 
@@ -355,12 +377,27 @@ export const ContactController = {
       },
     });
 
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'contacts',
+      entityType: EntityType.CONTACT,
+      entityId: contact.id,
+      action: AuditAction.CREATE,
+      newValues: toContactAuditSnapshot(contact),
+      ...getRequestMeta(c),
+    });
+
     return c.json({ data: contact }, 201);
   },
 
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const contactId = c.req.param('id');
+    if (!contactId) {
+      return c.json(new ValidationError('Cari hesap id zorunludur.').toJSON(), 400);
+    }
 
     const contact = await prisma.contact.findFirst({
       where: { id: contactId, tenantId, deletedAt: null },
@@ -391,12 +428,28 @@ export const ContactController = {
       },
     });
 
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'contacts',
+      entityType: EntityType.CONTACT,
+      entityId: contactId,
+      action: AuditAction.UPDATE,
+      oldValues: toContactAuditSnapshot(contact),
+      newValues: toContactAuditSnapshot(updated),
+      ...getRequestMeta(c),
+    });
+
     return c.json({ data: updated });
   },
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const contactId = c.req.param('id');
+    if (!contactId) {
+      return c.json(new ValidationError('Cari hesap id zorunludur.').toJSON(), 400);
+    }
 
     const contact = await prisma.contact.findFirst({
       where: { id: contactId, tenantId, deletedAt: null },
@@ -408,6 +461,17 @@ export const ContactController = {
     await prisma.contact.update({
       where: { id: contactId },
       data: { deletedAt: new Date() },
+    });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'contacts',
+      entityType: EntityType.CONTACT,
+      entityId: contactId,
+      action: AuditAction.DELETE,
+      oldValues: toContactAuditSnapshot(contact),
+      ...getRequestMeta(c),
     });
 
     return c.json({ data: { success: true } });

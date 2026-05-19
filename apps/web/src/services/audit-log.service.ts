@@ -4,9 +4,28 @@ import { safeParse } from '@/lib/safe-parse';
 import { PaginatedResponseSchema, SingleResponseSchema } from '@/types/api.types';
 import type { PaginationParams } from '@/types/api.types';
 
+export const AuditEntityTypeSchema = z.enum([
+  'INVOICE',
+  'PRODUCT',
+  'CATEGORY',
+  'CONTACT',
+  'EMPLOYEE',
+  'CUSTOMER_ASSET',
+  'SERVICE_REQUEST',
+  'PURCHASE_ORDER',
+  'SALES_ORDER',
+  'WORK_ORDER',
+  'DELIVERY_NOTE',
+  'OTHER',
+]);
+
+export type AuditEntityType = z.infer<typeof AuditEntityTypeSchema>;
+
 export const AuditLogSchema = z.object({
   id: z.string(), tenantId: z.string(), userId: z.string().nullable(),
-  module: z.string(), entityType: z.string(), entityId: z.string(),
+  module: z.string(), entityType: AuditEntityTypeSchema, entityId: z.string(),
+  entityLabel: z.string().nullable().optional(),
+  userLabel: z.string().nullable().optional(),
   action: z.string(), oldValues: z.unknown().nullable(), newValues: z.unknown().nullable(),
   ipAddress: z.string().nullable(), userAgent: z.string().nullable(),
   createdAt: z.string(),
@@ -26,7 +45,11 @@ export const AuditLogExportSchema = z.object({
 export type AuditLogExport = z.infer<typeof AuditLogExportSchema>;
 
 export interface AuditLogParams extends PaginationParams {
-  module?: string; entityType?: string; action?: string; userId?: string;
+  module?: string;
+  entityType?: AuditEntityType;
+  entityId?: string;
+  action?: string;
+  userId?: string;
 }
 
 export async function getAuditLogs(params: AuditLogParams) {

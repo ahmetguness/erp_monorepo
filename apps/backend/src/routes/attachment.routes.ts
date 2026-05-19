@@ -5,6 +5,7 @@ import { requirePermission } from '../middleware/requirePermission';
 // Attachments tüm planlara açık — requireAuth zaten tenantApi seviyesinde uygulanıyor
 const attachmentRoutes = new Hono();
 
+attachmentRoutes.get('/library', requirePermission('attachments', 'READ'), AttachmentController.library);
 attachmentRoutes.get('/', requirePermission('attachments', 'READ'), AttachmentController.listByEntity);
 attachmentRoutes.post('/upload', requirePermission('attachments', 'CREATE'), AttachmentController.upload);
 attachmentRoutes.get('/:id/download', requirePermission('attachments', 'READ'), AttachmentController.download);

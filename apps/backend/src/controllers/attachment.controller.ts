@@ -7,6 +7,11 @@ import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { bufferToArrayBuffer, storageService } from '../services/storage.service.js';
+import {
+  DocumentCenterService,
+  parseDocumentCenterCategory,
+  parseDocumentCenterSource,
+} from '../services/document-center.service.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -99,6 +104,31 @@ function validateFile(file: File): { safeName: string; extension: string; mimeTy
 }
 
 export const AttachmentController = {
+  async library(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '30', 10)));
+    const rawEntityType = c.req.query('entityType');
+    const entityType = rawEntityType && isEntityType(rawEntityType) ? rawEntityType : undefined;
+    const category = parseDocumentCenterCategory(c.req.query('category'));
+    const source = parseDocumentCenterSource(c.req.query('source'));
+
+    const service = new DocumentCenterService(prisma);
+    const result = await service.list({
+      tenantId,
+      userId,
+      page,
+      limit,
+      search: c.req.query('search'),
+      category,
+      source,
+      entityType,
+    });
+
+    return c.json(result);
+  },
+
   async listByEntity(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const rawEntityType = c.req.query('entityType');

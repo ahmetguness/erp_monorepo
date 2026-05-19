@@ -3,13 +3,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
-import { getNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications, archiveNotification } from '@/services/notification.service';
+import { getNotifications, getSmartNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications, archiveNotification } from '@/services/notification.service';
 
 export function useNotifications(params?: { status?: string; limit?: number }) {
   return useQuery({
     queryKey: ['notifications', params],
     queryFn: () => getNotifications(params),
     refetchInterval: 60 * 1000, // poll every 60s
+  });
+}
+
+export function useSmartNotifications() {
+  return useQuery({
+    queryKey: ['notifications', 'smart'],
+    queryFn: getSmartNotifications,
+    refetchInterval: 60 * 1000,
   });
 }
 

@@ -3,12 +3,19 @@ import { NotificationStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
+import { SmartNotificationService } from '../services/smart-notification.service.js';
 
 // ─────────────────────────────────────────────
 // Notification Controller
 // ─────────────────────────────────────────────
 
 export const NotificationController = {
+  async smart(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const service = new SmartNotificationService(prisma);
+    const summary = await service.getSummary(tenantId);
+    return c.json({ data: summary });
+  },
 
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);

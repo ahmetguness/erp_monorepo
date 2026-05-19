@@ -30,6 +30,7 @@ import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { KpiCard } from "@/components/shared/KpiCard";
 import { CreditLimitBar } from "@/components/shared/CreditLimitBar";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
+import { EntityActivityTimeline } from "@/components/shared/EntityActivityTimeline";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -679,6 +680,8 @@ export function ContactDetailPage({ id }: Props) {
       </div>
 
       <AttachmentPanel entityType="CONTACT" entityId={id} />
+
+      <EntityActivityTimeline entityType="CONTACT" entityId={id} module="contacts" />
 
       <ConfirmDialog
         isOpen={deleteOpen}
