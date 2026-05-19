@@ -11,7 +11,10 @@ export const mailRoutes = new Hono();
 mailRoutes.use('*', requirePlan(Plan.ENTERPRISE));
 mailRoutes.use('*', requireFeature(FeatureKey.HR)); // HR feature altında mail erişimi
 
+mailRoutes.get('/', requirePermission('mail', 'READ'), MailController.list);
+mailRoutes.get('/:id', requirePermission('mail', 'READ'), MailController.get);
 mailRoutes.post('/send', requirePermission('mail', 'CREATE'), MailController.send);
+mailRoutes.post('/bulk', requirePermission('mail', 'CREATE'), MailController.bulk);
 mailRoutes.post('/welcome', requirePermission('mail', 'CREATE'), MailController.sendWelcome);
 mailRoutes.post('/password-reset', requirePermission('mail', 'CREATE'), MailController.sendPasswordReset);
 mailRoutes.post('/invoice-notification', requirePermission('mail', 'CREATE'), MailController.sendInvoiceNotification);

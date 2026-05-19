@@ -1,5 +1,8 @@
 import { resend, DEFAULT_FROM } from '../lib/resend';
 import { logger } from '../lib/logger';
+import { normalizeMailAttachments } from '../utils/mail-attachments';
+import type { MailAttachmentInput } from '../utils/mail-attachments';
+import type { CreateEmailOptions } from 'resend';
 
 // ── Tipler ───────────────────────────────────
 export interface SendMailOptions {
@@ -10,11 +13,7 @@ export interface SendMailOptions {
   replyTo?: string;
   cc?: string | string[];
   bcc?: string | string[];
-  attachments?: Array<{
-    filename: string;
-    content: string;
-    contentType?: string;
-  }>;
+  attachments?: MailAttachmentInput[];
 }
 
 export interface MailResult {
@@ -23,13 +22,29 @@ export interface MailResult {
   error?: string;
 }
 
-function cleanBase64(content: string): string {
-  const trimmed = content.trim();
-  const dataUrlSeparator = trimmed.indexOf(',');
-  const withoutPrefix = trimmed.startsWith('data:') && dataUrlSeparator >= 0
-    ? trimmed.slice(dataUrlSeparator + 1)
-    : trimmed;
-  return withoutPrefix.replace(/\s/g, '');
+function toAddressArray(value: string | string[]): string[] {
+  return Array.isArray(value) ? value : [value];
+}
+
+export function buildResendEmailPayload(options: SendMailOptions): CreateEmailOptions {
+  const attachments = normalizeMailAttachments(options.attachments);
+
+  return {
+    from: options.from || DEFAULT_FROM,
+    to: toAddressArray(options.to),
+    subject: options.subject,
+    html: options.html,
+    ...(options.replyTo && { replyTo: options.replyTo }),
+    ...(options.cc && { cc: toAddressArray(options.cc) }),
+    ...(options.bcc && { bcc: toAddressArray(options.bcc) }),
+    ...(attachments.length > 0 && {
+      attachments: attachments.map((attachment) => ({
+        filename: attachment.filename,
+        content: attachment.content,
+        contentType: attachment.contentType,
+      })),
+    }),
+  };
 }
 
 // ── Genel mail gönderme ──────────────────────
@@ -40,29 +55,15 @@ export async function sendMail(options: SendMailOptions): Promise<MailResult> {
   }
 
   try {
-    const { data, error } = await resend.emails.send({
-      from: options.from || DEFAULT_FROM,
-      to: Array.isArray(options.to) ? options.to : [options.to],
-      subject: options.subject,
-      html: options.html,
-      ...(options.replyTo && { replyTo: options.replyTo }),
-      ...(options.cc && { cc: Array.isArray(options.cc) ? options.cc : [options.cc] }),
-      ...(options.bcc && { bcc: Array.isArray(options.bcc) ? options.bcc : [options.bcc] }),
-      ...(options.attachments?.length && {
-        attachments: options.attachments.map((attachment) => ({
-          filename: attachment.filename,
-          content: cleanBase64(attachment.content),
-          ...(attachment.contentType && { contentType: attachment.contentType }),
-        })),
-      }),
-    });
+    const payload = buildResendEmailPayload(options);
+    const { data, error } = await resend.emails.send(payload);
 
     if (error) {
       logger.error(`Mail gönderim hatası: ${JSON.stringify(error)}`);
       return { success: false, error: error.message };
     }
 
-    logger.info(`Mail gönderildi → ${options.to} (id: ${data?.id})`);
+    logger.info(`Mail gönderildi → ${options.to} (id: ${data?.id}, ek: ${options.attachments?.length ?? 0})`);
     return { success: true, id: data?.id };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

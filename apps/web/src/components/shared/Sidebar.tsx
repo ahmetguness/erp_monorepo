@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
-import { ChevronDown, LogOut } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, LogOut, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NAV_GROUPS, type NavItem } from '@/lib/nav-config';
 import { useCurrentUser, useLogout } from '@/hooks/useAuth';
@@ -34,19 +34,49 @@ function hasModuleAccess(tenantModules: string[], requiredModule?: string): bool
 }
 
 function hasAccess(tenantPlan: string, tenantModules: string[], item: { plan?: string; module?: string }): boolean {
+  const hasRequiredPlan = hasPlanAccess(tenantPlan, item.plan);
+
   // Eğer modül listesi doluysa -> Kısıtlayıcı Model: SADECE listedeki modüller (ve modülsüzler) gösterilir
   if (tenantModules.length > 0) {
     if (!item.module) {
       // Dashboard, Rol Yönetimi, Ayarlar vb. modül bağımsızlar için planı yeterli mi kontrol et
-      return hasPlanAccess(tenantPlan, item.plan);
+      return hasRequiredPlan;
     }
     // "warehouse" modülü açıldıysa nav-config'deki "inventory" menüsünün görünmesini sağla
-    if (tenantModules.includes('warehouse') && item.module === 'inventory') return true;
-    return tenantModules.includes(item.module);
+    const hasRequiredModule = tenantModules.includes(item.module) || (tenantModules.includes('warehouse') && item.module === 'inventory');
+    return hasRequiredPlan && hasRequiredModule;
   }
 
   // Eğer özel modül tanımlanmamışsa -> Normal Plan Kontrolü
-  return hasPlanAccess(tenantPlan, item.plan);
+  return hasRequiredPlan;
+}
+
+function normalizeSearchText(value: string): string {
+  return value.toLocaleLowerCase('tr-TR').trim();
+}
+
+function navItemMatches(item: NavItem, searchTerm: string): boolean {
+  const searchableText = `${item.label} ${item.href}`;
+  return normalizeSearchText(searchableText).includes(searchTerm);
+}
+
+function filterItemsBySearch(items: NavItem[], searchTerm: string): NavItem[] {
+  if (!searchTerm) return items;
+
+  return items.reduce<NavItem[]>((result, item) => {
+    const matchingChildren = item.children?.filter((child) => navItemMatches(child, searchTerm)) ?? [];
+
+    if (navItemMatches(item, searchTerm)) {
+      result.push(item);
+      return result;
+    }
+
+    if (matchingChildren.length > 0) {
+      result.push({ ...item, children: matchingChildren });
+    }
+
+    return result;
+  }, []);
 }
 
 // ─────────────────────────────────────────────
@@ -105,17 +135,20 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0 }: NavItemProps
   const pathname = usePathname();
 
   const visibleChildren = item.children?.filter((c) => hasAccess(tenantPlan, tenantModules, c));
+  const hasActiveChild = visibleChildren?.some((c) => isPathMatch(pathname, c.href)) ?? false;
 
   const [open, setOpen] = useState(() => {
     if (!visibleChildren) return false;
-    return visibleChildren.some((c) => isPathMatch(pathname, c.href));
+    return hasActiveChild;
   });
+
+  useEffect(() => {
+    if (hasActiveChild) setOpen(true);
+  }, [hasActiveChild]);
 
   if (!hasAccess(tenantPlan, tenantModules, item)) return null;
 
-  const isActive = visibleChildren
-    ? visibleChildren.some((c) => isPathMatch(pathname, c.href))
-    : isPathMatch(pathname, item.href);
+  const isActive = visibleChildren ? hasActiveChild : isPathMatch(pathname, item.href);
 
   const Icon = item.icon;
 
@@ -179,6 +212,29 @@ export function Sidebar() {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const tenantPlan = tenant?.plan ?? 'STARTER';
   const tenantModules = tenant?.modules ?? [];
+  const [menuSearch, setMenuSearch] = useState('');
+  const searchTerm = normalizeSearchText(menuSearch);
+  const visibleGroups = useMemo(
+    () =>
+      NAV_GROUPS.map((group) => {
+        const accessibleItems = group.items.reduce<NavItem[]>((items, item) => {
+          if (!hasAccess(tenantPlan, tenantModules, item)) return items;
+
+          if (item.children) {
+            items.push({
+              ...item,
+              children: item.children.filter((child) => hasAccess(tenantPlan, tenantModules, child)),
+            });
+            return items;
+          }
+
+          items.push(item);
+          return items;
+        }, []);
+        return { ...group, items: filterItemsBySearch(accessibleItems, searchTerm) };
+      }).filter((group) => group.items.length > 0),
+    [searchTerm, tenantModules, tenantPlan],
+  );
 
   return (
     <aside
@@ -200,27 +256,39 @@ export function Sidebar() {
         )}
       </div>
 
+      <div className="px-2 py-2 border-b border-slate-800/80 shrink-0">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+          <input
+            value={menuSearch}
+            onChange={(event) => setMenuSearch(event.target.value)}
+            placeholder="Menüde ara"
+            className="h-9 w-full rounded-lg border border-slate-800 bg-slate-950/70 pl-8 pr-3 text-xs text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-sky-500/70 focus:bg-slate-950"
+          />
+        </div>
+      </div>
+
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
-        {NAV_GROUPS.map((group, gi) => {
-          const visibleItems = group.items.filter((item) => hasAccess(tenantPlan, tenantModules, item));
-          if (visibleItems.length === 0) return null;
-
-          return (
-            <div key={gi}>
-              {group.label && (
-                <p className="px-3 mb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                  {group.label}
-                </p>
-              )}
-              <div className="space-y-0.5">
-                {visibleItems.map((item) => (
-                  <NavItemRow key={item.href} item={item} tenantPlan={tenantPlan} tenantModules={tenantModules} />
-                ))}
-              </div>
+        {visibleGroups.map((group, gi) => (
+          <div key={`${group.label ?? 'primary'}-${gi}`}>
+            {group.label && (
+              <p className="px-3 mb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                {group.label}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map((item) => (
+                <NavItemRow key={item.href} item={item} tenantPlan={tenantPlan} tenantModules={tenantModules} />
+              ))}
             </div>
-          );
-        })}
+          </div>
+        ))}
+        {visibleGroups.length === 0 && (
+          <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-4 text-center text-xs text-slate-500">
+            Sonuç bulunamadı.
+          </div>
+        )}
       </nav>
 
       {/* User + tenant info */}

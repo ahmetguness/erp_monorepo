@@ -257,6 +257,17 @@ enum NotificationStatus {
   ARCHIVED
 }
 
+enum MailDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MailDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 enum TaskStatus {
   TODO
   IN_PROGRESS
@@ -569,6 +580,7 @@ model Tenant {
   approvalFlows          ApprovalFlow[]
   approvalRequests       ApprovalRequest[]
   notifications          Notification[]
+  mailMessages           MailMessage[]
   tasks                  Task[]
   automationRules        AutomationRule[]
   tenantSettings         TenantSetting[]
@@ -644,6 +656,7 @@ model User {
   tenants TenantUser[]
   approvalSteps ApprovalStep[] @relation("StepApproverUser")
   sentInvitations Invitation[] @relation("InvitationInviter")
+  sentMailMessages MailMessage[] @relation("MailMessageSender")
 
   @@index([email])
   @@index([deletedAt])
@@ -966,6 +979,37 @@ model Notification {
   @@index([tenantId, userId, status])
   @@index([tenantId, createdAt])
   @@map("notifications")
+}
+
+model MailMessage {
+  id              String             @id @default(cuid())
+  tenantId        String
+  direction       MailDirection      @default(OUTBOUND)
+  status          MailDeliveryStatus @default(PENDING)
+  providerId      String?
+  from            String?
+  replyTo         String?
+  to              String[]
+  cc              String[]           @default([])
+  bcc             String[]           @default([])
+  subject         String
+  html            String
+  textPreview     String?
+  attachments     Json?
+  attachmentCount Int                @default(0)
+  error           String?
+  sentById        String?
+  sentAt          DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sentBy User?  @relation("MailMessageSender", fields: [sentById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, direction, createdAt])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, sentById])
+  @@map("mail_messages")
 }
 
 model Task {

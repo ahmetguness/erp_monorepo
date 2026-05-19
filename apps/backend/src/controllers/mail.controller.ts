@@ -1,12 +1,19 @@
 import { Context } from 'hono';
+import { MailDeliveryStatus, MailDirection } from '@prisma/client';
 import { sendMail } from '../services/mail.service';
+import { MailHistoryService } from '../services/mail-history.service';
 import {
   welcomeEmail,
   passwordResetEmail,
   invoiceNotificationEmail,
   genericNotificationEmail,
 } from '../services/mail-templates.service';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireUserId } from '../utils/context.js';
+import {
+  MailAttachmentInput,
+  normalizeMailAttachments,
+  validateNormalizedMailAttachments,
+} from '../utils/mail-attachments';
 
 // ── Rate limiter (tenant bazlı, saatte max 20 mail) ─────
 const mailRateMap = new Map<string, { count: number; resetAt: number }>();
@@ -16,13 +23,27 @@ const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
-interface MailAttachmentInput {
-  filename: string;
-  content: string;
-  contentType?: string;
+type AddressInput = string | string[] | undefined;
+
+interface SendMailBody {
+  to: string | string[];
+  subject: string;
+  html: string;
+  from?: string;
+  replyTo?: string;
+  cc?: string | string[];
+  bcc?: string | string[];
+  attachments?: MailAttachmentInput[];
 }
 
-type AddressInput = string | string[] | undefined;
+interface BulkMailBody {
+  recipients: string[];
+  subject: string;
+  html: string;
+  from?: string;
+  replyTo?: string;
+  attachments?: MailAttachmentInput[];
+}
 
 function checkMailRateLimit(tenantId: string): boolean {
   const now = Date.now();
@@ -61,9 +82,9 @@ function isValidMailAddress(value: string): boolean {
   return emailOnly.test(value) || namedEmail.test(value);
 }
 
-function validateAddressList(label: string, recipients: string[], required = false): string | null {
+function validateAddressList(label: string, recipients: string[], required = false, maxRecipients = 10): string | null {
   if (required && recipients.length === 0) return `${label} icin gecerli bir e-posta adresi gereklidir.`;
-  if (recipients.length > 10) return `${label} alaninda en fazla 10 alici olabilir.`;
+  if (recipients.length > maxRecipients) return `${label} alaninda en fazla ${maxRecipients} alici olabilir.`;
 
   const invalid = recipients.find((recipient) => !isValidMailAddress(recipient));
   if (invalid) return `${label} alaninda gecersiz e-posta adresi var: ${invalid}`;
@@ -71,68 +92,110 @@ function validateAddressList(label: string, recipients: string[], required = fal
   return null;
 }
 
-function estimateBase64Bytes(content: string): number {
-  const normalized = content.replace(/\s/g, '');
-  const padding = normalized.endsWith('==') ? 2 : normalized.endsWith('=') ? 1 : 0;
-  return Math.max(0, Math.floor((normalized.length * 3) / 4) - padding);
+function parsePositiveInt(value: string | undefined, fallback: number, max: number): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(1, parsed));
 }
 
-function normalizeAttachmentContent(content: string): string {
-  const trimmed = content.trim();
-  const dataUrlSeparator = trimmed.indexOf(',');
-  const withoutPrefix = trimmed.startsWith('data:') && dataUrlSeparator >= 0
-    ? trimmed.slice(dataUrlSeparator + 1)
-    : trimmed;
-  return withoutPrefix.replace(/\s/g, '');
+function parseMailDirection(value: string | undefined): MailDirection | undefined {
+  if (!value) return undefined;
+  return value === MailDirection.INBOUND || value === MailDirection.OUTBOUND ? value : undefined;
 }
 
-function normalizeAttachments(attachments?: MailAttachmentInput[]): MailAttachmentInput[] {
-  if (!attachments) return [];
-  return attachments.map((attachment) => ({
-    filename: attachment.filename.trim(),
-    content: normalizeAttachmentContent(attachment.content),
-    ...(attachment.contentType?.trim() && { contentType: attachment.contentType.trim() }),
-  }));
+function parseMailStatus(value: string | undefined): MailDeliveryStatus | undefined {
+  if (!value) return undefined;
+  if (value === MailDeliveryStatus.PENDING) return value;
+  if (value === MailDeliveryStatus.SENT) return value;
+  if (value === MailDeliveryStatus.FAILED) return value;
+  return undefined;
 }
 
-function validateAttachments(attachments?: MailAttachmentInput[]): string | null {
-  if (!attachments || attachments.length === 0) return null;
-  if (!Array.isArray(attachments)) return 'Dosya ekleri geçersiz.';
-  if (attachments.length > MAX_ATTACHMENTS) return `En fazla ${MAX_ATTACHMENTS} dosya eklenebilir.`;
+async function sendAndRecordMail(options: {
+  tenantId: string;
+  userId?: string;
+  to: string | string[];
+  subject: string;
+  html: string;
+  from?: string;
+  replyTo?: string;
+  cc?: string[];
+  bcc?: string[];
+  attachments?: ReturnType<typeof normalizeMailAttachments>;
+}) {
+  const recipients = normalizeAddresses(options.to);
+  const history = await MailHistoryService.createOutbound({
+    tenantId: options.tenantId,
+    sentById: options.userId,
+    from: options.from,
+    replyTo: options.replyTo,
+    to: recipients,
+    cc: options.cc,
+    bcc: options.bcc,
+    subject: options.subject,
+    html: options.html,
+    attachments: options.attachments,
+  });
 
-  let totalBytes = 0;
-  for (const attachment of attachments) {
-    if (!attachment.filename?.trim() || !attachment.content?.trim()) {
-      return 'Her dosya eki için dosya adı ve içerik zorunludur.';
-    }
+  const result = await sendMail({
+    to: recipients,
+    subject: options.subject,
+    html: options.html,
+    ...(options.from && { from: options.from }),
+    ...(options.replyTo && { replyTo: options.replyTo }),
+    ...(options.cc && options.cc.length > 0 && { cc: options.cc }),
+    ...(options.bcc && options.bcc.length > 0 && { bcc: options.bcc }),
+    ...(options.attachments && options.attachments.length > 0 && { attachments: options.attachments }),
+  });
 
-    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(attachment.content)) {
-      return `${attachment.filename} dosyasi base64 formatinda degil.`;
-    }
+  await MailHistoryService.complete({
+    id: history.id,
+    tenantId: options.tenantId,
+    success: result.success,
+    providerId: result.id,
+    error: result.error,
+  });
 
-    const size = estimateBase64Bytes(attachment.content);
-    if (size > MAX_ATTACHMENT_BYTES) return `${attachment.filename} dosyası 5 MB sınırını aşıyor.`;
-    totalBytes += size;
-  }
-
-  if (totalBytes > MAX_TOTAL_ATTACHMENT_BYTES) return 'Toplam dosya eki boyutu 10 MB sınırını aşıyor.';
-  return null;
+  return result;
 }
 
 export class MailController {
+  /** GET /api/mail – Tenant mail geçmişi */
+  static async list(c: Context) {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const page = parsePositiveInt(c.req.query('page'), 1, 10_000);
+    const limit = parsePositiveInt(c.req.query('limit'), 20, 100);
+
+    const result = await MailHistoryService.list({
+      tenantId,
+      userId,
+      page,
+      limit,
+      direction: parseMailDirection(c.req.query('direction')),
+      status: parseMailStatus(c.req.query('status')),
+      search: c.req.query('search')?.trim() || undefined,
+    });
+
+    return c.json(result);
+  }
+
+  /** GET /api/mail/:id – Mail detay */
+  static async get(c: Context) {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const id = c.req.param('id');
+    if (!id) return c.json({ error: 'Mail kaydı bulunamadı.' }, 404);
+    const mail = await MailHistoryService.get(tenantId, userId, id);
+    if (!mail) return c.json({ error: 'Mail kaydı bulunamadı.' }, 404);
+    return c.json({ data: mail });
+  }
+
   /** POST /api/mail/send – Serbest formatlı mail gönder */
   static async send(c: Context) {
     const tenantId = requireTenantId(c);
-    const { to, subject, html, from, replyTo, cc, bcc, attachments } = await c.req.json<{
-      to: string | string[];
-      subject: string;
-      html: string;
-      from?: string;
-      replyTo?: string;
-      cc?: string | string[];
-      bcc?: string | string[];
-      attachments?: MailAttachmentInput[];
-    }>();
+    const userId = requireUserId(c);
+    const { to, subject, html, from, replyTo, cc, bcc, attachments } = await c.req.json<SendMailBody>();
 
     if (!to || !subject || !html) {
       return c.json({ error: 'to, subject ve html alanları zorunludur.' }, 400);
@@ -160,42 +223,124 @@ export class MailController {
       return c.json({ error: 'From alaninda gecersiz e-posta adresi var.' }, 400);
     }
 
-    const normalizedAttachments = normalizeAttachments(attachments);
-    const attachmentError = validateAttachments(normalizedAttachments);
+    if (attachments !== undefined && !Array.isArray(attachments)) {
+      return c.json({ error: 'Dosya ekleri gecersiz.' }, 400);
+    }
+
+    const normalizedAttachments = normalizeMailAttachments(attachments);
+    const attachmentError = validateNormalizedMailAttachments(normalizedAttachments, {
+      maxAttachments: MAX_ATTACHMENTS,
+      maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
+      maxTotalAttachmentBytes: MAX_TOTAL_ATTACHMENT_BYTES,
+    });
     if (attachmentError) return c.json({ error: attachmentError }, 400);
 
     if (typeof html === 'string' && html.length > 50000) {
       return c.json({ error: 'Mail içeriği çok uzun (max 50KB).' }, 400);
     }
 
-    const result = await sendMail({
+    const result = await sendAndRecordMail({
+      tenantId,
+      userId,
+      from: from?.trim() || undefined,
+      replyTo: replyTo?.trim() || undefined,
       to: recipients,
+      cc: ccRecipients,
+      bcc: bccRecipients,
       subject,
       html,
-      ...(from?.trim() && { from: from.trim() }),
-      ...(replyTo?.trim() && { replyTo: replyTo.trim() }),
-      ...(ccRecipients.length > 0 && { cc: ccRecipients }),
-      ...(bccRecipients.length > 0 && { bcc: bccRecipients }),
-      ...(normalizedAttachments.length > 0 && { attachments: normalizedAttachments }),
+      attachments: normalizedAttachments,
     });
     return c.json(result, result.success ? 200 : 500);
+  }
+
+  /** POST /api/mail/bulk – Aynı içeriği birden fazla adrese tek tek gönder */
+  static async bulk(c: Context) {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const { recipients: rawRecipients, subject, html, from, replyTo, attachments } = await c.req.json<BulkMailBody>();
+
+    if (!rawRecipients || !subject || !html) {
+      return c.json({ error: 'recipients, subject ve html alanları zorunludur.' }, 400);
+    }
+
+    if (!checkMailRateLimit(tenantId)) {
+      return c.json({ error: 'Mail gönderim limiti aşıldı. Saatte en fazla 20 mail gönderilebilir.' }, 429);
+    }
+
+    const recipients = normalizeAddresses(rawRecipients);
+    if (recipients.length === 0) return c.json({ error: 'En az bir alıcı gereklidir.' }, 400);
+    if (recipients.length > 50) return c.json({ error: 'Toplu gönderimde en fazla 50 alıcı olabilir.' }, 400);
+
+    const recipientError = validateAddressList('Alıcılar', recipients, true, 50);
+    if (recipientError) return c.json({ error: recipientError }, 400);
+
+    if (replyTo?.trim() && !isValidMailAddress(replyTo.trim())) {
+      return c.json({ error: 'Reply-To alaninda gecersiz e-posta adresi var.' }, 400);
+    }
+
+    if (from?.trim() && !isValidMailAddress(from.trim())) {
+      return c.json({ error: 'From alaninda gecersiz e-posta adresi var.' }, 400);
+    }
+
+    if (attachments !== undefined && !Array.isArray(attachments)) {
+      return c.json({ error: 'Dosya ekleri gecersiz.' }, 400);
+    }
+
+    const normalizedAttachments = normalizeMailAttachments(attachments);
+    const attachmentError = validateNormalizedMailAttachments(normalizedAttachments, {
+      maxAttachments: MAX_ATTACHMENTS,
+      maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
+      maxTotalAttachmentBytes: MAX_TOTAL_ATTACHMENT_BYTES,
+    });
+    if (attachmentError) return c.json({ error: attachmentError }, 400);
+
+    if (typeof html === 'string' && html.length > 50000) {
+      return c.json({ error: 'Mail içeriği çok uzun (max 50KB).' }, 400);
+    }
+
+    const results = [];
+    for (const recipient of recipients) {
+      const result = await sendAndRecordMail({
+        tenantId,
+        userId,
+        from: from?.trim() || undefined,
+        replyTo: replyTo?.trim() || undefined,
+        to: [recipient],
+        subject,
+        html,
+        attachments: normalizedAttachments,
+      });
+
+      results.push({ to: recipient, success: result.success, id: result.id, error: result.error });
+    }
+
+    const successCount = results.filter((result) => result.success).length;
+    return c.json({
+      success: successCount === results.length,
+      sent: successCount,
+      failed: results.length - successCount,
+      results,
+    }, successCount === results.length ? 200 : 207);
   }
 
   /** POST /api/mail/welcome – Hoş geldin maili */
   static async sendWelcome(c: Context) {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const { to, name } = await c.req.json<{ to: string; name: string }>();
     if (!to || !name) return c.json({ error: 'to ve name alanları zorunludur.' }, 400);
     if (!checkMailRateLimit(tenantId)) return c.json({ error: 'Mail gönderim limiti aşıldı.' }, 429);
 
     const template = welcomeEmail(name);
-    const result = await sendMail({ to, ...template });
+    const result = await sendAndRecordMail({ tenantId, userId, to, ...template });
     return c.json(result, result.success ? 200 : 500);
   }
 
   /** POST /api/mail/password-reset – Şifre sıfırlama maili */
   static async sendPasswordReset(c: Context) {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const { to, name, resetUrl } = await c.req.json<{ to: string; name: string; resetUrl: string }>();
     if (!to || !name || !resetUrl) return c.json({ error: 'to, name ve resetUrl alanları zorunludur.' }, 400);
     if (!checkMailRateLimit(tenantId)) return c.json({ error: 'Mail gönderim limiti aşıldı.' }, 429);
@@ -206,13 +351,14 @@ export class MailController {
     }
 
     const template = passwordResetEmail(name, resetUrl);
-    const result = await sendMail({ to, ...template });
+    const result = await sendAndRecordMail({ tenantId, userId, to, ...template });
     return c.json(result, result.success ? 200 : 500);
   }
 
   /** POST /api/mail/invoice-notification – Fatura bildirimi */
   static async sendInvoiceNotification(c: Context) {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const { to, name, invoiceNo, amount } = await c.req.json<{
       to: string; name: string; invoiceNo: string; amount: number;
     }>();
@@ -220,19 +366,20 @@ export class MailController {
     if (!checkMailRateLimit(tenantId)) return c.json({ error: 'Mail gönderim limiti aşıldı.' }, 429);
 
     const template = invoiceNotificationEmail(name, invoiceNo, String(amount));
-    const result = await sendMail({ to, ...template });
+    const result = await sendAndRecordMail({ tenantId, userId, to, ...template });
     return c.json(result, result.success ? 200 : 500);
   }
 
   /** POST /api/mail/notification – Genel bildirim maili */
   static async sendNotification(c: Context) {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const { to, title, message } = await c.req.json<{ to: string; title: string; message: string }>();
     if (!to || !title || !message) return c.json({ error: 'to, title ve message alanları zorunludur.' }, 400);
     if (!checkMailRateLimit(tenantId)) return c.json({ error: 'Mail gönderim limiti aşıldı.' }, 429);
 
     const template = genericNotificationEmail(title, message);
-    const result = await sendMail({ to, ...template });
+    const result = await sendAndRecordMail({ tenantId, userId, to, ...template });
     return c.json(result, result.success ? 200 : 500);
   }
 }
