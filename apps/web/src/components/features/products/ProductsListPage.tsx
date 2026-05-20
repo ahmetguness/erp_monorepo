@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { EntityImage } from "@/components/shared/EntityImage";
+import { SavedViewControls } from "@/components/shared/SavedViewControls";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { useProducts } from "@/hooks/useProducts";
@@ -14,11 +15,26 @@ import { formatCurrency } from "@/lib/utils";
 import { Select } from "@/components/ui/Select";
 import Link from "next/link";
 import type { Product } from "@/services/product.service";
+import { getSavedViewFilterString, type SavedViewState } from "@/services/saved-view.service";
+
+type ActiveFilter = "" | "true" | "false";
+
+const ACTIVE_OPTIONS = [
+  { value: "", label: "Tüm Durumlar" },
+  { value: "true", label: "Aktif" },
+  { value: "false", label: "Pasif" },
+];
+
+function parseActiveFilter(value: string): ActiveFilter {
+  if (value === "true" || value === "false") return value;
+  return "";
+}
 
 export function ProductsListPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>("");
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useProducts({
@@ -26,8 +42,20 @@ export function ProductsListPage() {
     limit: 20,
     search: search || undefined,
     categoryId: categoryId || undefined,
+    isActive: activeFilter ? activeFilter === "true" : undefined,
   });
   const { data: categories = [] } = useCategories();
+  const viewState = useMemo<SavedViewState>(() => ({
+    filters: { search, categoryId, activeFilter },
+    pageSize: 20,
+  }), [activeFilter, categoryId, search]);
+
+  const applyView = (state: SavedViewState) => {
+    setSearch(getSavedViewFilterString(state, "search"));
+    setCategoryId(getSavedViewFilterString(state, "categoryId"));
+    setActiveFilter(parseActiveFilter(getSavedViewFilterString(state, "activeFilter")));
+    setPage(1);
+  };
 
   const categoryOptions = [
     { value: "", label: "Tüm Kategoriler" },
@@ -137,6 +165,16 @@ export function ProductsListPage() {
           }}
           className="w-48"
         />
+        <Select
+          options={ACTIVE_OPTIONS}
+          value={activeFilter}
+          onChange={(e) => {
+            setActiveFilter(parseActiveFilter(e.target.value));
+            setPage(1);
+          }}
+          className="w-40"
+        />
+        <SavedViewControls module="products" listKey="products.list" currentState={viewState} onApply={applyView} />
       </div>
 
       <DataTable

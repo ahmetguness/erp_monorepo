@@ -12,8 +12,12 @@ const KEYS = {
   detail: (id: string) => ['roles', id] as const,
 };
 
-export function useRoles(params: ListParams) {
-  return useQuery({ queryKey: KEYS.list(params), queryFn: () => getRoles(params) });
+export function useRoles(params: ListParams, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: KEYS.list(params),
+    queryFn: () => getRoles(params),
+    enabled: options?.enabled ?? true,
+  });
 }
 export function useRole(id: string) {
   return useQuery({ queryKey: KEYS.detail(id), queryFn: () => getRoleById(id), enabled: !!id });

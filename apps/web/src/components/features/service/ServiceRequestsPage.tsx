@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus, Wrench, Eye } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { SavedViewControls } from '@/components/shared/SavedViewControls';
 import { ContactSelect, CustomerAssetSelect } from '@/components/shared/EntitySelect';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +16,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { useServiceRequests, useCreateServiceRequest } from '@/hooks/useService';
 import { formatDate } from '@/lib/utils';
 import type { ServiceRequest } from '@/services/service.service';
+import { getSavedViewFilterString, type SavedViewState } from '@/services/saved-view.service';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'neutral' | 'success' | 'warning' | 'danger' | 'info' }> = {
   OPEN: { label: 'Açık', variant: 'info' },
@@ -32,15 +34,39 @@ const PRIORITY_MAP: Record<string, { label: string; variant: 'neutral' | 'succes
   CRITICAL: { label: 'Kritik', variant: 'danger' },
 };
 
+function parseServiceStatus(value: string): string {
+  return STATUS_MAP[value] ? value : '';
+}
+
+function parseServicePriority(value: string): string {
+  return PRIORITY_MAP[value] ? value : '';
+}
+
 export function ServiceRequestsPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ subject: '', description: '', priority: 'MEDIUM', contactId: '', customerAssetId: '' });
 
-  const { data, isLoading } = useServiceRequests({ page, limit: 20, ...(statusFilter && { status: statusFilter }) });
+  const { data, isLoading } = useServiceRequests({
+    page,
+    limit: 20,
+    ...(statusFilter && { status: statusFilter }),
+    ...(priorityFilter && { priority: priorityFilter }),
+  });
   const create = useCreateServiceRequest();
+  const viewState = useMemo<SavedViewState>(() => ({
+    filters: { statusFilter, priorityFilter },
+    pageSize: 20,
+  }), [priorityFilter, statusFilter]);
+
+  const applyView = (state: SavedViewState) => {
+    setStatusFilter(parseServiceStatus(getSavedViewFilterString(state, 'statusFilter')));
+    setPriorityFilter(parseServicePriority(getSavedViewFilterString(state, 'priorityFilter')));
+    setPage(1);
+  };
 
   const columns: ColumnDef<ServiceRequest>[] = [
     { key: 'number', header: 'No', width: '110px', render: (r) => <span className="font-mono text-sky-400">{r.number}</span> },
@@ -96,6 +122,25 @@ export function ServiceRequestsPage() {
             {s ? (STATUS_MAP[s]?.label ?? s) : 'Tümü'}
           </button>
         ))}
+      </div>
+
+      <div className="flex flex-wrap gap-3 mb-4">
+        <Select
+          options={[
+            { value: '', label: 'Tüm Öncelikler' },
+            { value: 'LOW', label: PRIORITY_MAP.LOW.label },
+            { value: 'MEDIUM', label: PRIORITY_MAP.MEDIUM.label },
+            { value: 'HIGH', label: PRIORITY_MAP.HIGH.label },
+            { value: 'CRITICAL', label: PRIORITY_MAP.CRITICAL.label },
+          ]}
+          value={priorityFilter}
+          onChange={(e) => {
+            setPriorityFilter(parseServicePriority(e.target.value));
+            setPage(1);
+          }}
+          className="w-44"
+        />
+        <SavedViewControls module="service" listKey="service.requests" currentState={viewState} onApply={applyView} />
       </div>
 
       <DataTable columns={columns} data={data?.data ?? []} keyExtractor={(r) => r.id} isLoading={isLoading}

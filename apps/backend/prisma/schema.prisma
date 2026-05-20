@@ -575,6 +575,7 @@ model Tenant {
   customerAssets         CustomerAsset[]
   marketplaces           MarketplaceIntegration[]
   savedReports           SavedReport[]
+  savedViews             SavedView[]
   numberSequences        NumberSequence[]
   auditLogs              AuditLog[]
   attachments            Attachment[]
@@ -2969,6 +2970,35 @@ model SavedReport {
 
   @@index([tenantId, module])
   @@map("saved_reports")
+}
+
+enum SavedViewScope {
+  PERSONAL
+  TENANT
+  ROLE
+}
+
+model SavedView {
+  id          String         @id @default(cuid())
+  tenantId    String
+  userId      String?
+  roleId      String?
+  name        String
+  module      String
+  listKey     String
+  scope       SavedViewScope @default(PERSONAL)
+  state       Json           @default("{}")
+  isDefault   Boolean        @default(false)
+  createdById String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, listKey])
+  @@index([tenantId, userId])
+  @@index([tenantId, roleId])
+  @@map("saved_views")
 }
 
 // ═════════════════════════════════════════════

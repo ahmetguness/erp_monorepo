@@ -91,6 +91,7 @@ function getActorLabel(log: AuditLog, userLabelById: Map<string, string>): strin
 }
 
 function getActionLabel(log: AuditLog): string {
+  if (log.business?.actionLabel) return log.business.actionLabel;
   const method = readStringField(log.newValues, 'method');
   const path = readStringField(log.newValues, 'path');
   const status = readNumberField(log.newValues, 'status');
@@ -107,6 +108,7 @@ function shortId(id: string): string {
 }
 
 function getEntityLabel(log: AuditLog): string {
+  if (log.business?.entityTypeLabel) return log.business.entityTypeLabel;
   return ENTITY_LABELS[log.entityType] ?? log.entityType;
 }
 
@@ -114,7 +116,12 @@ function getModuleLabel(module: string): string {
   return MODULE_LABELS[module] ?? module;
 }
 
+function getBusinessModuleLabel(log: AuditLog): string {
+  return log.business?.moduleLabel ?? getModuleLabel(log.module);
+}
+
 function getChangedFields(log: AuditLog): string[] {
+  if (log.business?.changes.length) return log.business.changes.map((change) => change.label);
   const keys = new Set<string>();
   for (const source of [log.oldValues, log.newValues]) {
     if (!isRecord(source)) continue;
@@ -186,7 +193,7 @@ export function AuditLogPage() {
       key: 'module',
       header: 'Modül',
       width: '130px',
-      render: (row) => <span className="text-xs text-slate-400">{getModuleLabel(row.module)}</span>,
+      render: (row) => <span className="text-xs text-slate-400">{getBusinessModuleLabel(row)}</span>,
     },
     {
       key: 'entity',
@@ -195,12 +202,18 @@ export function AuditLogPage() {
         const readableName = getReadableEntityName(row);
         return (
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
               <Badge variant="neutral">{getEntityLabel(row)}</Badge>
               <span className="max-w-[360px] truncate text-sm font-medium text-slate-200">
                 {readableName ?? `${getEntityLabel(row)} kaydı`}
               </span>
             </div>
+            <p className="line-clamp-2 text-xs text-slate-400">{row.business?.summary ?? 'İşlem kaydı oluşturuldu.'}</p>
+            {row.business?.changes?.[0] && (
+              <p className="mt-1 text-[11px] text-slate-500">
+                {row.business.changes[0].label}: {row.business.changes[0].oldValue ?? 'boş'} → {row.business.changes[0].newValue ?? 'boş'}
+              </p>
+            )}
             <span className="mt-1 block font-mono text-[10px] text-slate-600">ID: {shortId(row.entityId)}</span>
           </div>
         );
@@ -267,7 +280,7 @@ export function AuditLogPage() {
               </div>
               <div>
                 <span className="text-slate-500">Modül</span>
-                <p className="text-slate-200">{getModuleLabel(detail.module)}</p>
+                <p className="text-slate-200">{getBusinessModuleLabel(detail)}</p>
               </div>
               <div>
                 <span className="text-slate-500">Kullanıcı</span>
@@ -293,7 +306,28 @@ export function AuditLogPage() {
               )}
             </div>
 
-            {getChangedFields(detail).length > 0 && (
+            {detail.business?.summary && (
+              <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-sky-300/80">İş özeti</p>
+                <p className="mt-1 text-sm text-slate-100">{detail.business.summary}</p>
+              </div>
+            )}
+
+            {detail.business?.changes.length ? (
+              <div className="rounded-lg border border-slate-800 bg-slate-950/50">
+                <div className="border-b border-slate-800 px-3 py-2 text-[10px] uppercase tracking-wider text-slate-500">Değişiklikler</div>
+                <div className="divide-y divide-slate-800">
+                  {detail.business.changes.map((change) => (
+                    <div key={change.field} className="grid grid-cols-[140px_1fr] gap-3 px-3 py-2 text-xs">
+                      <span className="font-medium text-slate-300">{change.label}</span>
+                      <span className="text-slate-400">
+                        {change.oldValue ?? 'boş'} <span className="text-slate-600">→</span> {change.newValue ?? 'boş'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : getChangedFields(detail).length > 0 && (
               <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
                 <p className="text-[10px] uppercase tracking-wider text-slate-500">Alanlar</p>
                 <p className="mt-1 text-xs text-slate-300">{getChangedFields(detail).join(', ')}</p>

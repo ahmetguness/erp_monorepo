@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { createEventContext, domainEvents } from '../domain-events';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -53,6 +54,20 @@ interface OrderListQuery {
   dateTo?: string;
 }
 
+function parseQuoteStatus(value: string | undefined): QuoteStatus | undefined {
+  switch (value) {
+    case QuoteStatus.DRAFT:
+    case QuoteStatus.SENT:
+    case QuoteStatus.ACCEPTED:
+    case QuoteStatus.REJECTED:
+    case QuoteStatus.EXPIRED:
+    case QuoteStatus.CANCELLED:
+      return value;
+    default:
+      return undefined;
+  }
+}
+
 // ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
@@ -99,10 +114,12 @@ export const SalesOrderController = {
     const query = c.req.query() as OrderListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
+    const status = parseQuoteStatus(c.req.query('status'));
 
     const where = {
       tenantId,
       deletedAt: null,
+      ...(status && { status }),
       ...(query.contactId && { contactId: query.contactId }),
       ...(query.dateFrom || query.dateTo
         ? { date: { ...(query.dateFrom && { gte: new Date(query.dateFrom) }), ...(query.dateTo && { lte: new Date(query.dateTo) }) } }
@@ -176,6 +193,7 @@ export const SalesOrderController = {
 
   async convertQuoteToOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
     const quoteId = c.req.param('id');
 
     const quote = await prisma.salesQuote.findFirst({
@@ -230,6 +248,19 @@ export const SalesOrderController = {
 
     await prisma.salesOrderHistory.create({
       data: { tenantId, orderId: order.id, toStatus: 'DRAFT', notes: `Tekliften dönüştürüldü: ${quote.number}` },
+    });
+
+    await domainEvents.publish({
+      name: 'salesQuote.accepted',
+      context: createEventContext({ tenantId, userId }),
+      payload: {
+        quoteId: quote.id,
+        orderId: order.id,
+        quoteNumber: quote.number,
+        orderNumber: order.number,
+        contactId: quote.contactId,
+        totalGross: Number(quote.totalGross),
+      },
     });
 
     return c.json({ data: order }, 201);

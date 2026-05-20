@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { createEventContext, domainEvents } from '../domain-events';
 import { writeInvoiceAccountEntry, reverseInvoiceAccountEntry } from '../utils/account-entry.js';
 
 // ─────────────────────────────────────────────
@@ -293,6 +294,19 @@ export const InvoiceController = {
       newValues: { number: invoice.number, type: body.type, totalGross, contactId: body.contactId },
       ipAddress,
       userAgent,
+    });
+
+    await domainEvents.publish({
+      name: 'invoice.created',
+      context: createEventContext({ tenantId, userId }),
+      payload: {
+        invoiceId: invoice.id,
+        number: invoice.number,
+        contactId: invoice.contact.id,
+        contactName: invoice.contact.name,
+        totalGross: Number(invoice.totalGross),
+        dueDate: invoice.dueDate,
+      },
     });
 
     return c.json({ data: invoice }, 201);

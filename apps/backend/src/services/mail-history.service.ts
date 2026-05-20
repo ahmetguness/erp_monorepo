@@ -1,5 +1,6 @@
 import { MailDeliveryStatus, MailDirection, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { createEventContext, domainEvents } from '../domain-events';
 import type { NormalizedMailAttachment } from '../utils/mail-attachments';
 
 export interface CreateOutboundMailHistoryInput {
@@ -237,7 +238,7 @@ export class MailHistoryService {
   }
 
   static async complete(input: CompleteMailHistoryInput) {
-    return prisma.mailMessage.updateMany({
+    const result = await prisma.mailMessage.updateMany({
       where: { id: input.id, tenantId: input.tenantId },
       data: {
         status: input.success ? MailDeliveryStatus.SENT : MailDeliveryStatus.FAILED,
@@ -246,5 +247,28 @@ export class MailHistoryService {
         sentAt: input.success ? new Date() : undefined,
       },
     });
+
+    if (!input.success && result.count > 0) {
+      const mail = await prisma.mailMessage.findFirst({
+        where: { id: input.id, tenantId: input.tenantId },
+        select: { id: true, subject: true, sentById: true, to: true, cc: true, bcc: true, error: true },
+      });
+
+      if (mail) {
+        await domainEvents.publish({
+          name: 'mail.failed',
+          context: createEventContext({ tenantId: input.tenantId, userId: mail.sentById }),
+          payload: {
+            mailId: mail.id,
+            subject: mail.subject,
+            sentById: mail.sentById,
+            recipients: [...mail.to, ...mail.cc, ...mail.bcc],
+            error: mail.error,
+          },
+        });
+      }
+    }
+
+    return result;
   }
 }

@@ -1,8 +1,9 @@
 import { Context } from 'hono';
-import { AuditAction, EntityType, FeatureKey } from '@prisma/client';
+import { AuditAction, EntityType, FeatureKey, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ForbiddenError } from '../errors';
 import { TenantFeatureService } from '../services/tenant-feature.service';
+import { formatAuditLogBusiness } from '../services/audit-log-formatter.service';
 import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
@@ -202,19 +203,40 @@ async function resolveUserLabels(logs: Array<{ userId: string | null }>): Promis
   return labels;
 }
 
-async function enrichAuditLogs<T extends { module: string; entityType: EntityType; entityId: string; userId: string | null }>(
+async function enrichAuditLogs<T extends {
+  module: string;
+  entityType: EntityType;
+  entityId: string;
+  userId: string | null;
+  action: AuditAction;
+  oldValues: Prisma.JsonValue | null;
+  newValues: Prisma.JsonValue | null;
+}>(
   tenantId: string,
   logs: T[],
-): Promise<Array<T & { entityLabel: string | null; userLabel: string | null }>> {
+): Promise<Array<T & { entityLabel: string | null; userLabel: string | null; business: ReturnType<typeof formatAuditLogBusiness> }>> {
   const [entityLabels, userLabels] = await Promise.all([
     resolveEntityLabels(tenantId, logs),
     resolveUserLabels(logs),
   ]);
-  return logs.map((log) => ({
-    ...log,
-    entityLabel: entityLabels.get(entityKey(log.entityType, log.entityId)) ?? null,
-    userLabel: log.userId ? userLabels.get(log.userId) ?? null : null,
-  }));
+  return logs.map((log) => {
+    const entityLabel = entityLabels.get(entityKey(log.entityType, log.entityId)) ?? null;
+    const userLabel = log.userId ? userLabels.get(log.userId) ?? null : null;
+    return {
+      ...log,
+      entityLabel,
+      userLabel,
+      business: formatAuditLogBusiness({
+        action: log.action,
+        module: log.module,
+        entityType: log.entityType,
+        entityLabel,
+        userLabel,
+        oldValues: log.oldValues,
+        newValues: log.newValues,
+      }),
+    };
+  });
 }
 
 export const AuditLogController = {

@@ -1,5 +1,6 @@
 import { AuditAction, EntityType, MailDeliveryStatus, MailDirection, Prisma, ServiceActivityType } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
+import { formatAuditLogBusiness } from './audit-log-formatter.service';
 
 export type ActivitySource = 'AUDIT' | 'ATTACHMENT' | 'MAIL' | 'TASK' | 'NOTIFICATION' | 'APPROVAL' | 'PAYMENT' | 'SERVICE';
 export type ActivityTone = 'neutral' | 'success' | 'danger' | 'warning' | 'info';
@@ -29,6 +30,11 @@ export interface ActivityListInput {
 interface InternalActivityItem extends Omit<ActivityItem, 'occurredAt'> {
   occurredAt: Date;
   actorId: string | null;
+  auditFormat?: {
+    action: AuditAction;
+    oldValues: Prisma.JsonValue | null;
+    newValues: Prisma.JsonValue | null;
+  };
 }
 
 const ACTION_TITLES: Record<AuditAction, string> = {
@@ -219,8 +225,24 @@ export class ActivityService {
       id: `audit:${log.id}`,
       source: 'AUDIT',
       tone: ACTION_TONES[log.action],
-      title: ACTION_TITLES[log.action],
-      description: formatAuditDescription(log.oldValues, log.newValues),
+      title: formatAuditLogBusiness({
+        action: log.action,
+        module: log.module,
+        entityType: log.entityType,
+        entityLabel: null,
+        userLabel: null,
+        oldValues: log.oldValues,
+        newValues: log.newValues,
+      }).summary.replace(/^Sistem /, ''),
+      description: formatAuditLogBusiness({
+        action: log.action,
+        module: log.module,
+        entityType: log.entityType,
+        entityLabel: null,
+        userLabel: null,
+        oldValues: log.oldValues,
+        newValues: log.newValues,
+      }).changes.slice(0, 3).map((change) => `${change.label}: ${change.oldValue ?? 'boş'} -> ${change.newValue ?? 'boş'}`).join(', ') || null,
       actorLabel: null,
       actorId: log.userId,
       module: log.module,
@@ -228,6 +250,11 @@ export class ActivityService {
       entityId: log.entityId,
       occurredAt: log.createdAt,
       href: null,
+      auditFormat: {
+        action: log.action,
+        oldValues: log.oldValues,
+        newValues: log.newValues,
+      },
     }));
   }
 

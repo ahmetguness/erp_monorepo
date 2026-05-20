@@ -27,6 +27,18 @@ export const AuditLogSchema = z.object({
   module: z.string(), entityType: AuditEntityTypeSchema, entityId: z.string(),
   entityLabel: z.string().nullable().optional(),
   userLabel: z.string().nullable().optional(),
+  business: z.object({
+    actionLabel: z.string(),
+    moduleLabel: z.string(),
+    entityTypeLabel: z.string(),
+    summary: z.string(),
+    changes: z.array(z.object({
+      field: z.string(),
+      label: z.string(),
+      oldValue: z.string().nullable(),
+      newValue: z.string().nullable(),
+    })),
+  }).optional(),
   action: z.string(), oldValues: z.unknown().nullable(), newValues: z.unknown().nullable(),
   ipAddress: z.string().nullable(), userAgent: z.string().nullable(),
   createdAt: z.string(),

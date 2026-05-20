@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { writePaymentAccountEntry } from '../utils/account-entry.js';
+import { createEventContext, domainEvents } from '../domain-events';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -408,6 +409,20 @@ export const PaymentController = {
       newValues: { amount, method: body.method, direction, contactId: body.contactId ?? null },
       ipAddress, userAgent,
     });
+
+    if (direction === 'RECEIVE') {
+      await domainEvents.publish({
+        name: 'payment.received',
+        context: createEventContext({ tenantId, userId }),
+        payload: {
+          paymentId: payment.id,
+          contactId: payment.contactId,
+          amount: Number(payment.amount),
+          method: payment.method,
+          reference: payment.reference,
+        },
+      });
+    }
 
     return c.json({ data: payment }, 201);
   },

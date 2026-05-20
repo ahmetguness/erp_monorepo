@@ -58,9 +58,11 @@ import { SetPasswordController } from './controllers/set-password.controller';
 import { chatRoutes } from './routes/chat.routes';
 import { publicChatRoutes } from './routes/public-chat.routes';
 import { activityRoutes } from './routes/activity.routes';
+import { savedViewRoutes } from './routes/saved-view.routes';
 import { TrendyolWebhookController } from './controllers/trendyol-webhook.controller';
 import { TrendyolWorker } from './services/trendyol-worker.service';
 import { startMarketplaceMocks } from './mocks';
+import { registerDomainEventListeners } from './domain-events';
 
 // ── Startup env var kontrolü ─────────────────
 const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET', 'ADMIN_JWT_SECRET'] as const;
@@ -83,6 +85,8 @@ const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const APP_ROLE = process.env.APP_ROLE ?? 'api';
+
+registerDomainEventListeners();
 
 function shouldStartHttpServer(): boolean {
   return APP_ROLE !== 'worker';
@@ -207,6 +211,7 @@ tenantApi.route('/intelligence', intelligenceRoutes);
 tenantApi.route('/automation-rules', automationRuleRoutes);
 tenantApi.route('/audit-logs', auditLogRoutes);
 tenantApi.route('/activity', activityRoutes);
+tenantApi.route('/saved-views', savedViewRoutes);
 tenantApi.route('/attachments', attachmentRoutes);
 tenantApi.route('/invitations', invitationRoutes);
 tenantApi.get('/currency-rates/tcmb', requirePermission('settings', 'READ'), CurrencyRatesController.getTcmbRates);

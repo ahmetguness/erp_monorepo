@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { createEventContext, domainEvents } from '../domain-events';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -323,6 +324,36 @@ export const StockController = {
       },
       ...getRequestMeta(c),
     });
+
+    const product = await prisma.product.findFirst({
+      where: { id: body.productId, tenantId, deletedAt: null },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        minStockLevel: true,
+        stockLevels: { select: { quantity: true } },
+      },
+    });
+
+    if (product && Number(product.minStockLevel) > 0) {
+      const currentQuantity = product.stockLevels.reduce((total, level) => total + Number(level.quantity), 0);
+      const minStockLevel = Number(product.minStockLevel);
+      if (currentQuantity <= minStockLevel) {
+        await domainEvents.publish({
+          name: 'stock.low',
+          context: createEventContext({ tenantId, userId }),
+          payload: {
+            productId: product.id,
+            productCode: product.code,
+            productName: product.name,
+            currentQuantity,
+            minStockLevel,
+            warehouseId: body.warehouseId,
+          },
+        });
+      }
+    }
 
     return c.json({
       data: movement,

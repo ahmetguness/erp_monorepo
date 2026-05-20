@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { SavedViewControls } from '@/components/shared/SavedViewControls';
 import { InvoiceStatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
@@ -12,6 +13,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useInvoices } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { Invoice, InvoiceType, InvoiceStatus } from '@/services/sales.service';
+import { getSavedViewFilterString, type SavedViewState } from '@/services/saved-view.service';
 
 const TYPE_OPTIONS = [
   { value: '', label: 'Tüm Tipler' },
@@ -35,6 +37,23 @@ const TYPE_LABELS: Record<InvoiceType, string> = {
   SALES: 'Satış', PURCHASE: 'Alış', RETURN_SALES: 'Satış İade', RETURN_PURCHASE: 'Alış İade',
 };
 
+function parseInvoiceType(value: string): InvoiceType | '' {
+  if (value === 'SALES' || value === 'PURCHASE' || value === 'RETURN_SALES' || value === 'RETURN_PURCHASE') return value;
+  return '';
+}
+
+function parseInvoiceStatus(value: string): InvoiceStatus | '' {
+  if (
+    value === 'DRAFT'
+    || value === 'SENT'
+    || value === 'PAID'
+    || value === 'PARTIALLY_PAID'
+    || value === 'OVERDUE'
+    || value === 'CANCELLED'
+  ) return value;
+  return '';
+}
+
 export function InvoicesListPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
@@ -42,6 +61,16 @@ export function InvoicesListPage() {
   const [status, setStatus] = useState<InvoiceStatus | ''>('');
 
   const { data, isLoading } = useInvoices({ page, limit: 20, type: type || undefined, status: status || undefined });
+  const viewState = useMemo<SavedViewState>(() => ({
+    filters: { type, status },
+    pageSize: 20,
+  }), [status, type]);
+
+  const applyView = (state: SavedViewState) => {
+    setType(parseInvoiceType(getSavedViewFilterString(state, 'type')));
+    setStatus(parseInvoiceStatus(getSavedViewFilterString(state, 'status')));
+    setPage(1);
+  };
 
   const columns: ColumnDef<Invoice>[] = [
     { key: 'number', header: 'No', width: '130px', render: (r) => <span className="font-mono text-sky-400">{r.number}</span> },
@@ -61,8 +90,9 @@ export function InvoicesListPage() {
         action={<Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => router.push('/dashboard/invoices/new')}>Yeni Fatura</Button>}
       />
       <div className="flex flex-wrap gap-3 mb-4">
-        <Select options={TYPE_OPTIONS} value={type} onChange={(e) => { setType(e.target.value as InvoiceType | ''); setPage(1); }} className="w-40" />
-        <Select options={STATUS_OPTIONS} value={status} onChange={(e) => { setStatus(e.target.value as InvoiceStatus | ''); setPage(1); }} className="w-44" />
+        <Select options={TYPE_OPTIONS} value={type} onChange={(e) => { setType(parseInvoiceType(e.target.value)); setPage(1); }} className="w-40" />
+        <Select options={STATUS_OPTIONS} value={status} onChange={(e) => { setStatus(parseInvoiceStatus(e.target.value)); setPage(1); }} className="w-44" />
+        <SavedViewControls module="sales" listKey="sales.invoices" currentState={viewState} onApply={applyView} />
       </div>
       <DataTable
         columns={columns}

@@ -1,20 +1,55 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { SavedViewControls } from '@/components/shared/SavedViewControls';
 import { QuoteStatusBadge } from '@/components/shared/StatusBadge';
+import { Select } from '@/components/ui/Select';
 import { useSalesQuotes } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import type { SalesQuote } from '@/services/sales.service';
+import type { SalesQuote, QuoteStatus } from '@/services/sales.service';
+import { getSavedViewFilterString, type SavedViewState } from '@/services/saved-view.service';
+
+const STATUS_OPTIONS = [
+  { value: '', label: 'Tüm Durumlar' },
+  { value: 'DRAFT', label: 'Taslak' },
+  { value: 'SENT', label: 'Gönderildi' },
+  { value: 'ACCEPTED', label: 'Kabul edildi' },
+  { value: 'REJECTED', label: 'Reddedildi' },
+  { value: 'EXPIRED', label: 'Süresi doldu' },
+  { value: 'CANCELLED', label: 'İptal' },
+];
+
+function parseQuoteStatus(value: string): QuoteStatus | '' {
+  if (
+    value === 'DRAFT'
+    || value === 'SENT'
+    || value === 'ACCEPTED'
+    || value === 'REJECTED'
+    || value === 'EXPIRED'
+    || value === 'CANCELLED'
+  ) return value;
+  return '';
+}
 
 export function SalesQuotesListPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const { data, isLoading } = useSalesQuotes({ page, limit: 20 });
+  const [status, setStatus] = useState<QuoteStatus | ''>('');
+  const { data, isLoading } = useSalesQuotes({ page, limit: 20, status: status || undefined });
+  const viewState = useMemo<SavedViewState>(() => ({
+    filters: { status },
+    pageSize: 20,
+  }), [status]);
+
+  const applyView = (state: SavedViewState) => {
+    setStatus(parseQuoteStatus(getSavedViewFilterString(state, 'status')));
+    setPage(1);
+  };
 
   const columns: ColumnDef<SalesQuote>[] = [
     { key: 'number', header: 'No', width: '120px', render: (r) => <span className="font-mono text-sky-400">{r.number}</span> },
@@ -45,6 +80,15 @@ export function SalesQuotesListPage() {
           </Link>
         }
       />
+      <div className="flex flex-wrap gap-3 mb-4">
+        <Select
+          options={STATUS_OPTIONS}
+          value={status}
+          onChange={(e) => { setStatus(parseQuoteStatus(e.target.value)); setPage(1); }}
+          className="w-44"
+        />
+        <SavedViewControls module="sales" listKey="sales.quotes" currentState={viewState} onApply={applyView} />
+      </div>
       <DataTable
         columns={columns}
         data={data?.data ?? []}
