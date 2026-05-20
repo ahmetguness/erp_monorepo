@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 import { bufferToArrayBuffer, storageService } from '../services/storage.service.js';
+import { BusinessRulesService } from '../services/business-rules.service.js';
 
 const TENANT_LOGO_SETTING_KEY = 'tenant_logo_storage_path';
 const LEGACY_TENANT_LOGO_SETTING_KEY = 'company_logo';
@@ -12,6 +13,7 @@ const TENANT_LOGO_SETTING_KEYS = [TENANT_LOGO_SETTING_KEY, LEGACY_TENANT_LOGO_SE
 const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 const ALLOWED_LOGO_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_LOGO_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const businessRulesService = new BusinessRulesService(prisma);
 
 function sanitizeFileName(fileName: string): string {
   return basename(fileName).replace(/[^\w.\- ]/g, '_').slice(0, 180) || 'logo';
@@ -76,6 +78,23 @@ export const SettingsController = {
 
     await prisma.tenantSetting.deleteMany({ where: { tenantId, key } });
     return c.json({ data: { success: true } });
+  },
+
+  async listBusinessRules(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const rules = await businessRulesService.list(tenantId);
+    return c.json({ data: rules });
+  },
+
+  async upsertBusinessRule(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body = await c.req.json<{ key: string; value: unknown }>();
+    if (!body.key || body.value === undefined) {
+      return c.json(new ValidationError('key ve value zorunludur.').toJSON(), 400);
+    }
+
+    const rule = await businessRulesService.upsert(tenantId, body.key, body.value);
+    return c.json({ data: rule });
   },
 
   // ── Module Settings ──────────────────────────

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Save, Plus, X, Building2, Layers, Pencil,
   Globe, Calendar, Receipt, DollarSign, Clock,
-  Calculator, Package, FileText,
+  Calculator, Package, FileText, ShieldCheck,
 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { ImageUploadBox, type ImageUploadStatus } from '@/components/shared/ImageUploadBox';
@@ -21,9 +21,11 @@ import {
   useTenantLogo,
   useUploadTenantLogo,
   useDeleteTenantLogo,
+  useBusinessRules,
+  useUpsertBusinessRule,
 } from '@/hooks/useSettings';
 import { cn } from '@/lib/utils';
-import type { TenantSetting, ModuleSetting } from '@/services/settings.service';
+import type { TenantSetting, ModuleSetting, BusinessRule } from '@/services/settings.service';
 
 // ─────────────────────────────────────────────
 // Turkish label maps
@@ -113,6 +115,32 @@ function getValueDisplay(key: string, value: string): string {
     return map[value] ?? value;
   }
   return value;
+}
+
+function getBusinessRuleValueDisplay(rule: BusinessRule): string {
+  if (Array.isArray(rule.value)) return rule.value.length > 0 ? rule.value.join(', ') : 'Boş';
+  if (rule.type === 'number') {
+    if (rule.key.includes('days')) return `${rule.value} gün`;
+    if (rule.key.includes('hours')) return `${rule.value} saat`;
+    if (rule.key.includes('limit')) return `${rule.value} TL`;
+  }
+  return String(rule.value || 'Boş');
+}
+
+function getBusinessRuleEditValue(rule: BusinessRule): string {
+  return Array.isArray(rule.value) ? rule.value.join(', ') : String(rule.value);
+}
+
+function parseBusinessRuleEditValue(rule: BusinessRule, value: string): BusinessRule['value'] {
+  if (rule.type === 'number') return Number(value);
+  if (rule.type === 'string_list') return value.split(',').map((item) => item.trim()).filter(Boolean);
+  return value;
+}
+
+function getPlanLabel(plan: BusinessRule['minPlan']): string {
+  if (plan === 'STARTER') return 'Starter';
+  if (plan === 'PROFESSIONAL') return 'Pro';
+  return 'Enterprise';
 }
 
 // Options for select-based editing
@@ -229,12 +257,14 @@ function hasOptions(key: string): boolean {
 export function SettingsPage() {
   const { data: tenantSettings = [], isLoading: loadingTenant } = useTenantSettings();
   const { data: moduleSettings = [], isLoading: loadingModule } = useModuleSettings();
+  const { data: businessRules = [], isLoading: loadingBusinessRules } = useBusinessRules();
   const { data: logoBlob } = useTenantLogo();
   const upsertTenant = useUpsertTenantSetting();
   const deleteTenant = useDeleteTenantSetting();
   const upsertModule = useUpsertModuleSetting();
   const uploadLogo = useUploadTenantLogo();
   const deleteLogo = useDeleteTenantLogo();
+  const upsertBusinessRule = useUpsertBusinessRule();
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
@@ -255,6 +285,13 @@ export function SettingsPage() {
 
   const handleSaveModule = (module: string, key: string, value: string) => {
     upsertModule.mutate({ module, key, value }, { onSuccess: () => setEditingId(null) });
+  };
+
+  const handleSaveBusinessRule = (rule: BusinessRule, value: string) => {
+    upsertBusinessRule.mutate(
+      { key: rule.key, value: parseBusinessRuleEditValue(rule, value) },
+      { onSuccess: () => setEditingId(null) },
+    );
   };
 
   const handleAdd = () => {
@@ -386,6 +423,69 @@ export function SettingsPage() {
             );
           })}
         </div>
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-800/60">
+          <div className="p-2 rounded-lg bg-emerald-500/10"><ShieldCheck className="w-4 h-4 text-emerald-400" /></div>
+          <div>
+            <h2 className="text-sm font-semibold text-white">İş Kuralları</h2>
+            <p className="text-xs text-slate-500">Form varsayılanları, otomasyonlar ve paket bazlı ERP davranışları</p>
+          </div>
+          <span className="ml-auto text-[10px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">{businessRules.length}</span>
+        </div>
+        {loadingBusinessRules ? (
+          <div className="py-8 text-center text-sm text-slate-600">İş kuralları yükleniyor…</div>
+        ) : (
+          <div className="divide-y divide-slate-800/40">
+            {businessRules.map((rule) => {
+              const editKey = `business-rule:${rule.key}`;
+              const isEditing = editingId === editKey;
+              const disabled = !rule.isAvailable || upsertBusinessRule.isPending;
+
+              return (
+                <div key={rule.key} className={cn('px-5 py-4 transition-colors group hover:bg-slate-800/20', !rule.isAvailable && 'opacity-60')}>
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-slate-200">{rule.label}</p>
+                        <span className="text-[10px] font-medium text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">{getModuleLabel(rule.module)}</span>
+                        <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full', rule.isAvailable ? 'text-emerald-300 bg-emerald-500/10' : 'text-amber-300 bg-amber-500/10')}>
+                          {getPlanLabel(rule.minPlan)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">{rule.description}</p>
+                      <p className="mt-1 text-[10px] text-slate-600">Kullanım: {rule.consumingModules.join(', ')}</p>
+                    </div>
+
+                    {isEditing ? (
+                      <div className="flex items-start gap-2 shrink-0">
+                        {rule.type === 'string' ? (
+                          <textarea value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                            className="w-80 min-h-20 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                        ) : (
+                          <input type={rule.type === 'number' ? 'number' : 'text'} value={editValue} min={rule.validation.min} max={rule.validation.max}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            className="w-64 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" autoFocus />
+                        )}
+                        <button disabled={disabled} onClick={() => handleSaveBusinessRule(rule, editValue)} className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"><Save className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => setEditingId(null)} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-800 transition-colors"><X className="w-3.5 h-3.5" /></button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="max-w-72 truncate text-sm font-medium text-white bg-slate-800 px-3 py-1 rounded-lg">{getBusinessRuleValueDisplay(rule)}</span>
+                        <button disabled={disabled} onClick={() => { setEditingId(editKey); setEditValue(getBusinessRuleEditValue(rule)); }}
+                          className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-400 hover:bg-emerald-500/10 opacity-0 group-hover:opacity-100 transition-all disabled:cursor-not-allowed disabled:opacity-30">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Tenant Settings ─────────────────────── */}

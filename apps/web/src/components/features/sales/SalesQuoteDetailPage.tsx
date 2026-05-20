@@ -11,7 +11,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { useSalesQuote, useConvertQuoteToOrder } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
+import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 
 interface LineRow {
   id: string;
@@ -68,6 +68,8 @@ export function SalesQuoteDetailPage({ id }: Props) {
         }
       />
 
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="space-y-6">
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
         <div className="flex items-center gap-3 mb-2">
           <QuoteStatusBadge status={quote.status} />
@@ -88,8 +90,17 @@ export function SalesQuoteDetailPage({ id }: Props) {
         emptyTitle="Kalem bulunamadı"
       />
 
-      {/* Attachments */}
-      <AttachmentPanel entityType="SALES_QUOTE" entityId={id} />
+        </main>
+
+      <EntityActionPanel
+        entityType="SALES_QUOTE"
+        entityId={id}
+        displayName={`Teklif ${quote.number}`}
+        module="sales"
+        primaryEmail={quote.contact?.email}
+        availableActions={['mail', 'task', 'attachment', 'note', 'activity']}
+      />
+      </div>
 
       <ConfirmDialog
         isOpen={confirmOpen}

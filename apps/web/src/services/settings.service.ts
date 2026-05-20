@@ -13,8 +13,39 @@ export const ModuleSettingSchema = z.object({
   createdAt: z.string(), updatedAt: z.string(),
 });
 
+export const BusinessRuleSchema = z.object({
+  key: z.enum([
+    'sales.quote_validity_days',
+    'invoicing.invoice_due_days',
+    'mail.default_signature',
+    'payments.reminder_days_before_due',
+    'approvals.default_limit',
+    'service.default_sla_hours',
+    'hr.required_employee_documents',
+  ]),
+  type: z.enum(['number', 'string', 'string_list']),
+  defaultValue: z.union([z.number(), z.string(), z.array(z.string())]),
+  minPlan: z.enum(['STARTER', 'PROFESSIONAL', 'ENTERPRISE']),
+  module: z.string(),
+  label: z.string(),
+  description: z.string(),
+  consumingModules: z.array(z.string()),
+  validation: z.object({
+    min: z.number().optional(),
+    max: z.number().optional(),
+    maxLength: z.number().optional(),
+    maxItems: z.number().optional(),
+  }),
+  value: z.union([z.number(), z.string(), z.array(z.string())]),
+  valueString: z.string(),
+  isDefault: z.boolean(),
+  isAvailable: z.boolean(),
+  tenantPlan: z.enum(['STARTER', 'PROFESSIONAL', 'ENTERPRISE']),
+});
+
 export type TenantSetting = z.infer<typeof TenantSettingSchema>;
 export type ModuleSetting = z.infer<typeof ModuleSettingSchema>;
+export type BusinessRule = z.infer<typeof BusinessRuleSchema>;
 
 export async function getTenantSettings(): Promise<TenantSetting[]> {
   const res = await apiClient.get('/api/settings');
@@ -28,6 +59,16 @@ export async function upsertTenantSetting(key: string, value: string): Promise<T
 
 export async function deleteTenantSetting(key: string): Promise<void> {
   await apiClient.delete(`/api/settings/${key}`);
+}
+
+export async function getBusinessRules(): Promise<BusinessRule[]> {
+  const res = await apiClient.get('/api/settings/business-rules');
+  return safeParse(SingleResponseSchema(z.array(BusinessRuleSchema)), res.data, 'getBusinessRules').data;
+}
+
+export async function upsertBusinessRule(key: BusinessRule['key'], value: BusinessRule['value']): Promise<BusinessRule> {
+  const res = await apiClient.put('/api/settings/business-rules', { key, value });
+  return safeParse(SingleResponseSchema(BusinessRuleSchema), res.data, 'upsertBusinessRule').data;
 }
 
 export async function uploadTenantLogo(file: File): Promise<TenantSetting> {

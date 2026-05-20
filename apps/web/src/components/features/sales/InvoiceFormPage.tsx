@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,7 +21,9 @@ import { useCreateInvoice } from '@/hooks/useSales';
 import { useContacts } from '@/hooks/useContacts';
 import { useProducts } from '@/hooks/useProducts';
 import { useTaxRates } from '@/hooks/useMasterData';
+import { useBusinessRules } from '@/hooks/useSettings';
 import { cn, formatCurrency } from '@/lib/utils';
+import type { BusinessRule } from '@/services/settings.service';
 
 // ─────────────────────────────────────────────
 // Schema
@@ -46,6 +49,17 @@ const invoiceSchema = z.object({
 
 type InvoiceForm = z.infer<typeof invoiceSchema>;
 
+function addDaysString(dateValue: string, days: number): string {
+  const date = new Date(dateValue);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+}
+
+function getNumberRule(rules: BusinessRule[], key: BusinessRule['key'], fallback: number): number {
+  const rule = rules.find((item) => item.key === key);
+  return typeof rule?.value === 'number' ? rule.value : fallback;
+}
+
 // ─────────────────────────────────────────────
 // Type selector config
 // ─────────────────────────────────────────────
@@ -67,6 +81,7 @@ export function InvoiceFormPage() {
   const { data: contactsData } = useContacts({ limit: 200 });
   const { data: productsData } = useProducts({ page: 1, limit: 200 });
   const { data: taxRates = [] } = useTaxRates();
+  const { data: businessRules = [] } = useBusinessRules();
 
   const contacts = contactsData?.data ?? [];
   const products = productsData?.data ?? [];
@@ -75,10 +90,10 @@ export function InvoiceFormPage() {
 
   const today = new Date().toISOString().split('T')[0];
 
-  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<InvoiceForm>({
+  const { register, control, handleSubmit, setValue, formState: { errors, dirtyFields } } = useForm<InvoiceForm>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
-      type: 'SALES', date: today,
+      type: 'SALES', date: today, dueDate: addDaysString(today, 30),
       lines: [{ description: '', quantity: '1', unitPrice: '0', discount: '0' }],
     },
   });
@@ -89,6 +104,12 @@ export function InvoiceFormPage() {
   const watchContact = useWatch({ control, name: 'contactId' });
   const watchDate = useWatch({ control, name: 'date' });
   const watchDueDate = useWatch({ control, name: 'dueDate' });
+  const invoiceDueDays = getNumberRule(businessRules, 'invoicing.invoice_due_days', 30);
+
+  useEffect(() => {
+    if (!watchDate || dirtyFields.dueDate) return;
+    setValue('dueDate', addDaysString(watchDate, invoiceDueDays), { shouldDirty: false, shouldValidate: true });
+  }, [dirtyFields.dueDate, invoiceDueDays, setValue, watchDate]);
 
   const selectedContact = contacts.find((c) => c.id === watchContact);
   const activeType = INVOICE_TYPES.find((t) => t.value === watchType) ?? INVOICE_TYPES[0];

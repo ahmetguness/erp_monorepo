@@ -23,7 +23,7 @@ const OrderItemSchema = z.object({
   product: z.object({ id: z.string(), code: z.string(), name: z.string() }).optional(),
 });
 
-const ContactRefSchema = z.object({ id: z.string(), name: z.string() });
+const ContactRefSchema = z.object({ id: z.string(), name: z.string(), email: z.string().nullable().optional() });
 
 export const SalesQuoteSchema = z.object({
   id: z.string(),
@@ -82,7 +82,7 @@ export const InvoiceSchema = z.object({
   notes: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
-  contact: z.object({ id: z.string(), name: z.string(), taxNumber: z.string().nullable().optional() }).optional(),
+  contact: z.object({ id: z.string(), name: z.string(), taxNumber: z.string().nullable().optional(), email: z.string().nullable().optional() }).optional(),
   lines: z.array(z.object({
     id: z.string(),
     productId: z.string().nullable(),

@@ -3,9 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Play, CheckCircle, Clock, User, MessageSquare } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
-import { EntityActivityTimeline } from '@/components/shared/EntityActivityTimeline';
-import { EntityTaskActions } from '@/components/shared/EntityTaskActions';
+import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 import { EntityImageManager } from '@/components/shared/EntityImageManager';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -55,7 +53,9 @@ export function ServiceRequestDetailPage({ id }: { id: string }) {
         }
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Durum', value: s ? <Badge variant={s.variant}>{s.label}</Badge> : sr.status },
           { label: 'Öncelik', value: p ? <Badge variant={p.variant}>{p.label}</Badge> : sr.priority },
@@ -126,14 +126,17 @@ export function ServiceRequestDetailPage({ id }: { id: string }) {
         />
       </div>
 
-      <div className="mt-6">
-        <AttachmentPanel entityType="SERVICE_REQUEST" entityId={id} />
+        </main>
+
+      <div>
+        <EntityActionPanel
+          entityType="SERVICE_REQUEST"
+          entityId={id}
+          displayName={`${sr.number} - ${sr.subject}`}
+          module="service"
+          primaryEmail={sr.contact?.email}
+        />
       </div>
-      <div className="mt-6">
-        <EntityTaskActions entityType="SERVICE_REQUEST" entityId={id} entityLabel={`${sr.number} - ${sr.subject}`} module="service" />
-      </div>
-      <div className="mt-6">
-        <EntityActivityTimeline entityType="SERVICE_REQUEST" entityId={id} />
       </div>
     </div>
   );

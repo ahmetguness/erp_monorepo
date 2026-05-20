@@ -7,6 +7,7 @@ import { requireTenantId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { createEventContext, domainEvents } from '../domain-events';
 import { writeInvoiceAccountEntry, reverseInvoiceAccountEntry } from '../utils/account-entry.js';
+import { BusinessRulesService } from '../services/business-rules.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -48,6 +49,8 @@ interface InvoiceListQuery {
   dateFrom?: string;
   dateTo?: string;
 }
+
+const businessRulesService = new BusinessRulesService(prisma);
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -110,6 +113,12 @@ async function computeLineTotals(
   return { lineData, totalNet, totalTax, totalGross: totalNet + totalTax };
 }
 
+function addDays(baseDate: Date, days: number): Date {
+  const nextDate = new Date(baseDate);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
 // ─────────────────────────────────────────────
 // Invoice Controller
 // ─────────────────────────────────────────────
@@ -164,7 +173,7 @@ export const InvoiceController = {
     const invoice = await prisma.invoice.findFirst({
       where: { id: invoiceId, tenantId },
       include: {
-        contact: { select: { id: true, name: true, taxNumber: true, address: true } },
+        contact: { select: { id: true, name: true, taxNumber: true, address: true, email: true } },
         lines: {
           include: {
             product: { select: { id: true, code: true, name: true } },
@@ -228,6 +237,9 @@ export const InvoiceController = {
     if (!number) {
       number = await generateDocumentNumber(tenantId, 'invoice', 'INV-', 'invoice');
     }
+    const invoiceDate = new Date(body.date);
+    const invoiceDueDays = await businessRulesService.getNumber(tenantId, 'invoicing.invoice_due_days');
+    const dueDate = body.dueDate ? new Date(body.dueDate) : addDays(invoiceDate, invoiceDueDays);
 
     const invoice = await prisma.$transaction(async (tx) => {
       const newInvoice = await tx.invoice.create({
@@ -239,8 +251,8 @@ export const InvoiceController = {
           type: body.type,
           status: InvoiceStatus.DRAFT,
           number: number!,
-          date: new Date(body.date),
-          dueDate: body.dueDate ? new Date(body.dueDate) : null,
+          date: invoiceDate,
+          dueDate,
           notes: body.notes ?? null,
           totalNet,
           totalTax,
@@ -268,7 +280,7 @@ export const InvoiceController = {
         invoiceNumber: newInvoice.number,
         invoiceType: body.type,
         totalGross,
-        date: new Date(body.date),
+        date: invoiceDate,
         userId,
       });
 

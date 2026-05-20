@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -18,7 +18,9 @@ import { ContactSelect, ProductSelect } from '@/components/shared/EntitySelect';
 import { useContacts } from '@/hooks/useContacts';
 import { useProducts } from '@/hooks/useProducts';
 import { useCreateSalesQuote } from '@/hooks/useSales';
+import { useBusinessRules } from '@/hooks/useSettings';
 import { cn, formatCurrency } from '@/lib/utils';
+import type { BusinessRule } from '@/services/settings.service';
 
 // ─────────────────────────────────────────────
 // Schema
@@ -43,6 +45,17 @@ const quoteSchema = z.object({
 
 type QuoteForm = z.infer<typeof quoteSchema>;
 
+function addDaysString(dateValue: string, days: number): string {
+  const date = new Date(dateValue);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+}
+
+function getNumberRule(rules: BusinessRule[], key: BusinessRule['key'], fallback: number): number {
+  const rule = rules.find((item) => item.key === key);
+  return typeof rule?.value === 'number' ? rule.value : fallback;
+}
+
 // ─────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────
@@ -50,6 +63,7 @@ type QuoteForm = z.infer<typeof quoteSchema>;
 export function SalesQuoteFormPage() {
   const router = useRouter();
   const createQuote = useCreateSalesQuote();
+  const { data: businessRules = [] } = useBusinessRules();
 
   const { data: contactsData } = useContacts({ page: 1, limit: 200 });
   const { data: productsData } = useProducts({ page: 1, limit: 200 });
@@ -68,7 +82,7 @@ export function SalesQuoteFormPage() {
     };
   });
 
-  const { register, handleSubmit, control, setValue, formState: { errors } } = useForm<QuoteForm>({
+  const { register, handleSubmit, control, setValue, formState: { errors, dirtyFields } } = useForm<QuoteForm>({
     resolver: zodResolver(quoteSchema),
     defaultValues: { contactId: '', date: defaultDates.today, validUntil: defaultDates.validUntil, notes: '', items: [{ productId: '', quantity: '1', unitPrice: '0', discount: '0', taxRate: '0' }] },
   });
@@ -78,6 +92,12 @@ export function SalesQuoteFormPage() {
   const watchContact = useWatch({ control, name: 'contactId' });
   const watchDate = useWatch({ control, name: 'date' });
   const watchValidUntil = useWatch({ control, name: 'validUntil' });
+  const quoteValidityDays = getNumberRule(businessRules, 'sales.quote_validity_days', 30);
+
+  useEffect(() => {
+    if (!watchDate || dirtyFields.validUntil) return;
+    setValue('validUntil', addDaysString(watchDate, quoteValidityDays), { shouldDirty: false, shouldValidate: true });
+  }, [dirtyFields.validUntil, quoteValidityDays, setValue, watchDate]);
 
   const handleProductChange = (idx: number, productId: string) => {
     setValue(`items.${idx}.productId`, productId);
@@ -364,7 +384,7 @@ export function SalesQuoteFormPage() {
                   <li>• Ürün seçince fiyat otomatik dolar</li>
                   <li>• İskonto satır bazında uygulanır</li>
                   <li>• Teklif kabul edilirse siparişe dönüştürülebilir</li>
-                  <li>• Geçerlilik tarihi varsayılan 30 gündür</li>
+                  <li>• Geçerlilik tarihi varsayılan {quoteValidityDays} gündür</li>
                 </ul>
               </div>
             </div>

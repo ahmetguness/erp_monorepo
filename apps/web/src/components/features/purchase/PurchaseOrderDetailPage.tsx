@@ -9,9 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { FullPageSpinner } from '@/components/ui/Spinner';
-import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
-import { EntityActivityTimeline } from '@/components/shared/EntityActivityTimeline';
-import { EntityTaskActions } from '@/components/shared/EntityTaskActions';
+import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 import { usePurchaseOrder, useSendPurchaseOrder, useReceivePurchaseOrder, useCancelPurchaseOrder } from '@/hooks/usePurchase';
 import { useWarehouses } from '@/hooks/useStock';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -128,6 +126,8 @@ export function PurchaseOrderDetailPage({ id }: Props) {
         }
       />
 
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="space-y-6">
       {/* Details Card */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
         <div className="flex items-center gap-3 mb-4">
@@ -156,10 +156,16 @@ export function PurchaseOrderDetailPage({ id }: Props) {
         emptyTitle="Kalem bulunamadı"
       />
 
-      {/* Attachments */}
-      <AttachmentPanel entityType="PURCHASE_ORDER" entityId={id} />
-      <EntityTaskActions entityType="PURCHASE_ORDER" entityId={id} entityLabel={`Satın Alma ${order.number}`} module="purchasing" />
-      <EntityActivityTimeline entityType="PURCHASE_ORDER" entityId={id} />
+        </main>
+
+      <EntityActionPanel
+        entityType="PURCHASE_ORDER"
+        entityId={id}
+        displayName={`Satın Alma ${order.number}`}
+        module="purchasing"
+        primaryEmail={order.contact?.email}
+      />
+      </div>
 
       {/* Send Confirm */}
       <ConfirmDialog

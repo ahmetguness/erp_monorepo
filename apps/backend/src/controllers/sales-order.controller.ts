@@ -6,6 +6,7 @@ import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { createEventContext, domainEvents } from '../domain-events';
+import { BusinessRulesService } from '../services/business-rules.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -54,6 +55,8 @@ interface OrderListQuery {
   dateTo?: string;
 }
 
+const businessRulesService = new BusinessRulesService(prisma);
+
 function parseQuoteStatus(value: string | undefined): QuoteStatus | undefined {
   switch (value) {
     case QuoteStatus.DRAFT:
@@ -99,6 +102,12 @@ function computeItems(items: OrderItemDTO[]) {
   });
 
   return { lineData, totalNet, totalTax, totalGross: totalNet + totalTax };
+}
+
+function addDays(baseDate: Date, days: number): Date {
+  const nextDate = new Date(baseDate);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
 }
 
 // ─────────────────────────────────────────────
@@ -147,7 +156,7 @@ export const SalesOrderController = {
     const quote = await prisma.salesQuote.findFirst({
       where: { id: quoteId, tenantId, deletedAt: null },
       include: {
-        contact: { select: { id: true, name: true, taxNumber: true } },
+        contact: { select: { id: true, name: true, taxNumber: true, email: true } },
         items: { include: { product: { select: { id: true, code: true, name: true } } } },
       },
     });
@@ -171,14 +180,16 @@ export const SalesOrderController = {
     if (!number) {
       number = await generateDocumentNumber(tenantId, 'sales_quote', 'TKL-', 'salesQuote');
     }
+    const quoteDate = new Date(body.date);
+    const quoteValidityDays = await businessRulesService.getNumber(tenantId, 'sales.quote_validity_days');
 
     const quote = await prisma.salesQuote.create({
       data: {
         tenantId,
         contactId: body.contactId,
         number,
-        date: new Date(body.date),
-        validUntil: body.validUntil ? new Date(body.validUntil) : null,
+        date: quoteDate,
+        validUntil: body.validUntil ? new Date(body.validUntil) : addDays(quoteDate, quoteValidityDays),
         notes: body.notes ?? null,
         totalNet,
         totalTax,
@@ -306,7 +317,7 @@ export const SalesOrderController = {
     const order = await prisma.salesOrder.findFirst({
       where: { id: orderId, tenantId, deletedAt: null },
       include: {
-        contact: { select: { id: true, name: true, taxNumber: true } },
+        contact: { select: { id: true, name: true, taxNumber: true, email: true } },
         items: { include: { product: { select: { id: true, code: true, name: true } } } },
         invoices: { select: { id: true, number: true, status: true, totalGross: true } },
       },

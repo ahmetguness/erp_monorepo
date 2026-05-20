@@ -8,7 +8,7 @@ import type { PaginationParams } from '@/types/api.types';
 // Schemas
 // ─────────────────────────────────────────────
 
-const ContactRef = z.object({ id: z.string(), name: z.string(), code: z.string().optional() });
+const ContactRef = z.object({ id: z.string(), name: z.string(), code: z.string().optional(), email: z.string().nullable().optional() });
 const ProductRef = z.object({ id: z.string(), code: z.string(), name: z.string() });
 
 export const PurchaseRequestItemSchema = z.object({

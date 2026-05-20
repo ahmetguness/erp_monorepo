@@ -14,6 +14,8 @@ import {
   normalizeMailAttachments,
   validateNormalizedMailAttachments,
 } from '../utils/mail-attachments';
+import { prisma } from '../lib/prisma';
+import { BusinessRulesService } from '../services/business-rules.service.js';
 
 // ── Rate limiter (tenant bazlı, saatte max 20 mail) ─────
 const mailRateMap = new Map<string, { count: number; resetAt: number }>();
@@ -22,6 +24,7 @@ const MAIL_RATE_WINDOW = 60 * 60 * 1000; // 1 saat
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const businessRulesService = new BusinessRulesService(prisma);
 
 type AddressInput = string | string[] | undefined;
 
@@ -109,6 +112,12 @@ function parseMailStatus(value: string | undefined): MailDeliveryStatus | undefi
   if (value === MailDeliveryStatus.SENT) return value;
   if (value === MailDeliveryStatus.FAILED) return value;
   return undefined;
+}
+
+async function withDefaultSignature(tenantId: string, html: string): Promise<string> {
+  const signature = (await businessRulesService.getString(tenantId, 'mail.default_signature')).trim();
+  if (!signature || html.includes(signature)) return html;
+  return `${html}<br><br>${signature}`;
 }
 
 async function sendAndRecordMail(options: {
@@ -235,7 +244,8 @@ export class MailController {
     });
     if (attachmentError) return c.json({ error: attachmentError }, 400);
 
-    if (typeof html === 'string' && html.length > 50000) {
+    const htmlWithSignature = await withDefaultSignature(tenantId, html);
+    if (htmlWithSignature.length > 50000) {
       return c.json({ error: 'Mail içeriği çok uzun (max 50KB).' }, 400);
     }
 
@@ -248,7 +258,7 @@ export class MailController {
       cc: ccRecipients,
       bcc: bccRecipients,
       subject,
-      html,
+      html: htmlWithSignature,
       attachments: normalizedAttachments,
     });
     return c.json(result, result.success ? 200 : 500);
@@ -295,7 +305,8 @@ export class MailController {
     });
     if (attachmentError) return c.json({ error: attachmentError }, 400);
 
-    if (typeof html === 'string' && html.length > 50000) {
+    const htmlWithSignature = await withDefaultSignature(tenantId, html);
+    if (htmlWithSignature.length > 50000) {
       return c.json({ error: 'Mail içeriği çok uzun (max 50KB).' }, 400);
     }
 
@@ -308,7 +319,7 @@ export class MailController {
         replyTo: replyTo?.trim() || undefined,
         to: [recipient],
         subject,
-        html,
+        html: htmlWithSignature,
         attachments: normalizedAttachments,
       });
 

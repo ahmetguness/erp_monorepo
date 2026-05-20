@@ -9,9 +9,7 @@ import { OrderStatusBadge, InvoiceStatusBadge } from '@/components/shared/Status
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FullPageSpinner } from '@/components/ui/Spinner';
-import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
-import { EntityActivityTimeline } from '@/components/shared/EntityActivityTimeline';
-import { EntityTaskActions } from '@/components/shared/EntityTaskActions';
+import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 import { useSalesOrder, useCancelSalesOrder, useUpdateSalesOrder } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
@@ -64,6 +62,8 @@ export function SalesOrderDetailPage({ id }: Props) {
         }
       />
 
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="space-y-6">
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
         <div className="flex items-center gap-3 mb-4"><OrderStatusBadge status={order.status} /></div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
@@ -87,10 +87,16 @@ export function SalesOrderDetailPage({ id }: Props) {
         </div>
       )}
 
-      {/* Attachments */}
-      <AttachmentPanel entityType="SALES_ORDER" entityId={id} />
-      <EntityTaskActions entityType="SALES_ORDER" entityId={id} entityLabel={`Sipariş ${order.number}`} module="sales" />
-      <EntityActivityTimeline entityType="SALES_ORDER" entityId={id} />
+        </main>
+
+      <EntityActionPanel
+        entityType="SALES_ORDER"
+        entityId={id}
+        displayName={`Sipariş ${order.number}`}
+        module="sales"
+        primaryEmail={order.contact?.email}
+      />
+      </div>
 
       {/* Confirm Order */}
       <ConfirmDialog

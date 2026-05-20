@@ -11,10 +11,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { useInvoice, useCancelInvoice } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
 import { EntityImageManager } from '@/components/shared/EntityImageManager';
-import { EntityActivityTimeline } from '@/components/shared/EntityActivityTimeline';
-import { EntityTaskActions } from '@/components/shared/EntityTaskActions';
+import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 
 interface LineRow {
   id: string; description: string; quantity: number; unitPrice: number;
@@ -64,6 +62,8 @@ export function InvoiceDetailPage({ id }: Props) {
         }
       />
 
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="space-y-6">
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
         <div className="flex items-center gap-3 mb-4">
           <InvoiceStatusBadge status={invoice.status} />
@@ -98,10 +98,16 @@ export function InvoiceDetailPage({ id }: Props) {
         description="Taranmış fatura, fiş veya belge fotoğrafı yükleyin."
       />
 
-      {/* Attachments */}
-      <AttachmentPanel entityType="INVOICE" entityId={id} />
-      <EntityTaskActions entityType="INVOICE" entityId={id} entityLabel={`Fatura ${invoice.number}`} module="invoicing" />
-      <EntityActivityTimeline entityType="INVOICE" entityId={id} />
+        </main>
+
+      <EntityActionPanel
+        entityType="INVOICE"
+        entityId={id}
+        displayName={`Fatura ${invoice.number}`}
+        module="invoicing"
+        primaryEmail={invoice.contact?.email}
+      />
+      </div>
 
       <ConfirmDialog
         isOpen={cancelOpen}

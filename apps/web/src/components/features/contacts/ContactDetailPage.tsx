@@ -29,9 +29,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { KpiCard } from "@/components/shared/KpiCard";
 import { CreditLimitBar } from "@/components/shared/CreditLimitBar";
-import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
-import { EntityActivityTimeline } from "@/components/shared/EntityActivityTimeline";
-import { EntityTaskActions } from "@/components/shared/EntityTaskActions";
+import { EntityActionPanel } from "@/components/shared/EntityActionPanel";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -436,6 +434,8 @@ export function ContactDetailPage({ id }: Props) {
         />
       </div>
 
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="space-y-5">
       {/* Info + Credit + Open Invoices — 3 column */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Contact Info */}
@@ -680,10 +680,16 @@ export function ContactDetailPage({ id }: Props) {
         />
       </div>
 
-      <AttachmentPanel entityType="CONTACT" entityId={id} />
-      <EntityTaskActions entityType="CONTACT" entityId={id} entityLabel={contact.name} module="contacts" />
+        </main>
 
-      <EntityActivityTimeline entityType="CONTACT" entityId={id} module="contacts" />
+      <EntityActionPanel
+        entityType="CONTACT"
+        entityId={id}
+        displayName={contact.name}
+        module="contacts"
+        primaryEmail={contact.email}
+      />
+      </div>
 
       <ConfirmDialog
         isOpen={deleteOpen}

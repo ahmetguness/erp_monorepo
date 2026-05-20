@@ -236,7 +236,7 @@ export const PurchaseOrderController = {
     const order = await prisma.purchaseOrder.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: {
-        contact: { select: { id: true, name: true, code: true } },
+        contact: { select: { id: true, name: true, code: true, email: true } },
         items: {
           include: { product: { select: { id: true, code: true, name: true } } },
           orderBy: { sortOrder: 'asc' },

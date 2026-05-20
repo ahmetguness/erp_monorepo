@@ -13,9 +13,7 @@ import { FullPageSpinner } from "@/components/ui/Spinner";
 import { useProduct, useDeleteProduct } from "@/hooks/useProducts";
 import { useStockLevels } from "@/hooks/useStock";
 import { formatCurrency } from "@/lib/utils";
-import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
-import { EntityActivityTimeline } from "@/components/shared/EntityActivityTimeline";
-import { EntityTaskActions } from "@/components/shared/EntityTaskActions";
+import { EntityActionPanel } from "@/components/shared/EntityActionPanel";
 import type { StockLevel } from "@/services/stock.service";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -107,6 +105,8 @@ export function ProductDetailPage({ id }: Props) {
         }
       />
 
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="space-y-6">
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
         <div className="flex items-start gap-5 mb-4">
           <EntityImage entityType="PRODUCT" entityId={id} fallback="package" className="w-24 h-24 rounded-xl shrink-0" />
@@ -161,10 +161,16 @@ export function ProductDetailPage({ id }: Props) {
         />
       </div>
 
-      {/* Attachments */}
-      <AttachmentPanel entityType="PRODUCT" entityId={id} />
-      <EntityTaskActions entityType="PRODUCT" entityId={id} entityLabel={product.name} module="inventory" />
-      <EntityActivityTimeline entityType="PRODUCT" entityId={id} />
+        </main>
+
+      <EntityActionPanel
+        entityType="PRODUCT"
+        entityId={id}
+        displayName={product.name}
+        module="inventory"
+        availableActions={["task", "attachment", "note", "activity"]}
+      />
+      </div>
 
       <ConfirmDialog
         isOpen={deleteOpen}

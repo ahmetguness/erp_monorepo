@@ -7,6 +7,8 @@ import {
   getTenantSettings, upsertTenantSetting, deleteTenantSetting,
   getModuleSettings, upsertModuleSetting,
   downloadTenantLogo, uploadTenantLogo, deleteTenantLogo,
+  getBusinessRules, upsertBusinessRule,
+  type BusinessRule,
 } from '@/services/settings.service';
 
 export function useTenantSettings() {
@@ -29,6 +31,24 @@ export function useDeleteTenantSetting() {
   return useMutation({
     mutationFn: (key: string) => deleteTenantSetting(key),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['settings', 'tenant'] }); toast.success('Ayar silindi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useBusinessRules() {
+  return useQuery({ queryKey: ['settings', 'business-rules'], queryFn: getBusinessRules, staleTime: 5 * 60 * 1000 });
+}
+
+export function useUpsertBusinessRule() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: ({ key, value }: { key: BusinessRule['key']; value: BusinessRule['value'] }) => upsertBusinessRule(key, value),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'business-rules'] });
+      qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
+      toast.success('İş kuralı kaydedildi.');
+    },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }

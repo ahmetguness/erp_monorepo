@@ -10,6 +10,7 @@ import {
   type PrismaClient,
 } from '@prisma/client';
 import { getTenantPermissionContext } from '../lib/tenant-permissions.js';
+import { BusinessRulesService } from './business-rules.service.js';
 
 export type SmartNotificationSeverity = 'critical' | 'high' | 'medium' | 'low';
 export type SmartNotificationCategory =
@@ -63,8 +64,6 @@ interface SmartNotificationState {
 
 type SmartNotificationStateMap = Record<string, SmartNotificationState>;
 
-const UPCOMING_DAYS = 7;
-const SERVICE_SLA_HOURS = 48;
 const PREF_KEY = 'smartNotifications';
 
 function daysFromNow(days: number): Date {
@@ -170,8 +169,11 @@ export class SmartNotificationService {
 
     const canRead = (module: string): boolean => permissionContext.can(PermissionAction.READ, module);
     const now = new Date();
-    const soon = daysFromNow(UPCOMING_DAYS);
-    const serviceRiskDate = hoursAgo(SERVICE_SLA_HOURS);
+    const businessRules = new BusinessRulesService(this.db);
+    const paymentReminderDays = await businessRules.getNumber(tenantId, 'payments.reminder_days_before_due');
+    const serviceSlaHours = await businessRules.getNumber(tenantId, 'service.default_sla_hours');
+    const soon = daysFromNow(paymentReminderDays);
+    const serviceRiskDate = hoursAgo(serviceSlaHours);
     const preferences = await this.db.tenantUser.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
       select: { preferences: true },
@@ -249,7 +251,7 @@ export class SmartNotificationService {
               category: 'collection_due',
               severity: collectionAmount >= 100_000 ? 'critical' : 'high',
               title: 'Tahsilat vadesi yaklaşıyor',
-              message: `${UPCOMING_DAYS} gün içinde vadesi gelecek ${collectionDue} fatura var. Toplam ${formatTRY(collectionAmount)} TL.`,
+              message: `${paymentReminderDays} gün içinde vadesi gelecek ${collectionDue} fatura var. Toplam ${formatTRY(collectionAmount)} TL.`,
               count: collectionDue,
               href: '/dashboard/invoices',
               module: 'invoicing',
@@ -321,7 +323,7 @@ export class SmartNotificationService {
               category: 'service_sla',
               severity: 'critical',
               title: 'Servis SLA riski',
-              message: `${SERVICE_SLA_HOURS} saati aşan ${serviceSlaRisks} açık servis talebi var.`,
+              message: `${serviceSlaHours} saati aşan ${serviceSlaRisks} açık servis talebi var.`,
               count: serviceSlaRisks,
               href: '/dashboard/service/requests',
               module: 'service',
