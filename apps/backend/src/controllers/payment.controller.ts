@@ -404,7 +404,7 @@ export const PaymentController = {
     // Audit log
     await createAuditLog(prisma, {
       tenantId, userId, module: 'accounting',
-      entityType: EntityType.INVOICE, entityId: payment.id,
+      entityType: EntityType.OTHER, entityId: payment.id,
       action: AuditAction.CREATE,
       newValues: { amount, method: body.method, direction, contactId: body.contactId ?? null },
       ipAddress, userAgent,

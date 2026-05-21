@@ -57,6 +57,7 @@ export function useUpdateUserRole() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tenant-users'] });
       qc.invalidateQueries({ queryKey: ['roles'] });
+      qc.invalidateQueries({ queryKey: ['auth', 'me'] });
       toast.success('Kullanıcı rolü güncellendi.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),

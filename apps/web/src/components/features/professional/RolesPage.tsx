@@ -36,12 +36,114 @@ const ACTIONS: { key: PermissionAction; label: string }[] = [
   { key: 'EXPORT', label: 'Dışa Aktar' },
 ];
 
+const ROLE_MODULES = [
+  { key: 'invoicing', label: 'Satis / Fatura' },
+  { key: 'accounting', label: 'Muhasebe' },
+  { key: 'inventory', label: 'Stok / Urun' },
+  { key: 'purchasing', label: 'Satin Alma' },
+  { key: 'hr', label: 'Insan Kaynaklari' },
+  { key: 'payroll', label: 'Bordro' },
+  { key: 'service', label: 'Teknik Servis' },
+  { key: 'contacts', label: 'Cari Hesap' },
+  { key: 'reporting', label: 'Raporlama' },
+  { key: 'approvals', label: 'Onay Akislari' },
+  { key: 'tasks', label: 'Gorevler' },
+  { key: 'attachments', label: 'Dosyalar' },
+  { key: 'mail', label: 'Mail Merkezi' },
+  { key: 'notifications', label: 'Bildirimler' },
+  { key: 'production', label: 'Uretim' },
+  { key: 'marketplace', label: 'Pazaryeri' },
+  { key: 'settings', label: 'Ayarlar' },
+  { key: 'users', label: 'Kullanicilar' },
+  { key: 'roles', label: 'Rol Yonetimi' },
+  { key: 'audit_logs', label: 'Denetim Kaydi' },
+  { key: 'api_keys', label: 'API Anahtarlari' },
+  { key: 'chat', label: 'AI Asistan' },
+];
+
+const ROLE_ACTIONS: { key: PermissionAction; label: string }[] = [
+  { key: 'CREATE', label: 'Olustur' },
+  { key: 'READ', label: 'Oku' },
+  { key: 'UPDATE', label: 'Guncelle' },
+  { key: 'DELETE', label: 'Sil' },
+  { key: 'APPROVE', label: 'Onayla' },
+  { key: 'EXPORT', label: 'Disa Aktar' },
+];
+
+interface RolePreset {
+  key: string;
+  label: string;
+  description: string;
+  permissions: Array<{ module: string; action: PermissionAction }>;
+}
+
+const READ: PermissionAction = 'READ';
+const CREATE: PermissionAction = 'CREATE';
+const UPDATE: PermissionAction = 'UPDATE';
+const APPROVE: PermissionAction = 'APPROVE';
+const EXPORT: PermissionAction = 'EXPORT';
+
+function permissionsFor(modules: readonly string[], actions: readonly PermissionAction[]): Array<{ module: string; action: PermissionAction }> {
+  return modules.flatMap((module) => actions.map((action) => ({ module, action })));
+}
+
+const ROLE_PRESETS: RolePreset[] = [
+  {
+    key: 'sales',
+    label: 'Satis',
+    description: 'Teklif, siparis, cari takip, mail ve gorev odakli satis rolu.',
+    permissions: [
+      ...permissionsFor(['contacts', 'invoicing', 'mail', 'tasks', 'notifications', 'attachments'], [READ, CREATE, UPDATE]),
+      ...permissionsFor(['reporting'], [READ, EXPORT]),
+    ],
+  },
+  {
+    key: 'accounting',
+    label: 'Muhasebe',
+    description: 'Tahsilat, fatura, kasa/banka, rapor ve onay odakli muhasebe rolu.',
+    permissions: [
+      ...permissionsFor(['accounting', 'invoicing', 'contacts', 'approvals', 'notifications', 'attachments'], [READ, CREATE, UPDATE, EXPORT]),
+      ...permissionsFor(['reporting'], [READ, EXPORT]),
+      { module: 'approvals', action: APPROVE },
+    ],
+  },
+  {
+    key: 'warehouse',
+    label: 'Depo',
+    description: 'Stok, urun, satin alma ve sayim surecleri icin depo rolu.',
+    permissions: [
+      ...permissionsFor(['inventory', 'purchasing', 'notifications', 'tasks', 'attachments'], [READ, CREATE, UPDATE]),
+      ...permissionsFor(['reporting'], [READ]),
+    ],
+  },
+  {
+    key: 'hr',
+    label: 'IK',
+    description: 'Personel, izin, evrak, bordro okuma ve gorev takip rolu.',
+    permissions: [
+      ...permissionsFor(['hr', 'payroll', 'tasks', 'notifications', 'attachments', 'mail'], [READ, CREATE, UPDATE]),
+      ...permissionsFor(['reporting'], [READ]),
+      { module: 'hr', action: APPROVE },
+    ],
+  },
+  {
+    key: 'manager',
+    label: 'Yonetici',
+    description: 'Ciro, karlilik, nakit akisi, raporlar ve onaylar icin yonetici rolu.',
+    permissions: [
+      ...permissionsFor(['accounting', 'invoicing', 'inventory', 'contacts', 'purchasing', 'service', 'hr', 'reporting', 'approvals', 'notifications', 'tasks', 'attachments', 'mail'], [READ, EXPORT]),
+      { module: 'approvals', action: APPROVE },
+    ],
+  },
+];
+
 export function RolesPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailRoleId, setDetailRoleId] = useState<string | null>(null);
   const [editRoleId, setEditRoleId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', description: '' });
+  const [selectedPresetKey, setSelectedPresetKey] = useState('');
   const [editForm, setEditForm] = useState({ name: '', description: '' });
 
   const { data, isLoading } = useRoles({ page, limit: 20 });
@@ -53,6 +155,7 @@ export function RolesPage() {
   const removePerm = useRemovePermission();
   const { data: allUsers } = useTenantUsers();
   const updateUserRole = useUpdateUserRole();
+  const selectedPreset = ROLE_PRESETS.find((preset) => preset.key === selectedPresetKey);
 
   // Permission lookup for detail modal
   const permSet = useMemo(() => {
@@ -172,7 +275,7 @@ export function RolesPage() {
       {/* ── Create Role Modal ── */}
       <Modal
         isOpen={createOpen}
-        onClose={() => setCreateOpen(false)}
+        onClose={() => { setCreateOpen(false); setSelectedPresetKey(''); }}
         title="Yeni Rol"
         description="Rol oluşturun, ardından izinleri detay ekranından yönetin."
         size="sm"
@@ -185,8 +288,8 @@ export function RolesPage() {
               disabled={!form.name.trim()}
               onClick={() => {
                 createRole.mutate(
-                  { name: form.name, description: form.description || undefined },
-                  { onSuccess: () => { setCreateOpen(false); setForm({ name: '', description: '' }); } },
+                  { name: form.name, description: form.description || undefined, permissions: selectedPreset?.permissions },
+                  { onSuccess: () => { setCreateOpen(false); setSelectedPresetKey(''); setForm({ name: '', description: '' }); } },
                 );
               }}
             >
@@ -196,6 +299,33 @@ export function RolesPage() {
         }
       >
         <div className="space-y-5">
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-slate-300">Rol preseti</span>
+            <select
+              value={selectedPresetKey}
+              onChange={(event) => {
+                const preset = ROLE_PRESETS.find((item) => item.key === event.target.value);
+                setSelectedPresetKey(event.target.value);
+                if (preset) setForm({ name: preset.label, description: preset.description });
+              }}
+              className="h-11 w-full rounded-xl border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+            >
+              <option value="">Custom / bos rol</option>
+              {ROLE_PRESETS.map((preset) => (
+                <option key={preset.key} value={preset.key}>
+                  {preset.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500">
+              Preset sadece baslangic izinlerini doldurur; rol yine ozel roldur ve sonradan degistirilebilir.
+            </p>
+          </label>
+          {selectedPreset && (
+            <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 text-xs text-slate-400">
+              <span className="font-medium text-sky-300">{selectedPreset.permissions.length} izin</span> otomatik eklenecek.
+            </div>
+          )}
           <Input label="Rol Adı" required placeholder="ör. Depo Sorumlusu" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
           <Input label="Açıklama" placeholder="Bu rolün amacı" value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
         </div>
@@ -331,7 +461,7 @@ export function RolesPage() {
                   <thead>
                     <tr className="bg-slate-800/40">
                       <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Modül</th>
-                      {ACTIONS.map((a) => (
+                      {ROLE_ACTIONS.map((a) => (
                         <th key={a.key} className="text-center px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider w-20">
                           {a.label}
                         </th>
@@ -339,10 +469,10 @@ export function RolesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {MODULES.map((mod, i) => (
+                    {ROLE_MODULES.map((mod, i) => (
                       <tr key={mod.key} className={i % 2 === 1 ? 'bg-slate-800/[0.08]' : ''}>
                         <td className="px-4 py-2.5 text-sm text-slate-300">{mod.label}</td>
-                        {ACTIONS.map((act) => {
+                        {ROLE_ACTIONS.map((act) => {
                           const has = permSet.has(`${mod.key}:${act.key}`);
                           const perm = findPermission(mod.key, act.key);
                           const isToggling = addPerm.isPending || removePerm.isPending;

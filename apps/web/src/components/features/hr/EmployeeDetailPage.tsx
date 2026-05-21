@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useEmployee } from "@/hooks/useHR";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import type { RecommendedEntityAction } from "@/components/shared/RecommendedActionsPanel";
 
 const LEAVE_STATUS: Record<
   string,
@@ -57,6 +58,12 @@ function EmptyPanel({ title }: { title: string }) {
   );
 }
 
+function addDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
 export function EmployeeDetailPage({ id }: { id: string }) {
   const router = useRouter();
   const { data: emp, isLoading } = useEmployee(id);
@@ -78,6 +85,55 @@ export function EmployeeDetailPage({ id }: { id: string }) {
   }
 
   const employeeName = `${emp.firstName} ${emp.lastName}`;
+  const pendingLeaves = (emp.leaveRequests ?? []).filter((request) => request.status === "PENDING");
+  const missingContactFields = [
+    emp.email ? null : "e-posta",
+    emp.phone ? null : "telefon",
+  ].filter((field): field is string => field !== null);
+  const recommendedActions: RecommendedEntityAction[] = [
+    ...(pendingLeaves.length > 0
+      ? [{
+          id: `employee-${id}-leave-approval`,
+          kind: "task" as const,
+          title: "Bekleyen izin taleplerini değerlendir",
+          summary: `${pendingLeaves.length} bekleyen izin talebi var. HR onay/ret akışı için takip görevi açılmalı.`,
+          priority: "MEDIUM" as const,
+          entityType: "EMPLOYEE" as const,
+          entityId: id,
+          module: "hr",
+          href: `/dashboard/hr/employees/${id}`,
+          steps: ["Öneriyi gör", "Görev taslağını incele", "Onayla", "Workflow’da takip et"],
+          draft: {
+            title: `${employeeName} izin talepleri kontrolü`,
+            detail: pendingLeaves
+              .map((request) => `${formatDate(request.startDate)} - ${formatDate(request.endDate)} (${request.days} gün) ${request.type}`)
+              .join("\n"),
+            type: "GENERAL" as const,
+            dueAt: addDays(1),
+          },
+        }]
+      : []),
+    ...(missingContactFields.length > 0
+      ? [{
+          id: `employee-${id}-document-check`,
+          kind: "task" as const,
+          title: "Personel evrak ve iletişim kontrolü",
+          summary: `Eksik alanlar: ${missingContactFields.join(", ")}. Evrak/iletişim kontrolü için görev açılması önerilir.`,
+          priority: "LOW" as const,
+          entityType: "EMPLOYEE" as const,
+          entityId: id,
+          module: "hr",
+          href: `/dashboard/hr/employees/${id}`,
+          steps: ["Öneriyi gör", "Görev taslağını incele", "Onayla", "Workflow’da takip et"],
+          draft: {
+            title: `${employeeName} evrak ve iletişim kontrolü`,
+            detail: `${employeeName} için eksik iletişim/evrak bilgilerini tamamla: ${missingContactFields.join(", ")}.`,
+            type: "CHECK" as const,
+            dueAt: addDays(3),
+          },
+        }]
+      : []),
+  ];
 
   return (
     <div className="space-y-6">
@@ -196,6 +252,7 @@ export function EmployeeDetailPage({ id }: { id: string }) {
           displayName={employeeName}
           module="hr"
           primaryEmail={emp.email}
+          recommendedActions={recommendedActions}
         />
       </div>
     </div>

@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import { prisma } from '../lib/prisma';
 import { ValidationError, ForbiddenError, NotFoundError } from '../errors';
-import { Prisma } from '@prisma/client';
+import { PermissionAction, Prisma } from '@prisma/client';
 import { requireTenantId } from '../utils/context.js';
 import { logger } from '../lib/logger';
 import { rateLimiter } from '../lib/rateLimiter';
@@ -48,6 +48,44 @@ interface JwtPayload {
   tenantId: string;
   iat?: number;
   exp?: number;
+}
+
+interface TenantMembershipView {
+  isOwner: boolean;
+  roleId: string | null;
+  role: {
+    id: string;
+    name: string;
+    isSystem: boolean;
+    permissions: Array<{ module: string; action: string }>;
+  } | null;
+}
+
+function toTenantMembershipView(input: {
+  isOwner: boolean;
+  roleId: string | null;
+  roleRef?: {
+    id: string;
+    name: string;
+    isSystem: boolean;
+    permissions: Array<{ module: string; action: PermissionAction }>;
+  } | null;
+}): TenantMembershipView {
+  return {
+    isOwner: input.isOwner,
+    roleId: input.roleId,
+    role: input.roleRef
+      ? {
+          id: input.roleRef.id,
+          name: input.roleRef.name,
+          isSystem: input.roleRef.isSystem,
+          permissions: input.roleRef.permissions.map((permission) => ({
+            module: permission.module,
+            action: permission.action,
+          })),
+        }
+      : null,
+  };
 }
 
 function setAuthCookie(c: Context, token: string, rememberMe = true): void {
@@ -100,6 +138,14 @@ export const AuthController = {
         tenants: {
           where: { isActive: true },
           include: {
+            roleRef: {
+              select: {
+                id: true,
+                name: true,
+                isSystem: true,
+                permissions: { select: { module: true, action: true } },
+              },
+            },
             tenant: {
               select: {
                 id: true,
@@ -189,6 +235,7 @@ export const AuthController = {
           name: user.name,
           phone: user.phone,
           isActive: user.isActive,
+          tenantMembership: toTenantMembershipView(selectedTenantUser),
         },
         tenant: {
           id: tenant.id,
@@ -315,6 +362,7 @@ export const AuthController = {
             name: result.user.name,
             phone: result.user.phone,
             isActive: result.user.isActive,
+            tenantMembership: { isOwner: true, roleId: null, role: null },
           },
           tenant: {
             id: result.tenant.id,
@@ -386,11 +434,30 @@ export const AuthController = {
         tenantId_userId: { tenantId, userId }
       },
       select: {
-        preferences: true
+        preferences: true,
+        isOwner: true,
+        roleId: true,
+        roleRef: {
+          select: {
+            id: true,
+            name: true,
+            isSystem: true,
+            permissions: { select: { module: true, action: true } },
+          },
+        },
       }
     });
 
-    return c.json({ data: { user, tenant, preferences: tenantUser?.preferences || null } });
+    return c.json({
+      data: {
+        user: {
+          ...user,
+          tenantMembership: tenantUser ? toTenantMembershipView(tenantUser) : undefined,
+        },
+        tenant,
+        preferences: tenantUser?.preferences || null,
+      },
+    });
   },
 
   /**

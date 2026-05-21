@@ -33,8 +33,12 @@ const INVOICE_KEYS = {
 
 // ── Quotes ───────────────────────────────────
 
-export function useSalesQuotes(params: ListParams) {
-  return useQuery({ queryKey: QUOTE_KEYS.list(params), queryFn: () => getSalesQuotes(params) });
+export function useSalesQuotes(params: ListParams, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: QUOTE_KEYS.list(params),
+    queryFn: () => getSalesQuotes(params),
+    enabled: options?.enabled ?? true,
+  });
 }
 
 export function useSalesQuote(id: string) {
@@ -67,8 +71,12 @@ export function useConvertQuoteToOrder(quoteId: string) {
 
 // ── Orders ───────────────────────────────────
 
-export function useSalesOrders(params: ListParams) {
-  return useQuery({ queryKey: ORDER_KEYS.list(params), queryFn: () => getSalesOrders(params) });
+export function useSalesOrders(params: ListParams, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ORDER_KEYS.list(params),
+    queryFn: () => getSalesOrders(params),
+    enabled: options?.enabled ?? true,
+  });
 }
 
 export function useSalesOrder(id: string) {

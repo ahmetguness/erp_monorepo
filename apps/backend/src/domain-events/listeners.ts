@@ -1,6 +1,7 @@
-import { EntityType, NotificationStatus, Priority, TaskType } from '@prisma/client';
+import { AuditAction, EntityType, NotificationStatus, Prisma, Priority, TaskType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { createTask } from '../services/task.service.js';
+import { createAuditLog } from '../utils/audit.js';
 import { domainEvents } from './bus.js';
 import { entityIdForEvent, entityTypeForEvent, type DomainEvent } from './events.js';
 
@@ -42,6 +43,110 @@ async function notifyUsers(event: DomainEvent, title: string, message: string, m
   });
 }
 
+function moduleForEvent(event: DomainEvent): string {
+  switch (event.name) {
+    case 'invoice.created':
+    case 'invoice.overdue':
+      return 'invoicing';
+    case 'payment.received':
+      return 'accounting';
+    case 'stock.low':
+      return 'inventory';
+    case 'salesQuote.accepted':
+      return 'sales';
+    case 'mail.failed':
+      return 'mail';
+    case 'employee.documentMissing':
+      return 'hr';
+  }
+}
+
+function auditPayload(event: DomainEvent): Prisma.InputJsonObject {
+  switch (event.name) {
+    case 'invoice.created':
+      return {
+        event: event.name,
+        invoiceId: event.payload.invoiceId,
+        number: event.payload.number,
+        contactId: event.payload.contactId,
+        contactName: event.payload.contactName,
+        totalGross: event.payload.totalGross,
+        dueDate: event.payload.dueDate?.toISOString() ?? null,
+      };
+    case 'invoice.overdue':
+      return {
+        event: event.name,
+        invoiceId: event.payload.invoiceId,
+        number: event.payload.number,
+        contactId: event.payload.contactId,
+        contactName: event.payload.contactName,
+        totalGross: event.payload.totalGross,
+        dueDate: event.payload.dueDate.toISOString(),
+        daysLate: event.payload.daysLate,
+      };
+    case 'payment.received':
+      return {
+        event: event.name,
+        paymentId: event.payload.paymentId,
+        contactId: event.payload.contactId,
+        amount: event.payload.amount,
+        method: event.payload.method,
+        reference: event.payload.reference,
+      };
+    case 'stock.low':
+      return {
+        event: event.name,
+        productId: event.payload.productId,
+        productCode: event.payload.productCode,
+        productName: event.payload.productName,
+        currentQuantity: event.payload.currentQuantity,
+        minStockLevel: event.payload.minStockLevel,
+        warehouseId: event.payload.warehouseId,
+      };
+    case 'salesQuote.accepted':
+      return {
+        event: event.name,
+        quoteId: event.payload.quoteId,
+        orderId: event.payload.orderId,
+        quoteNumber: event.payload.quoteNumber,
+        orderNumber: event.payload.orderNumber,
+        contactId: event.payload.contactId,
+        totalGross: event.payload.totalGross,
+      };
+    case 'mail.failed':
+      return {
+        event: event.name,
+        mailId: event.payload.mailId,
+        subject: event.payload.subject,
+        sentById: event.payload.sentById,
+        recipients: event.payload.recipients,
+        error: event.payload.error,
+      };
+    case 'employee.documentMissing':
+      return {
+        event: event.name,
+        employeeId: event.payload.employeeId,
+        employeeName: event.payload.employeeName,
+        documentName: event.payload.documentName,
+        severity: event.payload.severity,
+      };
+  }
+}
+
+async function auditListener(event: DomainEvent): Promise<void> {
+  if (event.name === 'invoice.created' || event.name === 'payment.received') return;
+
+  await createAuditLog(prisma, {
+    tenantId: event.context.tenantId,
+    userId: event.context.userId ?? null,
+    module: moduleForEvent(event),
+    entityType: entityTypeForEvent(event),
+    entityId: entityIdForEvent(event),
+    action: event.name === 'salesQuote.accepted' ? AuditAction.UPDATE : AuditAction.CREATE,
+    newValues: auditPayload(event),
+  });
+}
+
 async function notificationListener(event: DomainEvent): Promise<void> {
   switch (event.name) {
     case 'mail.failed':
@@ -77,9 +182,23 @@ async function notificationListener(event: DomainEvent): Promise<void> {
         'hr',
       );
       return;
-    case 'invoice.created':
     case 'payment.received':
+      await notifyUsers(
+        event,
+        'Tahsilat alindi',
+        `${event.payload.amount.toFixed(2)} TL tahsilat kaydedildi${event.payload.reference ? ` (${event.payload.reference})` : ''}.`,
+        'accounting',
+      );
+      return;
     case 'salesQuote.accepted':
+      await notifyUsers(
+        event,
+        'Teklif siparise donustu',
+        `${event.payload.quoteNumber} kabul edildi ve ${event.payload.orderNumber} siparisi olustu. Tutar: ${event.payload.totalGross.toFixed(2)} TL`,
+        'sales',
+      );
+      return;
+    case 'invoice.created':
       return;
   }
 }
@@ -129,9 +248,22 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         createdById: event.context.userId ?? null,
       });
       return;
+    case 'salesQuote.accepted':
+      await createTask(event.context.tenantId, {
+        title: `Siparis takibi: ${event.payload.orderNumber}`,
+        detail: `${event.payload.quoteNumber} teklifinden olusan siparis icin sevkiyat/faturalama takibini baslatin.`,
+        type: TaskType.GENERAL,
+        priority: Priority.MEDIUM,
+        module: 'sales',
+        entityType: EntityType.SALES_ORDER,
+        entityId: event.payload.orderId,
+        href: `/dashboard/sales-orders/${event.payload.orderId}`,
+        source: `domain:salesQuote.accepted:${event.payload.quoteId}`,
+        createdById: event.context.userId ?? null,
+      });
+      return;
     case 'invoice.created':
     case 'payment.received':
-    case 'salesQuote.accepted':
     case 'mail.failed':
       return;
   }
@@ -140,6 +272,7 @@ async function workflowListener(event: DomainEvent): Promise<void> {
 export function registerDomainEventListeners(): void {
   if (listenersRegistered) return;
   listenersRegistered = true;
+  domainEvents.subscribe(auditListener);
   domainEvents.subscribe(notificationListener);
   domainEvents.subscribe(workflowListener);
 }

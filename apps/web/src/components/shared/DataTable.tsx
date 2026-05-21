@@ -1,5 +1,7 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from './EmptyState';
 import { Pagination, type PaginationProps } from '@/components/ui/Pagination';
 
@@ -19,6 +21,13 @@ export interface DataTableProps<T> {
   columns: ColumnDef<T>[];
   data: T[];
   keyExtractor: (row: T) => string;
+  selection?: {
+    selectedIds: ReadonlySet<string>;
+    isPageSelected: boolean;
+    isPagePartiallySelected: boolean;
+    onToggleRow: (id: string) => void;
+    onTogglePage: () => void;
+  };
   isLoading?: boolean;
   pagination?: PaginationProps;
   onRowClick?: (row: T) => void;
@@ -46,6 +55,44 @@ function SkeletonRow({ cols }: { cols: number }) {
   );
 }
 
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  disabled = false,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange: () => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      aria-label={label}
+      checked={checked}
+      disabled={disabled}
+      onChange={(event) => {
+        event.stopPropagation();
+        onChange();
+      }}
+      onClick={(event) => event.stopPropagation()}
+      className="h-3.5 w-3.5 cursor-pointer rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+    />
+  );
+}
+
 // ─────────────────────────────────────────────
 // DataTable
 // ─────────────────────────────────────────────
@@ -54,6 +101,7 @@ export function DataTable<T>({
   columns,
   data,
   keyExtractor,
+  selection,
   isLoading = false,
   pagination,
   onRowClick,
@@ -61,6 +109,8 @@ export function DataTable<T>({
   emptyDescription,
   className,
 }: DataTableProps<T>) {
+  const columnCount = columns.length + (selection ? 1 : 0);
+
   return (
     <div className={cn(
       'overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/45 shadow-xl shadow-black/10',
@@ -71,6 +121,17 @@ export function DataTable<T>({
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-slate-800/80 bg-slate-900/95">
+              {selection && (
+                <th className="w-10 px-4 py-3.5 text-center">
+                  <SelectionCheckbox
+                    label="Sayfadaki kayitlari sec"
+                    checked={selection.isPageSelected}
+                    indeterminate={selection.isPagePartiallySelected}
+                    disabled={isLoading || data.length === 0}
+                    onChange={selection.onTogglePage}
+                  />
+                </th>
+              )}
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -88,10 +149,10 @@ export function DataTable<T>({
 
           <tbody>
             {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={columns.length} />)
+              Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={columnCount} />)
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={columns.length}>
+                <td colSpan={columnCount}>
                   <EmptyState title={emptyTitle} description={emptyDescription} compact />
                 </td>
               </tr>
@@ -107,6 +168,15 @@ export function DataTable<T>({
                     'hover:bg-sky-500/[0.045]',
                   )}
                 >
+                  {selection && (
+                    <td className="px-4 py-4 text-center align-middle">
+                      <SelectionCheckbox
+                        label="Satiri sec"
+                        checked={selection.selectedIds.has(keyExtractor(row))}
+                        onChange={() => selection.onToggleRow(keyExtractor(row))}
+                      />
+                    </td>
+                  )}
                   {columns.map((col) => (
                     <td
                       key={col.key}

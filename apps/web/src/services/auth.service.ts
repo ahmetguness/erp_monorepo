@@ -14,6 +14,16 @@ const AuthUserSchema = z.object({
   name: z.string(),
   phone: z.string().nullable(),
   isActive: z.boolean(),
+  tenantMembership: z.object({
+    isOwner: z.boolean(),
+    roleId: z.string().nullable(),
+    role: z.object({
+      id: z.string(),
+      name: z.string(),
+      isSystem: z.boolean(),
+      permissions: z.array(z.object({ module: z.string(), action: z.string() })),
+    }).nullable(),
+  }).optional(),
 });
 
 const TenantInfoSchema = z.object({

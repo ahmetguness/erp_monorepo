@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { usePathname } from 'next/navigation';
 import {
   MessageCircle, X, Send, Bot, User, Loader2, Minimize2, Maximize2,
   Trash2, Database, Copy, Check, RefreshCw, Sparkles,
@@ -8,7 +9,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAuthStore } from '@/store/auth.store';
-import { clearChatHistory, openChatStream } from '@/services/chat.service';
+import { clearChatHistory, openChatStream, type ChatEntityType, type ChatPageContext, type ChatRecentRecord } from '@/services/chat.service';
 
 // ─────────────────────────────────────────────
 // Types
@@ -25,6 +26,8 @@ interface Message {
 }
 
 const STORAGE_KEY_PREFIX = 'axon_chat_messages_';
+const RECENT_RECORDS_KEY_PREFIX = 'axon_chat_recent_records_';
+const MAX_RECENT_RECORDS = 8;
 
 // ─────────────────────────────────────────────
 // rAF-based smooth streaming hook
@@ -81,6 +84,32 @@ const QUICK_ACTIONS = [
 // Helpers
 // ─────────────────────────────────────────────
 
+const ENTITY_QUICK_ACTIONS: Record<ChatEntityType, Array<{ label: string; message: string }>> = {
+  contact: [
+    { label: 'Müşteri riski', message: 'Bu müşterinin riskini özetle' },
+    { label: 'Açık işler', message: 'Bu müşterinin açık teklif, sipariş ve faturalarını özetle' },
+  ],
+  invoice: [
+    { label: 'Hatırlatma maili', message: 'Bu faturaya ödeme hatırlatma maili hazırla' },
+    { label: 'Tahsilat riski', message: 'Bu faturanın tahsilat riskini yorumla' },
+  ],
+  sales_quote: [
+    { label: 'Düşük kârlılık', message: 'Bu teklif neden düşük kârlı?' },
+    { label: 'İskonto önerisi', message: 'Bu teklif için iskonto ve marj uyarılarını çıkar' },
+  ],
+  sales_order: [
+    { label: 'Sipariş riski', message: 'Bu siparişin teslimat ve fatura riskini özetle' },
+  ],
+  employee: [
+    { label: 'Eksik evrak', message: 'Bu personelin eksik evraklarını çıkar' },
+    { label: 'Puantaj/izin', message: 'Bu personelin son izin ve puantaj durumunu özetle' },
+  ],
+  product: [
+    { label: 'Stok uygunluğu', message: 'Bu ürünün stok uygunluğunu özetle' },
+    { label: 'Son fiyatlar', message: 'Bu ürünün son satış fiyatlarını yorumla' },
+  ],
+};
+
 /** Yanıttan suggestions JSON'ını ayıkla */
 function parseSuggestions(text: string): { content: string; suggestions: string[] } {
   const separator = text.lastIndexOf('\n---\n');
@@ -123,6 +152,76 @@ function saveMessages(messages: Message[], userId?: string) {
 // ─────────────────────────────────────────────
 // Copy button component
 // ─────────────────────────────────────────────
+
+function parseRecentRecords(userId?: string): ChatRecentRecord[] {
+  if (!userId) return [];
+  try {
+    const raw = localStorage.getItem(RECENT_RECORDS_KEY_PREFIX + userId);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.flatMap((item) => {
+      if (typeof item !== 'object' || item === null) return [];
+      const entityType = Reflect.get(item, 'entityType');
+      const entityId = Reflect.get(item, 'entityId');
+      const label = Reflect.get(item, 'label');
+      const path = Reflect.get(item, 'path');
+      const viewedAt = Reflect.get(item, 'viewedAt');
+      if (
+        !isChatEntityType(entityType) ||
+        typeof entityId !== 'string' ||
+        typeof label !== 'string' ||
+        typeof path !== 'string' ||
+        typeof viewedAt !== 'string'
+      ) {
+        return [];
+      }
+      return [{ entityType, entityId, label, path, viewedAt }];
+    }).slice(0, MAX_RECENT_RECORDS);
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentRecords(records: ChatRecentRecord[], userId?: string) {
+  if (!userId) return;
+  try {
+    localStorage.setItem(RECENT_RECORDS_KEY_PREFIX + userId, JSON.stringify(records.slice(0, MAX_RECENT_RECORDS)));
+  } catch { /* quota aÅŸÄ±mÄ± vb. */ }
+}
+
+function isChatEntityType(value: unknown): value is ChatEntityType {
+  return (
+    value === 'contact' ||
+    value === 'invoice' ||
+    value === 'sales_quote' ||
+    value === 'sales_order' ||
+    value === 'employee' ||
+    value === 'product'
+  );
+}
+
+function inferEntityFromPath(pathname: string): Pick<ChatPageContext, 'entityType' | 'entityId'> {
+  const segments = pathname.split('/').filter(Boolean);
+  const dashboardIndex = segments.indexOf('dashboard');
+  const parts = dashboardIndex >= 0 ? segments.slice(dashboardIndex + 1) : segments;
+
+  if (parts[0] === 'contacts' && parts[1] && parts[1] !== 'new') return { entityType: 'contact', entityId: parts[1] };
+  if (parts[0] === 'invoices' && parts[1] && parts[1] !== 'new') return { entityType: 'invoice', entityId: parts[1] };
+  if (parts[0] === 'sales-orders' && parts[1] === 'quotes' && parts[2] && parts[2] !== 'new') return { entityType: 'sales_quote', entityId: parts[2] };
+  if (parts[0] === 'sales-orders' && parts[1] && parts[1] !== 'new' && parts[1] !== 'quotes') return { entityType: 'sales_order', entityId: parts[1] };
+  if (parts[0] === 'hr' && parts[1] === 'employees' && parts[2]) return { entityType: 'employee', entityId: parts[2] };
+  if (parts[0] === 'products' && parts[1] && parts[1] !== 'new') return { entityType: 'product', entityId: parts[1] };
+
+  return {};
+}
+
+function getEntityLabel(entityType?: ChatEntityType, entityId?: string, title?: string): string | undefined {
+  if (!entityType || !entityId) return undefined;
+  const cleanTitle = title?.replace(/\s+-\s+Axon ERP$/i, '').trim();
+  if (cleanTitle && cleanTitle.length <= 80) return cleanTitle;
+  return `${entityType.replace('_', ' ')} ${entityId.slice(0, 8)}`;
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -190,11 +289,14 @@ function ChatMarkdown({ content }: { content: string }) {
 // ─────────────────────────────────────────────
 
 export function ChatBot() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [pageTitle, setPageTitle] = useState('');
+  const [recentRecords, setRecentRecords] = useState<ChatRecentRecord[]>([]);
   const { displayed: streamingContent, append: appendStream, reset: resetStream } = useSmoothStream();
   const [fetchingData, setFetchingData] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -204,6 +306,49 @@ export function ChatBot() {
   const user = useAuthStore((s) => s.user);
   const tenant = useAuthStore((s) => s.tenant);
   const prevUserIdRef = useRef<string | undefined>(undefined);
+  const activeEntity = useMemo(() => inferEntityFromPath(pathname), [pathname]);
+  const activeEntityLabel = useMemo(
+    () => getEntityLabel(activeEntity.entityType, activeEntity.entityId, pageTitle),
+    [activeEntity.entityId, activeEntity.entityType, pageTitle],
+  );
+  const chatContext = useMemo<ChatPageContext>(() => ({
+    path: pathname,
+    title: pageTitle || undefined,
+    entityType: activeEntity.entityType,
+    entityId: activeEntity.entityId,
+    entityLabel: activeEntityLabel,
+    recentRecords,
+  }), [activeEntity.entityId, activeEntity.entityType, activeEntityLabel, pageTitle, pathname, recentRecords]);
+  const entityQuickActions = activeEntity.entityType ? ENTITY_QUICK_ACTIONS[activeEntity.entityType] : [];
+
+  useEffect(() => {
+    setPageTitle(document.title);
+  }, [pathname]);
+
+  useEffect(() => {
+    setRecentRecords(parseRecentRecords(user?.id));
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !activeEntity.entityType || !activeEntity.entityId) return;
+
+    const nextRecord: ChatRecentRecord = {
+      entityType: activeEntity.entityType,
+      entityId: activeEntity.entityId,
+      label: activeEntityLabel ?? `${activeEntity.entityType} ${activeEntity.entityId.slice(0, 8)}`,
+      path: pathname,
+      viewedAt: new Date().toISOString(),
+    };
+
+    setRecentRecords((prev) => {
+      const next = [
+        nextRecord,
+        ...prev.filter((record) => !(record.entityType === nextRecord.entityType && record.entityId === nextRecord.entityId)),
+      ].slice(0, MAX_RECENT_RECORDS);
+      saveRecentRecords(next, user.id);
+      return next;
+    });
+  }, [activeEntity.entityId, activeEntity.entityType, activeEntityLabel, pathname, user?.id]);
 
   // ── Kullanıcı değişimi algıla — hesap değiştiğinde sohbeti sıfırla ──
   useEffect(() => {
@@ -282,7 +427,7 @@ export function ChatBot() {
     abortRef.current = abort;
 
     try {
-      const res = await openChatStream(msg, abort.signal);
+      const res = await openChatStream(msg, chatContext, abort.signal);
 
       // Non-streaming hata yanıtları
       if (!res.ok) {
@@ -400,15 +545,20 @@ export function ChatBot() {
       setFetchingData(false);
       abortRef.current = null;
     }
-  }, [input, loading, streamingContent, appendStream, resetStream]);
+  }, [chatContext, input, loading, streamingContent, appendStream, resetStream]);
 
   useEffect(() => {
     const handleAction = (event: Event) => {
-      if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return;
-      const detail = event.detail.trim();
-      if (!detail) return;
+      if (!(event instanceof CustomEvent)) return;
+      const detail = typeof event.detail === 'string'
+        ? event.detail
+        : typeof event.detail === 'object' && event.detail !== null && typeof Reflect.get(event.detail, 'message') === 'string'
+          ? Reflect.get(event.detail, 'message')
+          : '';
+      const message = detail.trim();
+      if (!message) return;
       setOpen(true);
-      setTimeout(() => sendMessage(detail), 150);
+      setTimeout(() => sendMessage(message), 150);
     };
 
     window.addEventListener('axon-chat-action', handleAction);
@@ -420,6 +570,7 @@ export function ChatBot() {
   };
 
   const showQuickActions = messages.length <= 1 && !loading;
+  const quickActions = entityQuickActions.length > 0 ? [...entityQuickActions, ...QUICK_ACTIONS].slice(0, 4) : QUICK_ACTIONS;
 
   // ── Kapalı durum ──
   if (!open) {
@@ -451,7 +602,9 @@ export function ChatBot() {
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-white">Axon Asistan</h3>
-          <p className="text-[10px] text-slate-500 truncate">{tenant?.companyName ?? 'ERP Asistanı'}</p>
+          <p className="text-[10px] text-slate-500 truncate">
+            {activeEntityLabel ? `Kayıt bağlamı: ${activeEntityLabel}` : (tenant?.companyName ?? 'ERP Asistanı')}
+          </p>
         </div>
         <div className="flex items-center gap-0.5">
           <button onClick={clearChat}
@@ -536,7 +689,7 @@ export function ChatBot() {
               Aksiyon Akışları
             </p>
             <div className="grid grid-cols-2 gap-1.5">
-              {QUICK_ACTIONS.map((q) => (
+              {quickActions.map((q) => (
                 <button key={q.label} onClick={() => sendMessage(q.message)}
                   className="text-left px-2.5 py-2 rounded-xl text-[11px] text-slate-300 bg-slate-800/50 border border-slate-700/30 hover:bg-slate-800 hover:border-sky-500/30 transition-all">
                   {q.label}

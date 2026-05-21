@@ -7,6 +7,14 @@ export type { EmptyStateProps } from './EmptyState';
 export { DataTable } from './DataTable';
 export type { DataTableProps, ColumnDef } from './DataTable';
 
+export { BulkActionBar } from './BulkActionBar';
+export type { BulkActionBarProps, BulkActionDefinition, BulkActionContext } from './BulkActionBar';
+export { createBulkActionPresets } from './bulkActionPresets';
+export type { BulkActionPresetKind } from './bulkActionPresets';
+
+export { SmartFormSidePanel } from './SmartFormSidePanel';
+export type { SmartFormLine, SmartFormSidePanelProps } from './SmartFormSidePanel';
+
 export { SearchInput } from './SearchInput';
 export type { SearchInputProps } from './SearchInput';
 

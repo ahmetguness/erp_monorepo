@@ -15,9 +15,11 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { FormRow } from '@/components/shared/FormField';
 import { ContactSelect, ProductSelect } from '@/components/shared/EntitySelect';
+import { SmartFormSidePanel, type SmartFormLine } from '@/components/shared/SmartFormSidePanel';
 import { useContacts } from '@/hooks/useContacts';
 import { useProducts } from '@/hooks/useProducts';
-import { useCreateSalesQuote } from '@/hooks/useSales';
+import { useCreateSalesQuote, useSalesOrders, useSalesQuotes } from '@/hooks/useSales';
+import { useStockLevels } from '@/hooks/useStock';
 import { useBusinessRules } from '@/hooks/useSettings';
 import { cn, formatCurrency } from '@/lib/utils';
 import type { BusinessRule } from '@/services/settings.service';
@@ -93,6 +95,16 @@ export function SalesQuoteFormPage() {
   const watchDate = useWatch({ control, name: 'date' });
   const watchValidUntil = useWatch({ control, name: 'validUntil' });
   const quoteValidityDays = getNumberRule(businessRules, 'sales.quote_validity_days', 30);
+  const { data: openQuotesData } = useSalesQuotes(
+    { page: 1, limit: 5, contactId: watchContact || undefined, status: 'DRAFT' },
+    { enabled: Boolean(watchContact) },
+  );
+  const { data: openOrdersData } = useSalesOrders(
+    { page: 1, limit: 5, contactId: watchContact || undefined, status: 'CONFIRMED' },
+    { enabled: Boolean(watchContact) },
+  );
+  const selectedProductIds = watchItems.map((item) => item.productId).filter(Boolean);
+  const { data: stockLevels = [], isLoading: stockLoading } = useStockLevels({}, { enabled: selectedProductIds.length > 0 });
 
   useEffect(() => {
     if (!watchDate || dirtyFields.validUntil) return;
@@ -120,6 +132,14 @@ export function SalesQuoteFormPage() {
   const totalNet = lineTotals.reduce((s, l) => s + l.net, 0);
   const totalTax = lineTotals.reduce((s, l) => s + l.taxAmt, 0);
   const totalGross = lineTotals.reduce((s, l) => s + l.gross, 0);
+  const smartLines: SmartFormLine[] = watchItems.map((item, index) => ({
+    productId: item.productId || undefined,
+    quantity: Number(item.quantity || 0),
+    unitPrice: Number(item.unitPrice || 0),
+    discount: Number(item.discount || 0),
+    net: lineTotals[index]?.net ?? 0,
+    gross: lineTotals[index]?.gross ?? 0,
+  }));
 
   const selectedContact = contacts.find((c) => c.id === watchContact);
 
@@ -333,6 +353,18 @@ export function SalesQuoteFormPage() {
           {/* ── Right sidebar: summary ──────────── */}
           <div className="hidden lg:block w-72 shrink-0">
             <div className="sticky top-4 space-y-4">
+              <SmartFormSidePanel
+                formKind="quote"
+                contact={selectedContact}
+                products={products}
+                stockLevels={stockLevels}
+                stockLoading={stockLoading}
+                lines={smartLines}
+                totalGross={totalGross}
+                openQuoteCount={openQuotesData?.meta.total ?? 0}
+                openOrderCount={openOrdersData?.meta.total ?? 0}
+              />
+
               {/* Customer card */}
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">

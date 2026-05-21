@@ -15,7 +15,18 @@ import {
   validateNormalizedMailAttachments,
 } from '../utils/mail-attachments';
 import { prisma } from '../lib/prisma';
+import { openai } from '../lib/openai';
 import { BusinessRulesService } from '../services/business-rules.service.js';
+import {
+  createFallbackMailDraft,
+  getMailTemplates,
+  isMailTemplateId,
+  isMailTemplateVariableKey,
+  MailDraftTone,
+  MailTemplateId,
+  MailTemplateVariables,
+  renderMailTemplate,
+} from '../services/mail-template-library.service';
 
 // ── Rate limiter (tenant bazlı, saatte max 20 mail) ─────
 const mailRateMap = new Map<string, { count: number; resetAt: number }>();
@@ -46,6 +57,12 @@ interface BulkMailBody {
   from?: string;
   replyTo?: string;
   attachments?: MailAttachmentInput[];
+}
+
+interface AiDraftResult {
+  subject: string;
+  body: string;
+  usedAi: boolean;
 }
 
 function checkMailRateLimit(tenantId: string): boolean {
@@ -114,6 +131,52 @@ function parseMailStatus(value: string | undefined): MailDeliveryStatus | undefi
   return undefined;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseStringField(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.slice(0, maxLength);
+}
+
+function parseTemplateId(value: unknown): MailTemplateId | null {
+  if (typeof value !== 'string' || !isMailTemplateId(value)) return null;
+  return value;
+}
+
+function parseTone(value: unknown): MailDraftTone {
+  if (value === 'friendly' || value === 'short' || value === 'formal') return value;
+  return 'formal';
+}
+
+function parseTemplateVariables(value: unknown): MailTemplateVariables {
+  if (!isRecord(value)) return {};
+
+  return Object.entries(value).reduce<MailTemplateVariables>((acc, [key, rawValue]) => {
+    if (!isMailTemplateVariableKey(key) || typeof rawValue !== 'string') return acc;
+    const trimmed = rawValue.trim();
+    if (trimmed) acc[key] = trimmed.slice(0, 300);
+    return acc;
+  }, {});
+}
+
+function parseAiDraftContent(content: string | null, fallback: AiDraftResult): AiDraftResult {
+  if (!content) return fallback;
+  try {
+    const parsed: unknown = JSON.parse(content);
+    if (!isRecord(parsed)) return fallback;
+    const subject = parseStringField(parsed.subject, 200);
+    const body = parseStringField(parsed.body, 5000);
+    if (!subject || !body) return fallback;
+    return { subject, body, usedAi: true };
+  } catch {
+    return fallback;
+  }
+}
+
 async function withDefaultSignature(tenantId: string, html: string): Promise<string> {
   const signature = (await businessRulesService.getString(tenantId, 'mail.default_signature')).trim();
   if (!signature || html.includes(signature)) return html;
@@ -169,6 +232,96 @@ async function sendAndRecordMail(options: {
 }
 
 export class MailController {
+  /** GET /api/mail/templates - Tenant baglamli mail sablon kutuphanesi */
+  static async templates(c: Context) {
+    requireTenantId(c);
+    return c.json({ data: getMailTemplates() });
+  }
+
+  /** POST /api/mail/templates/render - Sablonu degiskenlerle doldur */
+  static async renderTemplate(c: Context) {
+    requireTenantId(c);
+    const body: unknown = await c.req.json();
+    if (!isRecord(body)) return c.json({ error: 'Gecersiz istek govdesi.' }, 400);
+
+    const templateId = parseTemplateId(body.templateId);
+    if (!templateId) return c.json({ error: 'Gecerli bir sablon secilmelidir.' }, 400);
+
+    const rendered = renderMailTemplate(templateId, parseTemplateVariables(body.variables));
+    if (!rendered) return c.json({ error: 'Sablon bulunamadi.' }, 404);
+    return c.json({ data: rendered });
+  }
+
+  /** POST /api/mail/ai-draft - Secili baglama gore mail taslagi uret */
+  static async aiDraft(c: Context) {
+    requireTenantId(c);
+    requireUserId(c);
+    const body: unknown = await c.req.json();
+    if (!isRecord(body)) return c.json({ error: 'Gecersiz istek govdesi.' }, 400);
+
+    const templateId = parseTemplateId(body.templateId);
+    if (!templateId) return c.json({ error: 'AI taslak icin gecerli bir baglam secilmelidir.' }, 400);
+
+    const variables = parseTemplateVariables(body.variables);
+    const notes = parseStringField(body.notes, 1000);
+    const audience = parseStringField(body.audience, 300);
+    const tone = parseTone(body.tone);
+    const fallback = createFallbackMailDraft({ templateId, variables, notes });
+    if (!fallback) return c.json({ error: 'Sablon bulunamadi.' }, 404);
+
+    const fallbackDraft: AiDraftResult = {
+      subject: fallback.subject,
+      body: fallback.body,
+      usedAi: false,
+    };
+
+    if (!process.env.OPENAI_API_KEY) {
+      return c.json({ data: fallbackDraft });
+    }
+
+    const template = getMailTemplates().find((item) => item.id === templateId);
+    const variableLines = Object.entries(variables)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n');
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content:
+              'ERP mail taslagi hazirlayan yardimcisin. Sadece verilen tenant baglami, sablon ve kullanici notlarini kullan. Yeni finansal veri uydurma. JSON olarak subject ve body don.',
+          },
+          {
+            role: 'user',
+            content: [
+              'Tenant baglami backend tarafinda dogrulandi.',
+              `Sablon: ${template?.name ?? templateId}`,
+              `Ton: ${tone}`,
+              audience ? `Hedef kitle: ${audience}` : undefined,
+              variableLines ? `Degiskenler:\n${variableLines}` : undefined,
+              notes ? `Kullanici notu: ${notes}` : undefined,
+              `Taslak konu: ${fallback.subject}`,
+              `Taslak metin:\n${fallback.body}`,
+              'Cevap dili Turkce olsun. Kisa, net, profesyonel ve gondermeden once kullanicinin duzenleyebilecegi metin yaz.',
+            ]
+              .filter((line): line is string => Boolean(line))
+              .join('\n\n'),
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 700,
+      });
+
+      const draft = parseAiDraftContent(completion.choices[0]?.message.content ?? null, fallbackDraft);
+      return c.json({ data: draft });
+    } catch {
+      return c.json({ data: fallbackDraft });
+    }
+  }
+
   /** GET /api/mail – Tenant mail geçmişi */
   static async list(c: Context) {
     const tenantId = requireTenantId(c);

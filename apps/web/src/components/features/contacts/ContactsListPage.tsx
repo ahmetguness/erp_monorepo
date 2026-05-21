@@ -12,7 +12,6 @@ import {
   AlertTriangle,
   Filter,
   X,
-  Download,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -23,13 +22,18 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { BulkActionBar } from "@/components/shared/BulkActionBar";
+import { createBulkActionPresets } from "@/components/shared/bulkActionPresets";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { RowActions, type RowAction } from "@/components/shared/RowActions";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
+import { useCurrentUser } from "@/hooks/useAuth";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import { useContacts } from "@/hooks/useContacts";
+import { useUIStore } from "@/store/ui.store";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type {
   ContactListItem,
@@ -193,6 +197,8 @@ function SummaryBar({
 
 export function ContactsListPage() {
   const router = useRouter();
+  const { user } = useCurrentUser();
+  const { toast } = useUIStore();
   const [search, setSearch] = useState("");
   const [type, setType] = useState<ContactType | "">("");
   const [status, setStatus] = useState("");
@@ -201,7 +207,6 @@ export function ContactsListPage() {
   >("");
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useContacts({
     page,
@@ -213,6 +218,7 @@ export function ContactsListPage() {
   });
 
   const contacts = data?.data ?? [];
+  const bulkSelection = useBulkSelection(contacts.map((contact) => contact.id));
   const summary = data?.summary;
   const hasActiveFilters = !!type || !!status || !!balanceFilter;
 
@@ -223,21 +229,12 @@ export function ContactsListPage() {
     setPage(1);
   };
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === contacts.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(contacts.map((c) => c.id)));
-    }
-  };
+  const bulkActions = createBulkActionPresets({
+    module: "contacts",
+    entityName: "cari hesap",
+    notify: toast.info,
+    include: ["export", "mail", "task", "tag", "status", "archive"],
+  });
 
   const getRowActions = (contact: ContactListItem): RowAction[] => [
     {
@@ -276,24 +273,6 @@ export function ContactsListPage() {
   ];
 
   const columns: ColumnDef<ContactListItem>[] = [
-    {
-      key: "select",
-      header: "",
-      width: "36px",
-      align: "center",
-      render: (r) => (
-        <input
-          type="checkbox"
-          checked={selectedIds.has(r.id)}
-          onChange={(e) => {
-            e.stopPropagation();
-            toggleSelect(r.id);
-          }}
-          onClick={(e) => e.stopPropagation()}
-          className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500/30 cursor-pointer"
-        />
-      ),
-    },
     {
       key: "name",
       header: "Cari Hesap",
@@ -425,15 +404,6 @@ export function ContactsListPage() {
         subtitle="Müşteri ve tedarikçi hesaplarını yönetin"
         action={
           <div className="flex gap-2">
-            {selectedIds.size > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                leftIcon={<Download className="w-3.5 h-3.5" />}
-              >
-                Dışa Aktar ({selectedIds.size})
-              </Button>
-            )}
             <Button
               leftIcon={<Plus className="w-4 h-4" />}
               onClick={() => router.push("/dashboard/contacts/new")}
@@ -516,10 +486,24 @@ export function ContactsListPage() {
         </div>
       )}
 
+      <BulkActionBar
+        selectedIds={bulkSelection.selectedIdList}
+        actions={bulkActions}
+        user={user}
+        onClear={bulkSelection.clearSelection}
+      />
+
       <DataTable
         columns={columns}
         data={contacts}
         keyExtractor={(r) => r.id}
+        selection={{
+          selectedIds: bulkSelection.selectedIds,
+          isPageSelected: bulkSelection.isPageSelected,
+          isPagePartiallySelected: bulkSelection.isPagePartiallySelected,
+          onToggleRow: bulkSelection.toggleOne,
+          onTogglePage: bulkSelection.togglePage,
+        }}
         isLoading={isLoading}
         onRowClick={(r) => router.push(`/dashboard/contacts/${r.id}`)}
         emptyTitle="Cari hesap bulunamadı"

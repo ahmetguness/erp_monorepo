@@ -1,7 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Eye, Mail, Paperclip, Send, Trash2, Users } from "lucide-react";
+import {
+  Eye,
+  FileText,
+  Mail,
+  Paperclip,
+  Send,
+  Sparkles,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -10,14 +19,21 @@ import { useCurrentUser } from "@/hooks/useAuth";
 import {
   useMailHistory,
   useMailMessage,
+  useMailTemplates,
+  useCreateAiMailDraft,
+  useRenderMailTemplate,
   useSendBulkMail,
 } from "@/hooks/useMail";
 import { useTenantUsers } from "@/hooks/useUsers";
 import { formatDate } from "@/lib/utils";
 import type {
   MailDeliveryStatus,
+  MailDraftTone,
   MailDirection,
   MailMessageListItem,
+  MailTemplateId,
+  MailTemplateVariableKey,
+  MailTemplateVariables,
 } from "@/services/mail.service";
 
 interface MailAttachmentDraft {
@@ -37,6 +53,21 @@ const DIRECTION_LABELS: Record<MailDirection, string> = {
   INBOUND: "Gelen",
   OUTBOUND: "Giden",
 };
+
+const MAIL_DIRECTIONS: readonly MailDirection[] = ["INBOUND", "OUTBOUND"];
+const MAIL_DELIVERY_STATUSES: readonly MailDeliveryStatus[] = [
+  "PENDING",
+  "SENT",
+  "FAILED",
+];
+
+const AI_TONE_LABELS: Record<MailDraftTone, string> = {
+  formal: "Resmi",
+  friendly: "Samimi",
+  short: "Kisa",
+};
+
+const AI_TONES: readonly MailDraftTone[] = ["formal", "friendly", "short"];
 
 function textToHtml(value: string): string {
   return value
@@ -207,7 +238,10 @@ function MailBodyPreview({ html }: { html: string }) {
 export function MailCenterPage() {
   const { user } = useCurrentUser();
   const { data: tenantUsers = [] } = useTenantUsers();
+  const { data: mailTemplates = [] } = useMailTemplates();
   const sendBulkMail = useSendBulkMail();
+  const renderTemplate = useRenderMailTemplate();
+  const createAiDraft = useCreateAiMailDraft();
   const [page, setPage] = useState(1);
   const [direction, setDirection] = useState<MailDirection | "">("");
   const [status, setStatus] = useState<MailDeliveryStatus | "">("");
@@ -221,6 +255,15 @@ export function MailCenterPage() {
   const [attachments, setAttachments] = useState<MailAttachmentDraft[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isReadingFiles, setIsReadingFiles] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<
+    MailTemplateId | ""
+  >("");
+  const [templateVariables, setTemplateVariables] =
+    useState<MailTemplateVariables>({});
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [aiTone, setAiTone] = useState<MailDraftTone>("formal");
+  const [aiAudience, setAiAudience] = useState("");
+  const [aiNotes, setAiNotes] = useState("");
 
   const params = useMemo(
     () => ({
@@ -235,6 +278,10 @@ export function MailCenterPage() {
 
   const { data, isLoading } = useMailHistory(params);
   const { data: detail } = useMailMessage(detailId);
+  const selectedTemplate = useMemo(
+    () => mailTemplates.find((template) => template.id === selectedTemplateId),
+    [mailTemplates, selectedTemplateId],
+  );
   const recipients = parseRecipients(recipientsText);
   const canSend =
     recipients.length > 0 &&
@@ -250,6 +297,12 @@ export function MailCenterPage() {
     setAttachments([]);
     setFileError(null);
     setIsReadingFiles(false);
+    setSelectedTemplateId("");
+    setTemplateVariables({});
+    setAiPanelOpen(false);
+    setAiTone("formal");
+    setAiAudience("");
+    setAiNotes("");
     setComposeOpen(false);
   };
 
@@ -257,6 +310,54 @@ export function MailCenterPage() {
     setRecipientsText((prev) =>
       parseRecipients(`${prev}\n${email}`).join("\n"),
     );
+  };
+
+  const selectTemplate = (value: string) => {
+    const template = mailTemplates.find((item) => item.id === value);
+    if (!template) {
+      setSelectedTemplateId("");
+      setTemplateVariables({});
+      return;
+    }
+
+    setSelectedTemplateId(template.id);
+    setTemplateVariables((prev) =>
+      template.variables.reduce<MailTemplateVariables>((acc, variable) => {
+        acc[variable.key] = prev[variable.key] ?? "";
+        return acc;
+      }, {}),
+    );
+  };
+
+  const updateTemplateVariable = (
+    key: MailTemplateVariableKey,
+    value: string,
+  ) => {
+    setTemplateVariables((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const applySelectedTemplate = async () => {
+    if (!selectedTemplate) return;
+    const rendered = await renderTemplate.mutateAsync({
+      templateId: selectedTemplate.id,
+      variables: templateVariables,
+    });
+    setSubject(rendered.subject);
+    setBody(rendered.body);
+  };
+
+  const createDraftWithAi = async () => {
+    if (!selectedTemplate) return;
+    const draft = await createAiDraft.mutateAsync({
+      templateId: selectedTemplate.id,
+      variables: templateVariables,
+      tone: aiTone,
+      ...(aiAudience.trim() && { audience: aiAudience.trim() }),
+      ...(aiNotes.trim() && { notes: aiNotes.trim() }),
+    });
+    setSubject(draft.subject);
+    setBody(draft.body);
+    setAiPanelOpen(false);
   };
 
   const handleFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -343,7 +444,10 @@ export function MailCenterPage() {
           <select
             value={direction}
             onChange={(event) => {
-              setDirection(event.target.value as MailDirection | "");
+              const nextDirection = MAIL_DIRECTIONS.find(
+                (item) => item === event.target.value,
+              );
+              setDirection(nextDirection ?? "");
               setPage(1);
             }}
             className="h-9 rounded-lg border border-slate-800 bg-slate-950 px-3 text-sm text-white outline-none focus:border-sky-500/60"
@@ -355,7 +459,10 @@ export function MailCenterPage() {
           <select
             value={status}
             onChange={(event) => {
-              setStatus(event.target.value as MailDeliveryStatus | "");
+              const nextStatus = MAIL_DELIVERY_STATUSES.find(
+                (item) => item === event.target.value,
+              );
+              setStatus(nextStatus ?? "");
               setPage(1);
             }}
             className="h-9 rounded-lg border border-slate-800 bg-slate-950 px-3 text-sm text-white outline-none focus:border-sky-500/60"
@@ -506,6 +613,154 @@ export function MailCenterPage() {
                 className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none focus:border-sky-500/60"
               />
             </label>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-sky-400" />
+                <span className="text-xs font-semibold text-slate-300">
+                  Sablon ve AI taslak
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={applySelectedTemplate}
+                  disabled={!selectedTemplate || renderTemplate.isPending}
+                  loading={renderTemplate.isPending}
+                  leftIcon={<FileText className="h-3.5 w-3.5" />}
+                >
+                  Sablondan olustur
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAiPanelOpen((prev) => !prev)}
+                  disabled={!selectedTemplate}
+                  leftIcon={<Sparkles className="h-3.5 w-3.5" />}
+                >
+                  AI ile taslak
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <label className="space-y-1.5">
+                <span className="text-xs font-medium text-slate-400">
+                  Sablon kutuphanesi
+                </span>
+                <select
+                  value={selectedTemplateId}
+                  onChange={(event) => selectTemplate(event.target.value)}
+                  className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+                >
+                  <option value="">Sablon secin</option>
+                  {mailTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.category} - {template.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {selectedTemplate && (
+                <div className="self-end rounded-lg border border-slate-800 bg-slate-900 px-3 py-2">
+                  <p className="text-[11px] font-medium text-slate-300">
+                    {selectedTemplate.name}
+                  </p>
+                  <p className="max-w-64 truncate text-[11px] text-slate-500">
+                    {selectedTemplate.description}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {selectedTemplate && selectedTemplate.variables.length > 0 && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {selectedTemplate.variables.map((variable) => (
+                  <label key={variable.key} className="space-y-1.5">
+                    <span className="text-xs font-medium text-slate-400">
+                      {variable.label}
+                      {variable.required ? " *" : ""}
+                    </span>
+                    <input
+                      value={templateVariables[variable.key] ?? ""}
+                      onChange={(event) =>
+                        updateTemplateVariable(variable.key, event.target.value)
+                      }
+                      placeholder={variable.example}
+                      className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-500/60"
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {aiPanelOpen && selectedTemplate && (
+              <div className="mt-3 space-y-3 rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-medium text-slate-400">
+                      Ton
+                    </span>
+                    <select
+                      value={aiTone}
+                      onChange={(event) => {
+                        const nextTone = AI_TONES.find(
+                          (tone) => tone === event.target.value,
+                        );
+                        if (nextTone) setAiTone(nextTone);
+                      }}
+                      className="h-10 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+                    >
+                      {AI_TONES.map((tone) => (
+                        <option key={tone} value={tone}>
+                          {AI_TONE_LABELS[tone]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-medium text-slate-400">
+                      Baglam / hedef kitle
+                    </span>
+                    <input
+                      value={aiAudience}
+                      onChange={(event) => setAiAudience(event.target.value)}
+                      placeholder="Orn. vadesi gecen B2B musterileri"
+                      className="h-10 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-500/60"
+                    />
+                  </label>
+                </div>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium text-slate-400">
+                    Ek not
+                  </span>
+                  <textarea
+                    value={aiNotes}
+                    onChange={(event) => setAiNotes(event.target.value)}
+                    rows={3}
+                    placeholder="AI taslakta dikkate alinacak kisa not"
+                    className="w-full resize-none rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-500/60"
+                  />
+                </label>
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={createDraftWithAi}
+                    disabled={createAiDraft.isPending}
+                    loading={createAiDraft.isPending}
+                    leftIcon={<Sparkles className="h-3.5 w-3.5" />}
+                  >
+                    Taslak uret
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5">

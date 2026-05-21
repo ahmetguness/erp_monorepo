@@ -12,11 +12,18 @@ import { FullPageSpinner } from '@/components/ui/Spinner';
 import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 import { useSalesOrder, useCancelSalesOrder, useUpdateSalesOrder } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 
 interface LineRow { id: string; description: string; quantity: number; unitPrice: number; discount: number; taxRate: number; lineTotal: number; product?: { code: string; name: string } }
 interface InvoiceRef { id: string; number: string; status: string; totalGross: number }
 
 interface Props { id: string }
+
+function addDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
 
 export function SalesOrderDetailPage({ id }: Props) {
   const router = useRouter();
@@ -42,6 +49,34 @@ export function SalesOrderDetailPage({ id }: Props) {
 
   if (isLoading) return <FullPageSpinner />;
   if (!order) return <div className="text-slate-400 text-sm">Sipariş bulunamadı.</div>;
+
+  const remainingToInvoice = Math.max(0, Number(order.totalGross) - Number(order.invoicedAmount));
+  const recommendedActions: RecommendedEntityAction[] = order.status !== 'CANCELLED' && order.status !== 'DELIVERED' && remainingToInvoice > 0
+    ? [{
+        id: `sales-order-${id}-invoice-followup`,
+        kind: 'task',
+        title: 'Faturalama takip görevi oluştur',
+        summary: `${formatCurrency(remainingToInvoice)} tutarında faturalanmamış bakiye var. Sipariş kapanmadan önce faturalama takip edilmeli.`,
+        priority: order.status === 'CONFIRMED' ? 'HIGH' : 'MEDIUM',
+        entityType: 'SALES_ORDER',
+        entityId: id,
+        module: 'sales',
+        href: `/dashboard/sales-orders/${id}`,
+        steps: ['Öneriyi gör', 'Görev taslağını incele', 'Onayla', 'Workflow’da takip et'],
+        draft: {
+          title: `${order.number} faturalama takibi`,
+          detail: [
+            `Sipariş: ${order.number}`,
+            `Müşteri: ${order.contact?.name ?? '-'}`,
+            `Toplam: ${formatCurrency(order.totalGross)}`,
+            `Faturalanan: ${formatCurrency(order.invoicedAmount)}`,
+            `Kalan: ${formatCurrency(remainingToInvoice)}`,
+          ].join('\n'),
+          type: 'CHECK',
+          dueAt: addDays(2),
+        },
+      }]
+    : [];
 
   return (
     <div className="space-y-6">
@@ -95,6 +130,7 @@ export function SalesOrderDetailPage({ id }: Props) {
         displayName={`Sipariş ${order.number}`}
         module="sales"
         primaryEmail={order.contact?.email}
+        recommendedActions={recommendedActions}
       />
       </div>
 

@@ -44,6 +44,7 @@ import {
   useAccountEntries,
 } from "@/hooks/useContacts";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import type { RecommendedEntityAction } from "@/components/shared/RecommendedActionsPanel";
 import type { AccountEntry, OpenInvoice } from "@/services/contact.service";
 
 // ─────────────────────────────────────────────
@@ -60,6 +61,12 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="text-sm text-slate-300">{value}</span>
     </div>
   );
+}
+
+function addDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
 }
 
 const REF_TYPE_LABELS: Record<string, string> = {
@@ -300,6 +307,33 @@ export function ContactDetailPage({ id }: Props) {
   const openInvoices = contact.openInvoices ?? [];
   const creditLimit = contact.creditLimit ? Number(contact.creditLimit) : 0;
   const creditUsed = Math.max(Number(fin.currentBalance) || 0, 0);
+  const hasFinancialRisk = (fin.overdueInvoiceCount ?? 0) > 0 || fin.riskLevel === "exceeded" || fin.riskLevel === "warning";
+  const recommendedActions: RecommendedEntityAction[] = hasFinancialRisk
+    ? [{
+        id: `contact-${id}-risk-followup`,
+        kind: "task",
+        title: "Cari risk takip görevi oluştur",
+        summary: `${contact.name} için ${fin.overdueInvoiceCount ?? 0} gecikmiş fatura ve ${formatCurrency(fin.currentBalance)} bakiye görünüyor.`,
+        priority: fin.riskLevel === "exceeded" ? "CRITICAL" : "HIGH",
+        entityType: "CONTACT",
+        entityId: id,
+        module: "contacts",
+        href: `/dashboard/contacts/${id}`,
+        steps: ["Öneriyi gör", "Görev taslağını incele", "Onayla", "Workflow’da takip et"],
+        draft: {
+          title: `${contact.name} cari risk takibi`,
+          detail: [
+            `Cari: ${contact.name}`,
+            `Güncel bakiye: ${formatCurrency(fin.currentBalance)}`,
+            `Açık fatura: ${fin.openInvoiceCount ?? 0}`,
+            `Gecikmiş fatura: ${fin.overdueInvoiceCount ?? 0}`,
+            creditLimit > 0 ? `Kredi limiti: ${formatCurrency(creditLimit)}` : null,
+          ].filter((line): line is string => line !== null).join("\n"),
+          type: "COLLECTION",
+          dueAt: addDays(1),
+        },
+      }]
+    : [];
 
   return (
     <div className="space-y-5">
@@ -688,6 +722,7 @@ export function ContactDetailPage({ id }: Props) {
         displayName={contact.name}
         module="contacts"
         primaryEmail={contact.email}
+        recommendedActions={recommendedActions}
       />
       </div>
 

@@ -12,6 +12,7 @@ import { FullPageSpinner } from '@/components/ui/Spinner';
 import { useSalesQuote, useConvertQuoteToOrder } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
+import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 
 interface LineRow {
   id: string;
@@ -25,6 +26,17 @@ interface LineRow {
 }
 
 interface Props { id: string }
+
+function addDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
+function daysUntil(value: string | null): number | null {
+  if (!value) return null;
+  return Math.ceil((new Date(value).getTime() - Date.now()) / 86_400_000);
+}
 
 export function SalesQuoteDetailPage({ id }: Props) {
   const router = useRouter();
@@ -53,6 +65,62 @@ export function SalesQuoteDetailPage({ id }: Props) {
   if (!quote) return <div className="text-slate-400 text-sm">Teklif bulunamadı.</div>;
 
   const canConvert = quote.status === 'DRAFT' || quote.status === 'SENT';
+  const validityDays = daysUntil(quote.validUntil);
+  const highDiscountLines = (quote.items ?? []).filter((item) => Number(item.discount) >= 15);
+  const recommendedActions: RecommendedEntityAction[] = [
+    ...(canConvert && quote.contact?.email && validityDays !== null && validityDays <= 7
+      ? [{
+          id: `quote-${id}-followup-mail`,
+          kind: 'mail' as const,
+          title: validityDays < 0 ? 'Geçerliliği biten teklif için takip maili' : 'Teklif takip maili gönder',
+          summary: validityDays < 0
+            ? 'Teklif geçerlilik tarihi geçmiş. Müşteriden karar veya revizyon talebi alınmalı.'
+            : `Teklifin geçerliliğine ${validityDays} gün kaldı. Karar sürecini hızlandırmak için takip maili önerilir.`,
+          priority: validityDays < 0 ? 'HIGH' as const : 'MEDIUM' as const,
+          entityType: 'SALES_QUOTE' as const,
+          entityId: id,
+          module: 'sales',
+          href: `/dashboard/sales-orders/quotes/${id}`,
+          steps: ['Öneriyi gör', 'Mail taslağını incele', 'Onayla', 'Mail merkezinde sonucu takip et'],
+          draft: {
+            to: quote.contact.email,
+            subject: `${quote.number} numaralı teklif hakkında`,
+            body: [
+              `Merhaba ${quote.contact.name},`,
+              '',
+              `${quote.number} numaralı ${formatCurrency(quote.totalGross)} tutarındaki teklifimizle ilgili karar sürecinizi takip etmek istedik.`,
+              'Revizyon, ek bilgi veya siparişe dönüştürme için yardımcı olmaktan memnuniyet duyarız.',
+              '',
+              'İyi çalışmalar.',
+            ].join('\n'),
+          },
+        }]
+      : []),
+    ...(canConvert && highDiscountLines.length > 0
+      ? [{
+          id: `quote-${id}-margin-review`,
+          kind: 'task' as const,
+          title: 'İskonto/marj kontrol görevi oluştur',
+          summary: `${highDiscountLines.length} kalemde yüksek iskonto var. Siparişe dönmeden önce marj onayı alınmalı.`,
+          priority: 'HIGH' as const,
+          entityType: 'SALES_QUOTE' as const,
+          entityId: id,
+          module: 'sales',
+          href: `/dashboard/sales-orders/quotes/${id}`,
+          steps: ['Öneriyi gör', 'Görev taslağını incele', 'Onayla', 'Workflow’da takip et'],
+          draft: {
+            title: `${quote.number} iskonto/marj kontrolü`,
+            detail: [
+              `${quote.number} teklifinde yüksek iskonto içeren kalemler var.`,
+              ...highDiscountLines.map((item) => `- ${item.product?.name ?? item.description}: %${item.discount} iskonto, toplam ${formatCurrency(item.lineTotal)}`),
+              'Siparişe dönüştürmeden önce kârlılık ve onay durumunu kontrol edin.',
+            ].join('\n'),
+            type: 'CHECK' as const,
+            dueAt: addDays(1),
+          },
+        }]
+      : []),
+  ];
 
   return (
     <div className="space-y-6">
@@ -99,6 +167,7 @@ export function SalesQuoteDetailPage({ id }: Props) {
         module="sales"
         primaryEmail={quote.contact?.email}
         availableActions={['mail', 'task', 'attachment', 'note', 'activity']}
+        recommendedActions={recommendedActions}
       />
       </div>
 

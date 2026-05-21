@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useServiceRequest, useChangeServiceRequestStatus } from '@/hooks/useService';
 import { formatDate, formatCurrency } from '@/lib/utils';
+import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'neutral' | 'success' | 'warning' | 'danger' | 'info' }> = {
   OPEN: { label: 'Açık', variant: 'info' },
@@ -30,6 +31,12 @@ const ACTIVITY_ICONS: Record<string, string> = {
   NOTE: '📝', STATUS_CHANGE: '🔄', ASSIGNMENT: '👤', CALL: '📞', VISIT: '🏠', OTHER: '📌',
 };
 
+function addDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
 export function ServiceRequestDetailPage({ id }: { id: string }) {
   const router = useRouter();
   const { data: sr, isLoading } = useServiceRequest(id);
@@ -40,6 +47,34 @@ export function ServiceRequestDetailPage({ id }: { id: string }) {
 
   const s = STATUS_MAP[sr.status];
   const p = PRIORITY_MAP[sr.priority];
+  const hasNoRecentActivity = (sr.activities ?? []).length === 0;
+  const needsSlaFollowup = sr.status !== 'COMPLETED' && sr.status !== 'CANCELLED' && (sr.priority === 'HIGH' || sr.priority === 'CRITICAL' || hasNoRecentActivity);
+  const recommendedActions: RecommendedEntityAction[] = needsSlaFollowup
+    ? [{
+        id: `service-${id}-sla-followup`,
+        kind: 'task',
+        title: 'SLA takip görevi oluştur',
+        summary: `${sr.priority === 'CRITICAL' ? 'Kritik' : sr.priority === 'HIGH' ? 'Yüksek öncelikli' : 'Aktivitesiz'} servis talebi için sorumlu takip görevi açılmalı.`,
+        priority: sr.priority === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
+        entityType: 'SERVICE_REQUEST',
+        entityId: id,
+        module: 'service',
+        href: `/dashboard/service/requests/${id}`,
+        steps: ['Öneriyi gör', 'Görev taslağını incele', 'Onayla', 'Workflow’da takip et'],
+        draft: {
+          title: `${sr.number} SLA takibi`,
+          detail: [
+            `${sr.number} - ${sr.subject}`,
+            `Durum: ${s?.label ?? sr.status}`,
+            `Öncelik: ${p?.label ?? sr.priority}`,
+            sr.customerAsset ? `Varlık: ${sr.customerAsset.name}` : null,
+            hasNoRecentActivity ? 'Henüz aktivite kaydı yok; ilk temas ve aksiyon planı girilmeli.' : 'SLA ve sonraki aksiyon tarihi kontrol edilmeli.',
+          ].filter((line): line is string => line !== null).join('\n'),
+          type: 'SERVICE',
+          dueAt: addDays(sr.priority === 'CRITICAL' ? 0 : 1),
+        },
+      }]
+    : [];
 
   return (
     <div>
@@ -135,6 +170,7 @@ export function ServiceRequestDetailPage({ id }: { id: string }) {
           displayName={`${sr.number} - ${sr.subject}`}
           module="service"
           primaryEmail={sr.contact?.email}
+          recommendedActions={recommendedActions}
         />
       </div>
       </div>

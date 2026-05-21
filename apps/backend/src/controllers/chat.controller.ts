@@ -6,6 +6,7 @@ import { sanitizeOutput } from '../lib/output-sanitizer';
 import { ValidationError } from '../errors';
 import { Plan } from '@prisma/client';
 import { handlePrivateChat, handlePrivateChatStream, clearConversation, type UserPermissions } from '../services/ai-chat.service';
+import { CHAT_ENTITY_TYPES, type ChatEntityType, type ChatPageContext, type ChatRecentRecord } from '../services/chat-context.service';
 import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
@@ -30,12 +31,68 @@ const PLAN_DAILY_LIMITS: Record<Plan, number> = {
 
 /** Maksimum mesaj uzunluğu (karakter) */
 const MAX_MESSAGE_LENGTH = 1000;
+const MAX_CONTEXT_TEXT_LENGTH = 160;
+const MAX_CONTEXT_PATH_LENGTH = 240;
+const MAX_RECENT_RECORDS = 8;
 
 /** Maksimum AI yanıt uzunluğu (karakter) — truncate edilir */
 const MAX_RESPONSE_LENGTH = 4000;
 
 // ─────────────────────────────────────────────
 import { rateLimiter } from '../lib/rateLimiter';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readString(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.slice(0, maxLength);
+}
+
+function parseEntityType(value: unknown): ChatEntityType | undefined {
+  if (typeof value !== 'string') return undefined;
+  return CHAT_ENTITY_TYPES.find((entityType) => entityType === value);
+}
+
+function parseRecentRecord(value: unknown): ChatRecentRecord | null {
+  if (!isRecord(value)) return null;
+
+  const entityType = parseEntityType(value.entityType);
+  const entityId = readString(value.entityId, MAX_CONTEXT_TEXT_LENGTH);
+  const label = readString(value.label, MAX_CONTEXT_TEXT_LENGTH);
+  const path = readString(value.path, MAX_CONTEXT_PATH_LENGTH);
+  const viewedAt = readString(value.viewedAt, MAX_CONTEXT_TEXT_LENGTH);
+
+  if (!entityType || !entityId || !label || !path || !viewedAt) return null;
+  return { entityType, entityId, label, path, viewedAt };
+}
+
+function parseChatPageContext(value: unknown): ChatPageContext | undefined {
+  if (!isRecord(value)) return undefined;
+
+  const path = readString(value.path, MAX_CONTEXT_PATH_LENGTH);
+  if (!path) return undefined;
+
+  const recentRecordsValue = Array.isArray(value.recentRecords) ? value.recentRecords : [];
+  const recentRecords = recentRecordsValue
+    .slice(0, MAX_RECENT_RECORDS)
+    .flatMap((record) => {
+      const parsed = parseRecentRecord(record);
+      return parsed ? [parsed] : [];
+    });
+
+  return {
+    path,
+    title: readString(value.title, MAX_CONTEXT_TEXT_LENGTH),
+    entityType: parseEntityType(value.entityType),
+    entityId: readString(value.entityId, MAX_CONTEXT_TEXT_LENGTH),
+    entityLabel: readString(value.entityLabel, MAX_CONTEXT_TEXT_LENGTH),
+    recentRecords,
+  };
+}
 
 async function checkChatRateLimit(userId: string, plan: Plan): Promise<{ allowed: boolean; reason?: string }> {
   const minuteLimit = PLAN_RATE_LIMITS[plan];
@@ -60,7 +117,7 @@ async function checkChatRateLimit(userId: string, plan: Plan): Promise<{ allowed
 
 async function validateChatRequest(c: Context): Promise<
   | { error: Response }
-  | { userId: string; tenantId: string; user: { name: string; isActive: boolean }; tenant: { companyName: string; plan: Plan; status: string; modules: string[] }; message: string; permissions: UserPermissions }
+  | { userId: string; tenantId: string; user: { name: string; isActive: boolean }; tenant: { companyName: string; plan: Plan; status: string; modules: string[] }; message: string; permissions: UserPermissions; context?: ChatPageContext }
 > {
   if (!OPENAI_API_KEY) {
     return { error: c.json({ error: 'Chatbot yapılandırılmamış.' }, 503) };
@@ -85,7 +142,7 @@ async function validateChatRequest(c: Context): Promise<
     }),
   ]);
 
-  if (!user?.isActive) return { error: c.json({ error: 'Kullanıcı hesabı aktif değil.' }, 403) };
+  if (!user || !user.isActive) return { error: c.json({ error: 'Kullanıcı hesabı aktif değil.' }, 403) };
   if (!tenant || tenant.status === 'SUSPENDED' || tenant.status === 'CANCELLED') {
     return { error: c.json({ error: 'Tenant hesabı aktif değil.' }, 403) };
   }
@@ -93,8 +150,9 @@ async function validateChatRequest(c: Context): Promise<
   const rateCheck = await checkChatRateLimit(userId, tenant.plan);
   if (!rateCheck.allowed) return { error: c.json({ error: rateCheck.reason }, 429) };
 
-  const body = await c.req.json<{ message?: string }>().catch(() => ({} as { message?: string }));
-  const message = body.message?.trim();
+  const body = await c.req.json().catch(() => null);
+  const messageValue = isRecord(body) ? body.message : undefined;
+  const message = typeof messageValue === 'string' ? messageValue.trim() : '';
 
   if (!message || message.length === 0) {
     return { error: c.json(new ValidationError('Mesaj boş olamaz.').toJSON(), 400) };
@@ -109,7 +167,9 @@ async function validateChatRequest(c: Context): Promise<
     modules: tenantUser?.roleRef?.permissions.map((p) => ({ module: p.module, action: p.action })) ?? [],
   };
 
-  return { userId, tenantId, user: user!, tenant: tenant!, message, permissions };
+  const context = parseChatPageContext(isRecord(body) ? body.context : undefined);
+
+  return { userId, tenantId, user, tenant, message, permissions, context };
 }
 
 // ─────────────────────────────────────────────
@@ -132,6 +192,7 @@ export const ChatController = {
         plan: v.tenant.plan,
         permissions: v.permissions,
         tenantModules: v.tenant.modules,
+        context: v.context,
       });
 
       if (!result.output || result.output.trim() === '') {
@@ -175,6 +236,7 @@ export const ChatController = {
             plan: v.tenant.plan,
             permissions: v.permissions,
             tenantModules: v.tenant.modules,
+            context: v.context,
           },
           {
             async onToken(token) {

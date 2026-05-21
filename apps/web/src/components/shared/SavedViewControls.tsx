@@ -36,7 +36,7 @@ function parseScope(value: string): SavedViewScope {
 }
 
 export function SavedViewControls({ module, listKey, currentState, onApply }: SavedViewControlsProps) {
-  const [selectedId, setSelectedId] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [name, setName] = useState('');
   const [scope, setScope] = useState<SavedViewScope>('PERSONAL');
@@ -49,19 +49,19 @@ export function SavedViewControls({ module, listKey, currentState, onApply }: Sa
   const createView = useCreateSavedView();
   const deleteView = useDeleteSavedView();
 
+  const defaultView = useMemo(() => views.find((view) => view.isDefault), [views]);
+  const effectiveSelectedId = selectedId ?? defaultView?.id ?? '';
   const selectedView = useMemo(
-    () => views.find((view) => view.id === selectedId),
-    [selectedId, views],
+    () => views.find((view) => view.id === effectiveSelectedId),
+    [effectiveSelectedId, views],
   );
 
   useEffect(() => {
-    if (defaultAppliedRef.current || selectedId) return;
-    const defaultView = views.find((view) => view.isDefault);
+    if (defaultAppliedRef.current || selectedId !== null) return;
     if (!defaultView) return;
     defaultAppliedRef.current = true;
-    setSelectedId(defaultView.id);
     onApply(defaultView.state);
-  }, [onApply, selectedId, views]);
+  }, [defaultView, onApply, selectedId]);
 
   const options = useMemo(
     () => [
@@ -118,7 +118,7 @@ export function SavedViewControls({ module, listKey, currentState, onApply }: Sa
       <Select
         aria-label="Kayıtlı görünümler"
         options={options}
-        value={selectedId}
+        value={effectiveSelectedId}
         onChange={(event) => applySelected(event.target.value)}
         className="w-56"
       />

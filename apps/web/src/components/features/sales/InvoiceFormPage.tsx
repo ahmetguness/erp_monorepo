@@ -17,7 +17,9 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { FormRow } from '@/components/shared/FormField';
 import { ContactSelect, ProductSelect } from '@/components/shared/EntitySelect';
-import { useCreateInvoice } from '@/hooks/useSales';
+import { SmartFormSidePanel, type SmartFormLine } from '@/components/shared/SmartFormSidePanel';
+import { useCreateInvoice, useSalesOrders, useSalesQuotes } from '@/hooks/useSales';
+import { useStockLevels } from '@/hooks/useStock';
 import { useContacts } from '@/hooks/useContacts';
 import { useProducts } from '@/hooks/useProducts';
 import { useTaxRates } from '@/hooks/useMasterData';
@@ -105,6 +107,16 @@ export function InvoiceFormPage() {
   const watchDate = useWatch({ control, name: 'date' });
   const watchDueDate = useWatch({ control, name: 'dueDate' });
   const invoiceDueDays = getNumberRule(businessRules, 'invoicing.invoice_due_days', 30);
+  const { data: openQuotesData } = useSalesQuotes(
+    { page: 1, limit: 5, contactId: watchContact || undefined, status: 'DRAFT' },
+    { enabled: Boolean(watchContact) },
+  );
+  const { data: openOrdersData } = useSalesOrders(
+    { page: 1, limit: 5, contactId: watchContact || undefined, status: 'CONFIRMED' },
+    { enabled: Boolean(watchContact) },
+  );
+  const selectedProductIds = watchedLines.map((line) => line.productId).filter(Boolean);
+  const { data: stockLevels = [], isLoading: stockLoading } = useStockLevels({}, { enabled: selectedProductIds.length > 0 });
 
   useEffect(() => {
     if (!watchDate || dirtyFields.dueDate) return;
@@ -127,6 +139,14 @@ export function InvoiceFormPage() {
   const totalNet = lineTotals.reduce((s, l) => s + l.net, 0);
   const totalTax = lineTotals.reduce((s, l) => s + l.taxAmt, 0);
   const totalGross = totalNet + totalTax;
+  const smartLines: SmartFormLine[] = watchedLines.map((line, index) => ({
+    productId: line.productId || undefined,
+    quantity: Number(line.quantity || 0),
+    unitPrice: Number(line.unitPrice || 0),
+    discount: Number(line.discount || 0),
+    net: lineTotals[index]?.net ?? 0,
+    gross: lineTotals[index]?.gross ?? 0,
+  }));
 
   const handleProductSelect = (idx: number, productId: string) => {
     setValue(`lines.${idx}.productId`, productId, { shouldDirty: true, shouldValidate: true });
@@ -369,6 +389,19 @@ export function InvoiceFormPage() {
           {/* ── Right sidebar ───────────────────── */}
           <div className="hidden lg:block w-72 shrink-0">
             <div className="sticky top-4 space-y-4">
+              <SmartFormSidePanel
+                formKind="invoice"
+                contact={selectedContact}
+                products={products}
+                stockLevels={stockLevels}
+                stockLoading={stockLoading}
+                lines={smartLines}
+                totalGross={totalGross}
+                balanceImpact={watchType === 'PURCHASE' || watchType === 'RETURN_SALES' ? 'increase-payable' : 'increase-receivable'}
+                openQuoteCount={openQuotesData?.meta.total ?? 0}
+                openOrderCount={openOrdersData?.meta.total ?? 0}
+              />
+
               {/* Type indicator */}
               <div className={cn('border rounded-xl p-4 flex items-center gap-3', activeType.bg, activeType.border)}>
                 <activeType.icon className={cn('w-5 h-5', activeType.color)} />

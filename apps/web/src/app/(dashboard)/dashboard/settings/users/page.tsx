@@ -9,7 +9,7 @@ import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { getInvitations, createInvitation, cancelInvitation, type Invitation } from '@/services/invitation.service';
-import { useTenantUsers } from '@/hooks/useUsers';
+import { useTenantUsers, useUpdateUserRole } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { useUIStore } from '@/store/ui.store';
 import { useCurrentUser } from '@/hooks/useAuth';
@@ -35,6 +35,7 @@ export default function UsersAndInvitesPage() {
   const { data: users = [], isLoading: usersLoading } = useTenantUsers();
   const { data: rolesData } = useRoles({ page: 1, limit: 50 });
   const roles = rolesData?.data ?? [];
+  const updateUserRole = useUpdateUserRole();
   const { data: invitations = [], isLoading: invitesLoading } = useQuery({
     queryKey: ['invitations'],
     queryFn: getInvitations,
@@ -114,7 +115,25 @@ export default function UsersAndInvitesPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-400">{tu.roleRef?.name || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-slate-400">
+                        {tu.isOwner ? (
+                          <span className="text-slate-500">{tu.roleRef?.name || 'Owner'}</span>
+                        ) : (
+                          <select
+                            value={tu.roleId ?? ''}
+                            onChange={(event) => updateUserRole.mutate({ userId: tu.userId, roleId: event.target.value || null })}
+                            disabled={updateUserRole.isPending}
+                            className="h-9 min-w-44 rounded-lg border border-slate-800 bg-slate-950 px-2.5 text-xs text-slate-200 outline-none focus:border-sky-500/60 disabled:opacity-60"
+                          >
+                            <option value="">Rol yok</option>
+                            {roles.map((role) => (
+                              <option key={role.id} value={role.id}>
+                                {role.name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <Badge variant={u.isActive !== false ? 'success' : 'danger'}>
                           {u.isActive !== false ? 'Aktif' : 'Pasif'}

@@ -141,6 +141,50 @@ function CardHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
   return <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-800/80">{icon}<h2 className="text-sm font-semibold text-slate-200">{title}</h2></div>;
 }
 
+type DashboardPreset = 'executive' | 'sales' | 'accounting' | 'warehouse' | 'hr' | 'custom';
+
+const DASHBOARD_PRESET_LABEL: Record<DashboardPreset, string> = {
+  executive: 'Yonetici',
+  sales: 'Satis',
+  accounting: 'Muhasebe',
+  warehouse: 'Depo',
+  hr: 'IK',
+  custom: 'Custom',
+};
+
+const DASHBOARD_PRESET_DESCRIPTION: Record<DashboardPreset, string> = {
+  executive: 'Ciro, karlilik, nakit akisi ve onaylar onceliklendirildi.',
+  sales: 'Acik teklifler, musteri takipleri ve satis aksiyonlari onceliklendirildi.',
+  accounting: 'Tahsilat, geciken faturalar, kasa/banka ve raporlar onceliklendirildi.',
+  warehouse: 'Kritik stok, satin alma ihtiyaci ve sayim isleri onceliklendirildi.',
+  hr: 'Izin talepleri, personel evraklari ve IK gorevleri onceliklendirildi.',
+  custom: 'Rol izinlerine gore erisebildiginiz moduller gosteriliyor.',
+};
+
+function canReadModule(user: NonNullable<ReturnType<typeof useCurrentUser>['user']>, module: string): boolean {
+  const membership = user.tenantMembership;
+  return Boolean(
+    membership?.isOwner ||
+      membership?.role?.permissions.some((permission) => permission.module === module && permission.action === 'READ'),
+  );
+}
+
+function detectDashboardPreset(user: NonNullable<ReturnType<typeof useCurrentUser>['user']> | null): DashboardPreset {
+  if (!user) return 'custom';
+  const membership = user.tenantMembership;
+  if (membership?.isOwner) return 'executive';
+  const roleName = membership?.role?.name.toLocaleLowerCase('tr-TR') ?? '';
+  const canRead = (module: string) => canReadModule(user, module);
+
+  if (roleName.includes('yonetici') || roleName.includes('yönetici') || roleName.includes('manager')) return 'executive';
+  if (roleName.includes('muhasebe') || roleName.includes('account') || canRead('accounting')) return 'accounting';
+  if (roleName.includes('depo') || roleName.includes('stok') || roleName.includes('warehouse')) return 'warehouse';
+  if (roleName.includes('ik') || roleName.includes('insan') || roleName.includes('hr') || canRead('hr')) return 'hr';
+  if (roleName.includes('satis') || roleName.includes('satış') || roleName.includes('sales')) return 'sales';
+  if (canRead('invoicing') || canRead('contacts')) return 'sales';
+  return 'custom';
+}
+
 function openAssistant(message: string) {
   window.dispatchEvent(new CustomEvent<string>("axon-chat-action", { detail: message }));
 }
@@ -150,6 +194,16 @@ function openAssistant(message: string) {
 export function DashboardOverview() {
   const { user, tenant } = useCurrentUser();
   const queryClient = useQueryClient();
+  const dashboardPreset = detectDashboardPreset(user);
+  const canRead = (module: string) => (user ? !user.tenantMembership || canReadModule(user, module) : false);
+  const canReadInvoicing = canRead('invoicing');
+  const canReadAccounting = canRead('accounting');
+  const canReadInventory = canRead('inventory');
+  const canReadContacts = canRead('contacts');
+  const canReadReporting = canRead('reporting');
+  const canReadApprovals = canRead('approvals');
+  const canReadTasks = canRead('tasks');
+  const canReadNotifications = canRead('notifications');
 
   const [clock, setClock] = useState("");
   useEffect(() => {
@@ -168,15 +222,15 @@ export function DashboardOverview() {
   const dF = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
   const dT = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
 
-  const { data: rev } = useQuery({ queryKey: ["d", "rev"], queryFn: async () => safeParse(RevSummary, (await apiClient.get("/api/reports/revenue-summary", { params: { dateFrom: dF, dateTo: dT } })).data, "rev").data });
-  const { data: exp } = useQuery({ queryKey: ["d", "exp"], queryFn: async () => safeParse(RevSummary, (await apiClient.get("/api/reports/expense-summary", { params: { dateFrom: dF, dateTo: dT } })).data, "exp").data });
-  const { data: stk } = useQuery({ queryKey: ["d", "stk"], queryFn: async () => safeParse(StockSummary, (await apiClient.get("/api/reports/stock-summary")).data, "stk").data });
-  const { data: bal } = useQuery({ queryKey: ["d", "bal"], queryFn: async () => safeParse(BalanceSummary, (await apiClient.get("/api/reports/contact-balance")).data, "bal").data });
-  const { data: invs } = useQuery({ queryKey: ["d", "invs"], queryFn: async () => safeParse(PaginatedResponseSchema(InvSchema), (await apiClient.get("/api/invoices", { params: { limit: 6 } })).data, "invs") });
+  const { data: rev } = useQuery({ queryKey: ["d", "rev"], enabled: canReadReporting || canReadInvoicing, queryFn: async () => safeParse(RevSummary, (await apiClient.get("/api/reports/revenue-summary", { params: { dateFrom: dF, dateTo: dT } })).data, "rev").data });
+  const { data: exp } = useQuery({ queryKey: ["d", "exp"], enabled: canReadReporting || canReadAccounting, queryFn: async () => safeParse(RevSummary, (await apiClient.get("/api/reports/expense-summary", { params: { dateFrom: dF, dateTo: dT } })).data, "exp").data });
+  const { data: stk } = useQuery({ queryKey: ["d", "stk"], enabled: canReadReporting || canReadInventory, queryFn: async () => safeParse(StockSummary, (await apiClient.get("/api/reports/stock-summary")).data, "stk").data });
+  const { data: bal } = useQuery({ queryKey: ["d", "bal"], enabled: canReadReporting || canReadContacts || canReadAccounting, queryFn: async () => safeParse(BalanceSummary, (await apiClient.get("/api/reports/contact-balance")).data, "bal").data });
+  const { data: invs } = useQuery({ queryKey: ["d", "invs"], enabled: canReadInvoicing, queryFn: async () => safeParse(PaginatedResponseSchema(InvSchema), (await apiClient.get("/api/invoices", { params: { limit: 6 } })).data, "invs") });
   const { data: tcmb } = useQuery({ queryKey: ["d", "tcmb"], queryFn: getTcmbRates, staleTime: 3e5 });
-  const { data: notifs } = useQuery({ queryKey: ["d", "notifs"], queryFn: async () => { try { return safeParse(SingleResponseSchema(NotifSchema), (await apiClient.get("/api/notifications", { params: { limit: 5 } })).data, "n").data; } catch { return []; } } });
-  const { data: appr } = useQuery({ queryKey: ["d", "appr"], queryFn: async () => { try { return safeParse(SingleResponseSchema(ApprSchema), (await apiClient.get("/api/approvals/requests", { params: { limit: 5 } })).data, "a").data; } catch { return []; } } });
-  const { data: tasks } = useQuery({ queryKey: ["d", "tasks"], queryFn: async () => { try { return safeParse(SingleResponseSchema(z.array(TaskSchema)), (await apiClient.get("/api/tasks")).data, "tasks").data; } catch { return []; } } });
+  const { data: notifs } = useQuery({ queryKey: ["d", "notifs"], enabled: canReadNotifications, queryFn: async () => { try { return safeParse(SingleResponseSchema(NotifSchema), (await apiClient.get("/api/notifications", { params: { limit: 5 } })).data, "n").data; } catch { return []; } } });
+  const { data: appr } = useQuery({ queryKey: ["d", "appr"], enabled: canReadApprovals, queryFn: async () => { try { return safeParse(SingleResponseSchema(ApprSchema), (await apiClient.get("/api/approvals/requests", { params: { limit: 5 } })).data, "a").data; } catch { return []; } } });
+  const { data: tasks } = useQuery({ queryKey: ["d", "tasks"], enabled: canReadTasks, queryFn: async () => { try { return safeParse(SingleResponseSchema(z.array(TaskSchema)), (await apiClient.get("/api/tasks")).data, "tasks").data; } catch { return []; } } });
   const { data: recommendations = [] } = useQuery({ queryKey: ["d", "recommendations"], queryFn: async () => { try { return await getRecommendations(); } catch { return []; } } });
   const { data: smartNotifications } = useSmartNotifications();
   const completeTask = useMutation({
@@ -256,6 +310,18 @@ export function DashboardOverview() {
       disabled: false,
     },
   ];
+  const presetActionOrder: Record<DashboardPreset, readonly string[]> = {
+    executive: ['cash', 'margin', 'overdue', 'low-stock', 'checks'],
+    sales: ['overdue', 'cash', 'margin'],
+    accounting: ['overdue', 'cash', 'checks', 'margin'],
+    warehouse: ['low-stock'],
+    hr: ['cash'],
+    custom: ['overdue', 'low-stock', 'cash', 'margin', 'checks'],
+  };
+  const allowedActionKeys = presetActionOrder[dashboardPreset];
+  const visibleActionItems = actionItems
+    .filter((item) => allowedActionKeys.includes(item.key))
+    .sort((left, right) => allowedActionKeys.indexOf(left.key) - allowedActionKeys.indexOf(right.key));
 
   /* ── JSX ── */
   return (
@@ -295,6 +361,28 @@ export function DashboardOverview() {
       </div>
 
       {/* ── Stat Cards ── */}
+      <Card>
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rol bazli dashboard</p>
+            <h2 className="mt-1 text-sm font-semibold text-white">{DASHBOARD_PRESET_LABEL[dashboardPreset]} gorunumu</h2>
+            <p className="mt-0.5 text-xs text-slate-500">{DASHBOARD_PRESET_DESCRIPTION[dashboardPreset]}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {user?.tenantMembership?.role?.name && (
+              <span className="rounded-lg border border-slate-700 bg-slate-950/50 px-2.5 py-1 text-xs font-medium text-slate-300">
+                {user.tenantMembership.role.name}
+              </span>
+            )}
+            {user?.tenantMembership?.isOwner && (
+              <span className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">
+                Owner
+              </span>
+            )}
+          </div>
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <div className="p-5 flex items-center gap-4">
@@ -394,7 +482,7 @@ export function DashboardOverview() {
               <p className="text-[11px] text-slate-500">Sık kullanılan AI iş akışları</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
-              {actionItems.map((item) => (
+              {visibleActionItems.map((item) => (
                 <div key={item.key} className="rounded-xl border border-slate-800 bg-slate-950/30 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2 min-w-0">

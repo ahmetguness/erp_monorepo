@@ -14,6 +14,7 @@ import { usePurchaseOrder, useSendPurchaseOrder, useReceivePurchaseOrder, useCan
 import { useWarehouses } from '@/hooks/useStock';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { PurchaseOrderItem } from '@/services/purchase.service';
+import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 
 interface ReceiveLineState {
   itemId: string;
@@ -24,6 +25,12 @@ interface ReceiveLineState {
 }
 
 interface Props { id: string }
+
+function addDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
 
 export function PurchaseOrderDetailPage({ id }: Props) {
   const { data: order, isLoading } = usePurchaseOrder(id);
@@ -99,6 +106,31 @@ export function PurchaseOrderDetailPage({ id }: Props) {
   const isDraft = order.status === 'DRAFT';
   const canReceive = order.status === 'SENT' || order.status === 'PARTIALLY_RECEIVED';
   const canCancel = order.status !== 'CANCELLED' && order.status !== 'RECEIVED';
+  const openItems = (order.items ?? []).filter((item) => Number(item.quantity) > Number(item.received));
+  const recommendedActions: RecommendedEntityAction[] = canReceive && openItems.length > 0
+    ? [{
+        id: `purchase-order-${id}-receive-followup`,
+        kind: 'task',
+        title: 'Teslim alma takip görevi oluştur',
+        summary: `${openItems.length} kalemde teslim alınmamış miktar var. Depo teslim süreci takip edilmeli.`,
+        priority: 'MEDIUM',
+        entityType: 'PURCHASE_ORDER',
+        entityId: id,
+        module: 'purchasing',
+        href: `/dashboard/purchase-orders/${id}`,
+        steps: ['Öneriyi gör', 'Görev taslağını incele', 'Onayla', 'Workflow’da takip et'],
+        draft: {
+          title: `${order.number} teslim alma takibi`,
+          detail: [
+            `Satın alma: ${order.number}`,
+            `Tedarikçi: ${order.contact?.name ?? '-'}`,
+            ...openItems.map((item) => `- ${item.product?.name ?? item.description ?? 'Kalem'}: kalan ${Number(item.quantity) - Number(item.received)}`),
+          ].join('\n'),
+          type: 'CHECK',
+          dueAt: addDays(1),
+        },
+      }]
+    : [];
 
   return (
     <div className="space-y-6">
@@ -164,6 +196,7 @@ export function PurchaseOrderDetailPage({ id }: Props) {
         displayName={`Satın Alma ${order.number}`}
         module="purchasing"
         primaryEmail={order.contact?.email}
+        recommendedActions={recommendedActions}
       />
       </div>
 

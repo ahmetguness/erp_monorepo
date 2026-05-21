@@ -5,6 +5,7 @@ import { CheckCircle2, ClipboardEdit, Mail, Paperclip, Send, ShieldCheck, Trash2
 import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
 import { EntityActivityTimeline } from '@/components/shared/EntityActivityTimeline';
 import { EntityTaskActions } from '@/components/shared/EntityTaskActions';
+import { RecommendedActionsPanel, type RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
@@ -31,6 +32,7 @@ export interface EntityActionPanelProps {
   module: string;
   primaryEmail?: string | null;
   availableActions?: readonly EntityAction[];
+  recommendedActions?: readonly RecommendedEntityAction[];
   href?: string;
 }
 
@@ -111,6 +113,7 @@ export function EntityActionPanel({
   module,
   primaryEmail,
   availableActions = DEFAULT_ACTIONS,
+  recommendedActions = [],
   href,
 }: EntityActionPanelProps) {
   const actions = useMemo(() => new Set<EntityAction>(availableActions), [availableActions]);
@@ -255,6 +258,7 @@ export function EntityActionPanel({
         </div>
       </section>
 
+      <RecommendedActionsPanel actions={recommendedActions} />
       {actions.has('task') && <EntityTaskActions entityType={entityType} entityId={entityId} entityLabel={displayName} module={module} href={href} />}
       {actions.has('attachment') && <AttachmentPanel entityType={entityType} entityId={entityId} />}
       {actions.has('activity') && <EntityActivityTimeline entityType={entityType} entityId={entityId} module={module} />}

@@ -14,6 +14,7 @@ import { useProduct, useDeleteProduct } from "@/hooks/useProducts";
 import { useStockLevels } from "@/hooks/useStock";
 import { formatCurrency } from "@/lib/utils";
 import { EntityActionPanel } from "@/components/shared/EntityActionPanel";
+import type { RecommendedEntityAction } from "@/components/shared/RecommendedActionsPanel";
 import type { StockLevel } from "@/services/stock.service";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -26,6 +27,12 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="text-sm text-slate-300">{value}</span>
     </div>
   );
+}
+
+function addDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
 }
 
 interface Props {
@@ -79,6 +86,36 @@ export function ProductDetailPage({ id }: Props) {
   if (isLoading) return <FullPageSpinner />;
   if (!product)
     return <div className="text-slate-400 text-sm">Ürün bulunamadı.</div>;
+
+  const totalStock = stockLevels.reduce((sum, item) => sum + Number(item.quantity), 0);
+  const minStock = Number(product.minStockLevel);
+  const stockGap = Math.max(0, minStock - totalStock);
+  const recommendedActions: RecommendedEntityAction[] = stockGap > 0
+    ? [{
+        id: `product-${id}-purchase-followup`,
+        kind: "task",
+        title: "Satın alma taslağı hazırla",
+        summary: `Mevcut stok ${totalStock.toLocaleString("tr-TR")}, minimum seviye ${minStock.toLocaleString("tr-TR")}. Eksik miktar için satın alma akışı başlatılmalı.`,
+        priority: stockGap >= minStock ? "CRITICAL" : "HIGH",
+        entityType: "PRODUCT",
+        entityId: id,
+        module: "purchasing",
+        href: `/dashboard/products/${id}`,
+        steps: ["Öneriyi gör", "Görev taslağını incele", "Onayla", "Satın alma akışında takip et"],
+        draft: {
+          title: `${product.name} için satın alma taslağı`,
+          detail: [
+            `${product.code} - ${product.name} minimum stok seviyesinin altında.`,
+            `Mevcut stok: ${totalStock.toLocaleString("tr-TR")}`,
+            `Minimum stok: ${minStock.toLocaleString("tr-TR")}`,
+            `Önerilen tamamlanacak miktar: ${Math.ceil(stockGap).toLocaleString("tr-TR")}`,
+            `Tahmini birim alış fiyatı: ${formatCurrency(product.purchasePrice)}`,
+          ].join("\n"),
+          type: "CHECK",
+          dueAt: addDays(1),
+        },
+      }]
+    : [];
 
   return (
     <div className="space-y-6">
@@ -169,6 +206,7 @@ export function ProductDetailPage({ id }: Props) {
         displayName={product.name}
         module="inventory"
         availableActions={["task", "attachment", "note", "activity"]}
+        recommendedActions={recommendedActions}
       />
       </div>
 

@@ -13,6 +13,7 @@ import { useInvoice, useCancelInvoice } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { EntityImageManager } from '@/components/shared/EntityImageManager';
 import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
+import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 
 interface LineRow {
   id: string; description: string; quantity: number; unitPrice: number;
@@ -24,6 +25,18 @@ interface LineRow {
 const TYPE_LABELS: Record<string, string> = {
   SALES: 'Satış', PURCHASE: 'Alış', RETURN_SALES: 'Satış İade', RETURN_PURCHASE: 'Alış İade',
 };
+
+function addDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
+function isInvoiceOverdue(status: string, dueDate: string | null): boolean {
+  if (status === 'OVERDUE') return true;
+  if (!dueDate || status === 'PAID' || status === 'CANCELLED') return false;
+  return new Date(dueDate).getTime() < Date.now();
+}
 
 interface Props { id: string }
 
@@ -49,6 +62,52 @@ export function InvoiceDetailPage({ id }: Props) {
   if (!invoice) return <div className="text-slate-400 text-sm">Fatura bulunamadı.</div>;
 
   const canCancel = invoice.status !== 'CANCELLED' && invoice.status !== 'PAID';
+  const overdue = invoice.type === 'SALES' && isInvoiceOverdue(invoice.status, invoice.dueDate);
+  const recommendedActions: RecommendedEntityAction[] = overdue && invoice.contact?.email
+    ? [{
+        id: `invoice-${id}-payment-reminder`,
+        kind: 'mail',
+        title: 'Ödeme hatırlatma maili gönder',
+        summary: `${invoice.number} vadesi geçmiş veya gecikme riski taşıyor. Müşteriye net bir tahsilat hatırlatması gönderilebilir.`,
+        priority: invoice.status === 'OVERDUE' ? 'CRITICAL' : 'HIGH',
+        entityType: 'INVOICE',
+        entityId: id,
+        module: 'invoicing',
+        href: `/dashboard/invoices/${id}`,
+        steps: ['Öneriyi gör', 'Mail taslağını incele', 'Onayla', 'Mail merkezinde sonucu takip et'],
+        draft: {
+          to: invoice.contact.email,
+          subject: `${invoice.number} numaralı fatura ödeme hatırlatması`,
+          body: [
+            `Merhaba ${invoice.contact.name},`,
+            '',
+            `${invoice.number} numaralı ve ${formatCurrency(invoice.totalGross)} tutarındaki faturanızın vadesi ${invoice.dueDate ? formatDate(invoice.dueDate) : 'geçmiş dönem'} itibarıyla dolmuştur.`,
+            'Ödemeniz yapıldıysa bu mesajı dikkate almayabilirsiniz. Destek ihtiyacınız olursa bizimle iletişime geçebilirsiniz.',
+            '',
+            'İyi çalışmalar.',
+          ].join('\n'),
+        },
+      }]
+    : overdue
+      ? [{
+          id: `invoice-${id}-collection-task`,
+          kind: 'task',
+          title: 'Tahsilat takip görevi oluştur',
+          summary: 'Fatura gecikmiş görünüyor ancak müşteri e-posta bilgisi yok. Önce iletişim/tahsilat görevi açılmalı.',
+          priority: 'HIGH',
+          entityType: 'INVOICE',
+          entityId: id,
+          module: 'invoicing',
+          href: `/dashboard/invoices/${id}`,
+          steps: ['Öneriyi gör', 'Görev taslağını incele', 'Onayla', 'Workflow’da takip et'],
+          draft: {
+            title: `${invoice.number} tahsilat takibi`,
+            detail: `${invoice.contact?.name ?? 'Cari'} için ${formatCurrency(invoice.totalGross)} tutarlı gecikmiş faturayı takip et. Eksik e-posta/iletişim bilgisini tamamla.`,
+            type: 'COLLECTION',
+            dueAt: addDays(1),
+          },
+        }]
+      : [];
 
   return (
     <div className="space-y-6">
@@ -106,6 +165,7 @@ export function InvoiceDetailPage({ id }: Props) {
         displayName={`Fatura ${invoice.number}`}
         module="invoicing"
         primaryEmail={invoice.contact?.email}
+        recommendedActions={recommendedActions}
       />
       </div>
 

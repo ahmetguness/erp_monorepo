@@ -152,6 +152,16 @@ export interface AuthUser {
   name: string;
   phone: string | null;
   isActive: boolean;
+  tenantMembership?: {
+    isOwner: boolean;
+    roleId: string | null;
+    role: {
+      id: string;
+      name: string;
+      isSystem: boolean;
+      permissions: Array<{ module: string; action: string }>;
+    } | null;
+  };
 }
 
 export interface TenantInfo {

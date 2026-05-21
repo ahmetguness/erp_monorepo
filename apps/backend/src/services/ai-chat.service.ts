@@ -1,5 +1,6 @@
 import { openai } from '../lib/openai';
 import { ChatDataService } from './chat-data.service';
+import { ChatContextService, type ChatPageContext, type LoadedChatEntityContext } from './chat-context.service';
 import { logger } from '../lib/logger';
 import type {
   ChatCompletionMessageParam,
@@ -778,6 +779,36 @@ function clearConversation(sessionId: string) {
 // Public exports
 // ─────────────────────────────────────────────
 
+function buildContextMessages(
+  context: ChatPageContext | undefined,
+  entityContext: LoadedChatEntityContext | null,
+): ChatCompletionMessageParam[] {
+  if (!context && !entityContext) return [];
+
+  const payload = {
+    activePage: context
+      ? {
+          path: context.path,
+          title: context.title,
+          entityType: context.entityType,
+          entityId: context.entityId,
+          entityLabel: context.entityLabel,
+        }
+      : null,
+    recentRecords: context?.recentRecords ?? [],
+    activeRecord: entityContext,
+  };
+
+  return [{
+    role: 'system',
+    content:
+      'Aktif sayfa/kayit baglami asagidadir. Bu veriler backend tarafindan tenant ve izin kontrolunden gecirilmistir. ' +
+      'Yetkisiz veya bulunamayan aktif kayit icin veri uydurma; kullaniciya yetki/kayit durumunu sade bicimde soyle. ' +
+      'Kullanicinin "bu kayit", "bu musteri", "bu teklif", "bu fatura", "bu personel" gibi ifadelerinde activeRecord bilgisini onceliklendir.\n' +
+      JSON.stringify(payload),
+  }];
+}
+
 export interface PrivateChatParams {
   message: string;
   tenantId: string;
@@ -787,6 +818,7 @@ export interface PrivateChatParams {
   plan: string;
   permissions: UserPermissions;
   tenantModules: string[];
+  context?: ChatPageContext;
 }
 
 export interface PrivateChatResult {
@@ -798,9 +830,10 @@ export interface PrivateChatResult {
  * Dashboard chatbot — ERP verilerine erişimli, function calling ile.
  */
 export async function handlePrivateChat(params: PrivateChatParams): Promise<PrivateChatResult> {
-  const { message, tenantId, userId, userName, tenantName, plan, permissions, tenantModules } = params;
+  const { message, tenantId, userId, userName, tenantName, plan, permissions, tenantModules, context } = params;
   const sessionId = `private:${tenantId}:${userId}`;
   const planTools = getAccessibleTools(plan, permissions, tenantModules);
+  const entityContext = await ChatContextService.loadEntityContext(tenantId, permissions, tenantModules, context);
 
   const systemMessage: ChatCompletionMessageParam = {
     role: 'system',
@@ -815,11 +848,12 @@ export async function handlePrivateChat(params: PrivateChatParams): Promise<Priv
 
   const messages: ChatCompletionMessageParam[] = [
     systemMessage,
+    ...buildContextMessages(context, entityContext),
     ...history,
     userMessage,
   ];
 
-  let usedTools = false;
+  let usedTools = Boolean(entityContext?.summary);
 
   // İlk çağrı
   let response = await openai.chat.completions.create({
@@ -1164,8 +1198,9 @@ export async function handlePrivateChatStream(
   params: PrivateChatParams,
   callbacks: StreamCallbacks,
 ): Promise<void> {
-  const { message, tenantId, userId, userName, tenantName, plan, permissions, tenantModules } = params;
+  const { message, tenantId, userId, userName, tenantName, plan, permissions, tenantModules, context } = params;
   const sessionId = `private:${tenantId}:${userId}`;
+  const entityContext = await ChatContextService.loadEntityContext(tenantId, permissions, tenantModules, context);
 
   const systemMessage: ChatCompletionMessageParam = {
     role: 'system',
@@ -1175,10 +1210,15 @@ export async function handlePrivateChatStream(
   const history = getConversation(sessionId);
   const userMessage: ChatCompletionMessageParam = { role: 'user', content: message };
 
-  const messages: ChatCompletionMessageParam[] = [systemMessage, ...history, userMessage];
+  const messages: ChatCompletionMessageParam[] = [
+    systemMessage,
+    ...buildContextMessages(context, entityContext),
+    ...history,
+    userMessage,
+  ];
   const planTools = getAccessibleTools(plan, permissions, tenantModules);
 
-  let usedTools = false;
+  let usedTools = Boolean(entityContext?.summary);
   let fullText = '';
 
   try {

@@ -4,8 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
+  createAiMailDraft,
   getMail,
+  listMailTemplates,
   listMail,
+  renderMailTemplate,
   sendBulkMail,
   sendGenericNotificationMail,
   sendInvoiceNotificationMail,
@@ -13,15 +16,22 @@ import {
   sendPasswordResetMail,
   sendWelcomeMail,
   type BulkMailDTO,
+  type CreateAiMailDraftDTO,
   type GenericNotificationMailDTO,
   type InvoiceNotificationMailDTO,
   type ListMailParams,
   type PasswordResetMailDTO,
+  type AiMailDraft,
+  type RenderMailTemplateDTO,
+  type RenderedMailTemplate,
   type SendMailDTO,
   type WelcomeMailDTO,
 } from '@/services/mail.service';
 
-function useMailMutation<TPayload>(mutationFn: (data: TPayload) => Promise<unknown>, successMessage: string) {
+function useMailMutation<TPayload, TResult = unknown>(
+  mutationFn: (data: TPayload) => Promise<TResult>,
+  successMessage: string,
+) {
   const { toast } = useUIStore();
   const queryClient = useQueryClient();
   return useMutation({
@@ -49,12 +59,33 @@ export function useMailMessage(id: string | null) {
   });
 }
 
+export function useMailTemplates() {
+  return useQuery({
+    queryKey: ['mail', 'templates'],
+    queryFn: listMailTemplates,
+  });
+}
+
 export function useSendMail() {
   return useMailMutation<SendMailDTO>(sendMail, 'Mail gönderildi.');
 }
 
 export function useSendBulkMail() {
   return useMailMutation<BulkMailDTO>(sendBulkMail, 'Toplu mail gönderildi.');
+}
+
+export function useRenderMailTemplate() {
+  return useMailMutation<RenderMailTemplateDTO, RenderedMailTemplate>(
+    renderMailTemplate,
+    'Sablon hazirlandi.',
+  );
+}
+
+export function useCreateAiMailDraft() {
+  return useMailMutation<CreateAiMailDraftDTO, AiMailDraft>(
+    createAiMailDraft,
+    'AI taslak hazirlandi.',
+  );
 }
 
 export function useSendWelcomeMail() {

@@ -12,6 +12,9 @@ mailRoutes.use('*', requirePlan(Plan.ENTERPRISE));
 mailRoutes.use('*', requireFeature(FeatureKey.HR)); // HR feature altında mail erişimi
 
 mailRoutes.get('/', requirePermission('mail', 'READ'), MailController.list);
+mailRoutes.get('/templates', requirePermission('mail', 'READ'), MailController.templates);
+mailRoutes.post('/templates/render', requirePermission('mail', 'CREATE'), MailController.renderTemplate);
+mailRoutes.post('/ai-draft', requirePermission('mail', 'CREATE'), MailController.aiDraft);
 mailRoutes.get('/:id', requirePermission('mail', 'READ'), MailController.get);
 mailRoutes.post('/send', requirePermission('mail', 'CREATE'), MailController.send);
 mailRoutes.post('/bulk', requirePermission('mail', 'CREATE'), MailController.bulk);

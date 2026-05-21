@@ -105,8 +105,12 @@ export function useDeleteLocation(warehouseId: string) {
 
 // ── Stock Levels ─────────────────────────────
 
-export function useStockLevels(params: StockLevelParams) {
-  return useQuery({ queryKey: STOCK_KEYS.levels(params), queryFn: () => getStockLevels(params) });
+export function useStockLevels(params: StockLevelParams, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: STOCK_KEYS.levels(params),
+    queryFn: () => getStockLevels(params),
+    enabled: options?.enabled ?? true,
+  });
 }
 
 // ── Stock Movements ──────────────────────────

@@ -5,12 +5,17 @@ import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { BulkActionBar } from '@/components/shared/BulkActionBar';
+import { createBulkActionPresets } from '@/components/shared/bulkActionPresets';
 import { SavedViewControls } from '@/components/shared/SavedViewControls';
 import { InvoiceStatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
+import { useCurrentUser } from '@/hooks/useAuth';
+import { useBulkSelection } from '@/hooks/useBulkSelection';
 import { useInvoices } from '@/hooks/useSales';
+import { useUIStore } from '@/store/ui.store';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { Invoice, InvoiceType, InvoiceStatus } from '@/services/sales.service';
 import { getSavedViewFilterString, type SavedViewState } from '@/services/saved-view.service';
@@ -56,11 +61,15 @@ function parseInvoiceStatus(value: string): InvoiceStatus | '' {
 
 export function InvoicesListPage() {
   const router = useRouter();
+  const { user } = useCurrentUser();
+  const { toast } = useUIStore();
   const [page, setPage] = useState(1);
   const [type, setType] = useState<InvoiceType | ''>('');
   const [status, setStatus] = useState<InvoiceStatus | ''>('');
 
   const { data, isLoading } = useInvoices({ page, limit: 20, type: type || undefined, status: status || undefined });
+  const invoices = data?.data ?? [];
+  const bulkSelection = useBulkSelection(invoices.map((invoice) => invoice.id));
   const viewState = useMemo<SavedViewState>(() => ({
     filters: { type, status },
     pageSize: 20,
@@ -82,6 +91,13 @@ export function InvoicesListPage() {
     { key: 'totalGross', header: 'Toplam', width: '130px', align: 'right', render: (r) => <span className="font-semibold text-slate-200">{formatCurrency(r.totalGross)}</span> },
   ];
 
+  const bulkActions = createBulkActionPresets({
+    module: 'invoicing',
+    entityName: 'fatura',
+    notify: toast.info,
+    include: ['export', 'mail', 'tag', 'status', 'task', 'archive'],
+  });
+
   return (
     <div>
       <PageHeader
@@ -94,10 +110,23 @@ export function InvoicesListPage() {
         <Select options={STATUS_OPTIONS} value={status} onChange={(e) => { setStatus(parseInvoiceStatus(e.target.value)); setPage(1); }} className="w-44" />
         <SavedViewControls module="sales" listKey="sales.invoices" currentState={viewState} onApply={applyView} />
       </div>
+      <BulkActionBar
+        selectedIds={bulkSelection.selectedIdList}
+        actions={bulkActions}
+        user={user}
+        onClear={bulkSelection.clearSelection}
+      />
       <DataTable
         columns={columns}
-        data={data?.data ?? []}
+        data={invoices}
         keyExtractor={(r) => r.id}
+        selection={{
+          selectedIds: bulkSelection.selectedIds,
+          isPageSelected: bulkSelection.isPageSelected,
+          isPagePartiallySelected: bulkSelection.isPagePartiallySelected,
+          onToggleRow: bulkSelection.toggleOne,
+          onTogglePage: bulkSelection.togglePage,
+        }}
         isLoading={isLoading}
         onRowClick={(r) => router.push(`/dashboard/invoices/${r.id}`)}
         emptyTitle="Fatura bulunamadı"
