@@ -521,8 +521,8 @@ export const StockController = {
         }
       }
 
-      await tx.stockCount.update({
-        where: { id: countId },
+      await tx.stockCount.updateMany({
+        where: { id: countId, tenantId },
         data: { isFinalized: true, finalizedAt: new Date() },
       });
     });

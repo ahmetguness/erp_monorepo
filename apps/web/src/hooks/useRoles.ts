@@ -4,12 +4,14 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getRoles, getRoleById, createRole, updateRole, deleteRole, addPermission, removePermission,
-  type ListParams, type CreateRoleDTO, type UpdateRoleDTO, type AddPermissionDTO,
+  getPermissionMatrix, simulatePermission,
+  type ListParams, type CreateRoleDTO, type UpdateRoleDTO, type AddPermissionDTO, type PermissionSimulationInput,
 } from '@/services/role.service';
 
 const KEYS = {
   list: (p: ListParams) => ['roles', p] as const,
   detail: (id: string) => ['roles', id] as const,
+  permissionMatrix: ['roles', 'permission-matrix'] as const,
 };
 
 export function useRoles(params: ListParams, options?: { enabled?: boolean }) {
@@ -21,6 +23,16 @@ export function useRoles(params: ListParams, options?: { enabled?: boolean }) {
 }
 export function useRole(id: string) {
   return useQuery({ queryKey: KEYS.detail(id), queryFn: () => getRoleById(id), enabled: !!id });
+}
+export function usePermissionMatrix() {
+  return useQuery({ queryKey: KEYS.permissionMatrix, queryFn: getPermissionMatrix });
+}
+export function useSimulatePermission() {
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (data: PermissionSimulationInput) => simulatePermission(data),
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
 }
 export function useCreateRole() {
   const qc = useQueryClient(); const { toast } = useUIStore();

@@ -78,13 +78,13 @@ export const AttendanceController = {
     const date = body.date ? new Date(body.date) : new Date();
     const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-    const existing = await prisma.attendance.findUnique({
-      where: { employeeId_date: { employeeId: body.employeeId, date: dateOnly } },
+    const existing = await prisma.attendance.findFirst({
+      where: { tenantId, employeeId: body.employeeId, date: dateOnly },
     });
     if (!existing) return c.json(new ValidationError('Önce giriş kaydı oluşturulmalıdır.').toJSON(), 400);
 
     const updated = await prisma.attendance.update({
-      where: { employeeId_date: { employeeId: body.employeeId, date: dateOnly } },
+      where: { id: existing.id },
       data: {
         checkOut: body.checkOut ? new Date(body.checkOut) : new Date(),
         ...(body.overtimeHours !== undefined && { overtimeHours: body.overtimeHours }),

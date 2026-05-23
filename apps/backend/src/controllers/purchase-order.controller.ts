@@ -364,8 +364,8 @@ export const PurchaseOrderController = {
         if (!orderItem) continue;
 
         // Update received quantity
-        await tx.purchaseOrderItem.update({
-          where: { id: recv.itemId },
+        await tx.purchaseOrderItem.updateMany({
+          where: { id: recv.itemId, tenantId, orderId: id },
           data: { received: { increment: recv.receivedQty } },
         });
 
@@ -404,15 +404,20 @@ export const PurchaseOrderController = {
       }
 
       // Check if fully received
-      const updatedItems = await tx.purchaseOrderItem.findMany({ where: { orderId: id } });
+      const updatedItems = await tx.purchaseOrderItem.findMany({ where: { tenantId, orderId: id } });
       const allReceived = updatedItems.every((i) => Number(i.received) >= Number(i.quantity));
       const newStatus = allReceived ? PurchaseOrderStatus.RECEIVED : PurchaseOrderStatus.PARTIALLY_RECEIVED;
 
-      const po = await tx.purchaseOrder.update({
-        where: { id },
+      await tx.purchaseOrder.updateMany({
+        where: { id, tenantId },
         data: { status: newStatus },
+      });
+
+      const po = await tx.purchaseOrder.findFirst({
+        where: { id, tenantId },
         include: { contact: { select: { id: true, name: true } }, items: true },
       });
+      if (!po) throw new NotFoundError('SatÄ±n alma sipariÅŸi', id);
 
       await tx.purchaseOrderHistory.create({
         data: {

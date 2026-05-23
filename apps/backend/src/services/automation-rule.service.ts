@@ -232,8 +232,8 @@ export const AutomationRuleService = {
       skipped: matches.length - tasksCreated - notificationsCreated,
     };
 
-    await prisma.automationRule.update({
-      where: { id: rule.id },
+    await prisma.automationRule.updateMany({
+      where: { id: rule.id, tenantId: rule.tenantId },
       data: {
         lastRunAt: new Date(),
         lastResult: {

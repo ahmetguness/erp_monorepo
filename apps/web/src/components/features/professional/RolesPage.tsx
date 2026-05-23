@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Shield, Trash2, Lock, Eye, Pencil, Check, X, UserPlus, UserMinus } from 'lucide-react';
+import { Plus, Shield, Trash2, Lock, Eye, Pencil, Check, X, UserPlus, UserMinus, PlayCircle } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { Badge } from '@/components/ui/Badge';
@@ -10,11 +10,11 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import {
   useRoles, useRole, useCreateRole, useUpdateRole, useDeleteRole,
-  useAddPermission, useRemovePermission,
+  useAddPermission, useRemovePermission, usePermissionMatrix, useSimulatePermission,
 } from '@/hooks/useRoles';
 import { useTenantUsers, useUpdateUserRole } from '@/hooks/useUsers';
 import { formatDate } from '@/lib/utils';
-import type { Role, Permission, PermissionAction } from '@/services/role.service';
+import type { Role, Permission, PermissionAction, PermissionMatrixEntry } from '@/services/role.service';
 
 const MODULES = [
   { key: 'accounting', label: 'Muhasebe' },
@@ -35,6 +35,10 @@ const ACTIONS: { key: PermissionAction; label: string }[] = [
   { key: 'APPROVE', label: 'Onayla' },
   { key: 'EXPORT', label: 'Dışa Aktar' },
 ];
+
+function toPermissionAction(value: string): PermissionAction {
+  return ACTIONS.find((action) => action.key === value)?.key ?? 'READ';
+}
 
 const ROLE_MODULES = [
   { key: 'invoicing', label: 'Satis / Fatura' },
@@ -145,17 +149,51 @@ export function RolesPage() {
   const [form, setForm] = useState({ name: '', description: '' });
   const [selectedPresetKey, setSelectedPresetKey] = useState('');
   const [editForm, setEditForm] = useState({ name: '', description: '' });
+  const [simUserId, setSimUserId] = useState('');
+  const [simRouteId, setSimRouteId] = useState('');
+  const [simModule, setSimModule] = useState('invoicing');
+  const [simAction, setSimAction] = useState<PermissionAction>('READ');
 
   const { data, isLoading } = useRoles({ page, limit: 20 });
   const { data: detailRole } = useRole(detailRoleId ?? '');
+  const { data: permissionMatrix = [] } = usePermissionMatrix();
   const createRole = useCreateRole();
   const updateRole = useUpdateRole();
   const deleteRole = useDeleteRole();
   const addPerm = useAddPermission();
   const removePerm = useRemovePermission();
+  const simulatePerm = useSimulatePermission();
   const { data: allUsers } = useTenantUsers();
   const updateUserRole = useUpdateUserRole();
   const selectedPreset = ROLE_PRESETS.find((preset) => preset.key === selectedPresetKey);
+  const activeUsers = useMemo(() => (allUsers ?? []).filter((tenantUser) => tenantUser.isActive && tenantUser.user.isActive), [allUsers]);
+  const simulatorUserId = simUserId || activeUsers[0]?.userId || '';
+  const selectedSimulatorRoute = permissionMatrix.find((entry) => entry.id === simRouteId);
+  const simulatorModules = useMemo(() => {
+    const labels = new Map(ROLE_MODULES.map((module) => [module.key, module.label]));
+    permissionMatrix.forEach((entry) => {
+      if (!labels.has(entry.module)) labels.set(entry.module, entry.module);
+    });
+    return Array.from(labels.entries()).map(([key, label]) => ({ key, label }));
+  }, [permissionMatrix]);
+
+  const runPermissionSimulation = () => {
+    if (!simulatorUserId) return;
+    simulatePerm.mutate({
+      userId: simulatorUserId,
+      module: simModule,
+      action: simAction,
+      routeId: simRouteId || undefined,
+    });
+  };
+
+  const selectSimulatorRoute = (routeId: string) => {
+    setSimRouteId(routeId);
+    const route = permissionMatrix.find((entry) => entry.id === routeId);
+    if (!route) return;
+    setSimModule(route.module);
+    setSimAction(route.action);
+  };
 
   // Permission lookup for detail modal
   const permSet = useMemo(() => {
@@ -260,6 +298,129 @@ export function RolesPage() {
           </Button>
         }
       />
+
+      <section className="mb-6 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-sky-400" />
+              <h3 className="text-sm font-semibold text-white">Permission ve plan gating simülasyonu</h3>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Backend route matrisi ile web aksiyonlarını aynı kullanıcı/rol bağlamında kontrol eder.
+            </p>
+          </div>
+          {simulatePerm.data && (
+            <Badge variant={simulatePerm.data.allowed ? 'success' : 'danger'} dot>
+              {simulatePerm.data.allowed ? 'Erişim var' : 'Erişim yok'}
+            </Badge>
+          )}
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-[1.4fr_1.6fr_1fr_1fr_auto]">
+          <label className="block space-y-1.5">
+            <span className="text-[11px] font-medium text-slate-500">Kullanıcı</span>
+            <select
+              value={simulatorUserId}
+              onChange={(event) => setSimUserId(event.target.value)}
+              className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-xs text-white outline-none focus:border-sky-500/60"
+            >
+              {!simulatorUserId && <option value="">Kullanıcı seçin</option>}
+              {activeUsers.map((tenantUser) => (
+                <option key={tenantUser.userId} value={tenantUser.userId}>
+                  {tenantUser.user.name} {tenantUser.isOwner ? '(Owner)' : tenantUser.roleRef?.name ? `(${tenantUser.roleRef.name})` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-[11px] font-medium text-slate-500">Route / UI aksiyonu</span>
+            <select
+              value={simRouteId}
+              onChange={(event) => selectSimulatorRoute(event.target.value)}
+              className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-xs text-white outline-none focus:border-sky-500/60"
+            >
+              <option value="">Manuel modül + aksiyon</option>
+              {permissionMatrix.map((entry: PermissionMatrixEntry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.method} {entry.route} - {entry.webAction}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-[11px] font-medium text-slate-500">Modül</span>
+            <select
+              value={simModule}
+              onChange={(event) => { setSimModule(event.target.value); setSimRouteId(''); }}
+              disabled={!!selectedSimulatorRoute}
+              className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-xs text-white outline-none focus:border-sky-500/60 disabled:opacity-60"
+            >
+              {simulatorModules.map((module) => (
+                <option key={module.key} value={module.key}>{module.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-[11px] font-medium text-slate-500">Aksiyon</span>
+            <select
+              value={simAction}
+              onChange={(event) => { setSimAction(toPermissionAction(event.target.value)); setSimRouteId(''); }}
+              disabled={!!selectedSimulatorRoute}
+              className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-xs text-white outline-none focus:border-sky-500/60 disabled:opacity-60"
+            >
+              {ACTIONS.map((action) => (
+                <option key={action.key} value={action.key}>{action.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="flex items-end">
+            <Button
+              type="button"
+              size="md"
+              loading={simulatePerm.isPending}
+              disabled={!simulatorUserId}
+              onClick={runPermissionSimulation}
+              className="w-full whitespace-nowrap"
+            >
+              <PlayCircle className="h-4 w-4" />
+              Test Et
+            </Button>
+          </div>
+        </div>
+
+        {simulatePerm.data && (
+          <div className="mt-4 grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Simülasyon sonucu</div>
+              <div className="mt-2 text-sm text-white">{simulatePerm.data.user.name}</div>
+              <div className="text-xs text-slate-500">
+                {simulatePerm.data.user.isOwner ? 'Owner' : simulatePerm.data.user.roleName ?? 'Rol yok'} -
+                {' '}{simulatePerm.data.requested.module}:{simulatePerm.data.requested.action}
+              </div>
+              <div className="mt-2 text-xs text-slate-500">
+                Plan: {simulatePerm.data.tenant.plan}
+                {simulatePerm.data.requested.route ? ` - Route: ${simulatePerm.data.requested.route.route}` : ''}
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              {simulatePerm.data.gates.map((gate) => (
+                <div key={gate.key} className="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-slate-300">{gate.label}</span>
+                    {gate.allowed ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <X className="h-3.5 w-3.5 text-red-400" />}
+                  </div>
+                  <p className="text-[11px] leading-4 text-slate-500">{gate.reason}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
 
       <DataTable
         columns={columns}

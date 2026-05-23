@@ -111,7 +111,7 @@ export const BOMController = {
     const body = await c.req.json<{ productId: string; quantity: number; unit?: string; notes?: string }>();
     if (!body.productId || !body.quantity) return c.json(new ValidationError('productId ve quantity zorunludur.').toJSON(), 400);
 
-    const maxSort = await prisma.bOMItem.aggregate({ where: { bomId }, _max: { sortOrder: true } });
+    const maxSort = await prisma.bOMItem.aggregate({ where: { tenantId, bomId }, _max: { sortOrder: true } });
     const item = await prisma.bOMItem.create({
       data: { tenantId, bomId, productId: body.productId, quantity: body.quantity, unit: body.unit ?? null, notes: body.notes ?? null, sortOrder: (maxSort._max.sortOrder ?? -1) + 1 },
       include: { product: { select: { id: true, code: true, name: true } } },

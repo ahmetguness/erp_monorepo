@@ -161,7 +161,7 @@ export const SettingsController = {
     if (!setting) return c.json(new NotFoundError('Logo').toJSON(), 404);
 
     await storageService.delete(setting.value);
-    await prisma.tenantSetting.delete({ where: { id: setting.id } });
+    await prisma.tenantSetting.delete({ where: { tenantId_key: { tenantId, key: TENANT_LOGO_SETTING_KEY } } });
     await prisma.tenantSetting.deleteMany({
       where: { tenantId, key: LEGACY_TENANT_LOGO_SETTING_KEY },
     });

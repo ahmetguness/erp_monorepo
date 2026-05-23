@@ -286,8 +286,8 @@ export const InvoiceController = {
 
       // SalesOrder.invoicedAmount güncelle
       if (body.salesOrderId && (body.type === 'SALES' || body.type === 'RETURN_SALES')) {
-        await tx.salesOrder.update({
-          where: { id: body.salesOrderId },
+        await tx.salesOrder.updateMany({
+          where: { id: body.salesOrderId, tenantId },
           data: { invoicedAmount: { increment: totalGross } },
         });
       }
@@ -418,8 +418,8 @@ export const InvoiceController = {
 
       // SalesOrder.invoicedAmount geri al
       if (invoice.salesOrderId && (invoice.type === 'SALES' || invoice.type === 'RETURN_SALES')) {
-        await tx.salesOrder.update({
-          where: { id: invoice.salesOrderId },
+        await tx.salesOrder.updateMany({
+          where: { id: invoice.salesOrderId, tenantId },
           data: { invoicedAmount: { decrement: Number(invoice.totalGross) } },
         });
       }

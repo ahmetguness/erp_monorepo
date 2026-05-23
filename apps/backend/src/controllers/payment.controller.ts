@@ -1,11 +1,16 @@
 import { Context } from 'hono';
-import { PaymentMethod, PaymentStatus, AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
-import { createAuditLog, getRequestMeta } from '../utils/audit.js';
-import { writePaymentAccountEntry } from '../utils/account-entry.js';
-import { createEventContext, domainEvents } from '../domain-events';
+import { getRequestMeta } from '../utils/audit.js';
+import {
+  createPayment,
+  getPaymentById,
+  listPayments,
+  parseCreatePaymentInput,
+  type CreatePaymentInput,
+  type ListPaymentsInput,
+} from '../services/payment.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -24,35 +29,8 @@ interface CreateCashAccountDTO {
   currencyCode?: string;
 }
 
-type PaymentDirection = 'RECEIVE' | 'SEND';
-
-interface CreatePaymentDTO {
-  contactId?: string;
-  bankAccountId?: string;
-  cashAccountId?: string;
-  date: string;
-  amount: number;
-  method: PaymentMethod;
-  direction?: PaymentDirection;
-  reference?: string;
-  notes?: string;
-  /** Fatura tahsisatları */
-  allocations?: Array<{ invoiceId: string; amount: number }>;
-}
-
-interface PaymentListQuery {
-  page?: string;
-  limit?: string;
-  contactId?: string;
-  status?: PaymentStatus;
-  dateFrom?: string;
-  dateTo?: string;
-}
-
-function isPaymentDirection(value: string | undefined): value is PaymentDirection {
-  return value === undefined || value === 'RECEIVE' || value === 'SEND';
-}
-
+type CreatePaymentDTO = CreatePaymentInput;
+type PaymentListQuery = ListPaymentsInput;
 // ─────────────────────────────────────────────
 // Payment Controller
 // BankAccount, CashAccount, Payment, PaymentAllocation
@@ -197,232 +175,30 @@ export const PaymentController = {
 
   async listPayments(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-
-    const query = c.req.query() as PaymentListQuery;
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
-
-    const where = {
-      tenantId,
-      deletedAt: null,
-      ...(query.contactId && { contactId: query.contactId }),
-      ...(query.status && { status: query.status }),
-      ...(query.dateFrom || query.dateTo
-        ? {
-            date: {
-              ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
-              ...(query.dateTo && { lte: new Date(query.dateTo) }),
-            },
-          }
-        : {}),
+    const query: PaymentListQuery = {
+      page: c.req.query('page'),
+      limit: c.req.query('limit'),
+      contactId: c.req.query('contactId'),
+      status: c.req.query('status'),
+      dateFrom: c.req.query('dateFrom'),
+      dateTo: c.req.query('dateTo'),
     };
 
-    const [total, payments] = await prisma.$transaction([
-      prisma.payment.count({ where }),
-      prisma.payment.findMany({
-        where,
-        include: {
-          contact: { select: { id: true, name: true } },
-          bankAccount: { select: { id: true, name: true } },
-          cashAccount: { select: { id: true, name: true } },
-          allocations: {
-            include: { invoice: { select: { id: true, number: true, totalGross: true } } },
-          },
-        },
-        orderBy: { date: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-    ]);
-
-    return c.json({
-      data: payments,
-      meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
-    });
+    return c.json(await listPayments(tenantId, query));
   },
 
   async createPayment(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = c.get('userId') as string | undefined;
     const { ipAddress, userAgent } = getRequestMeta(c);
+    const body: CreatePaymentDTO = parseCreatePaymentInput(await c.req.json());
 
-    const body = await c.req.json<CreatePaymentDTO>();
-
-    if (!body.date || body.amount === undefined || !body.method) {
-      return c.json(new ValidationError('date, amount ve method alanları zorunludur.').toJSON(), 400);
-    }
-
-    const amount = Number(body.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return c.json(new ValidationError('Tutar 0\'dan büyük olmalıdır.').toJSON(), 400);
-    }
-
-    if (!Object.values(PaymentMethod).includes(body.method)) {
-      return c.json(new ValidationError('Geçersiz ödeme yöntemi.').toJSON(), 400);
-    }
-
-    if (!isPaymentDirection(body.direction)) {
-      return c.json(new ValidationError('Geçersiz ödeme yönü.').toJSON(), 400);
-    }
-
-    const direction = body.direction ?? 'RECEIVE';
-
-    const paymentDate = new Date(body.date);
-    if (Number.isNaN(paymentDate.getTime())) {
-      return c.json(new ValidationError('Geçersiz tarih.').toJSON(), 400);
-    }
-
-    if (body.contactId) {
-      const contact = await prisma.contact.findFirst({
-        where: { id: body.contactId, tenantId, deletedAt: null, isActive: true },
-        select: { id: true },
-      });
-      if (!contact) {
-        return c.json(new ValidationError('Seçilen cari bulunamadı.').toJSON(), 400);
-      }
-    }
-
-    if (body.bankAccountId) {
-      const bankAccount = await prisma.bankAccount.findFirst({
-        where: { id: body.bankAccountId, tenantId, deletedAt: null, isActive: true },
-        select: { id: true },
-      });
-      if (!bankAccount) {
-        return c.json(new ValidationError('Seçilen banka hesabı bulunamadı.').toJSON(), 400);
-      }
-    }
-
-    if (body.cashAccountId) {
-      const cashAccount = await prisma.cashAccount.findFirst({
-        where: { id: body.cashAccountId, tenantId, deletedAt: null, isActive: true },
-        select: { id: true },
-      });
-      if (!cashAccount) {
-        return c.json(new ValidationError('Seçilen kasa hesabı bulunamadı.').toJSON(), 400);
-      }
-    }
-
-    // Tahsisat toplamı ödeme tutarını aşmamalı
-    if (body.allocations?.length) {
-      if (!body.contactId) {
-        return c.json(new ValidationError('Fatura tahsisatı için cari seçimi zorunludur.').toJSON(), 400);
-      }
-
-      const allocations = body.allocations.map((allocation) => ({
-        invoiceId: allocation.invoiceId,
-        amount: Number(allocation.amount),
-      }));
-      const invoiceIds = allocations.map((allocation) => allocation.invoiceId);
-      const uniqueInvoiceIds = new Set(invoiceIds);
-
-      if (uniqueInvoiceIds.size !== invoiceIds.length) {
-        return c.json(new ValidationError('Aynı fatura birden fazla kez tahsis edilemez.').toJSON(), 400);
-      }
-
-      if (allocations.some((allocation) => !Number.isFinite(allocation.amount) || allocation.amount <= 0)) {
-        return c.json(new ValidationError('Tahsisat tutarları 0\'dan büyük olmalıdır.').toJSON(), 400);
-      }
-
-      const allocTotal = allocations.reduce((s, a) => s + a.amount, 0);
-      if (allocTotal > amount) {
-        return c.json(
-          new ValidationError(
-            `Tahsisat toplamı (${allocTotal}) ödeme tutarını (${amount}) aşamaz.`,
-          ).toJSON(),
-          400,
-        );
-      }
-
-      const invoices = await prisma.invoice.findMany({
-        where: { id: { in: invoiceIds }, tenantId, deletedAt: null },
-        select: { id: true, contactId: true, type: true },
-      });
-
-      if (invoices.length !== uniqueInvoiceIds.size) {
-        return c.json(new ValidationError('Seçilen faturalardan biri bulunamadı.').toJSON(), 400);
-      }
-
-      if (body.contactId && invoices.some((invoice) => invoice.contactId !== body.contactId)) {
-        return c.json(new ValidationError('Tahsis edilen fatura seçilen cariye ait olmalıdır.').toJSON(), 400);
-      }
-
-      const hasWrongDirectionInvoice = invoices.some((invoice) =>
-        direction === 'RECEIVE'
-          ? invoice.type !== 'SALES' && invoice.type !== 'RETURN_PURCHASE'
-          : invoice.type !== 'PURCHASE' && invoice.type !== 'RETURN_SALES',
-      );
-
-      if (hasWrongDirectionInvoice) {
-        return c.json(new ValidationError('Fatura tipi ödeme yönü ile uyumlu değil.').toJSON(), 400);
-      }
-    }
-
-    const payment = await prisma.$transaction(async (tx) => {
-      const newPayment = await tx.payment.create({
-        data: {
-          tenantId,
-          contactId: body.contactId ?? null,
-          bankAccountId: body.bankAccountId ?? null,
-          cashAccountId: body.cashAccountId ?? null,
-          date: paymentDate,
-          amount,
-          method: body.method,
-          reference: body.reference ?? null,
-          notes: body.notes ?? null,
-          status: PaymentStatus.COMPLETED,
-        },
-      });
-
-      if (body.allocations?.length) {
-        await tx.paymentAllocation.createMany({
-          data: body.allocations.map((a) => ({
-            tenantId,
-            paymentId: newPayment.id,
-            invoiceId: a.invoiceId,
-            amount: Number(a.amount),
-          })),
-        });
-      }
-
-      // AccountEntry: cari hesap hareketi (contactId varsa)
-      if (body.contactId) {
-        await writePaymentAccountEntry(tx, {
-          tenantId,
-          contactId: body.contactId,
-          paymentId: newPayment.id,
-          reference: body.reference,
-          amount,
-          date: paymentDate,
-          direction,
-          userId,
-        });
-      }
-
-      return newPayment;
+    const payment = await createPayment({
+      tenantId,
+      userId,
+      input: body,
+      auditMeta: { ipAddress, userAgent },
     });
-
-    // Audit log
-    await createAuditLog(prisma, {
-      tenantId, userId, module: 'accounting',
-      entityType: EntityType.OTHER, entityId: payment.id,
-      action: AuditAction.CREATE,
-      newValues: { amount, method: body.method, direction, contactId: body.contactId ?? null },
-      ipAddress, userAgent,
-    });
-
-    if (direction === 'RECEIVE') {
-      await domainEvents.publish({
-        name: 'payment.received',
-        context: createEventContext({ tenantId, userId }),
-        payload: {
-          paymentId: payment.id,
-          contactId: payment.contactId,
-          amount: Number(payment.amount),
-          method: payment.method,
-          reference: payment.reference,
-        },
-      });
-    }
 
     return c.json({ data: payment }, 201);
   },
@@ -430,20 +206,8 @@ export const PaymentController = {
   async getPaymentById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const paymentId = c.req.param('id');
+    if (!paymentId) throw new ValidationError('id alani zorunludur.');
 
-    const payment = await prisma.payment.findFirst({
-      where: { id: paymentId, tenantId, deletedAt: null },
-      include: {
-        contact: { select: { id: true, name: true } },
-        bankAccount: { select: { id: true, name: true } },
-        cashAccount: { select: { id: true, name: true } },
-        allocations: {
-          include: { invoice: { select: { id: true, number: true, totalGross: true } } },
-        },
-      },
-    });
-
-    if (!payment) return c.json(new NotFoundError('Ödeme', paymentId).toJSON(), 404);
-    return c.json({ data: payment });
+    return c.json({ data: await getPaymentById(tenantId, paymentId) });
   },
 };

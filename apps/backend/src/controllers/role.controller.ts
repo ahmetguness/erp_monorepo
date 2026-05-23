@@ -4,6 +4,11 @@ import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import {
+  listPermissionMatrix,
+  parsePermissionSimulationInput,
+  simulatePermission as simulatePermissionAccess,
+} from '../services/permission-simulator.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -39,6 +44,18 @@ interface AddPermissionDTO {
 // ─────────────────────────────────────────────
 
 export const RoleController = {
+  async permissionMatrix(c: Context): Promise<Response> {
+    return c.json({ data: listPermissionMatrix() });
+  },
+
+  async simulatePermission(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body = parsePermissionSimulationInput(await c.req.json());
+    const result = await simulatePermissionAccess(tenantId, body);
+
+    return c.json({ data: result });
+  },
+
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 

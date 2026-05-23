@@ -191,8 +191,8 @@ export const WorkOrderController = {
           const item = wo.items.find((i) => i.id === cons.itemId);
           if (!item) continue;
 
-          await tx.workOrderItem.update({
-            where: { id: cons.itemId },
+          await tx.workOrderItem.updateMany({
+            where: { id: cons.itemId, tenantId, workOrderId: id },
             data: { consumedQty: { increment: cons.quantity } },
           });
 
@@ -212,7 +212,7 @@ export const WorkOrderController = {
       }
     });
 
-    const updated = await prisma.workOrder.findFirst({ where: { id }, select: { id: true, number: true, producedQty: true, plannedQty: true } });
+    const updated = await prisma.workOrder.findFirst({ where: { id, tenantId }, select: { id: true, number: true, producedQty: true, plannedQty: true } });
     return c.json({ data: updated });
   },
 

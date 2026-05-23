@@ -150,8 +150,8 @@ async function processPendingJobs() {
       timeout,
     ]);
 
-    await prisma.marketplaceSyncJob.update({
-      where: { id: job.id },
+    await prisma.marketplaceSyncJob.updateMany({
+      where: { id: job.id, tenantId: job.tenantId },
       data: {
         status: SyncJobStatus.DONE,
         finishedAt: new Date(),
@@ -164,12 +164,12 @@ async function processPendingJobs() {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`[TrendyolWorker] Job ${job.id} failed: ${msg}`);
-    await prisma.marketplaceSyncJob.update({
-      where: { id: job.id },
+    await prisma.marketplaceSyncJob.updateMany({
+      where: { id: job.id, tenantId: job.tenantId },
       data: { status: SyncJobStatus.FAILED, finishedAt: new Date(), errorMessage: msg, errorCount: 1 },
     });
-    await prisma.marketplaceIntegration.update({
-      where: { id: job.integrationId },
+    await prisma.marketplaceIntegration.updateMany({
+      where: { id: job.integrationId, tenantId: job.tenantId },
       data: { syncErrors: { increment: 1 } },
     }).catch(() => {});
   }
@@ -279,8 +279,8 @@ async function runSyncOrders(
     },
   );
 
-  await prisma.marketplaceIntegration.update({
-    where: { id: integrationId },
+  await prisma.marketplaceIntegration.updateMany({
+    where: { id: integrationId, tenantId },
     data: { lastSyncAt: new Date(), syncErrors: errors > 0 ? { increment: errors } : 0 },
   });
 
@@ -389,8 +389,8 @@ async function runSyncStock(
   }
 
   const totalErrors = errors + batchFailed;
-  await prisma.marketplaceIntegration.update({
-    where: { id: integrationId },
+  await prisma.marketplaceIntegration.updateMany({
+    where: { id: integrationId, tenantId },
     data: { lastSyncAt: new Date(), syncErrors: totalErrors > 0 ? { increment: totalErrors } : 0 },
   });
 

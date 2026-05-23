@@ -82,7 +82,7 @@ export const WorkCenterController = {
     const existing = await prisma.workCenter.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('İş Merkezi', id).toJSON(), 404);
 
-    const usedInOps = await prisma.workOrderOperation.count({ where: { workCenterId: id } });
+    const usedInOps = await prisma.workOrderOperation.count({ where: { tenantId, workCenterId: id } });
     if (usedInOps > 0) return c.json(new ValidationError('Aktif iş emirlerinde kullanılan iş merkezi silinemez.').toJSON(), 400);
 
     await prisma.workCenter.delete({ where: { id } });

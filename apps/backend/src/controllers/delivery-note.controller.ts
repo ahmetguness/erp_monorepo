@@ -175,8 +175,8 @@ export const DeliveryNoteController = {
       // SalesOrderItem.delivered güncelle
       for (const item of body.items) {
         if (item.salesOrderItemId && item.deliveredQty > 0) {
-          await tx.salesOrderItem.update({
-            where: { id: item.salesOrderItemId },
+          await tx.salesOrderItem.updateMany({
+            where: { id: item.salesOrderItemId, tenantId },
             data: { delivered: { increment: item.deliveredQty } },
           });
         }
@@ -185,7 +185,7 @@ export const DeliveryNoteController = {
       // SalesOrder durumunu güncelle (kısmi/tam teslimat)
       if (body.salesOrderId) {
         const orderItems = await tx.salesOrderItem.findMany({
-          where: { orderId: body.salesOrderId },
+          where: { tenantId, orderId: body.salesOrderId },
           select: { quantity: true, delivered: true },
         });
 
@@ -196,13 +196,13 @@ export const DeliveryNoteController = {
           const anyDelivered = orderItems.some((i) => Number(i.delivered) > 0);
 
           if (allDelivered) {
-            await tx.salesOrder.update({
-              where: { id: body.salesOrderId },
+            await tx.salesOrder.updateMany({
+              where: { id: body.salesOrderId, tenantId },
               data: { status: 'DELIVERED' },
             });
           } else if (anyDelivered) {
-            await tx.salesOrder.update({
-              where: { id: body.salesOrderId },
+            await tx.salesOrder.updateMany({
+              where: { id: body.salesOrderId, tenantId },
               data: { status: 'PARTIALLY_DELIVERED' },
             });
           }

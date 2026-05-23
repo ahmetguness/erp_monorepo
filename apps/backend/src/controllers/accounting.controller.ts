@@ -256,7 +256,7 @@ export const AccountingController = {
     }
 
     const updatedEntry = await prisma.$transaction(async (tx) => {
-      await tx.journalEntryLine.deleteMany({ where: { journalEntryId: entryId } });
+      await tx.journalEntryLine.deleteMany({ where: { tenantId, journalEntryId: entryId } });
       return tx.journalEntry.update({
         where: { id: entryId },
         data: {

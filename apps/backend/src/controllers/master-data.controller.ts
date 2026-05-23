@@ -45,7 +45,7 @@ export const MasterDataController = {
     const unitId = c.req.param('id');
     const unit = await prisma.unit.findFirst({ where: { id: unitId, tenantId } });
     if (!unit) return c.json(new NotFoundError('Birim', unitId).toJSON(), 404);
-    const usedCount = await prisma.product.count({ where: { unitId, deletedAt: null } });
+    const usedCount = await prisma.product.count({ where: { tenantId, unitId, deletedAt: null } });
     if (usedCount > 0) return c.json(new ValidationError(`Bu birim ${usedCount} üründe kullanılıyor.`).toJSON(), 400);
     await prisma.unit.delete({ where: { id: unitId } });
     return c.json({ data: { success: true } });
@@ -92,7 +92,7 @@ export const MasterDataController = {
     const categoryId = c.req.param('id');
     const category = await prisma.category.findFirst({ where: { id: categoryId, tenantId } });
     if (!category) return c.json(new NotFoundError('Kategori', categoryId).toJSON(), 404);
-    const usedCount = await prisma.product.count({ where: { categoryId, deletedAt: null } });
+    const usedCount = await prisma.product.count({ where: { tenantId, categoryId, deletedAt: null } });
     if (usedCount > 0) return c.json(new ValidationError(`Bu kategori ${usedCount} üründe kullanılıyor.`).toJSON(), 400);
     await prisma.category.delete({ where: { id: categoryId } });
     return c.json({ data: { success: true } });

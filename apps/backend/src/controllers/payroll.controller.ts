@@ -161,7 +161,7 @@ export const PayrollController = {
     });
 
     // Net maaşı yeniden hesapla
-    const allItems = await prisma.payrollItem.findMany({ where: { payrollId } });
+    const allItems = await prisma.payrollItem.findMany({ where: { tenantId, payrollId } });
     const deductions = allItems.filter((i) => i.isDeduction).reduce((sum, i) => sum + Number(i.amount), 0);
     const additions = allItems.filter((i) => !i.isDeduction).reduce((sum, i) => sum + Number(i.amount), 0);
     await prisma.payroll.update({
@@ -179,14 +179,14 @@ export const PayrollController = {
     const item = await prisma.payrollItem.findFirst({ where: { id: itemId, tenantId } });
     if (!item) return c.json(new NotFoundError('Bordro Kalemi', itemId).toJSON(), 404);
 
-    const payroll = await prisma.payroll.findFirst({ where: { id: item.payrollId, deletedAt: null } });
+    const payroll = await prisma.payroll.findFirst({ where: { id: item.payrollId, tenantId, deletedAt: null } });
     if (payroll?.paidAt) return c.json(new ValidationError('Ödenmiş bordrodan kalem silinemez.').toJSON(), 400);
 
     await prisma.payrollItem.delete({ where: { id: itemId } });
 
     // Net maaşı yeniden hesapla
     if (payroll) {
-      const allItems = await prisma.payrollItem.findMany({ where: { payrollId: payroll.id } });
+      const allItems = await prisma.payrollItem.findMany({ where: { tenantId, payrollId: payroll.id } });
       const deductions = allItems.filter((i) => i.isDeduction).reduce((sum, i) => sum + Number(i.amount), 0);
       const additions = allItems.filter((i) => !i.isDeduction).reduce((sum, i) => sum + Number(i.amount), 0);
       await prisma.payroll.update({

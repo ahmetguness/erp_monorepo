@@ -11,6 +11,8 @@ roleRoutes.use('*', requirePlan(Plan.PROFESSIONAL));
 roleRoutes.use('*', requireFeature(FeatureKey.ROLE_MANAGEMENT));
 
 roleRoutes.get('/', requirePermission('roles', 'READ'), RoleController.list);
+roleRoutes.get('/permission-simulator/matrix', requirePermission('roles', 'READ'), RoleController.permissionMatrix);
+roleRoutes.post('/permission-simulator/simulate', requirePermission('roles', 'READ'), RoleController.simulatePermission);
 roleRoutes.get('/:id', requirePermission('roles', 'READ'), RoleController.getById);
 roleRoutes.post('/', requirePermission('roles', 'CREATE'), RoleController.create);
 roleRoutes.patch('/:id', requirePermission('roles', 'UPDATE'), RoleController.update);
