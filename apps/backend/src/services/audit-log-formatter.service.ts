@@ -15,6 +15,8 @@ export interface BusinessAuditSummary {
   changes: AuditChange[];
 }
 
+export type AuditFieldValueLabels = ReadonlyMap<string, ReadonlyMap<string, string>>;
+
 interface AuditFormatInput {
   action: AuditAction;
   module: string;
@@ -23,7 +25,10 @@ interface AuditFormatInput {
   userLabel: string | null;
   oldValues: Prisma.JsonValue | null;
   newValues: Prisma.JsonValue | null;
+  fieldValueLabels?: AuditFieldValueLabels;
 }
+
+type AuditFieldKind = 'boolean' | 'date' | 'money' | 'quantity' | 'reference' | 'status' | 'text';
 
 const MODULE_LABELS: Record<string, string> = {
   accounting: 'Muhasebe',
@@ -108,6 +113,7 @@ const FIELD_LABELS: Record<string, string> = {
   categoryId: 'Kategori',
   code: 'Kod',
   contactId: 'Cari',
+  createdById: 'Oluşturan kullanıcı',
   date: 'Tarih',
   description: 'Açıklama',
   discount: 'İskonto',
@@ -122,6 +128,7 @@ const FIELD_LABELS: Record<string, string> = {
   number: 'Numara',
   paymentDate: 'Ödeme tarihi',
   priority: 'Öncelik',
+  productId: 'Ürün',
   purchasePrice: 'Alış fiyatı',
   quantity: 'Miktar',
   reference: 'Referans',
@@ -134,7 +141,38 @@ const FIELD_LABELS: Record<string, string> = {
   totalTax: 'Vergi',
   type: 'Tip',
   unitPrice: 'Birim fiyat',
+  updatedById: 'Güncelleyen kullanıcı',
+  userId: 'Kullanıcı',
   validUntil: 'Geçerlilik tarihi',
+};
+
+const FIELD_KINDS: Record<string, AuditFieldKind> = {
+  amount: 'money',
+  averageCost: 'money',
+  categoryId: 'reference',
+  contactId: 'reference',
+  createdById: 'reference',
+  date: 'date',
+  discount: 'quantity',
+  dueDate: 'date',
+  isActive: 'boolean',
+  method: 'status',
+  minStockLevel: 'quantity',
+  paymentDate: 'date',
+  priority: 'status',
+  productId: 'reference',
+  purchasePrice: 'money',
+  quantity: 'quantity',
+  salesPrice: 'money',
+  status: 'status',
+  totalGross: 'money',
+  totalNet: 'money',
+  totalTax: 'money',
+  type: 'status',
+  unitPrice: 'money',
+  updatedById: 'reference',
+  userId: 'reference',
+  validUntil: 'date',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -169,8 +207,10 @@ function isRecord(value: Prisma.JsonValue | null | undefined): value is Prisma.J
 }
 
 function labelFromKey(key: string): string {
+  const leafKey = key.split('.').at(-1) ?? key;
   if (FIELD_LABELS[key]) return FIELD_LABELS[key];
-  return key
+  if (FIELD_LABELS[leafKey]) return FIELD_LABELS[leafKey];
+  return leafKey
     .replace(/Id$/, '')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/_/g, ' ')
@@ -178,13 +218,39 @@ function labelFromKey(key: string): string {
 }
 
 function isMoneyField(field: string): boolean {
+  const leafKey = field.split('.').at(-1) ?? field;
+  if (FIELD_KINDS[field] === 'money' || FIELD_KINDS[leafKey] === 'money') return true;
   const lower = field.toLowerCase();
   return lower.includes('price') || lower.includes('amount') || lower.includes('total') || lower.includes('cost');
 }
 
 function isDateField(field: string): boolean {
+  const leafKey = field.split('.').at(-1) ?? field;
+  if (FIELD_KINDS[field] === 'date' || FIELD_KINDS[leafKey] === 'date') return true;
   const lower = field.toLowerCase();
   return lower.includes('date') || lower.includes('until') || lower.endsWith('at');
+}
+
+function isQuantityField(field: string): boolean {
+  const leafKey = field.split('.').at(-1) ?? field;
+  if (FIELD_KINDS[field] === 'quantity' || FIELD_KINDS[leafKey] === 'quantity') return true;
+  const lower = field.toLowerCase();
+  return lower.includes('quantity') || lower.includes('stock') || lower.includes('count');
+}
+
+function isReferenceField(field: string): boolean {
+  const leafKey = field.split('.').at(-1) ?? field;
+  return FIELD_KINDS[field] === 'reference' || FIELD_KINDS[leafKey] === 'reference' || leafKey.endsWith('Id');
+}
+
+function isStatusField(field: string): boolean {
+  const leafKey = field.split('.').at(-1) ?? field;
+  return FIELD_KINDS[field] === 'status' || FIELD_KINDS[leafKey] === 'status';
+}
+
+function referenceLabel(field: string, value: string, labels: AuditFieldValueLabels | undefined): string | null {
+  const leafKey = field.split('.').at(-1) ?? field;
+  return labels?.get(field)?.get(value) ?? labels?.get(leafKey)?.get(value) ?? null;
 }
 
 function formatDate(value: string): string | null {
@@ -197,18 +263,25 @@ function formatMoney(value: number): string {
   return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 2 }).format(value);
 }
 
-function formatJsonValue(field: string, value: Prisma.JsonValue | undefined): string | null {
+function formatJsonValue(field: string, value: Prisma.JsonValue | undefined, labels: AuditFieldValueLabels | undefined): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value === 'boolean') return value ? 'Evet' : 'Hayır';
-  if (typeof value === 'number') return isMoneyField(field) ? formatMoney(value) : new Intl.NumberFormat('tr-TR').format(value);
+  if (typeof value === 'number') {
+    if (isMoneyField(field)) return formatMoney(value);
+    return new Intl.NumberFormat('tr-TR', { maximumFractionDigits: isQuantityField(field) ? 3 : 2 }).format(value);
+  }
   if (typeof value === 'string') {
-    if (STATUS_LABELS[value]) return STATUS_LABELS[value];
+    if (isReferenceField(field)) return referenceLabel(field, value, labels) ?? (value.length > 10 ? `${value.slice(0, 6)}...${value.slice(-4)}` : value);
+    if (isStatusField(field) && STATUS_LABELS[value]) return STATUS_LABELS[value];
     if (isMoneyField(field)) {
       const numeric = Number(value);
       if (!Number.isNaN(numeric)) return formatMoney(numeric);
     }
+    if (isQuantityField(field)) {
+      const numeric = Number(value);
+      if (!Number.isNaN(numeric)) return new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 3 }).format(numeric);
+    }
     if (isDateField(field)) return formatDate(value) ?? value;
-    if (field.endsWith('Id')) return value.length > 10 ? `${value.slice(0, 6)}...${value.slice(-4)}` : value;
     return value;
   }
   if (Array.isArray(value)) return `${value.length} öğe`;
@@ -221,8 +294,10 @@ function valuesEqual(left: Prisma.JsonValue | undefined, right: Prisma.JsonValue
 
 function sortFields(fields: string[]): string[] {
   return fields.sort((left, right) => {
-    const leftIndex = IMPORTANT_FIELDS.indexOf(left);
-    const rightIndex = IMPORTANT_FIELDS.indexOf(right);
+    const leftKey = left.split('.').at(-1) ?? left;
+    const rightKey = right.split('.').at(-1) ?? right;
+    const leftIndex = IMPORTANT_FIELDS.indexOf(leftKey);
+    const rightIndex = IMPORTANT_FIELDS.indexOf(rightKey);
     if (leftIndex >= 0 && rightIndex >= 0) return leftIndex - rightIndex;
     if (leftIndex >= 0) return -1;
     if (rightIndex >= 0) return 1;
@@ -230,19 +305,38 @@ function sortFields(fields: string[]): string[] {
   });
 }
 
-function buildChanges(action: AuditAction, oldValues: Prisma.JsonValue | null, newValues: Prisma.JsonValue | null): AuditChange[] {
-  const oldRecord = isRecord(oldValues) ? oldValues : {};
-  const newRecord = isRecord(newValues) ? newValues : {};
+function flattenRecord(record: Prisma.JsonObject, prefix = ''): Record<string, Prisma.JsonValue> {
+  const flattened: Record<string, Prisma.JsonValue> = {};
+  Object.entries(record).forEach(([key, value]) => {
+    if (value === undefined) return;
+    const field = prefix ? `${prefix}.${key}` : key;
+    if (isRecord(value)) {
+      Object.assign(flattened, flattenRecord(value, field));
+      return;
+    }
+    flattened[field] = value;
+  });
+  return flattened;
+}
+
+function isVisibleField(field: string): boolean {
+  const leafKey = field.split('.').at(-1) ?? field;
+  return !HIDDEN_FIELDS.has(field) && !HIDDEN_FIELDS.has(leafKey);
+}
+
+function buildChanges(action: AuditAction, oldValues: Prisma.JsonValue | null, newValues: Prisma.JsonValue | null, labels: AuditFieldValueLabels | undefined): AuditChange[] {
+  const oldRecord = isRecord(oldValues) ? flattenRecord(oldValues) : {};
+  const newRecord = isRecord(newValues) ? flattenRecord(newValues) : {};
   const fields = sortFields(Array.from(new Set([...Object.keys(oldRecord), ...Object.keys(newRecord)])))
-    .filter((field) => !HIDDEN_FIELDS.has(field))
+    .filter(isVisibleField)
     .filter((field) => action !== AuditAction.UPDATE || !valuesEqual(oldRecord[field], newRecord[field]))
     .slice(0, 8);
 
   return fields.map((field) => ({
     field,
     label: labelFromKey(field),
-    oldValue: formatJsonValue(field, oldRecord[field]),
-    newValue: formatJsonValue(field, newRecord[field]),
+    oldValue: formatJsonValue(field, oldRecord[field], labels),
+    newValue: formatJsonValue(field, newRecord[field], labels),
   }));
 }
 
@@ -251,7 +345,28 @@ function fallbackEntityLabel(entityType: EntityType, entityLabel: string | null)
 }
 
 function firstImpactChange(changes: AuditChange[]): AuditChange | null {
-  return changes.find((change) => IMPORTANT_FIELDS.includes(change.field)) ?? changes[0] ?? null;
+  return changes.find((change) => IMPORTANT_FIELDS.includes(change.field.split('.').at(-1) ?? change.field)) ?? changes[0] ?? null;
+}
+
+function possessiveEntity(entityType: EntityType, entity: string): string {
+  if (entityType === EntityType.INVOICE) return `${entity} faturasının`;
+  if (entityType === EntityType.PRODUCT) return `${entity} ürününün`;
+  if (entityType === EntityType.CONTACT) return `${entity} carisinin`;
+  if (entityType === EntityType.SALES_QUOTE) return `${entity} teklifinin`;
+  if (entityType === EntityType.SALES_ORDER) return `${entity} satış siparişinin`;
+  if (entityType === EntityType.PURCHASE_ORDER) return `${entity} satın alma siparişinin`;
+  return `${entity} kaydının`;
+}
+
+function impactVerb(field: string): string {
+  const leafKey = field.split('.').at(-1) ?? field;
+  if (leafKey === 'dueDate') return 'vadesini';
+  if (leafKey === 'validUntil') return 'geçerlilik tarihini';
+  if (leafKey === 'status') return 'durumunu';
+  if (leafKey === 'totalGross') return 'genel toplamını';
+  if (leafKey === 'contactId') return 'carisini';
+  if (leafKey === 'productId') return 'ürününü';
+  return `${labelFromKey(field).toLocaleLowerCase('tr-TR')} alanını`;
 }
 
 function buildSummary(input: AuditFormatInput, changes: AuditChange[]): string {
@@ -264,7 +379,7 @@ function buildSummary(input: AuditFormatInput, changes: AuditChange[]): string {
 
   const impact = firstImpactChange(changes);
   if (input.action === AuditAction.UPDATE && impact && impact.oldValue !== null && impact.newValue !== null) {
-    return `${actor} ${entity} kaydında ${impact.label.toLocaleLowerCase('tr-TR')} alanını ${impact.oldValue} değerinden ${impact.newValue} değerine değiştirdi.`;
+    return `${actor} ${possessiveEntity(input.entityType, entity)} ${impactVerb(impact.field)} ${impact.oldValue} değerinden ${impact.newValue} değerine değiştirdi.`;
   }
 
   if (input.action === AuditAction.CREATE && impact?.newValue) {
@@ -287,7 +402,7 @@ export function getEntityTypeLabel(entityType: EntityType): string {
 }
 
 export function formatAuditLogBusiness(input: AuditFormatInput): BusinessAuditSummary {
-  const changes = buildChanges(input.action, input.oldValues, input.newValues);
+  const changes = buildChanges(input.action, input.oldValues, input.newValues, input.fieldValueLabels);
   return {
     actionLabel: ACTION_LABELS[input.action],
     moduleLabel: getModuleLabel(input.module),

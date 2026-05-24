@@ -59,6 +59,7 @@ import { chatRoutes } from './routes/chat.routes';
 import { publicChatRoutes } from './routes/public-chat.routes';
 import { activityRoutes } from './routes/activity.routes';
 import { savedViewRoutes } from './routes/saved-view.routes';
+import { domainEventRoutes } from './routes/domain-event.routes';
 import { TrendyolWebhookController } from './controllers/trendyol-webhook.controller';
 import { TrendyolWorker } from './services/trendyol-worker.service';
 import { startMarketplaceMocks } from './mocks';
@@ -81,7 +82,7 @@ if (!process.env.OPENAI_API_KEY) {
   logger.warn('[Startup] OPENAI_API_KEY tanımlı değil — AI chat devre dışı.');
 }
 
-const app = new Hono();
+export const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const APP_ROLE = process.env.APP_ROLE ?? 'api';
@@ -212,6 +213,7 @@ tenantApi.route('/automation-rules', automationRuleRoutes);
 tenantApi.route('/audit-logs', auditLogRoutes);
 tenantApi.route('/activity', activityRoutes);
 tenantApi.route('/saved-views', savedViewRoutes);
+tenantApi.route('/domain-events', domainEventRoutes);
 tenantApi.route('/attachments', attachmentRoutes);
 tenantApi.route('/invitations', invitationRoutes);
 tenantApi.get('/currency-rates/tcmb', requirePermission('settings', 'READ'), CurrencyRatesController.getTcmbRates);
@@ -273,12 +275,12 @@ app.notFound((c) => {
 });
 
 // ── Başlangıç ────────────────────────────────
-if (shouldStartHttpServer()) {
+if (process.env.NODE_ENV !== 'test' && shouldStartHttpServer()) {
   serve({ fetch: app.fetch, port: PORT }, () => {
     printBanner(PORT);
     startBackgroundServices();
   });
-} else {
+} else if (process.env.NODE_ENV !== 'test') {
   logger.info('[Startup] APP_ROLE=worker; HTTP API server disabled.');
   startBackgroundServices();
 }

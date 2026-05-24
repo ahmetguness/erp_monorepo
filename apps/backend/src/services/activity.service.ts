@@ -1,5 +1,6 @@
 import { AuditAction, EntityType, MailDeliveryStatus, MailDirection, Prisma, ServiceActivityType } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
+import { resolveAuditFieldValueLabels } from './audit-log-field-label.service';
 import { formatAuditLogBusiness } from './audit-log-formatter.service';
 
 export type ActivitySource = 'AUDIT' | 'ATTACHMENT' | 'MAIL' | 'TASK' | 'NOTIFICATION' | 'APPROVAL' | 'PAYMENT' | 'SERVICE';
@@ -8,10 +9,15 @@ export type ActivityTone = 'neutral' | 'success' | 'danger' | 'warning' | 'info'
 export interface ActivityItem {
   id: string;
   source: ActivitySource;
+  sourceType: ActivitySource;
+  sourceId: string;
   tone: ActivityTone;
   title: string;
+  businessSummary: string;
   description: string | null;
+  technicalDetails: string | null;
   actorLabel: string | null;
+  actorId: string | null;
   module: string | null;
   entityType: EntityType;
   entityId: string;
@@ -27,27 +33,9 @@ export interface ActivityListInput {
   limit: number;
 }
 
-interface InternalActivityItem extends Omit<ActivityItem, 'occurredAt'> {
+interface InternalActivityItem extends Omit<ActivityItem, 'occurredAt' | 'sourceType' | 'businessSummary' | 'technicalDetails'> {
   occurredAt: Date;
-  actorId: string | null;
-  auditFormat?: {
-    action: AuditAction;
-    oldValues: Prisma.JsonValue | null;
-    newValues: Prisma.JsonValue | null;
-  };
 }
-
-const ACTION_TITLES: Record<AuditAction, string> = {
-  CREATE: 'Kayıt oluşturuldu',
-  UPDATE: 'Kayıt güncellendi',
-  DELETE: 'Kayıt silindi',
-  APPROVE: 'Kayıt onaylandı',
-  REJECT: 'Kayıt reddedildi',
-  EXPORT: 'Kayıt dışa aktarıldı',
-  LOGIN: 'Giriş yapıldı',
-  LOGOUT: 'Çıkış yapıldı',
-  OTHER: 'İşlem yapıldı',
-};
 
 const ACTION_TONES: Record<AuditAction, ActivityTone> = {
   CREATE: 'success',
@@ -70,40 +58,6 @@ const SERVICE_ACTIVITY_TITLES: Record<ServiceActivityType, string> = {
   OTHER: 'Servis aktivitesi eklendi',
 };
 
-function isRecord(value: Prisma.JsonValue | null): value is Prisma.JsonObject {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function formatJsonValue(value: Prisma.JsonValue | undefined): string {
-  if (value === undefined || value === null) return 'boş';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) return `${value.length} öğe`;
-  return 'detay';
-}
-
-function formatAuditDescription(oldValues: Prisma.JsonValue | null, newValues: Prisma.JsonValue | null): string | null {
-  const oldRecord = isRecord(oldValues) ? oldValues : {};
-  const newRecord = isRecord(newValues) ? newValues : {};
-  const fields = Array.from(new Set([...Object.keys(oldRecord), ...Object.keys(newRecord)]))
-    .filter((field) => field !== 'id')
-    .slice(0, 3);
-
-  if (fields.length === 0) return null;
-
-  return fields
-    .map((field) => {
-      const oldValue = oldRecord[field];
-      const newValue = newRecord[field];
-      if (oldValue !== undefined && newValue !== undefined) {
-        return `${field}: ${formatJsonValue(oldValue)} → ${formatJsonValue(newValue)}`;
-      }
-      if (newValue !== undefined) return `${field}: ${formatJsonValue(newValue)}`;
-      return `${field}: ${formatJsonValue(oldValue)}`;
-    })
-    .join(', ');
-}
-
 function mailStatusTitle(status: MailDeliveryStatus): string {
   if (status === MailDeliveryStatus.SENT) return 'Mail gönderildi';
   if (status === MailDeliveryStatus.FAILED) return 'Mail gönderimi başarısız oldu';
@@ -119,6 +73,10 @@ function mailTone(status: MailDeliveryStatus): ActivityTone {
 function paymentDescription(amount: Prisma.Decimal, method: string, reference: string | null): string {
   const base = `${amount.toFixed(2)} TL, yöntem: ${method}`;
   return reference ? `${base}, referans: ${reference}` : base;
+}
+
+function paymentHref(paymentId: string): string {
+  return `/dashboard/payments?paymentId=${paymentId}`;
 }
 
 async function getTenantUserEmail(db: PrismaClient, tenantId: string, userId: string): Promise<string | null> {
@@ -192,19 +150,29 @@ export class ActivityService {
     ].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
 
     const actorLabels = await resolveActorLabels(this.db, collectActorIds(merged));
-    const data = merged.slice(0, input.limit).map((item): ActivityItem => ({
-      id: item.id,
-      source: item.source,
-      tone: item.tone,
-      title: item.actorId ? `${actorLabels.get(item.actorId) ?? 'Bir kullanıcı'} ${item.title.toLowerCase()}` : item.title,
-      description: item.description,
-      actorLabel: item.actorId ? actorLabels.get(item.actorId) ?? null : item.actorLabel,
-      module: item.module,
-      entityType: item.entityType,
-      entityId: item.entityId,
-      occurredAt: item.occurredAt.toISOString(),
-      href: item.href,
-    }));
+    const data = merged.slice(0, input.limit).map((item): ActivityItem => {
+      const actorLabel = item.actorId ? actorLabels.get(item.actorId) ?? null : item.actorLabel;
+      const businessSummary = item.actorId ? `${actorLabel ?? 'Bir kullanıcı'} ${item.title.toLowerCase()}` : item.title;
+
+      return {
+        id: item.id,
+        source: item.source,
+        sourceType: item.source,
+        sourceId: item.sourceId,
+        tone: item.tone,
+        title: businessSummary,
+        businessSummary,
+        description: item.description,
+        technicalDetails: item.description,
+        actorLabel,
+        actorId: item.actorId,
+        module: item.module,
+        entityType: item.entityType,
+        entityId: item.entityId,
+        occurredAt: item.occurredAt.toISOString(),
+        href: item.href,
+      };
+    });
 
     return { data, meta: { total: merged.length, limit: input.limit } };
   }
@@ -221,9 +189,12 @@ export class ActivityService {
       take: input.limit,
     });
 
+    const fieldValueLabels = await resolveAuditFieldValueLabels(this.db, input.tenantId, logs);
+
     return logs.map((log): InternalActivityItem => ({
       id: `audit:${log.id}`,
       source: 'AUDIT',
+      sourceId: log.id,
       tone: ACTION_TONES[log.action],
       title: formatAuditLogBusiness({
         action: log.action,
@@ -233,6 +204,7 @@ export class ActivityService {
         userLabel: null,
         oldValues: log.oldValues,
         newValues: log.newValues,
+        fieldValueLabels,
       }).summary.replace(/^Sistem /, ''),
       description: formatAuditLogBusiness({
         action: log.action,
@@ -242,6 +214,7 @@ export class ActivityService {
         userLabel: null,
         oldValues: log.oldValues,
         newValues: log.newValues,
+        fieldValueLabels,
       }).changes.slice(0, 3).map((change) => `${change.label}: ${change.oldValue ?? 'boş'} -> ${change.newValue ?? 'boş'}`).join(', ') || null,
       actorLabel: null,
       actorId: log.userId,
@@ -250,11 +223,6 @@ export class ActivityService {
       entityId: log.entityId,
       occurredAt: log.createdAt,
       href: null,
-      auditFormat: {
-        action: log.action,
-        oldValues: log.oldValues,
-        newValues: log.newValues,
-      },
     }));
   }
 
@@ -268,6 +236,7 @@ export class ActivityService {
     return attachments.map((attachment): InternalActivityItem => ({
       id: `attachment:${attachment.id}`,
       source: 'ATTACHMENT',
+      sourceId: attachment.id,
       tone: 'info',
       title: 'dosya ekledi',
       description: attachment.fileName,
@@ -291,6 +260,7 @@ export class ActivityService {
     return tasks.map((task): InternalActivityItem => ({
       id: `task:${task.id}`,
       source: 'TASK',
+      sourceId: task.id,
       tone: task.status === 'DONE' ? 'success' : 'warning',
       title: task.status === 'DONE' ? 'görevi tamamladı' : 'görev oluşturdu',
       description: task.detail ? `${task.title} - ${task.detail}` : task.title,
@@ -319,6 +289,7 @@ export class ActivityService {
     return notifications.map((notification): InternalActivityItem => ({
       id: `notification:${notification.id}`,
       source: 'NOTIFICATION',
+      sourceId: notification.id,
       tone: notification.status === 'READ' ? 'neutral' : 'info',
       title: 'Bildirim oluşturuldu',
       description: notification.message ? `${notification.title} - ${notification.message}` : notification.title,
@@ -356,6 +327,7 @@ export class ActivityService {
       const requestItem: InternalActivityItem = {
         id: `approval:${request.id}`,
         source: 'APPROVAL',
+        sourceId: request.id,
         tone: request.status === 'APPROVED' ? 'success' : request.status === 'REJECTED' ? 'danger' : 'warning',
         title: 'onay süreci başlattı',
         description: request.notes,
@@ -371,6 +343,7 @@ export class ActivityService {
       const actionItems = request.actions.map((action): InternalActivityItem => ({
         id: `approval-action:${action.id}`,
         source: 'APPROVAL',
+        sourceId: action.id,
         tone: action.actionType === 'APPROVE' ? 'success' : action.actionType === 'REJECT' ? 'danger' : 'info',
         title: `onay aksiyonu aldı: ${action.actionType}`,
         description: action.notes,
@@ -412,6 +385,7 @@ export class ActivityService {
       return allocations.map((allocation): InternalActivityItem => ({
         id: `payment-allocation:${allocation.id}`,
         source: 'PAYMENT',
+        sourceId: allocation.id,
         tone: 'success',
         title: 'faturaya ödeme bağladı',
         description: `${allocation.amount.toFixed(2)} TL tahsis edildi. ${paymentDescription(allocation.payment.amount, allocation.payment.method, allocation.payment.reference)}`,
@@ -421,7 +395,7 @@ export class ActivityService {
         entityType: input.entityType,
         entityId: input.entityId,
         occurredAt: allocation.createdAt,
-        href: `/dashboard/payments/${allocation.payment.id}`,
+        href: paymentHref(allocation.payment.id),
       }));
     }
 
@@ -435,6 +409,7 @@ export class ActivityService {
       return payments.map((payment): InternalActivityItem => ({
         id: `payment:${payment.id}`,
         source: 'PAYMENT',
+        sourceId: payment.id,
         tone: payment.status === 'COMPLETED' ? 'success' : 'warning',
         title: 'ödeme kaydetti',
         description: paymentDescription(payment.amount, payment.method, payment.reference),
@@ -444,7 +419,7 @@ export class ActivityService {
         entityType: input.entityType,
         entityId: input.entityId,
         occurredAt: payment.createdAt,
-        href: `/dashboard/payments/${payment.id}`,
+        href: paymentHref(payment.id),
       }));
     }
 
@@ -471,6 +446,7 @@ export class ActivityService {
       ...activities.map((activity): InternalActivityItem => ({
         id: `service-activity:${activity.id}`,
         source: 'SERVICE',
+        sourceId: activity.id,
         tone: 'info',
         title: SERVICE_ACTIVITY_TITLES[activity.activityType],
         description: activity.notes,
@@ -485,6 +461,7 @@ export class ActivityService {
       ...histories.map((history): InternalActivityItem => ({
         id: `service-history:${history.id}`,
         source: 'SERVICE',
+        sourceId: history.id,
         tone: 'info',
         title: 'servis durumunu değiştirdi',
         description: `${history.fromStatus ?? 'Başlangıç'} → ${history.toStatus}${history.notes ? ` - ${history.notes}` : ''}`,
@@ -541,6 +518,7 @@ export class ActivityService {
     return mails.map((mail): InternalActivityItem => ({
       id: `mail:${mail.id}`,
       source: 'MAIL',
+      sourceId: mail.id,
       tone: mailTone(mail.status),
       title: mail.direction === MailDirection.INBOUND ? 'Mail alındı' : mailStatusTitle(mail.status),
       description: `${mail.subject}${mail.attachmentCount > 0 ? ` (${mail.attachmentCount} ek)` : ''}${mail.textPreview ? ` - ${mail.textPreview}` : ''}`,

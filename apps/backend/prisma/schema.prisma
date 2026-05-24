@@ -585,6 +585,7 @@ model Tenant {
   mailMessages           MailMessage[]
   tasks                  Task[]
   automationRules        AutomationRule[]
+  domainEventOutbox      DomainEventOutbox[]
   tenantSettings         TenantSetting[]
   moduleSettings         ModuleSetting[]
   // Back-relations for models with tenantId
@@ -2978,6 +2979,14 @@ enum SavedViewScope {
   ROLE
 }
 
+enum DomainEventOutboxStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  DEAD_LETTER
+}
+
 model SavedView {
   id          String         @id @default(cuid())
   tenantId    String
@@ -2999,6 +3008,34 @@ model SavedView {
   @@index([tenantId, userId])
   @@index([tenantId, roleId])
   @@map("saved_views")
+}
+
+model DomainEventOutbox {
+  id              String                  @id @default(cuid())
+  tenantId        String
+  name            String
+  source          String
+  idempotencyKey  String
+  entityType      EntityType
+  entityId        String
+  payload         Json
+  context         Json
+  status          DomainEventOutboxStatus @default(PENDING)
+  attempts        Int                     @default(0)
+  lastError       String?
+  failedListeners Json?
+  nextRetryAt     DateTime?
+  processedAt     DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, name, createdAt])
+  @@index([tenantId, entityType, entityId])
+  @@map("domain_event_outbox")
 }
 
 // ═════════════════════════════════════════════

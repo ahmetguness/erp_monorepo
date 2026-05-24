@@ -1,5 +1,5 @@
 import { Context } from 'hono';
-import { AuditAction, EntityType, MovementType } from '@prisma/client';
+import { AuditAction, EntityType, MovementType, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
@@ -47,6 +47,7 @@ type NegativeStockPolicy = 'ALLOW' | 'WARN' | 'BLOCK';
 
 const NEGATIVE_STOCK_POLICY_KEY = 'negative_stock_policy';
 const LEGACY_NEGATIVE_STOCK_KEY = 'negative_stock';
+const DEFAULT_STOCK_LOCATION_CODE = '__DEFAULT__';
 
 function parseNegativeStockPolicy(value: string | null | undefined): NegativeStockPolicy | null {
   if (value === 'ALLOW' || value === 'WARN' || value === 'BLOCK') return value;
@@ -85,6 +86,35 @@ async function getStockShortageWarning(
 
   if (nextQuantity >= 0) return null;
   return `Stok eksiye dusecek. Mevcut: ${currentQuantity.toFixed(3)}, cikis: ${quantity.toFixed(3)}.`;
+}
+
+async function resolveStockLevelLocationId(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  warehouseId: string,
+  existingLocationId: string | null | undefined,
+): Promise<string> {
+  if (existingLocationId) return existingLocationId;
+
+  const location = await tx.location.upsert({
+    where: {
+      warehouseId_code: {
+        warehouseId,
+        code: DEFAULT_STOCK_LOCATION_CODE,
+      },
+    },
+    create: {
+      tenantId,
+      warehouseId,
+      code: DEFAULT_STOCK_LOCATION_CODE,
+      name: 'Varsayilan Lokasyon',
+      isActive: true,
+    },
+    update: {},
+    select: { id: true },
+  });
+
+  return location.id;
 }
 
 // ─────────────────────────────────────────────
@@ -247,7 +277,7 @@ export const StockController = {
       const existingLevel = await tx.stockLevel.findFirst({
         where: { tenantId, productId: body.productId, warehouseId: body.warehouseId },
       });
-      const locId = existingLevel?.locationId ?? '';
+      const locId = await resolveStockLevelLocationId(tx, tenantId, body.warehouseId, existingLevel?.locationId);
 
       if (body.type === MovementType.IN || body.type === MovementType.OPENING) {
         await tx.stockLevel.upsert({
@@ -498,7 +528,7 @@ export const StockController = {
               },
             });
 
-            const locId = item.locationId ?? existing?.locationId ?? '';
+            const locId = await resolveStockLevelLocationId(tx, tenantId, stockCount.warehouseId, item.locationId ?? existing?.locationId);
 
             await tx.stockLevel.upsert({
               where: {

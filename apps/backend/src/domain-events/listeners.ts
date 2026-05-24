@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { createTask } from '../services/task.service.js';
 import { createAuditLog } from '../utils/audit.js';
 import { domainEvents } from './bus.js';
-import { entityIdForEvent, entityTypeForEvent, type DomainEvent } from './events.js';
+import { entityIdForEvent, entityTypeForEvent, sourceForEvent, type DomainEvent } from './events.js';
 
 let listenersRegistered = false;
 
@@ -215,7 +215,7 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         entityType: EntityType.PRODUCT,
         entityId: event.payload.productId,
         href: `/dashboard/products/${event.payload.productId}`,
-        source: `domain:stock.low:${event.payload.productId}`,
+        source: sourceForEvent(event),
         createdById: event.context.userId ?? null,
       });
       return;
@@ -229,7 +229,7 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         entityType: EntityType.INVOICE,
         entityId: event.payload.invoiceId,
         href: `/dashboard/invoices/${event.payload.invoiceId}`,
-        source: `domain:invoice.overdue:${event.payload.invoiceId}`,
+        source: sourceForEvent(event),
         createdById: event.context.userId ?? null,
         dueAt: event.payload.dueDate,
       });
@@ -244,7 +244,7 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         entityType: EntityType.EMPLOYEE,
         entityId: event.payload.employeeId,
         href: `/dashboard/hr/employees/${event.payload.employeeId}`,
-        source: `domain:employee.documentMissing:${event.payload.employeeId}:${event.payload.documentName}`,
+        source: sourceForEvent(event),
         createdById: event.context.userId ?? null,
       });
       return;
@@ -258,7 +258,7 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         entityType: EntityType.SALES_ORDER,
         entityId: event.payload.orderId,
         href: `/dashboard/sales-orders/${event.payload.orderId}`,
-        source: `domain:salesQuote.accepted:${event.payload.quoteId}`,
+        source: sourceForEvent(event),
         createdById: event.context.userId ?? null,
       });
       return;

@@ -46,39 +46,52 @@ const TONE_BADGES: Record<ActivityTone, 'neutral' | 'success' | 'danger' | 'warn
 };
 
 function getActivityIcon(item: ActivityItem) {
-  if (item.source === 'ATTACHMENT') return <Paperclip className="h-4 w-4 text-cyan-400" />;
-  if (item.source === 'MAIL') return <Mail className="h-4 w-4 text-sky-400" />;
-  if (item.source === 'TASK') return <ClipboardCheck className="h-4 w-4 text-amber-400" />;
-  if (item.source === 'NOTIFICATION') return <Bell className="h-4 w-4 text-indigo-400" />;
-  if (item.source === 'APPROVAL') return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
-  if (item.source === 'PAYMENT') return <CreditCard className="h-4 w-4 text-emerald-400" />;
-  if (item.source === 'SERVICE') return <Wrench className="h-4 w-4 text-orange-400" />;
+  if (item.sourceType === 'ATTACHMENT') return <Paperclip className="h-4 w-4 text-cyan-400" />;
+  if (item.sourceType === 'MAIL') return <Mail className="h-4 w-4 text-sky-400" />;
+  if (item.sourceType === 'TASK') return <ClipboardCheck className="h-4 w-4 text-amber-400" />;
+  if (item.sourceType === 'NOTIFICATION') return <Bell className="h-4 w-4 text-indigo-400" />;
+  if (item.sourceType === 'APPROVAL') return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
+  if (item.sourceType === 'PAYMENT') return <CreditCard className="h-4 w-4 text-emerald-400" />;
+  if (item.sourceType === 'SERVICE') return <Wrench className="h-4 w-4 text-orange-400" />;
   if (item.tone === 'success') return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
   if (item.tone === 'danger') return <CircleDot className="h-4 w-4 text-red-400" />;
   return <FileText className="h-4 w-4 text-slate-400" />;
 }
 
 function ActivityItemRow({ item }: { item: ActivityItem }) {
+  const details = item.technicalDetails ?? item.description;
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium text-slate-200">{item.businessSummary}</p>
+            <Badge variant={TONE_BADGES[item.tone]}>{SOURCE_LABELS[item.sourceType]}</Badge>
+            {item.module && <span className="text-[11px] text-slate-500">{item.module}</span>}
+          </div>
+          {details && (
+            <p className="mt-1 line-clamp-2 text-xs text-slate-500">{details}</p>
+          )}
+        </div>
+        <time className="shrink-0 text-right text-[11px] text-slate-500">{formatDateTime(item.occurredAt)}</time>
+      </div>
+    </>
+  );
+
   return (
     <li className="relative pl-8">
       <span className="absolute left-0 top-0.5 flex h-7 w-7 items-center justify-center rounded-full border border-slate-800 bg-slate-950">
         {getActivityIcon(item)}
       </span>
-      <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium text-slate-200">{item.title}</p>
-              <Badge variant={TONE_BADGES[item.tone]}>{SOURCE_LABELS[item.source]}</Badge>
-              {item.module && <span className="text-[11px] text-slate-500">{item.module}</span>}
-            </div>
-            {item.description && (
-              <p className="mt-1 line-clamp-2 text-xs text-slate-500">{item.description}</p>
-            )}
-          </div>
-          <time className="shrink-0 text-right text-[11px] text-slate-500">{formatDateTime(item.occurredAt)}</time>
+      {item.href ? (
+        <a href={item.href} className="block rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5 transition-colors hover:border-sky-500/40 hover:bg-slate-950">
+          {content}
+        </a>
+      ) : (
+        <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5">
+          {content}
         </div>
-      </div>
+      )}
     </li>
   );
 }

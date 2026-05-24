@@ -114,3 +114,26 @@ export function entityIdForEvent(event: DomainEvent): string {
       return event.payload.employeeId;
   }
 }
+
+export function sourceForEvent(event: DomainEvent): string {
+  switch (event.name) {
+    case 'invoice.created':
+      return `domain:invoice.created:${event.payload.invoiceId}`;
+    case 'invoice.overdue':
+      return `domain:invoice.overdue:${event.payload.invoiceId}`;
+    case 'payment.received':
+      return `domain:payment.received:${event.payload.paymentId}`;
+    case 'stock.low':
+      return `domain:stock.low:${event.payload.productId}:${event.payload.warehouseId ?? 'all'}`;
+    case 'salesQuote.accepted':
+      return `domain:salesQuote.accepted:${event.payload.quoteId}`;
+    case 'mail.failed':
+      return `domain:mail.failed:${event.payload.mailId}`;
+    case 'employee.documentMissing':
+      return `domain:employee.documentMissing:${event.payload.employeeId}:${event.payload.documentName}`;
+  }
+}
+
+export function idempotencyKeyForEvent(event: DomainEvent): string {
+  return sourceForEvent(event);
+}

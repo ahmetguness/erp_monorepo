@@ -3,6 +3,7 @@ import { AuditAction, EntityType, FeatureKey, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ForbiddenError } from '../errors';
 import { TenantFeatureService } from '../services/tenant-feature.service';
+import { resolveAuditFieldValueLabels } from '../services/audit-log-field-label.service';
 import { formatAuditLogBusiness } from '../services/audit-log-formatter.service';
 import { requireTenantId } from '../utils/context.js';
 
@@ -215,9 +216,10 @@ async function enrichAuditLogs<T extends {
   tenantId: string,
   logs: T[],
 ): Promise<Array<T & { entityLabel: string | null; userLabel: string | null; business: ReturnType<typeof formatAuditLogBusiness> }>> {
-  const [entityLabels, userLabels] = await Promise.all([
+  const [entityLabels, userLabels, fieldValueLabels] = await Promise.all([
     resolveEntityLabels(tenantId, logs),
     resolveUserLabels(logs),
+    resolveAuditFieldValueLabels(prisma, tenantId, logs),
   ]);
   return logs.map((log) => {
     const entityLabel = entityLabels.get(entityKey(log.entityType, log.entityId)) ?? null;
@@ -234,6 +236,7 @@ async function enrichAuditLogs<T extends {
         userLabel,
         oldValues: log.oldValues,
         newValues: log.newValues,
+        fieldValueLabels,
       }),
     };
   });
