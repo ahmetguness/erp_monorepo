@@ -38,6 +38,13 @@ interface WebhookOrderPackage {
   lines: WebhookOrderLine[];
 }
 
+interface WebhookProcessingResult {
+  eventId: string;
+  packageId: string;
+  duplicate: boolean;
+  error: string | null;
+}
+
 export const TrendyolWebhookController = {
   async handle(c: Context): Promise<Response> {
     const integrationId = c.req.param('integrationId');
@@ -74,50 +81,16 @@ export const TrendyolWebhookController = {
       return c.json({ error: { code: 'INVALID_PAYLOAD', message: 'Webhook payload must be an object.' } }, 400);
     }
 
-    const packages = extractOrderPackages(payload);
-    if (packages.length === 0) {
-      return c.json({ error: { code: 'INVALID_PAYLOAD', message: 'No shipment package found in webhook payload.' } }, 400);
-    }
-
-    const results: Array<{ eventId: string; packageId: string; duplicate: boolean; error: string | null }> = [];
-
-    for (const orderPackage of packages) {
-      const eventId = buildEventId(orderPackage);
-      const existing = await prisma.marketplaceWebhookEvent.findUnique({
-        where: { integrationId_eventId: { integrationId, eventId } },
+    let results: WebhookProcessingResult[];
+    try {
+      results = await processTrendyolWebhookPayload({
+        tenantId: integration.tenantId,
+        integrationId,
+        payload,
+        replayProcessed: false,
       });
-
-      if (existing?.processedAt) {
-        results.push({ eventId, packageId: orderPackage.packageId, duplicate: true, error: existing.errorMessage });
-        continue;
-      }
-
-      const event = await prisma.marketplaceWebhookEvent.upsert({
-        where: { integrationId_eventId: { integrationId, eventId } },
-        create: {
-          tenantId: integration.tenantId,
-          integrationId,
-          eventId,
-          eventType: 'SHIPMENT_PACKAGE',
-          payload,
-        },
-        update: { payload },
-      });
-
-      let errorMessage: string | null = null;
-      try {
-        await upsertMarketplaceOrder(integration.tenantId, integrationId, orderPackage);
-      } catch (err) {
-        errorMessage = err instanceof Error ? err.message : String(err);
-        logger.error(`[TrendyolWebhook] Processing error for event ${eventId}: ${errorMessage}`);
-      }
-
-      await prisma.marketplaceWebhookEvent.update({
-        where: { id: event.id },
-        data: { processedAt: new Date(), errorMessage },
-      });
-
-      results.push({ eventId, packageId: orderPackage.packageId, duplicate: false, error: errorMessage });
+    } catch (err) {
+      return c.json({ error: { code: 'INVALID_PAYLOAD', message: err instanceof Error ? err.message : 'Invalid webhook payload.' } }, 400);
     }
 
     return c.json({
@@ -129,6 +102,70 @@ export const TrendyolWebhookController = {
     });
   },
 };
+
+export async function processTrendyolWebhookPayload({
+  tenantId,
+  integrationId,
+  payload,
+  replayProcessed,
+}: {
+  tenantId: string;
+  integrationId: string;
+  payload: Prisma.InputJsonValue | Prisma.JsonValue;
+  replayProcessed: boolean;
+}): Promise<WebhookProcessingResult[]> {
+  if (!isJsonObject(payload)) {
+    throw new Error('Webhook payload must be an object.');
+  }
+
+  const packages = extractOrderPackages(payload);
+  if (packages.length === 0) {
+    throw new Error('No shipment package found in webhook payload.');
+  }
+
+  const results: WebhookProcessingResult[] = [];
+
+  for (const orderPackage of packages) {
+    const eventId = buildEventId(orderPackage);
+    const existing = await prisma.marketplaceWebhookEvent.findUnique({
+      where: { integrationId_eventId: { integrationId, eventId } },
+    });
+
+    if (existing?.processedAt && !replayProcessed) {
+      results.push({ eventId, packageId: orderPackage.packageId, duplicate: true, error: existing.errorMessage });
+      continue;
+    }
+
+    const event = await prisma.marketplaceWebhookEvent.upsert({
+      where: { integrationId_eventId: { integrationId, eventId } },
+      create: {
+        tenantId,
+        integrationId,
+        eventId,
+        eventType: 'SHIPMENT_PACKAGE',
+        payload,
+      },
+      update: { payload },
+    });
+
+    let errorMessage: string | null = null;
+    try {
+      await upsertMarketplaceOrder(tenantId, integrationId, orderPackage);
+    } catch (err) {
+      errorMessage = err instanceof Error ? err.message : String(err);
+      logger.error(`[TrendyolWebhook] Processing error for event ${eventId}: ${errorMessage}`);
+    }
+
+    await prisma.marketplaceWebhookEvent.update({
+      where: { id: event.id },
+      data: { processedAt: new Date(), errorMessage },
+    });
+
+    results.push({ eventId, packageId: orderPackage.packageId, duplicate: false, error: errorMessage });
+  }
+
+  return results;
+}
 
 function isAuthorizedWebhook(c: Context, expectedSecret: string | null): boolean {
   if (!expectedSecret) return false;

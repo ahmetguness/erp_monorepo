@@ -15,7 +15,12 @@ import { EntityActivityTimeline } from "@/components/shared/EntityActivityTimeli
 import { EntityTaskActions } from "@/components/shared/EntityTaskActions";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { useWorkOrder, useChangeWorkOrderStatus } from "@/hooks/useProduction";
+import {
+  useWorkOrder,
+  useChangeWorkOrderStatus,
+  useReportProduction,
+  useUpdateWorkOrderOperation,
+} from "@/hooks/useProduction";
 import { formatDate } from "@/lib/utils";
 
 const STATUS_MAP: Record<
@@ -36,6 +41,8 @@ export function WorkOrderDetailPage({ id }: { id: string }) {
   const router = useRouter();
   const { data: wo, isLoading } = useWorkOrder(id);
   const changeStatus = useChangeWorkOrderStatus();
+  const reportProduction = useReportProduction();
+  const updateOperation = useUpdateWorkOrderOperation();
 
   if (isLoading)
     return (
@@ -53,6 +60,10 @@ export function WorkOrderDetailPage({ id }: { id: string }) {
   const s = STATUS_MAP[wo.status];
   const progress =
     wo.plannedQty > 0 ? Math.round((wo.producedQty / wo.plannedQty) * 100) : 0;
+  const remainingQty = Math.max(0, wo.plannedQty - wo.producedQty);
+  const plannedConsumptions = (wo.items ?? [])
+    .map((item) => ({ itemId: item.id, quantity: Math.max(0, item.requiredQty - item.consumedQty) }))
+    .filter((item) => item.quantity > 0);
 
   return (
     <div>
@@ -78,6 +89,22 @@ export function WorkOrderDetailPage({ id }: { id: string }) {
             )}
             {wo.status === "IN_PROGRESS" && (
               <>
+                {remainingQty > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={reportProduction.isPending}
+                    onClick={() =>
+                      reportProduction.mutate({
+                        id,
+                        data: { producedQty: remainingQty, consumptions: plannedConsumptions },
+                      })
+                    }
+                  >
+                    <Package className="w-4 h-4" />
+                    Üretimi Bildir
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -226,6 +253,40 @@ export function WorkOrderDetailPage({ id }: { id: string }) {
                       </span>
                     </div>
                     {opS && <Badge variant={opS.variant}>{opS.label}</Badge>}
+                    {wo.status === "IN_PROGRESS" && op.status !== "COMPLETED" && (
+                      <div className="flex items-center gap-1">
+                        {op.status === "PLANNED" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={updateOperation.isPending}
+                            onClick={() =>
+                              updateOperation.mutate({
+                                workOrderId: id,
+                                operationId: op.id,
+                                data: { status: "IN_PROGRESS" },
+                              })
+                            }
+                          >
+                            <Play className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={updateOperation.isPending}
+                          onClick={() =>
+                            updateOperation.mutate({
+                              workOrderId: id,
+                              operationId: op.id,
+                              data: { status: "COMPLETED" },
+                            })
+                          }
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 );
               })}

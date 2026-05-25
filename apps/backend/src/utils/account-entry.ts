@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { assertAccountingPeriodOpen } from '../services/financial-integrity.service';
 
 // ─────────────────────────────────────────────
 // AccountEntry Helper
@@ -25,6 +26,8 @@ export async function writeInvoiceAccountEntry(
     userId?: string | null;
   },
 ): Promise<void> {
+  await assertAccountingPeriodOpen(tx, params.tenantId, params.date, 'Fatura cari hareketi');
+
   const isSales = params.invoiceType === 'SALES' || params.invoiceType === 'RETURN_PURCHASE';
   const debit = isSales ? params.totalGross : 0;
   const credit = isSales ? 0 : params.totalGross;
@@ -71,6 +74,8 @@ export async function reverseInvoiceAccountEntry(
     userId?: string | null;
   },
 ): Promise<void> {
+  await assertAccountingPeriodOpen(tx, params.tenantId, params.date, 'Fatura ters cari hareketi');
+
   // Ters kayıt: orijinal debit/credit'i tersine çevir
   const isSales = params.invoiceType === 'SALES' || params.invoiceType === 'RETURN_PURCHASE';
   const debit = isSales ? 0 : params.totalGross;
@@ -118,6 +123,8 @@ export async function writePaymentAccountEntry(
     userId?: string | null;
   },
 ): Promise<void> {
+  await assertAccountingPeriodOpen(tx, params.tenantId, params.date, 'Odeme cari hareketi');
+
   const lastEntry = await tx.accountEntry.findFirst({
     where: { tenantId: params.tenantId, contactId: params.contactId },
     orderBy: { date: 'desc' },

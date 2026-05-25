@@ -4,10 +4,12 @@ import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { sanitizeOutput } from '../lib/output-sanitizer';
 import { ValidationError } from '../errors';
-import { Plan } from '@prisma/client';
+import { AiPermissionCheckResult, AiRequestStatus, AiRequestType, Plan } from '@prisma/client';
 import { handlePrivateChat, handlePrivateChatStream, clearConversation, type UserPermissions } from '../services/ai-chat.service';
 import { CHAT_ENTITY_TYPES, type ChatEntityType, type ChatPageContext, type ChatRecentRecord } from '../services/chat-context.service';
 import { requireTenantId } from '../utils/context.js';
+import { getRequestMeta } from '../utils/audit.js';
+import { AI_MODELS, AI_PROMPT_VERSIONS, mapAiEntityType, recordAiRequestLog } from '../services/ai-governance.service';
 
 // ─────────────────────────────────────────────
 // Config
@@ -92,6 +94,17 @@ function parseChatPageContext(value: unknown): ChatPageContext | undefined {
     entityLabel: readString(value.entityLabel, MAX_CONTEXT_TEXT_LENGTH),
     recentRecords,
   };
+}
+
+function toAiPermissionResult(value: 'ALLOWED' | 'PARTIAL' | 'DENIED'): AiPermissionCheckResult {
+  switch (value) {
+    case 'ALLOWED':
+      return AiPermissionCheckResult.ALLOWED;
+    case 'PARTIAL':
+      return AiPermissionCheckResult.PARTIAL;
+    case 'DENIED':
+      return AiPermissionCheckResult.DENIED;
+  }
 }
 
 async function checkChatRateLimit(userId: string, plan: Plan): Promise<{ allowed: boolean; reason?: string }> {
@@ -181,6 +194,7 @@ export const ChatController = {
   async send(c: Context): Promise<Response> {
     const v = await validateChatRequest(c);
     if ('error' in v) return v.error;
+    const requestMeta = getRequestMeta(c);
 
     try {
       const result = await handlePrivateChat({
@@ -208,10 +222,48 @@ export const ChatController = {
         ? sanitized.text.slice(0, MAX_RESPONSE_LENGTH) + '\n\n_(Yanıt kısaltıldı)_'
         : sanitized.text;
 
+      await recordAiRequestLog({
+        tenantId: v.tenantId,
+        userId: v.userId,
+        requestType: AiRequestType.PRIVATE_CHAT,
+        promptVersion: result.governance.promptVersion,
+        model: result.governance.model,
+        entityType: mapAiEntityType(v.context?.entityType),
+        entityId: v.context?.entityId ?? null,
+        entityContext: result.governance.entityContext,
+        permissionCheckResult: toAiPermissionResult(result.governance.permissionCheckResult),
+        redactedFields: sanitized.maskedTypes,
+        inputText: v.message,
+        outputText: finalOutput,
+        status: AiRequestStatus.SUCCEEDED,
+        usedTools: result.usedTools,
+        tokenUsage: result.governance.tokenUsage,
+        ipAddress: requestMeta.ipAddress,
+        userAgent: requestMeta.userAgent,
+      });
+
       return c.json({ output: finalOutput, usedTools: result.usedTools });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`Chat: OpenAI hatası — ${errMsg}`);
+      await recordAiRequestLog({
+        tenantId: v.tenantId,
+        userId: v.userId,
+        requestType: AiRequestType.PRIVATE_CHAT,
+        promptVersion: AI_PROMPT_VERSIONS.PRIVATE_CHAT,
+        model: AI_MODELS.CHAT,
+        entityType: mapAiEntityType(v.context?.entityType),
+        entityId: v.context?.entityId ?? null,
+        entityContext: v.context
+          ? { path: v.context.path, entityType: v.context.entityType ?? null, entityId: v.context.entityId ?? null }
+          : undefined,
+        permissionCheckResult: AiPermissionCheckResult.PARTIAL,
+        inputText: v.message,
+        status: AiRequestStatus.FAILED,
+        errorMessage: errMsg,
+        ipAddress: requestMeta.ipAddress,
+        userAgent: requestMeta.userAgent,
+      });
       return c.json({ error: 'Asistan şu an yanıt veremiyor.' }, 502);
     }
   },
@@ -220,6 +272,7 @@ export const ChatController = {
   async sendStream(c: Context): Promise<Response> {
     const v = await validateChatRequest(c);
     if ('error' in v) return v.error;
+    const requestMeta = getRequestMeta(c);
 
     return streamSSE(c, async (s) => {
       let accumulatedRaw = '';
@@ -259,10 +312,50 @@ export const ChatController = {
               const finalOutput = sanitized.text.length > MAX_RESPONSE_LENGTH
                 ? sanitized.text.slice(0, MAX_RESPONSE_LENGTH) + '\n\n_(Yanıt kısaltıldı)_'
                 : sanitized.text;
+              await recordAiRequestLog({
+                tenantId: v.tenantId,
+                userId: v.userId,
+                requestType: AiRequestType.PRIVATE_CHAT,
+                promptVersion: AI_PROMPT_VERSIONS.PRIVATE_CHAT_STREAM,
+                model: AI_MODELS.CHAT,
+                entityType: mapAiEntityType(v.context?.entityType),
+                entityId: v.context?.entityId ?? null,
+                entityContext: v.context
+                  ? {
+                      path: v.context.path,
+                      entityType: v.context.entityType ?? null,
+                      entityId: v.context.entityId ?? null,
+                      recentRecordCount: v.context.recentRecords.length,
+                    }
+                  : undefined,
+                permissionCheckResult: AiPermissionCheckResult.ALLOWED,
+                redactedFields: sanitized.maskedTypes,
+                inputText: v.message,
+                outputText: finalOutput,
+                status: AiRequestStatus.SUCCEEDED,
+                usedTools,
+                ipAddress: requestMeta.ipAddress,
+                userAgent: requestMeta.userAgent,
+              });
               await s.writeSSE({ event: 'done', data: JSON.stringify({ output: finalOutput, usedTools }) });
             },
             async onError(error) {
               logger.error(`Chat stream: ${error}`);
+              await recordAiRequestLog({
+                tenantId: v.tenantId,
+                userId: v.userId,
+                requestType: AiRequestType.PRIVATE_CHAT,
+                promptVersion: AI_PROMPT_VERSIONS.PRIVATE_CHAT_STREAM,
+                model: AI_MODELS.CHAT,
+                entityType: mapAiEntityType(v.context?.entityType),
+                entityId: v.context?.entityId ?? null,
+                permissionCheckResult: AiPermissionCheckResult.PARTIAL,
+                inputText: v.message,
+                status: AiRequestStatus.FAILED,
+                errorMessage: String(error),
+                ipAddress: requestMeta.ipAddress,
+                userAgent: requestMeta.userAgent,
+              });
               await s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan şu an yanıt veremiyor.' }) });
             },
           },
@@ -270,6 +363,21 @@ export const ChatController = {
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         logger.error(`Chat stream unhandled: ${errMsg}`);
+        await recordAiRequestLog({
+          tenantId: v.tenantId,
+          userId: v.userId,
+          requestType: AiRequestType.PRIVATE_CHAT,
+          promptVersion: AI_PROMPT_VERSIONS.PRIVATE_CHAT_STREAM,
+          model: AI_MODELS.CHAT,
+          entityType: mapAiEntityType(v.context?.entityType),
+          entityId: v.context?.entityId ?? null,
+          permissionCheckResult: AiPermissionCheckResult.PARTIAL,
+          inputText: v.message,
+          status: AiRequestStatus.FAILED,
+          errorMessage: errMsg,
+          ipAddress: requestMeta.ipAddress,
+          userAgent: requestMeta.userAgent,
+        });
         await s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan şu an yanıt veremiyor.' }) });
       }
     });

@@ -1,10 +1,18 @@
 import { Context } from 'hono';
-import { WorkOrderStatus } from '@prisma/client';
+import { AuditAction, EntityType, MovementType, ReservationRefType, WorkOrderStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { getPaginationParams } from '../utils/pagination.js';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireUserId } from '../utils/context.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { createEventContext, domainEvents } from '../domain-events';
+import {
+  assertCanConsumeStock,
+  assertCanReserveStock,
+  recordInventoryCosting,
+  resolveStockLevelLocationId,
+} from '../services/inventory-rules.service';
 
 // ─────────────────────────────────────────────
 // Work Order Controller — İş emri CRUD + durum geçişleri
@@ -17,6 +25,51 @@ const STATUS_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
   COMPLETED: [],
   CANCELLED: [],
 };
+
+interface MaterialRequirement {
+  productId: string;
+  warehouseId: string;
+  quantity: number;
+}
+
+interface ReservationResult {
+  reservedLineCount: number;
+  reservedQuantity: number;
+}
+
+function requirePositiveQuantity(value: number, field: string): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new ValidationError(`${field} pozitif olmalıdır.`);
+  }
+}
+
+function materialRequirementKey(productId: string, warehouseId: string): string {
+  return `${productId}:${warehouseId}`;
+}
+
+function buildMaterialRequirements(
+  items: Array<{ productId: string; requiredQty: unknown; consumedQty: unknown; sourceWarehouseId: string | null }>,
+  inputWarehouseId: string | null,
+): MaterialRequirement[] {
+  const requirements = new Map<string, MaterialRequirement>();
+
+  for (const item of items) {
+    const warehouseId = item.sourceWarehouseId ?? inputWarehouseId;
+    if (!warehouseId) continue;
+    const remainingQty = Math.max(0, Number(item.requiredQty ?? 0) - Number(item.consumedQty ?? 0));
+    if (remainingQty <= 0) continue;
+
+    const key = materialRequirementKey(item.productId, warehouseId);
+    const current = requirements.get(key);
+    if (current) {
+      current.quantity += remainingQty;
+    } else {
+      requirements.set(key, { productId: item.productId, warehouseId, quantity: remainingQty });
+    }
+  }
+
+  return Array.from(requirements.values());
+}
 
 export const WorkOrderController = {
   async list(c: Context): Promise<Response> {
@@ -70,6 +123,8 @@ export const WorkOrderController = {
 
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const requestMeta = getRequestMeta(c);
 
     const body = await c.req.json<{
       productId: string; bomId?: string; plannedQty: number;
@@ -115,20 +170,41 @@ export const WorkOrderController = {
         notes: body.notes ?? null,
         inputWarehouseId: body.inputWarehouseId ?? null,
         outputWarehouseId: body.outputWarehouseId ?? null,
+        createdById: userId,
         ...(itemsCreate.length && { items: { create: itemsCreate } }),
         ...(opsCreate.length && { operations: { create: opsCreate } }),
-        history: { create: { tenantId, toStatus: 'PLANNED' } },
+        history: { create: { tenantId, toStatus: 'PLANNED', createdById: userId } },
       },
       include: { product: { select: { id: true, code: true, name: true } } },
     });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'production',
+      entityType: EntityType.WORK_ORDER,
+      entityId: wo.id,
+      action: AuditAction.CREATE,
+      newValues: { id: wo.id, number: wo.number, status: wo.status, plannedQty: Number(wo.plannedQty) },
+      ...requestMeta,
+    });
+
     return c.json({ data: wo }, 201);
   },
 
   async changeStatus(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const requestMeta = getRequestMeta(c);
     const id = c.req.param('id')!;
 
-    const wo = await prisma.workOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
+    const wo = await prisma.workOrder.findFirst({
+      where: { id, tenantId, deletedAt: null },
+      include: {
+        product: { select: { id: true, name: true } },
+        items: { select: { productId: true, requiredQty: true, consumedQty: true, sourceWarehouseId: true } },
+      },
+    });
     if (!wo) return c.json(new NotFoundError('İş Emri', id).toJSON(), 404);
 
     const body = await c.req.json<{ status: WorkOrderStatus; notes?: string }>();
@@ -139,44 +215,224 @@ export const WorkOrderController = {
       return c.json(new ValidationError(`${wo.status} → ${body.status} geçişi yapılamaz.`).toJSON(), 400);
     }
 
+    const reservationEvents: ReservationResult[] = [];
+    const completionEvents: Array<{
+      productId: string;
+      productName: string;
+      plannedQty: number;
+      producedQty: number;
+      scrapQty: number;
+    }> = [];
+
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.workOrder.update({
         where: { id },
         data: { status: body.status },
       });
       await tx.workOrderHistory.create({
-        data: { tenantId, workOrderId: id, fromStatus: wo.status, toStatus: body.status, notes: body.notes ?? null },
+        data: { tenantId, workOrderId: id, fromStatus: wo.status, toStatus: body.status, notes: body.notes ?? null, createdById: userId },
       });
+
+      if (body.status === 'IN_PROGRESS') {
+        const requirements = buildMaterialRequirements(wo.items, wo.inputWarehouseId);
+        let reservedLineCount = 0;
+        let reservedQuantity = 0;
+
+        for (const requirement of requirements) {
+          const existingReservation = await tx.inventoryReservation.aggregate({
+            where: {
+              tenantId,
+              productId: requirement.productId,
+              warehouseId: requirement.warehouseId,
+              refType: ReservationRefType.WORK_ORDER,
+              refId: id,
+              releasedAt: null,
+              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+            },
+            _sum: { quantity: true },
+          });
+          const existingQuantity = Number(existingReservation._sum.quantity ?? 0);
+          const missingQuantity = Math.max(0, requirement.quantity - existingQuantity);
+          if (missingQuantity <= 0) continue;
+
+          await assertCanReserveStock(tx, tenantId, {
+            productId: requirement.productId,
+            warehouseId: requirement.warehouseId,
+            quantity: missingQuantity,
+            refType: ReservationRefType.WORK_ORDER,
+            refId: id,
+          });
+          await tx.inventoryReservation.create({
+            data: {
+              tenantId,
+              productId: requirement.productId,
+              warehouseId: requirement.warehouseId,
+              quantity: missingQuantity,
+              refType: ReservationRefType.WORK_ORDER,
+              refId: id,
+              notes: `Work order ${wo.number} material reservation`,
+              createdById: userId,
+            },
+          });
+          reservedLineCount += 1;
+          reservedQuantity += missingQuantity;
+        }
+
+        if (reservedLineCount > 0) {
+          reservationEvents.push({ reservedLineCount, reservedQuantity });
+        }
+      }
 
       // COMPLETED → stok hareketi: üretilen ürünü output warehouse'a ekle
       if (body.status === 'COMPLETED' && wo.outputWarehouseId && Number(wo.producedQty) > 0) {
-        await tx.stockMovement.create({
+        const existingLevel = await tx.stockLevel.findFirst({
+          where: { tenantId, productId: wo.productId, warehouseId: wo.outputWarehouseId },
+        });
+        const previousQuantity = Number(existingLevel?.quantity ?? 0);
+        const locationId = await resolveStockLevelLocationId(tx, tenantId, wo.outputWarehouseId, existingLevel?.locationId);
+        const stockMovement = await tx.stockMovement.create({
           data: {
-            tenantId, productId: wo.productId, type: 'IN',
+            tenantId, productId: wo.productId, type: MovementType.IN,
             quantity: wo.producedQty, toWarehouseId: wo.outputWarehouseId,
             refType: 'WORK_ORDER', refId: id, notes: `İş emri ${wo.number} üretim çıktısı`,
           },
         });
+        const producedQuantity = Number(wo.producedQty);
+        await tx.stockLevel.upsert({
+          where: {
+            productId_warehouseId_locationId: {
+              productId: wo.productId,
+              warehouseId: wo.outputWarehouseId,
+              locationId,
+            },
+          },
+          create: {
+            tenantId,
+            productId: wo.productId,
+            warehouseId: wo.outputWarehouseId,
+            locationId,
+            quantity: wo.producedQty,
+          },
+          update: { quantity: { increment: wo.producedQty } },
+        });
+        await recordInventoryCosting(tx, tenantId, {
+          movementId: stockMovement.id,
+          productId: wo.productId,
+          warehouseId: wo.outputWarehouseId,
+          type: MovementType.IN,
+          quantity: producedQuantity,
+          previousQuantity,
+          quantityChange: producedQuantity,
+          resultingQuantity: previousQuantity + producedQuantity,
+          date: stockMovement.createdAt,
+        });
+        completionEvents.push({
+          productId: wo.productId,
+          productName: wo.product.name,
+          plannedQty: Number(wo.plannedQty),
+          producedQty: producedQuantity,
+          scrapQty: 0,
+        });
+      }
+
+      if (body.status === 'COMPLETED' || body.status === 'CANCELLED') {
+        await tx.inventoryReservation.updateMany({
+          where: { tenantId, refType: ReservationRefType.WORK_ORDER, refId: id, releasedAt: null },
+          data: { releasedAt: new Date() },
+        });
       }
       return result;
     });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'production',
+      entityType: EntityType.WORK_ORDER,
+      entityId: id,
+      action: AuditAction.UPDATE,
+      oldValues: { status: wo.status },
+      newValues: { status: body.status, notes: body.notes ?? null },
+      ...requestMeta,
+    });
+
+    for (const reservationResult of reservationEvents) {
+      await domainEvents.publish({
+        name: 'production.materialReserved',
+        context: createEventContext({ tenantId, userId }),
+        payload: {
+          workOrderId: id,
+          workOrderNumber: wo.number,
+          reservedLineCount: reservationResult.reservedLineCount,
+          reservedQuantity: reservationResult.reservedQuantity,
+        },
+      });
+    }
+
+    for (const completionPayload of completionEvents) {
+      await domainEvents.publish({
+        name: 'production.completed',
+        context: createEventContext({ tenantId, userId }),
+        payload: {
+          workOrderId: id,
+          workOrderNumber: wo.number,
+          ...completionPayload,
+        },
+      });
+    }
 
     return c.json({ data: updated });
   },
 
   async reportProduction(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const requestMeta = getRequestMeta(c);
     const id = c.req.param('id')!;
 
     const wo = await prisma.workOrder.findFirst({
       where: { id, tenantId, deletedAt: null },
-      include: { items: true },
+      include: {
+        product: { select: { id: true, name: true } },
+        items: true,
+      },
     });
     if (!wo) return c.json(new NotFoundError('İş Emri', id).toJSON(), 404);
     if (wo.status !== 'IN_PROGRESS') return c.json(new ValidationError('Üretim bildirimi sadece IN_PROGRESS durumunda yapılabilir.').toJSON(), 400);
 
-    const body = await c.req.json<{ producedQty: number; consumptions?: Array<{ itemId: string; quantity: number }> }>();
-    if (!body.producedQty || body.producedQty <= 0) return c.json(new ValidationError('producedQty pozitif olmalıdır.').toJSON(), 400);
+    const body = await c.req.json<{
+      producedQty: number;
+      scrapQty?: number;
+      operationId?: string;
+      notes?: string;
+      consumptions?: Array<{ itemId: string; quantity: number }>;
+    }>();
+    try {
+      requirePositiveQuantity(body.producedQty, 'producedQty');
+      if (body.scrapQty !== undefined && body.scrapQty < 0) throw new ValidationError('scrapQty negatif olamaz.');
+      for (const cons of body.consumptions ?? []) {
+        requirePositiveQuantity(cons.quantity, 'consumption.quantity');
+      }
+    } catch (error) {
+      if (error instanceof ValidationError) return c.json(error.toJSON(), 400);
+      throw error;
+    }
+
+    if (body.consumptions?.length) {
+      for (const cons of body.consumptions) {
+        const item = wo.items.find((i) => i.id === cons.itemId);
+        if (!item) continue;
+        const warehouseId = item.sourceWarehouseId ?? wo.inputWarehouseId;
+        if (!warehouseId) continue;
+        await assertCanConsumeStock(prisma, tenantId, {
+          productId: item.productId,
+          warehouseId,
+          quantity: cons.quantity,
+          refType: 'WORK_ORDER',
+          refId: id,
+        });
+      }
+    }
 
     await prisma.$transaction(async (tx) => {
       // Üretim miktarını güncelle
@@ -184,6 +440,13 @@ export const WorkOrderController = {
         where: { id },
         data: { producedQty: { increment: body.producedQty } },
       });
+
+      if (body.operationId) {
+        await tx.workOrderOperation.updateMany({
+          where: { id: body.operationId, tenantId, workOrderId: id },
+          data: { status: WorkOrderStatus.COMPLETED, actualEndAt: new Date(), notes: body.notes ?? undefined },
+        });
+      }
 
       // Malzeme tüketimlerini kaydet
       if (body.consumptions?.length) {
@@ -199,20 +462,138 @@ export const WorkOrderController = {
           // Stok hareketi: malzeme çıkışı
           const warehouseId = item.sourceWarehouseId ?? wo.inputWarehouseId;
           if (warehouseId) {
-            await tx.stockMovement.create({
+            const existingLevel = await tx.stockLevel.findFirst({
+              where: { tenantId, productId: item.productId, warehouseId },
+            });
+            const previousQuantity = Number(existingLevel?.quantity ?? 0);
+            const locationId = await resolveStockLevelLocationId(tx, tenantId, warehouseId, existingLevel?.locationId);
+            const stockMovement = await tx.stockMovement.create({
               data: {
-                tenantId, productId: item.productId, type: 'OUT',
+                tenantId, productId: item.productId, type: MovementType.OUT,
                 quantity: cons.quantity, fromWarehouseId: warehouseId,
                 refType: 'WORK_ORDER', refId: id,
                 notes: `İş emri ${wo.number} malzeme tüketimi`,
               },
             });
+            await tx.stockLevel.upsert({
+              where: {
+                productId_warehouseId_locationId: {
+                  productId: item.productId,
+                  warehouseId,
+                  locationId,
+                },
+              },
+              create: {
+                tenantId,
+                productId: item.productId,
+                warehouseId,
+                locationId,
+                quantity: -cons.quantity,
+              },
+              update: { quantity: { decrement: cons.quantity } },
+            });
+            await recordInventoryCosting(tx, tenantId, {
+              movementId: stockMovement.id,
+              productId: item.productId,
+              warehouseId,
+              type: MovementType.OUT,
+              quantity: cons.quantity,
+              previousQuantity,
+              quantityChange: -cons.quantity,
+              resultingQuantity: previousQuantity - cons.quantity,
+              date: stockMovement.createdAt,
+            });
           }
         }
       }
+
+      if ((body.scrapQty ?? 0) > 0 || body.notes) {
+        await tx.workOrderHistory.create({
+          data: {
+            tenantId,
+            workOrderId: id,
+            fromStatus: wo.status,
+            toStatus: wo.status,
+            notes: [
+              body.scrapQty ? `Fire: ${body.scrapQty}` : null,
+              body.notes ?? null,
+            ].filter((note): note is string => Boolean(note)).join(' | '),
+            createdById: userId,
+          },
+        });
+      }
+    });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'production',
+      entityType: EntityType.WORK_ORDER,
+      entityId: id,
+      action: AuditAction.UPDATE,
+      newValues: {
+        producedQty: body.producedQty,
+        scrapQty: body.scrapQty ?? 0,
+        operationId: body.operationId ?? null,
+        consumptionCount: body.consumptions?.length ?? 0,
+      },
+      ...requestMeta,
     });
 
     const updated = await prisma.workOrder.findFirst({ where: { id, tenantId }, select: { id: true, number: true, producedQty: true, plannedQty: true } });
+    return c.json({ data: updated });
+  },
+
+  async updateOperation(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const requestMeta = getRequestMeta(c);
+    const workOrderId = c.req.param('id')!;
+    const operationId = c.req.param('operationId')!;
+
+    const body = await c.req.json<{
+      status?: WorkOrderStatus;
+      actualStartAt?: string | null;
+      actualEndAt?: string | null;
+      notes?: string | null;
+    }>();
+
+    const operation = await prisma.workOrderOperation.findFirst({
+      where: { id: operationId, tenantId, workOrderId, workOrder: { tenantId, deletedAt: null } },
+      select: { id: true, status: true, actualStartAt: true, actualEndAt: true, name: true },
+    });
+    if (!operation) return c.json(new NotFoundError('Operasyon', operationId).toJSON(), 404);
+
+    const nextStatus = body.status ?? operation.status;
+    const actualStartAt = body.actualStartAt === undefined
+      ? (nextStatus === WorkOrderStatus.IN_PROGRESS && !operation.actualStartAt ? new Date() : undefined)
+      : body.actualStartAt === null ? null : new Date(body.actualStartAt);
+    const actualEndAt = body.actualEndAt === undefined
+      ? (nextStatus === WorkOrderStatus.COMPLETED && !operation.actualEndAt ? new Date() : undefined)
+      : body.actualEndAt === null ? null : new Date(body.actualEndAt);
+
+    const updated = await prisma.workOrderOperation.update({
+      where: { id: operationId },
+      data: {
+        status: nextStatus,
+        ...(actualStartAt !== undefined ? { actualStartAt } : {}),
+        ...(actualEndAt !== undefined ? { actualEndAt } : {}),
+        ...(body.notes !== undefined ? { notes: body.notes } : {}),
+      },
+    });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'production',
+      entityType: EntityType.WORK_ORDER,
+      entityId: workOrderId,
+      action: AuditAction.UPDATE,
+      oldValues: { operationId, status: operation.status },
+      newValues: { operationId, status: updated.status, notes: updated.notes ?? null },
+      ...requestMeta,
+    });
+
     return c.json({ data: updated });
   },
 

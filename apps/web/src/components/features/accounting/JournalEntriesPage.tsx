@@ -119,7 +119,8 @@ export function JournalEntriesPage() {
   });
 
   const reverseEntry = useMutation({
-    mutationFn: (id: string) => reverseJournalEntry(id),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      reverseJournalEntry(id, { reason }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["accounting", "journal-entries"],
@@ -316,7 +317,12 @@ export function JournalEntriesPage() {
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                reverseEntry.mutate(r.id);
+                const reason = window.prompt(`${r.number} ters kayit nedeni`);
+                if (!reason?.trim()) {
+                  toast.error("Ters kayit nedeni zorunludur.");
+                  return;
+                }
+                reverseEntry.mutate({ id: r.id, reason: reason.trim() });
               }}
               className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium
                          text-amber-400 bg-amber-500/10 border border-amber-500/20

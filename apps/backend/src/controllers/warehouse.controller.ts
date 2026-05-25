@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 import { getPaginationParams } from '../utils/pagination.js';
+import { assertCanConsumeStock, resolveStockLevelLocationId } from '../services/inventory-rules.service';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -201,25 +202,33 @@ export const WarehouseController = {
     }
 
     // Kaynak depoda yeterli stok var mı?
-    const sourceStock = await prisma.stockLevel.findFirst({
-      where: {
-        tenantId,
-        productId: body.productId,
-        warehouseId: body.fromWarehouseId,
-      },
+    await assertCanConsumeStock(prisma, tenantId, {
+      productId: body.productId,
+      warehouseId: body.fromWarehouseId,
+      quantity: body.quantity,
     });
-
-    if (!sourceStock || Number(sourceStock.quantity) < body.quantity) {
-      return c.json(
-        new ValidationError(
-          `Kaynak depoda yeterli stok yok. Mevcut: ${sourceStock?.quantity ?? 0}`,
-        ).toJSON(),
-        400,
-      );
-    }
 
     // Transfer işlemi — transaction içinde
     const movement = await prisma.$transaction(async (tx) => {
+      const sourceStock = await tx.stockLevel.findFirst({
+        where: {
+          tenantId,
+          productId: body.productId,
+          warehouseId: body.fromWarehouseId,
+          quantity: { gte: body.quantity },
+        },
+        orderBy: { quantity: 'desc' },
+      });
+      if (!sourceStock) throw new ValidationError('Kaynak depoda tek lokasyonda yeterli stok bulunamadi.');
+      const sourceLocationId = await resolveStockLevelLocationId(tx, tenantId, body.fromWarehouseId, sourceStock.locationId);
+      const targetStock = await tx.stockLevel.findFirst({
+        where: {
+          tenantId,
+          productId: body.productId,
+          warehouseId: body.toWarehouseId,
+        },
+      });
+      const targetLocationId = await resolveStockLevelLocationId(tx, tenantId, body.toWarehouseId, targetStock?.locationId);
       // Stok hareketi oluştur
       const stockMovement = await tx.stockMovement.create({
         data: {
@@ -234,14 +243,16 @@ export const WarehouseController = {
       });
 
       // Kaynak depo stok azalt
-      await tx.stockLevel.updateMany({
+      const sourceUpdate = await tx.stockLevel.updateMany({
         where: {
           tenantId,
           productId: body.productId,
           warehouseId: body.fromWarehouseId,
+          locationId: sourceLocationId,
         },
         data: { quantity: { decrement: body.quantity } },
       });
+      if (sourceUpdate.count !== 1) throw new ValidationError('Kaynak depo stok guncellenemedi.');
 
       // Hedef depo stok artır (yoksa oluştur)
       await tx.stockLevel.upsert({
@@ -249,14 +260,14 @@ export const WarehouseController = {
           productId_warehouseId_locationId: {
             productId: body.productId,
             warehouseId: body.toWarehouseId,
-            locationId: '',
+            locationId: targetLocationId,
           },
         },
         create: {
           tenantId,
           productId: body.productId,
           warehouseId: body.toWarehouseId,
-          locationId: '',
+          locationId: targetLocationId,
           quantity: body.quantity,
         },
         update: { quantity: { increment: body.quantity } },

@@ -61,6 +61,21 @@ export interface DomainEventPayloads {
     documentName: string;
     severity: Priority;
   };
+  'production.materialReserved': {
+    workOrderId: string;
+    workOrderNumber: string;
+    reservedLineCount: number;
+    reservedQuantity: number;
+  };
+  'production.completed': {
+    workOrderId: string;
+    workOrderNumber: string;
+    productId: string;
+    productName: string;
+    plannedQty: number;
+    producedQty: number;
+    scrapQty: number;
+  };
 }
 
 export type DomainEventName = keyof DomainEventPayloads;
@@ -91,6 +106,9 @@ export function entityTypeForEvent(event: DomainEvent): EntityType {
       return EntityType.SALES_QUOTE;
     case 'employee.documentMissing':
       return EntityType.EMPLOYEE;
+    case 'production.materialReserved':
+    case 'production.completed':
+      return EntityType.WORK_ORDER;
     case 'payment.received':
     case 'mail.failed':
       return EntityType.OTHER;
@@ -112,6 +130,9 @@ export function entityIdForEvent(event: DomainEvent): string {
       return event.payload.mailId;
     case 'employee.documentMissing':
       return event.payload.employeeId;
+    case 'production.materialReserved':
+    case 'production.completed':
+      return event.payload.workOrderId;
   }
 }
 
@@ -131,6 +152,10 @@ export function sourceForEvent(event: DomainEvent): string {
       return `domain:mail.failed:${event.payload.mailId}`;
     case 'employee.documentMissing':
       return `domain:employee.documentMissing:${event.payload.employeeId}:${event.payload.documentName}`;
+    case 'production.materialReserved':
+      return `domain:production.materialReserved:${event.payload.workOrderId}`;
+    case 'production.completed':
+      return `domain:production.completed:${event.payload.workOrderId}:${event.payload.producedQty}:${event.payload.scrapQty}`;
   }
 }
 

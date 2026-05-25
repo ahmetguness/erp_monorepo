@@ -86,6 +86,23 @@ export const StockCountItemSchema = z.object({
   product: z.object({ id: z.string(), code: z.string(), name: z.string() }).optional(),
 });
 
+export const StockReorderSuggestionSchema = z.object({
+  productId: z.string(),
+  productCode: z.string(),
+  productName: z.string(),
+  warehouseId: z.string(),
+  warehouseCode: z.string(),
+  warehouseName: z.string(),
+  onHand: z.coerce.number(),
+  reserved: z.coerce.number(),
+  available: z.coerce.number(),
+  minStockLevel: z.coerce.number(),
+  suggestedQuantity: z.coerce.number(),
+  estimatedDaysToStockout: z.coerce.number().nullable(),
+  unitCost: z.coerce.number(),
+  estimatedCost: z.coerce.number(),
+});
+
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
@@ -97,6 +114,7 @@ export type StockMovement = z.infer<typeof StockMovementSchema>;
 export type StockMovementType = StockMovement['type'];
 export type StockCount = z.infer<typeof StockCountSchema>;
 export type StockCountItem = z.infer<typeof StockCountItemSchema>;
+export type StockReorderSuggestion = z.infer<typeof StockReorderSuggestionSchema>;
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -110,7 +128,7 @@ export interface StockMovementParams extends PaginationParams {
 export interface CreateManualMovementDTO {
   productId: string; type: StockMovementType;
   quantity: number; warehouseId: string;
-  unitCost?: number; notes?: string;
+  unitCost?: number; lotId?: string; batchId?: string; notes?: string;
 }
 export interface CreateStockCountDTO {
   warehouseId: string; date: string; notes?: string;
@@ -179,10 +197,16 @@ const StockMovementCreateSchema = SingleResponseSchema(StockMovementSchema).exte
   meta: z.object({ warnings: z.array(z.string()) }).optional(),
 });
 const StockCountListSchema = SingleResponseSchema(z.array(StockCountSchema));
+const StockReorderSuggestionListSchema = SingleResponseSchema(z.array(StockReorderSuggestionSchema));
 
 export async function getStockLevels(params: StockLevelParams): Promise<StockLevel[]> {
   const res = await apiClient.get('/api/stock/levels', { params });
   return safeParse(StockLevelListSchema, res.data, 'getStockLevels').data;
+}
+
+export async function getStockReorderSuggestions(): Promise<StockReorderSuggestion[]> {
+  const res = await apiClient.get('/api/stock/reorder-suggestions');
+  return safeParse(StockReorderSuggestionListSchema, res.data, 'getStockReorderSuggestions').data;
 }
 
 export async function getStockMovements(params: StockMovementParams) {

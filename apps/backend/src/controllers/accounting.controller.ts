@@ -3,7 +3,11 @@ import { JournalEntryType, AccountType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireUserId } from '../utils/context.js';
+import {
+  assertJournalBalanced,
+  resolveOpenFiscalPeriodId,
+} from '../services/financial-integrity.service';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -41,6 +45,31 @@ interface JournalEntryListQuery {
   dateFrom?: string;
   dateTo?: string;
   isPosted?: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function readOptionalJsonObject(c: Context): Promise<Record<string, unknown>> {
+  const rawBody = await c.req.text();
+  if (!rawBody.trim()) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    throw new ValidationError('Gecersiz JSON govdesi.');
+  }
+  if (!isRecord(parsed)) throw new ValidationError('Gecersiz istek govdesi.');
+  return parsed;
+}
+
+function readRequiredReason(body: Record<string, unknown>): string {
+  const reason = body.reason;
+  if (typeof reason !== 'string' || !reason.trim()) {
+    throw new ValidationError('Ters kayit icin reason zorunludur.');
+  }
+  return reason.trim();
 }
 
 // ─────────────────────────────────────────────
@@ -158,6 +187,7 @@ export const AccountingController = {
 
   async createJournalEntry(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
 
     const body = await c.req.json<CreateJournalEntryDTO>();
 
@@ -169,27 +199,21 @@ export const AccountingController = {
     }
 
     // Borç = Alacak dengesi kontrolü
-    const totalDebit = body.lines.reduce((s, l) => s + (l.debit ?? 0), 0);
-    const totalCredit = body.lines.reduce((s, l) => s + (l.credit ?? 0), 0);
-
-    if (Math.abs(totalDebit - totalCredit) > 0.001) {
-      return c.json(
-        new ValidationError(
-          `Borç (${totalDebit}) ve alacak (${totalCredit}) toplamları eşit olmalıdır.`,
-        ).toJSON(),
-        400,
-      );
-    }
+    assertJournalBalanced(body.lines);
+    const entryDate = new Date(body.date);
+    const fiscalPeriodId = await resolveOpenFiscalPeriodId(prisma, tenantId, entryDate, 'Yevmiye fisi');
     const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', 'journalEntry');
 
     const entry = await prisma.journalEntry.create({
       data: {
         tenantId,
+        fiscalPeriodId,
         type: JournalEntryType.MANUAL,
         number,
-        date: new Date(body.date),
+        date: entryDate,
         description: body.description ?? null,
         isPosted: false,
+        createdById: userId,
         lines: {
           create: body.lines.map((l) => ({
             tenantId,
@@ -214,6 +238,7 @@ export const AccountingController = {
 
   async postJournalEntry(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const entryId = c.req.param('id');
 
     const entry = await prisma.journalEntry.findFirst({
@@ -227,9 +252,11 @@ export const AccountingController = {
       return c.json(new ValidationError('Fiş zaten onaylanmış.').toJSON(), 400);
     }
 
+    const fiscalPeriodId = await resolveOpenFiscalPeriodId(prisma, tenantId, entry.date, 'Yevmiye fisi onayi');
+
     const updated = await prisma.journalEntry.update({
       where: { id: entryId },
-      data: { isPosted: true },
+      data: { isPosted: true, fiscalPeriodId, postedAt: new Date(), postedById: userId },
     });
 
     return c.json({ data: updated });
@@ -248,19 +275,21 @@ export const AccountingController = {
     }
 
     const body = await c.req.json<CreateJournalEntryDTO>();
-
-    const totalDebit = body.lines.reduce((s, l) => s + (l.debit ?? 0), 0);
-    const totalCredit = body.lines.reduce((s, l) => s + (l.credit ?? 0), 0);
-    if (Math.abs(totalDebit - totalCredit) > 0.001) {
-      return c.json(new ValidationError('Borç ve alacak toplamları eşit olmalıdır.').toJSON(), 400);
+    if (!body.date || !body.lines?.length) {
+      return c.json(new ValidationError('date ve en az bir satir zorunludur.').toJSON(), 400);
     }
+
+    assertJournalBalanced(body.lines);
+    const entryDate = new Date(body.date);
+    const fiscalPeriodId = await resolveOpenFiscalPeriodId(prisma, tenantId, entryDate, 'Yevmiye fisi duzeltmesi');
 
     const updatedEntry = await prisma.$transaction(async (tx) => {
       await tx.journalEntryLine.deleteMany({ where: { tenantId, journalEntryId: entryId } });
       return tx.journalEntry.update({
         where: { id: entryId },
         data: {
-          date: new Date(body.date),
+          date: entryDate,
+          fiscalPeriodId,
           description: body.description ?? null,
           lines: {
             create: body.lines.map((l) => ({
@@ -283,7 +312,10 @@ export const AccountingController = {
 
   async reverseJournalEntry(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const entryId = c.req.param('id');
+    const body = await readOptionalJsonObject(c);
+    const reason = readRequiredReason(body);
 
     const entry = await prisma.journalEntry.findFirst({
       where: { id: entryId, tenantId },
@@ -293,16 +325,24 @@ export const AccountingController = {
     if (!entry.isPosted) {
       return c.json(new ValidationError('Sadece onaylı fişler ters kayıt yapılabilir.').toJSON(), 400);
     }
+    const reversalDate = new Date();
+    const fiscalPeriodId = await resolveOpenFiscalPeriodId(prisma, tenantId, reversalDate, 'Yevmiye ters kaydi');
     const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', 'journalEntry');
 
     const reversal = await prisma.journalEntry.create({
       data: {
         tenantId,
+        fiscalPeriodId,
         type: JournalEntryType.MANUAL,
         number,
-        date: new Date(),
-        description: `Ters kayıt: ${entry.number}`,
+        date: reversalDate,
+        description: `Ters kayit: ${entry.number}. Neden: ${reason}`,
+        refType: 'JOURNAL_REVERSAL',
+        refId: entry.id,
         isPosted: true,
+        postedAt: reversalDate,
+        postedById: userId,
+        createdById: userId,
         lines: {
           create: entry.lines.map((l) => ({
             tenantId,

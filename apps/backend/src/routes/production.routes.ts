@@ -38,6 +38,7 @@ productionRoutes.get('/work-orders/:id', requirePermission('production', 'READ')
 productionRoutes.post('/work-orders', requirePermission('production', 'CREATE'), WorkOrderController.create);
 productionRoutes.post('/work-orders/:id/status', requirePermission('production', 'UPDATE'), WorkOrderController.changeStatus);
 productionRoutes.post('/work-orders/:id/report', requirePermission('production', 'UPDATE'), WorkOrderController.reportProduction);
+productionRoutes.patch('/work-orders/:id/operations/:operationId', requirePermission('production', 'UPDATE'), WorkOrderController.updateOperation);
 productionRoutes.delete('/work-orders/:id', requirePermission('production', 'DELETE'), WorkOrderController.remove);
 
 export { productionRoutes };

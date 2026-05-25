@@ -12,13 +12,22 @@ function isJsonObject(value: Prisma.JsonValue | null | undefined): value is Pris
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function collectFieldStringValuesFromObject(json: Prisma.JsonObject, field: string, values: Set<string>): void {
+  Object.entries(json).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    if (key === field && typeof value === 'string' && value.trim()) {
+      values.add(value);
+      return;
+    }
+    if (isJsonObject(value)) collectFieldStringValuesFromObject(value, field, values);
+  });
+}
+
 function collectFieldStringValues(logs: readonly AuditFieldLabelSource[], field: string): string[] {
   const values = new Set<string>();
   logs.forEach((log) => {
     [log.oldValues, log.newValues].forEach((json) => {
-      if (!isJsonObject(json)) return;
-      const value = json[field];
-      if (typeof value === 'string' && value.trim()) values.add(value);
+      if (isJsonObject(json)) collectFieldStringValuesFromObject(json, field, values);
     });
   });
   return Array.from(values);

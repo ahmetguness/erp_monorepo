@@ -7,6 +7,8 @@ import { createDemoRequest } from '../services/demo.service';
 import { prisma } from '../lib/prisma';
 import { sanitizeOutput } from '../lib/output-sanitizer';
 import { rateLimiter } from '../lib/rateLimiter';
+import { AiPermissionCheckResult, AiRequestStatus, AiRequestType } from '@prisma/client';
+import { AI_MODELS, AI_PROMPT_VERSIONS, recordAiRequestLog } from '../services/ai-governance.service';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PUBLIC_RATE_LIMIT_PER_MINUTE = 10;
@@ -110,15 +112,46 @@ export const PublicChatController = {
 
     const rateCheck = await checkPublicRateLimit(getClientIp(c), parsed.sessionId);
     if (!rateCheck.allowed) return c.json({ error: rateCheck.reason }, 429);
+    const ipAddress = getClientIp(c);
+    const userAgent = c.req.header('user-agent') ?? null;
 
     try {
       const { createDemoFn, checkEmailFn } = await buildChatDeps();
       const result = await handlePublicChat({ message: parsed.message, sessionId: `public:${parsed.sessionId}` }, createDemoFn, checkEmailFn);
       const sanitized = sanitizeOutput(result.output, true);
+      await recordAiRequestLog({
+        tenantId: null,
+        userId: null,
+        requestType: AiRequestType.PUBLIC_CHAT,
+        promptVersion: result.governance.promptVersion,
+        model: result.governance.model,
+        permissionCheckResult: AiPermissionCheckResult.NOT_REQUIRED,
+        redactedFields: sanitized.maskedTypes,
+        inputText: parsed.message,
+        outputText: sanitized.text,
+        status: AiRequestStatus.SUCCEEDED,
+        usedTools: false,
+        tokenUsage: result.governance.tokenUsage,
+        ipAddress,
+        userAgent,
+        isPublicOutput: true,
+      });
       return c.json({ output: sanitized.text });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`PublicChat: OpenAI hatasi - ${errMsg}`);
+      await recordAiRequestLog({
+        requestType: AiRequestType.PUBLIC_CHAT,
+        promptVersion: AI_PROMPT_VERSIONS.PUBLIC_CHAT,
+        model: AI_MODELS.CHAT,
+        permissionCheckResult: AiPermissionCheckResult.NOT_REQUIRED,
+        inputText: parsed.message,
+        status: AiRequestStatus.FAILED,
+        errorMessage: errMsg,
+        ipAddress,
+        userAgent,
+        isPublicOutput: true,
+      });
       return c.json({ error: 'Asistan su an yanit veremiyor.' }, 502);
     }
   },
@@ -134,6 +167,8 @@ export const PublicChatController = {
 
     const rateCheck = await checkPublicRateLimit(getClientIp(c), parsed.sessionId);
     if (!rateCheck.allowed) return c.json({ error: rateCheck.reason }, 429);
+    const ipAddress = getClientIp(c);
+    const userAgent = c.req.header('user-agent') ?? null;
 
     const { createDemoFn, checkEmailFn } = await buildChatDeps();
 
@@ -153,10 +188,35 @@ export const PublicChatController = {
             },
             async onDone(fullText) {
               const sanitized = sanitizeOutput(fullText, true);
+              await recordAiRequestLog({
+                requestType: AiRequestType.PUBLIC_CHAT,
+                promptVersion: AI_PROMPT_VERSIONS.PUBLIC_CHAT_STREAM,
+                model: AI_MODELS.CHAT,
+                permissionCheckResult: AiPermissionCheckResult.NOT_REQUIRED,
+                redactedFields: sanitized.maskedTypes,
+                inputText: parsed.message,
+                outputText: sanitized.text,
+                status: AiRequestStatus.SUCCEEDED,
+                ipAddress,
+                userAgent,
+                isPublicOutput: true,
+              });
               await s.writeSSE({ event: 'done', data: JSON.stringify({ output: sanitized.text }) });
             },
             async onError(error) {
               logger.error(`PublicChat stream: ${error}`);
+              await recordAiRequestLog({
+                requestType: AiRequestType.PUBLIC_CHAT,
+                promptVersion: AI_PROMPT_VERSIONS.PUBLIC_CHAT_STREAM,
+                model: AI_MODELS.CHAT,
+                permissionCheckResult: AiPermissionCheckResult.NOT_REQUIRED,
+                inputText: parsed.message,
+                status: AiRequestStatus.FAILED,
+                errorMessage: String(error),
+                ipAddress,
+                userAgent,
+                isPublicOutput: true,
+              });
               await s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan su an yanit veremiyor.' }) });
             },
           },
@@ -164,6 +224,18 @@ export const PublicChatController = {
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         logger.error(`PublicChat stream unhandled: ${errMsg}`);
+        await recordAiRequestLog({
+          requestType: AiRequestType.PUBLIC_CHAT,
+          promptVersion: AI_PROMPT_VERSIONS.PUBLIC_CHAT_STREAM,
+          model: AI_MODELS.CHAT,
+          permissionCheckResult: AiPermissionCheckResult.NOT_REQUIRED,
+          inputText: parsed.message,
+          status: AiRequestStatus.FAILED,
+          errorMessage: errMsg,
+          ipAddress,
+          userAgent,
+          isPublicOutput: true,
+        });
         await s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan su an yanit veremiyor.' }) });
       }
     });

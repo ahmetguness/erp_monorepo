@@ -373,6 +373,29 @@ enum EntityType {
   OTHER
 }
 
+enum AiRequestType {
+  PRIVATE_CHAT
+  PUBLIC_CHAT
+  MAIL_DRAFT
+  SMART_FORM
+  RECOMMENDED_ACTION
+  OTHER
+}
+
+enum AiRequestStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+  FALLBACK
+}
+
+enum AiPermissionCheckResult {
+  NOT_REQUIRED
+  ALLOWED
+  DENIED
+  PARTIAL
+}
+
 enum ApprovalModule {
   PURCHASE_REQUEST
   LEAVE_REQUEST
@@ -588,6 +611,7 @@ model Tenant {
   domainEventOutbox      DomainEventOutbox[]
   tenantSettings         TenantSetting[]
   moduleSettings         ModuleSetting[]
+  aiRequestLogs          AiRequestLog[]
   // Back-relations for models with tenantId
   accountEntries           AccountEntry[]
   stockLevels              StockLevel[]
@@ -660,6 +684,7 @@ model User {
   approvalSteps ApprovalStep[] @relation("StepApproverUser")
   sentInvitations Invitation[] @relation("InvitationInviter")
   sentMailMessages MailMessage[] @relation("MailMessageSender")
+  aiRequestLogs AiRequestLog[]
 
   @@index([email])
   @@index([deletedAt])
@@ -935,6 +960,44 @@ model AuditLog {
   @@index([tenantId, userId])
   @@index([tenantId, createdAt])
   @@map("audit_logs")
+}
+
+model AiRequestLog {
+  id                    String                  @id @default(cuid())
+  tenantId              String?
+  userId                String?
+  requestType           AiRequestType
+  promptVersion         String
+  model                 String
+  entityType            EntityType?
+  entityId              String?
+  entityContext         Json?
+  permissionCheckResult AiPermissionCheckResult @default(NOT_REQUIRED)
+  redactedFields        String[]                @default([])
+  inputSummary          String?
+  outputSummary         String?
+  draft                 Json?
+  result                Json?
+  userApprovedAction    String?
+  status                AiRequestStatus         @default(STARTED)
+  usedTools             Boolean                 @default(false)
+  tokenPrompt           Int?
+  tokenCompletion       Int?
+  tokenTotal            Int?
+  errorMessage          String?
+  ipAddress             String?
+  userAgent             String?
+  createdAt             DateTime                @default(now())
+  completedAt           DateTime?
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, requestType, createdAt])
+  @@index([tenantId, entityType, entityId])
+  @@index([userId, createdAt])
+  @@map("ai_request_logs")
 }
 
 // ═════════════════════════════════════════════

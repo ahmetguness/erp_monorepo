@@ -147,6 +147,20 @@ export function useReportProduction() {
   });
 }
 
+export function useUpdateWorkOrderOperation() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: ({ workOrderId, operationId, data }: {
+      workOrderId: string;
+      operationId: string;
+      data: Parameters<typeof svc.updateWorkOrderOperation>[2];
+    }) => svc.updateWorkOrderOperation(workOrderId, operationId, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['work-orders'] }); toast.success('Operasyon güncellendi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
 export function useDeleteWorkOrder() {
   const qc = useQueryClient();
   const { toast } = useUIStore();

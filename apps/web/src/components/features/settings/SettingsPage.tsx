@@ -54,6 +54,9 @@ const MODULE_KEY_META: Record<string, { label: string; description: string }> = 
   low_stock_alert: { label: 'Düşük Stok Uyarısı', description: 'Minimum stok altına düşünce uyarı' },
   negative_stock: { label: 'Negatif Stok', description: 'Stok eksiye düşebilsin mi' },
   negative_stock_policy: { label: 'Negatif Stok Politikası', description: 'Stok çıkışı eksi bakiyeye düşerse uygulanacak davranış' },
+  reservation_policy: { label: 'Rezervasyon Politikası', description: 'Stok çıkışlarında rezervasyonlar düşülsün mü' },
+  lot_serial_policy: { label: 'Lot/Seri Politikası', description: 'Stok hareketlerinde lot veya seri zorunluluğu' },
+  stock_count_approval_policy: { label: 'Sayım Farkı Onayı', description: 'Sayım farkı düzeltmelerinde onay nedeni zorunluluğu' },
   auto_invoice_number: { label: 'Otomatik Fatura Numarası', description: 'Fatura numarası otomatik oluşturulsun mu' },
   payment_terms: { label: 'Ödeme Vadesi', description: 'Varsayılan ödeme vadesi (gün)' },
   payment_terms_days: { label: 'Ödeme Vadesi (Gün)', description: 'Varsayılan ödeme vadesi' },
@@ -95,6 +98,25 @@ function getValueDisplay(key: string, value: string): string {
   if (value === 'false') return 'Kapalı';
   if (key === NEGATIVE_STOCK_POLICY_KEY) {
     return NEGATIVE_STOCK_POLICY_OPTIONS.find((option) => option.value === value)?.label ?? value;
+  }
+  if (key === 'reservation_policy') {
+    const map: Record<string, string> = { RESPECT: 'Rezervasyonları düş', IGNORE: 'Rezervasyonları dikkate alma' };
+    return map[value] ?? value;
+  }
+  if (key === 'lot_serial_policy') {
+    const map: Record<string, string> = {
+      OPTIONAL: 'Opsiyonel',
+      REQUIRED: 'Her harekette zorunlu',
+      REQUIRED_FOR_OUT: 'Çıkışlarda zorunlu',
+    };
+    return map[value] ?? value;
+  }
+  if (key === 'stock_count_approval_policy') {
+    const map: Record<string, string> = {
+      OPTIONAL: 'Opsiyonel',
+      REQUIRED_FOR_DIFFERENCE: 'Fark varsa onay nedeni zorunlu',
+    };
+    return map[value] ?? value;
   }
   if (key === 'costing_method') {
     const map: Record<string, string> = { MOVING_AVERAGE: 'Hareketli Ortalama', FIFO: 'İlk Giren İlk Çıkar', LIFO: 'Son Giren İlk Çıkar', STANDARD: 'Standart Maliyet' };
@@ -208,6 +230,19 @@ const KEY_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
     value: option.value,
     label: option.label,
   })),
+  reservation_policy: [
+    { value: 'RESPECT', label: 'Rezervasyonları düş' },
+    { value: 'IGNORE', label: 'Rezervasyonları dikkate alma' },
+  ],
+  lot_serial_policy: [
+    { value: 'OPTIONAL', label: 'Opsiyonel' },
+    { value: 'REQUIRED', label: 'Her harekette zorunlu' },
+    { value: 'REQUIRED_FOR_OUT', label: 'Çıkışlarda zorunlu' },
+  ],
+  stock_count_approval_policy: [
+    { value: 'OPTIONAL', label: 'Opsiyonel' },
+    { value: 'REQUIRED_FOR_DIFFERENCE', label: 'Fark varsa onay nedeni zorunlu' },
+  ],
   fiscal_year_start: [
     { value: '01-01', label: '1 Ocak' },
     { value: '04-01', label: '1 Nisan' },

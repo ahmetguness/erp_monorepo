@@ -58,6 +58,9 @@ function moduleForEvent(event: DomainEvent): string {
       return 'mail';
     case 'employee.documentMissing':
       return 'hr';
+    case 'production.materialReserved':
+    case 'production.completed':
+      return 'production';
   }
 }
 
@@ -130,6 +133,25 @@ function auditPayload(event: DomainEvent): Prisma.InputJsonObject {
         documentName: event.payload.documentName,
         severity: event.payload.severity,
       };
+    case 'production.materialReserved':
+      return {
+        event: event.name,
+        workOrderId: event.payload.workOrderId,
+        workOrderNumber: event.payload.workOrderNumber,
+        reservedLineCount: event.payload.reservedLineCount,
+        reservedQuantity: event.payload.reservedQuantity,
+      };
+    case 'production.completed':
+      return {
+        event: event.name,
+        workOrderId: event.payload.workOrderId,
+        workOrderNumber: event.payload.workOrderNumber,
+        productId: event.payload.productId,
+        productName: event.payload.productName,
+        plannedQty: event.payload.plannedQty,
+        producedQty: event.payload.producedQty,
+        scrapQty: event.payload.scrapQty,
+      };
   }
 }
 
@@ -142,7 +164,7 @@ async function auditListener(event: DomainEvent): Promise<void> {
     module: moduleForEvent(event),
     entityType: entityTypeForEvent(event),
     entityId: entityIdForEvent(event),
-    action: event.name === 'salesQuote.accepted' ? AuditAction.UPDATE : AuditAction.CREATE,
+    action: event.name === 'salesQuote.accepted' || event.name === 'production.completed' ? AuditAction.UPDATE : AuditAction.CREATE,
     newValues: auditPayload(event),
   });
 }
@@ -180,6 +202,22 @@ async function notificationListener(event: DomainEvent): Promise<void> {
         'Personel evrakı eksik',
         `${event.payload.employeeName}: ${event.payload.documentName}`,
         'hr',
+      );
+      return;
+    case 'production.materialReserved':
+      await notifyUsers(
+        event,
+        'Uretim malzemesi rezerve edildi',
+        `${event.payload.workOrderNumber} icin ${event.payload.reservedLineCount} kalemde ${event.payload.reservedQuantity.toFixed(3)} birim rezerve edildi.`,
+        'production',
+      );
+      return;
+    case 'production.completed':
+      await notifyUsers(
+        event,
+        'Uretim tamamlandi',
+        `${event.payload.workOrderNumber}: ${event.payload.productName} icin ${event.payload.producedQty.toFixed(3)} birim uretildi${event.payload.scrapQty > 0 ? `, ${event.payload.scrapQty.toFixed(3)} fire kaydedildi` : ''}.`,
+        'production',
       );
       return;
     case 'payment.received':
@@ -262,9 +300,24 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         createdById: event.context.userId ?? null,
       });
       return;
+    case 'production.completed':
+      await createTask(event.context.tenantId, {
+        title: `Uretim kapanis kontrolu: ${event.payload.workOrderNumber}`,
+        detail: `${event.payload.productName} uretimi tamamlandi. Stok girisi, maliyet ve fire kayitlarini kontrol edin.`,
+        type: TaskType.CHECK,
+        priority: event.payload.scrapQty > 0 ? Priority.HIGH : Priority.MEDIUM,
+        module: 'production',
+        entityType: EntityType.WORK_ORDER,
+        entityId: event.payload.workOrderId,
+        href: `/dashboard/production/work-orders/${event.payload.workOrderId}`,
+        source: sourceForEvent(event),
+        createdById: event.context.userId ?? null,
+      });
+      return;
     case 'invoice.created':
     case 'payment.received':
     case 'mail.failed':
+    case 'production.materialReserved':
       return;
   }
 }

@@ -88,6 +88,7 @@ export interface UpdateLedgerAccountDTO { code?: string; name?: string; type?: A
 export interface CreateFiscalPeriodDTO { name: string; startDate: string; endDate: string; }
 export interface JournalEntryLineDTO { accountId: string; debit: number; credit: number; description?: string; }
 export interface CreateJournalEntryDTO { date: string; description?: string; lines: JournalEntryLineDTO[]; }
+export interface ReverseJournalEntryDTO { reason: string; }
 export interface CreateBankAccountDTO { name: string; accountNumber?: string; iban?: string; bankName?: string; currencyCode?: string; }
 export type UpdateBankAccountDTO = Partial<CreateBankAccountDTO> & { type?: BankAccount['type']; isActive?: boolean };
 export interface CreateCashAccountDTO { name: string; currencyCode?: string; }
@@ -169,8 +170,8 @@ export async function updateJournalEntry(id: string, data: CreateJournalEntryDTO
   return safeParse(SingleResponseSchema(JournalEntrySchema), res.data, 'updateJournalEntry').data;
 }
 
-export async function reverseJournalEntry(id: string): Promise<JournalEntry> {
-  const res = await apiClient.post(`/api/accounting/journal-entries/${id}/reverse`);
+export async function reverseJournalEntry(id: string, data: ReverseJournalEntryDTO): Promise<JournalEntry> {
+  const res = await apiClient.post(`/api/accounting/journal-entries/${id}/reverse`, data);
   return safeParse(SingleResponseSchema(JournalEntrySchema), res.data, 'reverseJournalEntry').data;
 }
 

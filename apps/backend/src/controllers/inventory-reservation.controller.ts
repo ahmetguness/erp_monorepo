@@ -2,7 +2,8 @@ import { Context } from 'hono';
 import { ReservationRefType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireUserId } from '../utils/context.js';
+import { assertCanReserveStock } from '../services/inventory-rules.service';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -71,6 +72,7 @@ export const InventoryReservationController = {
 
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
 
     const body = await c.req.json<CreateReservationDTO>();
 
@@ -85,6 +87,14 @@ export const InventoryReservationController = {
       return c.json(new ValidationError('Miktar 0\'dan büyük olmalıdır.').toJSON(), 400);
     }
 
+    await assertCanReserveStock(prisma, tenantId, {
+      productId: body.productId,
+      warehouseId: body.warehouseId,
+      quantity: body.quantity,
+      refType: body.refType,
+      refId: body.refId,
+    });
+
     const reservation = await prisma.inventoryReservation.create({
       data: {
         tenantId,
@@ -95,6 +105,7 @@ export const InventoryReservationController = {
         refId: body.refId,
         notes: body.notes ?? null,
         expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+        createdById: userId,
       },
       include: {
         product: { select: { id: true, code: true, name: true } },

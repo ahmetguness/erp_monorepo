@@ -187,6 +187,10 @@ export function useDeleteMarketplaceOrder() {
 
 // ─── Monitoring ───────────────────────────────
 
+export function useMarketplaceHealthCenter() {
+  return useQuery({ queryKey: ['mp-health-center'], queryFn: svc.getMarketplaceHealthCenter });
+}
+
 export function useSyncJobs(params?: { page?: number; limit?: number; integrationId?: string; status?: string; jobType?: string }) {
   return useQuery({ queryKey: ['mp-sync-jobs', params], queryFn: () => svc.getSyncJobs(params) });
 }
@@ -224,6 +228,21 @@ export function useWebhookEvents(params?: { page?: number; limit?: number; integ
 
 export function useWebhookEvent(id: string) {
   return useQuery({ queryKey: ['mp-webhook-events', id], queryFn: () => svc.getWebhookEvent(id), enabled: !!id });
+}
+
+export function useReplayWebhookEvent() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (id: string) => svc.replayWebhookEvent(id),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['mp-webhook-events'] });
+      qc.invalidateQueries({ queryKey: ['mp-health-center'] });
+      qc.invalidateQueries({ queryKey: ['mp-orders'] });
+      toast.success(`Webhook replay tamamlandi. Islenen: ${result.replayed}, hata: ${result.failed}`);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
 }
 
 export function useListingSnapshots(params?: { page?: number; limit?: number; integrationId?: string }) {

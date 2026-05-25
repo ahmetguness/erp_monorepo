@@ -198,6 +198,47 @@ export interface MarketplaceListingSnapshotRecord {
   listing?: { id: string; externalId: string; externalSku: string | null; price: number; isActive: boolean };
 }
 
+export interface MarketplaceIntegrationHealthSummary {
+  integration: MarketplaceIntegration;
+  lastSuccessfulSyncAt: string | null;
+  lastErrorAt: string | null;
+  lastErrorMessage: string | null;
+  errorRate: number;
+  pendingJobCount: number;
+  runningJobCount: number;
+  failedJobCount: number;
+  retryAvailableCount: number;
+  webhookReplayCount: number;
+  webhookFailureCount: number;
+  apiLimit: {
+    status: 'UNKNOWN' | 'OK' | 'WARNING' | 'LIMITED';
+    remaining: number | null;
+    resetAt: string | null;
+  };
+}
+
+export interface MarketplaceHealthCenter {
+  totals: {
+    integrations: number;
+    pendingJobs: number;
+    runningJobs: number;
+    failedJobs: number;
+    retryAvailable: number;
+    webhookReplayAvailable: number;
+    webhookFailures: number;
+  };
+  items: MarketplaceIntegrationHealthSummary[];
+}
+
+export interface MarketplaceWebhookReplayResult {
+  replayed: number;
+  failed: number;
+  results: Array<{ eventId: string; packageId: string; duplicate: boolean; error: string | null }>;
+}
+
+export const getMarketplaceHealthCenter = () =>
+  apiClient.get<{ data: MarketplaceHealthCenter }>('/api/marketplace/health').then((r) => r.data.data);
+
 export const getSyncJobs = (params?: { page?: number; limit?: number; integrationId?: string; status?: string; jobType?: string }) =>
   apiClient.get<Paginated<MarketplaceSyncJobRecord>>('/api/marketplace/sync-jobs', { params }).then((r) => r.data);
 
@@ -212,6 +253,9 @@ export const getWebhookEvents = (params?: { page?: number; limit?: number; integ
 
 export const getWebhookEvent = (id: string) =>
   apiClient.get<{ data: MarketplaceWebhookEventRecord }>(`/api/marketplace/webhook-events/${id}`).then((r) => r.data.data);
+
+export const replayWebhookEvent = (id: string) =>
+  apiClient.post<{ data: MarketplaceWebhookReplayResult }>(`/api/marketplace/webhook-events/${id}/replay`).then((r) => r.data.data);
 
 export const getListingSnapshots = (params?: { page?: number; limit?: number; integrationId?: string }) =>
   apiClient.get<Paginated<MarketplaceListingSnapshotRecord>>('/api/marketplace/listing-snapshots', { params }).then((r) => r.data);

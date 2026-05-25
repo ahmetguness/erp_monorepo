@@ -1,11 +1,19 @@
 import { Context } from 'hono';
-import { AuditAction, EntityType, MovementType, Prisma } from '@prisma/client';
+import { AuditAction, EntityType, MovementType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { createEventContext, domainEvents } from '../domain-events';
+import {
+  assertCanConsumeStock,
+  assertStockCountApproval,
+  getInventoryRules,
+  getReorderSuggestions,
+  recordInventoryCosting,
+  resolveStockLevelLocationId,
+} from '../services/inventory-rules.service';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -41,80 +49,7 @@ interface CreateStockCountDTO {
 
 interface FinalizeStockCountDTO {
   applyAdjustments: boolean;
-}
-
-type NegativeStockPolicy = 'ALLOW' | 'WARN' | 'BLOCK';
-
-const NEGATIVE_STOCK_POLICY_KEY = 'negative_stock_policy';
-const LEGACY_NEGATIVE_STOCK_KEY = 'negative_stock';
-const DEFAULT_STOCK_LOCATION_CODE = '__DEFAULT__';
-
-function parseNegativeStockPolicy(value: string | null | undefined): NegativeStockPolicy | null {
-  if (value === 'ALLOW' || value === 'WARN' || value === 'BLOCK') return value;
-  if (value === 'true') return 'ALLOW';
-  if (value === 'false') return 'BLOCK';
-  return null;
-}
-
-async function getNegativeStockPolicy(tenantId: string): Promise<NegativeStockPolicy> {
-  const settings = await prisma.moduleSetting.findMany({
-    where: {
-      tenantId,
-      module: 'inventory',
-      key: { in: [NEGATIVE_STOCK_POLICY_KEY, LEGACY_NEGATIVE_STOCK_KEY] },
-    },
-    select: { key: true, value: true },
-  });
-
-  const policySetting = settings.find((setting) => setting.key === NEGATIVE_STOCK_POLICY_KEY);
-  const legacySetting = settings.find((setting) => setting.key === LEGACY_NEGATIVE_STOCK_KEY);
-  return parseNegativeStockPolicy(policySetting?.value) ?? parseNegativeStockPolicy(legacySetting?.value) ?? 'ALLOW';
-}
-
-async function getStockShortageWarning(
-  tenantId: string,
-  productId: string,
-  warehouseId: string,
-  quantity: number,
-): Promise<string | null> {
-  const stockLevel = await prisma.stockLevel.findFirst({
-    where: { tenantId, productId, warehouseId },
-    select: { quantity: true },
-  });
-  const currentQuantity = Number(stockLevel?.quantity ?? 0);
-  const nextQuantity = currentQuantity - quantity;
-
-  if (nextQuantity >= 0) return null;
-  return `Stok eksiye dusecek. Mevcut: ${currentQuantity.toFixed(3)}, cikis: ${quantity.toFixed(3)}.`;
-}
-
-async function resolveStockLevelLocationId(
-  tx: Prisma.TransactionClient,
-  tenantId: string,
-  warehouseId: string,
-  existingLocationId: string | null | undefined,
-): Promise<string> {
-  if (existingLocationId) return existingLocationId;
-
-  const location = await tx.location.upsert({
-    where: {
-      warehouseId_code: {
-        warehouseId,
-        code: DEFAULT_STOCK_LOCATION_CODE,
-      },
-    },
-    create: {
-      tenantId,
-      warehouseId,
-      code: DEFAULT_STOCK_LOCATION_CODE,
-      name: 'Varsayilan Lokasyon',
-      isActive: true,
-    },
-    update: {},
-    select: { id: true },
-  });
-
-  return location.id;
+  approvalReason?: string;
 }
 
 // ─────────────────────────────────────────────
@@ -156,6 +91,12 @@ export const StockController = {
       : stockLevels;
 
     return c.json({ data: result });
+  },
+
+  async listReorderSuggestions(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const suggestions = await getReorderSuggestions(prisma, tenantId);
+    return c.json({ data: suggestions });
   },
 
   // ── Stock Movements ──────────────────────────
@@ -219,6 +160,8 @@ export const StockController = {
       quantity: number;
       warehouseId: string;
       unitCost?: number;
+      lotId?: string;
+      batchId?: string;
       notes?: string;
     }>();
 
@@ -249,16 +192,23 @@ export const StockController = {
       return c.json(new ValidationError('Miktar 0\'dan büyük olmalıdır.').toJSON(), 400);
     }
 
-    const negativeStockPolicy = await getNegativeStockPolicy(tenantId);
-    const negativeStockWarning = body.type === MovementType.OUT
-      ? await getStockShortageWarning(tenantId, body.productId, body.warehouseId, body.quantity)
+    const inventoryRules = await getInventoryRules(prisma, tenantId);
+    const consumptionCheck = body.type === MovementType.OUT
+      ? await assertCanConsumeStock(prisma, tenantId, {
+          productId: body.productId,
+          warehouseId: body.warehouseId,
+          quantity: body.quantity,
+          lotId: body.lotId ?? null,
+        })
       : null;
 
-    if (negativeStockPolicy === 'BLOCK' && negativeStockWarning) {
-      return c.json(new ValidationError(negativeStockWarning).toJSON(), 400);
-    }
-
     const movement = await prisma.$transaction(async (tx) => {
+      const existingLevel = await tx.stockLevel.findFirst({
+        where: { tenantId, productId: body.productId, warehouseId: body.warehouseId },
+      });
+      const previousQuantity = Number(existingLevel?.quantity ?? 0);
+      const locId = await resolveStockLevelLocationId(tx, tenantId, body.warehouseId, existingLevel?.locationId);
+
       const stockMovement = await tx.stockMovement.create({
         data: {
           tenantId,
@@ -266,6 +216,8 @@ export const StockController = {
           type: body.type,
           quantity: body.quantity,
           unitCost: body.unitCost ?? null,
+          lotId: body.lotId ?? null,
+          batchId: body.batchId ?? null,
           ...(body.type === MovementType.OUT
             ? { fromWarehouseId: body.warehouseId }
             : { toWarehouseId: body.warehouseId }),
@@ -274,12 +226,9 @@ export const StockController = {
       });
 
       // StockLevel güncelle — mevcut kaydın locationId'sini bul
-      const existingLevel = await tx.stockLevel.findFirst({
-        where: { tenantId, productId: body.productId, warehouseId: body.warehouseId },
-      });
-      const locId = await resolveStockLevelLocationId(tx, tenantId, body.warehouseId, existingLevel?.locationId);
-
+      let resultingQuantity = previousQuantity;
       if (body.type === MovementType.IN || body.type === MovementType.OPENING) {
+        resultingQuantity = previousQuantity + body.quantity;
         await tx.stockLevel.upsert({
           where: {
             productId_warehouseId_locationId: {
@@ -298,6 +247,7 @@ export const StockController = {
           update: { quantity: { increment: body.quantity } },
         });
       } else if (body.type === MovementType.OUT) {
+        resultingQuantity = previousQuantity - body.quantity;
         await tx.stockLevel.upsert({
           where: {
             productId_warehouseId_locationId: {
@@ -316,6 +266,7 @@ export const StockController = {
           update: { quantity: { decrement: body.quantity } },
         });
       } else if (body.type === MovementType.ADJUSTMENT) {
+        resultingQuantity = body.quantity;
         await tx.stockLevel.upsert({
           where: {
             productId_warehouseId_locationId: {
@@ -334,6 +285,19 @@ export const StockController = {
           update: { quantity: body.quantity },
         });
       }
+
+      await recordInventoryCosting(tx, tenantId, {
+        movementId: stockMovement.id,
+        productId: body.productId,
+        warehouseId: body.warehouseId,
+        type: body.type,
+        quantity: body.quantity,
+        previousQuantity,
+        quantityChange: resultingQuantity - previousQuantity,
+        resultingQuantity,
+        unitCost: body.unitCost ?? null,
+        date: stockMovement.createdAt,
+      });
 
       return stockMovement;
     });
@@ -387,8 +351,8 @@ export const StockController = {
 
     return c.json({
       data: movement,
-      ...(negativeStockPolicy === 'WARN' && negativeStockWarning
-        ? { meta: { warnings: [negativeStockWarning] } }
+      ...(inventoryRules.negativeStockPolicy === 'WARN' && consumptionCheck?.warning
+        ? { meta: { warnings: [consumptionCheck.warning] } }
         : {}),
     }, 201);
   },
@@ -500,26 +464,20 @@ export const StockController = {
     }
 
     const body = await c.req.json<FinalizeStockCountDTO>();
+    const inventoryRules = await getInventoryRules(prisma, tenantId);
+    const hasDifference = stockCount.items.some((item) => Number(item.difference) !== 0);
+    assertStockCountApproval({
+      rules: inventoryRules,
+      hasDifference,
+      applyAdjustments: body.applyAdjustments,
+      approvalReason: body.approvalReason ?? null,
+    });
 
     await prisma.$transaction(async (tx) => {
       if (body.applyAdjustments) {
         // Fark olan kalemlere ADJUSTMENT hareketi oluştur
         for (const item of stockCount.items) {
           if (Number(item.difference) !== 0) {
-            await tx.stockMovement.create({
-              data: {
-                tenantId,
-                productId: item.productId,
-                type: MovementType.ADJUSTMENT,
-                quantity: Math.abs(Number(item.difference)),
-                ...(Number(item.difference) > 0
-                  ? { toWarehouseId: stockCount.warehouseId }
-                  : { fromWarehouseId: stockCount.warehouseId }),
-                notes: `Sayım düzeltmesi: ${stockCount.number}`,
-              },
-            });
-
-            // Mevcut stok seviyesini bul (locationId eşleşmesi için)
             const existing = await tx.stockLevel.findFirst({
               where: {
                 tenantId,
@@ -527,7 +485,24 @@ export const StockController = {
                 warehouseId: stockCount.warehouseId,
               },
             });
+            const previousQuantity = Number(existing?.quantity ?? 0);
+            const difference = Number(item.difference);
+            const stockMovement = await tx.stockMovement.create({
+              data: {
+                tenantId,
+                productId: item.productId,
+                type: MovementType.ADJUSTMENT,
+                quantity: Math.abs(difference),
+                ...(difference > 0
+                  ? { toWarehouseId: stockCount.warehouseId }
+                  : { fromWarehouseId: stockCount.warehouseId }),
+                refType: 'STOCK_COUNT',
+                refId: stockCount.id,
+                notes: `Sayım düzeltmesi: ${stockCount.number}`,
+              },
+            });
 
+            // Mevcut stok seviyesini bul (locationId eşleşmesi için)
             const locId = await resolveStockLevelLocationId(tx, tenantId, stockCount.warehouseId, item.locationId ?? existing?.locationId);
 
             await tx.stockLevel.upsert({
@@ -547,6 +522,18 @@ export const StockController = {
               },
               update: { quantity: item.countedQty },
             });
+
+            await recordInventoryCosting(tx, tenantId, {
+              movementId: stockMovement.id,
+              productId: item.productId,
+              warehouseId: stockCount.warehouseId,
+              type: MovementType.ADJUSTMENT,
+              quantity: Math.abs(difference),
+              previousQuantity,
+              quantityChange: difference,
+              resultingQuantity: Number(item.countedQty),
+              date: stockMovement.createdAt,
+            });
           }
         }
       }
@@ -565,7 +552,12 @@ export const StockController = {
       entityId: countId,
       action: AuditAction.UPDATE,
       oldValues: { id: countId, isFinalized: stockCount.isFinalized },
-      newValues: { id: countId, isFinalized: true, applyAdjustments: body.applyAdjustments },
+      newValues: {
+        id: countId,
+        isFinalized: true,
+        applyAdjustments: body.applyAdjustments,
+        approvalReason: body.approvalReason ?? null,
+      },
       ...getRequestMeta(c),
     });
 

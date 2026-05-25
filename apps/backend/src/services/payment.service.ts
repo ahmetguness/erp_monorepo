@@ -4,6 +4,10 @@ import { ValidationError, NotFoundError } from '../errors';
 import { createEventContext, domainEvents } from '../domain-events';
 import { createAuditLog } from '../utils/audit.js';
 import { writePaymentAccountEntry } from '../utils/account-entry.js';
+import {
+  assertAccountingPeriodOpen,
+  assertPaymentAllocationsWithinInvoiceBalance,
+} from './financial-integrity.service';
 
 export type PaymentDirection = 'RECEIVE' | 'SEND';
 
@@ -310,8 +314,11 @@ export async function createPayment(options: {
 
   await validatePaymentRelations(options.tenantId, options.input);
   await validatePaymentAllocations(options.tenantId, options.input, amount, direction);
+  await assertAccountingPeriodOpen(prisma, options.tenantId, paymentDate, 'Odeme');
 
   const payment = await prisma.$transaction(async (tx) => {
+    await assertPaymentAllocationsWithinInvoiceBalance(tx, options.tenantId, options.input.allocations ?? []);
+
     const newPayment = await tx.payment.create({
       data: {
         tenantId: options.tenantId,

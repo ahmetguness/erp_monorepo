@@ -2,7 +2,9 @@ import { openai } from '../lib/openai';
 import { ChatDataService } from './chat-data.service';
 import { ChatContextService, type ChatPageContext, type LoadedChatEntityContext } from './chat-context.service';
 import { logger } from '../lib/logger';
+import { AI_MODELS, AI_PROMPT_VERSIONS, type AiTokenUsage } from './ai-governance.service';
 import type {
+  ChatCompletion,
   ChatCompletionMessageParam,
   ChatCompletionTool,
   ChatCompletionMessageFunctionToolCall,
@@ -12,7 +14,7 @@ import type {
 // Model config — tek yerden değiştir
 // ─────────────────────────────────────────────
 
-const CHAT_MODEL = 'gpt-4o-mini';
+const CHAT_MODEL = AI_MODELS.CHAT;
 const purchaseRequestPreviewSessions = new Set<string>();
 // OpenAI Function Definitions — ERP veri araçları
 // Üç katmanlı erişim: Plan + Modül + Kullanıcı Rolü
@@ -824,6 +826,56 @@ export interface PrivateChatParams {
 export interface PrivateChatResult {
   output: string;
   usedTools: boolean;
+  governance: {
+    promptVersion: string;
+    model: string;
+    entityContext: Record<string, unknown>;
+    permissionCheckResult: 'ALLOWED' | 'PARTIAL' | 'DENIED';
+    tokenUsage: AiTokenUsage;
+  };
+}
+
+function addUsage(total: AiTokenUsage, response: ChatCompletion): AiTokenUsage {
+  const usage = response.usage;
+  return {
+    prompt: (total.prompt ?? 0) + (usage?.prompt_tokens ?? 0),
+    completion: (total.completion ?? 0) + (usage?.completion_tokens ?? 0),
+    total: (total.total ?? 0) + (usage?.total_tokens ?? 0),
+  };
+}
+
+function buildGovernanceEntityContext(
+  context: ChatPageContext | undefined,
+  entityContext: LoadedChatEntityContext | null,
+): Record<string, unknown> {
+  return {
+    activePage: context
+      ? {
+          path: context.path,
+          title: context.title ?? null,
+          entityType: context.entityType ?? null,
+          entityId: context.entityId ?? null,
+          entityLabel: context.entityLabel ?? null,
+        }
+      : null,
+    recentRecordCount: context?.recentRecords.length ?? 0,
+    activeRecord: entityContext
+      ? {
+          allowed: entityContext.allowed,
+          entityType: entityContext.entityType ?? null,
+          suggestedActions: entityContext.suggestedActions,
+          hasSummary: Boolean(entityContext.summary),
+          message: entityContext.message ?? null,
+        }
+      : null,
+  };
+}
+
+function permissionCheckResult(entityContext: LoadedChatEntityContext | null): 'ALLOWED' | 'PARTIAL' | 'DENIED' {
+  if (!entityContext) return 'ALLOWED';
+  if (entityContext.allowed && entityContext.summary) return 'ALLOWED';
+  if (entityContext.allowed) return 'PARTIAL';
+  return 'DENIED';
 }
 
 /**
@@ -834,6 +886,7 @@ export async function handlePrivateChat(params: PrivateChatParams): Promise<Priv
   const sessionId = `private:${tenantId}:${userId}`;
   const planTools = getAccessibleTools(plan, permissions, tenantModules);
   const entityContext = await ChatContextService.loadEntityContext(tenantId, permissions, tenantModules, context);
+  let tokenUsage: AiTokenUsage = {};
 
   const systemMessage: ChatCompletionMessageParam = {
     role: 'system',
@@ -863,6 +916,7 @@ export async function handlePrivateChat(params: PrivateChatParams): Promise<Priv
     temperature: 0.3,
     max_tokens: 1000,
   });
+  tokenUsage = addUsage(tokenUsage, response);
 
   let choice = response.choices[0];
 
@@ -899,6 +953,7 @@ export async function handlePrivateChat(params: PrivateChatParams): Promise<Priv
       temperature: 0.3,
       max_tokens: 1000,
     });
+    tokenUsage = addUsage(tokenUsage, response);
 
     choice = response.choices[0];
   }
@@ -911,7 +966,17 @@ export async function handlePrivateChat(params: PrivateChatParams): Promise<Priv
     { role: 'assistant', content: output },
   ]);
 
-  return { output, usedTools };
+  return {
+    output,
+    usedTools,
+    governance: {
+      promptVersion: AI_PROMPT_VERSIONS.PRIVATE_CHAT,
+      model: CHAT_MODEL,
+      entityContext: buildGovernanceEntityContext(context, entityContext),
+      permissionCheckResult: permissionCheckResult(entityContext),
+      tokenUsage,
+    },
+  };
 }
 
 export interface PublicChatParams {
@@ -921,6 +986,11 @@ export interface PublicChatParams {
 
 export interface PublicChatResult {
   output: string;
+  governance: {
+    promptVersion: string;
+    model: string;
+    tokenUsage: AiTokenUsage;
+  };
 }
 
 /**
@@ -932,6 +1002,7 @@ export async function handlePublicChat(
   checkEmailFn: (email: string) => Promise<{ available: boolean; message: string }>,
 ): Promise<PublicChatResult> {
   const { message, sessionId } = params;
+  let tokenUsage: AiTokenUsage = {};
 
   const systemMessage: ChatCompletionMessageParam = {
     role: 'system',
@@ -957,6 +1028,7 @@ export async function handlePublicChat(
     temperature: 0.7,
     max_tokens: 500,
   });
+  tokenUsage = addUsage(tokenUsage, response);
 
   let choice = response.choices[0];
 
@@ -1030,6 +1102,7 @@ export async function handlePublicChat(
       temperature: 0.7,
       max_tokens: 500,
     });
+    tokenUsage = addUsage(tokenUsage, response);
 
     choice = response.choices[0];
   }
@@ -1041,7 +1114,14 @@ export async function handlePublicChat(
     { role: 'assistant', content: output },
   ]);
 
-  return { output };
+  return {
+    output,
+    governance: {
+      promptVersion: AI_PROMPT_VERSIONS.PUBLIC_CHAT,
+      model: CHAT_MODEL,
+      tokenUsage,
+    },
+  };
 }
 
 /** Konuşma geçmişini temizle */

@@ -13,6 +13,7 @@ import { requireTenantId, requireUserId } from '../utils/context.js';
 import { getPaginationParams } from '../utils/pagination.js';
 import { encrypt } from '../utils/encryption.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { processTrendyolWebhookPayload } from './trendyol-webhook.controller.js';
 
 type IntegrationWithSecrets = {
   apiKey: string | null;
@@ -53,6 +54,32 @@ type MarketplaceListingActionListing = Prisma.MarketplaceListingGetPayload<{
 interface MarketplaceListingActionResult {
   batchRequestId: string;
   listing: MarketplaceListingActionListing;
+}
+
+interface MarketplaceIntegrationHealthSummary {
+  integration: Omit<Prisma.MarketplaceIntegrationGetPayload<{
+    include: { _count: { select: { listings: true; orders: true } } };
+  }>, 'apiKey' | 'apiSecret'> & {
+    apiKey: null;
+    apiSecret: null;
+    hasApiKey: boolean;
+    hasApiSecret: boolean;
+  };
+  lastSuccessfulSyncAt: Date | null;
+  lastErrorAt: Date | null;
+  lastErrorMessage: string | null;
+  errorRate: number;
+  pendingJobCount: number;
+  runningJobCount: number;
+  failedJobCount: number;
+  retryAvailableCount: number;
+  webhookReplayCount: number;
+  webhookFailureCount: number;
+  apiLimit: {
+    status: 'UNKNOWN' | 'OK' | 'WARNING' | 'LIMITED';
+    remaining: number | null;
+    resetAt: string | null;
+  };
 }
 
 function hideIntegrationSecrets<T extends IntegrationWithSecrets>(
@@ -130,6 +157,40 @@ function parseUpdateIntegrationBody(value: unknown): UpdateIntegrationBody | Val
 
 function toJobParams(value: Prisma.JsonValue): JobParams {
   return isJsonObject(value) ? value : {};
+}
+
+function readJsonNumber(value: Prisma.JsonValue | null, keys: string[]): number | null {
+  if (!isJsonObject(value)) return null;
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) return candidate;
+    if (typeof candidate === 'string') {
+      const parsed = Number(candidate);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return null;
+}
+
+function readJsonString(value: Prisma.JsonValue | null, keys: string[]): string | null {
+  if (!isJsonObject(value)) return null;
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === 'string' && candidate.trim().length > 0) return candidate;
+  }
+  return null;
+}
+
+function getApiLimitStatus(remaining: number | null): 'UNKNOWN' | 'OK' | 'WARNING' | 'LIMITED' {
+  if (remaining === null) return 'UNKNOWN';
+  if (remaining <= 0) return 'LIMITED';
+  if (remaining <= 20) return 'WARNING';
+  return 'OK';
+}
+
+function calculateErrorRate(total: number, failed: number): number {
+  if (total <= 0) return 0;
+  return Math.round((failed / total) * 1000) / 10;
 }
 
 function parsePositiveNumber(value: number | undefined, fallback: number): number {
@@ -807,6 +868,115 @@ export const TrendyolLookupController = {
 
 export const MarketplaceMonitoringController = {
 
+  async health(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+
+    const integrations = await prisma.marketplaceIntegration.findMany({
+      where: { tenantId },
+      include: { _count: { select: { listings: true, orders: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const items: MarketplaceIntegrationHealthSummary[] = await Promise.all(
+      integrations.map(async (integration) => {
+        const [
+          totalJobCount,
+          failedJobCount,
+          pendingJobCount,
+          runningJobCount,
+          lastDoneJob,
+          lastFailedJob,
+          webhookFailureCount,
+          webhookReplayCount,
+          latestJobWithResult,
+        ] = await prisma.$transaction([
+          prisma.marketplaceSyncJob.count({ where: { tenantId, integrationId: integration.id } }),
+          prisma.marketplaceSyncJob.count({ where: { tenantId, integrationId: integration.id, status: SyncJobStatus.FAILED } }),
+          prisma.marketplaceSyncJob.count({ where: { tenantId, integrationId: integration.id, status: SyncJobStatus.PENDING } }),
+          prisma.marketplaceSyncJob.count({ where: { tenantId, integrationId: integration.id, status: SyncJobStatus.RUNNING } }),
+          prisma.marketplaceSyncJob.findFirst({
+            where: { tenantId, integrationId: integration.id, status: SyncJobStatus.DONE },
+            orderBy: { finishedAt: 'desc' },
+            select: { finishedAt: true },
+          }),
+          prisma.marketplaceSyncJob.findFirst({
+            where: { tenantId, integrationId: integration.id, status: SyncJobStatus.FAILED },
+            orderBy: { finishedAt: 'desc' },
+            select: { finishedAt: true, updatedAt: true, errorMessage: true },
+          }),
+          prisma.marketplaceWebhookEvent.count({
+            where: { tenantId, integrationId: integration.id, errorMessage: { not: null } },
+          }),
+          prisma.marketplaceWebhookEvent.count({
+            where: {
+              tenantId,
+              integrationId: integration.id,
+              OR: [{ processedAt: null }, { errorMessage: { not: null } }],
+            },
+          }),
+          prisma.marketplaceSyncJob.findFirst({
+            where: { tenantId, integrationId: integration.id, result: { not: Prisma.JsonNull } },
+            orderBy: { updatedAt: 'desc' },
+            select: { result: true },
+          }),
+        ]);
+
+        const apiLimitRemaining = readJsonNumber(latestJobWithResult?.result ?? null, [
+          'apiLimitRemaining',
+          'rateLimitRemaining',
+          'remainingRequests',
+        ]);
+        const apiLimitResetAt = readJsonString(latestJobWithResult?.result ?? null, [
+          'apiLimitResetAt',
+          'rateLimitResetAt',
+          'resetAt',
+        ]);
+
+        return {
+          integration: hideIntegrationSecrets(integration),
+          lastSuccessfulSyncAt: integration.lastSyncAt ?? lastDoneJob?.finishedAt ?? null,
+          lastErrorAt: lastFailedJob?.finishedAt ?? lastFailedJob?.updatedAt ?? null,
+          lastErrorMessage: lastFailedJob?.errorMessage ?? null,
+          errorRate: calculateErrorRate(totalJobCount, failedJobCount),
+          pendingJobCount,
+          runningJobCount,
+          failedJobCount,
+          retryAvailableCount: failedJobCount,
+          webhookReplayCount,
+          webhookFailureCount,
+          apiLimit: {
+            status: getApiLimitStatus(apiLimitRemaining),
+            remaining: apiLimitRemaining,
+            resetAt: apiLimitResetAt,
+          },
+        };
+      }),
+    );
+
+    const totals = items.reduce(
+      (acc, item) => ({
+        integrations: acc.integrations + 1,
+        pendingJobs: acc.pendingJobs + item.pendingJobCount,
+        runningJobs: acc.runningJobs + item.runningJobCount,
+        failedJobs: acc.failedJobs + item.failedJobCount,
+        retryAvailable: acc.retryAvailable + item.retryAvailableCount,
+        webhookReplayAvailable: acc.webhookReplayAvailable + item.webhookReplayCount,
+        webhookFailures: acc.webhookFailures + item.webhookFailureCount,
+      }),
+      {
+        integrations: 0,
+        pendingJobs: 0,
+        runningJobs: 0,
+        failedJobs: 0,
+        retryAvailable: 0,
+        webhookReplayAvailable: 0,
+        webhookFailures: 0,
+      },
+    );
+
+    return c.json({ data: { totals, items } });
+  },
+
   // ── Sync Jobs ─────────────────────────────────
 
   async listSyncJobs(c: Context): Promise<Response> {
@@ -909,6 +1079,43 @@ export const MarketplaceMonitoringController = {
     if (!event) return c.json(new NotFoundError('Webhook Event', id).toJSON(), 404);
 
     return c.json({ data: event });
+  },
+
+  async replayWebhookEvent(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const event = await prisma.marketplaceWebhookEvent.findFirst({
+      where: { id, tenantId },
+      include: {
+        integration: { select: { id: true, channel: true, isActive: true } },
+      },
+    });
+    if (!event) return c.json(new NotFoundError('Webhook Event', id).toJSON(), 404);
+    if (event.integration.channel !== MarketplaceChannel.TRENDYOL) {
+      return c.json(new ValidationError('Webhook replay su anda sadece Trendyol icin desteklenir.').toJSON(), 400);
+    }
+    if (!event.integration.isActive) {
+      return c.json(new ValidationError('Pasif entegrasyon icin webhook replay yapilamaz.').toJSON(), 400);
+    }
+
+    try {
+      const results = await processTrendyolWebhookPayload({
+        tenantId,
+        integrationId: event.integrationId,
+        payload: event.payload,
+        replayProcessed: true,
+      });
+      return c.json({
+        data: {
+          replayed: results.filter((result) => !result.duplicate && result.error === null).length,
+          failed: results.filter((result) => result.error !== null).length,
+          results,
+        },
+      });
+    } catch (err) {
+      return c.json(new ValidationError(err instanceof Error ? err.message : 'Webhook replay basarisiz.').toJSON(), 400);
+    }
   },
 
   // ── Listing Snapshots ─────────────────────────

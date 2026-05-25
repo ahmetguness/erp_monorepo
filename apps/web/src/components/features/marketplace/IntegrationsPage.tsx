@@ -35,6 +35,8 @@ import {
   useDeleteIntegration,
   useIntegrations,
   useListingSnapshots,
+  useMarketplaceHealthCenter,
+  useReplayWebhookEvent,
   useRetrySyncJob,
   useSyncJobs,
   useUpdateIntegration,
@@ -265,7 +267,9 @@ function OperationsPanel({ integrationId }: { integrationId: string }) {
   const { data: webhookEvents } = useWebhookEvents({ integrationId, limit: 3 });
   const { data: snapshots } = useListingSnapshots({ integrationId, limit: 3 });
   const retry = useRetrySyncJob();
+  const replayWebhook = useReplayWebhookEvent();
   const lastJob = syncJobs?.data[0];
+  const replayableWebhook = webhookEvents?.data.find((event) => event.errorMessage || !event.processedAt);
 
   return (
     <div className="mt-3 pt-3 border-t border-slate-800 grid grid-cols-1 gap-2">
@@ -275,7 +279,12 @@ function OperationsPanel({ integrationId }: { integrationId: string }) {
         detail={lastJob ? formatDate(lastJob.createdAt) : undefined}
         action={lastJob?.status === "FAILED" ? { label: "Tekrar dene", onClick: () => retry.mutate(lastJob.id) } : undefined}
       />
-      <MiniMetric label="Son Webhook" value={webhookEvents?.data[0]?.eventType ?? "Yok"} detail={webhookEvents?.data[0]?.errorMessage ?? undefined} />
+      <MiniMetric
+        label="Son Webhook"
+        value={webhookEvents?.data[0]?.eventType ?? "Yok"}
+        detail={webhookEvents?.data[0]?.errorMessage ?? undefined}
+        action={replayableWebhook ? { label: "Replay", onClick: () => replayWebhook.mutate(replayableWebhook.id) } : undefined}
+      />
       <MiniMetric label="Son Stok/Fiyat" value={snapshots?.data[0]?.batchRequestId ?? "Yok"} detail={snapshots?.data[0] ? formatDate(snapshots.data[0].lastSentAt) : undefined} />
     </div>
   );
@@ -340,6 +349,85 @@ function SummaryTile({
         </div>
       </div>
       <div className="text-[11px] text-slate-500 mt-2 truncate">{detail}</div>
+    </div>
+  );
+}
+
+function IntegrationHealthCenter() {
+  const { data, isLoading } = useMarketplaceHealthCenter();
+  const totals = data?.totals;
+  const topRiskItems = data?.items
+    .filter((item) => item.failedJobCount > 0 || item.webhookReplayCount > 0 || item.runningJobCount > 0 || item.pendingJobCount > 0)
+    .slice(0, 4) ?? [];
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 className="text-sm font-semibold text-white">Integration Health Center</h2>
+          <p className="text-xs text-slate-500 mt-1">Sync job, webhook replay ve API limit durumunu tek yerden izleyin.</p>
+        </div>
+        {isLoading && <RefreshCw className="w-4 h-4 text-slate-500 animate-spin" />}
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-2">
+        <HealthMetric label="Entegrasyon" value={totals?.integrations ?? 0} />
+        <HealthMetric label="Bekleyen Job" value={totals?.pendingJobs ?? 0} tone={(totals?.pendingJobs ?? 0) > 0 ? "warning" : "neutral"} />
+        <HealthMetric label="Calisan Job" value={totals?.runningJobs ?? 0} tone={(totals?.runningJobs ?? 0) > 0 ? "success" : "neutral"} />
+        <HealthMetric label="Failed Job" value={totals?.failedJobs ?? 0} tone={(totals?.failedJobs ?? 0) > 0 ? "danger" : "neutral"} />
+        <HealthMetric label="Retry" value={totals?.retryAvailable ?? 0} tone={(totals?.retryAvailable ?? 0) > 0 ? "warning" : "neutral"} />
+        <HealthMetric label="Webhook Replay" value={totals?.webhookReplayAvailable ?? 0} tone={(totals?.webhookReplayAvailable ?? 0) > 0 ? "danger" : "neutral"} />
+      </div>
+
+      {topRiskItems.length > 0 && (
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
+          {topRiskItems.map((item) => (
+            <div key={item.integration.id} className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-medium text-slate-200 truncate">{item.integration.name}</div>
+                <Badge variant={item.failedJobCount > 0 || item.webhookFailureCount > 0 ? "danger" : "warning"}>
+                  %{item.errorRate}
+                </Badge>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-1 text-[10px] text-slate-500">
+                <span>Job: {item.pendingJobCount + item.runningJobCount}</span>
+                <span>Fail: {item.failedJobCount}</span>
+                <span>Replay: {item.webhookReplayCount}</span>
+              </div>
+              <div className="mt-2 text-[10px] text-slate-500 truncate">
+                {item.lastErrorMessage ?? (item.lastSuccessfulSyncAt ? `Son basarili sync: ${formatDate(item.lastSuccessfulSyncAt)}` : "Basarili sync yok")}
+              </div>
+              <div className="mt-1 text-[10px] text-slate-600">
+                API limit: {item.apiLimit.remaining ?? item.apiLimit.status}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HealthMetric({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  tone?: "neutral" | "success" | "warning" | "danger";
+}) {
+  const toneClass = {
+    neutral: "text-slate-200",
+    success: "text-emerald-300",
+    warning: "text-amber-300",
+    danger: "text-red-300",
+  }[tone];
+
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
+      <div className="text-[10px] text-slate-500 truncate">{label}</div>
+      <div className={`text-lg font-semibold tabular-nums ${toneClass}`}>{value}</div>
     </div>
   );
 }
@@ -501,6 +589,8 @@ export function IntegrationsPage() {
         <SummaryTile icon={<Package className="w-4 h-4" />} label="Listeleme" value={String(summary.listings)} detail="Pazaryerine bagli urun" tone="warning" />
         <SummaryTile icon={<ShoppingCart className="w-4 h-4" />} label="Siparis" value={String(summary.orders)} detail="Senkronize edilen siparis" />
       </div>
+
+      <IntegrationHealthCenter />
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 mb-4">
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_180px_150px_150px] gap-3">

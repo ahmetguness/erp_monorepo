@@ -1,5 +1,5 @@
 import { Context } from 'hono';
-import { MailDeliveryStatus, MailDirection } from '@prisma/client';
+import { AiPermissionCheckResult, AiRequestStatus, AiRequestType, MailDeliveryStatus, MailDirection } from '@prisma/client';
 import { sendMail } from '../services/mail.service';
 import { MailHistoryService } from '../services/mail-history.service';
 import {
@@ -17,6 +17,8 @@ import {
 import { prisma } from '../lib/prisma';
 import { openai } from '../lib/openai';
 import { BusinessRulesService } from '../services/business-rules.service.js';
+import { getRequestMeta } from '../utils/audit.js';
+import { AI_MODELS, AI_PROMPT_VERSIONS, recordAiRequestLog } from '../services/ai-governance.service';
 import {
   createFallbackMailDraft,
   getMailTemplates,
@@ -254,8 +256,9 @@ export class MailController {
 
   /** POST /api/mail/ai-draft - Secili baglama gore mail taslagi uret */
   static async aiDraft(c: Context) {
-    requireTenantId(c);
-    requireUserId(c);
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const requestMeta = getRequestMeta(c);
     const body: unknown = await c.req.json();
     if (!isRecord(body)) return c.json({ error: 'Gecersiz istek govdesi.' }, 400);
 
@@ -276,6 +279,21 @@ export class MailController {
     };
 
     if (!process.env.OPENAI_API_KEY) {
+      await recordAiRequestLog({
+        tenantId,
+        userId,
+        requestType: AiRequestType.MAIL_DRAFT,
+        promptVersion: AI_PROMPT_VERSIONS.MAIL_DRAFT,
+        model: AI_MODELS.MAIL_DRAFT,
+        entityContext: { templateId, variableKeys: Object.keys(variables), tone, hasAudience: Boolean(audience) },
+        permissionCheckResult: AiPermissionCheckResult.ALLOWED,
+        inputText: [templateId, notes, audience].filter((item): item is string => Boolean(item)).join(' '),
+        outputText: fallbackDraft.body,
+        draft: fallbackDraft,
+        status: AiRequestStatus.FALLBACK,
+        ipAddress: requestMeta.ipAddress,
+        userAgent: requestMeta.userAgent,
+      });
       return c.json({ data: fallbackDraft });
     }
 
@@ -316,8 +334,44 @@ export class MailController {
       });
 
       const draft = parseAiDraftContent(completion.choices[0]?.message.content ?? null, fallbackDraft);
+      await recordAiRequestLog({
+        tenantId,
+        userId,
+        requestType: AiRequestType.MAIL_DRAFT,
+        promptVersion: AI_PROMPT_VERSIONS.MAIL_DRAFT,
+        model: AI_MODELS.MAIL_DRAFT,
+        entityContext: { templateId, variableKeys: Object.keys(variables), tone, hasAudience: Boolean(audience) },
+        permissionCheckResult: AiPermissionCheckResult.ALLOWED,
+        inputText: [templateId, notes, audience, variableLines].filter((item): item is string => Boolean(item)).join(' '),
+        outputText: draft.body,
+        draft,
+        status: draft.usedAi ? AiRequestStatus.SUCCEEDED : AiRequestStatus.FALLBACK,
+        tokenUsage: {
+          prompt: completion.usage?.prompt_tokens ?? null,
+          completion: completion.usage?.completion_tokens ?? null,
+          total: completion.usage?.total_tokens ?? null,
+        },
+        ipAddress: requestMeta.ipAddress,
+        userAgent: requestMeta.userAgent,
+      });
       return c.json({ data: draft });
-    } catch {
+    } catch (err) {
+      await recordAiRequestLog({
+        tenantId,
+        userId,
+        requestType: AiRequestType.MAIL_DRAFT,
+        promptVersion: AI_PROMPT_VERSIONS.MAIL_DRAFT,
+        model: AI_MODELS.MAIL_DRAFT,
+        entityContext: { templateId, variableKeys: Object.keys(variables), tone, hasAudience: Boolean(audience) },
+        permissionCheckResult: AiPermissionCheckResult.ALLOWED,
+        inputText: [templateId, notes, audience, variableLines].filter((item): item is string => Boolean(item)).join(' '),
+        outputText: fallbackDraft.body,
+        draft: fallbackDraft,
+        status: AiRequestStatus.FALLBACK,
+        errorMessage: err instanceof Error ? err.message : String(err),
+        ipAddress: requestMeta.ipAddress,
+        userAgent: requestMeta.userAgent,
+      });
       return c.json({ data: fallbackDraft });
     }
   }

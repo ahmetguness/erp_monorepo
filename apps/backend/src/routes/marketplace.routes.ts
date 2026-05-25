@@ -54,10 +54,12 @@ marketplaceRoutes.post('/orders/:id/status', requirePermission('marketplace', 'U
 marketplaceRoutes.delete('/orders/:id', requirePermission('marketplace', 'DELETE'), MarketplaceOrderController.remove);
 
 // Monitoring (read-only)
+marketplaceRoutes.get('/health', requirePermission('marketplace', 'READ'), MarketplaceMonitoringController.health);
 marketplaceRoutes.get('/sync-jobs', requirePermission('marketplace', 'READ'), MarketplaceMonitoringController.listSyncJobs);
 marketplaceRoutes.get('/sync-jobs/:id', requirePermission('marketplace', 'READ'), MarketplaceMonitoringController.getSyncJob);
 marketplaceRoutes.post('/sync-jobs/:id/retry', requirePermission('marketplace', 'UPDATE'), MarketplaceMonitoringController.retrySyncJob);
 marketplaceRoutes.get('/webhook-events', requirePermission('marketplace', 'READ'), MarketplaceMonitoringController.listWebhookEvents);
+marketplaceRoutes.post('/webhook-events/:id/replay', requirePermission('marketplace', 'UPDATE'), MarketplaceMonitoringController.replayWebhookEvent);
 marketplaceRoutes.get('/webhook-events/:id', requirePermission('marketplace', 'READ'), MarketplaceMonitoringController.getWebhookEvent);
 marketplaceRoutes.get('/listing-snapshots', requirePermission('marketplace', 'READ'), MarketplaceMonitoringController.listSnapshots);
 

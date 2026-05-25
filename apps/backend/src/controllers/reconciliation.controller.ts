@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
+import { assertAccountingPeriodOpen } from '../services/financial-integrity.service';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -99,12 +100,15 @@ export const ReconciliationController = {
       return c.json(new ValidationError('name ve date zorunludur.').toJSON(), 400);
     }
 
+    const reconciliationDate = new Date(body.date);
+    await assertAccountingPeriodOpen(prisma, tenantId, reconciliationDate, 'Mutabakat');
+
     const reconciliation = await prisma.reconciliation.create({
       data: {
         tenantId,
         name: body.name,
         description: body.description ?? null,
-        date: new Date(body.date),
+        date: reconciliationDate,
         ...(body.lines?.length && {
           lines: {
             create: body.lines.map((line) => ({
@@ -140,6 +144,8 @@ export const ReconciliationController = {
     if (reconciliation.isFinalized) {
       return c.json(new ValidationError('Tamamlanmış mutabakata satır eklenemez.').toJSON(), 400);
     }
+
+    await assertAccountingPeriodOpen(prisma, tenantId, reconciliation.date, 'Mutabakat satiri');
 
     const body = await c.req.json<AddReconciliationLineDTO>();
 
@@ -182,6 +188,8 @@ export const ReconciliationController = {
     if (reconciliation._count.lines === 0) {
       return c.json(new ValidationError('Satır olmadan mutabakat tamamlanamaz.').toJSON(), 400);
     }
+
+    await assertAccountingPeriodOpen(prisma, tenantId, reconciliation.date, 'Mutabakat tamamlama');
 
     const updated = await prisma.reconciliation.update({
       where: { id },

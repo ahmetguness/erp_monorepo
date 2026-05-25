@@ -9,6 +9,7 @@ const stockRoutes = new Hono();
 stockRoutes.use('*', requireModule(MODULE_KEYS.INVENTORY));
 
 stockRoutes.get('/levels', requirePermission('inventory', 'READ'), StockController.listStockLevels);
+stockRoutes.get('/reorder-suggestions', requirePermission('inventory', 'READ'), StockController.listReorderSuggestions);
 stockRoutes.get('/movements', requirePermission('inventory', 'READ'), StockController.listMovements);
 stockRoutes.post('/movements', requirePermission('inventory', 'CREATE'), StockController.createManualMovement);
 stockRoutes.get('/counts', requirePermission('inventory', 'READ'), StockController.listStockCounts);

@@ -126,8 +126,22 @@ export const createWorkOrder = (data: {
 export const changeWorkOrderStatus = (id: string, data: { status: string; notes?: string }) =>
   apiClient.post<{ data: WorkOrder }>(`/api/production/work-orders/${id}/status`, data).then((r) => r.data.data);
 
-export const reportProduction = (id: string, data: { producedQty: number; consumptions?: Array<{ itemId: string; quantity: number }> }) =>
+export const reportProduction = (id: string, data: {
+  producedQty: number;
+  scrapQty?: number;
+  operationId?: string;
+  notes?: string;
+  consumptions?: Array<{ itemId: string; quantity: number }>;
+}) =>
   apiClient.post(`/api/production/work-orders/${id}/report`, data).then((r) => r.data);
+
+export const updateWorkOrderOperation = (workOrderId: string, operationId: string, data: {
+  status?: string;
+  actualStartAt?: string | null;
+  actualEndAt?: string | null;
+  notes?: string | null;
+}) =>
+  apiClient.patch<{ data: WorkOrderOp }>(`/api/production/work-orders/${workOrderId}/operations/${operationId}`, data).then((r) => r.data.data);
 
 export const deleteWorkOrder = (id: string) =>
   apiClient.delete(`/api/production/work-orders/${id}`);
