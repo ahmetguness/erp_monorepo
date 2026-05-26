@@ -3,12 +3,9 @@
 import { useEffect, useState } from 'react';
 import { Image as ImageIcon, Package } from 'lucide-react';
 import { useAttachments } from '@/hooks/useAttachments';
-import { downloadAttachment, type Attachment } from '@/services/attachment.service';
+import { downloadAttachment } from '@/services/attachment.service';
 import { cn } from '@/lib/utils';
-
-function isImageAttachment(attachment: Attachment): boolean {
-  return attachment.mimeType?.startsWith('image/') ?? false;
-}
+import { findEntityImageAttachment } from '@/components/shared/entityImageAttachment';
 
 interface EntityImageProps {
   entityType: string;
@@ -20,7 +17,7 @@ interface EntityImageProps {
 
 export function EntityImage({ entityType, entityId, className, fallback = 'image', fallbackContent }: EntityImageProps) {
   const { data: attachments = [] } = useAttachments(entityType, entityId);
-  const image = attachments.find(isImageAttachment);
+  const image = findEntityImageAttachment(attachments);
   const imageId = image?.id;
   const [imageUrl, setImageUrl] = useState<{ imageId: string; url: string } | null>(null);
   const url = imageId && imageUrl?.imageId === imageId ? imageUrl.url : null;

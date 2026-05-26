@@ -5,11 +5,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ImageUploadBox, type ImageUploadStatus } from '@/components/shared/ImageUploadBox';
 import { useAttachments } from '@/hooks/useAttachments';
 import { useUIStore } from '@/store/ui.store';
-import { deleteAttachment, downloadAttachment, uploadAttachment, type Attachment } from '@/services/attachment.service';
-
-function isImageAttachment(attachment: Attachment): boolean {
-  return attachment.mimeType?.startsWith('image/') ?? false;
-}
+import { deleteAttachment, downloadAttachment, uploadAttachment } from '@/services/attachment.service';
+import { ENTITY_IMAGE_TAG, findEntityImageAttachment } from '@/components/shared/entityImageAttachment';
 
 interface EntityImageManagerProps {
   entityType: string;
@@ -34,7 +31,7 @@ export function EntityImageManager({
   const queryClient = useQueryClient();
   const { toast } = useUIStore();
   const { data: attachments = [] } = useAttachments(entityType, entityId);
-  const image = useMemo(() => attachments.find(isImageAttachment) ?? null, [attachments]);
+  const image = useMemo(() => findEntityImageAttachment(attachments), [attachments]);
   const imageId = image?.id;
 
   const [file, setFile] = useState<File | null>(null);
@@ -97,7 +94,7 @@ export function EntityImageManager({
 
     try {
       setStatus('uploading');
-      await uploadAttachment(entityType, entityId, file);
+      await uploadAttachment(entityType, entityId, file, { tags: [ENTITY_IMAGE_TAG] });
       if (image) await deleteAttachment(image.id);
       await invalidate();
       if (selectedPreviewUrl) URL.revokeObjectURL(selectedPreviewUrl);
