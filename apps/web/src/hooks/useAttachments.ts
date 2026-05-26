@@ -6,11 +6,13 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   deleteAttachment,
   getAttachmentEntityOptions,
+  getAttachmentAccessLog,
   getAttachments,
   getDocumentCenter,
   renameAttachment,
   updateAttachmentMetadata,
   uploadAttachment,
+  uploadAttachmentVersion,
   type AttachmentEntityType,
   type AttachmentMetadataInput,
   type DocumentCenterParams,
@@ -21,6 +23,14 @@ export function useAttachments(entityType: string, entityId: string) {
     queryKey: ['attachments', entityType, entityId],
     queryFn: () => getAttachments(entityType, entityId),
     enabled: !!entityType && !!entityId,
+  });
+}
+
+export function useAttachmentAccessLog(id: string | null) {
+  return useQuery({
+    queryKey: ['attachments', 'access-log', id],
+    queryFn: () => getAttachmentAccessLog(id ?? ''),
+    enabled: Boolean(id),
   });
 }
 
@@ -49,6 +59,20 @@ export function useUploadAttachment() {
       qc.invalidateQueries({ queryKey: ['attachments', vars.entityType, vars.entityId] });
       qc.invalidateQueries({ queryKey: ['attachments', 'library'] });
       toast.success('Dosya yüklendi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useUploadAttachmentVersion() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: ({ id, file, metadata }: { id: string; file: File; metadata?: AttachmentMetadataInput }) =>
+      uploadAttachmentVersion(id, file, metadata),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['attachments'] });
+      toast.success('Yeni dosya versiyonu yüklendi.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

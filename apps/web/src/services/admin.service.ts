@@ -31,6 +31,97 @@ export interface PlatformMetrics {
   totals: { users: number; products: number; invoices: number; payments: number };
 }
 
+export type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DEAD_LETTER';
+export type SyncJobStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
+
+export interface EndpointLatencySnapshot {
+  key: string;
+  method: string;
+  path: string;
+  count: number;
+  errorCount: number;
+  avgMs: number;
+  maxMs: number;
+  histogram: { le100ms: number; le300ms: number; le1000ms: number; gt1000ms: number };
+}
+
+export interface SlowEndpointSnapshot {
+  method: string;
+  path: string;
+  status: number;
+  durationMs: number;
+  requestId: string;
+  correlationId: string;
+  occurredAt: string;
+}
+
+export interface RecentErrorSnapshot {
+  method: string;
+  path: string;
+  message: string;
+  requestId: string;
+  correlationId: string;
+  occurredAt: string;
+}
+
+export interface DomainEventFailureSnapshot {
+  id: string;
+  tenantId: string;
+  tenantName: string | null;
+  name: string;
+  source: string;
+  status: DomainEventStatus;
+  attempts: number;
+  lastError: string | null;
+  updatedAt: string;
+}
+
+export interface WorkerJobMetricSnapshot {
+  status: SyncJobStatus;
+  count: number;
+}
+
+export interface RecentWorkerJobSnapshot {
+  id: string;
+  tenantId: string;
+  tenantName: string | null;
+  integrationId: string;
+  jobType: string;
+  status: SyncJobStatus;
+  processedCount: number;
+  errorCount: number;
+  errorMessage: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  updatedAt: string;
+}
+
+export interface OperationalObservability {
+  runtime: {
+    appRole: string;
+    marketplaceWorkerEnabled: boolean;
+    uptimeSeconds: number;
+    generatedAt: string;
+  };
+  http: {
+    totalRequests: number;
+    totalErrors: number;
+    slowThresholdMs: number;
+    endpoints: EndpointLatencySnapshot[];
+    recentSlowEndpoints: SlowEndpointSnapshot[];
+    recentErrors: RecentErrorSnapshot[];
+  };
+  domainEvents: {
+    failedCount: number;
+    deadLetterCount: number;
+    recentFailures: DomainEventFailureSnapshot[];
+  };
+  workerJobs: {
+    byStatus: WorkerJobMetricSnapshot[];
+    recentProblemJobs: RecentWorkerJobSnapshot[];
+  };
+}
+
 export interface TenantMetrics {
   tenantId: string;
   counts: { users: number; products: number; contacts: number; invoices: number; salesOrders: number; purchaseOrders: number; payments: number; warehouses: number; stockLevels: number; journalEntries: number };
@@ -155,6 +246,11 @@ export async function getPlatformMetrics(): Promise<PlatformMetrics> {
 
 export async function getTenantMetrics(id: string): Promise<TenantMetrics> {
   const res = await adminApiClient.get(`/api/admin/metrics/tenants/${id}`);
+  return res.data.data;
+}
+
+export async function getOperationalObservability(): Promise<OperationalObservability> {
+  const res = await adminApiClient.get('/api/admin/observability');
   return res.data.data;
 }
 

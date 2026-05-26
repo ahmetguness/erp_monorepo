@@ -4,9 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   Activity, ArrowUpRight, Building2, CreditCard, Package,
-  Plus, Receipt, Shield, TrendingUp, Users, Zap,
+  Plus, Receipt, Server, Shield, Timer, TrendingUp, Users, Zap,
 } from 'lucide-react';
-import { getPlatformMetrics, getTenants } from '@/services/admin.service';
+import { getOperationalObservability, getPlatformMetrics, getTenants } from '@/services/admin.service';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
@@ -43,6 +43,13 @@ function formatNumber(value: number): string {
   return numberFormatter.format(value);
 }
 
+function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return `${hours} sa ${minutes} dk`;
+  return `${minutes} dk`;
+}
+
 function DashboardSkeleton() {
   return (
     <div className="space-y-5" aria-busy="true">
@@ -64,6 +71,7 @@ export default function AdminDashboardPage() {
   const { admin } = useAdminAuthStore();
   const { data: metrics, isLoading, isError } = useQuery({ queryKey: ['admin', 'metrics'], queryFn: getPlatformMetrics });
   const { data: recentTenants } = useQuery({ queryKey: ['admin', 'recent-tenants'], queryFn: () => getTenants({ page: 1, limit: 5 }) });
+  const { data: observability } = useQuery({ queryKey: ['admin', 'observability'], queryFn: getOperationalObservability, refetchInterval: 30_000 });
 
   if (isLoading) return <DashboardSkeleton />;
 
@@ -101,6 +109,10 @@ export default function AdminDashboardPage() {
     { plan: 'Enterprise', count: metrics.plans.enterprise, color: 'bg-amber-400' },
   ];
 
+  const slowEndpoint = observability?.http.recentSlowEndpoints[0];
+  const latestDomainEventFailure = observability?.domainEvents.recentFailures[0];
+  const latestProblemJob = observability?.workerJobs.recentProblemJobs[0];
+
   return (
     <div className="space-y-5">
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
@@ -136,6 +148,64 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       </section>
+
+      {observability && (
+        <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Operasyonel İzleme</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Request, domain event ve worker sağlığı 30 saniyede bir yenilenir.
+              </p>
+            </div>
+            <span className="inline-flex w-fit items-center gap-2 rounded-full bg-slate-800 px-3 py-1 text-xs font-medium text-slate-300">
+              <Server className="h-3.5 w-3.5" />
+              {observability.runtime.appRole} / {formatDuration(observability.runtime.uptimeSeconds)}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-medium text-slate-500">HTTP istek</p>
+                <Activity className="h-4 w-4 text-sky-300" />
+              </div>
+              <p className="mt-2 text-xl font-semibold text-white">{formatNumber(observability.http.totalRequests)}</p>
+              <p className="mt-1 text-xs text-slate-500">{formatNumber(observability.http.totalErrors)} server hatası</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-medium text-slate-500">Yavaş endpoint</p>
+                <Timer className="h-4 w-4 text-amber-300" />
+              </div>
+              <p className="mt-2 truncate text-sm font-semibold text-white">{slowEndpoint ? `${slowEndpoint.method} ${slowEndpoint.path}` : 'Yok'}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {slowEndpoint ? `${formatNumber(slowEndpoint.durationMs)}ms / eşik ${observability.http.slowThresholdMs}ms` : 'Eşik aşımı görülmedi'}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-medium text-slate-500">Event hata</p>
+                <Zap className="h-4 w-4 text-red-300" />
+              </div>
+              <p className="mt-2 text-xl font-semibold text-white">
+                {formatNumber(observability.domainEvents.failedCount + observability.domainEvents.deadLetterCount)}
+              </p>
+              <p className="mt-1 truncate text-xs text-slate-500">{latestDomainEventFailure?.name ?? 'Aktif hata yok'}</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-medium text-slate-500">Worker job</p>
+                <Server className="h-4 w-4 text-emerald-300" />
+              </div>
+              <p className="mt-2 text-xl font-semibold text-white">
+                {formatNumber(observability.workerJobs.byStatus.reduce((sum, row) => sum + row.count, 0))}
+              </p>
+              <p className="mt-1 truncate text-xs text-slate-500">{latestProblemJob ? `${latestProblemJob.status} ${latestProblemJob.jobType}` : 'Sorunlu job yok'}</p>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {tenantStats.map((stat) => (

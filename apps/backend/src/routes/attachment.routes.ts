@@ -9,6 +9,8 @@ attachmentRoutes.get('/library', requirePermission('attachments', 'READ'), Attac
 attachmentRoutes.get('/entity-options', requirePermission('attachments', 'READ'), AttachmentController.entityOptions);
 attachmentRoutes.get('/', requirePermission('attachments', 'READ'), AttachmentController.listByEntity);
 attachmentRoutes.post('/upload', requirePermission('attachments', 'CREATE'), AttachmentController.upload);
+attachmentRoutes.get('/:id/access-log', requirePermission('attachments', 'READ'), AttachmentController.accessLog);
+attachmentRoutes.post('/:id/version', requirePermission('attachments', 'CREATE'), AttachmentController.uploadVersion);
 attachmentRoutes.get('/:id/download', requirePermission('attachments', 'READ'), AttachmentController.download);
 attachmentRoutes.patch('/:id', requirePermission('attachments', 'UPDATE'), AttachmentController.rename);
 attachmentRoutes.delete('/:id', requirePermission('attachments', 'DELETE'), AttachmentController.delete);

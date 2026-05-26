@@ -19,6 +19,7 @@ import { useCurrentUser } from "@/hooks/useAuth";
 import { useSmartNotifications } from "@/hooks/useNotifications";
 import { getTcmbRates } from "@/services/currency-rates.service";
 import { getRecommendations, type Recommendation } from "@/services/intelligence.service";
+import { getPinnedKpiPreviews, type KpiPreview } from "@/services/reporting.service";
 import type { SmartNotification } from "@/services/notification.service";
 import { updateTaskStatus } from "@/services/task.service";
 import { SingleResponseSchema, PaginatedResponseSchema } from "@/types/api.types";
@@ -232,6 +233,7 @@ export function DashboardOverview() {
   const { data: appr } = useQuery({ queryKey: ["d", "appr"], enabled: canReadApprovals, queryFn: async () => { try { return safeParse(SingleResponseSchema(ApprSchema), (await apiClient.get("/api/approvals/requests", { params: { limit: 5 } })).data, "a").data; } catch { return []; } } });
   const { data: tasks } = useQuery({ queryKey: ["d", "tasks"], enabled: canReadTasks, queryFn: async () => { try { return safeParse(SingleResponseSchema(z.array(TaskSchema)), (await apiClient.get("/api/tasks")).data, "tasks").data; } catch { return []; } } });
   const { data: recommendations = [] } = useQuery({ queryKey: ["d", "recommendations"], queryFn: async () => { try { return await getRecommendations(); } catch { return []; } } });
+  const { data: pinnedKpis = [] } = useQuery({ queryKey: ["reports", "pinned-kpi"], enabled: canReadReporting, queryFn: async () => { try { return await getPinnedKpiPreviews(); } catch { return []; } } });
   const { data: smartNotifications } = useSmartNotifications();
   const completeTask = useMutation({
     mutationFn: (taskId: string) => updateTaskStatus(taskId, "DONE"),
@@ -382,6 +384,31 @@ export function DashboardOverview() {
           </div>
         </div>
       </Card>
+
+      {pinnedKpis.length > 0 && (
+        <Card>
+          <CardHeader icon={<TrendingUp className="w-4 h-4 text-sky-400" />} title="Sabit KPI Kartları" />
+          <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+            {pinnedKpis.slice(0, 4).map((kpi: KpiPreview) => (
+              <div key={`${kpi.config.dataset}:${kpi.config.metric}:${kpi.config.dateRangePreset}`} className="rounded-xl border border-slate-800 bg-slate-950/35 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-100">{kpi.metricLabel}</p>
+                    <p className="mt-1 text-xs text-slate-500">{kpi.datasetLabel}</p>
+                  </div>
+                  <span className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300">
+                    {kpi.chartType}
+                  </span>
+                </div>
+                <p className="mt-3 truncate text-xl font-bold text-white">{kpi.formattedValue}</p>
+                {(kpi.period.from || kpi.period.to) && (
+                  <p className="mt-1 text-[11px] text-slate-600">{kpi.period.from ?? "-"} / {kpi.period.to ?? "-"}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>

@@ -356,9 +356,13 @@ export function MailCenterPage() {
 
   const { data, isLoading } = useMailHistory(params);
   const { data: detail } = useMailMessage(detailId);
+  const availableMailTemplates = useMemo(
+    () => mailTemplates.filter((template) => template.scope === "SYSTEM" || template.approved),
+    [mailTemplates],
+  );
   const selectedTemplate = useMemo(
-    () => mailTemplates.find((template) => template.id === selectedTemplateId),
-    [mailTemplates, selectedTemplateId],
+    () => availableMailTemplates.find((template) => template.id === selectedTemplateId),
+    [availableMailTemplates, selectedTemplateId],
   );
   const recipients = parseRecipients(recipientsText);
   const tenantTemplates = mailTemplates.filter((template) => template.scope === "TENANT");
@@ -443,7 +447,7 @@ export function MailCenterPage() {
   };
 
   const selectTemplate = (value: string) => {
-    const template = mailTemplates.find((item) => item.id === value);
+    const template = availableMailTemplates.find((item) => item.id === value);
     if (!template) {
       setSelectedTemplateId("");
       setTemplateVariables({});
@@ -774,7 +778,7 @@ export function MailCenterPage() {
                   className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none focus:border-sky-500/60"
                 >
                   <option value="">Sablon secin</option>
-                  {mailTemplates.map((template) => (
+                  {availableMailTemplates.map((template) => (
                     <option key={template.id} value={template.id}>
                       {template.category} - {template.name}
                       {template.scope === "TENANT" ? ` (v${template.version}${template.approved ? "" : ", taslak"})` : ""}

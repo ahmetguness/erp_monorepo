@@ -1,11 +1,11 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
-import { downloadTemplate, exportData, previewImport, type DataExchangeEntity } from '@/services/data-exchange.service';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { downloadTemplate, exportData, getDataQualitySummary, previewImport, type DataExchangeEntity, type ImportPreviewInput } from '@/services/data-exchange.service';
 
 export function useImportPreview() {
   return useMutation({
-    mutationFn: ({ entity, csv }: { entity: DataExchangeEntity; csv: string }) => previewImport(entity, csv),
+    mutationFn: (input: ImportPreviewInput) => previewImport(input),
   });
 }
 
@@ -18,5 +18,12 @@ export function useTemplateDownload() {
 export function useDataExport() {
   return useMutation({
     mutationFn: (entity: DataExchangeEntity) => exportData(entity),
+  });
+}
+
+export function useDataQualitySummary() {
+  return useQuery({
+    queryKey: ['data-exchange', 'quality'],
+    queryFn: getDataQualitySummary,
   });
 }

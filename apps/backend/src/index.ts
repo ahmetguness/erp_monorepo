@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
+import { randomUUID } from 'crypto';
 import { prisma } from './lib/prisma';
 import { logger, printBanner } from './lib/logger';
 import { userRoutes } from './routes/user.routes';
@@ -64,6 +65,7 @@ import { TrendyolWebhookController } from './controllers/trendyol-webhook.contro
 import { TrendyolWorker } from './services/trendyol-worker.service';
 import { startMarketplaceMocks } from './mocks';
 import { registerDomainEventListeners } from './domain-events';
+import { recordHttpRequest, recordUnhandledError } from './services/observability.service';
 
 // ── Startup env var kontrolü ─────────────────
 const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET', 'ADMIN_JWT_SECRET'] as const;
@@ -86,6 +88,7 @@ export const app = new Hono();
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const APP_ROLE = process.env.APP_ROLE ?? 'api';
+const REQUEST_HEADER_PATTERN = /^[a-zA-Z0-9._-]{1,128}$/;
 
 registerDomainEventListeners();
 
@@ -109,6 +112,16 @@ function startBackgroundServices(): void {
   startMarketplaceMocks();
 }
 
+function getRequestId(c: { req: { header: (name: string) => string | undefined } }): string {
+  const candidate = c.req.header('x-request-id')?.trim();
+  return candidate && REQUEST_HEADER_PATTERN.test(candidate) ? candidate : randomUUID();
+}
+
+function getCorrelationId(c: { req: { header: (name: string) => string | undefined } }, requestId: string): string {
+  const candidate = c.req.header('x-correlation-id')?.trim();
+  return candidate && REQUEST_HEADER_PATTERN.test(candidate) ? candidate : requestId;
+}
+
 // ── CORS ─────────────────────────────────────
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
   .split(',')
@@ -122,8 +135,8 @@ app.use('*', cors({
     return ALLOWED_ORIGINS.includes(origin) ? origin : '';
   },
   allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
-  exposeHeaders: ['Content-Length'],
+  allowHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-request-id', 'x-correlation-id'],
+  exposeHeaders: ['Content-Length', 'x-request-id', 'x-correlation-id'],
   maxAge: 86400,
   credentials: true,
 }));
@@ -131,8 +144,32 @@ app.use('*', cors({
 // ── HTTP istek logu ──────────────────────────
 app.use('*', async (c, next) => {
   const start = Date.now();
+  const requestId = getRequestId(c);
+  const correlationId = getCorrelationId(c, requestId);
+  c.header('x-request-id', requestId);
+  c.header('x-correlation-id', correlationId);
+
   await next();
-  logger.http(c.req.method, c.req.path, c.res.status, Date.now() - start);
+  const durationMs = Date.now() - start;
+  recordHttpRequest({
+    method: c.req.method,
+    path: c.req.path,
+    status: c.res.status,
+    durationMs,
+    requestId,
+    correlationId,
+  });
+  logger.http(c.req.method, c.req.path, c.res.status, durationMs, { requestId, correlationId });
+  if (durationMs >= 1_000) {
+    logger.warn('[HTTP] Slow endpoint detected', {
+      method: c.req.method,
+      path: c.req.path,
+      status: c.res.status,
+      durationMs,
+      requestId,
+      correlationId,
+    });
+  }
 });
 
 // ── Routes ───────────────────────────────────
@@ -251,12 +288,22 @@ app.route('/api', tenantApi);
 
 // ── Global error handler ─────────────────────
 app.onError((err, c) => {
+  const requestId = c.res.headers.get('x-request-id') ?? c.req.header('x-request-id') ?? 'unknown';
+  const correlationId = c.res.headers.get('x-correlation-id') ?? c.req.header('x-correlation-id') ?? requestId;
+  recordUnhandledError({
+    method: c.req.method,
+    path: c.req.path,
+    message: err.message,
+    requestId,
+    correlationId,
+  });
+
   if (err instanceof BaseError && err.isOperational) {
-    logger.warn(`Operational error: ${err.message}`);
+    logger.warn(`Operational error: ${err.message}`, { requestId, correlationId });
     return c.json(err.toJSON(), err.statusCode as 400);
   }
 
-  logger.error(`Unhandled error: ${err.message}`);
+  logger.error(`Unhandled error: ${err.message}`, { requestId, correlationId });
 
   if (IS_PRODUCTION) {
     return c.json({

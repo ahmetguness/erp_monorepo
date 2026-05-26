@@ -58,24 +58,36 @@ function statusBadge(status: number): string {
   return `${fg.green}${bold}${status}${r}`;
 }
 
+export interface StructuredLogFields {
+  [key: string]: string | number | boolean | null | undefined;
+}
+
+function formatFields(fields: StructuredLogFields | undefined): string {
+  if (!fields) return '';
+  const parts = Object.entries(fields)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}=${String(value)}`);
+  return parts.length > 0 ? ` ${dim}${parts.join(' ')}${r}` : '';
+}
+
 // ─────────────────────────────────────────────
 // Logger
 // ─────────────────────────────────────────────
 
 export const logger = {
-  info: (msg: string) =>
-    console.log(`${time()} ${badge('INFO', bg.blue, fg.white)}  ${fg.white}${msg}${r}`),
+  info: (msg: string, fields?: StructuredLogFields) =>
+    console.log(`${time()} ${badge('INFO', bg.blue, fg.white)}  ${fg.white}${msg}${r}${formatFields(fields)}`),
 
-  success: (msg: string) =>
-    console.log(`${time()} ${badge(' OK ', bg.green, fg.white)}  ${fg.white}${msg}${r}`),
+  success: (msg: string, fields?: StructuredLogFields) =>
+    console.log(`${time()} ${badge(' OK ', bg.green, fg.white)}  ${fg.white}${msg}${r}${formatFields(fields)}`),
 
-  warn: (msg: string) =>
-    console.log(`${time()} ${badge('WARN', bg.yellow, fg.black)}  ${fg.yellow}${msg}${r}`),
+  warn: (msg: string, fields?: StructuredLogFields) =>
+    console.log(`${time()} ${badge('WARN', bg.yellow, fg.black)}  ${fg.yellow}${msg}${r}${formatFields(fields)}`),
 
-  error: (msg: string) =>
-    console.log(`${time()} ${badge('ERR ', bg.red, fg.white)}  ${fg.red}${msg}${r}`),
+  error: (msg: string, fields?: StructuredLogFields) =>
+    console.log(`${time()} ${badge('ERR ', bg.red, fg.white)}  ${fg.red}${msg}${r}${formatFields(fields)}`),
 
-  http: (method: string, path: string, status: number, ms: number) => {
+  http: (method: string, path: string, status: number, ms: number, fields?: StructuredLogFields) => {
     const pathStr = `${fg.white}${path}${r}`;
     const msStr   = ms > 500
       ? `${fg.red}${bold}${ms}ms${r}`
@@ -84,7 +96,7 @@ export const logger = {
         : `${dim}${ms}ms${r}`;
 
     console.log(
-      `${time()} ${httpMethodBadge(method)} ${pathStr.padEnd(38)} ${statusBadge(status)}  ${msStr}`,
+      `${time()} ${httpMethodBadge(method)} ${pathStr.padEnd(38)} ${statusBadge(status)}  ${msStr}${formatFields(fields)}`,
     );
   },
 };

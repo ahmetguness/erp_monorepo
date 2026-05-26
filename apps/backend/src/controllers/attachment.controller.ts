@@ -90,6 +90,10 @@ function readRecord(value: unknown): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function readBodyString(body: Record<string, unknown>, key: string): string | undefined {
   const value = body[key];
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
@@ -300,6 +304,12 @@ function validateFile(file: File): { safeName: string; extension: string; mimeTy
   return { safeName, extension, mimeType };
 }
 
+function getAttachmentIdFromAuditValues(value: Prisma.JsonValue | null): string | null {
+  if (!isRecord(value)) return null;
+  const attachmentId = value.attachmentId;
+  return typeof attachmentId === 'string' ? attachmentId : null;
+}
+
 export const AttachmentController = {
   async library(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
@@ -425,6 +435,7 @@ export const AttachmentController = {
 
   async download(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = c.req.param('id')!;
 
     const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
@@ -437,6 +448,17 @@ export const AttachmentController = {
 
     const body = new Blob([bufferToArrayBuffer(storedObject.body)]);
 
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'attachments',
+      entityType: attachment.entityType,
+      entityId: attachment.entityId,
+      action: AuditAction.OTHER,
+      newValues: { attachmentId: attachment.id, fileName: attachment.fileName, fileSize: attachment.fileSize },
+      ...getRequestMeta(c),
+    });
+
     return new Response(body, {
       headers: {
         'Content-Type': attachment.mimeType ?? storedObject.contentType,
@@ -444,6 +466,132 @@ export const AttachmentController = {
         'Content-Length': String(storedObject.contentLength),
       },
     });
+  },
+
+  async accessLog(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
+    if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
+    await ensureEntityBelongsToTenant(tenantId, attachment.entityType, attachment.entityId);
+
+    const logs = await prisma.auditLog.findMany({
+      where: {
+        tenantId,
+        module: 'attachments',
+        entityType: attachment.entityType,
+        entityId: attachment.entityId,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        userId: true,
+        action: true,
+        oldValues: true,
+        newValues: true,
+        ipAddress: true,
+        userAgent: true,
+        createdAt: true,
+      },
+    });
+
+    const data = logs
+      .filter((log) => getAttachmentIdFromAuditValues(log.oldValues) === id || getAttachmentIdFromAuditValues(log.newValues) === id)
+      .map((log) => ({
+        id: log.id,
+        userId: log.userId,
+        action: log.action,
+        ipAddress: log.ipAddress,
+        userAgent: log.userAgent,
+        createdAt: log.createdAt,
+      }));
+
+    return c.json({ data });
+  },
+
+  async uploadVersion(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const id = c.req.param('id')!;
+
+    const current = await prisma.attachment.findFirst({ where: { id, tenantId } });
+    if (!current) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
+    await ensureEntityBelongsToTenant(tenantId, current.entityType, current.entityId);
+
+    const formData = await c.req.formData();
+    const formKeys = new Set(Array.from(formData.keys()));
+    const fileValue = formData.get('file');
+    if (!(fileValue instanceof File)) {
+      return c.json(new ValidationError('file zorunludur.').toJSON(), 400);
+    }
+
+    const { safeName, extension, mimeType } = validateFile(fileValue);
+    const category = formKeys.has('category')
+      ? parseCategoryInput(readFormString(formData, 'category'))
+      : current.category;
+    const tags = readFormString(formData, 'tags') ? parseTagList(readFormString(formData, 'tags')) : current.tags;
+    const documentKind = formKeys.has('documentKind')
+      ? parseKindInput(readFormString(formData, 'documentKind'))
+      : current.documentKind;
+    const confidentiality = formKeys.has('confidentiality')
+      ? parseConfidentialityInput(readFormString(formData, 'confidentiality'))
+      : current.confidentiality;
+    const validFrom = formKeys.has('validFrom')
+      ? parseDateField(readFormString(formData, 'validFrom')) ?? null
+      : current.validFrom;
+    const validUntil = formKeys.has('validUntil')
+      ? parseDateField(readFormString(formData, 'validUntil')) ?? null
+      : current.validUntil;
+    const requestedVersion = parsePositiveVersion(readFormString(formData, 'version'));
+    const version = requestedVersion ?? current.version + 1;
+    validateDocumentDates(validFrom, validUntil);
+
+    const storageName = `${randomUUID()}${extension}`;
+    const storagePath = `${tenantId}/${storageName}`;
+    const buffer = Buffer.from(await fileValue.arrayBuffer());
+    await storageService.put({ key: storagePath, body: buffer, contentType: mimeType });
+
+    const attachment = await prisma.attachment.create({
+      data: {
+        tenantId,
+        entityType: current.entityType,
+        entityId: current.entityId,
+        fileName: current.fileName,
+        storagePath,
+        mimeType,
+        fileSize: fileValue.size,
+        category,
+        tags,
+        documentKind,
+        confidentiality,
+        validFrom,
+        validUntil,
+        version,
+        uploadedById: userId,
+      },
+    });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'attachments',
+      entityType: current.entityType,
+      entityId: current.entityId,
+      action: AuditAction.CREATE,
+      oldValues: { attachmentId: current.id, fileName: current.fileName, version: current.version },
+      newValues: {
+        attachmentId: attachment.id,
+        fileName: current.fileName,
+        uploadedFileName: safeName,
+        version,
+        previousAttachmentId: current.id,
+      },
+      ...getRequestMeta(c),
+    });
+
+    return c.json({ data: attachment }, 201);
   },
 
   async rename(c: Context): Promise<Response> {

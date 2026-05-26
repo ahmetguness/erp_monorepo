@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { Download, Edit3, ExternalLink, FileText, Mail, Search, Shield, Tags, Upload } from 'lucide-react';
+import { Download, Edit3, ExternalLink, FileText, FileUp, History, Mail, ScanText, Search, Shield, Tags, Upload } from 'lucide-react';
 import { FeaturePageShell } from '@/components/shared/FeaturePageShell';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
-import { useAttachmentEntityOptions, useDocumentCenter, useUpdateAttachmentMetadata, useUploadAttachment } from '@/hooks/useAttachments';
+import { useAttachmentAccessLog, useAttachmentEntityOptions, useDocumentCenter, useUpdateAttachmentMetadata, useUploadAttachment, useUploadAttachmentVersion } from '@/hooks/useAttachments';
 import { cn, formatDateTime } from '@/lib/utils';
 import {
   downloadAttachment,
@@ -102,6 +102,19 @@ function labelForConfidentiality(value: DocumentConfidentiality | null): string 
   return CONFIDENTIALITIES.find((item) => item.value === value)?.label ?? value;
 }
 
+function labelForLifecycle(value: DocumentCenterItem['lifecycleStatus']): string {
+  if (value === 'EXPIRED') return 'Suresi doldu';
+  if (value === 'EXPIRING_SOON') return 'Yakinda dolacak';
+  if (value === 'ACTIVE') return 'Gecerli';
+  return 'Sure yok';
+}
+
+function labelForOcr(value: DocumentCenterItem['ocrStatus']): string {
+  if (value === 'TEXT_READY') return 'Metin okunabilir';
+  if (value === 'PROVIDER_REQUIRED') return 'OCR saglayici gerekli';
+  return 'OCR desteklenmiyor';
+}
+
 function isCategory(value: string): value is DocumentCenterCategory {
   return CATEGORIES.some((item) => item.value === value);
 }
@@ -187,6 +200,12 @@ interface EditFormState {
   version: string;
 }
 
+interface VersionFormState {
+  base: DocumentCenterItem;
+  file: File | null;
+  version: string;
+}
+
 function dateInputValue(value: string | null): string {
   return value ? value.slice(0, 10) : '';
 }
@@ -199,6 +218,8 @@ export function DocumentCenterPage() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [uploadForm, setUploadForm] = useState<UploadFormState>(DEFAULT_UPLOAD_FORM);
   const [editForm, setEditForm] = useState<EditFormState | null>(null);
+  const [versionForm, setVersionForm] = useState<VersionFormState | null>(null);
+  const [accessLogId, setAccessLogId] = useState<string | null>(null);
 
   const params = useMemo(
     () => ({
@@ -213,7 +234,9 @@ export function DocumentCenterPage() {
 
   const { data, isLoading } = useDocumentCenter(params);
   const upload = useUploadAttachment();
+  const uploadVersion = useUploadAttachmentVersion();
   const updateMetadata = useUpdateAttachmentMetadata();
+  const { data: accessLogs = [], isLoading: accessLogsLoading } = useAttachmentAccessLog(accessLogId);
   const { data: entityOptions = [] } = useAttachmentEntityOptions(uploadForm.entityType, uploadForm.entitySearch.trim() || undefined);
 
   const handleDownload = async (item: DocumentCenterItem) => {
@@ -278,6 +301,24 @@ export function DocumentCenterPage() {
     setEditForm(null);
   };
 
+  const submitVersion = async () => {
+    if (!versionForm?.file) return;
+    await uploadVersion.mutateAsync({
+      id: versionForm.base.id,
+      file: versionForm.file,
+      metadata: {
+        category: versionForm.base.category,
+        tags: versionForm.base.tags,
+        documentKind: versionForm.base.documentKind ?? 'GENERAL',
+        confidentiality: versionForm.base.confidentiality ?? 'INTERNAL',
+        validFrom: dateInputValue(versionForm.base.validFrom) || null,
+        validUntil: dateInputValue(versionForm.base.validUntil) || null,
+        version: Number.parseInt(versionForm.version, 10) || (versionForm.base.latestVersion ?? versionForm.base.version ?? 1) + 1,
+      },
+    });
+    setVersionForm(null);
+  };
+
   const columns: ColumnDef<DocumentCenterItem>[] = [
     {
       key: 'file',
@@ -340,7 +381,14 @@ export function DocumentCenterPage() {
               {row.isExpired ? 'Süresi doldu' : row.expiresSoon ? 'Yakında dolacak' : 'Geçerli'} · {formatDateTime(row.validUntil)}
             </p>
           )}
-          {row.version && <p className="text-[10px] text-slate-600">v{row.version}</p>}
+          <p className={cn('text-[10px]', row.isLatestVersion ? 'text-slate-600' : 'text-amber-300')}>
+            v{row.version ?? 1}{row.versionCount > 1 ? ` / son v${row.latestVersion ?? row.version}` : ''}
+          </p>
+          <p className="inline-flex items-center gap-1 text-[10px] text-slate-600">
+            <ScanText className="h-3 w-3" />
+            {labelForOcr(row.ocrStatus)}
+          </p>
+          {row.lifecycleAction && <p className="text-[10px] text-amber-300">{row.lifecycleAction}</p>}
         </div>
       ),
     },
@@ -364,7 +412,7 @@ export function DocumentCenterPage() {
     {
       key: 'actions',
       header: '',
-      width: '140px',
+      width: '190px',
       align: 'right',
       render: (row) => (
         <div className="flex justify-end gap-1.5">
@@ -380,6 +428,32 @@ export function DocumentCenterPage() {
             >
               <Edit3 className="h-3.5 w-3.5" />
             </button>
+          )}
+          {row.source === 'ATTACHMENT' && (
+            <>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setVersionForm({ base: row, file: null, version: String((row.latestVersion ?? row.version ?? 1) + 1) });
+                }}
+                className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-800 hover:text-violet-300"
+                aria-label="Yeni versiyon yukle"
+              >
+                <FileUp className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setAccessLogId(row.id);
+                }}
+                className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-800 hover:text-sky-300"
+                aria-label="Erisim logu"
+              >
+                <History className="h-3.5 w-3.5" />
+              </button>
+            </>
           )}
           {row.href && (
             <Link
@@ -624,6 +698,70 @@ export function DocumentCenterPage() {
             <Input label="Bitiş / geçerlilik tarihi" type="date" value={editForm.validUntil} onChange={(event) => setEditForm((current) => current ? { ...current, validUntil: event.target.value } : current)} />
           </div>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(versionForm)}
+        onClose={() => setVersionForm(null)}
+        title="Yeni dosya versiyonu"
+        description="Ayni belge zincirine yeni fiziksel dosya ekleyin."
+        size="md"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setVersionForm(null)}>Vazgec</Button>
+            <Button onClick={() => void submitVersion()} loading={uploadVersion.isPending} disabled={!versionForm?.file}>Versiyon yukle</Button>
+          </>
+        )}
+      >
+        {versionForm && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-sm text-slate-300">
+              <p className="font-medium text-slate-100">{versionForm.base.fileName}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Mevcut v{versionForm.base.version ?? 1} - Son v{versionForm.base.latestVersion ?? versionForm.base.version ?? 1}
+              </p>
+            </div>
+            <Input
+              label="Yeni dosya"
+              type="file"
+              onChange={(event) => setVersionForm((current) => current ? { ...current, file: event.target.files?.[0] ?? null } : current)}
+              required
+            />
+            <Input
+              label="Yeni versiyon"
+              type="number"
+              min={1}
+              max={999}
+              value={versionForm.version}
+              onChange={(event) => setVersionForm((current) => current ? { ...current, version: event.target.value } : current)}
+            />
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(accessLogId)}
+        onClose={() => setAccessLogId(null)}
+        title="Erisim logu"
+        description="Dosya indirme, yukleme ve metadata hareketleri"
+        size="md"
+      >
+        <div className="space-y-2">
+          {accessLogsLoading && <p className="text-sm text-slate-500">Yukleniyor...</p>}
+          {!accessLogsLoading && accessLogs.length === 0 && (
+            <p className="rounded-xl border border-dashed border-slate-800 p-4 text-sm text-slate-500">Log bulunamadi.</p>
+          )}
+          {accessLogs.map((log) => (
+            <div key={log.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <Badge variant={log.action === 'OTHER' ? 'info' : 'neutral'}>{log.action === 'OTHER' ? 'DOWNLOAD' : log.action}</Badge>
+                <span className="text-xs text-slate-500">{formatDateTime(log.createdAt)}</span>
+              </div>
+              <p className="mt-2 font-mono text-[11px] text-slate-500">{log.userId ?? 'system'}</p>
+              {log.ipAddress && <p className="mt-1 text-[11px] text-slate-600">{log.ipAddress}</p>}
+            </div>
+          ))}
+        </div>
       </Modal>
     </FeaturePageShell>
   );

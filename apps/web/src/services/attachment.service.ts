@@ -44,8 +44,24 @@ export const DocumentCenterItemSchema = z.object({
   validFrom: z.string().nullable(),
   validUntil: z.string().nullable(),
   version: z.coerce.number().nullable(),
+  versionGroupKey: z.string().nullable(),
+  versionCount: z.coerce.number(),
+  latestVersion: z.coerce.number().nullable(),
+  isLatestVersion: z.boolean(),
+  lifecycleStatus: z.enum(['ACTIVE', 'EXPIRING_SOON', 'EXPIRED', 'NO_EXPIRY']),
+  lifecycleAction: z.string().nullable(),
+  ocrStatus: z.enum(['TEXT_READY', 'PROVIDER_REQUIRED', 'NOT_SUPPORTED']),
   isExpired: z.boolean(),
   expiresSoon: z.boolean(),
+});
+
+export const AttachmentAccessLogSchema = z.object({
+  id: z.string(),
+  userId: z.string().nullable(),
+  action: z.string(),
+  ipAddress: z.string().nullable(),
+  userAgent: z.string().nullable(),
+  createdAt: z.string(),
 });
 
 export const AttachmentEntityOptionSchema = z.object({
@@ -59,6 +75,14 @@ export const DocumentCenterSummarySchema = z.object({
   attachmentCount: z.coerce.number(),
   mailAttachmentCount: z.coerce.number(),
   totalSizeBytes: z.coerce.number(),
+  expiredCount: z.coerce.number(),
+  expiringSoonCount: z.coerce.number(),
+  contractCount: z.coerce.number(),
+  employeeDocumentCount: z.coerce.number(),
+  confidentialCount: z.coerce.number(),
+  oldVersionCount: z.coerce.number(),
+  ocrReadyCount: z.coerce.number(),
+  ocrProviderRequiredCount: z.coerce.number(),
 });
 
 const DocumentCenterResponseSchema = PaginatedResponseSchema(DocumentCenterItemSchema).extend({
@@ -74,6 +98,7 @@ export type DocumentKind = NonNullable<DocumentCenterItem['documentKind']>;
 export type DocumentConfidentiality = NonNullable<DocumentCenterItem['confidentiality']>;
 export type AttachmentEntityType = Exclude<DocumentCenterItem['entityType'], 'MAIL'>;
 export type AttachmentEntityOption = z.infer<typeof AttachmentEntityOptionSchema>;
+export type AttachmentAccessLog = z.infer<typeof AttachmentAccessLogSchema>;
 export type DocumentCenterResponse = z.infer<typeof DocumentCenterResponseSchema>;
 
 export interface DocumentCenterParams {
@@ -93,6 +118,16 @@ export interface AttachmentMetadataInput {
   validFrom?: string | null;
   validUntil?: string | null;
   version?: number;
+}
+
+function appendAttachmentMetadata(formData: FormData, metadata?: AttachmentMetadataInput): void {
+  if (metadata?.category) formData.append('category', metadata.category);
+  if (metadata?.tags?.length) formData.append('tags', metadata.tags.join(','));
+  if (metadata?.documentKind) formData.append('documentKind', metadata.documentKind);
+  if (metadata?.confidentiality) formData.append('confidentiality', metadata.confidentiality);
+  if (metadata?.validFrom) formData.append('validFrom', metadata.validFrom);
+  if (metadata?.validUntil) formData.append('validUntil', metadata.validUntil);
+  if (metadata?.version) formData.append('version', String(metadata.version));
 }
 
 export async function getAttachments(entityType: string, entityId: string): Promise<Attachment[]> {
@@ -115,22 +150,31 @@ export async function uploadAttachment(entityType: string, entityId: string, fil
   formData.append('file', file);
   formData.append('entityType', entityType);
   formData.append('entityId', entityId);
-  if (metadata?.category) formData.append('category', metadata.category);
-  if (metadata?.tags?.length) formData.append('tags', metadata.tags.join(','));
-  if (metadata?.documentKind) formData.append('documentKind', metadata.documentKind);
-  if (metadata?.confidentiality) formData.append('confidentiality', metadata.confidentiality);
-  if (metadata?.validFrom) formData.append('validFrom', metadata.validFrom);
-  if (metadata?.validUntil) formData.append('validUntil', metadata.validUntil);
-  if (metadata?.version) formData.append('version', String(metadata.version));
+  appendAttachmentMetadata(formData, metadata);
   const res = await apiClient.post('/api/attachments/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return safeParse(SingleResponseSchema(AttachmentSchema), res.data, 'uploadAttachment').data;
 }
 
+export async function uploadAttachmentVersion(id: string, file: File, metadata?: AttachmentMetadataInput): Promise<Attachment> {
+  const formData = new FormData();
+  formData.append('file', file);
+  appendAttachmentMetadata(formData, metadata);
+  const res = await apiClient.post(`/api/attachments/${id}/version`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return safeParse(SingleResponseSchema(AttachmentSchema), res.data, 'uploadAttachmentVersion').data;
+}
+
 export async function downloadAttachment(id: string): Promise<Blob> {
   const res = await apiClient.get(`/api/attachments/${id}/download`, { responseType: 'blob' });
   return res.data instanceof Blob ? res.data : new Blob([res.data]);
+}
+
+export async function getAttachmentAccessLog(id: string): Promise<AttachmentAccessLog[]> {
+  const res = await apiClient.get(`/api/attachments/${id}/access-log`);
+  return safeParse(SingleResponseSchema(z.array(AttachmentAccessLogSchema)), res.data, 'getAttachmentAccessLog').data;
 }
 
 export async function deleteAttachment(id: string): Promise<void> {

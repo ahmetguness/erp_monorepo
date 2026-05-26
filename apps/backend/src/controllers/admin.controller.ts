@@ -10,6 +10,7 @@ import { getPaginationParams } from '../utils/pagination.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { sendMail } from '../services/mail.service.js';
 import { tenantReadyEmail } from '../services/mail-templates.service.js';
+import { getObservabilitySnapshot } from '../services/observability.service.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
@@ -692,6 +693,11 @@ export const AdminMetricsController = {
         counts: { users, products, contacts, invoices, salesOrders, purchaseOrders, payments, warehouses, stockLevels, journalEntries },
       },
     });
+  },
+
+  async observability(c: Context): Promise<Response> {
+    const snapshot = await getObservabilitySnapshot(prisma);
+    return c.json({ data: snapshot });
   },
 };
 

@@ -1,17 +1,13 @@
 import { Context } from 'hono';
-import { InvoiceStatus, InvoiceType } from '@prisma/client';
+import { InvoiceStatus, InvoiceType, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ValidationError, NotFoundError } from '../errors';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireUserId } from '../utils/context.js';
+import { ReportingBuilderService, isKpiConfig, normalizeKpiConfig } from '../services/reporting-builder.service';
 
 // ─────────────────────────────────────────────
 // DTOs
 // ─────────────────────────────────────────────
-
-interface DateRangeQuery {
-  dateFrom?: string;
-  dateTo?: string;
-}
 
 // ─────────────────────────────────────────────
 // Reporting Controller
@@ -26,7 +22,7 @@ export const ReportingController = {
   async revenueSummary(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const query = c.req.query() as DateRangeQuery;
+    const query = { dateFrom: c.req.query('dateFrom'), dateTo: c.req.query('dateTo') };
 
     if (!query.dateFrom || !query.dateTo) {
       return c.json(
@@ -183,7 +179,7 @@ export const ReportingController = {
   async expenseSummary(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const query = c.req.query() as DateRangeQuery;
+    const query = { dateFrom: c.req.query('dateFrom'), dateTo: c.req.query('dateTo') };
 
     if (!query.dateFrom || !query.dateTo) {
       return c.json(
@@ -234,16 +230,71 @@ interface CreateSavedReportDTO {
   isShared?: boolean;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function toJsonValue(value: unknown): Prisma.InputJsonValue | null {
+  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Array.isArray(value)) return value.map((item) => toJsonValue(item));
+  if (!isRecord(value)) return null;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, toJsonValue(item)]));
+}
+
+function toSavedReportFilters(input: unknown): Prisma.InputJsonObject {
+  if (!isRecord(input)) return {};
+  if (input.reportType !== 'KPI') {
+    return Object.fromEntries(Object.entries(input).map(([key, value]) => [key, toJsonValue(value)]));
+  }
+  const config = normalizeKpiConfig(input);
+  return {
+    reportType: config.reportType,
+    dataset: config.dataset,
+    metric: config.metric,
+    groupBy: config.groupBy,
+    dateRangePreset: config.dateRangePreset,
+    dateFrom: config.dateFrom,
+    dateTo: config.dateTo,
+    chartType: config.chartType,
+    pinnedToDashboard: config.pinnedToDashboard,
+    scheduleEmail: {
+      enabled: config.scheduleEmail.enabled,
+      frequency: config.scheduleEmail.frequency,
+      recipients: config.scheduleEmail.recipients,
+    },
+  };
+}
+
+function isDashboardPinnedReport(report: { filters: Prisma.JsonValue }): boolean {
+  return isKpiConfig(report.filters) && report.filters.pinnedToDashboard === true;
+}
+
+export const ReportingBuilderController = {
+  registry(c: Context): Response {
+    const service = new ReportingBuilderService(prisma);
+    return c.json({ data: service.registry() });
+  },
+
+  async preview(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body = await c.req.json<unknown>();
+    const service = new ReportingBuilderService(prisma);
+    const preview = await service.preview(tenantId, body);
+    return c.json({ data: preview });
+  },
+};
+
 export const SavedReportController = {
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const dashboardOnly = c.req.query('dashboard') === '1';
 
     const reports = await prisma.savedReport.findMany({
       where: { tenantId },
       orderBy: { updatedAt: 'desc' },
     });
 
-    return c.json({ data: reports });
+    return c.json({ data: dashboardOnly ? reports.filter(isDashboardPinnedReport) : reports });
   },
 
   async getById(c: Context): Promise<Response> {
@@ -258,21 +309,24 @@ export const SavedReportController = {
 
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
 
     const body = await c.req.json<CreateSavedReportDTO>();
 
     if (!body.name || !body.module) {
       return c.json(new ValidationError('name ve module alanları zorunludur.').toJSON(), 400);
     }
+    const filters = toSavedReportFilters(body.filters ?? {});
 
     const report = await prisma.savedReport.create({
       data: {
         tenantId,
         name: body.name,
         module: body.module,
-        filters: (body.filters ?? {}) as object,
+        filters,
         columns: body.columns ?? [],
         isShared: body.isShared ?? false,
+        createdBy: userId,
       },
     });
 
@@ -287,12 +341,13 @@ export const SavedReportController = {
     if (!report) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
 
     const body = await c.req.json<Partial<CreateSavedReportDTO>>();
+    const filters = body.filters !== undefined ? toSavedReportFilters(body.filters) : undefined;
 
     const updated = await prisma.savedReport.update({
       where: { id: reportId },
       data: {
         ...(body.name !== undefined && { name: body.name }),
-        ...(body.filters !== undefined && { filters: body.filters as object }),
+        ...(filters !== undefined && { filters }),
         ...(body.columns !== undefined && { columns: body.columns }),
         ...(body.isShared !== undefined && { isShared: body.isShared }),
       },

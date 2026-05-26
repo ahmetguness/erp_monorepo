@@ -39,6 +39,56 @@ const SavedReportSchema = z.object({
   createdAt: z.string(), updatedAt: z.string(),
 });
 
+const ReportingMetricDefinitionSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  format: z.enum(['currency', 'number', 'percent']),
+});
+
+const ReportingDatasetDefinitionSchema = z.object({
+  key: z.enum(['invoices', 'payments', 'stock', 'contacts']),
+  label: z.string(),
+  module: z.string(),
+  dateField: z.string().nullable(),
+  metrics: z.array(ReportingMetricDefinitionSchema),
+  groupBy: z.array(z.object({ key: z.string(), label: z.string() })),
+  filters: z.array(z.object({ key: z.string(), label: z.string(), type: z.enum(['dateRange', 'select']) })),
+});
+
+const ReportingRegistrySchema = z.object({
+  datasets: z.array(ReportingDatasetDefinitionSchema),
+  chartTypes: z.array(z.object({ key: z.enum(['number', 'bar', 'line', 'pie']), label: z.string() })),
+});
+
+export const KpiReportConfigSchema = z.object({
+  reportType: z.literal('KPI'),
+  dataset: z.enum(['invoices', 'payments', 'stock', 'contacts']),
+  metric: z.string(),
+  groupBy: z.string().nullable(),
+  dateRangePreset: z.enum(['THIS_MONTH', 'LAST_30_DAYS', 'THIS_YEAR', 'CUSTOM']),
+  dateFrom: z.string().nullable(),
+  dateTo: z.string().nullable(),
+  chartType: z.enum(['number', 'bar', 'line', 'pie']),
+  pinnedToDashboard: z.boolean(),
+  scheduleEmail: z.object({
+    enabled: z.boolean(),
+    frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']),
+    recipients: z.array(z.string()),
+  }),
+});
+
+const KpiPreviewSchema = z.object({
+  config: KpiReportConfigSchema,
+  datasetLabel: z.string(),
+  metricLabel: z.string(),
+  value: z.coerce.number(),
+  formattedValue: z.string(),
+  period: z.object({ from: z.string().nullable(), to: z.string().nullable() }),
+  chartType: z.enum(['number', 'bar', 'line', 'pie']),
+  pinnedToDashboard: z.boolean(),
+  scheduleEmail: KpiReportConfigSchema.shape.scheduleEmail,
+});
+
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
@@ -47,6 +97,10 @@ export type RevenueSummary = z.infer<typeof RevenueSummarySchema>['data'];
 export type StockSummary = z.infer<typeof StockSummarySchema>['data'];
 export type ContactBalance = z.infer<typeof ContactBalanceSchema>['data'];
 export type SavedReport = z.infer<typeof SavedReportSchema>;
+export type ReportingRegistry = z.infer<typeof ReportingRegistrySchema>;
+export type ReportingDatasetDefinition = z.infer<typeof ReportingDatasetDefinitionSchema>;
+export type KpiReportConfig = z.infer<typeof KpiReportConfigSchema>;
+export type KpiPreview = z.infer<typeof KpiPreviewSchema>;
 
 // ─────────────────────────────────────────────
 // Service functions
@@ -72,12 +126,35 @@ export async function getContactBalance(): Promise<ContactBalance> {
   return safeParse(ContactBalanceSchema, res.data, 'getContactBalance').data;
 }
 
-export async function getSavedReports(): Promise<SavedReport[]> {
-  const res = await apiClient.get('/api/reports/saved');
+export async function getReportingRegistry(): Promise<ReportingRegistry> {
+  const res = await apiClient.get('/api/reports/registry');
+  return safeParse(SingleResponseSchema(ReportingRegistrySchema), res.data, 'getReportingRegistry').data;
+}
+
+export async function previewKpi(config: KpiReportConfig): Promise<KpiPreview> {
+  const res = await apiClient.post('/api/reports/kpi/preview', config);
+  return safeParse(SingleResponseSchema(KpiPreviewSchema), res.data, 'previewKpi').data;
+}
+
+export async function getSavedReports(params?: { dashboard?: boolean }): Promise<SavedReport[]> {
+  const res = await apiClient.get('/api/reports/saved', { params: params?.dashboard ? { dashboard: '1' } : undefined });
   return safeParse(SingleResponseSchema(z.array(SavedReportSchema)), res.data, 'getSavedReports').data;
 }
 
-export async function createSavedReport(data: { name: string; module: string; filters?: Record<string, unknown>; columns?: string[] }): Promise<SavedReport> {
+export async function getPinnedKpiReports(): Promise<SavedReport[]> {
+  return getSavedReports({ dashboard: true });
+}
+
+export async function getPinnedKpiPreviews(): Promise<KpiPreview[]> {
+  const reports = await getPinnedKpiReports();
+  const configs = reports
+    .map((report) => KpiReportConfigSchema.safeParse(report.filters))
+    .filter((result): result is z.ZodSafeParseSuccess<KpiReportConfig> => result.success)
+    .map((result) => result.data);
+  return Promise.all(configs.map((config) => previewKpi(config)));
+}
+
+export async function createSavedReport(data: { name: string; module: string; filters?: Record<string, unknown>; columns?: string[]; isShared?: boolean }): Promise<SavedReport> {
   const res = await apiClient.post('/api/reports/saved', data);
   return safeParse(SingleResponseSchema(SavedReportSchema), res.data, 'createSavedReport').data;
 }

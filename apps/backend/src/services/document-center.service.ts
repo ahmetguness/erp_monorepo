@@ -46,6 +46,13 @@ export interface DocumentCenterItem {
   validFrom: string | null;
   validUntil: string | null;
   version: number | null;
+  versionGroupKey: string | null;
+  versionCount: number;
+  latestVersion: number | null;
+  isLatestVersion: boolean;
+  lifecycleStatus: DocumentLifecycleStatus;
+  lifecycleAction: string | null;
+  ocrStatus: DocumentOcrStatus;
   isExpired: boolean;
   expiresSoon: boolean;
 }
@@ -55,6 +62,14 @@ export interface DocumentCenterSummary {
   attachmentCount: number;
   mailAttachmentCount: number;
   totalSizeBytes: number;
+  expiredCount: number;
+  expiringSoonCount: number;
+  contractCount: number;
+  employeeDocumentCount: number;
+  confidentialCount: number;
+  oldVersionCount: number;
+  ocrReadyCount: number;
+  ocrProviderRequiredCount: number;
 }
 
 export interface DocumentCenterResult {
@@ -95,6 +110,16 @@ interface MailAttachmentRecord {
   subject: string;
   sentById: string | null;
   createdAt: Date;
+}
+
+type DocumentLifecycleStatus = 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'NO_EXPIRY';
+type DocumentOcrStatus = 'TEXT_READY' | 'PROVIDER_REQUIRED' | 'NOT_SUPPORTED';
+
+interface VersionGroupInfo {
+  key: string;
+  count: number;
+  latestVersion: number;
+  latestCreatedAt: Date;
 }
 
 const ALL_CATEGORIES: readonly DocumentCenterCategory[] = [
@@ -193,6 +218,11 @@ function extensionTag(fileName: string): string | null {
   return extension && extension !== fileName ? extension.toUpperCase() : null;
 }
 
+function baseFileName(fileName: string): string {
+  const dotIndex = fileName.lastIndexOf('.');
+  return normalizeForSearch(dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName);
+}
+
 function mimeTag(mimeType: string | null): string {
   if (!mimeType) return 'Dosya';
   if (mimeType.startsWith('image/')) return 'Görsel';
@@ -228,6 +258,54 @@ function expiresSoon(validUntil: Date | null, now: Date): boolean {
   if (!validUntil) return false;
   const soon = new Date(now.getTime() + 30 * 86_400_000);
   return validUntil > now && validUntil <= soon;
+}
+
+function lifecycleStatus(validUntil: Date | null, now: Date): DocumentLifecycleStatus {
+  if (!validUntil) return 'NO_EXPIRY';
+  if (validUntil < now) return 'EXPIRED';
+  return expiresSoon(validUntil, now) ? 'EXPIRING_SOON' : 'ACTIVE';
+}
+
+function lifecycleAction(
+  status: DocumentLifecycleStatus,
+  documentKind: DocumentKind | null,
+): string | null {
+  if (status === 'EXPIRED') return documentKind === 'CONTRACT' ? 'Sozlesme yenileme surecini baslatin.' : 'Guncel belge talep edin.';
+  if (status === 'EXPIRING_SOON') return documentKind === 'CONTRACT' ? 'Yenileme hatirlatmasi olusturun.' : 'Gecerlilik bitmeden yenisini isteyin.';
+  return null;
+}
+
+function ocrStatus(mimeType: string | null): DocumentOcrStatus {
+  if (mimeType === 'text/plain' || mimeType === 'text/csv') return 'TEXT_READY';
+  if (mimeType?.includes('pdf') || mimeType?.startsWith('image/')) return 'PROVIDER_REQUIRED';
+  return 'NOT_SUPPORTED';
+}
+
+function versionGroupKey(row: AttachmentRow): string {
+  return `${row.entityType}:${row.entityId}:${row.documentKind ?? 'GENERAL'}:${baseFileName(row.fileName)}`;
+}
+
+function buildVersionGroups(rows: AttachmentRow[]): Map<string, VersionGroupInfo> {
+  const groups = new Map<string, VersionGroupInfo>();
+  for (const row of rows) {
+    const key = versionGroupKey(row);
+    const current = groups.get(key);
+    if (!current) {
+      groups.set(key, { key, count: 1, latestVersion: row.version, latestCreatedAt: row.createdAt });
+      continue;
+    }
+
+    const isNewLatest =
+      row.version > current.latestVersion ||
+      (row.version === current.latestVersion && row.createdAt > current.latestCreatedAt);
+    groups.set(key, {
+      key,
+      count: current.count + 1,
+      latestVersion: isNewLatest ? row.version : current.latestVersion,
+      latestCreatedAt: isNewLatest ? row.createdAt : current.latestCreatedAt,
+    });
+  }
+  return groups;
 }
 
 async function getTenantUserEmail(db: PrismaClient, tenantId: string, userId: string): Promise<string | null> {
@@ -489,9 +567,14 @@ export class DocumentCenterService {
     ]);
 
     const now = new Date();
+    const versionGroups = buildVersionGroups(attachmentRows);
     const attachmentItems = attachmentRows.map<DocumentCenterItem>((row) => {
       const category = metadataCategory(row);
       const documentKind = metadataDocumentKind(row, category);
+      const groupKey = versionGroupKey(row);
+      const versionGroup = versionGroups.get(groupKey);
+      const status = lifecycleStatus(row.validUntil, now);
+      const rowOcrStatus = ocrStatus(row.mimeType);
       return {
         id: row.id,
         source: 'ATTACHMENT',
@@ -513,8 +596,15 @@ export class DocumentCenterService {
         validFrom: row.validFrom?.toISOString() ?? null,
         validUntil: row.validUntil?.toISOString() ?? null,
         version: row.version,
-        isExpired: row.validUntil ? row.validUntil < now : false,
-        expiresSoon: expiresSoon(row.validUntil, now),
+        versionGroupKey: groupKey,
+        versionCount: versionGroup?.count ?? 1,
+        latestVersion: versionGroup?.latestVersion ?? row.version,
+        isLatestVersion: row.version === (versionGroup?.latestVersion ?? row.version),
+        lifecycleStatus: status,
+        lifecycleAction: lifecycleAction(status, documentKind),
+        ocrStatus: rowOcrStatus,
+        isExpired: status === 'EXPIRED',
+        expiresSoon: status === 'EXPIRING_SOON',
       };
     });
 
@@ -539,6 +629,13 @@ export class DocumentCenterService {
       validFrom: null,
       validUntil: null,
       version: null,
+      versionGroupKey: null,
+      versionCount: 1,
+      latestVersion: null,
+      isLatestVersion: true,
+      lifecycleStatus: 'NO_EXPIRY',
+      lifecycleAction: null,
+      ocrStatus: 'NOT_SUPPORTED',
       isExpired: false,
       expiresSoon: false,
     }));
@@ -567,6 +664,14 @@ export class DocumentCenterService {
     const attachmentCount = allItems.filter((item) => item.source === 'ATTACHMENT').length;
     const mailAttachmentCount = allItems.filter((item) => item.source === 'MAIL').length;
     const totalSizeBytes = allItems.reduce((totalSize, item) => totalSize + (item.fileSize ?? 0), 0);
+    const expiredCount = allItems.filter((item) => item.lifecycleStatus === 'EXPIRED').length;
+    const expiringSoonCount = allItems.filter((item) => item.lifecycleStatus === 'EXPIRING_SOON').length;
+    const contractCount = allItems.filter((item) => item.documentKind === 'CONTRACT').length;
+    const employeeDocumentCount = allItems.filter((item) => item.documentKind === 'EMPLOYEE_DOCUMENT').length;
+    const confidentialCount = allItems.filter((item) => item.confidentiality === 'CONFIDENTIAL').length;
+    const oldVersionCount = allItems.filter((item) => !item.isLatestVersion).length;
+    const ocrReadyCount = allItems.filter((item) => item.ocrStatus === 'TEXT_READY').length;
+    const ocrProviderRequiredCount = allItems.filter((item) => item.ocrStatus === 'PROVIDER_REQUIRED').length;
 
     return {
       data,
@@ -580,6 +685,14 @@ export class DocumentCenterService {
           attachmentCount,
           mailAttachmentCount,
           totalSizeBytes,
+          expiredCount,
+          expiringSoonCount,
+          contractCount,
+          employeeDocumentCount,
+          confidentialCount,
+          oldVersionCount,
+          ocrReadyCount,
+          ocrProviderRequiredCount,
         },
       },
     };
