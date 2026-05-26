@@ -6,6 +6,7 @@ import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 import { bufferToArrayBuffer, storageService } from '../services/storage.service.js';
 import { BusinessRulesService } from '../services/business-rules.service.js';
+import { getTenantSecurityScore } from '../services/tenant-security.service.js';
 
 const TENANT_LOGO_SETTING_KEY = 'tenant_logo_storage_path';
 const LEGACY_TENANT_LOGO_SETTING_KEY = 'company_logo';
@@ -84,6 +85,12 @@ export const SettingsController = {
     const tenantId = requireTenantId(c);
     const rules = await businessRulesService.list(tenantId);
     return c.json({ data: rules });
+  },
+
+  async securityScore(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const score = await getTenantSecurityScore(prisma, tenantId);
+    return c.json({ data: score });
   },
 
   async upsertBusinessRule(c: Context): Promise<Response> {

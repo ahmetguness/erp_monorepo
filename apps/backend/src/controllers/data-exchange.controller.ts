@@ -90,6 +90,20 @@ async function requireAccess(
   return permissions;
 }
 
+async function requireAnyReadAccess(
+  c: Context,
+  tenantId: string,
+  userId: string,
+  modules: readonly string[],
+): Promise<TenantPermissionContext | Response> {
+  const permissions = await getTenantPermissionContext(tenantId, userId);
+  if (!permissions) return c.json(new ForbiddenError("Bu tenant'a erisiminiz yok.").toJSON(), 403);
+  if (!modules.some((module) => permissions.can(PermissionAction.READ, module))) {
+    return c.json(new ForbiddenError(`Bu islem icin yetkiniz yok (${modules.join('|')}:READ).`).toJSON(), 403);
+  }
+  return permissions;
+}
+
 function csvEscape(value: string | number | boolean | null | undefined): string {
   const normalized = value === null || value === undefined ? '' : String(value);
   if (!/[",\r\n]/.test(normalized)) return normalized;
@@ -200,6 +214,7 @@ async function dbDuplicateWarnings(config: EntityConfig, tenantId: string, rows:
     const codes = Array.from(new Set(rows.map((row) => row.code?.trim()).filter((code): code is string => Boolean(code))));
     const taxNumbers = Array.from(new Set(rows.map((row) => row.taxNumber?.trim()).filter((taxNumber): taxNumber is string => Boolean(taxNumber))));
     const emails = Array.from(new Set(rows.map((row) => row.email?.trim()).filter((email): email is string => Boolean(email))));
+    if (codes.length === 0 && taxNumbers.length === 0 && emails.length === 0) return warnings;
     const existing = await prisma.contact.findMany({
       where: {
         tenantId,
@@ -371,7 +386,7 @@ export const DataExchangeController = {
   async quality(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const access = await requireAccess(c, tenantId, userId, 'reporting', PermissionAction.READ);
+    const access = await requireAnyReadAccess(c, tenantId, userId, ['reporting', 'contacts', 'inventory', 'hr', 'sales', 'invoicing']);
     if (access instanceof Response) return access;
 
     const summary = await getDataQualitySummary(prisma, tenantId);

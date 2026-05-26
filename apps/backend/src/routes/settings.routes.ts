@@ -10,6 +10,7 @@ settingsRoutes.get('/', requirePermission('settings', 'READ'), SettingsControlle
 settingsRoutes.put('/', requirePermission('settings', 'UPDATE'), SettingsController.upsertTenantSetting);
 settingsRoutes.get('/business-rules', requirePermission('settings', 'READ'), SettingsController.listBusinessRules);
 settingsRoutes.put('/business-rules', requirePermission('settings', 'UPDATE'), SettingsController.upsertBusinessRule);
+settingsRoutes.get('/security-score', requirePermission('settings', 'READ'), SettingsController.securityScore);
 settingsRoutes.get('/logo', requirePermission('settings', 'READ'), SettingsController.downloadTenantLogo);
 settingsRoutes.post('/logo', requirePermission('settings', 'UPDATE'), SettingsController.uploadTenantLogo);
 settingsRoutes.delete('/logo', requirePermission('settings', 'DELETE'), SettingsController.deleteTenantLogo);

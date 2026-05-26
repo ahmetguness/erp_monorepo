@@ -8,6 +8,7 @@ import {
   getModuleSettings, upsertModuleSetting,
   downloadTenantLogo, uploadTenantLogo, deleteTenantLogo,
   getBusinessRules, upsertBusinessRule,
+  getTenantSecurityScore,
   type BusinessRule,
 } from '@/services/settings.service';
 
@@ -37,6 +38,10 @@ export function useDeleteTenantSetting() {
 
 export function useBusinessRules() {
   return useQuery({ queryKey: ['settings', 'business-rules'], queryFn: getBusinessRules, staleTime: 5 * 60 * 1000 });
+}
+
+export function useTenantSecurityScore() {
+  return useQuery({ queryKey: ['settings', 'security-score'], queryFn: getTenantSecurityScore, staleTime: 2 * 60 * 1000 });
 }
 
 export function useUpsertBusinessRule() {

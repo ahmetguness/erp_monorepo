@@ -43,9 +43,37 @@ export const BusinessRuleSchema = z.object({
   tenantPlan: z.enum(['STARTER', 'PROFESSIONAL', 'ENTERPRISE']),
 });
 
+export const TenantSecurityFindingSchema = z.object({
+  key: z.string(),
+  severity: z.enum(['critical', 'high', 'medium', 'low']),
+  status: z.enum(['pass', 'warn', 'fail']),
+  title: z.string(),
+  description: z.string(),
+  actionLabel: z.string(),
+  href: z.string(),
+  count: z.coerce.number(),
+});
+
+export const TenantSecurityScoreSchema = z.object({
+  score: z.coerce.number(),
+  status: z.enum(['pass', 'warn', 'fail']),
+  generatedAt: z.string(),
+  findings: z.array(TenantSecurityFindingSchema),
+  metrics: z.object({
+    activeUsers: z.coerce.number(),
+    inactiveUsers: z.coerce.number(),
+    activeApiKeys: z.coerce.number(),
+    expiringApiKeys: z.coerce.number(),
+    staleApiKeys: z.coerce.number(),
+    riskyRoles: z.coerce.number(),
+    owners: z.coerce.number(),
+  }),
+});
+
 export type TenantSetting = z.infer<typeof TenantSettingSchema>;
 export type ModuleSetting = z.infer<typeof ModuleSettingSchema>;
 export type BusinessRule = z.infer<typeof BusinessRuleSchema>;
+export type TenantSecurityScore = z.infer<typeof TenantSecurityScoreSchema>;
 
 export async function getTenantSettings(): Promise<TenantSetting[]> {
   const res = await apiClient.get('/api/settings');
@@ -64,6 +92,11 @@ export async function deleteTenantSetting(key: string): Promise<void> {
 export async function getBusinessRules(): Promise<BusinessRule[]> {
   const res = await apiClient.get('/api/settings/business-rules');
   return safeParse(SingleResponseSchema(z.array(BusinessRuleSchema)), res.data, 'getBusinessRules').data;
+}
+
+export async function getTenantSecurityScore(): Promise<TenantSecurityScore> {
+  const res = await apiClient.get('/api/settings/security-score');
+  return safeParse(SingleResponseSchema(TenantSecurityScoreSchema), res.data, 'getTenantSecurityScore').data;
 }
 
 export async function upsertBusinessRule(key: BusinessRule['key'], value: BusinessRule['value']): Promise<BusinessRule> {

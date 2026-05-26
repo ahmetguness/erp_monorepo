@@ -66,6 +66,7 @@ import { TrendyolWorker } from './services/trendyol-worker.service';
 import { startMarketplaceMocks } from './mocks';
 import { registerDomainEventListeners } from './domain-events';
 import { recordHttpRequest, recordUnhandledError } from './services/observability.service';
+import { globalRateLimit } from './middleware/globalRateLimit';
 
 // ── Startup env var kontrolü ─────────────────
 const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET', 'ADMIN_JWT_SECRET'] as const;
@@ -173,6 +174,8 @@ app.use('*', async (c, next) => {
 });
 
 // ── Routes ───────────────────────────────────
+app.use('*', globalRateLimit);
+
 app.get('/', (c) => c.json({ status: 'ok', service: 'Axon ERP API' }));
 
 // ── Health Check (genişletilmiş) ─────────────

@@ -19,6 +19,9 @@ if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil.
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '7d';
 const AUTH_COOKIE_NAME = 'axon_token';
 const REMEMBER_ME_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+const LOGIN_IP_LIMIT = 10;
+const LOGIN_EMAIL_LIMIT = 5;
+const LOGIN_LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
 
 // ─────────────────────────────────────────────
 // Rate limiter (register + login brute force koruması)
@@ -106,6 +109,22 @@ function clearAuthCookie(c: Context): void {
   });
 }
 
+function getClientIp(c: Context): string {
+  return c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip')?.trim() || 'unknown';
+}
+
+function normalizeEmail(email: string): string {
+  return email.toLowerCase().trim();
+}
+
+function validatePasswordPolicy(password: string): ValidationError | null {
+  if (password.length < 10) return new ValidationError('Sifre en az 10 karakter olmalidir.');
+  if (!/[a-z]/.test(password)) return new ValidationError('Sifre en az bir kucuk harf icermelidir.');
+  if (!/[A-Z]/.test(password)) return new ValidationError('Sifre en az bir buyuk harf icermelidir.');
+  if (!/[0-9]/.test(password)) return new ValidationError('Sifre en az bir rakam icermelidir.');
+  return null;
+}
+
 // ─────────────────────────────────────────────
 // Auth Controller
 // ─────────────────────────────────────────────
@@ -117,8 +136,8 @@ export const AuthController = {
    */
   async login(c: Context): Promise<Response> {
     // Rate limit: IP başına 15 dakikada max 10 giriş denemesi
-    const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
-    if (await rateLimiter.check(`login:${ip}`, 10, 15 * 60 * 1000)) {
+    const ip = getClientIp(c);
+    if (await rateLimiter.check(`login:${ip}`, LOGIN_IP_LIMIT, LOGIN_LOCKOUT_WINDOW_MS)) {
       return c.json({ error: { code: 'RATE_LIMITED', message: 'Çok fazla giriş denemesi. Lütfen 15 dakika sonra tekrar deneyin.' } }, 429);
     }
 
@@ -132,8 +151,14 @@ export const AuthController = {
     }
 
     // Kullanıcıyı bul
+    const normalizedEmail = normalizeEmail(body.email);
+    const emailLockKey = `login_email:${normalizedEmail}`;
+    if (await rateLimiter.check(emailLockKey, LOGIN_EMAIL_LIMIT, LOGIN_LOCKOUT_WINDOW_MS)) {
+      return c.json({ error: { code: 'ACCOUNT_LOCKED', message: 'Bu hesap icin cok fazla basarisiz giris denemesi var. Lutfen 15 dakika sonra tekrar deneyin.' } }, 429);
+    }
+
     const user = await prisma.user.findUnique({
-      where: { email: body.email.toLowerCase().trim() },
+      where: { email: normalizedEmail },
       include: {
         tenants: {
           where: { isActive: true },
@@ -226,6 +251,10 @@ export const AuthController = {
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
+    await Promise.all([
+      rateLimiter.reset(`login:${ip}`),
+      rateLimiter.reset(emailLockKey),
+    ]);
 
     return c.json({
       data: {
@@ -277,16 +306,11 @@ export const AuthController = {
       );
     }
 
-    if (body.password.length < 8) {
-      return c.json(
-        new ValidationError('Şifre en az 8 karakter olmalıdır.').toJSON(),
-        400,
-      );
-    }
+    const passwordPolicyError = validatePasswordPolicy(body.password);
+    if (passwordPolicyError) return c.json(passwordPolicyError.toJSON(), 400);
 
-    // Email benzersizlik kontrolü
     const existingUser = await prisma.user.findUnique({
-      where: { email: body.email.toLowerCase().trim() },
+      where: { email: normalizeEmail(body.email) },
     });
 
     if (existingUser) {

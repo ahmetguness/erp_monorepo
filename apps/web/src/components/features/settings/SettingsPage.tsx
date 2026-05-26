@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
   Save, Plus, X, Building2, Layers, Pencil,
@@ -23,6 +24,7 @@ import {
   useDeleteTenantLogo,
   useBusinessRules,
   useUpsertBusinessRule,
+  useTenantSecurityScore,
 } from '@/hooks/useSettings';
 import { cn } from '@/lib/utils';
 import type { TenantSetting, ModuleSetting, BusinessRule } from '@/services/settings.service';
@@ -80,6 +82,18 @@ const NEGATIVE_STOCK_POLICY_OPTIONS = [
   { value: 'WARN', label: 'Uyar, izin ver', description: 'İşlem kaydedilir, fakat kullanıcıya stok uyarısı döner.' },
   { value: 'ALLOW', label: 'İzin ver', description: 'Eski davranış korunur; eksi stok hareketine izin verilir.' },
 ] as const;
+
+const SECURITY_STATUS_LABELS = {
+  pass: 'Guvenli',
+  warn: 'Izleme gerekli',
+  fail: 'Riskli',
+} as const;
+
+const SECURITY_STATUS_CLASSES = {
+  pass: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+  warn: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+  fail: 'border-red-500/30 bg-red-500/10 text-red-300',
+} as const;
 
 function humanizeKey(key: string): string {
   return key
@@ -293,6 +307,7 @@ export function SettingsPage() {
   const { data: tenantSettings = [], isLoading: loadingTenant } = useTenantSettings();
   const { data: moduleSettings = [], isLoading: loadingModule } = useModuleSettings();
   const { data: businessRules = [], isLoading: loadingBusinessRules } = useBusinessRules();
+  const { data: securityScore, isLoading: loadingSecurityScore } = useTenantSecurityScore();
   const { data: logoBlob } = useTenantLogo();
   const upsertTenant = useUpsertTenantSetting();
   const deleteTenant = useDeleteTenantSetting();
@@ -417,6 +432,71 @@ export function SettingsPage() {
           className="hidden"
           onChange={handleLogoChange}
         />
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-800/60">
+          <div className="p-2 rounded-lg bg-emerald-500/10"><ShieldCheck className="w-4 h-4 text-emerald-400" /></div>
+          <div>
+            <h2 className="text-sm font-semibold text-white">Guvenlik Skoru</h2>
+            <p className="text-xs text-slate-500">Tenant erisimleri, API key rotasyonu ve rol riskleri</p>
+          </div>
+          <span className={cn(
+            'ml-auto rounded-lg border px-2.5 py-1 text-xs font-medium',
+            securityScore ? SECURITY_STATUS_CLASSES[securityScore.status] : 'border-slate-700 bg-slate-800 text-slate-400',
+          )}>
+            {loadingSecurityScore ? 'Taranıyor' : securityScore ? `${securityScore.score}/100` : 'Yok'}
+          </span>
+        </div>
+        {loadingSecurityScore ? (
+          <div className="grid gap-3 p-5 md:grid-cols-3">
+            {[1, 2, 3].map((item) => <div key={item} className="h-20 animate-pulse rounded-xl bg-slate-800/60" />)}
+          </div>
+        ) : securityScore ? (
+          <div className="p-5 space-y-4">
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                <p className="text-xs text-slate-500">Durum</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{SECURITY_STATUS_LABELS[securityScore.status]}</p>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                <p className="text-xs text-slate-500">Aktif kullanıcı</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{securityScore.metrics.activeUsers}</p>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                <p className="text-xs text-slate-500">Aktif API key</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{securityScore.metrics.activeApiKeys}</p>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                <p className="text-xs text-slate-500">Geniş rol riski</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{securityScore.metrics.riskyRoles}</p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-2">
+              {securityScore.findings.map((finding) => (
+                <div key={finding.key} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-200">{finding.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{finding.description}</p>
+                    </div>
+                    <span className={cn('rounded-lg border px-2 py-1 text-xs font-medium', SECURITY_STATUS_CLASSES[finding.status])}>
+                      {finding.count}
+                    </span>
+                  </div>
+                  {finding.status !== 'pass' && (
+                    <Link href={finding.href} className="mt-3 inline-flex text-xs font-medium text-sky-300 hover:text-sky-200">
+                      {finding.actionLabel}
+                    </Link>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="p-5 text-sm text-slate-500">Guvenlik skoru alınamadı.</p>
+        )}
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
