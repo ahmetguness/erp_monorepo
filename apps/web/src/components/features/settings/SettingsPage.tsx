@@ -6,7 +6,7 @@ import {
   Globe, Calendar, Receipt, DollarSign, Clock,
   Calculator, Package, FileText, ShieldCheck,
 } from 'lucide-react';
-import { PageHeader } from '@/components/shared/PageHeader';
+import { FeaturePageShell } from '@/components/shared/FeaturePageShell';
 import { ImageUploadBox, type ImageUploadStatus } from '@/components/shared/ImageUploadBox';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -387,8 +387,7 @@ export function SettingsPage() {
   )?.value ?? 'ALLOW';
 
   return (
-    <div className="space-y-5">
-      <PageHeader title="Genel Ayarlar" subtitle="Sistem ve modül yapılandırmasını yönetin."
+    <FeaturePageShell title="Genel Ayarlar" subtitle="Sistem ve modül yapılandırmasını yönetin."
         action={
           <button onClick={() => setAddOpen(true)}
             className="group inline-flex items-center gap-2.5 h-10 px-5 rounded-xl font-medium text-sm text-white bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 shadow-lg shadow-sky-500/20 transition-all duration-200 active:scale-[0.97]">
@@ -396,7 +395,7 @@ export function SettingsPage() {
             Yeni Ayar
           </button>
         }
-      />
+    >
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
         <ImageUploadBox
@@ -681,6 +680,6 @@ export function SettingsPage() {
           <Input label="Değer" placeholder="değer" value={newValue} onChange={(e) => setNewValue(e.target.value)} />
         </div>
       </Modal>
-    </div>
+    </FeaturePageShell>
   );
 }

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { Download, Edit3, ExternalLink, FileText, Mail, Search, Shield, Tags, Upload } from 'lucide-react';
-import { PageHeader } from '@/components/shared/PageHeader';
+import { FeaturePageShell } from '@/components/shared/FeaturePageShell';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -411,12 +411,11 @@ export function DocumentCenterPage() {
   const summary = data?.meta.summary;
 
   return (
-    <div className="space-y-5">
-      <PageHeader
+    <FeaturePageShell
         title="Doküman Merkezi"
         subtitle="Müşteri, personel, satış, servis ve mail eklerini tek merkezden takip edin."
         action={<Button leftIcon={<Upload className="h-4 w-4" />} onClick={() => setIsUploadOpen(true)}>Yeni dosya yükle</Button>}
-      />
+    >
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <StatCard label="Toplam" value={String(summary?.totalDocuments ?? 0)} hint="Filtreye uyan kayıt" />
@@ -626,6 +625,6 @@ export function DocumentCenterPage() {
           </div>
         )}
       </Modal>
-    </div>
+    </FeaturePageShell>
   );
 }

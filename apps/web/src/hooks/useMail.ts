@@ -4,7 +4,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
+  approveMailTemplate,
   createAiMailDraft,
+  createMailTemplate,
+  deleteMailTemplate,
   getMail,
   listMailTemplates,
   listMail,
@@ -15,6 +18,8 @@ import {
   sendMail,
   sendPasswordResetMail,
   sendWelcomeMail,
+  updateMailTemplate,
+  type ApproveMailTemplateDTO,
   type BulkMailDTO,
   type CreateAiMailDraftDTO,
   type GenericNotificationMailDTO,
@@ -25,6 +30,7 @@ import {
   type RenderMailTemplateDTO,
   type RenderedMailTemplate,
   type SendMailDTO,
+  type UpsertMailTemplateDTO,
   type WelcomeMailDTO,
 } from '@/services/mail.service';
 
@@ -86,6 +92,52 @@ export function useCreateAiMailDraft() {
     createAiMailDraft,
     'AI taslak hazirlandi.',
   );
+}
+
+export function useCreateMailTemplate() {
+  return useMailMutation<UpsertMailTemplateDTO>(
+    createMailTemplate,
+    'Sablon kaydedildi.',
+  );
+}
+
+export function useUpdateMailTemplate() {
+  const { toast } = useUIStore();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpsertMailTemplateDTO }) => updateMailTemplate(id, data),
+    onSuccess: () => {
+      toast.success('Sablon guncellendi.');
+      queryClient.invalidateQueries({ queryKey: ['mail', 'templates'] });
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useApproveMailTemplate() {
+  const { toast } = useUIStore();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: ApproveMailTemplateDTO }) => approveMailTemplate(id, data),
+    onSuccess: () => {
+      toast.success('Sablon onay durumu guncellendi.');
+      queryClient.invalidateQueries({ queryKey: ['mail', 'templates'] });
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useDeleteMailTemplate() {
+  const { toast } = useUIStore();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteMailTemplate,
+    onSuccess: () => {
+      toast.success('Sablon silindi.');
+      queryClient.invalidateQueries({ queryKey: ['mail', 'templates'] });
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
 }
 
 export function useSendWelcomeMail() {

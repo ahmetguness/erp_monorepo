@@ -70,13 +70,7 @@ export const MailTemplateVariableKeySchema = z.enum([
   'serviceNo',
 ]);
 
-export const MailTemplateIdSchema = z.enum([
-  'quote_followup',
-  'payment_reminder',
-  'employee_document',
-  'service_update',
-  'bulk_announcement',
-]);
+export const MailTemplateIdSchema = z.string().min(1);
 
 export const MailDraftToneSchema = z.enum(['formal', 'friendly', 'short']);
 
@@ -95,6 +89,13 @@ const MailTemplateSchema = z.object({
   subject: z.string(),
   body: z.string(),
   variables: z.array(MailTemplateVariableDefinitionSchema),
+  scope: z.enum(['SYSTEM', 'TENANT']).default('SYSTEM'),
+  version: z.number().int().positive().default(1),
+  approved: z.boolean().default(true),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  createdById: z.string().optional(),
+  updatedById: z.string().optional(),
 });
 
 const RenderedMailTemplateSchema = z.object({
@@ -160,6 +161,10 @@ export interface BulkMailDTO {
     content: string;
     contentType?: string;
   }>;
+  personalizations?: Array<{
+    recipient: string;
+    variables: MailTemplateVariables;
+  }>;
 }
 
 export interface RenderMailTemplateDTO {
@@ -171,6 +176,20 @@ export interface CreateAiMailDraftDTO extends RenderMailTemplateDTO {
   tone: MailDraftTone;
   audience?: string;
   notes?: string;
+}
+
+export interface UpsertMailTemplateDTO {
+  name: string;
+  category: string;
+  description?: string;
+  subject: string;
+  body: string;
+  variables: MailTemplateVariableDefinition[];
+  approved?: boolean;
+}
+
+export interface ApproveMailTemplateDTO {
+  approved: boolean;
 }
 
 export interface WelcomeMailDTO { to: string; name: string }
@@ -206,6 +225,26 @@ export async function listMailTemplates(): Promise<MailTemplate[]> {
 export async function renderMailTemplate(data: RenderMailTemplateDTO): Promise<RenderedMailTemplate> {
   const res = await apiClient.post('/api/mail/templates/render', data);
   return safeParse(SingleResponseSchema(RenderedMailTemplateSchema), res.data, 'renderMailTemplate').data;
+}
+
+export async function createMailTemplate(data: UpsertMailTemplateDTO): Promise<MailTemplate> {
+  const res = await apiClient.post('/api/mail/templates/custom', data);
+  return safeParse(SingleResponseSchema(MailTemplateSchema), res.data, 'createMailTemplate').data;
+}
+
+export async function updateMailTemplate(id: string, data: UpsertMailTemplateDTO): Promise<MailTemplate> {
+  const res = await apiClient.put(`/api/mail/templates/custom/${id}`, data);
+  return safeParse(SingleResponseSchema(MailTemplateSchema), res.data, 'updateMailTemplate').data;
+}
+
+export async function approveMailTemplate(id: string, data: ApproveMailTemplateDTO): Promise<MailTemplate> {
+  const res = await apiClient.post(`/api/mail/templates/custom/${id}/approval`, data);
+  return safeParse(SingleResponseSchema(MailTemplateSchema), res.data, 'approveMailTemplate').data;
+}
+
+export async function deleteMailTemplate(id: string): Promise<{ deleted: boolean }> {
+  const res = await apiClient.delete(`/api/mail/templates/custom/${id}`);
+  return safeParse(SingleResponseSchema(z.object({ deleted: z.boolean() })), res.data, 'deleteMailTemplate').data;
 }
 
 export async function createAiMailDraft(data: CreateAiMailDraftDTO): Promise<AiMailDraft> {

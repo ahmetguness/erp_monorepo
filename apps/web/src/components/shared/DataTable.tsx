@@ -14,6 +14,8 @@ export interface ColumnDef<T> {
   header: string;
   width?: string;
   align?: 'left' | 'center' | 'right';
+  hideable?: boolean;
+  exportValue?: (row: T) => string | number | boolean | null | undefined;
   render: (row: T) => React.ReactNode;
 }
 

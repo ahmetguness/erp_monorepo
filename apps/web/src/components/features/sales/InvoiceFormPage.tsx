@@ -24,6 +24,17 @@ import { useContacts } from '@/hooks/useContacts';
 import { useProducts } from '@/hooks/useProducts';
 import { useTaxRates } from '@/hooks/useMasterData';
 import { useBusinessRules } from '@/hooks/useSettings';
+import {
+  applyServerFieldErrors,
+  isSubmitLocked,
+  optionalPercentString,
+  optionalText,
+  parseDecimalInput,
+  requiredDateString,
+  requiredNonNegativeMoneyString,
+  requiredQuantityString,
+  useDirtyStateWarning,
+} from '@/lib/form-standard';
 import { cn, formatCurrency } from '@/lib/utils';
 import type { BusinessRule } from '@/services/settings.service';
 
@@ -35,15 +46,15 @@ const lineSchema = z.object({
   description: z.string().min(1, 'Açıklama zorunludur'),
   productId: z.string().optional(),
   taxRateId: z.string().optional(),
-  quantity: z.string().min(1, 'Miktar zorunludur'),
-  unitPrice: z.string().min(1, 'Birim fiyat zorunludur'),
-  discount: z.string().optional(),
+  quantity: requiredQuantityString(),
+  unitPrice: requiredNonNegativeMoneyString('Birim fiyat negatif olamaz'),
+  discount: optionalPercentString(),
 });
 
 const invoiceSchema = z.object({
   contactId: z.string().min(1, 'Cari seçiniz'),
   type: z.enum(['SALES', 'PURCHASE', 'RETURN_SALES', 'RETURN_PURCHASE']),
-  date: z.string().min(1, 'Tarih zorunludur'),
+  date: requiredDateString('Tarih zorunludur'),
   dueDate: z.string().optional(),
   notes: z.string().optional(),
   lines: z.array(lineSchema).min(1, 'En az bir kalem ekleyin'),
@@ -92,7 +103,7 @@ export function InvoiceFormPage() {
 
   const today = new Date().toISOString().split('T')[0];
 
-  const { register, control, handleSubmit, setValue, formState: { errors, dirtyFields } } = useForm<InvoiceForm>({
+  const { register, control, handleSubmit, setValue, setError, formState: { errors, dirtyFields, isDirty, isSubmitting } } = useForm<InvoiceForm>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       type: 'SALES', date: today, dueDate: addDaysString(today, 30),
@@ -101,6 +112,7 @@ export function InvoiceFormPage() {
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
+  useDirtyStateWarning(isDirty && !createInvoice.isSuccess);
   const watchedLines = useWatch({ control, name: 'lines' }) ?? [];
   const watchType = useWatch({ control, name: 'type' });
   const watchContact = useWatch({ control, name: 'contactId' });
@@ -128,9 +140,9 @@ export function InvoiceFormPage() {
 
   // Line totals
   const lineTotals = watchedLines.map((line) => {
-    const qty = Number(line.quantity || 0);
-    const price = Number(line.unitPrice || 0);
-    const disc = Number(line.discount || 0);
+    const qty = parseDecimalInput(line.quantity);
+    const price = parseDecimalInput(line.unitPrice);
+    const disc = parseDecimalInput(line.discount);
     const net = qty * price * (1 - disc / 100);
     const taxRate = taxRates.find((t) => t.id === line.taxRateId);
     const taxAmt = net * ((taxRate?.rate ?? 0) / 100);
@@ -141,9 +153,9 @@ export function InvoiceFormPage() {
   const totalGross = totalNet + totalTax;
   const smartLines: SmartFormLine[] = watchedLines.map((line, index) => ({
     productId: line.productId || undefined,
-    quantity: Number(line.quantity || 0),
-    unitPrice: Number(line.unitPrice || 0),
-    discount: Number(line.discount || 0),
+    quantity: parseDecimalInput(line.quantity),
+    unitPrice: parseDecimalInput(line.unitPrice),
+    discount: parseDecimalInput(line.discount),
     net: lineTotals[index]?.net ?? 0,
     gross: lineTotals[index]?.gross ?? 0,
   }));
@@ -160,13 +172,18 @@ export function InvoiceFormPage() {
   const onSubmit = (data: InvoiceForm) => {
     createInvoice.mutate({
       contactId: data.contactId, type: data.type, date: data.date,
-      dueDate: data.dueDate || undefined, notes: data.notes || undefined,
+      dueDate: optionalText(data.dueDate), notes: optionalText(data.notes),
       lines: data.lines.map((l) => ({
-        description: l.description, productId: l.productId || undefined,
-        taxRateId: l.taxRateId || undefined, quantity: Number(l.quantity),
-        unitPrice: Number(l.unitPrice), discount: Number(l.discount) || 0,
+        description: l.description, productId: optionalText(l.productId),
+        taxRateId: optionalText(l.taxRateId), quantity: parseDecimalInput(l.quantity),
+        unitPrice: parseDecimalInput(l.unitPrice), discount: parseDecimalInput(l.discount),
       })),
-    }, { onSuccess: (inv) => router.push(`/dashboard/invoices/${inv.id}`) });
+    }, {
+      onSuccess: (inv) => router.push(`/dashboard/invoices/${inv.id}`),
+      onError: (error) => {
+        applyServerFieldErrors<InvoiceForm>(error, setError);
+      },
+    });
   };
 
   return (
@@ -377,7 +394,7 @@ export function InvoiceFormPage() {
                 <div className="flex items-center gap-2.5">
                   <Button type="button" variant="ghost" size="sm" leftIcon={<X className="w-3.5 h-3.5" />}
                     onClick={() => router.back()}>İptal</Button>
-                  <Button type="submit" size="sm" loading={createInvoice.isPending} leftIcon={<Save className="w-3.5 h-3.5" />}
+                  <Button type="submit" size="sm" loading={createInvoice.isPending} disabled={isSubmitLocked(isSubmitting, createInvoice.isPending)} leftIcon={<Save className="w-3.5 h-3.5" />}
                     className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 shadow-lg shadow-emerald-500/20">
                     Fatura Oluştur
                   </Button>

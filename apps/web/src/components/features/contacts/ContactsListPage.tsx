@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
@@ -24,6 +24,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { BulkActionBar } from "@/components/shared/BulkActionBar";
 import { createBulkActionPresets } from "@/components/shared/bulkActionPresets";
+import { ListStandardControls } from "@/components/shared/ListStandardControls";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { RowActions, type RowAction } from "@/components/shared/RowActions";
@@ -34,12 +35,14 @@ import { useCurrentUser } from "@/hooks/useAuth";
 import { useBulkSelection } from "@/hooks/useBulkSelection";
 import { useContacts } from "@/hooks/useContacts";
 import { useUIStore } from "@/store/ui.store";
+import { createListSavedViewState, getSavedViewPageSize, getVisibleColumns, normalizeColumnKeys } from "@/lib/list-standard";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type {
   ContactListItem,
   ContactType,
   RiskLevel,
 } from "@/services/contact.service";
+import { getSavedViewFilterString, type SavedViewState } from "@/services/saved-view.service";
 
 // ─────────────────────────────────────────────
 // Config
@@ -75,6 +78,21 @@ const TYPE_VARIANTS: Record<ContactType, "info" | "warning" | "purple"> = {
   SUPPLIER: "warning",
   BOTH: "purple",
 };
+
+const DEFAULT_PAGE_SIZE = 25;
+const CONTACT_COLUMN_KEYS = ['name', 'type', 'taxNumber', 'balance', 'openInvoices', 'risk', 'lastTx', 'isActive', 'actions'] as const;
+
+function parseContactType(value: string): ContactType | "" {
+  return value === "CUSTOMER" || value === "SUPPLIER" || value === "BOTH" ? value : "";
+}
+
+function parseActiveStatus(value: string): string {
+  return value === "true" || value === "false" ? value : "";
+}
+
+function parseBalanceFilter(value: string): "" | "receivable" | "payable" | "risky" {
+  return value === "receivable" || value === "payable" || value === "risky" ? value : "";
+}
 
 const RISK_CONFIG: Record<
   RiskLevel,
@@ -207,10 +225,12 @@ export function ContactsListPage() {
   >("");
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>([...CONTACT_COLUMN_KEYS]);
 
   const { data, isLoading } = useContacts({
     page,
-    limit: 25,
+    limit: pageSize,
     search: search || undefined,
     type: type || undefined,
     isActive: status ? status === "true" : undefined,
@@ -221,6 +241,21 @@ export function ContactsListPage() {
   const bulkSelection = useBulkSelection(contacts.map((contact) => contact.id));
   const summary = data?.summary;
   const hasActiveFilters = !!type || !!status || !!balanceFilter;
+  const viewState = useMemo<SavedViewState>(() => createListSavedViewState({
+    filters: { search, type, status, balanceFilter },
+    columns: visibleColumnKeys,
+    pageSize,
+  }), [balanceFilter, pageSize, search, status, type, visibleColumnKeys]);
+
+  const applyView = (state: SavedViewState) => {
+    setSearch(getSavedViewFilterString(state, 'search'));
+    setType(parseContactType(getSavedViewFilterString(state, 'type')));
+    setStatus(parseActiveStatus(getSavedViewFilterString(state, 'status')));
+    setBalanceFilter(parseBalanceFilter(getSavedViewFilterString(state, 'balanceFilter')));
+    setPageSize(getSavedViewPageSize(state, DEFAULT_PAGE_SIZE));
+    setVisibleColumnKeys(normalizeColumnKeys(columns, state.columns));
+    setPage(1);
+  };
 
   const clearFilters = () => {
     setType("");
@@ -276,6 +311,7 @@ export function ContactsListPage() {
     {
       key: "name",
       header: "Cari Hesap",
+      exportValue: (r) => r.name,
       render: (r) => (
         <div>
           <p className="font-medium text-slate-200 text-sm leading-tight">
@@ -289,6 +325,7 @@ export function ContactsListPage() {
       key: "type",
       header: "Tip",
       width: "90px",
+      exportValue: (r) => TYPE_LABELS[r.type],
       render: (r) => (
         <Badge variant={TYPE_VARIANTS[r.type]}>{TYPE_LABELS[r.type]}</Badge>
       ),
@@ -297,6 +334,7 @@ export function ContactsListPage() {
       key: "taxNumber",
       header: "Vergi No",
       width: "115px",
+      exportValue: (r) => r.taxNumber ?? "",
       render: (r) => (
         <span className="text-xs text-slate-400 font-mono">
           {r.taxNumber ?? "—"}
@@ -308,6 +346,7 @@ export function ContactsListPage() {
       header: "Bakiye",
       width: "150px",
       align: "right",
+      exportValue: (r) => Number(r.currentBalance) || 0,
       render: (r) => {
         const bal = Number(r.currentBalance) || 0;
         if (bal === 0)
@@ -356,6 +395,7 @@ export function ContactsListPage() {
       header: "Risk",
       width: "80px",
       align: "center",
+      exportValue: (r) => r.riskLevel,
       render: (r) => {
         const cfg = RISK_CONFIG[r.riskLevel as RiskLevel];
         if (!cfg || r.riskLevel === "none")
@@ -386,6 +426,7 @@ export function ContactsListPage() {
       header: "Durum",
       width: "70px",
       align: "center",
+      exportValue: (r) => r.isActive ? "Aktif" : "Pasif",
       render: (r) => <ActiveBadge isActive={r.isActive} />,
     },
     {
@@ -393,9 +434,11 @@ export function ContactsListPage() {
       header: "",
       width: "40px",
       align: "center",
+      hideable: false,
       render: (r) => <RowActions actions={getRowActions(r)} />,
     },
   ];
+  const visibleColumns = getVisibleColumns(columns, visibleColumnKeys);
 
   return (
     <div>
@@ -451,6 +494,22 @@ export function ContactsListPage() {
             Temizle
           </Button>
         )}
+        <ListStandardControls
+          module="contacts"
+          listKey="contacts.list"
+          currentState={viewState}
+          onApplyView={applyView}
+          columns={columns}
+          visibleColumnKeys={visibleColumnKeys}
+          onVisibleColumnKeysChange={setVisibleColumnKeys}
+          pageSize={pageSize}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize);
+            setPage(1);
+          }}
+          exportRows={contacts}
+          exportFilename="cari-hesaplar.csv"
+        />
       </div>
 
       {/* Advanced Filters */}
@@ -494,7 +553,7 @@ export function ContactsListPage() {
       />
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={contacts}
         keyExtractor={(r) => r.id}
         selection={{
@@ -512,7 +571,7 @@ export function ContactsListPage() {
           data
             ? {
                 page,
-                pageSize: 25,
+                pageSize,
                 total: data.meta.total,
                 totalPages: data.meta.totalPages,
                 onChange: setPage,

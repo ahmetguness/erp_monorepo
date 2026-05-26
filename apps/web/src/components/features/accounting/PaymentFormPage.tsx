@@ -32,6 +32,16 @@ import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { useCreatePayment } from "@/hooks/useAccounting";
 import { useInvoices } from "@/hooks/useSales";
+import {
+  applyServerFieldErrors,
+  isSubmitLocked,
+  optionalMoneyString,
+  optionalText,
+  parseDecimalInput,
+  requiredDateString,
+  requiredMoneyString,
+  useDirtyStateWarning,
+} from "@/lib/form-standard";
 import { cn, formatCurrency, formatDate, todayInputDate } from "@/lib/utils";
 import type {
   CreatePaymentDTO,
@@ -94,18 +104,9 @@ const paymentFormSchema = z
       "PROMISSORY_NOTE",
       "OTHER",
     ]),
-    date: z.string().min(1, "Tarih zorunlu"),
-    amount: z
-      .string()
-      .min(1, "Tutar zorunlu")
-      .refine((value) => Number(value) > 0, "Tutar 0'dan büyük olmalı"),
-    allocationAmount: z
-      .string()
-      .optional()
-      .refine(
-        (value) => !value || Number(value) > 0,
-        "Tahsis tutarı 0'dan büyük olmalı",
-      ),
+    date: requiredDateString("Tarih zorunlu"),
+    amount: requiredMoneyString("Tutar 0'dan büyük olmalı"),
+    allocationAmount: optionalMoneyString("Tahsis tutarı 0'dan büyük olmalı"),
     reference: z.string().max(80, "Referans en fazla 80 karakter olabilir").optional(),
     notes: z.string().max(500, "Not en fazla 500 karakter olabilir").optional(),
   })
@@ -126,9 +127,9 @@ const paymentFormSchema = z
       });
     }
 
-    const amount = Number(values.amount);
+    const amount = parseDecimalInput(values.amount);
     const allocationAmount = values.allocationAmount
-      ? Number(values.allocationAmount)
+      ? parseDecimalInput(values.allocationAmount)
       : undefined;
 
     if (values.invoiceId && allocationAmount !== undefined && allocationAmount > amount) {
@@ -159,11 +160,6 @@ function accountTypeForMethod(method: PaymentMethod): AccountType {
   return method === "CASH" ? "CASH" : "BANK";
 }
 
-function trimToUndefined(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-}
-
 export function PaymentFormPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -178,8 +174,9 @@ export function PaymentFormPage() {
     register,
     handleSubmit,
     setValue,
+    setError,
     control,
-    formState: { errors },
+    formState: { errors, isDirty, isSubmitting },
   } = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
     defaultValues: {
@@ -208,6 +205,7 @@ export function PaymentFormPage() {
   const allocationAmount = useWatch({ control, name: "allocationAmount" }) ?? "";
   const cashAccountId = useWatch({ control, name: "cashAccountId" }) ?? "";
   const bankAccountId = useWatch({ control, name: "bankAccountId" }) ?? "";
+  useDirtyStateWarning(isDirty && !createPayment.isSuccess);
   const invoiceType = invoiceTypeForDirection(direction);
 
   const { data: invoicesData } = useInvoices({
@@ -268,15 +266,15 @@ export function PaymentFormPage() {
         };
   const DirectionIcon = directionConfig.icon;
 
-  const numericAmount = Number(amount || 0);
+  const numericAmount = parseDecimalInput(amount);
   const numericAllocation = invoiceId
-    ? Number(allocationAmount || amount || 0)
+    ? parseDecimalInput(allocationAmount || amount)
     : 0;
 
   const onSubmit = (values: PaymentFormValues) => {
-    const paymentAmount = Number(values.amount);
+    const paymentAmount = parseDecimalInput(values.amount);
     const paymentAllocationAmount = values.invoiceId
-      ? Number(values.allocationAmount || values.amount)
+      ? parseDecimalInput(values.allocationAmount || values.amount)
       : undefined;
 
     const payload: CreatePaymentDTO = {
@@ -285,8 +283,8 @@ export function PaymentFormPage() {
       date: values.date,
       amount: paymentAmount,
       method: values.method,
-      reference: trimToUndefined(values.reference),
-      notes: trimToUndefined(values.notes),
+      reference: optionalText(values.reference),
+      notes: optionalText(values.notes),
       bankAccountId:
         values.accountType === "BANK" ? values.bankAccountId : undefined,
       cashAccountId:
@@ -299,6 +297,9 @@ export function PaymentFormPage() {
 
     createPayment.mutate(payload, {
       onSuccess: () => router.push("/dashboard/payments"),
+      onError: (error) => {
+        applyServerFieldErrors<PaymentFormValues>(error, setError);
+      },
     });
   };
 
@@ -664,6 +665,7 @@ export function PaymentFormPage() {
                   type="submit"
                   className="flex-1"
                   loading={createPayment.isPending}
+                  disabled={isSubmitLocked(isSubmitting, createPayment.isPending)}
                   leftIcon={<Save className="h-4 w-4" />}
                 >
                   Kaydet

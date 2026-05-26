@@ -20,15 +20,16 @@ import { BusinessRulesService } from '../services/business-rules.service.js';
 import { getRequestMeta } from '../utils/audit.js';
 import { AI_MODELS, AI_PROMPT_VERSIONS, recordAiRequestLog } from '../services/ai-governance.service';
 import {
-  createFallbackMailDraft,
-  getMailTemplates,
-  isMailTemplateId,
   isMailTemplateVariableKey,
   MailDraftTone,
-  MailTemplateId,
+  MailTemplateVariableDefinition,
   MailTemplateVariables,
-  renderMailTemplate,
 } from '../services/mail-template-library.service';
+import {
+  MailTemplateInput,
+  MailTemplateManagementService,
+  renderMailTemplateText,
+} from '../services/mail-template-management.service';
 
 // ── Rate limiter (tenant bazlı, saatte max 20 mail) ─────
 const mailRateMap = new Map<string, { count: number; resetAt: number }>();
@@ -59,6 +60,12 @@ interface BulkMailBody {
   from?: string;
   replyTo?: string;
   attachments?: MailAttachmentInput[];
+  personalizations?: RecipientPersonalizationInput[];
+}
+
+interface RecipientPersonalizationInput {
+  recipient: string;
+  variables: MailTemplateVariables;
 }
 
 interface AiDraftResult {
@@ -144,9 +151,10 @@ function parseStringField(value: unknown, maxLength: number): string | undefined
   return trimmed.slice(0, maxLength);
 }
 
-function parseTemplateId(value: unknown): MailTemplateId | null {
-  if (typeof value !== 'string' || !isMailTemplateId(value)) return null;
-  return value;
+function parseTemplateId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, 120) : null;
 }
 
 function parseTone(value: unknown): MailDraftTone {
@@ -163,6 +171,59 @@ function parseTemplateVariables(value: unknown): MailTemplateVariables {
     if (trimmed) acc[key] = trimmed.slice(0, 300);
     return acc;
   }, {});
+}
+
+function normalizeRecipientKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function parseRecipientPersonalizations(value: unknown): Map<string, MailTemplateVariables> {
+  const personalizations = new Map<string, MailTemplateVariables>();
+  if (!Array.isArray(value)) return personalizations;
+
+  for (const item of value) {
+    if (!isRecord(item) || typeof item.recipient !== 'string') continue;
+    const key = normalizeRecipientKey(item.recipient);
+    if (!key) continue;
+    personalizations.set(key, parseTemplateVariables(item.variables));
+  }
+
+  return personalizations;
+}
+
+function parseRequiredBoolean(value: unknown): boolean | null {
+  if (typeof value !== 'boolean') return null;
+  return value;
+}
+
+function parseTemplateVariableDefinitions(value: unknown): MailTemplateVariableDefinition[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.reduce<MailTemplateVariableDefinition[]>((acc, item) => {
+    if (!isRecord(item)) return acc;
+    if (typeof item.key !== 'string' || !isMailTemplateVariableKey(item.key)) return acc;
+    if (seen.has(item.key)) return acc;
+    seen.add(item.key);
+    acc.push({
+      key: item.key,
+      label: parseStringField(item.label, 80) ?? item.key,
+      required: item.required === true,
+      example: parseStringField(item.example, 120) ?? '',
+    });
+    return acc;
+  }, []);
+}
+
+function parseTemplateInput(body: Record<string, unknown>): MailTemplateInput {
+  return {
+    name: parseStringField(body.name, 120) ?? '',
+    category: parseStringField(body.category, 80) ?? '',
+    description: parseStringField(body.description, 300) ?? '',
+    subject: parseStringField(body.subject, 200) ?? '',
+    body: parseStringField(body.body, 10000) ?? '',
+    variables: parseTemplateVariableDefinitions(body.variables),
+    approved: body.approved === true,
+  };
 }
 
 function parseAiDraftContent(content: string | null, fallback: AiDraftResult): AiDraftResult {
@@ -236,20 +297,83 @@ async function sendAndRecordMail(options: {
 export class MailController {
   /** GET /api/mail/templates - Tenant baglamli mail sablon kutuphanesi */
   static async templates(c: Context) {
-    requireTenantId(c);
-    return c.json({ data: getMailTemplates() });
+    const tenantId = requireTenantId(c);
+    const templates = await MailTemplateManagementService.list(tenantId);
+    return c.json({ data: templates });
+  }
+
+  /** POST /api/mail/templates/custom - Tenant ozel sablon olustur */
+  static async createTemplate(c: Context) {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const body: unknown = await c.req.json();
+    if (!isRecord(body)) return c.json({ error: 'Gecersiz istek govdesi.' }, 400);
+
+    const result = await MailTemplateManagementService.create({
+      tenantId,
+      userId,
+      input: parseTemplateInput(body),
+    });
+
+    if ('error' in result) return c.json({ error: result.error }, 400);
+    return c.json({ data: result }, 201);
+  }
+
+  /** PUT /api/mail/templates/custom/:id - Tenant ozel sablon versiyonla */
+  static async updateTemplate(c: Context) {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const templateId = c.req.param('id');
+    const body: unknown = await c.req.json();
+    if (!templateId || !isRecord(body)) return c.json({ error: 'Gecersiz sablon istegi.' }, 400);
+
+    const result = await MailTemplateManagementService.update({
+      tenantId,
+      userId,
+      templateId,
+      input: parseTemplateInput(body),
+    });
+
+    if ('error' in result) return c.json({ error: result.error }, result.error === 'Sablon bulunamadi.' ? 404 : 400);
+    return c.json({ data: result });
+  }
+
+  /** POST /api/mail/templates/custom/:id/approval - Tenant sablon onay durumu */
+  static async approveTemplate(c: Context) {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const templateId = c.req.param('id');
+    const body: unknown = await c.req.json();
+    if (!templateId || !isRecord(body)) return c.json({ error: 'Gecersiz sablon istegi.' }, 400);
+
+    const approved = parseRequiredBoolean(body.approved);
+    if (approved === null) return c.json({ error: 'approved alani boolean olmalidir.' }, 400);
+
+    const result = await MailTemplateManagementService.approve(tenantId, userId, templateId, approved);
+    if (!result) return c.json({ error: 'Sablon bulunamadi veya onaylanamaz.' }, 404);
+    return c.json({ data: result });
+  }
+
+  /** DELETE /api/mail/templates/custom/:id - Tenant ozel sablon sil */
+  static async deleteTemplate(c: Context) {
+    const tenantId = requireTenantId(c);
+    const templateId = c.req.param('id');
+    if (!templateId) return c.json({ error: 'Sablon bulunamadi.' }, 404);
+    const deleted = await MailTemplateManagementService.delete(tenantId, templateId);
+    if (!deleted) return c.json({ error: 'Sablon bulunamadi veya silinemez.' }, 404);
+    return c.json({ data: { deleted: true } });
   }
 
   /** POST /api/mail/templates/render - Sablonu degiskenlerle doldur */
   static async renderTemplate(c: Context) {
-    requireTenantId(c);
+    const tenantId = requireTenantId(c);
     const body: unknown = await c.req.json();
     if (!isRecord(body)) return c.json({ error: 'Gecersiz istek govdesi.' }, 400);
 
     const templateId = parseTemplateId(body.templateId);
     if (!templateId) return c.json({ error: 'Gecerli bir sablon secilmelidir.' }, 400);
 
-    const rendered = renderMailTemplate(templateId, parseTemplateVariables(body.variables));
+    const rendered = await MailTemplateManagementService.render(tenantId, templateId, parseTemplateVariables(body.variables));
     if (!rendered) return c.json({ error: 'Sablon bulunamadi.' }, 404);
     return c.json({ data: rendered });
   }
@@ -269,7 +393,7 @@ export class MailController {
     const notes = parseStringField(body.notes, 1000);
     const audience = parseStringField(body.audience, 300);
     const tone = parseTone(body.tone);
-    const fallback = createFallbackMailDraft({ templateId, variables, notes });
+    const fallback = await MailTemplateManagementService.fallbackDraft({ tenantId, templateId, variables, notes });
     if (!fallback) return c.json({ error: 'Sablon bulunamadi.' }, 404);
 
     const fallbackDraft: AiDraftResult = {
@@ -297,7 +421,7 @@ export class MailController {
       return c.json({ data: fallbackDraft });
     }
 
-    const template = getMailTemplates().find((item) => item.id === templateId);
+    const template = await MailTemplateManagementService.find(tenantId, templateId);
     const variableLines = Object.entries(variables)
       .map(([key, value]) => `${key}: ${value}`)
       .join('\n');
@@ -475,7 +599,7 @@ export class MailController {
   static async bulk(c: Context) {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const { recipients: rawRecipients, subject, html, from, replyTo, attachments } = await c.req.json<BulkMailBody>();
+    const { recipients: rawRecipients, subject, html, from, replyTo, attachments, personalizations } = await c.req.json<BulkMailBody>();
 
     if (!rawRecipients || !subject || !html) {
       return c.json({ error: 'recipients, subject ve html alanları zorunludur.' }, 400);
@@ -517,16 +641,20 @@ export class MailController {
       return c.json({ error: 'Mail içeriği çok uzun (max 50KB).' }, 400);
     }
 
+    const personalizationMap = parseRecipientPersonalizations(personalizations);
     const results = [];
     for (const recipient of recipients) {
+      const recipientVariables = personalizationMap.get(normalizeRecipientKey(recipient)) ?? {};
+      const personalizedSubject = renderMailTemplateText(subject, recipientVariables);
+      const personalizedHtml = renderMailTemplateText(htmlWithSignature, recipientVariables);
       const result = await sendAndRecordMail({
         tenantId,
         userId,
         from: from?.trim() || undefined,
         replyTo: replyTo?.trim() || undefined,
         to: [recipient],
-        subject,
-        html: htmlWithSignature,
+        subject: personalizedSubject,
+        html: personalizedHtml,
         attachments: normalizedAttachments,
       });
 

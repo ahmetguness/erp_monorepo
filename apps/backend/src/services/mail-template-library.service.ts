@@ -30,7 +30,7 @@ export interface MailTemplateVariableDefinition {
 }
 
 export interface MailTemplate {
-  id: MailTemplateId;
+  id: string;
   name: string;
   category: string;
   description: string;
@@ -40,7 +40,7 @@ export interface MailTemplate {
 }
 
 export interface RenderedMailTemplate {
-  templateId: MailTemplateId;
+  templateId: string;
   subject: string;
   body: string;
   missingVariables: MailTemplateVariableKey[];

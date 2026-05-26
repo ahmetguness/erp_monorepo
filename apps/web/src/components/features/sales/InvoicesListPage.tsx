@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { BulkActionBar } from '@/components/shared/BulkActionBar';
 import { createBulkActionPresets } from '@/components/shared/bulkActionPresets';
-import { SavedViewControls } from '@/components/shared/SavedViewControls';
+import { ListStandardControls } from '@/components/shared/ListStandardControls';
 import { InvoiceStatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
@@ -17,6 +17,7 @@ import { useBulkSelection } from '@/hooks/useBulkSelection';
 import { useInvoices } from '@/hooks/useSales';
 import { useUIStore } from '@/store/ui.store';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { createListSavedViewState, getSavedViewPageSize, getVisibleColumns, normalizeColumnKeys } from '@/lib/list-standard';
 import type { Invoice, InvoiceType, InvoiceStatus } from '@/services/sales.service';
 import { getSavedViewFilterString, type SavedViewState } from '@/services/saved-view.service';
 
@@ -42,6 +43,9 @@ const TYPE_LABELS: Record<InvoiceType, string> = {
   SALES: 'Satış', PURCHASE: 'Alış', RETURN_SALES: 'Satış İade', RETURN_PURCHASE: 'Alış İade',
 };
 
+const DEFAULT_PAGE_SIZE = 20;
+const INVOICE_COLUMN_KEYS = ['number', 'contact', 'type', 'date', 'dueDate', 'status', 'totalGross'] as const;
+
 function parseInvoiceType(value: string): InvoiceType | '' {
   if (value === 'SALES' || value === 'PURCHASE' || value === 'RETURN_SALES' || value === 'RETURN_PURCHASE') return value;
   return '';
@@ -64,32 +68,38 @@ export function InvoicesListPage() {
   const { user } = useCurrentUser();
   const { toast } = useUIStore();
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [type, setType] = useState<InvoiceType | ''>('');
   const [status, setStatus] = useState<InvoiceStatus | ''>('');
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>([...INVOICE_COLUMN_KEYS]);
 
-  const { data, isLoading } = useInvoices({ page, limit: 20, type: type || undefined, status: status || undefined });
+  const { data, isLoading } = useInvoices({ page, limit: pageSize, type: type || undefined, status: status || undefined });
   const invoices = data?.data ?? [];
   const bulkSelection = useBulkSelection(invoices.map((invoice) => invoice.id));
-  const viewState = useMemo<SavedViewState>(() => ({
+  const viewState = useMemo<SavedViewState>(() => createListSavedViewState({
     filters: { type, status },
-    pageSize: 20,
-  }), [status, type]);
+    columns: visibleColumnKeys,
+    pageSize,
+  }), [pageSize, status, type, visibleColumnKeys]);
 
   const applyView = (state: SavedViewState) => {
     setType(parseInvoiceType(getSavedViewFilterString(state, 'type')));
     setStatus(parseInvoiceStatus(getSavedViewFilterString(state, 'status')));
+    setPageSize(getSavedViewPageSize(state, DEFAULT_PAGE_SIZE));
+    setVisibleColumnKeys(normalizeColumnKeys(columns, state.columns));
     setPage(1);
   };
 
   const columns: ColumnDef<Invoice>[] = [
-    { key: 'number', header: 'No', width: '130px', render: (r) => <span className="font-mono text-sky-400">{r.number}</span> },
+    { key: 'number', header: 'No', width: '130px', exportValue: (r) => r.number, render: (r) => <span className="font-mono text-sky-400">{r.number}</span> },
     { key: 'contact', header: 'Cari', render: (r) => <span className="text-slate-200">{r.contact?.name ?? '—'}</span> },
-    { key: 'type', header: 'Tip', width: '100px', render: (r) => <Badge variant="neutral">{TYPE_LABELS[r.type]}</Badge> },
-    { key: 'date', header: 'Tarih', width: '110px', render: (r) => <span className="text-slate-400">{formatDate(r.date)}</span> },
+    { key: 'type', header: 'Tip', width: '100px', exportValue: (r) => TYPE_LABELS[r.type], render: (r) => <Badge variant="neutral">{TYPE_LABELS[r.type]}</Badge> },
+    { key: 'date', header: 'Tarih', width: '110px', exportValue: (r) => formatDate(r.date), render: (r) => <span className="text-slate-400">{formatDate(r.date)}</span> },
     { key: 'dueDate', header: 'Vade', width: '110px', render: (r) => <span className="text-slate-400">{r.dueDate ? formatDate(r.dueDate) : '—'}</span> },
-    { key: 'status', header: 'Durum', width: '130px', render: (r) => <InvoiceStatusBadge status={r.status} /> },
-    { key: 'totalGross', header: 'Toplam', width: '130px', align: 'right', render: (r) => <span className="font-semibold text-slate-200">{formatCurrency(r.totalGross)}</span> },
+    { key: 'status', header: 'Durum', width: '130px', exportValue: (r) => r.status, render: (r) => <InvoiceStatusBadge status={r.status} /> },
+    { key: 'totalGross', header: 'Toplam', width: '130px', align: 'right', exportValue: (r) => r.totalGross, render: (r) => <span className="font-semibold text-slate-200">{formatCurrency(r.totalGross)}</span> },
   ];
+  const visibleColumns = getVisibleColumns(columns, visibleColumnKeys);
 
   const bulkActions = createBulkActionPresets({
     module: 'invoicing',
@@ -108,7 +118,22 @@ export function InvoicesListPage() {
       <div className="flex flex-wrap gap-3 mb-4">
         <Select options={TYPE_OPTIONS} value={type} onChange={(e) => { setType(parseInvoiceType(e.target.value)); setPage(1); }} className="w-40" />
         <Select options={STATUS_OPTIONS} value={status} onChange={(e) => { setStatus(parseInvoiceStatus(e.target.value)); setPage(1); }} className="w-44" />
-        <SavedViewControls module="sales" listKey="sales.invoices" currentState={viewState} onApply={applyView} />
+        <ListStandardControls
+          module="sales"
+          listKey="sales.invoices"
+          currentState={viewState}
+          onApplyView={applyView}
+          columns={columns}
+          visibleColumnKeys={visibleColumnKeys}
+          onVisibleColumnKeysChange={setVisibleColumnKeys}
+          pageSize={pageSize}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize);
+            setPage(1);
+          }}
+          exportRows={invoices}
+          exportFilename="faturalar.csv"
+        />
       </div>
       <BulkActionBar
         selectedIds={bulkSelection.selectedIdList}
@@ -117,7 +142,7 @@ export function InvoicesListPage() {
         onClear={bulkSelection.clearSelection}
       />
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={invoices}
         keyExtractor={(r) => r.id}
         selection={{
@@ -130,7 +155,7 @@ export function InvoicesListPage() {
         isLoading={isLoading}
         onRowClick={(r) => router.push(`/dashboard/invoices/${r.id}`)}
         emptyTitle="Fatura bulunamadı"
-        pagination={data ? { page, pageSize: 20, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
+        pagination={data ? { page, pageSize, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
       />
     </div>
   );

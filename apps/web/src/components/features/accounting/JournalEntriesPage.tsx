@@ -25,7 +25,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
-import { PageHeader } from "@/components/shared/PageHeader";
+import { FeaturePageShell } from "@/components/shared/FeaturePageShell";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -338,8 +338,7 @@ export function JournalEntriesPage() {
   ];
 
   return (
-    <div>
-      <PageHeader
+    <FeaturePageShell
         title="Yevmiye Fişleri"
         subtitle="Manuel muhasebe kayıtlarını yönetin."
         action={
@@ -360,7 +359,7 @@ export function JournalEntriesPage() {
             Yeni Fiş
           </Link>
         }
-      />
+    >
 
       {/* ── Filter tabs ─────────────────────────── */}
       <div className="flex items-center gap-2 mb-4">
@@ -729,7 +728,7 @@ export function JournalEntriesPage() {
           isPending={updateEntry.isPending}
         />
       )}
-    </div>
+    </FeaturePageShell>
   );
 }
 

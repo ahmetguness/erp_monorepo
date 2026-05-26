@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import {
+  CheckCircle2,
+  Edit3,
   Eye,
   FileText,
   Mail,
@@ -11,18 +13,23 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import { PageHeader } from "@/components/shared/PageHeader";
+import { FeaturePageShell } from "@/components/shared/FeaturePageShell";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { MailCenterFilters } from "./MailCenterFilters";
 import { useCurrentUser } from "@/hooks/useAuth";
 import {
   useMailHistory,
   useMailMessage,
   useMailTemplates,
+  useApproveMailTemplate,
   useCreateAiMailDraft,
+  useCreateMailTemplate,
+  useDeleteMailTemplate,
   useRenderMailTemplate,
   useSendBulkMail,
+  useUpdateMailTemplate,
 } from "@/hooks/useMail";
 import { useTenantUsers } from "@/hooks/useUsers";
 import { formatDate } from "@/lib/utils";
@@ -31,9 +38,12 @@ import type {
   MailDraftTone,
   MailDirection,
   MailMessageListItem,
+  MailTemplate,
   MailTemplateId,
+  MailTemplateVariableDefinition,
   MailTemplateVariableKey,
   MailTemplateVariables,
+  UpsertMailTemplateDTO,
 } from "@/services/mail.service";
 
 interface MailAttachmentDraft {
@@ -54,13 +64,6 @@ const DIRECTION_LABELS: Record<MailDirection, string> = {
   OUTBOUND: "Giden",
 };
 
-const MAIL_DIRECTIONS: readonly MailDirection[] = ["INBOUND", "OUTBOUND"];
-const MAIL_DELIVERY_STATUSES: readonly MailDeliveryStatus[] = [
-  "PENDING",
-  "SENT",
-  "FAILED",
-];
-
 const AI_TONE_LABELS: Record<MailDraftTone, string> = {
   formal: "Resmi",
   friendly: "Samimi",
@@ -68,6 +71,40 @@ const AI_TONE_LABELS: Record<MailDraftTone, string> = {
 };
 
 const AI_TONES: readonly MailDraftTone[] = ["formal", "friendly", "short"];
+
+const TEMPLATE_VARIABLES: readonly MailTemplateVariableDefinition[] = [
+  { key: "customerName", label: "Musteri adi", required: false, example: "Acme Ltd." },
+  { key: "invoiceNo", label: "Fatura no", required: false, example: "FTR-2026-001" },
+  { key: "dueDate", label: "Vade tarihi", required: false, example: "31.05.2026" },
+  { key: "amount", label: "Tutar", required: false, example: "25.000 TL" },
+  { key: "employeeName", label: "Personel adi", required: false, example: "Ayse Yilmaz" },
+  { key: "quoteNo", label: "Teklif no", required: false, example: "TKL-2026-014" },
+  { key: "serviceNo", label: "Servis no", required: false, example: "SRV-2026-008" },
+];
+
+interface TemplateFormState {
+  id: string | null;
+  name: string;
+  category: string;
+  description: string;
+  subject: string;
+  body: string;
+  enabledVariables: MailTemplateVariableKey[];
+  requiredVariables: MailTemplateVariableKey[];
+  approved: boolean;
+}
+
+const EMPTY_TEMPLATE_FORM: TemplateFormState = {
+  id: null,
+  name: "",
+  category: "Genel",
+  description: "",
+  subject: "",
+  body: "",
+  enabledVariables: [],
+  requiredVariables: [],
+  approved: false,
+};
 
 function textToHtml(value: string): string {
   return value
@@ -139,6 +176,41 @@ function readFileAsAttachment(file: File): Promise<MailAttachmentDraft> {
     reader.onerror = () => reject(new Error(`${file.name} okunamadi.`));
     reader.readAsDataURL(file);
   });
+}
+
+function templateToForm(template: MailTemplate): TemplateFormState {
+  return {
+    id: template.id,
+    name: template.name,
+    category: template.category,
+    description: template.description,
+    subject: template.subject,
+    body: template.body,
+    enabledVariables: template.variables.map((variable) => variable.key),
+    requiredVariables: template.variables
+      .filter((variable) => variable.required)
+      .map((variable) => variable.key),
+    approved: template.approved,
+  };
+}
+
+function buildTemplatePayload(form: TemplateFormState): UpsertMailTemplateDTO {
+  const variables = TEMPLATE_VARIABLES
+    .filter((variable) => form.enabledVariables.includes(variable.key))
+    .map((variable) => ({
+      ...variable,
+      required: form.requiredVariables.includes(variable.key),
+    }));
+
+  return {
+    name: form.name.trim(),
+    category: form.category.trim(),
+    description: form.description.trim(),
+    subject: form.subject.trim(),
+    body: form.body.trim(),
+    variables,
+    approved: form.approved,
+  };
 }
 
 function statusVariant(
@@ -242,6 +314,10 @@ export function MailCenterPage() {
   const sendBulkMail = useSendBulkMail();
   const renderTemplate = useRenderMailTemplate();
   const createAiDraft = useCreateAiMailDraft();
+  const createTemplate = useCreateMailTemplate();
+  const updateTemplate = useUpdateMailTemplate();
+  const approveTemplate = useApproveMailTemplate();
+  const deleteTemplate = useDeleteMailTemplate();
   const [page, setPage] = useState(1);
   const [direction, setDirection] = useState<MailDirection | "">("");
   const [status, setStatus] = useState<MailDeliveryStatus | "">("");
@@ -264,6 +340,8 @@ export function MailCenterPage() {
   const [aiTone, setAiTone] = useState<MailDraftTone>("formal");
   const [aiAudience, setAiAudience] = useState("");
   const [aiNotes, setAiNotes] = useState("");
+  const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
+  const [templateForm, setTemplateForm] = useState<TemplateFormState>(EMPTY_TEMPLATE_FORM);
 
   const params = useMemo(
     () => ({
@@ -283,6 +361,13 @@ export function MailCenterPage() {
     [mailTemplates, selectedTemplateId],
   );
   const recipients = parseRecipients(recipientsText);
+  const tenantTemplates = mailTemplates.filter((template) => template.scope === "TENANT");
+  const canSaveTemplate = Boolean(
+    templateForm.name.trim() &&
+      templateForm.category.trim() &&
+      templateForm.subject.trim() &&
+      templateForm.body.trim(),
+  );
   const canSend =
     recipients.length > 0 &&
     Boolean(subject.trim() && body.trim()) &&
@@ -304,6 +389,51 @@ export function MailCenterPage() {
     setAiAudience("");
     setAiNotes("");
     setComposeOpen(false);
+  };
+
+  const resetTemplateForm = () => {
+    setTemplateForm(EMPTY_TEMPLATE_FORM);
+  };
+
+  const updateTemplateForm = <K extends keyof TemplateFormState>(
+    key: K,
+    value: TemplateFormState[K],
+  ) => {
+    setTemplateForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const toggleTemplateVariable = (key: MailTemplateVariableKey) => {
+    setTemplateForm((prev) => {
+      const enabled = prev.enabledVariables.includes(key);
+      return {
+        ...prev,
+        enabledVariables: enabled
+          ? prev.enabledVariables.filter((item) => item !== key)
+          : [...prev.enabledVariables, key],
+        requiredVariables: enabled
+          ? prev.requiredVariables.filter((item) => item !== key)
+          : prev.requiredVariables,
+      };
+    });
+  };
+
+  const toggleRequiredVariable = (key: MailTemplateVariableKey) => {
+    setTemplateForm((prev) => ({
+      ...prev,
+      requiredVariables: prev.requiredVariables.includes(key)
+        ? prev.requiredVariables.filter((item) => item !== key)
+        : [...prev.requiredVariables, key],
+    }));
+  };
+
+  const saveTemplate = async () => {
+    const payload = buildTemplatePayload(templateForm);
+    if (templateForm.id) {
+      await updateTemplate.mutateAsync({ id: templateForm.id, data: payload });
+    } else {
+      await createTemplate.mutateAsync(payload);
+    }
+    resetTemplateForm();
   };
 
   const addTenantUser = (email: string) => {
@@ -415,64 +545,49 @@ export function MailCenterPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Mail Merkezi"
+    <FeaturePageShell
+      contentClassName="space-y-6"
+      title="Mail Merkezi"
         subtitle="Giden mailler, ekler ve toplu gönderimler"
         action={
-          <Button
-            size="sm"
-            onClick={() => setComposeOpen(true)}
-            leftIcon={<Send className="h-4 w-4" />}
-          >
-            Toplu mail
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setTemplateManagerOpen(true)}
+              leftIcon={<FileText className="h-4 w-4" />}
+            >
+              Sablonlar
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setComposeOpen(true)}
+              leftIcon={<Send className="h-4 w-4" />}
+            >
+              Toplu mail
+            </Button>
+          </div>
         }
-      />
+    >
 
       <section className="rounded-xl border border-slate-800 bg-slate-900">
-        <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 p-4">
-          <input
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-            placeholder="Konu, alici veya gonderen ara"
-            className="h-9 min-w-64 rounded-lg border border-slate-800 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-500/60"
-          />
-          <select
-            value={direction}
-            onChange={(event) => {
-              const nextDirection = MAIL_DIRECTIONS.find(
-                (item) => item === event.target.value,
-              );
-              setDirection(nextDirection ?? "");
-              setPage(1);
-            }}
-            className="h-9 rounded-lg border border-slate-800 bg-slate-950 px-3 text-sm text-white outline-none focus:border-sky-500/60"
-          >
-            <option value="">Tum yonler</option>
-            <option value="OUTBOUND">Giden</option>
-            <option value="INBOUND">Gelen</option>
-          </select>
-          <select
-            value={status}
-            onChange={(event) => {
-              const nextStatus = MAIL_DELIVERY_STATUSES.find(
-                (item) => item === event.target.value,
-              );
-              setStatus(nextStatus ?? "");
-              setPage(1);
-            }}
-            className="h-9 rounded-lg border border-slate-800 bg-slate-950 px-3 text-sm text-white outline-none focus:border-sky-500/60"
-          >
-            <option value="">Tum durumlar</option>
-            <option value="SENT">Gonderildi</option>
-            <option value="FAILED">Hatali</option>
-            <option value="PENDING">Bekliyor</option>
-          </select>
-        </div>
+        <MailCenterFilters
+          search={search}
+          direction={direction}
+          status={status}
+          onSearchChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          onDirectionChange={(value) => {
+            setDirection(value);
+            setPage(1);
+          }}
+          onStatusChange={(value) => {
+            setStatus(value);
+            setPage(1);
+          }}
+        />
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -662,6 +777,7 @@ export function MailCenterPage() {
                   {mailTemplates.map((template) => (
                     <option key={template.id} value={template.id}>
                       {template.category} - {template.name}
+                      {template.scope === "TENANT" ? ` (v${template.version}${template.approved ? "" : ", taslak"})` : ""}
                     </option>
                   ))}
                 </select>
@@ -836,6 +952,210 @@ export function MailCenterPage() {
       </Modal>
 
       <Modal
+        isOpen={templateManagerOpen}
+        onClose={() => {
+          setTemplateManagerOpen(false);
+          resetTemplateForm();
+        }}
+        title="Mail sablonlari"
+        description="Tenant ozel sablon, versiyon ve onay durumunu yonetin"
+        size="lg"
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={resetTemplateForm}>
+              Yeni form
+            </Button>
+            <Button
+              size="sm"
+              onClick={saveTemplate}
+              disabled={!canSaveTemplate}
+              loading={createTemplate.isPending || updateTemplate.isPending}
+            >
+              {templateForm.id ? "Versiyonla" : "Kaydet"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-slate-300">
+                Tenant sablonlari
+              </p>
+              <Badge variant="neutral">{tenantTemplates.length}</Badge>
+            </div>
+            <div className="max-h-[32rem] space-y-2 overflow-auto pr-1">
+              {tenantTemplates.length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-500">
+                  Henuz tenant ozel sablon yok.
+                </div>
+              )}
+              {tenantTemplates.map((template) => (
+                <div
+                  key={template.id}
+                  className="rounded-xl border border-slate-800 bg-slate-950/60 p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-100">
+                        {template.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        v{template.version} · {template.category}
+                      </p>
+                    </div>
+                    <Badge variant={template.approved ? "success" : "warning"}>
+                      {template.approved ? "Onayli" : "Taslak"}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 line-clamp-2 text-xs text-slate-500">
+                    {template.description || template.subject}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setTemplateForm(templateToForm(template))}
+                      leftIcon={<Edit3 className="h-3.5 w-3.5" />}
+                    >
+                      Duzenle
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      loading={approveTemplate.isPending}
+                      onClick={() =>
+                        approveTemplate.mutate({
+                          id: template.id,
+                          data: { approved: !template.approved },
+                        })
+                      }
+                      leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                    >
+                      {template.approved ? "Onayi kaldir" : "Onayla"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      loading={deleteTemplate.isPending}
+                      onClick={() => deleteTemplate.mutate(template.id)}
+                      leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                    >
+                      Sil
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3.5">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1.5">
+                <span className="text-xs font-medium text-slate-400">
+                  Sablon adi
+                </span>
+                <input
+                  value={templateForm.name}
+                  onChange={(event) => updateTemplateForm("name", event.target.value)}
+                  className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+                />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-xs font-medium text-slate-400">
+                  Kategori
+                </span>
+                <input
+                  value={templateForm.category}
+                  onChange={(event) => updateTemplateForm("category", event.target.value)}
+                  className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+                />
+              </label>
+            </div>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-slate-400">
+                Aciklama
+              </span>
+              <input
+                value={templateForm.description}
+                onChange={(event) => updateTemplateForm("description", event.target.value)}
+                className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-slate-400">Konu</span>
+              <input
+                value={templateForm.subject}
+                onChange={(event) => updateTemplateForm("subject", event.target.value)}
+                placeholder="{{customerName}} odeme hatirlatmasi"
+                className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-500/60"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-slate-400">
+                Sablon metni
+              </span>
+              <textarea
+                value={templateForm.body}
+                onChange={(event) => updateTemplateForm("body", event.target.value)}
+                rows={7}
+                placeholder="Merhaba {{customerName}},"
+                className="w-full resize-none rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-slate-600 focus:border-sky-500/60"
+              />
+            </label>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-300">
+                Degisken semasi
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {TEMPLATE_VARIABLES.map((variable) => {
+                  const enabled = templateForm.enabledVariables.includes(variable.key);
+                  return (
+                    <div
+                      key={variable.key}
+                      className="rounded-lg border border-slate-800 bg-slate-900/70 p-2.5"
+                    >
+                      <label className="flex items-center gap-2 text-xs text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={enabled}
+                          onChange={() => toggleTemplateVariable(variable.key)}
+                          className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-sky-500"
+                        />
+                        {variable.label}
+                      </label>
+                      <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-500">
+                        <input
+                          type="checkbox"
+                          checked={templateForm.requiredVariables.includes(variable.key)}
+                          disabled={!enabled}
+                          onChange={() => toggleRequiredVariable(variable.key)}
+                          className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-950 text-sky-500 disabled:opacity-50"
+                        />
+                        Zorunlu
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <label className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={templateForm.approved}
+                onChange={(event) => updateTemplateForm("approved", event.target.checked)}
+                className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-sky-500"
+              />
+              Onayli sablon olarak kullanima ac
+            </label>
+          </section>
+        </div>
+      </Modal>
+
+      <Modal
         isOpen={Boolean(detailId)}
         onClose={() => setDetailId(null)}
         title="Mail detayi"
@@ -900,6 +1220,6 @@ export function MailCenterPage() {
           </div>
         )}
       </Modal>
-    </div>
+    </FeaturePageShell>
   );
 }
