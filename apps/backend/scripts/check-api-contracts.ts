@@ -37,6 +37,13 @@ interface RuntimeContractSpec {
   validateRequest?: (value: unknown) => string[];
 }
 
+interface WebValidationCoverageSpec {
+  file: string;
+  label: string;
+  requiredPaths: readonly string[];
+  requireSafeParse?: boolean;
+}
+
 function normalizeTemplatePath(path: string): string {
   return normalizePath(path.replace(/\$\{[^}]+\}/g, ':param'));
 }
@@ -183,6 +190,15 @@ function validateContactItem(value: unknown): string[] {
   return validateObjectFields(value, ['id', 'tenantId', 'code', 'name', 'type', 'isActive']);
 }
 
+function validateProductItem(value: unknown): string[] {
+  if (!isRecord(value)) return ['must be an object'];
+  const issues = validateObjectFields(value, ['id', 'tenantId', 'unitId', 'code', 'name', 'isActive', 'createdAt', 'updatedAt']);
+  ['purchasePrice', 'salesPrice', 'minStockLevel', 'averageCost'].forEach((field) => {
+    if (!hasNumber(value, field)) issues.push(`${field} must be a number`);
+  });
+  return issues;
+}
+
 function validateStockMovementItem(value: unknown): string[] {
   if (!isRecord(value)) return ['must be an object'];
   const issues = validateObjectFields(value, ['id', 'tenantId', 'productId', 'type', 'quantity', 'date']);
@@ -230,7 +246,9 @@ function validateMailSendRequest(value: unknown): string[] {
 
 function validateAttachmentItem(value: unknown): string[] {
   if (!isRecord(value)) return ['must be an object'];
-  return validateObjectFields(value, ['id', 'tenantId', 'fileName', 'mimeType', 'size', 'entityType', 'entityId']);
+  const issues = validateObjectFields(value, ['id', 'tenantId', 'fileName', 'mimeType', 'entityType', 'entityId']);
+  if (!hasNumber(value, 'fileSize') && !hasNumber(value, 'size')) issues.push('fileSize or size must be a number');
+  return issues;
 }
 
 function validateActivityResponse(value: unknown): string[] {
@@ -252,6 +270,91 @@ function validateSearchResponse(value: unknown): string[] {
     if (!isRecord(item)) return [`results[${index}] must be an object`];
     return validateObjectFields(item, ['id', 'type', 'title', 'href']).map((issue) => `results[${index}].${issue}`);
   });
+}
+
+function validateRevenueSummary(value: unknown): string[] {
+  if (!isRecord(value)) return ['data must be an object'];
+  const issues = validateObjectFields(value, ['period', 'invoiceCount', 'totalNet', 'totalTax', 'totalGross']);
+  ['invoiceCount', 'totalNet', 'totalTax', 'totalGross'].forEach((field) => {
+    if (!hasNumber(value, field)) issues.push(`${field} must be a number`);
+  });
+  return issues;
+}
+
+function validateStockSummary(value: unknown): string[] {
+  if (!isRecord(value)) return ['data must be an object'];
+  const issues = validateObjectFields(value, ['summary', 'belowMinStock', 'stockLevels']);
+  if (isRecord(value.summary)) {
+    const summary = value.summary;
+    ['totalLines', 'belowMinStockCount', 'totalStockValue'].forEach((field) => {
+      if (!hasNumber(summary, field)) issues.push(`summary.${field} must be a number`);
+    });
+  }
+  if (!Array.isArray(value.belowMinStock)) issues.push('belowMinStock must be an array');
+  if (!Array.isArray(value.stockLevels)) issues.push('stockLevels must be an array');
+  return issues;
+}
+
+function validateContactBalance(value: unknown): string[] {
+  if (!isRecord(value)) return ['data must be an object'];
+  const issues = validateObjectFields(value, ['contacts', 'summary']);
+  if (!Array.isArray(value.contacts)) issues.push('contacts must be an array');
+  if (isRecord(value.summary)) {
+    if (!hasNumber(value.summary, 'totalReceivable')) issues.push('summary.totalReceivable must be a number');
+    if (!hasNumber(value.summary, 'totalPayable')) issues.push('summary.totalPayable must be a number');
+  }
+  return issues;
+}
+
+function validateReportingRegistry(value: unknown): string[] {
+  if (!isRecord(value)) return ['data must be an object'];
+  const issues = validateObjectFields(value, ['datasets', 'chartTypes']);
+  if (!Array.isArray(value.datasets)) issues.push('datasets must be an array');
+  if (!Array.isArray(value.chartTypes)) issues.push('chartTypes must be an array');
+  return issues;
+}
+
+function validateDataQualitySummary(value: unknown): string[] {
+  if (!isRecord(value)) return ['data must be an object'];
+  const issues = validateObjectFields(value, ['score', 'issueCount', 'criticalCount', 'generatedAt', 'issues']);
+  ['score', 'issueCount', 'criticalCount'].forEach((field) => {
+    if (!hasNumber(value, field)) issues.push(`${field} must be a number`);
+  });
+  if (!Array.isArray(value.issues)) issues.push('issues must be an array');
+  return issues;
+}
+
+function validateImportPreview(value: unknown): string[] {
+  if (!isRecord(value)) return ['data must be an object'];
+  const issues = validateObjectFields(value, ['entity', 'headers', 'rows', 'errors', 'validRows', 'invalidRows', 'batchPlan']);
+  if (!Array.isArray(value.headers)) issues.push('headers must be an array');
+  if (!Array.isArray(value.rows)) issues.push('rows must be an array');
+  if (!Array.isArray(value.errors)) issues.push('errors must be an array');
+  ['validRows', 'invalidRows'].forEach((field) => {
+    if (!hasNumber(value, field)) issues.push(`${field} must be a number`);
+  });
+  return issues;
+}
+
+function validateMarketplaceIntegration(value: unknown): string[] {
+  if (!isRecord(value)) return ['must be an object'];
+  const issues = validateObjectFields(value, ['id', 'tenantId', 'channel', 'name', 'isActive', 'lastSyncAt', 'syncErrors', 'createdAt', 'updatedAt']);
+  if (!hasBoolean(value, 'isActive')) issues.push('isActive must be a boolean');
+  if (!hasNumber(value, 'syncErrors')) issues.push('syncErrors must be a number');
+  return issues;
+}
+
+function validateMarketplaceHealthCenter(value: unknown): string[] {
+  if (!isRecord(value)) return ['data must be an object'];
+  const issues = validateObjectFields(value, ['totals', 'items']);
+  if (isRecord(value.totals)) {
+    const totals = value.totals;
+    ['integrations', 'pendingJobs', 'runningJobs', 'failedJobs', 'retryAvailable', 'webhookReplayAvailable', 'webhookFailures'].forEach((field) => {
+      if (!hasNumber(totals, field)) issues.push(`totals.${field} must be a number`);
+    });
+  }
+  if (!Array.isArray(value.items)) issues.push('items must be an array');
+  return issues;
 }
 
 function routeMatches(endpoint: WebEndpoint, route: BackendRoute): boolean {
@@ -389,6 +492,20 @@ function extractWebEndpoints(): WebEndpoint[] {
     return true;
   });
 }
+
+const priorityValidationCoverage: readonly WebValidationCoverageSpec[] = [
+  { file: 'admin.service.ts', label: 'admin', requiredPaths: ['/api/admin/auth/me', '/api/admin/tenants', '/api/admin/metrics'] },
+  { file: 'chat.service.ts', label: 'chat', requiredPaths: ['/api/chat'] },
+  { file: 'hr.service.ts', label: 'hr', requiredPaths: ['/api/hr/employees', '/api/payroll'] },
+  { file: 'invitation.service.ts', label: 'invitation', requiredPaths: ['/api/invitations'] },
+  { file: 'marketplace.service.ts', label: 'marketplace', requiredPaths: ['/api/marketplace/integrations', '/api/marketplace/health'] },
+  { file: 'production.service.ts', label: 'production', requiredPaths: ['/api/production/work-orders', '/api/production/work-centers'] },
+  { file: 'service.service.ts', label: 'service', requiredPaths: ['/api/service/assets', '/api/service/requests'] },
+  { file: 'user.service.ts', label: 'user', requiredPaths: ['/api/users'] },
+  { file: 'product.service.ts', label: 'products', requiredPaths: ['/api/products'], requireSafeParse: true },
+  { file: 'reporting.service.ts', label: 'reports', requiredPaths: ['/api/reports/revenue-summary', '/api/reports/registry'], requireSafeParse: true },
+  { file: 'data-exchange.service.ts', label: 'data-exchange', requiredPaths: ['/api/data-exchange/quality'], requireSafeParse: true },
+];
 
 const runtimeContracts: readonly RuntimeContractSpec[] = [
   {
@@ -602,6 +719,37 @@ const runtimeContracts: readonly RuntimeContractSpec[] = [
     validateData: (fixture) => validatePaginatedItems(fixture, validateContactItem),
   },
   {
+    name: 'products list',
+    method: 'GET',
+    path: '/api/products',
+    webServiceFile: 'product.service.ts',
+    responseKind: 'paginated',
+    fixture: {
+      data: [{
+        id: 'product_1',
+        tenantId: 'tenant_1',
+        categoryId: null,
+        unitId: 'unit_1',
+        taxRateId: null,
+        code: 'PRD-001',
+        name: 'Demo Product',
+        barcode: null,
+        description: null,
+        imageUrl: null,
+        purchasePrice: 80,
+        salesPrice: 120,
+        minStockLevel: 5,
+        averageCost: 82,
+        isActive: true,
+        createdAt: '2026-05-24T10:00:00.000Z',
+        updatedAt: '2026-05-24T10:00:00.000Z',
+      }],
+      meta: { total: 1, page: 1, pageSize: 20, totalPages: 1 },
+    },
+    requestFixture: { page: 1, limit: 20, search: 'Demo' },
+    validateData: (fixture) => validatePaginatedItems(fixture, validateProductItem),
+  },
+  {
     name: 'attachments library',
     method: 'GET',
     path: '/api/attachments/library',
@@ -622,6 +770,157 @@ const runtimeContracts: readonly RuntimeContractSpec[] = [
     },
     requestFixture: { page: 1, limit: 20, search: 'contract' },
     validateData: (fixture) => validatePaginatedItems(fixture, validateAttachmentItem),
+  },
+  {
+    name: 'revenue summary',
+    method: 'GET',
+    path: '/api/reports/revenue-summary',
+    webServiceFile: 'reporting.service.ts',
+    responseKind: 'single',
+    fixture: {
+      data: {
+        period: { from: '2026-05-01', to: '2026-05-31' },
+        invoiceCount: 3,
+        totalNet: 1000,
+        totalTax: 200,
+        totalGross: 1200,
+      },
+    },
+    requestFixture: { dateFrom: '2026-05-01', dateTo: '2026-05-31' },
+    validateData: (fixture) => validateRevenueSummary(dataOf(fixture)),
+  },
+  {
+    name: 'stock summary',
+    method: 'GET',
+    path: '/api/reports/stock-summary',
+    webServiceFile: 'reporting.service.ts',
+    responseKind: 'single',
+    fixture: {
+      data: {
+        summary: { totalLines: 1, belowMinStockCount: 0, totalStockValue: 500 },
+        belowMinStock: [],
+        stockLevels: [],
+      },
+    },
+    validateData: (fixture) => validateStockSummary(dataOf(fixture)),
+  },
+  {
+    name: 'contact balance report',
+    method: 'GET',
+    path: '/api/reports/contact-balance',
+    webServiceFile: 'reporting.service.ts',
+    responseKind: 'single',
+    fixture: {
+      data: {
+        contacts: [{ id: 'contact_1', name: 'Acme Ltd.', code: 'C-001', type: 'CUSTOMER', balance: 120 }],
+        summary: { totalReceivable: 120, totalPayable: 0 },
+      },
+    },
+    validateData: (fixture) => validateContactBalance(dataOf(fixture)),
+  },
+  {
+    name: 'reporting registry',
+    method: 'GET',
+    path: '/api/reports/registry',
+    webServiceFile: 'reporting.service.ts',
+    responseKind: 'single',
+    fixture: {
+      data: {
+        datasets: [{ key: 'revenue', label: 'Gelir', metrics: [], groupBy: [], filters: [] }],
+        chartTypes: [{ key: 'number', label: 'Sayi' }],
+      },
+    },
+    validateData: (fixture) => validateReportingRegistry(dataOf(fixture)),
+  },
+  {
+    name: 'data quality summary',
+    method: 'GET',
+    path: '/api/data-exchange/quality',
+    webServiceFile: 'data-exchange.service.ts',
+    responseKind: 'single',
+    fixture: {
+      data: {
+        score: 92,
+        issueCount: 1,
+        criticalCount: 0,
+        generatedAt: '2026-05-24T10:00:00.000Z',
+        issues: [],
+      },
+    },
+    validateData: (fixture) => validateDataQualitySummary(dataOf(fixture)),
+  },
+  {
+    name: 'import preview contacts',
+    method: 'POST',
+    path: '/api/data-exchange/import/preview/:entity',
+    webServiceFile: 'data-exchange.service.ts',
+    responseKind: 'single',
+    requestFixture: { csv: 'type,code,name\nCUSTOMER,C-001,Acme', mapping: {}, partialImport: true },
+    fixture: {
+      data: {
+        entity: 'contacts',
+        headers: ['type', 'code', 'name'],
+        rows: [],
+        errors: [],
+        validRows: 0,
+        invalidRows: 0,
+        batchPlan: {
+          batchId: 'batch_1',
+          mapping: {},
+          partialImport: true,
+          canImportValidRows: true,
+          rollbackAvailable: true,
+          rollbackNote: 'Batch rollback desteklenir.',
+        },
+      },
+    },
+    validateData: (fixture) => validateImportPreview(dataOf(fixture)),
+  },
+  {
+    name: 'marketplace integrations',
+    method: 'GET',
+    path: '/api/marketplace/integrations',
+    webServiceFile: 'marketplace.service.ts',
+    responseKind: 'single',
+    fixture: {
+      data: [{
+        id: 'integration_1',
+        tenantId: 'tenant_1',
+        channel: 'TRENDYOL',
+        name: 'Trendyol',
+        apiKey: null,
+        apiSecret: null,
+        storeId: null,
+        isActive: true,
+        lastSyncAt: null,
+        syncErrors: 0,
+        createdAt: '2026-05-24T10:00:00.000Z',
+        updatedAt: '2026-05-24T10:00:00.000Z',
+      }],
+    },
+    validateData: (fixture) => validateArrayItems(dataOf(fixture), validateMarketplaceIntegration),
+  },
+  {
+    name: 'marketplace health',
+    method: 'GET',
+    path: '/api/marketplace/health',
+    webServiceFile: 'marketplace.service.ts',
+    responseKind: 'single',
+    fixture: {
+      data: {
+        totals: {
+          integrations: 1,
+          pendingJobs: 0,
+          runningJobs: 0,
+          failedJobs: 0,
+          retryAvailable: 0,
+          webhookReplayAvailable: 0,
+          webhookFailures: 0,
+        },
+        items: [],
+      },
+    },
+    validateData: (fixture) => validateMarketplaceHealthCenter(dataOf(fixture)),
   },
   {
     name: 'activity feed',
@@ -776,6 +1075,81 @@ function servicePathFor(webServiceFile: string): string {
   return resolve(process.cwd(), '..', 'web', 'src', 'services', webServiceFile);
 }
 
+function serviceReferencesContractPath(serviceText: string, path: string): boolean {
+  const literalPath = path.replace('/:id', '');
+  if (serviceText.includes(literalPath)) return true;
+
+  const dynamicPrefix = path.split('/:')[0];
+  return dynamicPrefix.length > 0 && dynamicPrefix !== path && serviceText.includes(dynamicPrefix);
+}
+
+function hasTypedClientResponse(text: string): boolean {
+  return /\b(?:apiClient|adminApiClient)\.(?:get|post|put|patch|delete)<[^>]+>/.test(text) ||
+    /\bas\s+\{\s*data:/.test(text) ||
+    /\bPromise<[^>]+>/.test(text);
+}
+
+function validateWebValidationCoverage(): CheckIssue[] {
+  const issues: CheckIssue[] = [];
+
+  for (const spec of priorityValidationCoverage) {
+    const path = servicePathFor(spec.file);
+    if (!existsSync(path)) {
+      issues.push({ file: `../web/src/services/${spec.file}`, message: `${spec.label}: service file is missing` });
+      continue;
+    }
+
+    const text = readText(path);
+    for (const requiredPath of spec.requiredPaths) {
+      if (!text.includes(requiredPath)) {
+        issues.push({ file: toProjectPath(path), message: `${spec.label}: service does not reference ${requiredPath}` });
+      }
+    }
+
+    const safeParseCount = (text.match(/safeParse\(/g) ?? []).length;
+    if (spec.requireSafeParse && safeParseCount === 0) {
+      issues.push({ file: toProjectPath(path), message: `${spec.label}: service must validate critical responses with safeParse` });
+    }
+    if (!spec.requireSafeParse && safeParseCount === 0 && !hasTypedClientResponse(text)) {
+      issues.push({ file: toProjectPath(path), message: `${spec.label}: service has no safeParse or typed response wrapper` });
+    }
+  }
+
+  return issues;
+}
+
+function validateSharedContractDrift(): CheckIssue[] {
+  const issues: CheckIssue[] = [];
+  const packagesTypes = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'index.ts'));
+  const webApiTypes = readText(resolve(process.cwd(), '..', 'web', 'src', 'types', 'api.types.ts'));
+
+  const sharedChecks: Array<{ label: string; pattern: RegExp }> = [
+    { label: 'ApiResponse<T>.data', pattern: /interface\s+ApiResponse<[^>]+>\s*\{[\s\S]*data:\s*T/ },
+    { label: 'PaginatedResponse<T>.meta.total', pattern: /interface\s+PaginatedResponse<[^>]+>\s*\{[\s\S]*meta:\s*\{[\s\S]*total:\s*number/ },
+    { label: 'PaginatedResponse<T>.meta.pageSize', pattern: /interface\s+PaginatedResponse<[^>]+>\s*\{[\s\S]*pageSize:\s*number/ },
+    { label: 'ApiErrorBody.error.code', pattern: /interface\s+ApiErrorBody\s*\{[\s\S]*error:\s*\{[\s\S]*code:\s*string/ },
+  ];
+  for (const check of sharedChecks) {
+    if (!check.pattern.test(packagesTypes)) {
+      issues.push({ file: '../../packages/types/index.ts', message: `shared contract drift: ${check.label} is missing` });
+    }
+  }
+
+  const webChecks: Array<{ label: string; pattern: RegExp }> = [
+    { label: 'SingleResponseSchema.data', pattern: /function\s+SingleResponseSchema[\s\S]*data:\s*itemSchema/ },
+    { label: 'PaginatedResponseSchema.meta', pattern: /function\s+PaginatedResponseSchema[\s\S]*meta:\s*PaginationMetaSchema/ },
+    { label: 'ApiErrorSchema.error.code', pattern: /ApiErrorSchema[\s\S]*code:\s*z\.string\(\)/ },
+    { label: 'ApiErrorSchema.error.fields', pattern: /ApiErrorSchema[\s\S]*fields:\s*z\.record\(z\.string\(\),\s*z\.string\(\)\)\.optional\(\)/ },
+  ];
+  for (const check of webChecks) {
+    if (!check.pattern.test(webApiTypes)) {
+      issues.push({ file: '../web/src/types/api.types.ts', message: `web contract drift: ${check.label} is missing` });
+    }
+  }
+
+  return issues;
+}
+
 function validateRuntimeContracts(backendRoutes: readonly BackendRoute[]): CheckIssue[] {
   const issues: CheckIssue[] = [];
 
@@ -797,7 +1171,7 @@ function validateRuntimeContracts(backendRoutes: readonly BackendRoute[]): Check
       issues.push({ file: `../web/src/services/${contract.webServiceFile}`, message: `${contract.name}: web service file is missing` });
     } else {
       const serviceText = readText(servicePath);
-      if (!serviceText.includes(contract.path.replace('/:id', ''))) {
+      if (!serviceReferencesContractPath(serviceText, contract.path)) {
         issues.push({ file: toProjectPath(servicePath), message: `${contract.name}: web service does not reference ${contract.path}` });
       }
       if (!serviceText.includes('safeParse(')) {
@@ -835,6 +1209,8 @@ function findIssues(): CheckIssue[] {
   }
 
   issues.push(...validateRuntimeContracts(backendRoutes));
+  issues.push(...validateWebValidationCoverage());
+  issues.push(...validateSharedContractDrift());
 
   return issues;
 }

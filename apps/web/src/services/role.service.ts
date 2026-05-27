@@ -36,6 +36,7 @@ export const PermissionMatrixEntrySchema = z.object({
   moduleGate: z.string().optional(),
   minPlan: z.enum(['STARTER', 'PROFESSIONAL', 'ENTERPRISE']).optional(),
   featureKey: z.string().optional(),
+  webHref: z.string().optional(),
   webAction: z.string(),
 });
 
@@ -64,6 +65,11 @@ export const PermissionSimulationResultSchema = z.object({
     module: z.string(),
     action: PermissionActionSchema,
     route: PermissionMatrixEntrySchema.nullable(),
+  }),
+  explanation: z.object({
+    summary: z.string(),
+    blockers: z.array(z.string()),
+    nextSteps: z.array(z.string()),
   }),
   gates: z.array(PermissionSimulationGateSchema),
   matchingRoutes: z.array(PermissionMatrixEntrySchema),

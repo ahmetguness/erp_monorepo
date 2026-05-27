@@ -3077,6 +3077,7 @@ model DomainEventOutbox {
   id              String                  @id @default(cuid())
   tenantId        String
   name            String
+  schemaVersion   Int                     @default(1)
   source          String
   idempotencyKey  String
   entityType      EntityType

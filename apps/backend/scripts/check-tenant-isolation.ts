@@ -77,6 +77,8 @@ const highRiskCoverage = [
   'src/controllers/search.controller.ts',
   'src/controllers/attachment.controller.ts',
   'src/controllers/mail.controller.ts',
+  'src/controllers/data-exchange.controller.ts',
+  'src/controllers/reporting.controller.ts',
   'src/controllers/saved-view.controller.ts',
   'src/controllers/notification.controller.ts',
   'src/controllers/marketplace.controller.ts',
@@ -87,6 +89,8 @@ const highRiskCoverage = [
   'src/services/mail-history.service.ts',
   'src/services/mail-template-library.service.ts',
   'src/services/mail.service.ts',
+  'src/services/reporting-builder.service.ts',
+  'src/services/search.service.ts',
   'src/services/smart-notification.service.ts',
   'src/domain-events/listeners.ts',
 ] as const;
@@ -199,8 +203,27 @@ function hasTenantScopedDataVariableBefore(text: string, call: PrismaCall): bool
   return previousContext.slice(dataIndex).includes('tenantId');
 }
 
-function hasTenantScopeInArguments(text: string, call: PrismaCall): boolean {
-  return call.body.includes('tenantId') || hasTenantScopedWhereVariableBefore(text, call) || hasTenantScopedDataVariableBefore(text, call);
+function sliceFromProperty(body: string, propertyName: 'where' | 'data'): string | null {
+  const propertyMatch = new RegExp(`\\b${propertyName}\\s*:`).exec(body);
+  if (!propertyMatch) return null;
+
+  const start = propertyMatch.index;
+  const nextProperty = propertyName === 'where'
+    ? /\bdata\s*:/.exec(body.slice(start + propertyMatch[0].length))
+    : /\bwhere\s*:/.exec(body.slice(start + propertyMatch[0].length));
+
+  if (!nextProperty) return body.slice(start);
+  return body.slice(start, start + propertyMatch[0].length + nextProperty.index);
+}
+
+function hasTenantScopeInWhereArguments(text: string, call: PrismaCall): boolean {
+  const whereSection = sliceFromProperty(call.body, 'where');
+  return (whereSection?.includes('tenantId') ?? false) || hasTenantScopedWhereVariableBefore(text, call);
+}
+
+function hasTenantScopeInDataArguments(text: string, call: PrismaCall): boolean {
+  const dataSection = sliceFromProperty(call.body, 'data');
+  return (dataSection?.includes('tenantId') ?? false) || hasTenantScopedDataVariableBefore(text, call);
 }
 
 function targetsPlainId(body: string): boolean {
@@ -208,19 +231,20 @@ function targetsPlainId(body: string): boolean {
 }
 
 function checkPrismaCall(text: string, call: PrismaCall): string | null {
-  if (hasTenantScopeInArguments(text, call)) return null;
-
   if (readOperations.has(call.operation)) {
+    if (hasTenantScopeInWhereArguments(text, call)) return null;
     return `${call.needle} call is missing tenantId in query arguments`;
   }
 
   if (createOperations.has(call.operation)) {
+    if (hasTenantScopeInDataArguments(text, call)) return null;
     return `${call.needle} call is missing tenantId in created data`;
   }
 
   if (writeOperations.has(call.operation)) {
+    if (hasTenantScopeInWhereArguments(text, call)) return null;
     if (targetsPlainId(call.body) && hasNearbyTenantGuardBefore(text, call)) return null;
-    return `${call.needle} call is missing tenantId or a nearby tenant-scoped guard`;
+    return `${call.needle} call is missing tenantId in write where clause or a nearby tenant-scoped guard`;
   }
 
   return null;
@@ -245,6 +269,21 @@ function checkForbiddenIdentityPatterns(file: string, text: string): CheckIssue[
   return issues;
 }
 
+function checkRawSqlPatterns(file: string, text: string): CheckIssue[] {
+  const issues: CheckIssue[] = [];
+  const rawOperations = ['prisma.$queryRaw', 'prisma.$executeRaw', 'prisma.$queryRawUnsafe', 'prisma.$executeRawUnsafe'] as const;
+
+  for (const operation of rawOperations) {
+    for (const { body } of findCallBodies(text, operation)) {
+      if (!body.includes('tenantId')) {
+        issues.push({ file, message: `${operation} call must carry an explicit tenantId predicate or parameter` });
+      }
+    }
+  }
+
+  return issues;
+}
+
 function isExcluded(file: string): boolean {
   return excludedFiles.has(toProjectPath(file));
 }
@@ -258,7 +297,10 @@ function checkFile(file: string, models: readonly TenantScopedModel[]): CheckIss
   if (isExcluded(file)) return [];
 
   const text = readText(file);
-  const issues = checkForbiddenIdentityPatterns(projectPath, text);
+  const issues = [
+    ...checkForbiddenIdentityPatterns(projectPath, text),
+    ...checkRawSqlPatterns(projectPath, text),
+  ];
   const calls = findPrismaCalls(text, models);
 
   if (projectPath.startsWith('src/controllers/') && calls.length > 0 && !text.includes('requireTenantId(c)')) {

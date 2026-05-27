@@ -1,4 +1,7 @@
+import { z } from 'zod';
 import { apiClient } from '@/lib/api-client';
+import { safeParse } from '@/lib/safe-parse';
+import { SingleResponseSchema } from '@/types/api.types';
 
 // ─────────────────────────────────────────────
 // Types
@@ -92,10 +95,59 @@ export interface MarketplaceOrder {
 
 type Paginated<T> = { data: T[]; meta: { total: number; page: number; pageSize: number; totalPages: number } };
 
+const MarketplaceIntegrationSchema = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  channel: z.string(),
+  name: z.string(),
+  apiKey: z.string().nullable(),
+  apiSecret: z.string().nullable(),
+  storeId: z.string().nullable(),
+  isActive: z.boolean(),
+  lastSyncAt: z.string().nullable(),
+  syncErrors: z.coerce.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  hasApiKey: z.boolean().optional(),
+  hasApiSecret: z.boolean().optional(),
+  _count: z.object({ listings: z.coerce.number(), orders: z.coerce.number() }).optional(),
+});
+
+const MarketplaceHealthCenterSchema = z.object({
+  totals: z.object({
+    integrations: z.coerce.number(),
+    pendingJobs: z.coerce.number(),
+    runningJobs: z.coerce.number(),
+    failedJobs: z.coerce.number(),
+    retryAvailable: z.coerce.number(),
+    webhookReplayAvailable: z.coerce.number(),
+    webhookFailures: z.coerce.number(),
+  }),
+  items: z.array(z.object({
+    integration: MarketplaceIntegrationSchema,
+    lastSuccessfulSyncAt: z.string().nullable(),
+    lastErrorAt: z.string().nullable(),
+    lastErrorMessage: z.string().nullable(),
+    errorRate: z.coerce.number(),
+    pendingJobCount: z.coerce.number(),
+    runningJobCount: z.coerce.number(),
+    failedJobCount: z.coerce.number(),
+    retryAvailableCount: z.coerce.number(),
+    webhookReplayCount: z.coerce.number(),
+    webhookFailureCount: z.coerce.number(),
+    apiLimit: z.object({
+      status: z.enum(['UNKNOWN', 'OK', 'WARNING', 'LIMITED']),
+      remaining: z.coerce.number().nullable(),
+      resetAt: z.string().nullable(),
+    }),
+  })),
+});
+
 // ─── Integrations ─────────────────────────────
 
 export const getIntegrations = () =>
-  apiClient.get<{ data: MarketplaceIntegration[] }>('/api/marketplace/integrations').then((r) => r.data.data);
+  apiClient.get('/api/marketplace/integrations')
+    .then((r) => safeParse(SingleResponseSchema(z.array(MarketplaceIntegrationSchema)), r.data, 'getIntegrations').data);
 
 export const getIntegration = (id: string) =>
   apiClient.get<{ data: MarketplaceIntegration }>(`/api/marketplace/integrations/${id}`).then((r) => r.data.data);
@@ -237,7 +289,8 @@ export interface MarketplaceWebhookReplayResult {
 }
 
 export const getMarketplaceHealthCenter = () =>
-  apiClient.get<{ data: MarketplaceHealthCenter }>('/api/marketplace/health').then((r) => r.data.data);
+  apiClient.get('/api/marketplace/health')
+    .then((r) => safeParse(SingleResponseSchema(MarketplaceHealthCenterSchema), r.data, 'getMarketplaceHealthCenter').data);
 
 export const getSyncJobs = (params?: { page?: number; limit?: number; integrationId?: string; status?: string; jobType?: string }) =>
   apiClient.get<Paginated<MarketplaceSyncJobRecord>>('/api/marketplace/sync-jobs', { params }).then((r) => r.data);

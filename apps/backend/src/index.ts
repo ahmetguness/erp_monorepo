@@ -63,6 +63,7 @@ import { savedViewRoutes } from './routes/saved-view.routes';
 import { domainEventRoutes } from './routes/domain-event.routes';
 import { TrendyolWebhookController } from './controllers/trendyol-webhook.controller';
 import { TrendyolWorker } from './services/trendyol-worker.service';
+import { DomainEventOutboxWorker } from './services/domain-event-outbox-worker.service';
 import { startMarketplaceMocks } from './mocks';
 import { registerDomainEventListeners } from './domain-events';
 import { recordHttpRequest, recordUnhandledError } from './services/observability.service';
@@ -104,7 +105,20 @@ function shouldStartMarketplaceWorker(): boolean {
   return APP_ROLE === 'worker' || APP_ROLE === 'all';
 }
 
+function shouldStartDomainEventOutboxWorker(): boolean {
+  if (process.env.DOMAIN_EVENT_OUTBOX_WORKER_ENABLED === 'true') return true;
+  if (process.env.DOMAIN_EVENT_OUTBOX_WORKER_ENABLED === 'false') return false;
+
+  return APP_ROLE === 'worker' || APP_ROLE === 'all';
+}
+
 function startBackgroundServices(): void {
+  if (shouldStartDomainEventOutboxWorker()) {
+    DomainEventOutboxWorker.start();
+  } else {
+    logger.info('[DomainEventOutboxWorker] Disabled. Set DOMAIN_EVENT_OUTBOX_WORKER_ENABLED=true or APP_ROLE=worker/all to enable.');
+  }
+
   if (shouldStartMarketplaceWorker()) {
     TrendyolWorker.start();
   } else {

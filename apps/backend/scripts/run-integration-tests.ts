@@ -5,7 +5,24 @@ process.env.ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS || 'http://localhost:3
 process.env.MARKETPLACE_WORKER_ENABLED = 'false';
 
 import jwt from 'jsonwebtoken';
-import { ContactType, DomainEventOutboxStatus, EntityType, FiscalPeriodStatus, InvoiceType, MovementType, PaymentMethod, PermissionAction, Plan, TenantStatus, WorkOrderStatus } from '@prisma/client';
+import crypto from 'node:crypto';
+import {
+  ContactType,
+  DeliveryNoteType,
+  DomainEventOutboxStatus,
+  EntityType,
+  FiscalPeriodStatus,
+  InvoiceStatus,
+  InvoiceType,
+  MovementType,
+  OrderStatus,
+  PaymentMethod,
+  PermissionAction,
+  Plan,
+  PurchaseOrderStatus,
+  TenantStatus,
+  WorkOrderStatus,
+} from '@prisma/client';
 import { prisma } from '../src/lib/prisma';
 
 interface TestContext {
@@ -15,7 +32,10 @@ interface TestContext {
   limitedAId: string;
   contactAId: string;
   contactBId: string;
+  contactBCode: string;
+  contactBEmail: string;
   productAId: string;
+  productBId: string;
   warehouseAId: string;
   cashAccountAId: string;
 }
@@ -23,6 +43,11 @@ interface TestContext {
 interface ApiResult {
   status: number;
   body: unknown;
+}
+
+interface ApiTextResult {
+  status: number;
+  text: string;
 }
 
 type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
@@ -42,6 +67,50 @@ function readDataId(body: unknown): string {
     throw new Error('Response data.id bulunamadi.');
   }
   return body.data.id;
+}
+
+function readDataRecord(body: unknown): Record<string, unknown> {
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw new Error('Response data kaydi bulunamadi.');
+  }
+  return body.data;
+}
+
+function readDataArray(body: unknown): Record<string, unknown>[] {
+  if (!isRecord(body) || !Array.isArray(body.data)) {
+    throw new Error('Response data listesi bulunamadi.');
+  }
+  return body.data.filter(isRecord);
+}
+
+function readStringField(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  if (typeof value !== 'string') throw new Error(`${key} string olarak donmedi.`);
+  return value;
+}
+
+function readNumberField(record: Record<string, unknown>, key: string): number {
+  const value = record[key];
+  if (typeof value !== 'number') throw new Error(`${key} number olarak donmedi.`);
+  return value;
+}
+
+function readSimulationAllowed(body: unknown): boolean {
+  if (!isRecord(body) || !isRecord(body.data) || typeof body.data.allowed !== 'boolean') {
+    throw new Error('Permission simulator response data.allowed bulunamadi.');
+  }
+  return body.data.allowed;
+}
+
+function readSimulationGate(body: unknown, key: string): { allowed: boolean; reason: string } {
+  if (!isRecord(body) || !isRecord(body.data) || !Array.isArray(body.data.gates)) {
+    throw new Error('Permission simulator response data.gates bulunamadi.');
+  }
+  const gate = body.data.gates.find((item): item is Record<string, unknown> => isRecord(item) && item.key === key);
+  if (!gate || typeof gate.allowed !== 'boolean' || typeof gate.reason !== 'string') {
+    throw new Error(`Permission simulator ${key} gate bulunamadi.`);
+  }
+  return { allowed: gate.allowed, reason: gate.reason };
 }
 
 function token(userId: string, tenantId: string): string {
@@ -82,7 +151,38 @@ async function api(method: HttpMethod, path: string, bearerToken: string, body?:
   return { status: response.status, body: parsedBody };
 }
 
-function assertStatus(result: ApiResult, expected: number, label: string): void {
+async function apiText(method: HttpMethod, path: string, bearerToken: string): Promise<ApiTextResult> {
+  const { app } = await withTimeout('app import', import('../src/index.js'));
+  const response = await withTimeout(`${method} ${path}`, Promise.resolve(app.request(path, {
+    method,
+    headers: new Headers({
+      Authorization: `Bearer ${bearerToken}`,
+      Origin: 'http://localhost:3000',
+    }),
+  })));
+  return { status: response.status, text: await response.text() };
+}
+
+async function apiKeyRequest(method: HttpMethod, path: string, rawKey: string, body?: unknown): Promise<ApiResult> {
+  const { app } = await withTimeout('app import', import('../src/index.js'));
+  const headers = new Headers({
+    'x-api-key': rawKey,
+    Origin: 'http://localhost:3000',
+  });
+  let requestBody: BodyInit | undefined;
+
+  if (body !== undefined) {
+    headers.set('Content-Type', 'application/json');
+    requestBody = JSON.stringify(body);
+  }
+
+  const response = await withTimeout(`${method} ${path}`, Promise.resolve(app.request(path, { method, headers, body: requestBody })));
+  const text = await response.text();
+  const parsedBody = text ? JSON.parse(text) as unknown : null;
+  return { status: response.status, body: parsedBody };
+}
+
+function assertStatus(result: { status: number; body?: unknown }, expected: number, label: string): void {
   if (result.status !== expected) {
     throw new Error(`${label}: HTTP ${expected} bekleniyordu, ${result.status} dondu. Body: ${JSON.stringify(result.body)}`);
   }
@@ -96,7 +196,7 @@ async function seedTenant(runId: string, suffix: 'a' | 'b') {
       email: `tenant-${runId}-${suffix}@example.com`,
       plan: Plan.ENTERPRISE,
       status: TenantStatus.ACTIVE,
-      modules: ['contacts', 'invoicing', 'accounting', 'inventory', 'attachments', 'settings', 'production'],
+      modules: ['contacts', 'invoicing', 'accounting', 'inventory', 'attachments', 'settings', 'production', 'reporting', 'purchasing', 'api_keys'],
     },
   });
   createdTenantIds.push(tenant.id);
@@ -172,12 +272,41 @@ async function seed(): Promise<TestContext> {
     },
   });
 
+  const unitB = await prisma.unit.create({
+    data: { tenantId: tenantB.tenant.id, code: `PCB-${runId}`, name: 'Piece B' },
+  });
+
+  const productB = await prisma.product.create({
+    data: {
+      tenantId: tenantB.tenant.id,
+      unitId: unitB.id,
+      code: `PRDB-${runId}`,
+      name: 'Integration Product B',
+      salesPrice: 200,
+      purchasePrice: 75,
+    },
+  });
+
   const warehouse = await prisma.warehouse.create({
     data: { tenantId: tenantA.tenant.id, code: `WH-${runId}`, name: 'Integration Warehouse' },
   });
 
   const cashAccount = await prisma.cashAccount.create({
     data: { tenantId: tenantA.tenant.id, name: `Integration Cash ${runId}`, currencyCode: 'TRY' },
+  });
+
+  await prisma.accountEntry.create({
+    data: {
+      tenantId: tenantB.tenant.id,
+      contactId: contactB.id,
+      date: new Date('2026-05-24T00:00:00.000Z'),
+      debit: 1234,
+      credit: 0,
+      balance: 1234,
+      description: 'Tenant B isolation marker',
+      refType: 'TEST',
+      refId: `tenant-b-${runId}`,
+    },
   });
 
   return {
@@ -187,7 +316,10 @@ async function seed(): Promise<TestContext> {
     limitedAId: limitedUser.id,
     contactAId: contactA.id,
     contactBId: contactB.id,
+    contactBCode: contactB.code ?? '',
+    contactBEmail: contactB.email ?? '',
     productAId: product.id,
+    productBId: productB.id,
     warehouseAId: warehouse.id,
     cashAccountAId: cashAccount.id,
   };
@@ -202,9 +334,20 @@ async function cleanup(): Promise<void> {
   await prisma.invoiceLine.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.invoice.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.accountEntry.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.deliveryNoteItem.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.deliveryNote.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.salesOrderHistory.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.salesOrderItem.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.salesOrder.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.purchaseRequestItem.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.purchaseRequest.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.purchaseOrderHistory.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.purchaseOrderItem.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.purchaseOrder.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.stockValuation.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.stockMovement.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.stockLevel.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.lotSerialNumber.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.inventoryReservation.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.workOrderHistory.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.workOrderOperation.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
@@ -215,6 +358,7 @@ async function cleanup(): Promise<void> {
   await prisma.task.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.domainEventOutbox.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.auditLog.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.apiKey.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.cashAccount.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.product.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.location.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
@@ -236,6 +380,33 @@ async function testTenantIsolation(ctx: TestContext): Promise<void> {
   assertStatus(result, 404, 'tenant A, tenant B carisini okuyamamali');
 }
 
+async function testDataExchangeTenantIsolation(ctx: TestContext): Promise<void> {
+  const exportResult = await apiText('GET', '/api/data-exchange/export/contacts', token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(exportResult, 200, 'data exchange contact export calismali');
+  if (exportResult.text.includes('Integration Contact B') || exportResult.text.includes('CTB-')) {
+    throw new Error('Data exchange export tenant B carisini sizdirdi.');
+  }
+
+  const previewResult = await api('POST', '/api/data-exchange/import/preview/contacts', token(ctx.ownerAId, ctx.tenantAId), {
+    csv: `type,code,name,email\nCUSTOMER,${ctx.contactBCode},Integration Contact B,${ctx.contactBEmail}\n`,
+    mapping: {},
+    partialImport: true,
+  });
+  assertStatus(previewResult, 200, 'data exchange import preview calismali');
+  if (JSON.stringify(previewResult.body).includes('sistemde mevcut')) {
+    throw new Error('Data exchange import preview tenant B kaydini duplicate olarak gordu.');
+  }
+}
+
+async function testReportingTenantIsolation(ctx: TestContext): Promise<void> {
+  const result = await api('GET', '/api/reports/contact-balance', token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(result, 200, 'contact balance raporu calismali');
+  const serialized = JSON.stringify(result.body);
+  if (serialized.includes(ctx.contactBId) || serialized.includes('Integration Contact B') || serialized.includes('1234')) {
+    throw new Error('Reporting contact-balance tenant B bakiyesini sizdirdi.');
+  }
+}
+
 async function testPermissionDenied(ctx: TestContext): Promise<void> {
   const result = await api('POST', '/api/invoices', token(ctx.limitedAId, ctx.tenantAId), {
     contactId: ctx.contactAId,
@@ -244,6 +415,50 @@ async function testPermissionDenied(ctx: TestContext): Promise<void> {
     lines: [{ description: 'Service', quantity: 1, unitPrice: 100 }],
   });
   assertStatus(result, 403, 'CREATE izni olmayan kullanici fatura olusturamamali');
+}
+
+async function testPermissionSimulatorSmoke(ctx: TestContext): Promise<void> {
+  const ownerResult = await api('POST', '/api/roles/permission-simulator/simulate', token(ctx.ownerAId, ctx.tenantAId), {
+    userId: ctx.ownerAId,
+    module: 'invoicing',
+    action: PermissionAction.CREATE,
+    routeId: 'invoices:create',
+  });
+  assertStatus(ownerResult, 200, 'owner permission simulator calismali');
+  if (!readSimulationAllowed(ownerResult.body)) throw new Error('Owner kullanici invoices:create icin izinli olmali.');
+
+  const limitedResult = await api('POST', '/api/roles/permission-simulator/simulate', token(ctx.ownerAId, ctx.tenantAId), {
+    userId: ctx.limitedAId,
+    module: 'invoicing',
+    action: PermissionAction.CREATE,
+    routeId: 'invoices:create',
+  });
+  assertStatus(limitedResult, 200, 'limited role permission simulator calismali');
+  if (readSimulationAllowed(limitedResult.body)) throw new Error('Limited kullanici invoices:create icin izinli olmamali.');
+  if (readSimulationGate(limitedResult.body, 'permission').allowed) throw new Error('Limited kullanici permission gate tarafindan engellenmeli.');
+
+  const originalModules = (await prisma.tenant.findUniqueOrThrow({
+    where: { id: ctx.tenantAId },
+    select: { modules: true },
+  })).modules;
+  await prisma.tenant.update({
+    where: { id: ctx.tenantAId },
+    data: { modules: originalModules.filter((module) => module !== 'inventory') },
+  });
+
+  try {
+    const moduleDisabledResult = await api('POST', '/api/roles/permission-simulator/simulate', token(ctx.ownerAId, ctx.tenantAId), {
+      userId: ctx.ownerAId,
+      module: 'inventory',
+      action: PermissionAction.READ,
+      routeId: 'stock:movements',
+    });
+    assertStatus(moduleDisabledResult, 200, 'module-disabled tenant permission simulator calismali');
+    if (readSimulationAllowed(moduleDisabledResult.body)) throw new Error('Inventory modulu kapaliyken stock:movements izinli olmamali.');
+    if (readSimulationGate(moduleDisabledResult.body, 'module').allowed) throw new Error('Inventory modulu kapaliyken module gate engellemeli.');
+  } finally {
+    await prisma.tenant.update({ where: { id: ctx.tenantAId }, data: { modules: originalModules } });
+  }
 }
 
 async function createInvoice(ctx: TestContext): Promise<string> {
@@ -319,6 +534,208 @@ async function testPaymentAllocationCannotExceedInvoiceTotal(ctx: TestContext, i
   assertStatus(result, 400, 'fatura toplamindan fazla tahsis engellenmeli');
 }
 
+async function testInvoiceCancelCreatesReverseEntry(ctx: TestContext): Promise<void> {
+  const invoiceId = await createInvoice(ctx);
+  const beforeEntries = await prisma.accountEntry.findMany({
+    where: { tenantId: ctx.tenantAId, refType: 'INVOICE', refId: invoiceId },
+    select: { debit: true, credit: true },
+  });
+  if (beforeEntries.length !== 1 || Number(beforeEntries[0]?.debit ?? 0) !== 100) {
+    throw new Error('Iptal oncesi fatura muhasebe kaydi beklenen durumda degil.');
+  }
+
+  const cancelResult = await api('POST', `/api/invoices/${invoiceId}/cancel`, token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(cancelResult, 200, 'fatura iptal edilebilmeli');
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { tenantId: ctx.tenantAId, id: invoiceId },
+    select: { status: true },
+  });
+  if (!invoice || invoice.status !== InvoiceStatus.CANCELLED) {
+    throw new Error('Fatura iptal sonrasi CANCELLED durumuna gecmedi.');
+  }
+
+  const entries = await prisma.accountEntry.findMany({
+    where: { tenantId: ctx.tenantAId, refType: 'INVOICE', refId: invoiceId },
+    select: { debit: true, credit: true },
+  });
+  if (entries.length !== 2 || !entries.some((entry) => Number(entry.credit) === 100)) {
+    throw new Error('Fatura iptali ters muhasebe kaydi olusturmadi.');
+  }
+
+  const secondCancelResult = await api('POST', `/api/invoices/${invoiceId}/cancel`, token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(secondCancelResult, 400, 'iptal edilmis fatura tekrar iptal edilememeli');
+}
+
+async function testSalesOrderDeliveryInvoiceChain(ctx: TestContext): Promise<void> {
+  const orderResult = await api('POST', '/api/sales-orders', token(ctx.ownerAId, ctx.tenantAId), {
+    contactId: ctx.contactAId,
+    date: '2026-05-25',
+    items: [{ productId: ctx.productAId, description: 'Sales chain product', quantity: 2, unitPrice: 100 }],
+  });
+  assertStatus(orderResult, 201, 'satis siparisi olusturulabilmeli');
+  const orderId = readDataId(orderResult.body);
+
+  const orderItem = await prisma.salesOrderItem.findFirst({
+    where: { tenantId: ctx.tenantAId, orderId, productId: ctx.productAId },
+    select: { id: true },
+  });
+  if (!orderItem) throw new Error('Satis siparisi kalemi bulunamadi.');
+
+  const deliveryResult = await api('POST', '/api/delivery-notes', token(ctx.ownerAId, ctx.tenantAId), {
+    type: DeliveryNoteType.OUTBOUND,
+    salesOrderId: orderId,
+    contactId: ctx.contactAId,
+    warehouseId: ctx.warehouseAId,
+    date: '2026-05-25',
+    items: [{
+      productId: ctx.productAId,
+      orderedQty: 2,
+      deliveredQty: 2,
+      salesOrderItemId: orderItem.id,
+    }],
+  });
+  assertStatus(deliveryResult, 201, 'satis teslimat notu olusturulabilmeli');
+
+  const deliveredOrder = await prisma.salesOrder.findFirst({
+    where: { tenantId: ctx.tenantAId, id: orderId },
+    select: { status: true, items: { select: { delivered: true } } },
+  });
+  if (!deliveredOrder || deliveredOrder.status !== OrderStatus.DELIVERED) {
+    throw new Error('Teslimat sonrasi satis siparisi DELIVERED olmadi.');
+  }
+  const deliveredQty = deliveredOrder.items.reduce((sum, item) => sum + Number(item.delivered), 0);
+  if (deliveredQty !== 2) throw new Error('Teslimat satis siparisi kalem teslim miktarini guncellemedi.');
+
+  const invoiceResult = await api('POST', '/api/invoices', token(ctx.ownerAId, ctx.tenantAId), {
+    contactId: ctx.contactAId,
+    salesOrderId: orderId,
+    type: InvoiceType.SALES,
+    date: '2026-05-25',
+    lines: [{ productId: ctx.productAId, description: 'Sales chain invoice', quantity: 2, unitPrice: 100 }],
+  });
+  assertStatus(invoiceResult, 201, 'satis siparisinden fatura olusturulabilmeli');
+
+  const invoicedOrder = await prisma.salesOrder.findFirst({
+    where: { tenantId: ctx.tenantAId, id: orderId },
+    select: { invoicedAmount: true },
+  });
+  if (!invoicedOrder || Number(invoicedOrder.invoicedAmount) !== 200) {
+    throw new Error('Satis siparisi faturalanan tutari guncellenmedi.');
+  }
+}
+
+async function testPurchaseOrderReceiptInvoiceChain(ctx: TestContext): Promise<void> {
+  const beforeStock = await prisma.stockLevel.findFirst({
+    where: { tenantId: ctx.tenantAId, productId: ctx.productAId, warehouseId: ctx.warehouseAId },
+    select: { quantity: true },
+  });
+  const beforeQty = Number(beforeStock?.quantity ?? 0);
+
+  const orderResult = await api('POST', '/api/purchase-orders', token(ctx.ownerAId, ctx.tenantAId), {
+    contactId: ctx.contactAId,
+    date: '2026-05-26',
+    items: [{ productId: ctx.productAId, description: 'Purchase chain product', quantity: 3, unitPrice: 40 }],
+  });
+  assertStatus(orderResult, 201, 'satinalma siparisi olusturulabilmeli');
+  const orderId = readDataId(orderResult.body);
+
+  const orderItem = await prisma.purchaseOrderItem.findFirst({
+    where: { tenantId: ctx.tenantAId, orderId, productId: ctx.productAId },
+    select: { id: true },
+  });
+  if (!orderItem) throw new Error('Satinalma siparisi kalemi bulunamadi.');
+
+  const sendResult = await api('POST', `/api/purchase-orders/${orderId}/send`, token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(sendResult, 200, 'satinalma siparisi gonderilebilmeli');
+
+  const receiveResult = await api('POST', `/api/purchase-orders/${orderId}/receive`, token(ctx.ownerAId, ctx.tenantAId), {
+    warehouseId: ctx.warehouseAId,
+    items: [{ itemId: orderItem.id, receivedQty: 3 }],
+  });
+  assertStatus(receiveResult, 200, 'satinalma siparisi teslim alinabilmeli');
+
+  const receivedOrder = await prisma.purchaseOrder.findFirst({
+    where: { tenantId: ctx.tenantAId, id: orderId },
+    select: { status: true, items: { select: { received: true } } },
+  });
+  if (!receivedOrder || receivedOrder.status !== PurchaseOrderStatus.RECEIVED) {
+    throw new Error('Satinalma teslimi sonrasi siparis RECEIVED olmadi.');
+  }
+  const receivedQty = receivedOrder.items.reduce((sum, item) => sum + Number(item.received), 0);
+  if (receivedQty !== 3) throw new Error('Satinalma siparisi kalem teslim miktari guncellenmedi.');
+
+  const afterStock = await prisma.stockLevel.findFirst({
+    where: { tenantId: ctx.tenantAId, productId: ctx.productAId, warehouseId: ctx.warehouseAId },
+    select: { quantity: true },
+  });
+  if (Number(afterStock?.quantity ?? 0) !== beforeQty + 3) {
+    throw new Error('Satinalma teslimi stok seviyesini beklenen miktarda artirmadi.');
+  }
+
+  const invoiceResult = await api('POST', '/api/invoices', token(ctx.ownerAId, ctx.tenantAId), {
+    contactId: ctx.contactAId,
+    purchaseOrderId: orderId,
+    type: InvoiceType.PURCHASE,
+    date: '2026-05-26',
+    lines: [{ productId: ctx.productAId, description: 'Purchase chain invoice', quantity: 3, unitPrice: 40 }],
+  });
+  assertStatus(invoiceResult, 201, 'satinalma siparisinden fatura olusturulabilmeli');
+  const invoiceId = readDataId(invoiceResult.body);
+
+  const accountEntry = await prisma.accountEntry.findFirst({
+    where: { tenantId: ctx.tenantAId, refType: 'INVOICE', refId: invoiceId },
+    select: { credit: true },
+  });
+  if (!accountEntry || Number(accountEntry.credit) !== 120) {
+    throw new Error('Satinalma faturasi muhasebe alacak kaydi olusturmadi.');
+  }
+}
+
+async function testDataImportPartialFailurePlan(ctx: TestContext): Promise<void> {
+  const result = await api('POST', '/api/data-exchange/import/preview/contacts', token(ctx.ownerAId, ctx.tenantAId), {
+    csv: 'type,code,name,email\nCUSTOMER,IT-IMPORT-OK,Valid Import,valid-import@example.com\nCUSTOMER,IT-IMPORT-BAD,,bad-import@example.com\n',
+    mapping: {},
+    partialImport: true,
+  });
+  assertStatus(result, 200, 'partial import preview calismali');
+  const data = readDataRecord(result.body);
+  if (readNumberField(data, 'validRows') !== 1 || readNumberField(data, 'invalidRows') !== 1) {
+    throw new Error('Partial import preview satir hata/valid sayilarini dogru hesaplamadi.');
+  }
+  const batchPlan = data.batchPlan;
+  if (!isRecord(batchPlan) || batchPlan.canImportValidRows !== true || batchPlan.rollbackAvailable !== false) {
+    throw new Error('Partial import preview batch plan/rollback bilgisini dogru uretmedi.');
+  }
+}
+
+async function testApiKeyScopeAndTenantIsolation(ctx: TestContext): Promise<void> {
+  const rawKey = `it_${crypto.randomBytes(18).toString('hex')}`;
+  await prisma.apiKey.create({
+    data: {
+      tenantId: ctx.tenantAId,
+      name: 'Integration External Read',
+      keyHash: crypto.createHash('sha256').update(rawKey).digest('hex'),
+      keyPrefix: rawKey.slice(0, 8),
+      scopes: ['products:read'],
+      createdById: ctx.ownerAId,
+    },
+  });
+
+  const productsResult = await apiKeyRequest('GET', '/api/external/products', rawKey);
+  assertStatus(productsResult, 200, 'external products api key ile okunabilmeli');
+  const productsData = readDataArray(productsResult.body);
+  if (productsData.some((product) => readStringField(product, 'id') === ctx.productBId)) {
+    throw new Error('External products API tenant B urununu sizdirdi.');
+  }
+
+  const otherTenantProductResult = await apiKeyRequest('GET', `/api/external/products/${ctx.productBId}`, rawKey);
+  assertStatus(otherTenantProductResult, 404, 'external api baska tenant urun id icin 404 donmeli');
+
+  const contactsResult = await apiKeyRequest('GET', '/api/external/contacts', rawKey);
+  assertStatus(contactsResult, 403, 'external api eksik scope icin 403 donmeli');
+}
+
 async function testDomainEventOutbox(ctx: TestContext): Promise<void> {
   const events = await prisma.domainEventOutbox.findMany({
     where: {
@@ -359,6 +776,58 @@ async function testDomainEventIdempotency(ctx: TestContext): Promise<void> {
 
   const after = await prisma.notification.count({ where: { tenantId: ctx.tenantAId, module: 'accounting' } });
   if (after !== before) throw new Error('Domain event idempotency kontrolu yan etki uretmemeli.');
+}
+
+async function testDomainEventCoverageAndDeadLetterReplay(ctx: TestContext): Promise<void> {
+  const coverageResult = await api('GET', '/api/domain-events/coverage', token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(coverageResult, 200, 'domain event coverage raporu listelenebilmeli');
+  const coverageData = readDataRecord(coverageResult.body);
+  if (readNumberField(coverageData, 'schemaVersion') < 1 || !Array.isArray(coverageData.publishCoverage)) {
+    throw new Error('Domain event coverage raporu schemaVersion/publishCoverage dondurmedi.');
+  }
+
+  const source = `domain:stock.low:${ctx.productAId}:${ctx.warehouseAId}`;
+  const outbox = await prisma.domainEventOutbox.create({
+    data: {
+      tenantId: ctx.tenantAId,
+      name: 'stock.low',
+      schemaVersion: 1,
+      source,
+      idempotencyKey: source,
+      entityType: EntityType.PRODUCT,
+      entityId: ctx.productAId,
+      payload: {
+        productId: ctx.productAId,
+        productCode: 'IT-STOCK',
+        productName: 'Integration Product',
+        currentQuantity: 0,
+        minStockLevel: 5,
+        warehouseId: ctx.warehouseAId,
+      },
+      context: {
+        tenantId: ctx.tenantAId,
+        userId: ctx.ownerAId,
+        occurredAt: new Date().toISOString(),
+      },
+      status: DomainEventOutboxStatus.DEAD_LETTER,
+      attempts: 3,
+      lastError: 'integration replay marker',
+    },
+    select: { id: true },
+  });
+
+  const replayResult = await api('POST', `/api/domain-events/${outbox.id}/replay`, token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(replayResult, 200, 'dead-letter domain event replay edilebilmeli');
+  const replayData = readDataRecord(replayResult.body);
+  if (replayData.replayed !== true || replayData.afterStatus !== DomainEventOutboxStatus.PROCESSED) {
+    throw new Error('Dead-letter replay event statusunu PROCESSED yapmadi.');
+  }
+
+  const task = await prisma.task.findFirst({
+    where: { tenantId: ctx.tenantAId, source },
+    select: { id: true },
+  });
+  if (!task) throw new Error('Dead-letter replay workflow listener idempotent task uretmedi.');
 }
 
 async function testStockMovementUpdatesLevel(ctx: TestContext): Promise<void> {
@@ -471,8 +940,14 @@ async function main(): Promise<void> {
   try {
     console.log('Integration: tenant isolation');
     await testTenantIsolation(ctx);
+    console.log('Integration: data exchange tenant isolation');
+    await testDataExchangeTenantIsolation(ctx);
+    console.log('Integration: reporting tenant isolation');
+    await testReportingTenantIsolation(ctx);
     console.log('Integration: permission denied');
     await testPermissionDenied(ctx);
+    console.log('Integration: permission simulator smoke');
+    await testPermissionSimulatorSmoke(ctx);
     console.log('Integration: invoice account entry');
     const invoiceId = await testInvoiceCreatesAccountEntry(ctx);
     console.log('Integration: closed fiscal period');
@@ -481,16 +956,28 @@ async function main(): Promise<void> {
     await testPaymentAllocation(ctx, invoiceId);
     console.log('Integration: payment allocation reconciliation');
     await testPaymentAllocationCannotExceedInvoiceTotal(ctx, invoiceId);
+    console.log('Integration: invoice cancel reverse accounting');
+    await testInvoiceCancelCreatesReverseEntry(ctx);
     console.log('Integration: domain event outbox');
     await testDomainEventOutbox(ctx);
     console.log('Integration: domain event idempotency');
     await testDomainEventIdempotency(ctx);
+    console.log('Integration: domain event coverage and dead-letter replay');
+    await testDomainEventCoverageAndDeadLetterReplay(ctx);
     console.log('Integration: stock movement');
     await testStockMovementUpdatesLevel(ctx);
+    console.log('Integration: sales order delivery invoice chain');
+    await testSalesOrderDeliveryInvoiceChain(ctx);
+    console.log('Integration: purchase order receipt invoice chain');
+    await testPurchaseOrderReceiptInvoiceChain(ctx);
     console.log('Integration: production execution');
     await testProductionExecutionFlow(ctx);
     console.log('Integration: attachment tenant validation');
     await testAttachmentTenantValidation(ctx);
+    console.log('Integration: data import partial failure plan');
+    await testDataImportPartialFailurePlan(ctx);
+    console.log('Integration: external API key scope and tenant isolation');
+    await testApiKeyScopeAndTenantIsolation(ctx);
     console.log('Backend integration tests: OK');
   } finally {
     await cleanup();

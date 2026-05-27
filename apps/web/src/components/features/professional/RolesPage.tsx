@@ -406,6 +406,16 @@ export function RolesPage() {
                 Plan: {simulatePerm.data.tenant.plan}
                 {simulatePerm.data.requested.route ? ` - Route: ${simulatePerm.data.requested.route.route}` : ''}
               </div>
+              <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950/50 p-2">
+                <div className="text-xs font-medium text-slate-300">{simulatePerm.data.explanation.summary}</div>
+                {simulatePerm.data.explanation.nextSteps.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-[11px] leading-4 text-slate-500">
+                    {simulatePerm.data.explanation.nextSteps.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
               {simulatePerm.data.gates.map((gate) => (

@@ -2,6 +2,7 @@ import { DomainEventOutboxStatus, Prisma } from '@prisma/client';
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
 import {
+  DOMAIN_EVENT_SCHEMA_VERSION,
   entityIdForEvent,
   entityTypeForEvent,
   idempotencyKeyForEvent,
@@ -74,6 +75,7 @@ export async function claimDomainEvent(event: DomainEvent): Promise<OutboxClaim>
     data: {
       tenantId: event.context.tenantId,
       name: event.name,
+      schemaVersion: DOMAIN_EVENT_SCHEMA_VERSION,
       source: sourceForEvent(event),
       idempotencyKey,
       entityType: entityTypeForEvent(event),
