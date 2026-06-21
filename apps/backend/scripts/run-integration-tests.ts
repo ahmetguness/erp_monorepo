@@ -211,6 +211,17 @@ async function seedTenant(runId: string, suffix: 'a' | 'b') {
   });
   createdUserIds.push(owner.id);
 
+  // Seed basic accounting TDHP structure for production costing
+  await prisma.ledgerAccount.createMany({
+    data: [
+      { tenantId: tenant.id, code: '150', name: 'Raw Materials', accountType: 'ASSET' },
+      { tenantId: tenant.id, code: '152', name: 'Finished Goods', accountType: 'ASSET' },
+      { tenantId: tenant.id, code: '720', name: 'Direct Labor', accountType: 'EXPENSE' },
+      { tenantId: tenant.id, code: '730', name: 'Production Overhead', accountType: 'EXPENSE' },
+      { tenantId: tenant.id, code: '689', name: 'Scrap Expenses', accountType: 'EXPENSE' },
+    ],
+  });
+
   return { tenant, owner };
 }
 
@@ -328,6 +339,8 @@ async function seed(): Promise<TestContext> {
 async function cleanup(): Promise<void> {
   if (createdTenantIds.length === 0 && createdUserIds.length === 0) return;
 
+  await prisma.journalEntryLine.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.journalEntry.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.paymentAllocation.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.payment.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.invoiceHistory.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
@@ -370,6 +383,7 @@ async function cleanup(): Promise<void> {
   await prisma.role.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.numberSequence.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.moduleSetting.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.ledgerAccount.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.fiscalPeriod.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.tenant.updateMany({ where: { id: { in: createdTenantIds } }, data: { deletedAt: new Date(), status: TenantStatus.CANCELLED } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });

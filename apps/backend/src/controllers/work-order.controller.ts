@@ -13,6 +13,12 @@ import {
   recordInventoryCosting,
   resolveStockLevelLocationId,
 } from '../services/inventory-rules.service';
+import {
+  calculateEstimatedCosts,
+  allocateCapacity,
+  releaseCapacity,
+  postProductionAccountingEntry,
+} from '../services/production-rules.service.js';
 
 // ─────────────────────────────────────────────
 // Work Order Controller — İş emri CRUD + durum geçişleri
@@ -105,11 +111,11 @@ export const WorkOrderController = {
     const wo = await prisma.workOrder.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: {
-        product: { select: { id: true, code: true, name: true } },
+        product: { select: { id: true, code: true, name: true, purchasePrice: true, averageCost: true } },
         bom: { select: { id: true, name: true, version: true } },
         inputWarehouse: { select: { id: true, code: true, name: true } },
         outputWarehouse: { select: { id: true, code: true, name: true } },
-        items: { include: { product: { select: { id: true, code: true, name: true } } } },
+        items: { include: { product: { select: { id: true, code: true, name: true, purchasePrice: true, averageCost: true } } } },
         operations: {
           include: { workCenter: { select: { id: true, code: true, name: true } } },
           orderBy: { stepOrder: 'asc' },
@@ -139,7 +145,10 @@ export const WorkOrderController = {
 
     // BOM varsa item ve operasyonları otomatik kopyala
     let itemsCreate: Array<{ tenantId: string; productId: string; requiredQty: number }> = [];
-    let opsCreate: Array<{ tenantId: string; workCenterId: string; routingOpId: string; name: string; stepOrder: number }> = [];
+    let opsCreate: Array<{ tenantId: string; workCenterId: string; routingOpId: string; name: string; stepOrder: number; plannedSetupTime: number | null; plannedRunTime: number | null }> = [];
+    let estimatedMaterialCost = 0;
+    let estimatedLaborCost = 0;
+    let estimatedOverheadCost = 0;
 
     if (body.bomId) {
       const bom = await prisma.bOM.findFirst({
@@ -157,7 +166,18 @@ export const WorkOrderController = {
         opsCreate = bom.routings.map((r) => ({
           tenantId, workCenterId: r.workCenterId, routingOpId: r.id,
           name: r.name, stepOrder: r.stepOrder,
+          plannedSetupTime: r.setupTime ? Number(r.setupTime) : null,
+          plannedRunTime: r.runTime ? Number(r.runTime) : null,
         }));
+
+        try {
+          const estimates = await calculateEstimatedCosts(prisma, tenantId, body.bomId, body.plannedQty);
+          estimatedMaterialCost = estimates.estimatedMaterialCost;
+          estimatedLaborCost = estimates.estimatedLaborCost;
+          estimatedOverheadCost = estimates.estimatedOverheadCost;
+        } catch (e) {
+          // Keep defaults if estimation fails
+        }
       }
     }
 
@@ -170,6 +190,9 @@ export const WorkOrderController = {
         notes: body.notes ?? null,
         inputWarehouseId: body.inputWarehouseId ?? null,
         outputWarehouseId: body.outputWarehouseId ?? null,
+        estimatedMaterialCost,
+        estimatedLaborCost,
+        estimatedOverheadCost,
         createdById: userId,
         ...(itemsCreate.length && { items: { create: itemsCreate } }),
         ...(opsCreate.length && { operations: { create: opsCreate } }),
@@ -281,6 +304,9 @@ export const WorkOrderController = {
         if (reservedLineCount > 0) {
           reservationEvents.push({ reservedLineCount, reservedQuantity });
         }
+
+        // Allocate capacity on Work Center Calendar
+        await allocateCapacity(tx, tenantId, id);
       }
 
       // COMPLETED → stok hareketi: üretilen ürünü output warehouse'a ekle
@@ -340,6 +366,14 @@ export const WorkOrderController = {
           where: { tenantId, refType: ReservationRefType.WORK_ORDER, refId: id, releasedAt: null },
           data: { releasedAt: new Date() },
         });
+
+        // Release capacity on Work Center Calendar
+        await releaseCapacity(tx, tenantId, id);
+
+        // Generate journal entry on Work Order completion
+        if (body.status === 'COMPLETED') {
+          await postProductionAccountingEntry(tx, tenantId, id, userId);
+        }
       }
       return result;
     });
@@ -393,7 +427,7 @@ export const WorkOrderController = {
     const wo = await prisma.workOrder.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: {
-        product: { select: { id: true, name: true } },
+        product: { select: { id: true, name: true, averageCost: true, purchasePrice: true } },
         items: true,
       },
     });
@@ -403,10 +437,12 @@ export const WorkOrderController = {
     const body = await c.req.json<{
       producedQty: number;
       scrapQty?: number;
+      scrapReason?: string;
       operationId?: string;
       notes?: string;
       consumptions?: Array<{ itemId: string; quantity: number }>;
     }>();
+
     try {
       requirePositiveQuantity(body.producedQty, 'producedQty');
       if (body.scrapQty !== undefined && body.scrapQty < 0) throw new ValidationError('scrapQty negatif olamaz.');
@@ -435,10 +471,64 @@ export const WorkOrderController = {
     }
 
     await prisma.$transaction(async (tx) => {
-      // Üretim miktarını güncelle
+      // 1. Material Cost Calculation based on consumptions
+      let consumedCost = 0;
+      if (body.consumptions?.length) {
+        for (const cons of body.consumptions) {
+          const item = wo.items.find((i) => i.id === cons.itemId);
+          if (!item) continue;
+          const prod = await tx.product.findUnique({
+            where: { id: item.productId },
+            select: { averageCost: true, purchasePrice: true }
+          });
+          const unitC = Number(prod?.averageCost ?? prod?.purchasePrice ?? 0);
+          consumedCost += cons.quantity * unitC;
+        }
+      }
+
+      // 2. Labor & Overhead Cost Calculation for the reported operation
+      let laborCost = 0;
+      let overheadCost = 0;
+      if (body.operationId) {
+        const op = await tx.workOrderOperation.findFirst({
+          where: { id: body.operationId, tenantId, workOrderId: id },
+          include: { workCenter: true }
+        });
+        if (op) {
+          const start = op.actualStartAt ? new Date(op.actualStartAt) : new Date();
+          const end = new Date();
+          let diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+          if (diffHours <= 0) {
+            const setup = Number(op.plannedSetupTime ?? 0);
+            const run = Number(op.plannedRunTime ?? 0);
+            diffHours = (setup + run * body.producedQty) / 60;
+          }
+          laborCost = diffHours * Number(op.workCenter.laborRate ?? 0);
+          overheadCost = diffHours * Number(op.workCenter.overheadRate ?? 0);
+        }
+      }
+
+      // 3. Scrap Cost Calculation
+      let scrapCost = 0;
+      if (body.scrapQty && body.scrapQty > 0) {
+        const unitC = Number(wo.product.averageCost ?? wo.product.purchasePrice ?? 0);
+        scrapCost = body.scrapQty * unitC;
+      }
+
+      // Update producedQty and costing fields
       await tx.workOrder.update({
         where: { id },
-        data: { producedQty: { increment: body.producedQty } },
+        data: {
+          producedQty: { increment: body.producedQty },
+          actualMaterialCost: { increment: consumedCost },
+          actualLaborCost: { increment: laborCost },
+          actualOverheadCost: { increment: overheadCost },
+          ...(body.scrapQty && {
+            scrapQty: { increment: body.scrapQty },
+            scrapCost: { increment: scrapCost },
+            scrapReason: body.scrapReason ?? null
+          })
+        },
       });
 
       if (body.operationId) {
@@ -534,6 +624,7 @@ export const WorkOrderController = {
       newValues: {
         producedQty: body.producedQty,
         scrapQty: body.scrapQty ?? 0,
+        scrapReason: body.scrapReason ?? null,
         operationId: body.operationId ?? null,
         consumptionCount: body.consumptions?.length ?? 0,
       },

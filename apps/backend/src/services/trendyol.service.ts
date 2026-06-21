@@ -906,6 +906,20 @@ export const TrendyolService = {
       { method: 'PUT', body: JSON.stringify({ status, ...params }) },
     );
   },
+
+  getApiLimitRemaining(): { remaining: number; resetAt: string } {
+    let maxCount = 0;
+    let windowStart = Date.now();
+    for (const bucket of rateBuckets.values()) {
+      if (bucket.count > maxCount) {
+        maxCount = bucket.count;
+        windowStart = bucket.windowStart;
+      }
+    }
+    const remaining = Math.max(0, RATE_LIMIT - maxCount);
+    const resetAt = new Date(windowStart + RATE_WINDOW_MS).toISOString();
+    return { remaining, resetAt };
+  },
 };
 
 // ─────────────────────────────────────────────

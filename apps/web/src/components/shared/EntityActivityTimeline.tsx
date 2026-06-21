@@ -4,6 +4,7 @@ import {
   Activity,
   Bell,
   CheckCircle2,
+  ChevronDown,
   CircleDot,
   ClipboardCheck,
   CreditCard,
@@ -12,16 +13,24 @@ import {
   Paperclip,
   Wrench,
 } from 'lucide-react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { useActivity } from '@/hooks/useActivity';
 import { formatDateTime } from '@/lib/utils';
 import type { AuditEntityType } from '@/services/audit-log.service';
-import type { ActivityItem, ActivitySource, ActivityTone } from '@/services/activity.service';
+import type { ActivityItem, ActivitySource, ActivityTone, ActivityImportance } from '@/services/activity.service';
+
+// ─────────────────────────────────────────────
+// EntityActivityTimeline
+// Entity bazlı aktivite zaman çizelgesi.
+// businessSummary iş diliyle gösterilir;
+// technicalDetails audit kayıtlarında
+// daraltılabilir blokta ayrıca sunulur.
+// ─────────────────────────────────────────────
 
 interface EntityActivityTimelineProps {
   entityType: AuditEntityType;
   entityId: string;
-  module?: string;
   title?: string;
   limit?: number;
 }
@@ -37,12 +46,26 @@ const SOURCE_LABELS: Record<ActivitySource, string> = {
   SERVICE: 'Servis',
 };
 
-const TONE_BADGES: Record<ActivityTone, 'neutral' | 'success' | 'danger' | 'warning' | 'info'> = {
+const TONE_BADGE_VARIANT: Record<ActivityTone, 'neutral' | 'success' | 'danger' | 'warning' | 'info'> = {
   neutral: 'neutral',
   success: 'success',
   danger: 'danger',
   warning: 'warning',
   info: 'info',
+};
+
+/** Sol kenardaki önem gösterge rengi. */
+const IMPORTANCE_INDICATOR: Record<ActivityImportance, string> = {
+  high: 'bg-red-500',
+  medium: 'bg-amber-400',
+  low: 'bg-slate-600',
+};
+
+/** Önemlilik → kart border sınıfı. */
+const IMPORTANCE_BORDER: Record<ActivityImportance, string> = {
+  high: 'border-red-900/40 hover:border-red-500/40',
+  medium: 'border-amber-900/30 hover:border-amber-500/30',
+  low: 'border-slate-800 hover:border-sky-500/40',
 };
 
 function getActivityIcon(item: ActivityItem) {
@@ -58,42 +81,93 @@ function getActivityIcon(item: ActivityItem) {
   return <FileText className="h-4 w-4 text-slate-400" />;
 }
 
+function TechnicalDetailsToggle({ details }: { details: string }) {
+  const [open, setOpen] = useState(false);
+  const lines = details.split('\n');
+
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex items-center gap-1 text-[11px] text-slate-500 transition-colors hover:text-slate-300"
+        aria-expanded={open}
+      >
+        <ChevronDown
+          className={`h-3 w-3 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+        {open ? 'Teknik detayları gizle' : `${lines.length} alan değişimi`}
+      </button>
+
+      {open && (
+        <ul className="mt-1.5 space-y-0.5 rounded-md border border-slate-800 bg-slate-950/60 px-2.5 py-2">
+          {lines.map((line, index) => (
+            <li key={index} className="font-mono text-[10px] text-slate-400">
+              {line}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function ActivityItemRow({ item }: { item: ActivityItem }) {
-  const details = item.technicalDetails ?? item.description;
+  const borderClass = IMPORTANCE_BORDER[item.importance];
+  const indicatorClass = IMPORTANCE_INDICATOR[item.importance];
+
   const content = (
     <>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium text-slate-200">{item.businessSummary}</p>
-            <Badge variant={TONE_BADGES[item.tone]}>{SOURCE_LABELS[item.sourceType]}</Badge>
-            {item.module && <span className="text-[11px] text-slate-500">{item.module}</span>}
+            <Badge variant={TONE_BADGE_VARIANT[item.tone]}>{SOURCE_LABELS[item.sourceType]}</Badge>
+            {item.module && (
+              <span className="text-[11px] text-slate-500">{item.module}</span>
+            )}
           </div>
-          {details && (
-            <p className="mt-1 line-clamp-2 text-xs text-slate-500">{details}</p>
+          {item.description && item.sourceType !== 'AUDIT' && (
+            <p className="mt-1 line-clamp-2 text-xs text-slate-500">{item.description}</p>
+          )}
+          {item.technicalDetails && item.sourceType === 'AUDIT' && (
+            <TechnicalDetailsToggle details={item.technicalDetails} />
           )}
         </div>
-        <time className="shrink-0 text-right text-[11px] text-slate-500">{formatDateTime(item.occurredAt)}</time>
+        <time className="shrink-0 text-right text-[11px] text-slate-500">
+          {formatDateTime(item.occurredAt)}
+        </time>
       </div>
     </>
   );
 
+  const cardClass = `rounded-lg border ${borderClass} bg-slate-950/50 px-3 py-2.5 transition-colors`;
+
   return (
     <li className="relative pl-8">
+      {/* Önem gösterge çizgisi */}
+      <span
+        className={`absolute left-3 top-2.5 h-2.5 w-0.5 rounded-full ${indicatorClass}`}
+        aria-hidden="true"
+      />
+      {/* Kaynak ikonu */}
       <span className="absolute left-0 top-0.5 flex h-7 w-7 items-center justify-center rounded-full border border-slate-800 bg-slate-950">
         {getActivityIcon(item)}
       </span>
+
       {item.href ? (
-        <a href={item.href} className="block rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5 transition-colors hover:border-sky-500/40 hover:bg-slate-950">
+        <a href={item.href} className={`block ${cardClass} hover:bg-slate-950`}>
           {content}
         </a>
       ) : (
-        <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5">
-          {content}
-        </div>
+        <div className={cardClass}>{content}</div>
       )}
     </li>
   );
+}
+
+function SkeletonRow() {
+  return <div className="h-14 animate-pulse rounded-lg bg-slate-800/50" />;
 }
 
 export function EntityActivityTimeline({
@@ -114,13 +188,15 @@ export function EntityActivityTimeline({
           <Activity className="h-4 w-4 text-sky-400" />
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">{title}</h3>
         </div>
-        {data?.meta.total !== undefined && <span className="text-[10px] text-slate-500">{data.meta.total} kayıt</span>}
+        {data?.meta.total !== undefined && (
+          <span className="text-[10px] text-slate-500">{data.meta.total} kayıt</span>
+        )}
       </div>
 
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="h-14 animate-pulse rounded-lg bg-slate-800/50" />
+            <SkeletonRow key={index} />
           ))}
         </div>
       ) : items.length > 0 ? (
@@ -132,7 +208,9 @@ export function EntityActivityTimeline({
       ) : (
         <div className="rounded-lg border border-dashed border-slate-800 bg-slate-950/40 px-3 py-5 text-center">
           <p className="text-sm text-slate-400">Henüz aktivite yok.</p>
-          <p className="mt-1 text-xs text-slate-600">Bu kayıt için işlemler oluştukça burada görünecek.</p>
+          <p className="mt-1 text-xs text-slate-600">
+            Bu kayıt için işlemler oluştukça burada görünecek.
+          </p>
         </div>
       )}
     </section>

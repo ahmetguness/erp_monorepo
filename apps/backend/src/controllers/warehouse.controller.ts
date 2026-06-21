@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 import { getPaginationParams } from '../utils/pagination.js';
-import { assertCanConsumeStock, resolveStockLevelLocationId } from '../services/inventory-rules.service';
+import { assertCanConsumeStock, resolveStockLevelLocationId, recordInventoryCosting } from '../services/inventory-rules.service';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -271,6 +271,33 @@ export const WarehouseController = {
           quantity: body.quantity,
         },
         update: { quantity: { increment: body.quantity } },
+      });
+
+      // Record costing for source warehouse (outbound)
+      await recordInventoryCosting(tx, tenantId, {
+        movementId: stockMovement.id,
+        productId: body.productId,
+        warehouseId: body.fromWarehouseId,
+        type: MovementType.TRANSFER,
+        quantity: body.quantity,
+        previousQuantity: Number(sourceStock.quantity),
+        quantityChange: -body.quantity,
+        resultingQuantity: Number(sourceStock.quantity) - body.quantity,
+        date: stockMovement.createdAt,
+      });
+
+      // Record costing for target warehouse (inbound)
+      const targetPreviousQty = Number(targetStock?.quantity ?? 0);
+      await recordInventoryCosting(tx, tenantId, {
+        movementId: stockMovement.id,
+        productId: body.productId,
+        warehouseId: body.toWarehouseId,
+        type: MovementType.TRANSFER,
+        quantity: body.quantity,
+        previousQuantity: targetPreviousQty,
+        quantityChange: body.quantity,
+        resultingQuantity: targetPreviousQty + body.quantity,
+        date: stockMovement.createdAt,
       });
 
       return stockMovement;

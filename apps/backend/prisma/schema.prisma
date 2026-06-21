@@ -634,6 +634,7 @@ model Tenant {
   bomItems                 BOMItem[]
   workOrderItems           WorkOrderItem[]
   workOrderOperations      WorkOrderOperation[]
+  workCenterCapacities     WorkCenterCapacity[]
   salesQuoteItems          SalesQuoteItem[]
   salesOrderItems          SalesOrderItem[]
   purchaseRequestItems     PurchaseRequestItem[]
@@ -2554,6 +2555,8 @@ model WorkCenter {
   code        String
   description String?
   capacity    Decimal? @db.Decimal(10, 2)
+  laborRate    Decimal?             @db.Decimal(10, 2)
+  overheadRate Decimal?             @db.Decimal(10, 2)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -2561,6 +2564,7 @@ model WorkCenter {
   tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   operations   RoutingOperation[]
   workOrderOps WorkOrderOperation[]
+  capacities   WorkCenterCapacity[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -2574,6 +2578,8 @@ model BOM {
   name      String
   version   String   @default("1.0")
   isActive  Boolean  @default(true)
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2643,6 +2649,15 @@ model WorkOrder {
   inputWarehouseId  String?
   // Warehouse to which finished goods are output
   outputWarehouseId String?
+  estimatedMaterialCost Decimal? @db.Decimal(18, 2)
+  estimatedLaborCost    Decimal? @db.Decimal(18, 2)
+  estimatedOverheadCost Decimal? @db.Decimal(18, 2)
+  actualMaterialCost    Decimal? @db.Decimal(18, 2) @default(0)
+  actualLaborCost       Decimal? @db.Decimal(18, 2) @default(0)
+  actualOverheadCost    Decimal? @db.Decimal(18, 2) @default(0)
+  scrapCost             Decimal? @db.Decimal(18, 2) @default(0)
+  scrapQty              Decimal? @db.Decimal(18, 3) @default(0)
+  scrapReason           String?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   deletedAt        DateTime?
@@ -2696,6 +2711,10 @@ model WorkOrderOperation {
   plannedEndAt   DateTime?
   actualStartAt  DateTime?
   actualEndAt    DateTime?
+  plannedSetupTime Decimal? @db.Decimal(10, 2)
+  plannedRunTime   Decimal? @db.Decimal(10, 2)
+  actualSetupTime  Decimal? @db.Decimal(10, 2)
+  actualRunTime    Decimal? @db.Decimal(10, 2)
   notes          String?
 
   workOrder  WorkOrder         @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
@@ -2723,6 +2742,24 @@ model WorkOrderHistory {
 
   @@index([tenantId, workOrderId])
   @@map("work_order_history")
+}
+
+model WorkCenterCapacity {
+  id           String   @id @default(cuid())
+  tenantId     String
+  workCenterId String
+  date         DateTime @db.Date
+  capacity     Decimal  @db.Decimal(10, 2) // Available hours
+  allocated    Decimal  @db.Decimal(10, 2) @default(0) // Allocated hours
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workCenter   WorkCenter @relation(fields: [workCenterId], references: [id], onDelete: Cascade)
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, workCenterId, date])
+  @@index([tenantId])
+  @@map("work_center_capacities")
 }
 
 // ═════════════════════════════════════════════

@@ -24,5 +24,6 @@ paymentRoutes.delete('/cash-accounts/:id', requirePermission('accounting', 'DELE
 paymentRoutes.get('/', requirePermission('accounting', 'READ'), PaymentController.listPayments);
 paymentRoutes.get('/:id', requirePermission('accounting', 'READ'), PaymentController.getPaymentById);
 paymentRoutes.post('/', requirePermission('accounting', 'CREATE'), PaymentController.createPayment);
+paymentRoutes.post('/:id/cancel', requirePermission('accounting', 'UPDATE'), PaymentController.cancelPayment);
 
 export { paymentRoutes };

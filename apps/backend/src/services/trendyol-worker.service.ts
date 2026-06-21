@@ -150,6 +150,13 @@ async function processPendingJobs() {
       timeout,
     ]);
 
+    const apiLimits = TrendyolService.getApiLimitRemaining();
+    const finalResult = {
+      ...(result || {}),
+      apiLimitRemaining: apiLimits.remaining,
+      apiLimitResetAt: apiLimits.resetAt,
+    };
+
     await prisma.marketplaceSyncJob.updateMany({
       where: { id: job.id, tenantId: job.tenantId },
       data: {
@@ -157,10 +164,10 @@ async function processPendingJobs() {
         finishedAt: new Date(),
         processedCount: result.processedCount,
         errorCount: result.errorCount,
-        result: result as Prisma.InputJsonValue,
+        result: finalResult as Prisma.InputJsonValue,
       },
     });
-    logger.info(`[TrendyolWorker] Job ${job.id} done: ${JSON.stringify(result)}`);
+    logger.info(`[TrendyolWorker] Job ${job.id} done: ${JSON.stringify(finalResult)}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`[TrendyolWorker] Job ${job.id} failed: ${msg}`);
@@ -174,10 +181,6 @@ async function processPendingJobs() {
     }).catch(() => {});
   }
 }
-
-// ---------------------------------------------
-// Job runners
-// ---------------------------------------------
 
 interface JobResult {
   processedCount: number;

@@ -43,14 +43,14 @@ export const WorkCenterController = {
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<{ code: string; name: string; description?: string; capacity?: number }>();
+    const body = await c.req.json<{ code: string; name: string; description?: string; capacity?: number; laborRate?: number; overheadRate?: number }>();
     if (!body.code || !body.name) return c.json(new ValidationError('code ve name zorunludur.').toJSON(), 400);
 
     const exists = await prisma.workCenter.findUnique({ where: { tenantId_code: { tenantId, code: body.code } } });
     if (exists) return c.json(new ValidationError('Bu kodla iş merkezi zaten mevcut.').toJSON(), 400);
 
     const wc = await prisma.workCenter.create({
-      data: { tenantId, code: body.code, name: body.name, description: body.description ?? null, capacity: body.capacity ?? null },
+      data: { tenantId, code: body.code, name: body.name, description: body.description ?? null, capacity: body.capacity ?? null, laborRate: body.laborRate ?? null, overheadRate: body.overheadRate ?? null },
     });
     return c.json({ data: wc }, 201);
   },
@@ -62,7 +62,7 @@ export const WorkCenterController = {
     const existing = await prisma.workCenter.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('İş Merkezi', id).toJSON(), 404);
 
-    const body = await c.req.json<{ name?: string; description?: string; capacity?: number; isActive?: boolean }>();
+    const body = await c.req.json<{ name?: string; description?: string; capacity?: number; isActive?: boolean; laborRate?: number; overheadRate?: number }>();
     const updated = await prisma.workCenter.update({
       where: { id },
       data: {
@@ -70,6 +70,8 @@ export const WorkCenterController = {
         ...(body.description !== undefined && { description: body.description }),
         ...(body.capacity !== undefined && { capacity: body.capacity }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
+        ...(body.laborRate !== undefined && { laborRate: body.laborRate }),
+        ...(body.overheadRate !== undefined && { overheadRate: body.overheadRate }),
       },
     });
     return c.json({ data: updated });
@@ -87,5 +89,17 @@ export const WorkCenterController = {
 
     await prisma.workCenter.delete({ where: { id } });
     return c.json({ data: { success: true } });
+  },
+
+  async getCapacityCalendar(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = c.req.param('id')!;
+
+    const capacities = await prisma.workCenterCapacity.findMany({
+      where: { tenantId, workCenterId: id },
+      orderBy: { date: 'asc' },
+    });
+
+    return c.json({ data: capacities });
   },
 };

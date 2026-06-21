@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { processDeliveryNoteStock } from '../services/inventory-rules.service';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -209,6 +210,7 @@ export const DeliveryNoteController = {
         }
       }
 
+      await processDeliveryNoteStock(tx, tenantId, newNote.id);
       return newNote;
     });
 
@@ -238,13 +240,18 @@ export const DeliveryNoteController = {
       return c.json(new ValidationError('status alanı zorunludur.').toJSON(), 400);
     }
 
-    const updated = await prisma.deliveryNote.update({
+    const updated = await prisma.$transaction(async (tx) => {
+      const up = await tx.deliveryNote.update({
       where: { id },
       data: {
         status: body.status,
         ...(body.shippedAt && { shippedAt: new Date(body.shippedAt) }),
         ...(body.deliveredAt && { deliveredAt: new Date(body.deliveredAt) }),
       },
+      });
+
+      await processDeliveryNoteStock(tx, tenantId, id);
+      return up;
     });
 
     return c.json({ data: updated });

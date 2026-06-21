@@ -13,6 +13,7 @@ import {
   getReorderSuggestions,
   recordInventoryCosting,
   resolveStockLevelLocationId,
+  convertReorderSuggestionsToPurchaseRequest,
 } from '../services/inventory-rules.service';
 
 // ─────────────────────────────────────────────
@@ -466,6 +467,22 @@ export const StockController = {
     const body = await c.req.json<FinalizeStockCountDTO>();
     const inventoryRules = await getInventoryRules(prisma, tenantId);
     const hasDifference = stockCount.items.some((item) => Number(item.difference) !== 0);
+
+    const thresholdSetting = await prisma.moduleSetting.findFirst({
+      where: { tenantId, module: 'inventory', key: 'stock_count_approval_threshold' },
+    });
+    const threshold = thresholdSetting ? Number(thresholdSetting.value) : 500;
+    const totalDiffQty = stockCount.items.reduce((sum, item) => sum + Math.abs(Number(item.difference)), 0);
+
+    if (hasDifference && totalDiffQty > threshold && !body.approvalReason?.trim()) {
+      return c.json(
+        new ValidationError(
+          `Sayım farkı toplamı (${totalDiffQty}) limit değeri (${threshold}) üzerinde olduğu için onay sebebi (approvalReason) zorunludur.`,
+        ).toJSON(),
+        400,
+      );
+    }
+
     assertStockCountApproval({
       rules: inventoryRules,
       hasDifference,
@@ -562,5 +579,89 @@ export const StockController = {
     });
 
     return c.json({ data: { success: true } });
+  },
+
+  async convertSuggestionsToRequest(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+
+    const result = await prisma.$transaction(async (tx) => {
+      return await convertReorderSuggestionsToPurchaseRequest(tx, tenantId, userId);
+    });
+
+    return c.json({ data: result }, 201);
+  },
+
+  async getValuationReconciliation(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+
+    const stockLevels = await prisma.stockLevel.findMany({
+      where: { tenantId, product: { deletedAt: null } },
+      include: { product: { select: { averageCost: true } } },
+    });
+    const totalInventoryValuation = stockLevels.reduce(
+      (sum, sl) => sum + Number(sl.quantity) * Number(sl.product.averageCost ?? 0),
+      0
+    );
+
+    const inventoryAccounts = await prisma.ledgerAccount.findMany({
+      where: {
+        tenantId,
+        isActive: true,
+        deletedAt: null,
+        OR: [
+          { code: { startsWith: '15' } },
+          { name: { contains: 'Stok', mode: 'insensitive' } },
+          { name: { contains: 'Inventory', mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, code: true, name: true },
+    });
+
+    const accountIds = inventoryAccounts.map((acc) => acc.id);
+
+    const lineSums = await prisma.journalEntryLine.groupBy({
+      by: ['accountId'],
+      where: {
+        tenantId,
+        accountId: { in: accountIds },
+        journalEntry: { isPosted: true },
+      },
+      _sum: { debit: true, credit: true },
+    });
+
+    const sumMap = new Map(
+      lineSums.map((row) => [
+        row.accountId,
+        {
+          debit: Number(row._sum.debit ?? 0),
+          credit: Number(row._sum.credit ?? 0),
+        },
+      ]),
+    );
+
+    const accountsWithBalance = inventoryAccounts.map((acc) => {
+      const sums = sumMap.get(acc.id) ?? { debit: 0, credit: 0 };
+      const balance = sums.debit - sums.credit;
+      return {
+        id: acc.id,
+        code: acc.code,
+        name: acc.name,
+        balance,
+      };
+    });
+
+    const totalLedgerBalance = accountsWithBalance.reduce((sum, acc) => sum + acc.balance, 0);
+    const discrepancy = totalInventoryValuation - totalLedgerBalance;
+
+    return c.json({
+      data: {
+        totalInventoryValuation,
+        totalLedgerBalance,
+        discrepancy,
+        status: Math.abs(discrepancy) < 0.01 ? 'RECONCILED' : 'DISCREPANCY',
+        accounts: accountsWithBalance,
+      },
+    });
   },
 };

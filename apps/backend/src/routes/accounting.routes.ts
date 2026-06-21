@@ -26,6 +26,13 @@ accountingRoutes.post('/journal-entries/:id/reverse', requirePermission('account
 accountingRoutes.get('/fiscal-periods', requirePermission('accounting', 'READ'), AccountingExtController.listFiscalPeriods);
 accountingRoutes.post('/fiscal-periods', requirePermission('accounting', 'CREATE'), AccountingExtController.createFiscalPeriod);
 accountingRoutes.post('/fiscal-periods/:id/close', requirePermission('accounting', 'UPDATE'), AccountingExtController.closeFiscalPeriod);
+accountingRoutes.post('/fiscal-periods/:id/lock', requirePermission('accounting', 'UPDATE'), AccountingExtController.lockFiscalPeriod);
+accountingRoutes.post('/fiscal-periods/:id/reopen', requirePermission('accounting', 'UPDATE'), AccountingExtController.reopenFiscalPeriod);
 accountingRoutes.delete('/fiscal-periods/:id', requirePermission('accounting', 'DELETE'), AccountingExtController.deleteFiscalPeriod);
 
+// Mizan ve Cari Ekstre
+accountingRoutes.get('/trial-balance', requirePermission('accounting', 'READ'), AccountingExtController.getTrialBalance);
+accountingRoutes.get('/account-statement/:contactId', requirePermission('accounting', 'READ'), AccountingExtController.getContactStatement);
+
 export { accountingRoutes };
+

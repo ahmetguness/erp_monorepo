@@ -8,6 +8,12 @@ import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { createEventContext, domainEvents } from '../domain-events';
 import { writeInvoiceAccountEntry, reverseInvoiceAccountEntry } from '../utils/account-entry.js';
 import { BusinessRulesService } from '../services/business-rules.service.js';
+import {
+  assertInvoiceCancelable,
+  assertInvoiceEditable,
+  assertAccountingPeriodOpen,
+  readRequiredReason,
+} from '../services/financial/index.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -386,7 +392,22 @@ export const InvoiceController = {
       return c.json(new NotFoundError('Fatura', invoiceId).toJSON(), 404);
     }
 
-    if (invoice.status === InvoiceStatus.CANCELLED) {
+    // Central guards & reason parse
+    assertInvoiceCancelable(invoice, 'Fatura iptali');
+
+    let body: Record<string, unknown> = {};
+    try {
+      body = await c.req.json() as Record<string, unknown>;
+    } catch {
+      // Fallback for testing / empty body
+    }
+
+    const reason = readRequiredReason(body);
+
+    const cancellationDate = new Date();
+    await assertAccountingPeriodOpen(prisma, tenantId, cancellationDate, 'Fatura iptali');
+
+    /*
       return c.json(new ValidationError('Fatura zaten iptal edilmiş.').toJSON(), 400);
     }
 
@@ -394,6 +415,7 @@ export const InvoiceController = {
       return c.json(new ValidationError('Ödenmiş fatura iptal edilemez.').toJSON(), 400);
     }
 
+    */
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.invoice.update({
         where: { id: invoiceId },
@@ -401,7 +423,7 @@ export const InvoiceController = {
       });
 
       await tx.invoiceHistory.create({
-        data: { tenantId, invoiceId: invoiceId!, fromStatus: invoice.status, toStatus: InvoiceStatus.CANCELLED, notes: 'Fatura iptal edildi' },
+        data: { tenantId, invoiceId: invoiceId!, fromStatus: invoice.status, toStatus: InvoiceStatus.CANCELLED, notes: `İptal nedeni: ${reason}` },
       });
 
       // AccountEntry: ters kayıt
@@ -412,7 +434,8 @@ export const InvoiceController = {
         invoiceNumber: invoice.number,
         invoiceType: invoice.type,
         totalGross: Number(invoice.totalGross),
-        date: new Date(),
+        date: cancellationDate,
+        reason,
         userId,
       });
 
@@ -432,7 +455,7 @@ export const InvoiceController = {
       entityType: EntityType.INVOICE, entityId: invoiceId!,
       action: AuditAction.UPDATE,
       oldValues: { status: invoice.status },
-      newValues: { status: InvoiceStatus.CANCELLED },
+      newValues: { status: InvoiceStatus.CANCELLED, reason },
       ipAddress, userAgent,
     });
 

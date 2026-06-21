@@ -985,4 +985,11 @@ export const MarketplaceMonitoringController = {
 
     return c.json({ data: snapshots, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
   },
+
+  async driftReport(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const integrationId = c.req.query('integrationId');
+    const data = await marketplaceMonitoringService.driftReport(tenantId, integrationId);
+    return c.json({ data });
+  },
 };

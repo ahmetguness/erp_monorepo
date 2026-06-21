@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ValidationError } from '../errors';
-import { ActivityService } from '../services/activity.service';
+import { ActivityService } from '../services/activity/index.js';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 
 const ENTITY_TYPES: readonly EntityType[] = Object.values(EntityType);

@@ -16,5 +16,7 @@ stockRoutes.get('/counts', requirePermission('inventory', 'READ'), StockControll
 stockRoutes.get('/counts/:id', requirePermission('inventory', 'READ'), StockController.getStockCount);
 stockRoutes.post('/counts', requirePermission('inventory', 'CREATE'), StockController.createStockCount);
 stockRoutes.post('/counts/:id/finalize', requirePermission('inventory', 'UPDATE'), StockController.finalizeStockCount);
+stockRoutes.post('/reorder-suggestions/convert', requirePermission('inventory', 'CREATE'), StockController.convertSuggestionsToRequest);
+stockRoutes.get('/valuation/reconciliation', requirePermission('inventory', 'READ'), StockController.getValuationReconciliation);
 
 export { stockRoutes };

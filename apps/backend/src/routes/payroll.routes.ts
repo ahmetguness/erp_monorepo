@@ -20,6 +20,7 @@ payrollRoutes.get('/:id', requirePermission('payroll', 'READ'), PayrollControlle
 payrollRoutes.post('/:id/items', requirePermission('payroll', 'UPDATE'), PayrollController.addItem);
 payrollRoutes.delete('/:id/items/:itemId', requirePermission('payroll', 'UPDATE'), PayrollController.removeItem);
 payrollRoutes.post('/:id/pay', requirePermission('payroll', 'UPDATE'), PayrollController.markPaid);
+payrollRoutes.post('/:id/reverse', requirePermission('payroll', 'UPDATE'), PayrollController.reversePayroll);
 payrollRoutes.delete('/:id', requirePermission('payroll', 'DELETE'), PayrollController.remove);
 
 export { payrollRoutes };

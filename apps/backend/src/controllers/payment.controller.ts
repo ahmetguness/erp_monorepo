@@ -11,6 +11,7 @@ import {
   type CreatePaymentInput,
   type ListPaymentsInput,
 } from '../services/payment.service.js';
+import { reversePayment, readRequiredReason } from '../services/financial/index.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -209,5 +210,31 @@ export const PaymentController = {
     if (!paymentId) throw new ValidationError('id alani zorunludur.');
 
     return c.json({ data: await getPaymentById(tenantId, paymentId) });
+  },
+
+  async cancelPayment(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const paymentId = c.req.param('id')!;
+    const { ipAddress, userAgent } = getRequestMeta(c);
+
+    let body: Record<string, unknown>;
+    try {
+      body = await c.req.json() as Record<string, unknown>;
+    } catch {
+      throw new ValidationError('Geçersiz JSON gövdesi.');
+    }
+
+    const reason = readRequiredReason(body);
+
+    await reversePayment(prisma, {
+      tenantId,
+      userId,
+      paymentId,
+      reason,
+      auditMeta: { ipAddress, userAgent },
+    });
+
+    return c.json({ data: { success: true } });
   },
 };

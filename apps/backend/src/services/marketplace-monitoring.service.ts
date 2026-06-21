@@ -31,6 +31,7 @@ export interface MarketplaceIntegrationHealthSummary {
     remaining: number | null;
     resetAt: string | null;
   };
+  credentialWarning: string | null;
 }
 
 export interface MarketplaceMonitoringHealth {
@@ -160,6 +161,12 @@ export class MarketplaceMonitoringService {
           'resetAt',
         ]);
 
+        const rotationDays = 90;
+        const isRotationDue = Date.now() - new Date(integration.updatedAt).getTime() > rotationDays * 24 * 60 * 60 * 1000;
+        const credentialWarning = isRotationDue
+          ? 'Kimlik bilgileri 90 gündür güncellenmedi, güvenlik için şifre rotasyonu önerilir.'
+          : null;
+
         return {
           integration: hideIntegrationSecrets(integration),
           lastSuccessfulSyncAt: integration.lastSyncAt ?? lastDoneJob?.finishedAt ?? null,
@@ -177,6 +184,7 @@ export class MarketplaceMonitoringService {
             remaining: apiLimitRemaining,
             resetAt: apiLimitResetAt,
           },
+          credentialWarning,
         };
       }),
     );
@@ -204,4 +212,73 @@ export class MarketplaceMonitoringService {
 
     return { totals, items };
   }
+
+  async driftReport(tenantId: string, integrationId?: string): Promise<MarketplaceDriftItem[]> {
+    const listings = await this.db.marketplaceListing.findMany({
+      where: {
+        tenantId,
+        ...(integrationId && { integrationId }),
+        isActive: true,
+      },
+      include: {
+        product: {
+          select: {
+            name: true,
+            code: true,
+            stockLevels: { select: { quantity: true } },
+          },
+        },
+        snapshot: true,
+        integration: { select: { name: true, channel: true } },
+      },
+    });
+
+    const driftItems: MarketplaceDriftItem[] = [];
+    for (const listing of listings) {
+      const currentStock = listing.product.stockLevels.reduce((s, sl) => s + Number(sl.quantity), 0);
+      const currentPrice = Number(listing.price);
+
+      const snapshotStock = listing.snapshot ? Number(listing.snapshot.lastSentQty) : null;
+      const snapshotPrice = listing.snapshot ? Number(listing.snapshot.lastSentSalePrice) : null;
+
+      const hasStockDrift = snapshotStock !== null && Math.floor(currentStock) !== Math.floor(snapshotStock);
+      const hasPriceDrift = snapshotPrice !== null && Math.round(currentPrice * 100) / 100 !== Math.round(snapshotPrice * 100) / 100;
+
+      if (hasStockDrift || hasPriceDrift || !listing.snapshot) {
+        driftItems.push({
+          listingId: listing.id,
+          externalId: listing.externalId,
+          productName: listing.product.name,
+          productCode: listing.product.code,
+          integrationName: listing.integration.name,
+          channel: listing.integration.channel,
+          erpStock: Math.floor(currentStock),
+          marketplaceStock: snapshotStock,
+          erpPrice: currentPrice,
+          marketplacePrice: snapshotPrice,
+          hasStockDrift,
+          hasPriceDrift,
+          noSnapshot: !listing.snapshot,
+        });
+      }
+    }
+
+    return driftItems;
+  }
+}
+
+export interface MarketplaceDriftItem {
+  listingId: string;
+  externalId: string;
+  productName: string;
+  productCode: string;
+  integrationName: string;
+  channel: string;
+  erpStock: number;
+  marketplaceStock: number | null;
+  erpPrice: number;
+  marketplacePrice: number | null;
+  hasStockDrift: boolean;
+  hasPriceDrift: boolean;
+  noSnapshot: boolean;
 }

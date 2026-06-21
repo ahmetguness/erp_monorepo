@@ -140,6 +140,7 @@ const MarketplaceHealthCenterSchema = z.object({
       remaining: z.coerce.number().nullable(),
       resetAt: z.string().nullable(),
     }),
+    credentialWarning: z.string().nullable().optional(),
   })),
 });
 
@@ -267,6 +268,7 @@ export interface MarketplaceIntegrationHealthSummary {
     remaining: number | null;
     resetAt: string | null;
   };
+  credentialWarning: string | null;
 }
 
 export interface MarketplaceHealthCenter {
@@ -416,3 +418,24 @@ export const getTrendyolCargoProviders = (integrationId: string) =>
   apiClient.get<{ data: TrendyolLookupOption[] }>(
     `/api/marketplace/integrations/${integrationId}/trendyol/cargo-providers`,
   ).then((r) => r.data.data);
+
+// ─── Drift Report ─────────────────────────────
+
+export interface MarketplaceDriftItem {
+  listingId: string;
+  externalId: string;
+  productName: string;
+  productCode: string;
+  integrationName: string;
+  channel: string;
+  erpStock: number;
+  marketplaceStock: number | null;
+  erpPrice: number;
+  marketplacePrice: number | null;
+  hasStockDrift: boolean;
+  hasPriceDrift: boolean;
+  noSnapshot: boolean;
+}
+
+export const getDriftReport = (params?: { integrationId?: string }) =>
+  apiClient.get<{ data: MarketplaceDriftItem[] }>('/api/marketplace/drift-report', { params }).then((r) => r.data.data);

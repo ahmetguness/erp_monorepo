@@ -1,6 +1,8 @@
-import { CostingMethod, MovementType, Prisma } from '@prisma/client';
+import { CostingMethod, MovementType, Prisma, DeliveryNoteStatus } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
 import { ValidationError } from '../errors';
+import { generateDocumentNumber } from '../utils/generate-number.js';
+
 
 type InventoryDbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -161,6 +163,18 @@ export async function getStockPosition(
   warehouseId: string,
   excludeReservationRef?: { refType: string; refId: string },
 ): Promise<StockPosition> {
+  const now = new Date();
+  await db.inventoryReservation.updateMany({
+    where: {
+      tenantId,
+      productId,
+      warehouseId,
+      releasedAt: null,
+      expiresAt: { lt: now },
+    },
+    data: { releasedAt: now },
+  });
+
   const [stockLevels, activeReservations] = await Promise.all([
     db.stockLevel.findMany({
       where: { tenantId, productId, warehouseId },
@@ -172,7 +186,7 @@ export async function getStockPosition(
         productId,
         warehouseId,
         releasedAt: null,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       },
       select: { quantity: true, refType: true, refId: true },
     }),
@@ -212,6 +226,15 @@ export async function assertCanConsumeStock(
   );
   const stockBasis = rules.reservationPolicy === 'RESPECT' ? position.available : position.onHand;
   const nextQuantity = stockBasis - input.quantity;
+
+  if (input.lotId) {
+    const lot = await db.lotSerialNumber.findFirst({
+      where: { id: input.lotId, tenantId, productId: input.productId },
+    });
+    if (!lot) {
+      throw new ValidationError('Geçersiz Lot/Seri numarası.');
+    }
+  }
 
   if (
     (rules.lotSerialPolicy === 'REQUIRED' || rules.lotSerialPolicy === 'REQUIRED_FOR_OUT') &&
@@ -270,6 +293,88 @@ export function assertStockCountApproval(input: {
   }
 }
 
+async function calculateLayerCost(
+  db: InventoryDbClient,
+  tenantId: string,
+  productId: string,
+  warehouseId: string,
+  qtyRequired: number,
+  method: 'FIFO' | 'LIFO',
+): Promise<number> {
+  const valuations = await db.stockValuation.findMany({
+    where: { tenantId, productId, warehouseId },
+    orderBy: [
+      { date: 'asc' },
+      { createdAt: 'asc' },
+    ],
+  });
+
+  const inLayers: { id: string; qty: number; initialQty: number; unitCost: number }[] = [];
+
+  for (const v of valuations) {
+    const qtyIn = Number(v.qtyIn);
+    const qtyOut = Number(v.qtyOut);
+
+    if (qtyIn > 0) {
+      inLayers.push({
+        id: v.id,
+        qty: qtyIn,
+        initialQty: qtyIn,
+        unitCost: Number(v.unitCost),
+      });
+    }
+
+    if (qtyOut > 0) {
+      let remainingOut = qtyOut;
+      if (method === 'FIFO') {
+        for (const layer of inLayers) {
+          if (layer.qty > 0) {
+            const consume = Math.min(layer.qty, remainingOut);
+            layer.qty -= consume;
+            remainingOut -= consume;
+            if (remainingOut <= 0) break;
+          }
+        }
+      } else {
+        for (let i = inLayers.length - 1; i >= 0; i--) {
+          const layer = inLayers[i];
+          if (layer.qty > 0) {
+            const consume = Math.min(layer.qty, remainingOut);
+            layer.qty -= consume;
+            remainingOut -= consume;
+            if (remainingOut <= 0) break;
+          }
+        }
+      }
+    }
+  }
+
+  let totalCost = 0;
+  let remainingToConsume = qtyRequired;
+
+  const activeLayers = method === 'FIFO' ? inLayers : [...inLayers].reverse();
+
+  for (const layer of activeLayers) {
+    if (layer.qty > 0) {
+      const consume = Math.min(layer.qty, remainingToConsume);
+      totalCost += consume * layer.unitCost;
+      remainingToConsume -= consume;
+      if (remainingToConsume <= 0) break;
+    }
+  }
+
+  if (remainingToConsume > 0) {
+    const product = await db.product.findFirst({
+      where: { id: productId, tenantId },
+      select: { averageCost: true, purchasePrice: true },
+    });
+    const fallbackCost = Number(product?.averageCost ?? product?.purchasePrice ?? 0);
+    totalCost += remainingToConsume * fallbackCost;
+  }
+
+  return totalCost / qtyRequired;
+}
+
 export async function recordInventoryCosting(
   db: InventoryDbClient,
   tenantId: string,
@@ -304,17 +409,54 @@ export async function recordInventoryCosting(
   const qtyIn = quantityChange > 0 ? quantityChange : 0;
   const qtyOut = quantityChange < 0 ? Math.abs(quantityChange) : 0;
   const qtyBalance = input.resultingQuantity ?? input.previousQuantity + quantityChange;
-  const valuationUnitCost = qtyIn > 0 ? inboundUnitCost : (currentAverageCost > 0 ? currentAverageCost : inboundUnitCost);
 
-  if (qtyIn > 0 && costingMethod === CostingMethod.MOVING_AVERAGE) {
-    const previousValue = Math.max(input.previousQuantity, 0) * currentAverageCost;
-    const incomingValue = input.quantity * inboundUnitCost;
-    const nextQuantity = Math.max(input.previousQuantity, 0) + input.quantity;
-    const nextAverageCost = nextQuantity > 0 ? (previousValue + incomingValue) / nextQuantity : inboundUnitCost;
-    await db.product.update({
-      where: { id: input.productId },
-      data: { averageCost: nextAverageCost },
-    });
+  let valuationUnitCost = qtyIn > 0 ? inboundUnitCost : (currentAverageCost > 0 ? currentAverageCost : inboundUnitCost);
+
+  if (qtyOut > 0) {
+    if (costingMethod === CostingMethod.FIFO || costingMethod === CostingMethod.LIFO) {
+      const calculatedCost = await calculateLayerCost(db, tenantId, input.productId, input.warehouseId, input.quantity, costingMethod);
+      await db.stockMovement.update({
+        where: { id: input.movementId },
+        data: {
+          unitCost: calculatedCost,
+          totalCost: calculatedCost * input.quantity,
+        },
+      });
+      valuationUnitCost = calculatedCost;
+    } else if (costingMethod === CostingMethod.STANDARD) {
+      const standardCost = purchasePrice > 0 ? purchasePrice : currentAverageCost;
+      await db.stockMovement.update({
+        where: { id: input.movementId },
+        data: {
+          unitCost: standardCost,
+          totalCost: standardCost * input.quantity,
+        },
+      });
+      valuationUnitCost = standardCost;
+    }
+  }
+
+  if (qtyIn > 0) {
+    if (
+      costingMethod === CostingMethod.MOVING_AVERAGE ||
+      costingMethod === CostingMethod.FIFO ||
+      costingMethod === CostingMethod.LIFO
+    ) {
+      const previousValue = Math.max(input.previousQuantity, 0) * currentAverageCost;
+      const incomingValue = input.quantity * inboundUnitCost;
+      const nextQuantity = Math.max(input.previousQuantity, 0) + input.quantity;
+      const nextAverageCost = nextQuantity > 0 ? (previousValue + incomingValue) / nextQuantity : inboundUnitCost;
+      await db.product.update({
+        where: { id: input.productId },
+        data: { averageCost: nextAverageCost },
+      });
+    } else if (costingMethod === CostingMethod.STANDARD) {
+      const standardCost = purchasePrice > 0 ? purchasePrice : currentAverageCost;
+      await db.product.update({
+        where: { id: input.productId },
+        data: { averageCost: standardCost },
+      });
+    }
   }
 
   await db.stockValuation.create({
@@ -394,4 +536,143 @@ export async function getReorderSuggestions(
   }
 
   return suggestions.sort((a, b) => b.suggestedQuantity - a.suggestedQuantity);
+}
+
+export async function convertReorderSuggestionsToPurchaseRequest(
+  db: InventoryDbClient,
+  tenantId: string,
+  userId: string,
+): Promise<{ id: string; number: string; itemCount: number }> {
+  const suggestions = await getReorderSuggestions(db, tenantId);
+  if (!suggestions.length) {
+    throw new ValidationError('Oluşturulacak satın alma önerisi bulunamadı.');
+  }
+
+  const number = await generateDocumentNumber(tenantId, 'purchase_request', 'PR-', 'purchaseRequest');
+  const totalEstimated = suggestions.reduce((sum, s) => sum + s.estimatedCost, 0);
+
+  const request = await db.purchaseRequest.create({
+    data: {
+      tenantId,
+      number,
+      date: new Date(),
+      status: 'DRAFT',
+      notes: 'Stok seviyesi sipariş önerilerinden otomatik oluşturuldu.',
+      totalEstimated,
+      createdById: userId,
+      items: {
+        create: suggestions.map((s) => ({
+          tenantId,
+          productId: s.productId,
+          description: `${s.warehouseName} deposu için önerilen miktar.`,
+          quantity: s.suggestedQuantity,
+          unitPrice: s.unitCost,
+        })),
+      },
+    },
+  });
+
+  return { id: request.id, number: request.number, itemCount: suggestions.length };
+}
+
+export async function processDeliveryNoteStock(
+  db: InventoryDbClient,
+  tenantId: string,
+  deliveryNoteId: string,
+): Promise<void> {
+  const note = await db.deliveryNote.findFirst({
+    where: { id: deliveryNoteId, tenantId },
+    include: { items: { include: { product: true } } },
+  });
+  if (!note) return;
+
+  const activeStatuses: DeliveryNoteStatus[] = ['CONFIRMED', 'SHIPPED', 'DELIVERED'];
+  if (!activeStatuses.includes(note.status)) return;
+
+  const existingMovements = await db.stockMovement.findFirst({
+    where: { tenantId, refType: 'DELIVERY_NOTE', refId: deliveryNoteId },
+  });
+  if (existingMovements) return;
+
+  const isOutbound = note.type === 'OUTBOUND' || (note.type === 'RETURN' && note.purchaseOrderId !== null);
+  const isInbound = note.type === 'INBOUND' || (note.type === 'RETURN' && note.salesOrderId !== null);
+
+  const mType = isOutbound
+    ? (note.type === 'RETURN' ? MovementType.RETURN : MovementType.OUT)
+    : (note.type === 'RETURN' ? MovementType.RETURN : MovementType.IN);
+
+  for (const item of note.items) {
+    const qty = Number(item.deliveredQty);
+    if (qty <= 0) continue;
+
+    const warehouseId = note.warehouseId;
+    const existingLevel = await db.stockLevel.findFirst({
+      where: { tenantId, productId: item.productId, warehouseId },
+    });
+    const previousQuantity = Number(existingLevel?.quantity ?? 0);
+    const locId = await resolveStockLevelLocationId(db, tenantId, warehouseId, item.locationId ?? existingLevel?.locationId);
+
+    if (isOutbound) {
+      await assertCanConsumeStock(db, tenantId, {
+        productId: item.productId,
+        warehouseId,
+        quantity: qty,
+        lotId: item.lotId,
+        refType: 'DELIVERY_NOTE',
+        refId: deliveryNoteId,
+      });
+    } else {
+      const rules = await getInventoryRules(db, tenantId);
+      if (rules.lotSerialPolicy === 'REQUIRED' && !item.lotId) {
+        throw new ValidationError('Lot/seri bilgisi zorunludur.');
+      }
+    }
+
+    const movement = await db.stockMovement.create({
+      data: {
+        tenantId,
+        productId: item.productId,
+        type: mType,
+        quantity: qty,
+        lotId: item.lotId ?? null,
+        batchId: item.batchId ?? null,
+        fromWarehouseId: isOutbound ? warehouseId : null,
+        toWarehouseId: isInbound ? warehouseId : null,
+        refType: 'DELIVERY_NOTE',
+        refId: deliveryNoteId,
+        notes: `İrsaliye: ${note.number}`,
+      },
+    });
+
+    const qtyChange = isOutbound ? -qty : qty;
+    await db.stockLevel.upsert({
+      where: {
+        productId_warehouseId_locationId: {
+          productId: item.productId,
+          warehouseId,
+          locationId: locId,
+        },
+      },
+      create: {
+        tenantId,
+        productId: item.productId,
+        warehouseId,
+        locationId: locId,
+        quantity: qtyChange,
+      },
+      update: { quantity: { increment: qtyChange } },
+    });
+
+    await recordInventoryCosting(db, tenantId, {
+      movementId: movement.id,
+      productId: item.productId,
+      warehouseId,
+      type: mType,
+      quantity: qty,
+      previousQuantity,
+      quantityChange: qtyChange,
+      resultingQuantity: previousQuantity + qtyChange,
+      date: movement.createdAt,
+    });
+  }
 }

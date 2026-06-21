@@ -261,7 +261,7 @@ export function EntityActionPanel({
       <RecommendedActionsPanel actions={recommendedActions} />
       {actions.has('task') && <EntityTaskActions entityType={entityType} entityId={entityId} entityLabel={displayName} module={module} href={href} />}
       {actions.has('attachment') && <AttachmentPanel entityType={entityType} entityId={entityId} />}
-      {actions.has('activity') && <EntityActivityTimeline entityType={entityType} entityId={entityId} module={module} />}
+      {actions.has('activity') && <EntityActivityTimeline entityType={entityType} entityId={entityId} />}
 
       <Modal
         isOpen={mailOpen}

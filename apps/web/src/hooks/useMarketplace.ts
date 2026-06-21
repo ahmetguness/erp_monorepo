@@ -248,3 +248,7 @@ export function useReplayWebhookEvent() {
 export function useListingSnapshots(params?: { page?: number; limit?: number; integrationId?: string }) {
   return useQuery({ queryKey: ['mp-listing-snapshots', params], queryFn: () => svc.getListingSnapshots(params) });
 }
+
+export function useDriftReport(params?: { integrationId?: string }) {
+  return useQuery({ queryKey: ['mp-drift-report', params], queryFn: () => svc.getDriftReport(params) });
+}

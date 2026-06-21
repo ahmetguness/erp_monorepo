@@ -18,6 +18,7 @@ productionRoutes.use('*', requireModule(MODULE_KEYS.PRODUCTION));
 // İş Merkezleri
 productionRoutes.get('/work-centers', requirePermission('production', 'READ'), WorkCenterController.list);
 productionRoutes.get('/work-centers/:id', requirePermission('production', 'READ'), WorkCenterController.getById);
+productionRoutes.get('/work-centers/:id/capacity', requirePermission('production', 'READ'), WorkCenterController.getCapacityCalendar);
 productionRoutes.post('/work-centers', requirePermission('production', 'CREATE'), WorkCenterController.create);
 productionRoutes.patch('/work-centers/:id', requirePermission('production', 'UPDATE'), WorkCenterController.update);
 productionRoutes.delete('/work-centers/:id', requirePermission('production', 'DELETE'), WorkCenterController.remove);

@@ -3,8 +3,8 @@ import { AuditAction, EntityType, FeatureKey, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ForbiddenError } from '../errors';
 import { TenantFeatureService } from '../services/tenant-feature.service';
-import { resolveAuditFieldValueLabels } from '../services/audit-log-field-label.service';
-import { formatAuditLogBusiness } from '../services/audit-log-formatter.service';
+import { resolveAuditFieldValueLabels } from '../services/audit/field-label-resolver.js';
+import { formatAuditLogBusiness } from '../services/audit/formatter.js';
 import { requireTenantId } from '../utils/context.js';
 
 // ─────────────────────────────────────────────

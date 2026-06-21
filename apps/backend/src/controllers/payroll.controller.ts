@@ -3,6 +3,8 @@ import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
 import { requireTenantId } from '../utils/context.js';
+import { getRequestMeta } from '../utils/audit.js';
+import { reversePayroll, readRequiredReason } from '../services/financial/index.js';
 
 // ─────────────────────────────────────────────
 // Payroll Controller — Bordro CRUD + toplu oluşturma
@@ -219,6 +221,32 @@ export const PayrollController = {
     if (payroll.paidAt) return c.json(new ValidationError('Ödenmiş bordro silinemez.').toJSON(), 400);
 
     await prisma.payroll.update({ where: { id }, data: { deletedAt: new Date() } });
+    return c.json({ data: { success: true } });
+  },
+
+  async reversePayroll(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const id = c.req.param('id')!;
+    const { ipAddress, userAgent } = getRequestMeta(c);
+
+    let body: Record<string, unknown>;
+    try {
+      body = await c.req.json() as Record<string, unknown>;
+    } catch {
+      throw new ValidationError('Geçersiz JSON gövdesi.');
+    }
+
+    const reason = readRequiredReason(body);
+
+    await reversePayroll(prisma, {
+      tenantId,
+      userId,
+      payrollId: id,
+      reason,
+      auditMeta: { ipAddress, userAgent },
+    });
+
     return c.json({ data: { success: true } });
   },
 };

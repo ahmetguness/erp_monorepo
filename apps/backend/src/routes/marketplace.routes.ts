@@ -55,6 +55,7 @@ marketplaceRoutes.delete('/orders/:id', requirePermission('marketplace', 'DELETE
 
 // Monitoring (read-only)
 marketplaceRoutes.get('/health', requirePermission('marketplace', 'READ'), MarketplaceMonitoringController.health);
+marketplaceRoutes.get('/drift-report', requirePermission('marketplace', 'READ'), MarketplaceMonitoringController.driftReport);
 marketplaceRoutes.get('/sync-jobs', requirePermission('marketplace', 'READ'), MarketplaceMonitoringController.listSyncJobs);
 marketplaceRoutes.get('/sync-jobs/:id', requirePermission('marketplace', 'READ'), MarketplaceMonitoringController.getSyncJob);
 marketplaceRoutes.post('/sync-jobs/:id/retry', requirePermission('marketplace', 'UPDATE'), MarketplaceMonitoringController.retrySyncJob);

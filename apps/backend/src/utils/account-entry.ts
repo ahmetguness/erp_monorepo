@@ -24,6 +24,7 @@ export async function writeInvoiceAccountEntry(
     totalGross: number;
     date: Date;
     userId?: string | null;
+    reason?: string | null;
   },
 ): Promise<void> {
   await assertAccountingPeriodOpen(tx, params.tenantId, params.date, 'Fatura cari hareketi');
@@ -32,7 +33,6 @@ export async function writeInvoiceAccountEntry(
   const debit = isSales ? params.totalGross : 0;
   const credit = isSales ? 0 : params.totalGross;
 
-  // Son bakiyeyi hesapla
   const lastEntry = await tx.accountEntry.findFirst({
     where: { tenantId: params.tenantId, contactId: params.contactId },
     orderBy: { date: 'desc' },
@@ -42,6 +42,10 @@ export async function writeInvoiceAccountEntry(
   const prevBalance = lastEntry ? Number(lastEntry.balance) : 0;
   const balance = prevBalance + debit - credit;
 
+  const description = params.reason
+    ? `Fatura: ${params.invoiceNumber} — ${params.reason}`
+    : `Fatura: ${params.invoiceNumber}`;
+
   await tx.accountEntry.create({
     data: {
       tenantId: params.tenantId,
@@ -50,7 +54,7 @@ export async function writeInvoiceAccountEntry(
       debit,
       credit,
       balance,
-      description: `Fatura: ${params.invoiceNumber}`,
+      description,
       refType: 'INVOICE',
       refId: params.invoiceId,
       createdById: params.userId ?? null,
@@ -72,6 +76,7 @@ export async function reverseInvoiceAccountEntry(
     totalGross: number;
     date: Date;
     userId?: string | null;
+    reason?: string | null;
   },
 ): Promise<void> {
   await assertAccountingPeriodOpen(tx, params.tenantId, params.date, 'Fatura ters cari hareketi');
@@ -90,6 +95,10 @@ export async function reverseInvoiceAccountEntry(
   const prevBalance = lastEntry ? Number(lastEntry.balance) : 0;
   const balance = prevBalance + debit - credit;
 
+  const description = params.reason
+    ? `Fatura İptal: ${params.invoiceNumber} — ${params.reason}`
+    : `Fatura İptal: ${params.invoiceNumber}`;
+
   await tx.accountEntry.create({
     data: {
       tenantId: params.tenantId,
@@ -98,7 +107,7 @@ export async function reverseInvoiceAccountEntry(
       debit,
       credit,
       balance,
-      description: `Fatura İptal: ${params.invoiceNumber}`,
+      description,
       refType: 'INVOICE',
       refId: params.invoiceId,
       createdById: params.userId ?? null,
@@ -121,9 +130,10 @@ export async function writePaymentAccountEntry(
     date: Date;
     direction?: 'RECEIVE' | 'SEND';
     userId?: string | null;
+    reason?: string | null;
   },
 ): Promise<void> {
-  await assertAccountingPeriodOpen(tx, params.tenantId, params.date, 'Odeme cari hareketi');
+  await assertAccountingPeriodOpen(tx, params.tenantId, params.date, 'Ödeme cari hareketi');
 
   const lastEntry = await tx.accountEntry.findFirst({
     where: { tenantId: params.tenantId, contactId: params.contactId },
@@ -137,6 +147,9 @@ export async function writePaymentAccountEntry(
   const credit = isOutgoingPayment ? 0 : params.amount;
   const balance = prevBalance + debit - credit;
 
+  const baseDescription = params.reference ? `Ödeme: ${params.reference}` : 'Ödeme';
+  const description = params.reason ? `${baseDescription} — ${params.reason}` : baseDescription;
+
   await tx.accountEntry.create({
     data: {
       tenantId: params.tenantId,
@@ -145,7 +158,61 @@ export async function writePaymentAccountEntry(
       debit,
       credit,
       balance,
-      description: params.reference ? `Ödeme: ${params.reference}` : 'Ödeme',
+      description,
+      refType: 'PAYMENT',
+      refId: params.paymentId,
+      createdById: params.userId ?? null,
+    },
+  });
+}
+
+/**
+ * Ödeme iptal edildiğinde ters cari hesap hareketi yazar.
+ * Orijinal ödeme yönünü tersine çevirir.
+ */
+export async function reversePaymentAccountEntry(
+  tx: TxClient,
+  params: {
+    tenantId: string;
+    contactId: string;
+    paymentId: string;
+    reference?: string | null;
+    amount: number;
+    date: Date;
+    direction?: 'RECEIVE' | 'SEND';
+    userId?: string | null;
+    reason: string;
+  },
+): Promise<void> {
+  await assertAccountingPeriodOpen(tx, params.tenantId, params.date, 'Ödeme iptali cari hareketi');
+
+  const lastEntry = await tx.accountEntry.findFirst({
+    where: { tenantId: params.tenantId, contactId: params.contactId },
+    orderBy: { date: 'desc' },
+    select: { balance: true },
+  });
+
+  const prevBalance = lastEntry ? Number(lastEntry.balance) : 0;
+  // Ters kayıt: orijinal yönü tersine çevir
+  const isOutgoingPayment = params.direction === 'SEND';
+  const debit = isOutgoingPayment ? 0 : params.amount;
+  const credit = isOutgoingPayment ? params.amount : 0;
+  const balance = prevBalance + debit - credit;
+
+  const baseDescription = params.reference
+    ? `Ödeme İptal: ${params.reference}`
+    : 'Ödeme İptal';
+  const description = `${baseDescription} — ${params.reason}`;
+
+  await tx.accountEntry.create({
+    data: {
+      tenantId: params.tenantId,
+      contactId: params.contactId,
+      date: params.date,
+      debit,
+      credit,
+      balance,
+      description,
       refType: 'PAYMENT',
       refId: params.paymentId,
       createdById: params.userId ?? null,

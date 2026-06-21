@@ -1,5 +1,5 @@
 import { Context } from 'hono';
-import { JournalEntryType, AccountType } from '@prisma/client';
+import { JournalEntryType, AccountType, FiscalPeriodStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
@@ -7,7 +7,10 @@ import { requireTenantId, requireUserId } from '../utils/context.js';
 import {
   assertJournalBalanced,
   resolveOpenFiscalPeriodId,
-} from '../services/financial-integrity.service';
+  readRequiredReason,
+} from '../services/financial/index.js';
+import { computeTrialBalance, assertTrialBalanceBalanced } from '../services/financial/trial-balance.js';
+import { getContactStatement, verifyContactAccountBalance } from '../services/financial/account-entry-reconciliation.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -64,13 +67,7 @@ async function readOptionalJsonObject(c: Context): Promise<Record<string, unknow
   return parsed;
 }
 
-function readRequiredReason(body: Record<string, unknown>): string {
-  const reason = body.reason;
-  if (typeof reason !== 'string' || !reason.trim()) {
-    throw new ValidationError('Ters kayit icin reason zorunludur.');
-  }
-  return reason.trim();
-}
+
 
 // ─────────────────────────────────────────────
 // Accounting Controller
@@ -360,6 +357,7 @@ export const AccountingController = {
   },
 };
 
+
 // ─────────────────────────────────────────────
 // Accounting Extended Controller
 // LedgerAccount update/delete, JournalEntry getById, FiscalPeriod
@@ -492,20 +490,81 @@ export const AccountingExtController = {
 
   async closeFiscalPeriod(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const periodId = c.req.param('id');
 
     const period = await prisma.fiscalPeriod.findFirst({ where: { id: periodId, tenantId } });
     if (!period) return c.json(new NotFoundError('Dönem', periodId).toJSON(), 404);
 
-    if (period.status !== 'OPEN') {
+    if (period.status !== FiscalPeriodStatus.OPEN) {
       return c.json(new ValidationError('Sadece açık dönemler kapatılabilir.').toJSON(), 400);
+    }
+
+    // Onaylanmamış (draft) fişleri olan dönem kapatılamaz
+    const draftCount = await prisma.journalEntry.count({
+      where: { tenantId, fiscalPeriodId: periodId, isPosted: false },
+    });
+    if (draftCount > 0) {
+      return c.json(
+        new ValidationError(`Bu döneme ait ${draftCount} onaylanmamış yevmiye fişi var. Önce fişleri onaylayın veya silin.`).toJSON(),
+        400,
+      );
     }
 
     const updated = await prisma.fiscalPeriod.update({
       where: { id: periodId },
-      data: { status: 'CLOSED', closedAt: new Date() },
+      data: { status: FiscalPeriodStatus.CLOSED, closedAt: new Date(), closedById: userId },
     });
 
+    return c.json({ data: updated });
+  },
+
+  async lockFiscalPeriod(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const periodId = c.req.param('id');
+
+    const period = await prisma.fiscalPeriod.findFirst({ where: { id: periodId, tenantId } });
+    if (!period) return c.json(new NotFoundError('Dönem', periodId).toJSON(), 404);
+
+    if (period.status !== FiscalPeriodStatus.CLOSED) {
+      return c.json(new ValidationError('Sadece kapalı dönemler kilitlenebilir.').toJSON(), 400);
+    }
+
+    const updated = await prisma.fiscalPeriod.update({
+      where: { id: periodId },
+      data: { status: FiscalPeriodStatus.LOCKED },
+    });
+
+    return c.json({ data: updated });
+  },
+
+  async reopenFiscalPeriod(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const periodId = c.req.param('id');
+
+    const body = await readOptionalJsonObject(c);
+    const reason = readRequiredReason(body);
+
+    const period = await prisma.fiscalPeriod.findFirst({ where: { id: periodId, tenantId } });
+    if (!period) return c.json(new NotFoundError('Dönem', periodId).toJSON(), 404);
+
+    if (period.status === FiscalPeriodStatus.OPEN) {
+      return c.json(new ValidationError('Dönem zaten açık.').toJSON(), 400);
+    }
+
+    if (period.status === FiscalPeriodStatus.LOCKED) {
+      return c.json(
+        new ValidationError('Kilitli dönem yeniden açılamaz. Önce kilidi kaldırın.').toJSON(),
+        400,
+      );
+    }
+
+    const updated = await prisma.fiscalPeriod.update({
+      where: { id: periodId },
+      data: { status: FiscalPeriodStatus.OPEN, closedAt: null, closedById: null },
+    });
+
+    void reason; // audit log için ileride kullanılabilir
     return c.json({ data: updated });
   },
 
@@ -516,7 +575,7 @@ export const AccountingExtController = {
     const period = await prisma.fiscalPeriod.findFirst({ where: { id: periodId, tenantId } });
     if (!period) return c.json(new NotFoundError('Dönem', periodId).toJSON(), 404);
 
-    if (period.status !== 'OPEN') {
+    if (period.status !== FiscalPeriodStatus.OPEN) {
       return c.json(new ValidationError('Sadece açık dönemler silinebilir.').toJSON(), 400);
     }
 
@@ -527,5 +586,58 @@ export const AccountingExtController = {
 
     await prisma.fiscalPeriod.delete({ where: { id: periodId } });
     return c.json({ data: { success: true } });
+  },
+
+  // ── Trial Balance (Mizan) ─────────────────────
+
+  async getTrialBalance(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+
+    const dateFromStr = c.req.query('dateFrom');
+    const dateToStr = c.req.query('dateTo');
+
+    const dateFrom = dateFromStr ? new Date(dateFromStr) : undefined;
+    const dateTo = dateToStr ? new Date(dateToStr) : undefined;
+
+    if (dateFrom && Number.isNaN(dateFrom.getTime())) {
+      return c.json(new ValidationError('dateFrom geçersiz tarih.').toJSON(), 400);
+    }
+    if (dateTo && Number.isNaN(dateTo.getTime())) {
+      return c.json(new ValidationError('dateTo geçersiz tarih.').toJSON(), 400);
+    }
+
+    const rows = await computeTrialBalance(prisma, { tenantId, dateFrom, dateTo });
+    const { totalDebit, totalCredit, isBalanced } = assertTrialBalanceBalanced(rows);
+
+    return c.json({
+      data: rows,
+      meta: { totalDebit, totalCredit, isBalanced, rowCount: rows.length },
+    });
+  },
+
+  // ── Account Statement (Cari Ekstre) ───────────
+
+  async getContactStatement(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const contactId = c.req.param('contactId');
+    if (!contactId) return c.json(new ValidationError('contactId zorunludur.').toJSON(), 400);
+
+    const dateFromStr = c.req.query('dateFrom');
+    const dateToStr = c.req.query('dateTo');
+    const limitStr = c.req.query('limit');
+
+    const dateFrom = dateFromStr ? new Date(dateFromStr) : undefined;
+    const dateTo = dateToStr ? new Date(dateToStr) : undefined;
+    const limit = limitStr ? Math.min(1000, Math.max(1, parseInt(limitStr, 10))) : 100;
+
+    const [rows, balanceSummary] = await Promise.all([
+      getContactStatement(prisma, { tenantId, contactId, dateFrom, dateTo, limit }),
+      verifyContactAccountBalance(prisma, tenantId, contactId),
+    ]);
+
+    return c.json({
+      data: rows,
+      meta: balanceSummary,
+    });
   },
 };

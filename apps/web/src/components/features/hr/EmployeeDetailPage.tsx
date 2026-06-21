@@ -448,7 +448,6 @@ export function EmployeeDetailPage({ id }: { id: string }) {
             <EntityActivityTimeline
               entityType="EMPLOYEE"
               entityId={id}
-              module="hr"
               title="Son Aktiviteler"
               limit={6}
             />

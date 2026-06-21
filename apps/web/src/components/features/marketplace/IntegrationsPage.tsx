@@ -24,6 +24,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useUIStore } from "@/store/ui.store";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -41,6 +42,7 @@ import {
   useSyncJobs,
   useUpdateIntegration,
   useWebhookEvents,
+  useDriftReport,
 } from "@/hooks/useMarketplace";
 import { formatDate } from "@/lib/utils";
 import {
@@ -354,54 +356,401 @@ function SummaryTile({
 }
 
 function IntegrationHealthCenter() {
-  const { data, isLoading } = useMarketplaceHealthCenter();
-  const totals = data?.totals;
-  const topRiskItems = data?.items
-    .filter((item) => item.failedJobCount > 0 || item.webhookReplayCount > 0 || item.runningJobCount > 0 || item.pendingJobCount > 0)
-    .slice(0, 4) ?? [];
+  const [activeTab, setActiveTab] = useState<'overview' | 'jobs' | 'webhooks' | 'drift'>('overview');
+
+  // Health Center Query
+  const { data: healthData, isLoading: isHealthLoading, refetch: refetchHealth } = useMarketplaceHealthCenter();
+  const totals = healthData?.totals;
+  const healthItems = healthData?.items ?? [];
+
+  // Jobs Query
+  const [jobsPage, setJobsPage] = useState(1);
+  const { data: jobsData, isLoading: isJobsLoading, refetch: refetchJobs } = useSyncJobs({ page: jobsPage, limit: 10 });
+  const retryJob = useRetrySyncJob();
+
+  // Webhooks Query
+  const [webhooksPage, setWebhooksPage] = useState(1);
+  const { data: webhooksData, isLoading: isWebhooksLoading, refetch: refetchWebhooks } = useWebhookEvents({ page: webhooksPage, limit: 10 });
+  const replayWebhook = useReplayWebhookEvent();
+
+  // Drift Report Query
+  const { data: driftData, isLoading: isDriftLoading, refetch: refetchDrift } = useDriftReport();
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+
+  const triggerSyncStock = useMutation({
+    mutationFn: (integrationId: string) => syncTrendyolStock(integrationId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['mp-drift-report'] });
+      qc.invalidateQueries({ queryKey: ['mp-sync-jobs'] });
+      toast.success('Stok senkronizasyon işi sıraya alındı.');
+    },
+  });
+
+  const isLoading = isHealthLoading || isJobsLoading || isWebhooksLoading || isDriftLoading;
+
+  const handleRefresh = () => {
+    refetchHealth();
+    refetchJobs();
+    refetchWebhooks();
+    refetchDrift();
+  };
+
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val);
+  };
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4">
-      <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="text-sm font-semibold text-white">Integration Health Center</h2>
           <p className="text-xs text-slate-500 mt-1">Sync job, webhook replay ve API limit durumunu tek yerden izleyin.</p>
         </div>
-        {isLoading && <RefreshCw className="w-4 h-4 text-slate-500 animate-spin" />}
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isLoading}>
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            Yenile
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-2">
-        <HealthMetric label="Entegrasyon" value={totals?.integrations ?? 0} />
-        <HealthMetric label="Bekleyen Job" value={totals?.pendingJobs ?? 0} tone={(totals?.pendingJobs ?? 0) > 0 ? "warning" : "neutral"} />
-        <HealthMetric label="Calisan Job" value={totals?.runningJobs ?? 0} tone={(totals?.runningJobs ?? 0) > 0 ? "success" : "neutral"} />
-        <HealthMetric label="Failed Job" value={totals?.failedJobs ?? 0} tone={(totals?.failedJobs ?? 0) > 0 ? "danger" : "neutral"} />
-        <HealthMetric label="Retry" value={totals?.retryAvailable ?? 0} tone={(totals?.retryAvailable ?? 0) > 0 ? "warning" : "neutral"} />
-        <HealthMetric label="Webhook Replay" value={totals?.webhookReplayAvailable ?? 0} tone={(totals?.webhookReplayAvailable ?? 0) > 0 ? "danger" : "neutral"} />
+      {/* Tabs */}
+      <div className="flex border-b border-slate-800 mb-4 overflow-x-auto gap-2">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`pb-2 px-3 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+            activeTab === 'overview'
+              ? 'border-sky-500 text-sky-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Genel Durum
+        </button>
+        <button
+          onClick={() => setActiveTab('jobs')}
+          className={`pb-2 px-3 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+            activeTab === 'jobs'
+              ? 'border-sky-500 text-sky-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Sync İşleri ({totals?.pendingJobs ?? 0} Bekleyen / {totals?.failedJobs ?? 0} Hatalı)
+        </button>
+        <button
+          onClick={() => setActiveTab('webhooks')}
+          className={`pb-2 px-3 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+            activeTab === 'webhooks'
+              ? 'border-sky-500 text-sky-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Webhook Günlükleri ({totals?.webhookFailures ?? 0} Hatalı)
+        </button>
+        <button
+          onClick={() => setActiveTab('drift')}
+          className={`pb-2 px-3 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+            activeTab === 'drift'
+              ? 'border-sky-500 text-sky-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Uyumsuzluk (Drift) Raporu {driftData && driftData.length > 0 ? `(${driftData.length})` : ''}
+        </button>
       </div>
 
-      {topRiskItems.length > 0 && (
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
-          {topRiskItems.map((item) => (
-            <div key={item.integration.id} className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-xs font-medium text-slate-200 truncate">{item.integration.name}</div>
-                <Badge variant={item.failedJobCount > 0 || item.webhookFailureCount > 0 ? "danger" : "warning"}>
-                  %{item.errorRate}
-                </Badge>
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-2">
+            <HealthMetric label="Entegrasyon" value={totals?.integrations ?? 0} />
+            <HealthMetric label="Bekleyen Job" value={totals?.pendingJobs ?? 0} tone={(totals?.pendingJobs ?? 0) > 0 ? "warning" : "neutral"} />
+            <HealthMetric label="Calisan Job" value={totals?.runningJobs ?? 0} tone={(totals?.runningJobs ?? 0) > 0 ? "success" : "neutral"} />
+            <HealthMetric label="Failed Job" value={totals?.failedJobs ?? 0} tone={(totals?.failedJobs ?? 0) > 0 ? "danger" : "neutral"} />
+            <HealthMetric label="Retry" value={totals?.retryAvailable ?? 0} tone={(totals?.retryAvailable ?? 0) > 0 ? "warning" : "neutral"} />
+            <HealthMetric label="Webhook Replay" value={totals?.webhookReplayAvailable ?? 0} tone={(totals?.webhookReplayAvailable ?? 0) > 0 ? "danger" : "neutral"} />
+          </div>
+
+          {/* Credential alerts */}
+          {healthItems.some(item => item.credentialWarning) && (
+            <div className="space-y-2">
+              {healthItems.filter(item => item.credentialWarning).map(item => (
+                <div key={item.integration.id} className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-lg flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                  <div className="text-xs">
+                    <span className="font-semibold">{item.integration.name}:</span> {item.credentialWarning}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Risk Integration List */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
+            {healthItems.map((item) => (
+              <div key={item.integration.id} className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-medium text-slate-200 truncate">{item.integration.name}</div>
+                    <Badge variant={item.failedJobCount > 0 || item.webhookFailureCount > 0 ? "danger" : "warning"}>
+                      %{item.errorRate}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-1 text-[10px] text-slate-500 border-t border-slate-800/60 pt-1.5">
+                    <span>Job: {item.pendingJobCount + item.runningJobCount}</span>
+                    <span>Fail: {item.failedJobCount}</span>
+                    <span>Replay: {item.webhookReplayCount}</span>
+                  </div>
+                  <div className="mt-2 text-[10px] text-slate-400 truncate font-mono bg-slate-900/60 px-1 py-0.5 rounded border border-slate-800/40">
+                    {item.lastErrorMessage ?? (item.lastSuccessfulSyncAt ? `Son basarili: ${formatDate(item.lastSuccessfulSyncAt)}` : "Basarili sync yok")}
+                  </div>
+                </div>
+                <div className="mt-3 pt-2 border-t border-slate-800/60 text-[10px] text-slate-500">
+                  <div className="flex justify-between items-center mb-1">
+                    <span>API Limit:</span>
+                    <Badge variant={item.apiLimit.status === 'OK' ? 'success' : item.apiLimit.status === 'WARNING' ? 'warning' : 'danger'}>
+                      {item.apiLimit.status}
+                    </Badge>
+                  </div>
+                  {item.apiLimit.remaining !== null && (
+                    <div className="space-y-1">
+                      <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            item.apiLimit.status === 'LIMITED' ? 'bg-red-500' : item.apiLimit.status === 'WARNING' ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`}
+                          style={{ width: `${Math.min(100, (item.apiLimit.remaining / 48) * 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[9px] text-slate-600">
+                        <span>{item.apiLimit.remaining} requests left</span>
+                        {item.apiLimit.resetAt && <span>Reset: {formatDate(item.apiLimit.resetAt)}</span>}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="mt-2 grid grid-cols-3 gap-1 text-[10px] text-slate-500">
-                <span>Job: {item.pendingJobCount + item.runningJobCount}</span>
-                <span>Fail: {item.failedJobCount}</span>
-                <span>Replay: {item.webhookReplayCount}</span>
-              </div>
-              <div className="mt-2 text-[10px] text-slate-500 truncate">
-                {item.lastErrorMessage ?? (item.lastSuccessfulSyncAt ? `Son basarili sync: ${formatDate(item.lastSuccessfulSyncAt)}` : "Basarili sync yok")}
-              </div>
-              <div className="mt-1 text-[10px] text-slate-600">
-                API limit: {item.apiLimit.remaining ?? item.apiLimit.status}
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'jobs' && (
+        <div className="space-y-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-500">
+                  <th className="py-2 px-3">Job ID</th>
+                  <th className="py-2 px-3">Tip</th>
+                  <th className="py-2 px-3">Durum</th>
+                  <th className="py-2 px-3">Başlangıç / Bitiş</th>
+                  <th className="py-2 px-3 text-center">Başarılı / Hata</th>
+                  <th className="py-2 px-3">Hata Detayı</th>
+                  <th className="py-2 px-3 text-right">Aksiyon</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/40">
+                {isJobsLoading ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-slate-500">Yükleniyor...</td>
+                  </tr>
+                ) : !jobsData?.data.length ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-slate-500">Yakın zamanda çalışmış sync işi bulunamadı.</td>
+                  </tr>
+                ) : (
+                  jobsData.data.map((job) => (
+                    <tr key={job.id} className="hover:bg-slate-800/10">
+                      <td className="py-2 px-3 font-mono text-[10px] text-slate-400 truncate max-w-[120px]">{job.id}</td>
+                      <td className="py-2 px-3 font-medium text-slate-300">{job.jobType}</td>
+                      <td className="py-2 px-3">
+                        <Badge variant={job.status === 'DONE' ? 'success' : job.status === 'FAILED' ? 'danger' : job.status === 'RUNNING' ? 'warning' : 'neutral'}>
+                          {job.status}
+                        </Badge>
+                      </td>
+                      <td className="py-2 px-3 text-slate-400">
+                        <div>Başlangıç: {formatDate(job.createdAt)}</div>
+                        {job.finishedAt && <div className="text-[10px] text-slate-600">Bitiş: {formatDate(job.finishedAt)}</div>}
+                      </td>
+                      <td className="py-2 px-3 text-center font-mono">
+                        <span className="text-emerald-400">{job.processedCount}</span>
+                        <span className="text-slate-600 mx-1">/</span>
+                        <span className="text-red-400">{job.errorCount}</span>
+                      </td>
+                      <td className="py-2 px-3 text-red-400 max-w-[200px] truncate" title={job.errorMessage ?? ''}>
+                        {job.errorMessage ?? '-'}
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        {job.status === 'FAILED' && (
+                          <Button
+                            size="sm"
+                            onClick={() => retryJob.mutate(job.id)}
+                            loading={retryJob.isPending && retryJob.variables === job.id}
+                          >
+                            Tekrar Dene
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          {jobsData && jobsData.meta.totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-slate-800 pt-3">
+              <div className="text-[11px] text-slate-500">Toplam {jobsData.meta.total} kayıttan {jobsData.data.length} tanesi gösteriliyor</div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={jobsPage === 1} onClick={() => setJobsPage(p => p - 1)}>Önceki</Button>
+                <Button size="sm" variant="outline" disabled={jobsPage === jobsData.meta.totalPages} onClick={() => setJobsPage(p => p + 1)}>Sonraki</Button>
               </div>
             </div>
-          ))}
+          )}
+        </div>
+      )}
+
+      {activeTab === 'webhooks' && (
+        <div className="space-y-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-500">
+                  <th className="py-2 px-3">Event ID</th>
+                  <th className="py-2 px-3">İşlem Tipi</th>
+                  <th className="py-2 px-3">Durum</th>
+                  <th className="py-2 px-3">Alınma Tarihi</th>
+                  <th className="py-2 px-3">İşlenme Tarihi</th>
+                  <th className="py-2 px-3">Hata Detayı</th>
+                  <th className="py-2 px-3 text-right">Aksiyon</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/40">
+                {isWebhooksLoading ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-slate-500">Yükleniyor...</td>
+                  </tr>
+                ) : !webhooksData?.data.length ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-slate-500">Webhook olay kaydı bulunamadı.</td>
+                  </tr>
+                ) : (
+                  webhooksData.data.map((event) => (
+                    <tr key={event.id} className="hover:bg-slate-800/10">
+                      <td className="py-2 px-3 font-mono text-[10px] text-slate-400 truncate max-w-[120px]">{event.id}</td>
+                      <td className="py-2 px-3 font-medium text-slate-300">{event.eventType}</td>
+                      <td className="py-2 px-3">
+                        <Badge variant={event.processedAt && !event.errorMessage ? 'success' : event.errorMessage ? 'danger' : 'warning'}>
+                          {event.errorMessage ? 'Hata' : event.processedAt ? 'İşlendi' : 'Bekliyor'}
+                        </Badge>
+                      </td>
+                      <td className="py-2 px-3 text-slate-400">{formatDate(event.createdAt)}</td>
+                      <td className="py-2 px-3 text-slate-400">{event.processedAt ? formatDate(event.processedAt) : '-'}</td>
+                      <td className="py-2 px-3 text-red-400 max-w-[200px] truncate" title={event.errorMessage ?? ''}>
+                        {event.errorMessage ?? '-'}
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        {(event.errorMessage || !event.processedAt) && (
+                          <Button
+                            size="sm"
+                            onClick={() => replayWebhook.mutate(event.id)}
+                            loading={replayWebhook.isPending && replayWebhook.variables === event.id}
+                          >
+                            Yeniden İşle (Replay)
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          {webhooksData && webhooksData.meta.totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-slate-800 pt-3">
+              <div className="text-[11px] text-slate-500">Toplam {webhooksData.meta.total} kayıttan {webhooksData.data.length} tanesi gösteriliyor</div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={webhooksPage === 1} onClick={() => setWebhooksPage(p => p - 1)}>Önceki</Button>
+                <Button size="sm" variant="outline" disabled={webhooksPage === webhooksData.meta.totalPages} onClick={() => setWebhooksPage(p => p + 1)}>Sonraki</Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'drift' && (
+        <div className="space-y-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-500">
+                  <th className="py-2 px-3">Ürün</th>
+                  <th className="py-2 px-3">Barkod / Dış ID</th>
+                  <th className="py-2 px-3">Kanal</th>
+                  <th className="py-2 px-3 text-center">ERP Stok</th>
+                  <th className="py-2 px-3 text-center">Pazaryeri Stok</th>
+                  <th className="py-2 px-3 text-right">ERP Fiyat</th>
+                  <th className="py-2 px-3 text-right">Pazaryeri Fiyat</th>
+                  <th className="py-2 px-3 text-center">Durum</th>
+                  <th className="py-2 px-3 text-right">Aksiyon</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/40">
+                {isDriftLoading ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-slate-500">Yükleniyor...</td>
+                  </tr>
+                ) : !driftData?.length ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-slate-400">Harika! Hiçbir üründe stok veya fiyat uyuşmazlığı tespit edilmedi.</td>
+                  </tr>
+                ) : (
+                  driftData.map((item) => {
+                    const integration = healthItems.find(h => h.integration.name === item.integrationName)?.integration;
+                    return (
+                      <tr key={item.listingId} className="hover:bg-slate-800/10">
+                        <td className="py-2 px-3">
+                          <span className="text-white font-medium block">{item.productName}</span>
+                          <span className="text-[10px] text-slate-500 font-mono">{item.productCode}</span>
+                        </td>
+                        <td className="py-2 px-3 font-mono text-slate-300">{item.externalId}</td>
+                        <td className="py-2 px-3">
+                          <span className="text-slate-200">{item.integrationName}</span>
+                          <span className="text-[10px] text-slate-500 block">{item.channel}</span>
+                        </td>
+                        <td className="py-2 px-3 text-center font-mono text-slate-300">{item.erpStock}</td>
+                        <td className={`py-2 px-3 text-center font-mono ${item.hasStockDrift ? 'text-amber-400 font-semibold' : 'text-slate-400'}`}>
+                          {item.noSnapshot ? 'Yok (Gönderilmedi)' : item.marketplaceStock}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono text-slate-300">{formatCurrency(item.erpPrice)}</td>
+                        <td className={`py-2 px-3 text-right font-mono ${item.hasPriceDrift ? 'text-amber-400 font-semibold' : 'text-slate-400'}`}>
+                          {item.noSnapshot ? '-' : formatCurrency(item.marketplacePrice ?? 0)}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <div className="flex flex-col gap-1 items-center">
+                            {item.noSnapshot && <Badge variant="neutral">Kuyrukta Yok</Badge>}
+                            {item.hasStockDrift && <Badge variant="warning">Stok Uyuşmazlığı</Badge>}
+                            {item.hasPriceDrift && <Badge variant="warning">Fiyat Uyuşmazlığı</Badge>}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          {integration && (
+                            <Button
+                              size="sm"
+                              onClick={() => triggerSyncStock.mutate(integration.id)}
+                              loading={triggerSyncStock.isPending && triggerSyncStock.variables === integration.id}
+                            >
+                              Stok Eşitle
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

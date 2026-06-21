@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { resolveStockLevelLocationId, recordInventoryCosting } from '../services/inventory-rules.service';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -370,7 +371,7 @@ export const PurchaseOrderController = {
         });
 
         // Create stock movement (IN)
-        await tx.stockMovement.create({
+        const stockMovement = await tx.stockMovement.create({
           data: {
             tenantId, productId: orderItem.productId,
             type: 'IN', quantity: recv.receivedQty,
@@ -384,7 +385,7 @@ export const PurchaseOrderController = {
         const existingLevel = await tx.stockLevel.findFirst({
           where: { tenantId, productId: orderItem.productId, warehouseId: body.warehouseId },
         });
-        const locId = existingLevel?.locationId ?? '';
+        const locId = await resolveStockLevelLocationId(tx, tenantId, body.warehouseId, existingLevel?.locationId);
 
         await tx.stockLevel.upsert({
           where: {
@@ -400,6 +401,19 @@ export const PurchaseOrderController = {
             quantity: recv.receivedQty,
           },
           update: { quantity: { increment: recv.receivedQty } },
+        });
+
+        await recordInventoryCosting(tx, tenantId, {
+          movementId: stockMovement.id,
+          productId: orderItem.productId,
+          warehouseId: body.warehouseId,
+          type: 'IN',
+          quantity: recv.receivedQty,
+          previousQuantity: Number(existingLevel?.quantity ?? 0),
+          quantityChange: recv.receivedQty,
+          resultingQuantity: Number(existingLevel?.quantity ?? 0) + recv.receivedQty,
+          unitCost: Number(orderItem.unitPrice),
+          date: stockMovement.createdAt,
         });
       }
 

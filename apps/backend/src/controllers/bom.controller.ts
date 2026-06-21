@@ -57,7 +57,7 @@ export const BOMController = {
     const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{
-      productId: string; name: string; version?: string;
+      productId: string; name: string; version?: string; effectiveFrom?: string; effectiveTo?: string;
       items?: Array<{ productId: string; quantity: number; unit?: string; notes?: string }>;
     }>();
 
@@ -65,7 +65,7 @@ export const BOMController = {
 
     const bom = await prisma.bOM.create({
       data: {
-        tenantId, productId: body.productId, name: body.name, version: body.version ?? '1.0',
+        tenantId, productId: body.productId, name: body.name, version: body.version ?? '1.0', effectiveFrom: body.effectiveFrom ? new Date(body.effectiveFrom) : null, effectiveTo: body.effectiveTo ? new Date(body.effectiveTo) : null,
         ...(body.items?.length && {
           items: {
             create: body.items.map((item, i) => ({
@@ -87,13 +87,15 @@ export const BOMController = {
     const existing = await prisma.bOM.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('BOM', id).toJSON(), 404);
 
-    const body = await c.req.json<{ name?: string; version?: string; isActive?: boolean }>();
+    const body = await c.req.json<{ name?: string; version?: string; isActive?: boolean; effectiveFrom?: string | null; effectiveTo?: string | null }>();
     const updated = await prisma.bOM.update({
       where: { id },
       data: {
         ...(body.name !== undefined && { name: body.name }),
         ...(body.version !== undefined && { version: body.version }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
+        effectiveFrom: body.effectiveFrom === null ? null : (body.effectiveFrom !== undefined ? new Date(body.effectiveFrom) : undefined),
+        effectiveTo: body.effectiveTo === null ? null : (body.effectiveTo !== undefined ? new Date(body.effectiveTo) : undefined),
       },
     });
     return c.json({ data: updated });
