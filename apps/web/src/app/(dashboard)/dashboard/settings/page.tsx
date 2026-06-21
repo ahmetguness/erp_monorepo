@@ -41,6 +41,7 @@ const GROUPS: SettingsGroup[] = [
     items: [
       { href: '/dashboard/settings/general', icon: Settings, label: 'Genel Ayarlar', description: 'Şirket bilgileri ve yapılandırma', color: 'text-slate-300', bg: 'bg-slate-700/40', ring: 'group-hover:ring-slate-600/30' },
       { href: '/dashboard/settings/audit-log', icon: Shield, label: 'Denetim Kaydı', description: 'Tüm işlem geçmişi ve loglar', color: 'text-pink-400', bg: 'bg-pink-500/10', ring: 'group-hover:ring-pink-500/20' },
+      { href: '/dashboard/settings/domain-events', icon: Database, label: 'Domain Event Hatalari', description: 'Outbox failure ve dead-letter replay islemleri', color: 'text-amber-400', bg: 'bg-amber-500/10', ring: 'group-hover:ring-amber-500/20' },
     ],
   },
 ];

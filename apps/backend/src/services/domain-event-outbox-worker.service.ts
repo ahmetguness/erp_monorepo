@@ -12,6 +12,12 @@ import {
 
 const DEFAULT_BATCH_SIZE = 25;
 const DEFAULT_POLL_INTERVAL_MS = 10_000;
+const DEFAULT_PROCESSING_TIMEOUT_MS = 5 * 60_000;
+
+function readPositiveNumberEnv(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 interface StoredDomainEvent {
   id: string;
@@ -38,6 +44,7 @@ export interface DomainEventOutboxBatchResult {
   replayed: number;
   skipped: number;
   failed: number;
+  requeuedStale: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -316,6 +323,23 @@ export async function replayDomainEventOutbox(tenantId: string, id: string, incl
 }
 
 export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE): Promise<DomainEventOutboxBatchResult> {
+  const processingTimeoutMs = readPositiveNumberEnv(
+    process.env.DOMAIN_EVENT_OUTBOX_PROCESSING_TIMEOUT_MS,
+    DEFAULT_PROCESSING_TIMEOUT_MS,
+  );
+  const staleProcessingCutoff = new Date(Date.now() - processingTimeoutMs);
+  const staleProcessing = await prisma.domainEventOutbox.updateMany({
+    where: {
+      status: DomainEventOutboxStatus.PROCESSING,
+      updatedAt: { lte: staleProcessingCutoff },
+    },
+    data: {
+      status: DomainEventOutboxStatus.FAILED,
+      lastError: 'PROCESSING timeout sonrasi worker tarafindan tekrar kuyruga alindi.',
+      nextRetryAt: null,
+    },
+  });
+
   const dueEvents = await prisma.domainEventOutbox.findMany({
     where: {
       status: { in: [DomainEventOutboxStatus.PENDING, DomainEventOutboxStatus.FAILED] },
@@ -326,7 +350,13 @@ export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE):
     select: { id: true, tenantId: true },
   });
 
-  const result: DomainEventOutboxBatchResult = { claimed: dueEvents.length, replayed: 0, skipped: 0, failed: 0 };
+  const result: DomainEventOutboxBatchResult = {
+    claimed: dueEvents.length,
+    replayed: 0,
+    skipped: 0,
+    failed: 0,
+    requeuedStale: staleProcessing.count,
+  };
   for (const event of dueEvents) {
     try {
       const replay = await replayDomainEventOutbox(event.tenantId, event.id, false);
@@ -375,12 +405,13 @@ class DomainEventOutboxWorkerService {
     this.running = true;
     try {
       const result = await processDomainEventOutboxBatch();
-      if (result.claimed > 0) {
+      if (result.claimed > 0 || result.requeuedStale > 0) {
         logger.info('[DomainEventOutboxWorker] Batch processed', {
           claimed: result.claimed,
           replayed: result.replayed,
           skipped: result.skipped,
           failed: result.failed,
+          requeuedStale: result.requeuedStale,
         });
       }
       return result;

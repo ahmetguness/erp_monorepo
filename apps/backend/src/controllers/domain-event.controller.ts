@@ -10,14 +10,6 @@ import { prisma } from '../lib/prisma.js';
 import { replayDomainEventOutbox } from '../services/domain-event-outbox-worker.service.js';
 import { requireTenantId } from '../utils/context.js';
 
-interface DomainEventListQuery {
-  page?: string;
-  limit?: string;
-  status?: string;
-  name?: string;
-  entityId?: string;
-}
-
 const VALID_STATUSES: readonly string[] = Object.values(DomainEventOutboxStatus);
 
 function parsePositiveInt(value: string | undefined, fallback: number, max: number): number {
@@ -34,7 +26,7 @@ function parseStatus(value: string | undefined): DomainEventOutboxStatus | undef
 export const DomainEventController = {
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const query = c.req.query() as DomainEventListQuery;
+    const query = c.req.query();
     const page = parsePositiveInt(query.page, 1, 10_000);
     const pageSize = parsePositiveInt(query.limit, 20, 100);
     const status = parseStatus(query.status);
@@ -64,7 +56,7 @@ export const DomainEventController = {
 
   async failures(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const query = c.req.query() as DomainEventListQuery;
+    const query = c.req.query();
     const page = parsePositiveInt(query.page, 1, 10_000);
     const pageSize = parsePositiveInt(query.limit, 20, 100);
 

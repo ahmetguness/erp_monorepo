@@ -11,6 +11,11 @@ import {
 } from './events.js';
 
 const MAX_ATTEMPTS = 3;
+const CLAIMABLE_STATUSES = [
+  DomainEventOutboxStatus.PENDING,
+  DomainEventOutboxStatus.FAILED,
+  DomainEventOutboxStatus.DEAD_LETTER,
+];
 
 interface OutboxClaim {
   outboxId: string | null;
@@ -58,8 +63,12 @@ export async function claimDomainEvent(event: DomainEvent): Promise<OutboxClaim>
   }
 
   if (existing) {
-    await prisma.domainEventOutbox.updateMany({
-      where: { id: existing.id, tenantId: event.context.tenantId },
+    const claimed = await prisma.domainEventOutbox.updateMany({
+      where: {
+        id: existing.id,
+        tenantId: event.context.tenantId,
+        status: { in: CLAIMABLE_STATUSES },
+      },
       data: {
         status: DomainEventOutboxStatus.PROCESSING,
         attempts: { increment: 1 },
@@ -68,7 +77,7 @@ export async function claimDomainEvent(event: DomainEvent): Promise<OutboxClaim>
         nextRetryAt: null,
       },
     });
-    return { outboxId: existing.id, shouldDispatch: true };
+    return { outboxId: existing.id, shouldDispatch: claimed.count === 1 };
   }
 
   const created = await prisma.domainEventOutbox.create({
