@@ -19,6 +19,7 @@ import { openai } from '../lib/openai';
 import { BusinessRulesService } from '../services/business-rules.service.js';
 import { getRequestMeta } from '../utils/audit.js';
 import { AI_MODELS, AI_PROMPT_VERSIONS, recordAiRequestLog } from '../services/ai-governance.service';
+import { assertAiAllowed, buildPolicyContext } from '../services/ai/policy.service.js';
 import {
   isMailTemplateVariableKey,
   MailDraftTone,
@@ -401,6 +402,28 @@ export class MailController {
       body: fallback.body,
       usedAi: false,
     };
+    const aiDecision = await assertAiAllowed(prisma, tenantId);
+
+    if (!aiDecision.allowed) {
+      await recordAiRequestLog({
+        tenantId,
+        userId,
+        requestType: AiRequestType.MAIL_DRAFT,
+        promptVersion: AI_PROMPT_VERSIONS.MAIL_DRAFT,
+        model: AI_MODELS.MAIL_DRAFT,
+        entityContext: { templateId, variableKeys: Object.keys(variables), tone, hasAudience: Boolean(audience), ...buildPolicyContext(aiDecision.policy) },
+        permissionCheckResult: AiPermissionCheckResult.DENIED,
+        inputText: [templateId, notes, audience].filter((item): item is string => Boolean(item)).join(' '),
+        outputText: fallbackDraft.body,
+        draft: fallbackDraft,
+        result: { fallbackReason: aiDecision.reason },
+        status: AiRequestStatus.FALLBACK,
+        policy: aiDecision.policy,
+        ipAddress: requestMeta.ipAddress,
+        userAgent: requestMeta.userAgent,
+      });
+      return c.json({ data: fallbackDraft });
+    }
 
     if (!process.env.OPENAI_API_KEY) {
       await recordAiRequestLog({
@@ -409,12 +432,13 @@ export class MailController {
         requestType: AiRequestType.MAIL_DRAFT,
         promptVersion: AI_PROMPT_VERSIONS.MAIL_DRAFT,
         model: AI_MODELS.MAIL_DRAFT,
-        entityContext: { templateId, variableKeys: Object.keys(variables), tone, hasAudience: Boolean(audience) },
+        entityContext: { templateId, variableKeys: Object.keys(variables), tone, hasAudience: Boolean(audience), ...buildPolicyContext(aiDecision.policy) },
         permissionCheckResult: AiPermissionCheckResult.ALLOWED,
         inputText: [templateId, notes, audience].filter((item): item is string => Boolean(item)).join(' '),
         outputText: fallbackDraft.body,
         draft: fallbackDraft,
         status: AiRequestStatus.FALLBACK,
+        policy: aiDecision.policy,
         ipAddress: requestMeta.ipAddress,
         userAgent: requestMeta.userAgent,
       });
@@ -464,7 +488,7 @@ export class MailController {
         requestType: AiRequestType.MAIL_DRAFT,
         promptVersion: AI_PROMPT_VERSIONS.MAIL_DRAFT,
         model: AI_MODELS.MAIL_DRAFT,
-        entityContext: { templateId, variableKeys: Object.keys(variables), tone, hasAudience: Boolean(audience) },
+        entityContext: { templateId, variableKeys: Object.keys(variables), tone, hasAudience: Boolean(audience), ...buildPolicyContext(aiDecision.policy) },
         permissionCheckResult: AiPermissionCheckResult.ALLOWED,
         inputText: [templateId, notes, audience, variableLines].filter((item): item is string => Boolean(item)).join(' '),
         outputText: draft.body,
@@ -475,6 +499,7 @@ export class MailController {
           completion: completion.usage?.completion_tokens ?? null,
           total: completion.usage?.total_tokens ?? null,
         },
+        policy: aiDecision.policy,
         ipAddress: requestMeta.ipAddress,
         userAgent: requestMeta.userAgent,
       });
@@ -486,12 +511,13 @@ export class MailController {
         requestType: AiRequestType.MAIL_DRAFT,
         promptVersion: AI_PROMPT_VERSIONS.MAIL_DRAFT,
         model: AI_MODELS.MAIL_DRAFT,
-        entityContext: { templateId, variableKeys: Object.keys(variables), tone, hasAudience: Boolean(audience) },
+        entityContext: { templateId, variableKeys: Object.keys(variables), tone, hasAudience: Boolean(audience), ...buildPolicyContext(aiDecision.policy) },
         permissionCheckResult: AiPermissionCheckResult.ALLOWED,
         inputText: [templateId, notes, audience, variableLines].filter((item): item is string => Boolean(item)).join(' '),
         outputText: fallbackDraft.body,
         draft: fallbackDraft,
         status: AiRequestStatus.FALLBACK,
+        policy: aiDecision.policy,
         errorMessage: err instanceof Error ? err.message : String(err),
         ipAddress: requestMeta.ipAddress,
         userAgent: requestMeta.userAgent,

@@ -142,6 +142,20 @@ const paymentFormSchema = z
   });
 
 type PaymentFormValues = z.infer<typeof paymentFormSchema>;
+const PAYMENT_FORM_SERVER_FIELDS = [
+  "direction",
+  "contactId",
+  "invoiceId",
+  "accountType",
+  "cashAccountId",
+  "bankAccountId",
+  "method",
+  "date",
+  "amount",
+  "allocationAmount",
+  "reference",
+  "notes",
+] as const satisfies readonly (keyof PaymentFormValues)[];
 type AccountType = PaymentFormValues["accountType"];
 
 function getInitialDirection(type: string | null): PaymentDirection {
@@ -298,7 +312,7 @@ export function PaymentFormPage() {
     createPayment.mutate(payload, {
       onSuccess: () => router.push("/dashboard/payments"),
       onError: (error) => {
-        applyServerFieldErrors<PaymentFormValues>(error, setError);
+        applyServerFieldErrors<PaymentFormValues>(error, setError, PAYMENT_FORM_SERVER_FIELDS);
       },
     });
   };

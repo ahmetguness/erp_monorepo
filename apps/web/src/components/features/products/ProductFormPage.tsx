@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import {
   ArrowLeft,
   Package,
@@ -55,28 +54,21 @@ import {
   type Attachment,
 } from "@/services/attachment.service";
 import { useUIStore } from "@/store/ui.store";
+import {
+  applyServerFieldErrors,
+  isSubmitLocked,
+  parseQuantityInput,
+  useDirtyStateWarning,
+} from "@/lib/form-standard";
 import { cn, formatCurrency } from "@/lib/utils";
-
-// ─────────────────────────────────────────────
-// Schema
-// ─────────────────────────────────────────────
-
-const productSchema = z.object({
-  code: z.string().min(1, "Kod zorunludur"),
-  name: z.string().min(1, "Ad zorunludur"),
-  unitId: z.string().min(1, "Birim seçiniz"),
-  categoryId: z.string().optional(),
-  taxRateId: z.string().optional(),
-  barcode: z.string().optional(),
-  description: z.string().optional(),
-  purchasePrice: z.string().optional(),
-  salesPrice: z.string().optional(),
-  minStockLevel: z.string().optional(),
-  initialStock: z.string().optional(),
-  warehouseId: z.string().optional(),
-});
-
-type ProductForm = z.infer<typeof productSchema>;
+import {
+  PRODUCT_FORM_DEFAULT_VALUES,
+  PRODUCT_FORM_SERVER_FIELDS,
+  productToFormDefaults,
+  productSchema,
+  toProductPayload,
+  type ProductForm,
+} from "./product-form/schema";
 
 function isImageAttachment(attachment: Attachment): boolean {
   return attachment.mimeType?.startsWith("image/") ?? false;
@@ -317,14 +309,16 @@ export function ProductFormPage({ editId }: Props) {
     handleSubmit,
     reset,
     setValue,
+    setError,
     control,
-    formState: { errors },
+    formState: { errors, isDirty, isSubmitting },
   } = useForm<ProductForm>({
     resolver: zodResolver(productSchema),
-    defaultValues: { purchasePrice: "0", salesPrice: "0", minStockLevel: "0" },
+    defaultValues: PRODUCT_FORM_DEFAULT_VALUES,
   });
 
   const watchAll = useWatch({ control });
+  useDirtyStateWarning(isDirty && !createProduct.isSuccess && !updateProduct.isSuccess);
 
   // Section completion checks
   const step1Done = !!(watchAll.code && watchAll.name && watchAll.unitId);
@@ -445,34 +439,13 @@ export function ProductFormPage({ editId }: Props) {
 
   useEffect(() => {
     if (existing) {
-      reset({
-        code: existing.code,
-        name: existing.name,
-        unitId: existing.unitId,
-        categoryId: existing.categoryId ?? "",
-        taxRateId: existing.taxRateId ?? "",
-        barcode: existing.barcode ?? "",
-        description: existing.description ?? "",
-        purchasePrice: String(existing.purchasePrice),
-        salesPrice: String(existing.salesPrice),
-        minStockLevel: String(existing.minStockLevel),
-      });
+      reset(productToFormDefaults(existing));
     }
   }, [existing, reset]);
 
   const onSubmit = async (data: ProductForm) => {
-    const payload = {
-      code: data.code,
-      name: data.name,
-      unitId: data.unitId,
-      categoryId: data.categoryId || undefined,
-      taxRateId: data.taxRateId || undefined,
-      barcode: data.barcode || undefined,
-      description: data.description || undefined,
-      purchasePrice: data.purchasePrice ? Number(data.purchasePrice) : 0,
-      salesPrice: data.salesPrice ? Number(data.salesPrice) : 0,
-      minStockLevel: data.minStockLevel ? Number(data.minStockLevel) : 0,
-    };
+    if (isSubmitLocked(isSubmitting, createProduct.isPending || updateProduct.isPending)) return;
+    const payload = toProductPayload(data);
 
     if (isEdit) {
       updateProduct.mutate(payload, {
@@ -492,6 +465,9 @@ export function ProductFormPage({ editId }: Props) {
           }
           router.push(`/dashboard/products/${editId}`);
         },
+        onError: (error) => {
+          applyServerFieldErrors<ProductForm>(error, setError, PRODUCT_FORM_SERVER_FIELDS);
+        },
       });
     } else {
       createProduct.mutate(payload, {
@@ -505,7 +481,7 @@ export function ProductFormPage({ editId }: Props) {
               toast.warning("Ürün oluşturuldu ama görsel yüklenemedi.");
             }
           }
-          const qty = Number(data.initialStock);
+          const qty = parseQuantityInput(data.initialStock);
           const wId = data.warehouseId;
           if (qty > 0 && wId) {
             try {
@@ -524,6 +500,9 @@ export function ProductFormPage({ editId }: Props) {
           }
           router.push(`/dashboard/products/${p.id}`);
         },
+        onError: (error) => {
+          applyServerFieldErrors<ProductForm>(error, setError, PRODUCT_FORM_SERVER_FIELDS);
+        },
       });
     }
   };
@@ -532,7 +511,7 @@ export function ProductFormPage({ editId }: Props) {
 
   const isImageBusy = imageStatus === "uploading" || imageStatus === "removing";
   const isPending =
-    createProduct.isPending || updateProduct.isPending || isImageBusy;
+    isSubmitting || createProduct.isPending || updateProduct.isPending || isImageBusy;
   const errorCount = Object.keys(errors).length;
 
   return (

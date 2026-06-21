@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import type { FieldValues, Path, UseFormSetError } from 'react-hook-form';
 import { z } from 'zod';
-import { isApiError } from '@/types/api.types';
+import { AxiosError } from 'axios';
+import { ApiErrorSchema } from '@/types/api.types';
 
 const NUMBER_NORMALIZATION_PATTERN = /[^0-9,.-]/g;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -18,6 +19,10 @@ export function parseDecimalInput(value: string | number | null | undefined): nu
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+export const parseMoneyInput = parseDecimalInput;
+export const parseQuantityInput = parseDecimalInput;
+export const parsePercentageInput = parseDecimalInput;
+
 export function parseOptionalDecimalInput(value: string | number | null | undefined): number | undefined {
   if (value === null || value === undefined || value === '') return undefined;
   return parseDecimalInput(value);
@@ -26,6 +31,31 @@ export function parseOptionalDecimalInput(value: string | number | null | undefi
 export function optionalText(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+export function dateToFormValue(value: string | Date | null | undefined): string {
+  if (!value) return '';
+  if (value instanceof Date) return value.toISOString().split('T')[0] ?? '';
+  return value.split('T')[0] ?? '';
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every((item) => typeof item === 'string')
+  );
+}
+
+export function getServerFieldErrors(error: unknown): Record<string, string> {
+  const payload = error instanceof AxiosError ? error.response?.data : error;
+  const parsed = ApiErrorSchema.safeParse(payload);
+  if (!parsed.success) return {};
+
+  if (parsed.data.error.fields) return parsed.data.error.fields;
+  if (isStringRecord(parsed.data.error.details)) return parsed.data.error.details;
+  return {};
 }
 
 export const requiredDateString = (message = 'Tarih zorunlu') =>
@@ -56,13 +86,20 @@ export const optionalPercentString = (message = 'Oran 0 ile 100 arasında olmal�
 export function applyServerFieldErrors<TFieldValues extends FieldValues>(
   error: unknown,
   setError: UseFormSetError<TFieldValues>,
+  fields: readonly Path<TFieldValues>[],
 ): boolean {
-  if (!isApiError(error) || !error.error.fields) return false;
+  const fieldErrors = getServerFieldErrors(error);
+  if (Object.keys(fieldErrors).length === 0) return false;
 
-  for (const [field, message] of Object.entries(error.error.fields)) {
-    setError(field as Path<TFieldValues>, { type: 'server', message });
+  let applied = false;
+  for (const field of fields) {
+    const message = fieldErrors[field];
+    if (message) {
+      setError(field, { type: 'server', message });
+      applied = true;
+    }
   }
-  return true;
+  return applied;
 }
 
 export function useDirtyStateWarning(isDirty: boolean, message = 'Kaydedilmemiş değişiklikler var. Sayfadan ayrılmak istiyor musunuz?') {

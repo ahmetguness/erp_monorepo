@@ -2,6 +2,7 @@ import { AiPermissionCheckResult, AiRequestStatus, AiRequestType, EntityType, Pr
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { sanitizeOutput } from '../lib/output-sanitizer';
+import type { AiGovernancePolicy } from './ai/policy.service.js';
 
 export const AI_PROMPT_VERSIONS = {
   PRIVATE_CHAT: 'private-chat:v2',
@@ -38,6 +39,7 @@ export interface AiGovernanceLogInput {
   draft?: unknown;
   result?: unknown;
   userApprovedAction?: string | null;
+  policy?: AiGovernancePolicy;
   status: AiRequestStatus;
   usedTools?: boolean;
   tokenUsage?: AiTokenUsage;
@@ -58,6 +60,7 @@ export interface AiGovernanceListParams {
 
 const MAX_SUMMARY_LENGTH = 700;
 const MAX_ERROR_LENGTH = 500;
+const ESTIMATED_USD_PER_1K_TOKENS = 0.0003;
 
 function compactText(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -86,6 +89,27 @@ function toJsonValue(value: unknown): Prisma.InputJsonValue | undefined {
     return Object.fromEntries(entries) as Prisma.InputJsonObject;
   }
   return String(value);
+}
+
+function estimateCostUsd(tokenUsage: AiTokenUsage | undefined): number | null {
+  const total = tokenUsage?.total;
+  if (typeof total !== 'number' || total <= 0) return null;
+  return Number(((total / 1000) * ESTIMATED_USD_PER_1K_TOKENS).toFixed(6));
+}
+
+function buildGovernanceResult(input: AiGovernanceLogInput): Prisma.InputJsonValue | undefined {
+  const result = toJsonValue(input.result);
+  const tokenCost = estimateCostUsd(input.tokenUsage);
+  const governanceMeta: Prisma.InputJsonObject = {
+    tokenCostEstimateUsd: tokenCost,
+    policy: input.policy ? toJsonValue(input.policy) ?? null : null,
+  };
+
+  if (result === undefined) return governanceMeta;
+  if (typeof result === 'object' && result !== null && !Array.isArray(result)) {
+    return { ...result, governance: governanceMeta };
+  }
+  return { value: result, governance: governanceMeta };
 }
 
 function redactSummary(text: string | null | undefined, isPublic: boolean): { summary: string | null; fields: string[] } {
@@ -139,7 +163,7 @@ export async function recordAiRequestLog(input: AiGovernanceLogInput): Promise<v
         inputSummary: inputSummary.summary,
         outputSummary: outputSummary.summary,
         draft: toJsonValue(input.draft),
-        result: toJsonValue(input.result),
+        result: buildGovernanceResult(input),
         userApprovedAction: input.userApprovedAction ?? null,
         status: input.status,
         usedTools: input.usedTools ?? false,
@@ -182,10 +206,13 @@ export async function listAiRequestLogs(params: AiGovernanceListParams) {
         model: true,
         entityType: true,
         entityId: true,
+        entityContext: true,
         permissionCheckResult: true,
         redactedFields: true,
         inputSummary: true,
         outputSummary: true,
+        draft: true,
+        result: true,
         userApprovedAction: true,
         status: true,
         usedTools: true,

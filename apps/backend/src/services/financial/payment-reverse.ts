@@ -52,13 +52,14 @@ export async function reversePayment(db: PrismaClient, input: ReversePaymentInpu
     });
 
     // 2. Payment → CANCELLED
-    await tx.payment.update({
-      where: { id: input.paymentId },
+    const updateResult = await tx.payment.updateMany({
+      where: { id: input.paymentId, tenantId: input.tenantId },
       data: {
         status: PaymentStatus.CANCELLED,
         notes: input.reason,
       },
     });
+    if (updateResult.count !== 1) throw new NotFoundError('Ödeme', input.paymentId);
 
     // 3. AccountEntry ters kaydı (sadece cari bağlıysa)
     if (payment.contactId) {

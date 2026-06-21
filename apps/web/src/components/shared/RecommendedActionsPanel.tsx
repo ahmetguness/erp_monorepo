@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useCurrentUser } from '@/hooks/useAuth';
+import { useRecordAiActionAudit } from '@/hooks/useIntelligence';
 import { useSendMail } from '@/hooks/useMail';
 import { useCreateTask } from '@/hooks/useWorkflow';
 import type { AuditEntityType } from '@/services/audit-log.service';
@@ -125,6 +126,7 @@ export function RecommendedActionsPanel({ actions }: RecommendedActionsPanelProp
   const { user } = useCurrentUser();
   const sendMail = useSendMail();
   const createTask = useCreateTask();
+  const recordActionAudit = useRecordAiActionAudit();
 
   const selected = useMemo(
     () => actions.find((action) => action.id === selectedId) ?? null,
@@ -139,12 +141,52 @@ export function RecommendedActionsPanel({ actions }: RecommendedActionsPanelProp
 
     try {
       if (selected.kind === 'mail') {
-        await sendMail.mutateAsync({
+        const result = await sendMail.mutateAsync({
           ...buildMailPayload(selected),
           ...(!selected.draft.replyTo && user?.email && { replyTo: user.email }),
         });
+        recordActionAudit.mutate({
+          actionId: selected.id,
+          actionType: selected.kind,
+          module: selected.module,
+          entityType: selected.entityType,
+          entityId: selected.entityId,
+          summary: selected.summary,
+          resultSummary: result.success ? 'Mail gonderildi.' : result.error ?? 'Mail gonderimi tamamlanamadi.',
+          draft: {
+            to: selected.draft.to,
+            subject: selected.draft.subject,
+            hasReplyTo: Boolean(selected.draft.replyTo || user?.email),
+          },
+          mutationResult: {
+            success: result.success,
+            id: result.id ?? null,
+            error: result.error ?? null,
+          },
+          status: result.success ? 'SUCCEEDED' : 'FAILED',
+        });
       } else {
-        await createTask.mutateAsync(buildTaskPayload(selected));
+        const result = await createTask.mutateAsync(buildTaskPayload(selected));
+        recordActionAudit.mutate({
+          actionId: selected.id,
+          actionType: selected.kind,
+          module: selected.module,
+          entityType: selected.entityType,
+          entityId: selected.entityId,
+          summary: selected.summary,
+          resultSummary: `Gorev olusturuldu: ${result.title}`,
+          draft: {
+            title: selected.draft.title,
+            type: selected.draft.type,
+            dueAt: selected.draft.dueAt ?? null,
+          },
+          mutationResult: {
+            id: result.id,
+            status: result.status,
+            href: result.href,
+          },
+          status: 'SUCCEEDED',
+        });
       }
     } catch {
       return;

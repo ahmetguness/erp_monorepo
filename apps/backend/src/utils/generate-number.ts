@@ -12,6 +12,38 @@ export type DocumentModelName =
   | 'stockCount' 
   | 'workOrder';
 
+async function documentNumberExists(
+  tenantId: string,
+  number: string,
+  modelName: DocumentModelName,
+): Promise<boolean> {
+  const where = { tenantId, number };
+  const select = { id: true } as const;
+
+  switch (modelName) {
+    case 'invoice':
+      return Boolean(await prisma.invoice.findFirst({ where, select }));
+    case 'salesOrder':
+      return Boolean(await prisma.salesOrder.findFirst({ where, select }));
+    case 'salesQuote':
+      return Boolean(await prisma.salesQuote.findFirst({ where, select }));
+    case 'purchaseOrder':
+      return Boolean(await prisma.purchaseOrder.findFirst({ where, select }));
+    case 'purchaseRequest':
+      return Boolean(await prisma.purchaseRequest.findFirst({ where, select }));
+    case 'journalEntry':
+      return Boolean(await prisma.journalEntry.findFirst({ where, select }));
+    case 'deliveryNote':
+      return Boolean(await prisma.deliveryNote.findFirst({ where, select }));
+    case 'serviceRequest':
+      return Boolean(await prisma.serviceRequest.findFirst({ where, select }));
+    case 'stockCount':
+      return Boolean(await prisma.stockCount.findFirst({ where, select }));
+    case 'workOrder':
+      return Boolean(await prisma.workOrder.findFirst({ where, select }));
+  }
+}
+
 /**
  * Benzersiz belge numarası üretir.
  * NumberSequence tablosunu kullanır, çakışma durumunda retry yapar.
@@ -39,16 +71,7 @@ export async function generateDocumentNumber(
 
     const candidate = `${seq.prefix}${String(seq.lastNum).padStart(seq.padding, '0')}`;
 
-    const delegate = prisma[modelName] as unknown as {
-      findFirst: (args: { where: { tenantId: string; number: string }; select: { id: true } }) => Promise<{ id: string } | null>;
-    };
-
-    const exists = await delegate.findFirst({
-      where: { tenantId, number: candidate },
-      select: { id: true }
-    });
-
-    if (!exists) return candidate;
+    if (!(await documentNumberExists(tenantId, candidate, modelName))) return candidate;
 
     // Çakışma var — loop devam edecek, sequence bir daha artacak
   }

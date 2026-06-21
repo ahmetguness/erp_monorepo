@@ -10,6 +10,7 @@ import { CHAT_ENTITY_TYPES, type ChatEntityType, type ChatPageContext, type Chat
 import { requireTenantId } from '../utils/context.js';
 import { getRequestMeta } from '../utils/audit.js';
 import { AI_MODELS, AI_PROMPT_VERSIONS, mapAiEntityType, recordAiRequestLog } from '../services/ai-governance.service';
+import { assertAiAllowed, buildPolicyContext, type AiGovernancePolicy } from '../services/ai/policy.service.js';
 
 // ─────────────────────────────────────────────
 // Config
@@ -130,7 +131,7 @@ async function checkChatRateLimit(userId: string, plan: Plan): Promise<{ allowed
 
 async function validateChatRequest(c: Context): Promise<
   | { error: Response }
-  | { userId: string; tenantId: string; user: { name: string; isActive: boolean }; tenant: { companyName: string; plan: Plan; status: string; modules: string[] }; message: string; permissions: UserPermissions; context?: ChatPageContext }
+  | { userId: string; tenantId: string; user: { name: string; isActive: boolean }; tenant: { companyName: string; plan: Plan; status: string; modules: string[] }; message: string; permissions: UserPermissions; context?: ChatPageContext; policy: AiGovernancePolicy }
 > {
   if (!OPENAI_API_KEY) {
     return { error: c.json({ error: 'Chatbot yapılandırılmamış.' }, 503) };
@@ -174,15 +175,38 @@ async function validateChatRequest(c: Context): Promise<
     return { error: c.json(new ValidationError(`Mesaj en fazla ${MAX_MESSAGE_LENGTH} karakter olabilir.`).toJSON(), 400) };
   }
 
+  const context = parseChatPageContext(isRecord(body) ? body.context : undefined);
+
+  const aiDecision = await assertAiAllowed(prisma, tenantId);
+  if (!aiDecision.allowed) {
+    const requestMeta = getRequestMeta(c);
+    await recordAiRequestLog({
+      tenantId,
+      userId,
+      requestType: AiRequestType.PRIVATE_CHAT,
+      promptVersion: AI_PROMPT_VERSIONS.PRIVATE_CHAT,
+      model: AI_MODELS.CHAT,
+      entityType: mapAiEntityType(context?.entityType),
+      entityId: context?.entityId ?? null,
+      entityContext: context ? { ...buildPolicyContext(aiDecision.policy), path: context.path } : buildPolicyContext(aiDecision.policy),
+      permissionCheckResult: AiPermissionCheckResult.DENIED,
+      inputText: message,
+      status: AiRequestStatus.FAILED,
+      errorMessage: aiDecision.reason,
+      policy: aiDecision.policy,
+      ipAddress: requestMeta.ipAddress,
+      userAgent: requestMeta.userAgent,
+    });
+    return { error: c.json({ error: 'AI asistan bu tenant icin kapali.' }, 403) };
+  }
+
   // Kullanıcı izinlerini derle
   const permissions: UserPermissions = {
     isOwner: tenantUser?.isOwner ?? false,
     modules: tenantUser?.roleRef?.permissions.map((p) => ({ module: p.module, action: p.action })) ?? [],
   };
 
-  const context = parseChatPageContext(isRecord(body) ? body.context : undefined);
-
-  return { userId, tenantId, user, tenant, message, permissions, context };
+  return { userId, tenantId, user, tenant, message, permissions, context, policy: aiDecision.policy };
 }
 
 // ─────────────────────────────────────────────
@@ -230,7 +254,7 @@ export const ChatController = {
         model: result.governance.model,
         entityType: mapAiEntityType(v.context?.entityType),
         entityId: v.context?.entityId ?? null,
-        entityContext: result.governance.entityContext,
+        entityContext: { ...result.governance.entityContext, ...buildPolicyContext(v.policy) },
         permissionCheckResult: toAiPermissionResult(result.governance.permissionCheckResult),
         redactedFields: sanitized.maskedTypes,
         inputText: v.message,
@@ -238,6 +262,7 @@ export const ChatController = {
         status: AiRequestStatus.SUCCEEDED,
         usedTools: result.usedTools,
         tokenUsage: result.governance.tokenUsage,
+        policy: v.policy,
         ipAddress: requestMeta.ipAddress,
         userAgent: requestMeta.userAgent,
       });
@@ -256,11 +281,12 @@ export const ChatController = {
         entityId: v.context?.entityId ?? null,
         entityContext: v.context
           ? { path: v.context.path, entityType: v.context.entityType ?? null, entityId: v.context.entityId ?? null }
-          : undefined,
+          : buildPolicyContext(v.policy),
         permissionCheckResult: AiPermissionCheckResult.PARTIAL,
         inputText: v.message,
         status: AiRequestStatus.FAILED,
         errorMessage: errMsg,
+        policy: v.policy,
         ipAddress: requestMeta.ipAddress,
         userAgent: requestMeta.userAgent,
       });
@@ -326,14 +352,16 @@ export const ChatController = {
                       entityType: v.context.entityType ?? null,
                       entityId: v.context.entityId ?? null,
                       recentRecordCount: v.context.recentRecords.length,
+                      ...buildPolicyContext(v.policy),
                     }
-                  : undefined,
+                  : buildPolicyContext(v.policy),
                 permissionCheckResult: AiPermissionCheckResult.ALLOWED,
                 redactedFields: sanitized.maskedTypes,
                 inputText: v.message,
                 outputText: finalOutput,
                 status: AiRequestStatus.SUCCEEDED,
                 usedTools,
+                policy: v.policy,
                 ipAddress: requestMeta.ipAddress,
                 userAgent: requestMeta.userAgent,
               });
@@ -353,6 +381,7 @@ export const ChatController = {
                 inputText: v.message,
                 status: AiRequestStatus.FAILED,
                 errorMessage: String(error),
+                policy: v.policy,
                 ipAddress: requestMeta.ipAddress,
                 userAgent: requestMeta.userAgent,
               });
@@ -375,6 +404,7 @@ export const ChatController = {
           inputText: v.message,
           status: AiRequestStatus.FAILED,
           errorMessage: errMsg,
+          policy: v.policy,
           ipAddress: requestMeta.ipAddress,
           userAgent: requestMeta.userAgent,
         });

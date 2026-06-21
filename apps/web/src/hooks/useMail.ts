@@ -25,6 +25,7 @@ import {
   type GenericNotificationMailDTO,
   type InvoiceNotificationMailDTO,
   type ListMailParams,
+  type MailResult,
   type PasswordResetMailDTO,
   type AiMailDraft,
   type RenderMailTemplateDTO,
@@ -73,7 +74,7 @@ export function useMailTemplates() {
 }
 
 export function useSendMail() {
-  return useMailMutation<SendMailDTO>(sendMail, 'Mail gönderildi.');
+  return useMailMutation<SendMailDTO, MailResult>(sendMail, 'Mail gönderildi.');
 }
 
 export function useSendBulkMail() {

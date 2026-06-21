@@ -328,17 +328,25 @@ export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE):
     DEFAULT_PROCESSING_TIMEOUT_MS,
   );
   const staleProcessingCutoff = new Date(Date.now() - processingTimeoutMs);
-  const staleProcessing = await prisma.domainEventOutbox.updateMany({
+  const staleProcessingEvents = await prisma.domainEventOutbox.findMany({
     where: {
       status: DomainEventOutboxStatus.PROCESSING,
       updatedAt: { lte: staleProcessingCutoff },
     },
-    data: {
-      status: DomainEventOutboxStatus.FAILED,
-      lastError: 'PROCESSING timeout sonrasi worker tarafindan tekrar kuyruga alindi.',
-      nextRetryAt: null,
-    },
+    select: { id: true, tenantId: true },
   });
+  let requeuedStale = 0;
+  for (const event of staleProcessingEvents) {
+    const staleProcessing = await prisma.domainEventOutbox.updateMany({
+      where: { id: event.id, tenantId: event.tenantId },
+      data: {
+        status: DomainEventOutboxStatus.FAILED,
+        lastError: 'PROCESSING timeout sonrasi worker tarafindan tekrar kuyruga alindi.',
+        nextRetryAt: null,
+      },
+    });
+    requeuedStale += staleProcessing.count;
+  }
 
   const dueEvents = await prisma.domainEventOutbox.findMany({
     where: {
@@ -355,7 +363,7 @@ export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE):
     replayed: 0,
     skipped: 0,
     failed: 0,
-    requeuedStale: staleProcessing.count,
+    requeuedStale,
   };
   for (const event of dueEvents) {
     try {

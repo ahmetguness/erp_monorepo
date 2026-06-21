@@ -61,6 +61,7 @@ const invoiceSchema = z.object({
 });
 
 type InvoiceForm = z.infer<typeof invoiceSchema>;
+const INVOICE_FORM_SERVER_FIELDS = ['contactId', 'type', 'date', 'dueDate', 'notes', 'lines'] as const satisfies readonly (keyof InvoiceForm)[];
 
 function addDaysString(dateValue: string, days: number): string {
   const date = new Date(dateValue);
@@ -181,7 +182,7 @@ export function InvoiceFormPage() {
     }, {
       onSuccess: (inv) => router.push(`/dashboard/invoices/${inv.id}`),
       onError: (error) => {
-        applyServerFieldErrors<InvoiceForm>(error, setError);
+        applyServerFieldErrors<InvoiceForm>(error, setError, INVOICE_FORM_SERVER_FIELDS);
       },
     });
   };

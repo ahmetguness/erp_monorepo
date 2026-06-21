@@ -248,10 +248,11 @@ export const WorkOrderController = {
     }> = [];
 
     const updated = await prisma.$transaction(async (tx) => {
-      const result = await tx.workOrder.update({
-        where: { id },
+      const updateResult = await tx.workOrder.updateMany({
+        where: { id, tenantId },
         data: { status: body.status },
       });
+      if (updateResult.count !== 1) throw new NotFoundError('İş Emri', id);
       await tx.workOrderHistory.create({
         data: { tenantId, workOrderId: id, fromStatus: wo.status, toStatus: body.status, notes: body.notes ?? null, createdById: userId },
       });
@@ -375,6 +376,8 @@ export const WorkOrderController = {
           await postProductionAccountingEntry(tx, tenantId, id, userId);
         }
       }
+      const result = await tx.workOrder.findFirst({ where: { id, tenantId } });
+      if (!result) throw new NotFoundError('İş Emri', id);
       return result;
     });
 
@@ -516,8 +519,8 @@ export const WorkOrderController = {
       }
 
       // Update producedQty and costing fields
-      await tx.workOrder.update({
-        where: { id },
+      const updateResult = await tx.workOrder.updateMany({
+        where: { id, tenantId },
         data: {
           producedQty: { increment: body.producedQty },
           actualMaterialCost: { increment: consumedCost },
@@ -530,6 +533,7 @@ export const WorkOrderController = {
           })
         },
       });
+      if (updateResult.count !== 1) throw new NotFoundError('İş Emri', id);
 
       if (body.operationId) {
         await tx.workOrderOperation.updateMany({

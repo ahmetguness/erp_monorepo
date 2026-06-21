@@ -46,6 +46,7 @@ import {
   UploadCloud,
   Mail,
   FolderOpen,
+  Bot,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -223,6 +224,16 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Ayarlar',
-    items: [{ label: 'Ayarlar', href: '/dashboard/settings', icon: Settings }],
+    items: [
+      {
+        label: 'Ayarlar',
+        href: '/dashboard/settings',
+        icon: Settings,
+        children: [
+          { label: 'Genel Ayarlar', href: '/dashboard/settings', icon: Settings },
+          { label: 'AI Governance', href: '/dashboard/settings/ai-governance', icon: Bot, plan: 'ENTERPRISE' },
+        ],
+      },
+    ],
   },
 ];

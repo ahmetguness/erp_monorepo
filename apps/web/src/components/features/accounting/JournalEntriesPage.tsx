@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { z } from "zod";
 import {
   Plus,
   Trash2,
@@ -20,13 +19,9 @@ import {
   Scale,
   Check,
   AlertCircle,
-  CheckCircle,
-  Pencil,
-  RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
 import { FeaturePageShell } from "@/components/shared/FeaturePageShell";
-import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -42,29 +37,32 @@ import {
   updateJournalEntry,
   reverseJournalEntry,
 } from "@/services/accounting.service";
-import { cn, formatDate, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
+import {
+  applyServerFieldErrors,
+  isSubmitLocked,
+  useDirtyStateWarning,
+} from "@/lib/form-standard";
 import { useUIStore } from "@/store/ui.store";
 import { getErrorMessage } from "@/types/api.types";
 import type { JournalEntry } from "@/services/accounting.service";
-
-// ─────────────────────────────────────────────
-// Schema
-// ─────────────────────────────────────────────
-
-const lineSchema = z.object({
-  accountId: z.string().min(1, "Hesap seçiniz"),
-  debit: z.string(),
-  credit: z.string(),
-  description: z.string().optional(),
-});
-
-const entrySchema = z.object({
-  date: z.string().min(1, "Tarih zorunludur"),
-  description: z.string().optional(),
-  lines: z.array(lineSchema).min(2, "En az 2 satır gereklidir"),
-});
-
-type EntryForm = z.infer<typeof entrySchema>;
+import {
+  JournalEntryStatusFilters,
+  filterJournalEntries,
+} from "./journal-entries/JournalEntryStatusFilters";
+import {
+  JournalEntryTable,
+  createJournalEntryColumns,
+} from "./journal-entries/columns";
+import {
+  JOURNAL_ENTRY_FORM_DEFAULT_VALUES,
+  JOURNAL_ENTRY_SERVER_FIELDS,
+  journalEntryToFormDefaults,
+  journalEntrySchema,
+  toJournalEntryPayload,
+  type JournalEntryForm,
+  type JournalEntryStatusFilter,
+} from "./journal-entries/schema";
 
 // ─────────────────────────────────────────────
 // Component
@@ -143,21 +141,17 @@ export function JournalEntriesPage() {
     control,
     setValue,
     reset,
-    formState: { errors },
-  } = useForm<EntryForm>({
-    resolver: zodResolver(entrySchema),
-    defaultValues: {
-      date: new Date().toISOString().split("T")[0],
-      lines: [
-        { accountId: "", debit: "0", credit: "0" },
-        { accountId: "", debit: "0", credit: "0" },
-      ],
-    },
+    setError,
+    formState: { errors, isDirty, isSubmitting },
+  } = useForm<JournalEntryForm>({
+    resolver: zodResolver(journalEntrySchema),
+    defaultValues: JOURNAL_ENTRY_FORM_DEFAULT_VALUES,
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
   const watchedLines = useWatch({ control, name: "lines" }) ?? [];
   const watchedDate = useWatch({ control, name: "date" });
+  useDirtyStateWarning(createOpen && isDirty && !createEntry.isSuccess);
 
   const totalDebit = watchedLines.reduce(
     (s, l) => s + (Number(l.debit) || 0),
@@ -175,168 +169,28 @@ export function JournalEntriesPage() {
     reset();
   };
 
-  const onSubmit = (data: EntryForm) => {
+  const onSubmit = (data: JournalEntryForm) => {
+    if (isSubmitLocked(isSubmitting, createEntry.isPending)) return;
     createEntry.mutate(
+      toJournalEntryPayload(data),
       {
-        date: data.date,
-        description: data.description || undefined,
-        lines: data.lines.map((l) => ({
-          accountId: l.accountId,
-          debit: Number(l.debit) || 0,
-          credit: Number(l.credit) || 0,
-          description: l.description || undefined,
-        })),
+        onSuccess: closeModal,
+        onError: (error) => {
+          applyServerFieldErrors<JournalEntryForm>(error, setError, JOURNAL_ENTRY_SERVER_FIELDS);
+        },
       },
-      { onSuccess: closeModal },
     );
   };
 
-  const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "posted">(
-    "all",
-  );
-
-  const columns: ColumnDef<JournalEntry>[] = [
-    {
-      key: "number",
-      header: "Fiş No",
-      width: "120px",
-      render: (r) => (
-        <div>
-          <span className="font-mono text-sky-400">{r.number}</span>
-          {r.description?.startsWith("Ters kayıt") && (
-            <span className="ml-1.5 text-[9px] font-medium text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded">
-              STORNO
-            </span>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "date",
-      header: "Tarih",
-      width: "100px",
-      render: (r) => (
-        <span className="text-slate-400 text-xs">{formatDate(r.date)}</span>
-      ),
-    },
-    {
-      key: "description",
-      header: "Açıklama",
-      render: (r) => (
-        <span className="text-slate-300 text-sm truncate block max-w-[200px]">
-          {r.description ?? "—"}
-        </span>
-      ),
-    },
-    {
-      key: "totalDebit",
-      header: "Borç",
-      width: "110px",
-      align: "right",
-      render: (r) => {
-        const total = r.lines?.reduce((s, l) => s + Number(l.debit), 0) ?? 0;
-        return (
-          <span className="text-emerald-400 font-medium text-sm tabular-nums">
-            {total > 0 ? formatCurrency(total) : "—"}
-          </span>
-        );
-      },
-    },
-    {
-      key: "totalCredit",
-      header: "Alacak",
-      width: "110px",
-      align: "right",
-      render: (r) => {
-        const total = r.lines?.reduce((s, l) => s + Number(l.credit), 0) ?? 0;
-        return (
-          <span className="text-red-400 font-medium text-sm tabular-nums">
-            {total > 0 ? formatCurrency(total) : "—"}
-          </span>
-        );
-      },
-    },
-    {
-      key: "lineCount",
-      header: "Satır",
-      width: "60px",
-      align: "center",
-      render: (r) => (
-        <span className="text-xs text-slate-500">{r.lines?.length ?? 0}</span>
-      ),
-    },
-    {
-      key: "isPosted",
-      header: "Durum",
-      width: "90px",
-      align: "center",
-      render: (r) => (
-        <Badge variant={r.isPosted ? "success" : "warning"}>
-          {r.isPosted ? "Onaylı" : "Taslak"}
-        </Badge>
-      ),
-    },
-    {
-      key: "actions",
-      header: "",
-      width: "180px",
-      align: "right",
-      render: (r) => (
-        <div className="flex items-center justify-end gap-1.5">
-          {!r.isPosted ? (
-            <>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditEntry(r);
-                }}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium
-                           text-sky-400 bg-sky-500/10 border border-sky-500/20
-                           hover:bg-sky-500/20 transition-colors"
-              >
-                <Pencil className="w-3 h-3" />
-                Düzenle
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  postEntry.mutate(r.id);
-                }}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium
-                           text-emerald-400 bg-emerald-500/10 border border-emerald-500/20
-                           hover:bg-emerald-500/20 transition-colors"
-              >
-                <CheckCircle className="w-3 h-3" />
-                Onayla
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                const reason = window.prompt(`${r.number} ters kayit nedeni`);
-                if (!reason?.trim()) {
-                  toast.error("Ters kayit nedeni zorunludur.");
-                  return;
-                }
-                reverseEntry.mutate({ id: r.id, reason: reason.trim() });
-              }}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium
-                         text-amber-400 bg-amber-500/10 border border-amber-500/20
-                         hover:bg-amber-500/20 transition-colors"
-            >
-              <RotateCcw className="w-3 h-3" />
-              Storno
-            </button>
-          )}
-        </div>
-      ),
-    },
-  ];
-
+  const [statusFilter, setStatusFilter] = useState<JournalEntryStatusFilter>("all");
+  const allEntries = data?.data ?? [];
+  const filteredEntries = filterJournalEntries(allEntries, statusFilter);
+  const columns = createJournalEntryColumns({
+    onEdit: setEditEntry,
+    onPost: (id) => postEntry.mutate(id),
+    onReverse: (id, reason) => reverseEntry.mutate({ id, reason }),
+    onReverseReasonMissing: () => toast.error("Ters kayit nedeni zorunludur."),
+  });
   return (
     <FeaturePageShell
         title="Yevmiye Fişleri"
@@ -361,87 +215,21 @@ export function JournalEntriesPage() {
         }
     >
 
-      {/* ── Filter tabs ─────────────────────────── */}
-      <div className="flex items-center gap-2 mb-4">
-        {[
-          {
-            key: "all" as const,
-            label: "Tümü",
-            color: "text-sky-400",
-            active: "bg-sky-500/15 text-sky-400 border-sky-500/30",
-          },
-          {
-            key: "draft" as const,
-            label: "Taslak",
-            color: "text-amber-400",
-            active: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-          },
-          {
-            key: "posted" as const,
-            label: "Onaylı",
-            color: "text-emerald-400",
-            active: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-          },
-        ].map((f) => {
-          const allData = data?.data ?? [];
-          const count =
-            f.key === "all"
-              ? allData.length
-              : f.key === "draft"
-                ? allData.filter((e) => !e.isPosted).length
-                : allData.filter((e) => e.isPosted).length;
-          return (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setStatusFilter(f.key)}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200",
-                statusFilter === f.key
-                  ? f.active
-                  : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/50",
-              )}
-            >
-              {f.label}
-              <span
-                className={cn(
-                  "text-[10px] font-bold px-1.5 py-0.5 rounded-full",
-                  statusFilter === f.key
-                    ? "bg-white/10"
-                    : "bg-slate-800 text-slate-600",
-                )}
-              >
-                {count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={(() => {
-          const all = data?.data ?? [];
-          if (statusFilter === "draft") return all.filter((e) => !e.isPosted);
-          if (statusFilter === "posted") return all.filter((e) => e.isPosted);
-          return all;
-        })()}
-        keyExtractor={(r) => r.id}
-        isLoading={isLoading}
-        emptyTitle="Yevmiye fişi bulunamadı"
-        pagination={
-          data
-            ? {
-                page,
-                pageSize: 20,
-                total: data.meta.total,
-                totalPages: data.meta.totalPages,
-                onChange: setPage,
-              }
-            : undefined
-        }
+      <JournalEntryStatusFilters
+        entries={allEntries}
+        value={statusFilter}
+        onChange={setStatusFilter}
       />
 
+      <JournalEntryTable
+        columns={columns}
+        entries={filteredEntries}
+        isLoading={isLoading}
+        page={page}
+        total={data?.meta.total ?? 0}
+        totalPages={data?.meta.totalPages ?? 1}
+        onPageChange={setPage}
+      />
       {/* ── New journal entry modal ─────────────── */}
       <Modal
         isOpen={createOpen}
@@ -763,44 +551,15 @@ function EditJournalEntryModal({
     ...accounts.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` })),
   ];
 
-  const editSchema = z.object({
-    date: z.string().min(1),
-    description: z.string().optional(),
-    lines: z
-      .array(
-        z.object({
-          accountId: z.string().min(1, "Hesap seçiniz"),
-          debit: z.string(),
-          credit: z.string(),
-          description: z.string().optional(),
-        }),
-      )
-      .min(2),
-  });
-
-  type EditForm = z.infer<typeof editSchema>;
-
   const {
     register,
     handleSubmit,
     control,
     setValue,
     formState: { errors },
-  } = useForm<EditForm>({
-    resolver: zodResolver(editSchema),
-    defaultValues: {
-      date: entry.date.split("T")[0],
-      description: entry.description ?? "",
-      lines: (entry.lines ?? []).map((l) => ({
-        accountId:
-          l.accountId ??
-          ((l as Record<string, unknown>).account as { id?: string } | undefined)?.id ??
-          "",
-        debit: String(Number(l.debit)),
-        credit: String(Number(l.credit)),
-        description: l.description ?? "",
-      })),
-    },
+  } = useForm<JournalEntryForm>({
+    resolver: zodResolver(journalEntrySchema),
+    defaultValues: journalEntryToFormDefaults(entry),
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
@@ -818,17 +577,8 @@ function EditJournalEntryModal({
   const diff = Math.abs(totalDebit - totalCredit);
   const isBalanced = diff < 0.001 && (totalDebit > 0 || totalCredit > 0);
 
-  const handleSave = (data: EditForm) => {
-    onSave({
-      date: data.date,
-      description: data.description || undefined,
-      lines: data.lines.map((l) => ({
-        accountId: l.accountId,
-        debit: Number(l.debit) || 0,
-        credit: Number(l.credit) || 0,
-        description: l.description || undefined,
-      })),
-    });
+  const handleSave = (data: JournalEntryForm) => {
+    onSave(toJournalEntryPayload(data));
   };
 
   return (
