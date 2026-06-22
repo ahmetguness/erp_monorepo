@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
+  bulkUpdateAttachmentMetadata,
   deleteAttachment,
   getAttachmentEntityOptions,
   getAttachmentAccessLog,
@@ -15,6 +16,7 @@ import {
   uploadAttachmentVersion,
   type AttachmentEntityType,
   type AttachmentMetadataInput,
+  type BulkAttachmentMetadataResult,
   type DocumentCenterParams,
 } from '@/services/attachment.service';
 
@@ -112,6 +114,20 @@ export function useUpdateAttachmentMetadata() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attachments'] });
       toast.success('Dosya bilgileri güncellendi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useBulkUpdateAttachmentMetadata() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: ({ ids, metadata }: { ids: readonly string[]; metadata: AttachmentMetadataInput }): Promise<BulkAttachmentMetadataResult> =>
+      bulkUpdateAttachmentMetadata(ids, metadata),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['attachments'] });
+      toast.success(`${result.updatedCount} dosyanÄ±n metadata bilgisi gÃ¼ncellendi.`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

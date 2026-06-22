@@ -3,18 +3,29 @@ import { randomUUID } from 'crypto';
 import { basename, extname } from 'path';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireUserId } from '../utils/context.js';
+import { getRequestMeta } from '../utils/audit.js';
 import { bufferToArrayBuffer, storageService } from '../services/storage.service.js';
 import { BusinessRulesService } from '../services/business-rules.service.js';
 import { getTenantSecurityScore } from '../services/tenant-security.service.js';
+import {
+  getSecurityHardeningSnapshot,
+  listSecuritySessions,
+  revokeSecuritySession,
+} from '../services/security-hardening.service.js';
 
 const TENANT_LOGO_SETTING_KEY = 'tenant_logo_storage_path';
 const LEGACY_TENANT_LOGO_SETTING_KEY = 'company_logo';
 const TENANT_LOGO_SETTING_KEYS = [TENANT_LOGO_SETTING_KEY, LEGACY_TENANT_LOGO_SETTING_KEY] as const;
+const INTERNAL_TENANT_SETTING_KEYS = [...TENANT_LOGO_SETTING_KEYS, 'security.sessions'] as const;
 const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 const ALLOWED_LOGO_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_LOGO_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const businessRulesService = new BusinessRulesService(prisma);
+
+function isInternalTenantSettingKey(key: string | undefined): boolean {
+  return typeof key === 'string' && INTERNAL_TENANT_SETTING_KEYS.some((internalKey) => internalKey === key);
+}
 
 function sanitizeFileName(fileName: string): string {
   return basename(fileName).replace(/[^\w.\- ]/g, '_').slice(0, 180) || 'logo';
@@ -49,7 +60,7 @@ export const SettingsController = {
     const settings = await prisma.tenantSetting.findMany({
       where: {
         tenantId,
-        key: { notIn: [...TENANT_LOGO_SETTING_KEYS] },
+        key: { notIn: [...INTERNAL_TENANT_SETTING_KEYS] },
       },
       orderBy: { key: 'asc' },
     });
@@ -62,6 +73,9 @@ export const SettingsController = {
     const body = await c.req.json<{ key: string; value: string }>();
     if (!body.key || body.value === undefined) {
       return c.json(new ValidationError('key ve value zorunludur.').toJSON(), 400);
+    }
+    if (isInternalTenantSettingKey(body.key)) {
+      return c.json(new ValidationError('Bu ayar sistem tarafindan yonetilir.').toJSON(), 400);
     }
 
     const setting = await prisma.tenantSetting.upsert({
@@ -76,6 +90,9 @@ export const SettingsController = {
   async deleteTenantSetting(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const key = c.req.param('key');
+    if (isInternalTenantSettingKey(key)) {
+      return c.json(new ValidationError('Bu ayar sistem tarafindan yonetilir.').toJSON(), 400);
+    }
 
     await prisma.tenantSetting.deleteMany({ where: { tenantId, key } });
     return c.json({ data: { success: true } });
@@ -91,6 +108,28 @@ export const SettingsController = {
     const tenantId = requireTenantId(c);
     const score = await getTenantSecurityScore(prisma, tenantId);
     return c.json({ data: score });
+  },
+
+  async securityDashboard(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const snapshot = await getSecurityHardeningSnapshot(prisma, tenantId);
+    return c.json({ data: snapshot });
+  },
+
+  async listSecuritySessions(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const sessions = await listSecuritySessions(prisma, tenantId);
+    return c.json({ data: sessions });
+  },
+
+  async revokeSecuritySession(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const sessionId = c.req.param('sessionId');
+    if (!sessionId) return c.json(new ValidationError('sessionId zorunludur.').toJSON(), 400);
+    const revoked = await revokeSecuritySession(prisma, tenantId, sessionId, userId, getRequestMeta(c));
+    if (!revoked) return c.json(new NotFoundError('Session', sessionId).toJSON(), 404);
+    return c.json({ data: revoked });
   },
 
   async upsertBusinessRule(c: Context): Promise<Response> {

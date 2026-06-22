@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
+    "@repo/types": "file:../../packages/types",
     "@tanstack/react-query": "^5.96.2",
     "@tanstack/react-query-devtools": "^5.96.2",
     "axios": "^1.14.0",

@@ -1,9 +1,9 @@
 import { Context } from 'hono';
-import { AuditAction, EntityType, Prisma } from '@prisma/client';
+import { AuditAction, EntityType, PermissionAction, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { basename, extname } from 'path';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError } from '../errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { bufferToArrayBuffer, storageService } from '../services/storage.service.js';
@@ -105,6 +105,12 @@ function readStringArray(body: Record<string, unknown>, key: string): string[] |
   return Array.from(new Set(value.map((item) => (typeof item === 'string' ? sanitizeTag(item) : '')).filter(Boolean))).slice(0, 12);
 }
 
+function readStringArrayRequired(body: Record<string, unknown>, key: string): string[] {
+  const value = body[key];
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim()))).slice(0, 100);
+}
+
 function parseCategoryInput(value: string | undefined): DocumentCenterCategory | null {
   if (!value) return null;
   const category = parseDocumentCenterCategory(value);
@@ -132,11 +138,65 @@ function validateDocumentDates(validFrom: Date | null | undefined, validUntil: D
   }
 }
 
+interface AttachmentMetadataUpdate {
+  data: Prisma.AttachmentUpdateInput;
+  validFrom?: Date | null;
+  validUntil?: Date | null;
+}
+
+function parseAttachmentMetadataUpdate(body: Record<string, unknown>): AttachmentMetadataUpdate {
+  const data: Prisma.AttachmentUpdateInput = {};
+  const fileName = readBodyString(body, 'fileName');
+  const category = 'category' in body ? parseCategoryInput(readBodyString(body, 'category')) : undefined;
+  const tags = 'tags' in body ? readStringArray(body, 'tags') ?? [] : undefined;
+  const documentKind = 'documentKind' in body ? parseKindInput(readBodyString(body, 'documentKind')) : undefined;
+  const confidentiality = 'confidentiality' in body ? parseConfidentialityInput(readBodyString(body, 'confidentiality')) : undefined;
+  const validFrom = 'validFrom' in body ? parseDateField(readBodyString(body, 'validFrom')) ?? null : undefined;
+  const validUntil = 'validUntil' in body ? parseDateField(readBodyString(body, 'validUntil')) ?? null : undefined;
+  const version = 'version' in body ? parsePositiveVersion(readBodyString(body, 'version')) ?? 1 : undefined;
+
+  validateDocumentDates(validFrom, validUntil);
+
+  if (fileName) data.fileName = sanitizeFileName(fileName);
+  if (category !== undefined) data.category = category;
+  if (tags !== undefined) data.tags = tags;
+  if (documentKind !== undefined) data.documentKind = documentKind;
+  if (confidentiality !== undefined) data.confidentiality = confidentiality;
+  if (validFrom !== undefined) data.validFrom = validFrom;
+  if (validUntil !== undefined) data.validUntil = validUntil;
+  if (version !== undefined) data.version = version;
+  return { data, validFrom, validUntil };
+}
+
 async function ensureEntityBelongsToTenant(tenantId: string, entityType: EntityType, entityId: string): Promise<void> {
   const count = await countEntity(tenantId, entityType, entityId);
   if (count === 0) {
     throw new ValidationError('Ek dosya bağlanacak kayıt bu tenant içinde bulunamadı.');
   }
+}
+
+async function canAccessConfidentialDocuments(tenantId: string, userId: string): Promise<boolean> {
+  const tenantUser = await prisma.tenantUser.findFirst({
+    where: { tenantId, userId, isActive: true },
+    select: {
+      isOwner: true,
+      roleRef: {
+        select: {
+          permissions: {
+            where: { module: 'attachments', action: PermissionAction.UPDATE },
+            select: { id: true },
+          },
+        },
+      },
+    },
+  });
+  return Boolean(tenantUser?.isOwner || (tenantUser?.roleRef?.permissions.length ?? 0) > 0);
+}
+
+async function ensureAttachmentConfidentialityAccess(tenantId: string, userId: string, confidentiality: string | null): Promise<void> {
+  if (confidentiality !== 'CONFIDENTIAL') return;
+  if (await canAccessConfidentialDocuments(tenantId, userId)) return;
+  throw new ForbiddenError('Gizli dokumanlara erisim icin attachments:UPDATE yetkisi gereklidir.');
 }
 
 async function countEntity(tenantId: string, entityType: EntityType, entityId: string): Promise<number> {
@@ -322,9 +382,11 @@ export const AttachmentController = {
     const source = parseDocumentCenterSource(c.req.query('source'));
 
     const service = new DocumentCenterService(prisma);
+    const includeConfidential = await canAccessConfidentialDocuments(tenantId, userId);
     const result = await service.list({
       tenantId,
       userId,
+      includeConfidential,
       page,
       limit,
       search: c.req.query('search'),
@@ -351,6 +413,7 @@ export const AttachmentController = {
 
   async listByEntity(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const rawEntityType = c.req.query('entityType');
     const entityId = c.req.query('entityId');
 
@@ -359,9 +422,17 @@ export const AttachmentController = {
     }
 
     await ensureEntityBelongsToTenant(tenantId, rawEntityType, entityId);
+    const includeConfidential = await canAccessConfidentialDocuments(tenantId, userId);
 
     const attachments = await prisma.attachment.findMany({
-      where: { tenantId, entityType: rawEntityType, entityId },
+      where: {
+        tenantId,
+        entityType: rawEntityType,
+        entityId,
+        ...(!includeConfidential && {
+          OR: [{ confidentiality: null }, { confidentiality: { not: 'CONFIDENTIAL' } }],
+        }),
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -442,6 +513,7 @@ export const AttachmentController = {
     if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
 
     await ensureEntityBelongsToTenant(tenantId, attachment.entityType, attachment.entityId);
+    await ensureAttachmentConfidentialityAccess(tenantId, userId, attachment.confidentiality);
 
     const storedObject = await storageService.get(attachment.storagePath);
     if (!storedObject) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
@@ -470,11 +542,13 @@ export const AttachmentController = {
 
   async accessLog(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = c.req.param('id')!;
 
     const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
     if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
     await ensureEntityBelongsToTenant(tenantId, attachment.entityType, attachment.entityId);
+    await ensureAttachmentConfidentialityAccess(tenantId, userId, attachment.confidentiality);
 
     const logs = await prisma.auditLog.findMany({
       where: {
@@ -674,6 +748,94 @@ export const AttachmentController = {
     });
 
     return c.json({ data: updated });
+  },
+
+  async bulkMetadata(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const body = readRecord(await c.req.json<unknown>().catch(() => null));
+    const ids = readStringArrayRequired(body, 'ids');
+    if (ids.length === 0) {
+      return c.json(new ValidationError('GÃ¼ncellenecek dosya seÃ§ilmelidir.').toJSON(), 400);
+    }
+
+    const metadata = isRecord(body.metadata) ? body.metadata : body;
+    const metadataUpdate = parseAttachmentMetadataUpdate(metadata);
+    const { data } = metadataUpdate;
+    if (Object.keys(data).length === 0) {
+      return c.json(new ValidationError('GÃ¼ncellenecek en az bir metadata alanÄ± gÃ¶nderilmelidir.').toJSON(), 400);
+    }
+
+    const attachments = await prisma.attachment.findMany({
+      where: { tenantId, id: { in: ids } },
+      select: {
+        id: true,
+        entityType: true,
+        entityId: true,
+        fileName: true,
+        category: true,
+        tags: true,
+        documentKind: true,
+        confidentiality: true,
+        validFrom: true,
+        validUntil: true,
+        version: true,
+      },
+    });
+
+    if (attachments.length === 0) {
+      return c.json(new NotFoundError('Dosya').toJSON(), 404);
+    }
+
+    attachments.forEach((attachment) => {
+      validateDocumentDates(
+        metadataUpdate.validFrom !== undefined ? metadataUpdate.validFrom : attachment.validFrom,
+        metadataUpdate.validUntil !== undefined ? metadataUpdate.validUntil : attachment.validUntil,
+      );
+    });
+
+    const requestMeta = getRequestMeta(c);
+    await prisma.$transaction(async (tx) => {
+      await tx.attachment.updateMany({
+        where: { tenantId, id: { in: attachments.map((attachment) => attachment.id) } },
+        data,
+      });
+
+      await Promise.all(attachments.map((attachment) =>
+        createAuditLog(tx, {
+          tenantId,
+          userId,
+          module: 'attachments',
+          entityType: attachment.entityType,
+          entityId: attachment.entityId,
+          action: AuditAction.UPDATE,
+          oldValues: {
+            attachmentId: attachment.id,
+            fileName: attachment.fileName,
+            category: attachment.category,
+            tags: attachment.tags,
+            documentKind: attachment.documentKind,
+            confidentiality: attachment.confidentiality,
+            validFrom: attachment.validFrom,
+            validUntil: attachment.validUntil,
+            version: attachment.version,
+          },
+          newValues: {
+            attachmentId: attachment.id,
+            bulkMetadataUpdate: true,
+            ...metadata,
+          },
+          ...requestMeta,
+        }),
+      ));
+    });
+
+    return c.json({
+      data: {
+        updatedCount: attachments.length,
+        skippedCount: ids.length - attachments.length,
+      },
+    });
   },
 
   async delete(c: Context): Promise<Response> {

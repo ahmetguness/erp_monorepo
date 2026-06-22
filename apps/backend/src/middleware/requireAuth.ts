@@ -3,6 +3,8 @@ import { deleteCookie, getCookie } from 'hono/cookie';
 import jwt from 'jsonwebtoken';
 import type { JwtPayload as JsonWebTokenPayload } from 'jsonwebtoken';
 import { ForbiddenError } from '../errors';
+import { prisma } from '../lib/prisma';
+import { touchSecuritySession } from '../services/security-hardening.service.js';
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
@@ -10,6 +12,7 @@ if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil.
 interface JwtPayload {
   userId: string;
   tenantId: string;
+  sessionId?: string;
 }
 
 function isJwtPayload(value: string | JsonWebTokenPayload): value is JwtPayload {
@@ -40,6 +43,13 @@ export async function requireAuth(c: Context, next: Next) {
 
     c.set('userId', payload.userId);
     c.set('tenantId', payload.tenantId);
+    if (payload.sessionId) {
+      const sessionStatus = await touchSecuritySession(prisma, payload.tenantId, payload.sessionId);
+      if (sessionStatus !== 'ACTIVE') {
+        throw new Error('Revoked auth session');
+      }
+      c.set('sessionId', payload.sessionId);
+    }
 
     await next();
   } catch {

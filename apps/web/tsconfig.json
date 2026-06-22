@@ -6,9 +6,6 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ],
-      "@repo/types": [
-        "../../packages/types/index.ts"
       ]
     },
     "target": "ES2017",

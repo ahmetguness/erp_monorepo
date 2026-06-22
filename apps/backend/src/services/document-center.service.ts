@@ -17,6 +17,7 @@ export type DocumentConfidentiality = 'PUBLIC' | 'INTERNAL' | 'CONFIDENTIAL';
 export interface DocumentCenterFilters {
   tenantId: string;
   userId: string;
+  includeConfidential: boolean;
   search?: string;
   category?: DocumentCenterCategory;
   entityType?: EntityType;
@@ -27,6 +28,8 @@ export interface DocumentCenterFilters {
 
 export interface DocumentCenterItem {
   id: string;
+  documentId: string;
+  versionId: string;
   source: DocumentCenterSource;
   category: DocumentCenterCategory;
   fileName: string;
@@ -70,6 +73,8 @@ export interface DocumentCenterSummary {
   oldVersionCount: number;
   ocrReadyCount: number;
   ocrProviderRequiredCount: number;
+  contractRenewalAlertCount: number;
+  employeeChecklistMissingCount: number;
 }
 
 export interface DocumentCenterResult {
@@ -495,6 +500,9 @@ export class DocumentCenterService {
     const attachmentWhere: Prisma.AttachmentWhereInput = {
       tenantId: filters.tenantId,
       ...(filters.entityType && { entityType: filters.entityType }),
+      ...(!filters.includeConfidential && {
+        OR: [{ confidentiality: null }, { confidentiality: { not: 'CONFIDENTIAL' } }],
+      }),
     };
 
     const includeAttachments = !filters.source || filters.source === 'ATTACHMENT';
@@ -577,6 +585,8 @@ export class DocumentCenterService {
       const rowOcrStatus = ocrStatus(row.mimeType);
       return {
         id: row.id,
+        documentId: groupKey,
+        versionId: row.id,
         source: 'ATTACHMENT',
         category,
         fileName: row.fileName,
@@ -610,6 +620,8 @@ export class DocumentCenterService {
 
     const mailItems = mailAttachments.map<DocumentCenterItem>((row) => ({
       id: row.id,
+      documentId: row.id,
+      versionId: row.id,
       source: 'MAIL',
       category: 'MAIL',
       fileName: row.filename,
@@ -672,6 +684,16 @@ export class DocumentCenterService {
     const oldVersionCount = allItems.filter((item) => !item.isLatestVersion).length;
     const ocrReadyCount = allItems.filter((item) => item.ocrStatus === 'TEXT_READY').length;
     const ocrProviderRequiredCount = allItems.filter((item) => item.ocrStatus === 'PROVIDER_REQUIRED').length;
+    const contractRenewalAlertCount = allItems.filter(
+      (item) => item.documentKind === 'CONTRACT' && (item.lifecycleStatus === 'EXPIRED' || item.lifecycleStatus === 'EXPIRING_SOON'),
+    ).length;
+    const employeeDocumentEntityIds = new Set(
+      allItems
+        .filter((item) => item.source === 'ATTACHMENT' && item.entityType === EntityType.EMPLOYEE && item.documentKind === 'EMPLOYEE_DOCUMENT')
+        .map((item) => item.entityId),
+    );
+    const employeeCount = await this.db.employee.count({ where: { tenantId: filters.tenantId, deletedAt: null } });
+    const employeeChecklistMissingCount = Math.max(0, employeeCount - employeeDocumentEntityIds.size);
 
     return {
       data,
@@ -693,6 +715,8 @@ export class DocumentCenterService {
           oldVersionCount,
           ocrReadyCount,
           ocrProviderRequiredCount,
+          contractRenewalAlertCount,
+          employeeChecklistMissingCount,
         },
       },
     };

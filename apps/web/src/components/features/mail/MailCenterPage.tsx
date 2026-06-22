@@ -22,6 +22,8 @@ import { useCurrentUser } from "@/hooks/useAuth";
 import {
   useMailHistory,
   useMailMessage,
+  useMailSummary,
+  useMailTemplateLifecycle,
   useMailTemplates,
   useApproveMailTemplate,
   useCreateAiMailDraft,
@@ -307,10 +309,22 @@ function MailBodyPreview({ html }: { html: string }) {
   );
 }
 
+function MailStatCard({ label, value, hint }: { label: string; value: string; hint: string }) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-950/45 px-4 py-3">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</p>
+      <p className="mt-2 text-lg font-semibold text-slate-100">{value}</p>
+      <p className="mt-1 text-xs text-slate-500">{hint}</p>
+    </div>
+  );
+}
+
 export function MailCenterPage() {
   const { user } = useCurrentUser();
   const { data: tenantUsers = [] } = useTenantUsers();
   const { data: mailTemplates = [] } = useMailTemplates();
+  const { data: mailSummary } = useMailSummary();
+  const { data: templateLifecycle } = useMailTemplateLifecycle();
   const sendBulkMail = useSendBulkMail();
   const renderTemplate = useRenderMailTemplate();
   const createAiDraft = useCreateAiMailDraft();
@@ -573,6 +587,15 @@ export function MailCenterPage() {
           </div>
         }
     >
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <MailStatCard label="Giden" value={String(mailSummary?.outboundCount ?? 0)} hint="Gonderim kaydi" />
+        <MailStatCard label="Bekleyen" value={String(mailSummary?.pendingCount ?? 0)} hint="Batch kuyrugu" />
+        <MailStatCard label="Basarili" value={String(mailSummary?.sentCount ?? 0)} hint="Teslimat kaydi" />
+        <MailStatCard label="Hatali" value={String(mailSummary?.failedCount ?? 0)} hint="Delivery/reply takip" />
+        <MailStatCard label="Tenant sablon" value={String(templateLifecycle?.tenantCount ?? 0)} hint={`${templateLifecycle?.approvedTenantCount ?? 0} onayli`} />
+        <MailStatCard label="Taslak sablon" value={String(templateLifecycle?.draftTenantCount ?? 0)} hint={`Son v${templateLifecycle?.latestTenantVersion ?? 0}`} />
+      </div>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900">
         <MailCenterFilters

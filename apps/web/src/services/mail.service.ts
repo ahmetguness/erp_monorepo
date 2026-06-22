@@ -111,6 +111,30 @@ const AiMailDraftSchema = z.object({
   usedAi: z.boolean(),
 });
 
+const MailTemplateLifecycleSummarySchema = z.object({
+  total: z.coerce.number(),
+  systemCount: z.coerce.number(),
+  tenantCount: z.coerce.number(),
+  approvedTenantCount: z.coerce.number(),
+  draftTenantCount: z.coerce.number(),
+  latestTenantVersion: z.coerce.number(),
+  variableSchemaCount: z.coerce.number(),
+  requiredVariableCount: z.coerce.number(),
+});
+
+const MailDeliverySummarySchema = z.object({
+  total: z.coerce.number(),
+  outboundCount: z.coerce.number(),
+  inboundCount: z.coerce.number(),
+  pendingCount: z.coerce.number(),
+  sentCount: z.coerce.number(),
+  failedCount: z.coerce.number(),
+  attachmentCount: z.coerce.number(),
+  recipientCount: z.coerce.number(),
+  lastSentAt: z.string().nullable(),
+  lastFailureAt: z.string().nullable(),
+});
+
 export type MailDirection = 'INBOUND' | 'OUTBOUND';
 export type MailDeliveryStatus = 'PENDING' | 'SENT' | 'FAILED';
 export type MailMessageListItem = z.infer<typeof MailMessageListItemSchema>;
@@ -124,6 +148,8 @@ export type MailTemplateVariableDefinition = z.infer<typeof MailTemplateVariable
 export type MailTemplate = z.infer<typeof MailTemplateSchema>;
 export type RenderedMailTemplate = z.infer<typeof RenderedMailTemplateSchema>;
 export type AiMailDraft = z.infer<typeof AiMailDraftSchema>;
+export type MailTemplateLifecycleSummary = z.infer<typeof MailTemplateLifecycleSummarySchema>;
+export type MailDeliverySummary = z.infer<typeof MailDeliverySummarySchema>;
 export type MailTemplateVariables = Partial<Record<MailTemplateVariableKey, string>>;
 export type MailListResponse = { data: MailMessageListItem[]; meta: PaginationMeta };
 
@@ -202,6 +228,11 @@ export async function listMail(params: ListMailParams = {}): Promise<MailListRes
   return safeParse(PaginatedResponseSchema(MailMessageListItemSchema), res.data, 'listMail');
 }
 
+export async function getMailSummary(): Promise<MailDeliverySummary> {
+  const res = await apiClient.get('/api/mail/summary');
+  return safeParse(SingleResponseSchema(MailDeliverySummarySchema), res.data, 'getMailSummary').data;
+}
+
 export async function getMail(id: string): Promise<MailMessageDetail> {
   const res = await apiClient.get(`/api/mail/${id}`);
   return safeParse(SingleResponseSchema(MailMessageDetailSchema), res.data, 'getMail').data;
@@ -220,6 +251,11 @@ export async function sendBulkMail(data: BulkMailDTO): Promise<BulkMailResult> {
 export async function listMailTemplates(): Promise<MailTemplate[]> {
   const res = await apiClient.get('/api/mail/templates');
   return safeParse(SingleResponseSchema(z.array(MailTemplateSchema)), res.data, 'listMailTemplates').data;
+}
+
+export async function getMailTemplateLifecycle(): Promise<MailTemplateLifecycleSummary> {
+  const res = await apiClient.get('/api/mail/templates/lifecycle');
+  return safeParse(SingleResponseSchema(MailTemplateLifecycleSummarySchema), res.data, 'getMailTemplateLifecycle').data;
 }
 
 export async function renderMailTemplate(data: RenderMailTemplateDTO): Promise<RenderedMailTemplate> {

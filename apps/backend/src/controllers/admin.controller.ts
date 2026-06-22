@@ -699,6 +699,58 @@ export const AdminMetricsController = {
     const snapshot = await getObservabilitySnapshot(prisma);
     return c.json({ data: snapshot });
   },
+
+  async observabilitySearch(c: Context): Promise<Response> {
+    const query = c.req.query('q')?.trim();
+    if (!query || query.length < 6) {
+      return c.json(new ValidationError('Arama için en az 6 karakterli requestId veya correlationId girin.').toJSON(), 400);
+    }
+
+    const snapshot = await getObservabilitySnapshot(prisma);
+    const matchingSlowEndpoints = snapshot.http.recentSlowEndpoints.filter(
+      (item) => item.requestId === query || item.correlationId === query,
+    );
+    const matchingErrors = snapshot.http.recentErrors.filter(
+      (item) => item.requestId === query || item.correlationId === query,
+    );
+    const matchingSlowQueries = snapshot.slowQueries.recent.filter(
+      (item) => item.requestId === query || item.correlationId === query,
+    );
+
+    const where: Prisma.AuditLogWhereInput = {
+      OR: [
+        { newValues: { path: ['requestId'], equals: query } },
+        { newValues: { path: ['correlationId'], equals: query } },
+        { oldValues: { path: ['requestId'], equals: query } },
+        { oldValues: { path: ['correlationId'], equals: query } },
+      ],
+    };
+    const auditLogs = await prisma.auditLog.findMany({
+      where,
+      select: {
+        id: true,
+        tenantId: true,
+        userId: true,
+        module: true,
+        entityType: true,
+        entityId: true,
+        action: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    return c.json({
+      data: {
+        query,
+        slowEndpoints: matchingSlowEndpoints,
+        errors: matchingErrors,
+        slowQueries: matchingSlowQueries,
+        auditLogs: auditLogs.map((log) => ({ ...log, createdAt: log.createdAt.toISOString() })),
+      },
+    });
+  },
 };
 
 // ─────────────────────────────────────────────

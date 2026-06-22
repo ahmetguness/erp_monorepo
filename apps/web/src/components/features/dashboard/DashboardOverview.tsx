@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   TrendingUp, TrendingDown, Package, Users, ArrowUpRight, ArrowDownRight, Plus,
   Clock, Building2, Wallet, DollarSign, Bell, CheckCircle2, FileText,
@@ -12,81 +11,38 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   PieChart, Pie, Cell,
 } from "recharts";
-import { apiClient } from "@/lib/api-client";
-import { safeParse } from "@/lib/safe-parse";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useSmartNotifications } from "@/hooks/useNotifications";
-import { getTcmbRates } from "@/services/currency-rates.service";
-import { getRecommendations, type Recommendation } from "@/services/intelligence.service";
-import { getPinnedKpiPreviews, type KpiPreview } from "@/services/reporting.service";
+import {
+  useCompleteDashboardTask,
+  useDashboardApprovals,
+  useDashboardInvoices,
+  useDashboardNotifications,
+  useDashboardRates,
+  useDashboardRecommendations,
+  useDashboardTasks,
+} from "@/hooks/useDashboard";
+import {
+  useContactBalance,
+  useExpenseSummary,
+  usePinnedKpiPreviews,
+  useRevenueSummary,
+  useStockSummary,
+} from "@/hooks/useReporting";
+import type { Recommendation } from "@/services/intelligence.service";
+import type { KpiPreview } from "@/services/reporting.service";
+import type {
+  DashboardApprovalRequest,
+  DashboardInvoice,
+  DashboardNotification,
+  DashboardTask,
+} from "@/services/dashboard.service";
 import type { SmartNotification } from "@/services/notification.service";
-import { updateTaskStatus } from "@/services/task.service";
-import { SingleResponseSchema, PaginatedResponseSchema } from "@/types/api.types";
-import { z } from "zod";
 
 /* ── Types ──────────────────────────────────── */
 
 interface CurrencyRate { code: string; forexSelling: number | null }
-
-interface InvoiceItem {
-  id: string; number: string; date: string; status: string; type: string;
-  totalGross: number; contact?: { name?: string } | null;
-}
-
-interface NotificationItem {
-  id: string; title: string; message: string | null; status: string;
-  createdAt: string; module: string | null;
-}
-
-interface ApprovalItem {
-  id: string; module: string; status: string;
-  requestedBy?: { name?: string } | null; createdAt: string;
-}
-
-interface TaskItem {
-  id: string; type: string; title: string; detail: string | null;
-  priority: string; status?: string; dueAt: string | null; href: string;
-}
-
-/* ── Schemas ────────────────────────────────── */
-
-const RevSummary = SingleResponseSchema(
-  z.object({ period: z.unknown(), invoiceCount: z.coerce.number(), totalNet: z.coerce.number(), totalTax: z.coerce.number(), totalGross: z.coerce.number() }),
-);
-const StockSummary = SingleResponseSchema(
-  z.object({
-    summary: z.object({ totalLines: z.coerce.number(), belowMinStockCount: z.coerce.number(), totalStockValue: z.coerce.number() }),
-    belowMinStock: z.array(z.object({
-      productId: z.string(),
-      productCode: z.string(),
-      productName: z.string(),
-      warehouseName: z.string(),
-      quantity: z.coerce.number(),
-      minStockLevel: z.coerce.number(),
-    })),
-    stockLevels: z.array(z.unknown()),
-  }),
-);
-const BalanceSummary = SingleResponseSchema(
-  z.object({ contacts: z.array(z.unknown()), summary: z.object({ totalReceivable: z.coerce.number(), totalPayable: z.coerce.number() }) }),
-);
-const InvSchema = z.object({
-  id: z.string(), number: z.string(), date: z.string(), status: z.string(), type: z.string(),
-  totalGross: z.coerce.number(), contact: z.object({ name: z.string().optional() }).nullable().optional(),
-});
-const NotifSchema = z.object({ id: z.string(), title: z.string(), message: z.string().nullable(), status: z.string(), createdAt: z.string(), module: z.string().nullable() }).array();
-const ApprSchema = z.object({ id: z.string(), module: z.string(), status: z.string(), requestedBy: z.object({ name: z.string().optional() }).nullable().optional(), createdAt: z.string() }).array();
-const TaskSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  title: z.string(),
-  detail: z.string().nullable(),
-  priority: z.string(),
-  status: z.string().optional(),
-  dueAt: z.string().nullable(),
-  href: z.string(),
-});
 
 /* ── Constants ──────────────────────────────── */
 
@@ -194,7 +150,6 @@ function openAssistant(message: string) {
 
 export function DashboardOverview() {
   const { user, tenant } = useCurrentUser();
-  const queryClient = useQueryClient();
   const dashboardPreset = detectDashboardPreset(user);
   const canRead = (module: string) => (user ? !user.tenantMembership || canReadModule(user, module) : false);
   const canReadInvoicing = canRead('invoicing');
@@ -223,22 +178,20 @@ export function DashboardOverview() {
   const dF = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
   const dT = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
 
-  const { data: rev } = useQuery({ queryKey: ["d", "rev"], enabled: canReadReporting || canReadInvoicing, queryFn: async () => safeParse(RevSummary, (await apiClient.get("/api/reports/revenue-summary", { params: { dateFrom: dF, dateTo: dT } })).data, "rev").data });
-  const { data: exp } = useQuery({ queryKey: ["d", "exp"], enabled: canReadReporting || canReadAccounting, queryFn: async () => safeParse(RevSummary, (await apiClient.get("/api/reports/expense-summary", { params: { dateFrom: dF, dateTo: dT } })).data, "exp").data });
-  const { data: stk } = useQuery({ queryKey: ["d", "stk"], enabled: canReadReporting || canReadInventory, queryFn: async () => safeParse(StockSummary, (await apiClient.get("/api/reports/stock-summary")).data, "stk").data });
-  const { data: bal } = useQuery({ queryKey: ["d", "bal"], enabled: canReadReporting || canReadContacts || canReadAccounting, queryFn: async () => safeParse(BalanceSummary, (await apiClient.get("/api/reports/contact-balance")).data, "bal").data });
-  const { data: invs } = useQuery({ queryKey: ["d", "invs"], enabled: canReadInvoicing, queryFn: async () => safeParse(PaginatedResponseSchema(InvSchema), (await apiClient.get("/api/invoices", { params: { limit: 6 } })).data, "invs") });
-  const { data: tcmb } = useQuery({ queryKey: ["d", "tcmb"], queryFn: getTcmbRates, staleTime: 3e5 });
-  const { data: notifs } = useQuery({ queryKey: ["d", "notifs"], enabled: canReadNotifications, queryFn: async () => { try { return safeParse(SingleResponseSchema(NotifSchema), (await apiClient.get("/api/notifications", { params: { limit: 5 } })).data, "n").data; } catch { return []; } } });
-  const { data: appr } = useQuery({ queryKey: ["d", "appr"], enabled: canReadApprovals, queryFn: async () => { try { return safeParse(SingleResponseSchema(ApprSchema), (await apiClient.get("/api/approvals/requests", { params: { limit: 5 } })).data, "a").data; } catch { return []; } } });
-  const { data: tasks } = useQuery({ queryKey: ["d", "tasks"], enabled: canReadTasks, queryFn: async () => { try { return safeParse(SingleResponseSchema(z.array(TaskSchema)), (await apiClient.get("/api/tasks")).data, "tasks").data; } catch { return []; } } });
-  const { data: recommendations = [] } = useQuery({ queryKey: ["d", "recommendations"], queryFn: async () => { try { return await getRecommendations(); } catch { return []; } } });
-  const { data: pinnedKpis = [] } = useQuery({ queryKey: ["reports", "pinned-kpi"], enabled: canReadReporting, queryFn: async () => { try { return await getPinnedKpiPreviews(); } catch { return []; } } });
+  const reportRange = { dateFrom: dF, dateTo: dT };
+  const { data: rev } = useRevenueSummary(reportRange, { enabled: canReadReporting || canReadInvoicing });
+  const { data: exp } = useExpenseSummary(reportRange, { enabled: canReadReporting || canReadAccounting });
+  const { data: stk } = useStockSummary({ enabled: canReadReporting || canReadInventory });
+  const { data: bal } = useContactBalance({ enabled: canReadReporting || canReadContacts || canReadAccounting });
+  const { data: invs } = useDashboardInvoices(6, { enabled: canReadInvoicing });
+  const { data: tcmb } = useDashboardRates();
+  const { data: notifs } = useDashboardNotifications(5, { enabled: canReadNotifications });
+  const { data: appr } = useDashboardApprovals(5, { enabled: canReadApprovals });
+  const { data: tasks } = useDashboardTasks({ enabled: canReadTasks });
+  const { data: recommendations = [] } = useDashboardRecommendations();
+  const { data: pinnedKpis = [] } = usePinnedKpiPreviews({ enabled: canReadReporting });
   const { data: smartNotifications } = useSmartNotifications();
-  const completeTask = useMutation({
-    mutationFn: (taskId: string) => updateTaskStatus(taskId, "DONE"),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["d", "tasks"] }),
-  });
+  const completeTask = useCompleteDashboardTask();
 
   /* ── Derived ── */
   const profit = (rev?.totalGross ?? 0) - (exp?.totalGross ?? 0);
@@ -254,11 +207,11 @@ export function DashboardOverview() {
   const pieData = (() => {
     if (!invs?.data) return [];
     const m: Record<string, number> = {};
-    invs.data.forEach((i: InvoiceItem) => { m[i.status] = (m[i.status] ?? 0) + 1; });
+    invs.data.forEach((i: DashboardInvoice) => { m[i.status] = (m[i.status] ?? 0) + 1; });
     return Object.entries(m).map(([s, v]) => ({ name: STATUS_LABEL[s] ?? s, value: v }));
   })();
 
-  const overdueInvoiceCount = invs?.data?.filter((i: InvoiceItem) => i.status === "OVERDUE").length ?? 0;
+  const overdueInvoiceCount = invs?.data?.filter((i: DashboardInvoice) => i.status === "OVERDUE").length ?? 0;
   const lowStockItems = stk?.belowMinStock ?? [];
   const actionItems = [
     {
@@ -597,7 +550,7 @@ export function DashboardOverview() {
         <Card className="flex flex-col max-h-[420px]">
           <CardHeader icon={<FileText className="w-4 h-4 text-slate-400" />} title="Son Faturalar" />
           <div className="flex-1 overflow-auto divide-y divide-slate-800/50">
-            {invs?.data?.length ? invs.data.map((inv: InvoiceItem) => (
+            {invs?.data?.length ? invs.data.map((inv: DashboardInvoice) => (
               <div key={inv.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-800/30 transition-colors">
                 <div className={cn("w-2 h-2 rounded-full shrink-0", STATUS_DOT[inv.status])} />
                 <div className="flex-1 min-w-0">
@@ -673,7 +626,7 @@ export function DashboardOverview() {
         <Card className="flex flex-col max-h-[360px]">
           <CardHeader icon={<ListChecks className="w-4 h-4 text-violet-400" />} title="Görevlerim" />
           <div className="flex-1 overflow-auto divide-y divide-slate-800/50">
-            {tasks && tasks.length > 0 ? tasks.slice(0, 8).map((task: TaskItem) => (
+            {tasks && tasks.length > 0 ? tasks.slice(0, 8).map((task: DashboardTask) => (
               <Link key={task.id} href={task.href} className="block px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm text-slate-200 leading-snug truncate">{task.title}</p>
@@ -693,7 +646,7 @@ export function DashboardOverview() {
         <Card className="flex flex-col max-h-[360px]">
           <CardHeader icon={<Bell className="w-4 h-4 text-sky-400" />} title="Bildirimler" />
           <div className="flex-1 overflow-auto divide-y divide-slate-800/50">
-            {notifs && notifs.length > 0 ? notifs.map((n: NotificationItem) => (
+            {notifs && notifs.length > 0 ? notifs.map((n: DashboardNotification) => (
               <div key={n.id} className="px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
                 <p className="text-sm text-slate-200 leading-snug">{n.title}</p>
                 {n.message && <p className="text-xs text-slate-500 mt-1 line-clamp-1">{n.message}</p>}
@@ -708,7 +661,7 @@ export function DashboardOverview() {
         <Card className="flex flex-col max-h-[360px]">
           <CardHeader icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />} title="Bekleyen Onaylar" />
           <div className="flex-1 overflow-auto divide-y divide-slate-800/50">
-            {appr && appr.length > 0 ? appr.map((a: ApprovalItem) => (
+            {appr && appr.length > 0 ? appr.map((a: DashboardApprovalRequest) => (
               <div key={a.id} className="px-5 py-3.5 hover:bg-slate-800/30 transition-colors flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm text-slate-200">{a.module} Onayı</p>

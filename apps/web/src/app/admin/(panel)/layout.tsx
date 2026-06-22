@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
   Shield, LayoutDashboard, Building2, Sliders,
-  FileText, LogOut, ShieldCheck,
+  Activity, FileText, LogOut, ShieldCheck,
 } from 'lucide-react';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,7 @@ const NAV = [
   { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/admin/tenants', icon: Building2, label: 'Tenantlar' },
   { href: '/admin/features', icon: Sliders, label: 'Özellikler' },
+  { href: '/admin/observability', icon: Activity, label: 'Operasyon' },
   { href: '/admin/audit', icon: FileText, label: 'Denetim' },
   { href: '/admin/security', icon: ShieldCheck, label: 'Güvenlik' },
 ];

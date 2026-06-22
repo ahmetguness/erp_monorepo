@@ -5,6 +5,7 @@ interface SmokeCheck {
   label: string;
   file: string;
   includes: readonly string[];
+  excludes?: readonly string[];
 }
 
 const repoRoot = path.resolve(__dirname, '../../..');
@@ -19,6 +20,28 @@ const checks: readonly SmokeCheck[] = [
     label: 'dashboard page renders dashboard overview',
     file: 'apps/web/src/app/(dashboard)/dashboard/page.tsx',
     includes: ['DashboardOverview'],
+  },
+  {
+    label: 'dashboard data access is routed through hooks and services',
+    file: 'apps/web/src/components/features/dashboard/DashboardOverview.tsx',
+    includes: ['useDashboardInvoices', 'useDashboardTasks', 'useRevenueSummary', 'usePinnedKpiPreviews'],
+    excludes: ['apiClient', 'safeParse', '/api/reports'],
+  },
+  {
+    label: 'fiscal period report summaries use reporting hooks',
+    file: 'apps/web/src/components/features/accounting/FiscalPeriodsPage.tsx',
+    includes: ['useRevenueSummary', 'useExpenseSummary'],
+    excludes: ['apiClient', '/api/reports'],
+  },
+  {
+    label: 'standard api error state covers auth permission and plan/module gates',
+    file: 'apps/web/src/components/shared/ApiErrorState.tsx',
+    includes: ['ERROR_CODES.UNAUTHORIZED', 'ERROR_CODES.FORBIDDEN', 'ERROR_CODES.LIMIT_EXCEEDED', 'ERROR_CODES.FEATURE_DISABLED', 'ERROR_CODES.MODULE_DISABLED'],
+  },
+  {
+    label: 'query invalidation manifest centralizes shared cache keys',
+    file: 'apps/web/src/lib/query-invalidation.ts',
+    includes: ['dashboardTasks', 'workflowTasks', 'reports', 'invoices', 'notifications', 'approvalRequests'],
   },
   {
     label: 'contacts list and detail routes exist',
@@ -83,6 +106,10 @@ async function runCheck(check: SmokeCheck): Promise<void> {
   const missing = check.includes.filter((expected) => !content.includes(expected));
   if (missing.length > 0) {
     throw new Error(`${check.label}: ${check.file} icinde eksik isaretler: ${missing.join(', ')}`);
+  }
+  const forbidden = check.excludes?.filter((unexpected) => content.includes(unexpected)) ?? [];
+  if (forbidden.length > 0) {
+    throw new Error(`${check.label}: ${check.file} icinde beklenmeyen isaretler: ${forbidden.join(', ')}`);
   }
 }
 

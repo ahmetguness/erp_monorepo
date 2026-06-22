@@ -1,15 +1,23 @@
 import { Hono } from 'hono';
 import { FeatureKey } from '@prisma/client';
-import { authenticateApiKey, requireScope } from '../middleware/authenticateApiKey';
+import { apiKeyRateLimit, authenticateApiKey, requireScope } from '../middleware/authenticateApiKey';
 import { requireFeature } from '../middleware/requireFeature';
 import { prisma } from '../lib/prisma';
 import { ValidationError, NotFoundError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 import { validateTenantOwnership, buildOwnershipChecks } from '../utils/validateTenantOwnership';
+import { getExternalApiManifest, getExternalOpenApiDocument } from '../services/external-api-registry.service.js';
 
 const externalRoutes = new Hono();
 
+externalRoutes.get('/manifest', (c) => c.json({ data: getExternalApiManifest() }));
+externalRoutes.get('/openapi.json', (c) => {
+  const origin = new URL(c.req.url).origin;
+  return c.json(getExternalOpenApiDocument(origin));
+});
+
 externalRoutes.use('*', authenticateApiKey());
+externalRoutes.use('*', apiKeyRateLimit());
 externalRoutes.use('*', requireFeature(FeatureKey.API_ACCESS));
 
 // ═══════════════════════════════════════════

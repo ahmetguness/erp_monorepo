@@ -55,6 +55,17 @@ export interface RenderedManagedMailTemplate {
   missingVariables: string[];
 }
 
+export interface MailTemplateLifecycleSummary {
+  total: number;
+  systemCount: number;
+  tenantCount: number;
+  approvedTenantCount: number;
+  draftTenantCount: number;
+  latestTenantVersion: number;
+  variableSchemaCount: number;
+  requiredVariableCount: number;
+}
+
 interface StoredTenantMailTemplate extends ManagedMailTemplate {
   scope: 'TENANT';
   createdAt: string;
@@ -225,6 +236,27 @@ export class MailTemplateManagementService {
       ...getMailTemplates().map(toSystemTemplate),
       ...tenantTemplates,
     ];
+  }
+
+  static async lifecycleSummary(tenantId: string): Promise<MailTemplateLifecycleSummary> {
+    const templates = await this.list(tenantId);
+    const tenantTemplates = templates.filter((template) => template.scope === 'TENANT');
+    const variableSchemaCount = templates.reduce((count, template) => count + template.variables.length, 0);
+    const requiredVariableCount = templates.reduce(
+      (count, template) => count + template.variables.filter((variable) => variable.required).length,
+      0,
+    );
+
+    return {
+      total: templates.length,
+      systemCount: templates.length - tenantTemplates.length,
+      tenantCount: tenantTemplates.length,
+      approvedTenantCount: tenantTemplates.filter((template) => template.approved).length,
+      draftTenantCount: tenantTemplates.filter((template) => !template.approved).length,
+      latestTenantVersion: tenantTemplates.reduce((latest, template) => Math.max(latest, template.version), 0),
+      variableSchemaCount,
+      requiredVariableCount,
+    };
   }
 
   static async find(tenantId: string, templateId: string): Promise<ManagedMailTemplate | null> {

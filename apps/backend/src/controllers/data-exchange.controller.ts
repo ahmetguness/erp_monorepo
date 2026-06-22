@@ -1,11 +1,13 @@
 import { Context } from 'hono';
-import { PermissionAction } from '@prisma/client';
+import { AuditAction, EntityType, PermissionAction } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma';
 import { getTenantPermissionContext, type TenantPermissionContext } from '../lib/tenant-permissions';
 import { ForbiddenError, ValidationError } from '../errors';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { getDataQualitySummary } from '../services/data-quality.service.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { DataExchangeWorkflowService, duplicateSuggestionsFromWarnings, toJsonObject } from '../services/data-exchange-workflow.service.js';
 
 type DataExchangeEntity = 'products' | 'contacts' | 'stock' | 'invoices';
 
@@ -383,6 +385,43 @@ async function exportEntity(entity: DataExchangeEntity, tenantId: string): Promi
 }
 
 export const DataExchangeController = {
+  async batches(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const access = await requireAnyReadAccess(c, tenantId, userId, ['reporting', 'contacts', 'inventory', 'invoicing']);
+    if (access instanceof Response) return access;
+
+    const batches = await new DataExchangeWorkflowService(prisma).listBatches(tenantId);
+    return c.json({ data: batches });
+  },
+
+  async rollbackBatch(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const batchId = c.req.param('batchId');
+    if (!batchId) return c.json(new ValidationError('batchId zorunludur.').toJSON(), 400);
+    const access = await requireAnyReadAccess(c, tenantId, userId, ['reporting', 'contacts', 'inventory', 'invoicing']);
+    if (access instanceof Response) return access;
+
+    const batch = await new DataExchangeWorkflowService(prisma).rollbackBatch(tenantId, batchId);
+    if (!batch) return c.json(new ValidationError('Import batch bulunamadı.').toJSON(), 404);
+
+    const { ipAddress, userAgent } = getRequestMeta(c);
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'data_exchange',
+      entityType: EntityType.OTHER,
+      entityId: batch.batchId,
+      action: AuditAction.UPDATE,
+      newValues: toJsonObject(batch),
+      ipAddress,
+      userAgent,
+    });
+
+    return c.json({ data: batch });
+  },
+
   async quality(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
@@ -391,6 +430,21 @@ export const DataExchangeController = {
 
     const summary = await getDataQualitySummary(prisma, tenantId);
     return c.json({ data: summary });
+  },
+
+  async createQualityTask(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const access = await requireAnyReadAccess(c, tenantId, userId, ['reporting', 'contacts', 'inventory', 'hr', 'sales', 'invoicing']);
+    if (access instanceof Response) return access;
+
+    const issueKey = c.req.param('issueKey');
+    const summary = await getDataQualitySummary(prisma, tenantId);
+    const issue = summary.issues.find((item) => item.key === issueKey);
+    if (!issue) return c.json(new ValidationError('Data quality sorunu bulunamadı.').toJSON(), 404);
+
+    const result = await new DataExchangeWorkflowService(prisma).createQualityTask(tenantId, userId, issue);
+    return c.json({ data: result }, 201);
   },
 
   async template(c: Context): Promise<Response> {
@@ -433,6 +487,25 @@ export const DataExchangeController = {
     const preview = await previewImport(config, tenantId, body);
     const validRows = preview.rows.filter((row) => row.valid).length;
     const invalidRows = preview.rows.filter((row) => !row.valid).length;
+    const canImportValidRows = body.partialImport ? validRows > 0 : invalidRows === 0 && validRows > 0;
+    const batchId = randomUUID();
+    const duplicateSuggestions = duplicateSuggestionsFromWarnings(preview.rows);
+    const batch = await new DataExchangeWorkflowService(prisma).registerBatch({
+      tenantId,
+      userId,
+      batchId,
+      entity: config.entity,
+      totalRows: preview.rows.length,
+      validRows,
+      invalidRows,
+      partialImport: body.partialImport,
+      mapping: body.mapping,
+      rowIssues: preview.rows
+        .filter((row) => row.errors.length > 0 || row.warnings.length > 0)
+        .map((row) => ({ rowNumber: row.rowNumber, errors: row.errors, warnings: row.warnings })),
+      duplicateSuggestions,
+      canImportValidRows,
+    });
     return c.json({
       data: {
         entity: config.entity,
@@ -441,13 +514,14 @@ export const DataExchangeController = {
         errors: preview.errors,
         validRows,
         invalidRows,
+        duplicateSuggestions,
         batchPlan: {
-          batchId: randomUUID(),
+          batchId,
           mapping: body.mapping,
           partialImport: body.partialImport,
-          canImportValidRows: body.partialImport ? validRows > 0 : invalidRows === 0 && validRows > 0,
-          rollbackAvailable: false,
-          rollbackNote: 'Kalıcı import batch modeli devreye alınmadan gerçek rollback çalıştırılmaz.',
+          canImportValidRows,
+          rollbackAvailable: true,
+          rollbackNote: batch.rollbackNote,
         },
       },
     });

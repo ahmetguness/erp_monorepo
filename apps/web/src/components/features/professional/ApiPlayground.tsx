@@ -113,7 +113,7 @@ const ENDPOINT_GROUPS: {
         method: "GET",
         path: "/api/external/stock-levels",
         label: "Seviyeler",
-        scope: "products:read",
+        scope: "inventory:read",
         hasBody: false,
         params: "?page=1&limit=10",
         description: "Depo bazlı stok seviyeleri",
@@ -196,6 +196,7 @@ function highlightJson(json: string): string {
 
 export function ApiPlayground() {
   const [apiKey, setApiKey] = useState("");
+  const [sandboxMode, setSandboxMode] = useState(true);
   const [showKey, setShowKey] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [body, setBody] = useState("");
@@ -245,6 +246,7 @@ export function ApiPlayground() {
         headers: {
           "Content-Type": "application/json",
           "x-api-key": sanitizedKey,
+          "x-sandbox-mode": sandboxMode ? "true" : "false",
         },
         ...(endpoint.hasBody && body.trim() ? { body: body.trim() } : {}),
       });
@@ -303,7 +305,7 @@ export function ApiPlayground() {
         100,
       );
     }
-  }, [apiKey, endpoint, body]);
+  }, [apiKey, endpoint, body, sandboxMode]);
 
   const handleCopy = (type: "response" | "curl", text: string) => {
     navigator.clipboard.writeText(text);
@@ -311,7 +313,7 @@ export function ApiPlayground() {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const curlCommand = `curl -X ${endpoint.method} "${API_BASE}${endpoint.path}${endpoint.params ?? ""}" \\\n  -H "x-api-key: ${apiKey || "YOUR_API_KEY"}" \\\n  -H "Content-Type: application/json"${endpoint.hasBody && body.trim() ? ` \\\n  -d '${body.replace(/\n/g, "")}'` : ""}`;
+  const curlCommand = `curl -X ${endpoint.method} "${API_BASE}${endpoint.path}${endpoint.params ?? ""}" \\\n  -H "x-api-key: ${apiKey || "YOUR_API_KEY"}" \\\n  -H "x-sandbox-mode: ${sandboxMode ? "true" : "false"}" \\\n  -H "Content-Type: application/json"${endpoint.hasBody && body.trim() ? ` \\\n  -d '${body.replace(/\n/g, "")}'` : ""}`;
 
   const statusColor =
     statusCode === null
@@ -361,6 +363,15 @@ export function ApiPlayground() {
               {showKey ? "Gizle" : "Göster"}
             </button>
           </div>
+          <label className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
+            <span className="text-[11px] text-slate-400">Sandbox mode</span>
+            <input
+              type="checkbox"
+              checked={sandboxMode}
+              onChange={(event) => setSandboxMode(event.target.checked)}
+              className="h-4 w-4 accent-sky-500"
+            />
+          </label>
         </div>
 
         {/* Endpoint list */}
@@ -447,8 +458,7 @@ export function ApiPlayground() {
         {/* Info bar */}
         <div className="flex items-center gap-2 px-4 py-2 bg-sky-500/5 border-b border-sky-500/10 text-[11px] text-sky-400/80">
           <Terminal className="w-3 h-3 flex-shrink-0" />
-          Salt okunur mod — Playground sadece GET isteklerini destekler. Yazma
-          işlemleri için cURL veya kendi entegrasyonunuzu kullanın.
+          Sandbox modu acikken yazma istekleri dogrulanir, ancak veri degisikligi yapilmaz.
         </div>
 
         {/* Request header */}

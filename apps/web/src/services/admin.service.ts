@@ -41,8 +41,18 @@ export interface EndpointLatencySnapshot {
   count: number;
   errorCount: number;
   avgMs: number;
+  p95Ms: number;
+  p99Ms: number;
+  errorRatePct: number;
   maxMs: number;
   histogram: { le100ms: number; le300ms: number; le1000ms: number; gt1000ms: number };
+}
+
+export interface ErrorRateTrendSnapshot {
+  bucketStart: string;
+  requestCount: number;
+  errorCount: number;
+  errorRatePct: number;
 }
 
 export interface SlowEndpointSnapshot {
@@ -61,6 +71,15 @@ export interface RecentErrorSnapshot {
   message: string;
   requestId: string;
   correlationId: string;
+  occurredAt: string;
+}
+
+export interface SlowQuerySnapshot {
+  model: string | null;
+  action: string;
+  durationMs: number;
+  requestId: string | null;
+  correlationId: string | null;
   occurredAt: string;
 }
 
@@ -106,10 +125,18 @@ export interface OperationalObservability {
   http: {
     totalRequests: number;
     totalErrors: number;
+    errorRatePct: number;
     slowThresholdMs: number;
+    p95Ms: number;
+    p99Ms: number;
     endpoints: EndpointLatencySnapshot[];
+    errorRateTrend: ErrorRateTrendSnapshot[];
     recentSlowEndpoints: SlowEndpointSnapshot[];
     recentErrors: RecentErrorSnapshot[];
+  };
+  slowQueries: {
+    thresholdMs: number;
+    recent: SlowQuerySnapshot[];
   };
   domainEvents: {
     failedCount: number;
@@ -120,6 +147,32 @@ export interface OperationalObservability {
     byStatus: WorkerJobMetricSnapshot[];
     recentProblemJobs: RecentWorkerJobSnapshot[];
   };
+  telemetry: {
+    persistence: {
+      mode: 'in-memory' | 'persistent';
+      durable: boolean;
+      detail: string;
+    };
+    sentry: { enabled: boolean };
+    openTelemetry: { enabled: boolean; exporter: string | null };
+  };
+}
+
+export interface ObservabilityAuditSearchResult {
+  query: string;
+  slowEndpoints: SlowEndpointSnapshot[];
+  errors: RecentErrorSnapshot[];
+  slowQueries: SlowQuerySnapshot[];
+  auditLogs: Array<{
+    id: string;
+    tenantId: string;
+    userId: string | null;
+    module: string;
+    entityType: string;
+    entityId: string;
+    action: string;
+    createdAt: string;
+  }>;
 }
 
 export interface TenantMetrics {
@@ -251,6 +304,11 @@ export async function getTenantMetrics(id: string): Promise<TenantMetrics> {
 
 export async function getOperationalObservability(): Promise<OperationalObservability> {
   const res = await adminApiClient.get('/api/admin/observability');
+  return res.data.data;
+}
+
+export async function searchOperationalObservability(q: string): Promise<ObservabilityAuditSearchResult> {
+  const res = await adminApiClient.get('/api/admin/observability/search', { params: { q } });
   return res.data.data;
 }
 

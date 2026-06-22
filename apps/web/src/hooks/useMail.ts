@@ -8,6 +8,8 @@ import {
   createAiMailDraft,
   createMailTemplate,
   deleteMailTemplate,
+  getMailSummary,
+  getMailTemplateLifecycle,
   getMail,
   listMailTemplates,
   listMail,
@@ -70,6 +72,20 @@ export function useMailTemplates() {
   return useQuery({
     queryKey: ['mail', 'templates'],
     queryFn: listMailTemplates,
+  });
+}
+
+export function useMailSummary() {
+  return useQuery({
+    queryKey: ['mail', 'summary'],
+    queryFn: getMailSummary,
+  });
+}
+
+export function useMailTemplateLifecycle() {
+  return useQuery({
+    queryKey: ['mail', 'templates', 'lifecycle'],
+    queryFn: getMailTemplateLifecycle,
   });
 }
 

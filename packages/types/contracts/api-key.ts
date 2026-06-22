@@ -1,7 +1,6 @@
 import { z } from 'zod';
-import { apiClient } from '@/lib/api-client';
-import { safeParse } from '@/lib/safe-parse';
-import { PaginatedResponseSchema, SingleResponseSchema, type PaginationParams } from '@/types/api.types';
+
+export const API_KEY_CONTRACT_OWNER = 'packages/types/contracts/api-key.ts' as const;
 
 export const API_KEY_SCOPE_VALUES = [
   'products:read',
@@ -21,6 +20,14 @@ export const API_KEY_SCOPE_VALUES = [
 
 export const ApiKeyScopeSchema = z.enum(API_KEY_SCOPE_VALUES);
 export type ApiKeyScope = z.infer<typeof ApiKeyScopeSchema>;
+
+export const CreateApiKeySchema = z.object({
+  name: z.string().trim().min(1),
+  scopes: z.array(ApiKeyScopeSchema).optional(),
+  expiresAt: z.string().trim().min(1).optional(),
+});
+
+export type CreateApiKeyDTO = z.infer<typeof CreateApiKeySchema>;
 
 export const ApiKeySchema = z.object({
   id: z.string(),
@@ -42,7 +49,10 @@ export const ApiKeySchema = z.object({
   lastStatus: z.coerce.number().nullable().optional(),
 });
 
-export const ApiKeyWithRawSchema = ApiKeySchema.extend({ rawKey: z.string().optional() });
+export const ApiKeyWithRawSchema = ApiKeySchema.extend({
+  rawKey: z.string().optional(),
+});
+
 export const ApiKeyActivitySchema = z.object({
   id: z.string(),
   action: z.string(),
@@ -52,14 +62,20 @@ export const ApiKeyActivitySchema = z.object({
   createdAt: z.string(),
 });
 
-export const ExternalApiEndpointSchema = z.object({
-  method: z.enum(['GET', 'POST', 'PATCH', 'DELETE']),
+export const ExternalHttpMethodSchema = z.enum(['GET', 'POST', 'PATCH', 'DELETE']);
+export type ExternalHttpMethod = z.infer<typeof ExternalHttpMethodSchema>;
+
+export const ExternalApiEndpointSummarySchema = z.object({
+  method: ExternalHttpMethodSchema,
   path: z.string(),
   summary: z.string(),
+  sandboxSupported: z.boolean(),
+});
+
+export const ExternalApiEndpointSchema = ExternalApiEndpointSummarySchema.extend({
   description: z.string(),
   scope: ApiKeyScopeSchema.or(z.string()),
   group: z.string(),
-  sandboxSupported: z.boolean(),
   queryExample: z.string().optional(),
   requestExample: z.unknown().optional(),
   responseExample: z.unknown(),
@@ -69,12 +85,7 @@ export const ExternalScopeManifestItemSchema = z.object({
   scope: ApiKeyScopeSchema.or(z.string()),
   label: z.string(),
   description: z.string(),
-  endpoints: z.array(z.object({
-    method: z.enum(['GET', 'POST', 'PATCH', 'DELETE']),
-    path: z.string(),
-    summary: z.string(),
-    sandboxSupported: z.boolean(),
-  })),
+  endpoints: z.array(ExternalApiEndpointSummarySchema),
 });
 
 export const ExternalApiManifestSchema = z.object({
@@ -92,50 +103,9 @@ export const ExternalApiManifestSchema = z.object({
   endpoints: z.array(ExternalApiEndpointSchema),
 });
 
-export const CreateApiKeySchema = z.object({
-  name: z.string().trim().min(1),
-  scopes: z.array(ApiKeyScopeSchema).optional(),
-  expiresAt: z.string().trim().min(1).optional(),
-});
-
 export type ApiKey = z.infer<typeof ApiKeySchema>;
 export type ApiKeyWithRaw = z.infer<typeof ApiKeyWithRawSchema>;
 export type ApiKeyActivity = z.infer<typeof ApiKeyActivitySchema>;
-export type CreateApiKeyDTO = z.infer<typeof CreateApiKeySchema>;
+export type ExternalApiEndpoint = z.infer<typeof ExternalApiEndpointSchema>;
+export type ExternalScopeManifestItem = z.infer<typeof ExternalScopeManifestItemSchema>;
 export type ExternalApiManifest = z.infer<typeof ExternalApiManifestSchema>;
-
-export interface ListParams extends PaginationParams { isActive?: string }
-
-export async function getApiKeys(params: ListParams) {
-  const res = await apiClient.get('/api/api-keys', { params });
-  return safeParse(PaginatedResponseSchema(ApiKeySchema), res.data, 'getApiKeys');
-}
-
-export async function createApiKey(data: CreateApiKeyDTO): Promise<ApiKeyWithRaw> {
-  const res = await apiClient.post('/api/api-keys', data);
-  return safeParse(SingleResponseSchema(ApiKeyWithRawSchema), res.data, 'createApiKey').data;
-}
-
-export async function revokeApiKey(id: string): Promise<ApiKey> {
-  const res = await apiClient.post(`/api/api-keys/${id}/revoke`);
-  return safeParse(SingleResponseSchema(ApiKeySchema), res.data, 'revokeApiKey').data;
-}
-
-export async function deleteApiKey(id: string) {
-  await apiClient.delete(`/api/api-keys/${id}`);
-}
-
-export async function getApiKeyActivity(id: string): Promise<ApiKeyActivity[]> {
-  const res = await apiClient.get(`/api/api-keys/${id}/activity`);
-  return safeParse(SingleResponseSchema(z.array(ApiKeyActivitySchema)), res.data, 'getApiKeyActivity').data;
-}
-
-export async function getExternalApiManifest(): Promise<ExternalApiManifest> {
-  const res = await apiClient.get('/api/api-keys/manifest');
-  return safeParse(SingleResponseSchema(ExternalApiManifestSchema), res.data, 'getExternalApiManifest').data;
-}
-
-export async function getExternalOpenApiSpec(): Promise<unknown> {
-  const res = await apiClient.get('/api/api-keys/openapi.json');
-  return res.data;
-}

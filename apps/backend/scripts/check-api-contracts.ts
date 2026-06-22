@@ -505,6 +505,7 @@ const priorityValidationCoverage: readonly WebValidationCoverageSpec[] = [
   { file: 'product.service.ts', label: 'products', requiredPaths: ['/api/products'], requireSafeParse: true },
   { file: 'reporting.service.ts', label: 'reports', requiredPaths: ['/api/reports/revenue-summary', '/api/reports/registry'], requireSafeParse: true },
   { file: 'data-exchange.service.ts', label: 'data-exchange', requiredPaths: ['/api/data-exchange/quality'], requireSafeParse: true },
+  { file: 'api-key.service.ts', label: 'api-keys', requiredPaths: ['/api/api-keys', '/api/api-keys/manifest'], requireSafeParse: true },
 ];
 
 const runtimeContracts: readonly RuntimeContractSpec[] = [
@@ -1118,9 +1119,67 @@ function validateWebValidationCoverage(): CheckIssue[] {
   return issues;
 }
 
+function extractConstArrayStringValues(text: string, constName: string): Set<string> {
+  const match = new RegExp(`const\\s+${constName}\\s*=\\s*(?:new\\s+Set\\()?\\s*\\[([\\s\\S]*?)\\]`, 'm').exec(text);
+  if (!match) return new Set();
+
+  const values = new Set<string>();
+  const valueRegex = /'([^']+)'/g;
+  let valueMatch: RegExpExecArray | null;
+  while ((valueMatch = valueRegex.exec(match[1])) !== null) {
+    values.add(valueMatch[1]);
+  }
+  return values;
+}
+
+function extractObjectStringKeys(text: string, constName: string): Set<string> {
+  const match = new RegExp(`const\\s+${constName}\\s*:[^=]+\\=\\s*\\{([\\s\\S]*?)\\n\\};`, 'm').exec(text);
+  if (!match) return new Set();
+
+  const values = new Set<string>();
+  const valueRegex = /'([^']+)'\s*:/g;
+  let valueMatch: RegExpExecArray | null;
+  while ((valueMatch = valueRegex.exec(match[1])) !== null) {
+    values.add(valueMatch[1]);
+  }
+  return values;
+}
+
+function extractExternalEndpointScopes(text: string): Set<string> {
+  const blockMatch = /const\s+EXTERNAL_API_ENDPOINTS[^\=]*=\s*\[([\s\S]*?)\]\s+as\s+const/.exec(text);
+  const block = blockMatch?.[1] ?? '';
+  const values = new Set<string>();
+  const valueRegex = /\bscope:\s*'([^']+)'/g;
+  let valueMatch: RegExpExecArray | null;
+  while ((valueMatch = valueRegex.exec(block)) !== null) {
+    values.add(valueMatch[1]);
+  }
+  return values;
+}
+
+function pushSetDifferenceIssues(
+  issues: CheckIssue[],
+  file: string,
+  label: string,
+  source: ReadonlySet<string>,
+  target: ReadonlySet<string>,
+): void {
+  for (const value of source) {
+    if (!target.has(value)) {
+      issues.push({ file, message: `${label}: ${value} is missing` });
+    }
+  }
+}
+
 function validateSharedContractDrift(): CheckIssue[] {
   const issues: CheckIssue[] = [];
   const packagesTypes = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'index.ts'));
+  const packagesTypesPackage = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'package.json'));
+  const sharedCommonContracts = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'contracts', 'common.ts'));
+  const sharedApiKeyContracts = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'contracts', 'api-key.ts'));
+  const apiKeyService = readText(resolve(process.cwd(), '..', 'web', 'src', 'services', 'api-key.service.ts'));
+  const apiKeyController = readText(resolve(process.cwd(), 'src', 'controllers', 'api-key.controller.ts'));
+  const externalApiRegistry = readText(resolve(process.cwd(), 'src', 'services', 'external-api-registry.service.ts'));
   const webApiTypes = readText(resolve(process.cwd(), '..', 'web', 'src', 'types', 'api.types.ts'));
 
   const sharedChecks: Array<{ label: string; pattern: RegExp }> = [
@@ -1146,6 +1205,52 @@ function validateSharedContractDrift(): CheckIssue[] {
       issues.push({ file: '../web/src/types/api.types.ts', message: `web contract drift: ${check.label} is missing` });
     }
   }
+
+  const sharedZodChecks: Array<{ file: string; label: string; text: string; pattern: RegExp }> = [
+    { file: '../../packages/types/package.json', label: 'contracts export', text: packagesTypesPackage, pattern: /"\.\/contracts\/api-key":\s*\{[\s\S]*"types":\s*"\.\/contracts\/api-key\.ts"[\s\S]*"default":\s*"\.\/contracts\/api-key\.ts"/ },
+    { file: '../../packages/types/package.json', label: 'contracts index export', text: packagesTypesPackage, pattern: /"\.\/contracts":\s*\{[\s\S]*"types":\s*"\.\/contracts\/index\.ts"[\s\S]*"default":\s*"\.\/contracts\/index\.ts"/ },
+    { file: '../../packages/types/contracts/common.ts', label: 'SingleResponseSchema.data', text: sharedCommonContracts, pattern: /function\s+SingleResponseSchema[\s\S]*data:\s*itemSchema/ },
+    { file: '../../packages/types/contracts/common.ts', label: 'PaginatedResponseSchema.meta', text: sharedCommonContracts, pattern: /function\s+PaginatedResponseSchema[\s\S]*meta:\s*PaginationMetaSchema/ },
+    { file: '../../packages/types/contracts/api-key.ts', label: 'contract owner', text: sharedApiKeyContracts, pattern: /API_KEY_CONTRACT_OWNER/ },
+    { file: '../../packages/types/contracts/api-key.ts', label: 'CreateApiKeySchema', text: sharedApiKeyContracts, pattern: /const\s+CreateApiKeySchema\s*=\s*z\.object/ },
+    { file: '../../packages/types/contracts/api-key.ts', label: 'ApiKeySchema', text: sharedApiKeyContracts, pattern: /const\s+ApiKeySchema\s*=\s*z\.object/ },
+    { file: '../../packages/types/contracts/api-key.ts', label: 'ExternalApiManifestSchema', text: sharedApiKeyContracts, pattern: /const\s+ExternalApiManifestSchema\s*=\s*z\.object/ },
+    { file: '../web/src/services/api-key.service.ts', label: 'web ApiKeySchema mirror', text: apiKeyService, pattern: /export\s+const\s+ApiKeySchema\s*=\s*z\.object/ },
+    { file: '../web/src/services/api-key.service.ts', label: 'web ExternalApiManifestSchema mirror', text: apiKeyService, pattern: /export\s+const\s+ExternalApiManifestSchema\s*=\s*z\.object/ },
+  ];
+  for (const check of sharedZodChecks) {
+    if (!check.pattern.test(check.text)) {
+      issues.push({ file: check.file, message: `shared zod contract drift: ${check.label} is missing` });
+    }
+  }
+
+  if (/tenantId\s*:/.test(sharedApiKeyContracts)) {
+    issues.push({
+      file: '../../packages/types/contracts/api-key.ts',
+      message: 'shared zod contract drift: web-facing ApiKeySchema must not require backend-only tenantId',
+    });
+  }
+  if (/tenantId\s*:/.test(apiKeyService)) {
+    issues.push({
+      file: '../web/src/services/api-key.service.ts',
+      message: 'shared zod contract drift: web ApiKeySchema mirror must not require backend-only tenantId',
+    });
+  }
+
+  const sharedScopes = extractConstArrayStringValues(sharedApiKeyContracts, 'API_KEY_SCOPE_VALUES');
+  const webScopes = extractConstArrayStringValues(apiKeyService, 'API_KEY_SCOPE_VALUES');
+  const controllerScopes = extractConstArrayStringValues(apiKeyController, 'VALID_API_KEY_SCOPES');
+  const registryLabelScopes = extractObjectStringKeys(externalApiRegistry, 'SCOPE_LABELS');
+  const endpointScopes = extractExternalEndpointScopes(externalApiRegistry);
+  if (sharedScopes.size === 0) {
+    issues.push({ file: '../../packages/types/contracts/api-key.ts', message: 'shared zod contract drift: API_KEY_SCOPE_VALUES is empty or missing' });
+  }
+  pushSetDifferenceIssues(issues, '../web/src/services/api-key.service.ts', 'web API key scope mirror drift', sharedScopes, webScopes);
+  pushSetDifferenceIssues(issues, '../../packages/types/contracts/api-key.ts', 'shared API key scope drift from web mirror', webScopes, sharedScopes);
+  pushSetDifferenceIssues(issues, 'src/controllers/api-key.controller.ts', 'API key controller scope drift', sharedScopes, controllerScopes);
+  pushSetDifferenceIssues(issues, '../../packages/types/contracts/api-key.ts', 'shared API key scope drift', controllerScopes, sharedScopes);
+  pushSetDifferenceIssues(issues, 'src/services/external-api-registry.service.ts', 'external registry scope label drift', endpointScopes, registryLabelScopes);
+  pushSetDifferenceIssues(issues, '../../packages/types/contracts/api-key.ts', 'external registry endpoint scope drift', endpointScopes, sharedScopes);
 
   return issues;
 }

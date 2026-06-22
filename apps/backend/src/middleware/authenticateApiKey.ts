@@ -4,6 +4,8 @@ import { AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ForbiddenError } from '../errors';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { rateLimiter } from '../lib/rateLimiter.js';
+import { getExternalApiRateLimitPerMinute } from '../services/external-api-registry.service.js';
 
 /**
  * API Key authentication middleware.
@@ -57,6 +59,54 @@ export function authenticateApiKey() {
   };
 }
 
+function isSandboxMode(c: Context): boolean {
+  const header = c.req.header('x-sandbox-mode') ?? c.req.header('x-api-sandbox');
+  return header === 'true' || header === '1';
+}
+
+function getSandboxAction(method: string): AuditAction {
+  if (method === 'POST') return AuditAction.CREATE;
+  if (method === 'PATCH' || method === 'PUT') return AuditAction.UPDATE;
+  if (method === 'DELETE') return AuditAction.DELETE;
+  return AuditAction.OTHER;
+}
+
+export function apiKeyRateLimit() {
+  return async (c: Context, next: Next): Promise<Response | void> => {
+    const tenantId = c.get('tenantId');
+    const apiKeyId = c.get('apiKeyId');
+    if (typeof tenantId !== 'string' || typeof apiKeyId !== 'string') {
+      return c.json(new ForbiddenError('API anahtari dogrulanamadi.').toJSON(), 401);
+    }
+
+    const exceeded = await rateLimiter.check(
+      `external_api_key:${apiKeyId}`,
+      getExternalApiRateLimitPerMinute(),
+      60_000,
+    );
+    if (exceeded) {
+      void createAuditLog(prisma, {
+        tenantId,
+        userId: null,
+        module: 'api_keys',
+        entityType: EntityType.OTHER,
+        entityId: apiKeyId,
+        action: AuditAction.OTHER,
+        newValues: {
+          method: c.req.method.toUpperCase(),
+          path: c.req.path,
+          status: 429,
+          rateLimited: true,
+        },
+        ...getRequestMeta(c),
+      });
+      return c.json({ error: { code: 'RATE_LIMITED', message: 'API key rate limit asildi. Lutfen biraz sonra tekrar deneyin.' } }, 429);
+    }
+
+    await next();
+  };
+}
+
 /**
  * Scope check middleware. Use after authenticateApiKey().
  * Checks if the API key has the required scope.
@@ -68,10 +118,64 @@ export function requireScope(scope: string) {
     const scopes: string[] = c.get('apiKeyScopes') ?? [];
 
     if (!scopes.includes(scope)) {
+      const tenantId = c.get('tenantId');
+      const apiKeyId = c.get('apiKeyId');
+      if (typeof tenantId === 'string' && typeof apiKeyId === 'string') {
+        void createAuditLog(prisma, {
+          tenantId,
+          userId: null,
+          module: 'api_keys',
+          entityType: EntityType.OTHER,
+          entityId: apiKeyId,
+          action: AuditAction.OTHER,
+          newValues: {
+            scope,
+            method: c.req.method.toUpperCase(),
+            path: c.req.path,
+            status: 403,
+            denied: true,
+          },
+          ...getRequestMeta(c),
+        });
+      }
       return c.json(
         new ForbiddenError(`Bu API anahtarının '${scope}' yetkisi yok. Mevcut yetkiler: ${scopes.join(', ')}`).toJSON(),
         403,
       );
+    }
+
+    const sandboxMethod = c.req.method.toUpperCase();
+    if (isSandboxMode(c) && sandboxMethod !== 'GET') {
+      const tenantId = c.get('tenantId');
+      const apiKeyId = c.get('apiKeyId');
+      if (typeof tenantId === 'string' && typeof apiKeyId === 'string') {
+        void createAuditLog(prisma, {
+          tenantId,
+          userId: null,
+          module: 'api_keys',
+          entityType: EntityType.OTHER,
+          entityId: apiKeyId,
+          action: getSandboxAction(sandboxMethod),
+          newValues: {
+            scope,
+            method: sandboxMethod,
+            path: c.req.path,
+            status: 200,
+            sandbox: true,
+          },
+          ...getRequestMeta(c),
+        });
+      }
+
+      return c.json({
+        data: {
+          sandbox: true,
+          method: sandboxMethod,
+          path: c.req.path,
+          scope,
+          message: 'Sandbox mode aktif. Scope dogrulandi, ancak veri degisikligi yapilmadi.',
+        },
+      });
     }
 
     await next();

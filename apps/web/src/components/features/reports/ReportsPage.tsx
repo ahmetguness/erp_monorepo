@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pin, Save, Trash2, TrendingDown, TrendingUp, Package, Users } from 'lucide-react';
+import { Download, Pin, Save, Trash2, TrendingDown, TrendingUp, Package, Users } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { Button } from '@/components/ui/Button';
@@ -14,7 +14,7 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getRevenueSummary, getExpenseSummary, getStockSummary, getContactBalance,
-  getSavedReports, deleteSavedReport, createSavedReport, getReportingRegistry, previewKpi,
+  getSavedReports, deleteSavedReport, createSavedReport, getReportingRegistry, previewKpi, recordSavedReportExportAudit,
   KpiReportConfigSchema,
   type KpiPreview,
   type KpiReportConfig,
@@ -89,6 +89,10 @@ function isScheduleFrequency(value: string): value is KpiReportConfig['scheduleE
   return value === 'DAILY' || value === 'WEEKLY' || value === 'MONTHLY';
 }
 
+function parseRecipientInput(value: string): string[] {
+  return Array.from(new Set(value.split(/[,\n;]/).map((item) => item.trim()).filter(Boolean))).slice(0, 10);
+}
+
 // ─────────────────────────────────────────────
 // Reports Page
 // ─────────────────────────────────────────────
@@ -143,7 +147,17 @@ export function ReportsPage() {
       try {
         return await getReportingRegistry();
       } catch {
-        return { datasets: [], chartTypes: [] };
+        return {
+          datasets: [],
+          chartTypes: [],
+          capabilities: {
+            savedKpi: false,
+            dashboardPinning: false,
+            scheduledReportEmail: false,
+            exportAudit: false,
+            permissionAwareDatasetFields: false,
+          },
+        };
       }
     },
   });
@@ -169,6 +183,12 @@ export function ReportsPage() {
       qc.invalidateQueries({ queryKey: ['reports', 'pinned-kpi'] });
       toast.success('KPI kaydedildi.');
     },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+
+  const recordExportAudit = useMutation({
+    mutationFn: (id: string) => recordSavedReportExportAudit(id),
+    onSuccess: () => toast.success('Export audit kaydı oluşturuldu.'),
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 
@@ -202,12 +222,21 @@ export function ReportsPage() {
     },
     { key: 'createdAt', header: 'Oluşturulma', width: '120px', render: (r) => <span className="text-slate-400">{formatDate(r.createdAt)}</span> },
     {
-      key: 'actions', header: '', width: '60px', align: 'right',
+      key: 'actions', header: '', width: '88px', align: 'right',
       render: (r) => (
-        <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(r); }}
-          className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex justify-end gap-1">
+          <button
+            aria-label="Export audit"
+            onClick={(e) => { e.stopPropagation(); recordExportAudit.mutate(r.id); }}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(r); }}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       ),
     },
   ];
@@ -333,7 +362,7 @@ export function ReportsPage() {
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-slate-300">Dataset</span>
               <select
-                value={kpiConfig.dataset}
+                value={selectedDataset?.key ?? ''}
                 onChange={(event) => {
                   const dataset = registry?.datasets.find((item) => item.key === event.target.value);
                   if (!dataset) return;
@@ -342,6 +371,7 @@ export function ReportsPage() {
                 }}
                 className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
               >
+                {!selectedDataset && <option value="" disabled>Dataset seçin</option>}
                 {registry?.datasets.map((dataset) => <option key={dataset.key} value={dataset.key}>{dataset.label}</option>)}
               </select>
             </label>
@@ -369,6 +399,20 @@ export function ReportsPage() {
                 className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
               >
                 {registry?.chartTypes.map((chart) => <option key={chart.key} value={chart.key}>{chart.label}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-slate-300">Gruplama</span>
+              <select
+                value={kpiConfig.groupBy ?? ''}
+                onChange={(event) => {
+                  setKpiConfig((current) => ({ ...current, groupBy: event.target.value || null }));
+                  setKpiPreview(null);
+                }}
+                className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+              >
+                <option value="">Gruplama yok</option>
+                {selectedDataset?.groupBy.map((group) => <option key={group.key} value={group.key}>{group.label}</option>)}
               </select>
             </label>
             <label className="flex flex-col gap-1.5">
@@ -423,6 +467,25 @@ export function ReportsPage() {
                 <option value="MONTHLY">Aylık</option>
               </select>
             </label>
+            <label className="flex flex-col gap-1.5 md:col-span-2">
+              <span className="text-xs font-medium text-slate-300">E-posta alıcıları</span>
+              <input
+                value={kpiConfig.scheduleEmail.recipients.join(', ')}
+                onChange={(event) => {
+                  const recipients = parseRecipientInput(event.target.value);
+                  setKpiConfig((current) => ({
+                    ...current,
+                    scheduleEmail: {
+                      ...current.scheduleEmail,
+                      recipients,
+                      enabled: recipients.length > 0 || current.scheduleEmail.enabled,
+                    },
+                  }));
+                }}
+                placeholder="finans@firma.com, owner@firma.com"
+                className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+              />
+            </label>
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-4 text-xs text-slate-400">
@@ -446,10 +509,10 @@ export function ReportsPage() {
               </label>
             </div>
             <div className="flex gap-2">
-              <Button variant="secondary" leftIcon={<TrendingUp className="h-4 w-4" />} loading={previewKpiMutation.isPending} onClick={() => previewKpiMutation.mutate(kpiConfig)}>
+              <Button variant="secondary" leftIcon={<TrendingUp className="h-4 w-4" />} loading={previewKpiMutation.isPending} disabled={!selectedDataset} onClick={() => previewKpiMutation.mutate(kpiConfig)}>
                 Önizle
               </Button>
-              <Button leftIcon={<Save className="h-4 w-4" />} loading={createKpiReport.isPending} disabled={!kpiName.trim()} onClick={() => createKpiReport.mutate()}>
+              <Button leftIcon={<Save className="h-4 w-4" />} loading={createKpiReport.isPending} disabled={!kpiName.trim() || !selectedDataset} onClick={() => createKpiReport.mutate()}>
                 KPI kaydet
               </Button>
             </div>

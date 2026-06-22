@@ -10,6 +10,8 @@ const apiKeyRoutes = new Hono();
 apiKeyRoutes.use('*', requirePlan(Plan.PROFESSIONAL));
 apiKeyRoutes.use('*', requireFeature(FeatureKey.API_ACCESS));
 
+apiKeyRoutes.get('/manifest', requirePermission('api_keys', 'READ'), ApiKeyController.manifest);
+apiKeyRoutes.get('/openapi.json', requirePermission('api_keys', 'READ'), ApiKeyController.openApi);
 apiKeyRoutes.get('/', requirePermission('api_keys', 'READ'), ApiKeyController.list);
 apiKeyRoutes.get('/:id/activity', requirePermission('api_keys', 'READ'), ApiKeyController.activity);
 apiKeyRoutes.post('/', requirePermission('api_keys', 'CREATE'), ApiKeyController.create);

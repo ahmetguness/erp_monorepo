@@ -6,6 +6,7 @@ import {
   Save, Plus, X, Building2, Layers, Pencil,
   Globe, Calendar, Receipt, DollarSign, Clock,
   Calculator, Package, FileText, ShieldCheck,
+  KeyRound, Monitor, ShieldAlert, Activity,
 } from 'lucide-react';
 import { FeaturePageShell } from '@/components/shared/FeaturePageShell';
 import { ImageUploadBox, type ImageUploadStatus } from '@/components/shared/ImageUploadBox';
@@ -25,6 +26,8 @@ import {
   useBusinessRules,
   useUpsertBusinessRule,
   useTenantSecurityScore,
+  useSecurityHardeningSnapshot,
+  useRevokeSecuritySession,
 } from '@/hooks/useSettings';
 import { cn } from '@/lib/utils';
 import type { TenantSetting, ModuleSetting, BusinessRule } from '@/services/settings.service';
@@ -94,6 +97,38 @@ const SECURITY_STATUS_CLASSES = {
   warn: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
   fail: 'border-red-500/30 bg-red-500/10 text-red-300',
 } as const;
+
+const SECURITY_RISK_CLASSES = {
+  critical: 'border-red-500/30 bg-red-500/10 text-red-300',
+  high: 'border-orange-500/30 bg-orange-500/10 text-orange-300',
+  medium: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+  low: 'border-slate-600 bg-slate-800 text-slate-300',
+} as const;
+
+const SESSION_STATUS_CLASSES = {
+  ACTIVE: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+  REVOKED: 'border-red-500/30 bg-red-500/10 text-red-300',
+  EXPIRED: 'border-slate-600 bg-slate-800 text-slate-300',
+} as const;
+
+const SESSION_STATUS_LABELS = {
+  ACTIVE: 'Aktif',
+  REVOKED: 'Sonlandirildi',
+  EXPIRED: 'Suresi doldu',
+} as const;
+
+function formatSecurityDate(value: string | null): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return new Intl.DateTimeFormat('tr-TR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
 
 function humanizeKey(key: string): string {
   return key
@@ -308,6 +343,7 @@ export function SettingsPage() {
   const { data: moduleSettings = [], isLoading: loadingModule } = useModuleSettings();
   const { data: businessRules = [], isLoading: loadingBusinessRules } = useBusinessRules();
   const { data: securityScore, isLoading: loadingSecurityScore } = useTenantSecurityScore();
+  const { data: securityHardening, isLoading: loadingSecurityHardening } = useSecurityHardeningSnapshot();
   const { data: logoBlob } = useTenantLogo();
   const upsertTenant = useUpsertTenantSetting();
   const deleteTenant = useDeleteTenantSetting();
@@ -315,6 +351,7 @@ export function SettingsPage() {
   const uploadLogo = useUploadTenantLogo();
   const deleteLogo = useDeleteTenantLogo();
   const upsertBusinessRule = useUpsertBusinessRule();
+  const revokeSession = useRevokeSecuritySession();
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
@@ -497,6 +534,128 @@ export function SettingsPage() {
         ) : (
           <p className="p-5 text-sm text-slate-500">Guvenlik skoru alınamadı.</p>
         )}
+
+        <div className="border-t border-slate-800/60 p-5">
+          {loadingSecurityHardening ? (
+            <div className="grid gap-3 md:grid-cols-3">
+              {[1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-xl bg-slate-800/60" />)}
+            </div>
+          ) : securityHardening ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="flex items-center gap-2 text-xs text-slate-500"><Monitor className="h-3.5 w-3.5" /> Aktif oturum</div>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">{securityHardening.sessions.active}</p>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="flex items-center gap-2 text-xs text-slate-500"><KeyRound className="h-3.5 w-3.5" /> Rotasyon riski</div>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">{securityHardening.apiKeyRotation.length}</p>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="flex items-center gap-2 text-xs text-slate-500"><ShieldAlert className="h-3.5 w-3.5" /> Yetki riski</div>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">{securityHardening.weakPermissionRisks.length}</p>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="flex items-center gap-2 text-xs text-slate-500"><Activity className="h-3.5 w-3.5" /> Webhook hata</div>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">{securityHardening.webhookAudit.failedWebhookCount}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 xl:grid-cols-2">
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40">
+                  <div className="border-b border-slate-800 px-4 py-3">
+                    <h3 className="text-sm font-semibold text-slate-100">Oturumlar</h3>
+                  </div>
+                  <div className="divide-y divide-slate-800">
+                    {securityHardening.sessions.recent.length === 0 ? (
+                      <p className="px-4 py-5 text-sm text-slate-500">Kayitli oturum yok.</p>
+                    ) : securityHardening.sessions.recent.map((session) => (
+                      <div key={session.id} className="flex items-center gap-3 px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-sm font-medium text-slate-200">{session.deviceLabel}</p>
+                            <span className={cn('rounded-lg border px-2 py-0.5 text-[11px] font-medium', SESSION_STATUS_CLASSES[session.status])}>
+                              {SESSION_STATUS_LABELS[session.status]}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">{session.ipAddress ?? 'IP yok'} - {formatSecurityDate(session.lastSeenAt)}</p>
+                        </div>
+                        {session.status === 'ACTIVE' && (
+                          <button
+                            type="button"
+                            disabled={revokeSession.isPending}
+                            onClick={() => revokeSession.mutate(session.id)}
+                            className="rounded-lg border border-red-500/30 px-2.5 py-1 text-xs font-medium text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Sonlandir
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40">
+                  <div className="border-b border-slate-800 px-4 py-3">
+                    <h3 className="text-sm font-semibold text-slate-100">Risk Tarama</h3>
+                  </div>
+                  <div className="grid gap-3 p-4">
+                    {securityHardening.apiKeyRotation.slice(0, 3).map((risk) => (
+                      <div key={risk.id} className="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-slate-200">{risk.name} - {risk.keyPrefix}</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">{risk.reason}</p>
+                          </div>
+                          <span className={cn('rounded-lg border px-2 py-0.5 text-[11px] font-medium', SECURITY_RISK_CLASSES[risk.severity])}>
+                            {risk.severity}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {securityHardening.weakPermissionRisks.slice(0, 3).map((risk) => (
+                      <div key={risk.roleId} className="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-slate-200">{risk.roleName}</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">{risk.reason}</p>
+                          </div>
+                          <span className={cn('rounded-lg border px-2 py-0.5 text-[11px] font-medium', SECURITY_RISK_CLASSES[risk.severity])}>
+                            {risk.assignedUserCount} kullanici
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {securityHardening.apiKeyRotation.length === 0 && securityHardening.weakPermissionRisks.length === 0 && (
+                      <p className="text-sm text-slate-500">Aktif rotasyon veya yetki riski yok.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <p className="text-xs text-slate-500">Webhook secret eksik</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">{securityHardening.webhookAudit.missingSecretCount}</p>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <p className="text-xs text-slate-500">Replay bekleyen webhook</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">{securityHardening.webhookAudit.replayableWebhookCount}</p>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <p className="text-xs text-slate-500">Son public abuse</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">{securityHardening.publicEndpointAbuse[0]?.exceededCount ?? 0}</p>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <p className="text-xs text-slate-500">Son webhook hata</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">{formatSecurityDate(securityHardening.webhookAudit.lastFailureAt)}</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">Guvenlik detaylari alinamadi.</p>
+          )}
+        </div>
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">

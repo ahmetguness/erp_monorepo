@@ -9,6 +9,8 @@ import {
   downloadTenantLogo, uploadTenantLogo, deleteTenantLogo,
   getBusinessRules, upsertBusinessRule,
   getTenantSecurityScore,
+  getSecurityHardeningSnapshot,
+  revokeSecuritySession,
   type BusinessRule,
 } from '@/services/settings.service';
 
@@ -42,6 +44,24 @@ export function useBusinessRules() {
 
 export function useTenantSecurityScore() {
   return useQuery({ queryKey: ['settings', 'security-score'], queryFn: getTenantSecurityScore, staleTime: 2 * 60 * 1000 });
+}
+
+export function useSecurityHardeningSnapshot() {
+  return useQuery({ queryKey: ['settings', 'security-hardening'], queryFn: getSecurityHardeningSnapshot, staleTime: 60 * 1000 });
+}
+
+export function useRevokeSecuritySession() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (sessionId: string) => revokeSecuritySession(sessionId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'security-hardening'] });
+      qc.invalidateQueries({ queryKey: ['settings', 'security-score'] });
+      toast.success('Oturum sonlandirildi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
 }
 
 export function useUpsertBusinessRule() {

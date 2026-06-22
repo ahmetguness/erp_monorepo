@@ -66,7 +66,7 @@ import { TrendyolWorker } from './services/trendyol-worker.service';
 import { DomainEventOutboxWorker } from './services/domain-event-outbox-worker.service';
 import { startMarketplaceMocks } from './mocks';
 import { registerDomainEventListeners } from './domain-events';
-import { recordHttpRequest, recordUnhandledError } from './services/observability.service';
+import { recordHttpRequest, recordUnhandledError, runWithObservabilityContext } from './services/observability.service';
 import { globalRateLimit } from './middleware/globalRateLimit';
 
 // ── Startup env var kontrolü ─────────────────
@@ -164,7 +164,7 @@ app.use('*', async (c, next) => {
   c.header('x-request-id', requestId);
   c.header('x-correlation-id', correlationId);
 
-  await next();
+  await runWithObservabilityContext({ requestId, correlationId }, next);
   const durationMs = Date.now() - start;
   recordHttpRequest({
     method: c.req.method,

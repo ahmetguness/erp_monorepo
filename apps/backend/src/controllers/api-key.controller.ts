@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { getExternalApiManifest, getExternalOpenApiDocument } from '../services/external-api-registry.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -20,6 +21,14 @@ interface ApiKeyListQuery {
   page?: string;
   limit?: string;
   isActive?: string;
+}
+
+interface ApiKeyUsageStats {
+  requestCount: number;
+  errorCount: number;
+  errorRate: number;
+  lastIpAddress: string | null;
+  lastStatus: number | null;
 }
 
 const VALID_API_KEY_SCOPES = new Set([
@@ -42,6 +51,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function readStatus(value: unknown): number | null {
+  if (!isRecord(value)) return null;
+  const status = value.status;
+  return typeof status === 'number' && Number.isFinite(status) ? status : null;
+}
+
+function emptyUsageStats(): ApiKeyUsageStats {
+  return { requestCount: 0, errorCount: 0, errorRate: 0, lastIpAddress: null, lastStatus: null };
+}
+
 function parseCreateApiKeyBody(value: unknown): CreateApiKeyDTO | ValidationError {
   if (!isRecord(value)) return new ValidationError('Geçersiz istek gövdesi.');
 
@@ -60,6 +79,15 @@ function parseCreateApiKeyBody(value: unknown): CreateApiKeyDTO | ValidationErro
 // ─────────────────────────────────────────────
 
 export const ApiKeyController = {
+  async manifest(c: Context): Promise<Response> {
+    return c.json({ data: getExternalApiManifest() });
+  },
+
+  async openApi(c: Context): Promise<Response> {
+    const origin = new URL(c.req.url).origin;
+    return c.json(getExternalOpenApiDocument(origin));
+  },
+
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
@@ -99,8 +127,56 @@ export const ApiKeyController = {
       }),
     ]);
 
+    const apiKeyIds = apiKeys.map((apiKey) => apiKey.id);
+    const usageLogs = apiKeyIds.length > 0
+      ? await prisma.auditLog.findMany({
+          where: {
+            tenantId,
+            module: 'api_keys',
+            entityType: EntityType.OTHER,
+            entityId: { in: apiKeyIds },
+          },
+          select: {
+            entityId: true,
+            newValues: true,
+            ipAddress: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: Math.max(250, apiKeyIds.length * 50),
+        })
+      : [];
+
+    const usageByKey = new Map<string, ApiKeyUsageStats>();
+    for (const apiKey of apiKeys) usageByKey.set(apiKey.id, emptyUsageStats());
+    for (const log of usageLogs) {
+      const stats = usageByKey.get(log.entityId);
+      if (!stats) continue;
+      const status = readStatus(log.newValues);
+      if (status === null) continue;
+      stats.requestCount += 1;
+      if (status >= 400) stats.errorCount += 1;
+      if (stats.lastStatus === null) {
+        stats.lastStatus = status;
+        stats.lastIpAddress = log.ipAddress;
+      }
+    }
+
+    const enrichedApiKeys = apiKeys.map((apiKey) => {
+      const stats = usageByKey.get(apiKey.id) ?? emptyUsageStats();
+      const errorRate = stats.requestCount > 0 ? Math.round((stats.errorCount / stats.requestCount) * 1000) / 10 : 0;
+      return {
+        ...apiKey,
+        requestCount: stats.requestCount,
+        errorCount: stats.errorCount,
+        errorRate,
+        lastIpAddress: stats.lastIpAddress,
+        lastStatus: stats.lastStatus,
+      };
+    });
+
     return c.json({
-      data: apiKeys,
+      data: enrichedApiKeys,
       meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
     });
   },

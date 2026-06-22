@@ -16,6 +16,16 @@ export interface ListStandardStateInput {
 }
 
 const CSV_MIME_TYPE = 'text/csv;charset=utf-8';
+const LIST_STANDARD_STORAGE_PREFIX = 'axon:list-standard';
+
+type QueryValue = string | number | boolean | null | undefined;
+
+export interface ListQueryStateInput {
+  filters: Record<string, QueryValue>;
+  columns: readonly string[];
+  pageSize: number;
+  sort?: ListSortState | null;
+}
 
 export function getDefaultColumnKeys<T>(columns: ReadonlyArray<ColumnDef<T>>): string[] {
   return columns.map((column) => column.key);
@@ -54,6 +64,97 @@ export function getSavedViewPageSize(state: SavedViewState, fallback: number): n
     : fallback;
 }
 
+export function getListColumnStorageKey(listKey: string): string {
+  return `${LIST_STANDARD_STORAGE_PREFIX}:${listKey}:columns`;
+}
+
+function parseStoredColumnKeys(value: string | null): string[] | null {
+  if (!value) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return null;
+    const keys = parsed.filter((item): item is string => typeof item === 'string' && item.length > 0);
+    return keys.length > 0 ? keys : null;
+  } catch {
+    return null;
+  }
+}
+
+export function loadPersistedColumnKeys<T>(
+  listKey: string,
+  columns: ReadonlyArray<ColumnDef<T>>,
+  fallbackKeys?: readonly string[],
+): string[] {
+  if (typeof window === 'undefined') return normalizeColumnKeys(columns, fallbackKeys);
+
+  const storedKeys = parseStoredColumnKeys(window.localStorage.getItem(getListColumnStorageKey(listKey)));
+  return normalizeColumnKeys(columns, storedKeys ?? fallbackKeys);
+}
+
+export function persistColumnKeys(listKey: string, columnKeys: readonly string[]): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(getListColumnStorageKey(listKey), JSON.stringify([...columnKeys]));
+}
+
+export function createListQueryString(input: ListQueryStateInput): string {
+  const params = new URLSearchParams();
+
+  Object.entries(input.filters).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === '') return;
+    params.set(`f.${key}`, String(value));
+  });
+
+  if (input.columns.length > 0) params.set('columns', input.columns.join(','));
+  params.set('pageSize', String(input.pageSize));
+
+  if (input.sort) {
+    params.set('sort', `${input.sort.key}:${input.sort.direction}`);
+  }
+
+  return params.toString();
+}
+
+export function parseListQueryString(search: string | URLSearchParams): SavedViewState | null {
+  const params = typeof search === 'string' ? new URLSearchParams(search) : search;
+  const filters: Record<string, string> = {};
+
+  params.forEach((value, key) => {
+    if (key.startsWith('f.') && key.length > 2) {
+      filters[key.slice(2)] = value;
+    }
+  });
+
+  const columns = params.get('columns')?.split(',').filter((key) => key.length > 0);
+  const rawPageSize = params.get('pageSize');
+  const pageSize = rawPageSize ? Number(rawPageSize) : undefined;
+  const normalizedPageSize = pageSize !== undefined && Number.isInteger(pageSize) && pageSize > 0
+    ? pageSize
+    : undefined;
+  const rawSort = params.get('sort');
+  const sortParts = rawSort?.split(':');
+  const sortDirection: ListSortDirection | null = sortParts?.[1] === 'asc' || sortParts?.[1] === 'desc'
+    ? sortParts[1]
+    : null;
+  const sort = sortParts?.length === 2 && sortDirection
+    ? { key: sortParts[0] ?? '', direction: sortDirection }
+    : null;
+
+  if (Object.keys(filters).length === 0 && !columns && !pageSize && !sort) return null;
+
+  return {
+    filters,
+    columns,
+    pageSize: normalizedPageSize,
+    sort,
+  };
+}
+
+export function getListShareHref(queryString: string): string {
+  if (!queryString) return typeof window === 'undefined' ? '' : window.location.pathname;
+  if (typeof window === 'undefined') return `?${queryString}`;
+  return `${window.location.origin}${window.location.pathname}?${queryString}`;
+}
+
 function csvCell(value: string | number | boolean | null | undefined): string {
   const text = value === null || value === undefined ? '' : String(value);
   return `"${text.replace(/"/g, '""')}"`;
@@ -82,4 +183,3 @@ export function downloadCsv(filename: string, content: string): void {
   link.click();
   URL.revokeObjectURL(url);
 }
-

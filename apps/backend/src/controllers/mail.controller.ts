@@ -303,6 +303,13 @@ export class MailController {
     return c.json({ data: templates });
   }
 
+  /** GET /api/mail/templates/lifecycle - Sablon lifecycle ozeti */
+  static async templateLifecycle(c: Context) {
+    const tenantId = requireTenantId(c);
+    const summary = await MailTemplateManagementService.lifecycleSummary(tenantId);
+    return c.json({ data: summary });
+  }
+
   /** POST /api/mail/templates/custom - Tenant ozel sablon olustur */
   static async createTemplate(c: Context) {
     const tenantId = requireTenantId(c);
@@ -544,6 +551,14 @@ export class MailController {
     });
 
     return c.json(result);
+  }
+
+  /** GET /api/mail/summary - Teslimat ve batch saglik ozeti */
+  static async summary(c: Context) {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const summary = await MailHistoryService.summary(tenantId, userId);
+    return c.json({ data: summary });
   }
 
   /** GET /api/mail/:id – Mail detay */

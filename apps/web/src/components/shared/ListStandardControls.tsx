@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, SlidersHorizontal } from 'lucide-react';
+import { Download, Link2, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import type { ColumnDef } from './DataTable';
@@ -25,6 +25,9 @@ export interface ListStandardControlsProps<T> {
   onPageSizeChange: (pageSize: number) => void;
   exportRows?: readonly T[];
   exportFilename?: string;
+  canExport?: boolean;
+  exportDisabledReason?: string;
+  shareHref?: string;
   pageSizeOptions?: readonly PageSizeOption[];
 }
 
@@ -51,13 +54,16 @@ export function ListStandardControls<T>({
   onPageSizeChange,
   exportRows = [],
   exportFilename = 'liste.csv',
+  canExport: hasExportPermission = true,
+  exportDisabledReason,
+  shareHref,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
 }: ListStandardControlsProps<T>) {
   const visibleSet = new Set(visibleColumnKeys);
   const hideableColumns = columns.filter((column) => column.hideable !== false);
   const visibleColumns = columns.filter((column) => visibleSet.has(column.key));
   const exportableColumns = visibleColumns.filter((column) => column.exportValue);
-  const canExport = exportRows.length > 0 && exportableColumns.length > 0;
+  const canExport = hasExportPermission && exportRows.length > 0 && exportableColumns.length > 0;
 
   const toggleColumn = (key: string) => {
     const column = columns.find((item) => item.key === key);
@@ -73,6 +79,11 @@ export function ListStandardControls<T>({
   const exportCsv = () => {
     if (!canExport) return;
     downloadCsv(exportFilename, buildCsv(exportRows, exportableColumns));
+  };
+
+  const copyShareLink = () => {
+    if (!shareHref || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    void navigator.clipboard.writeText(shareHref);
   };
 
   return (
@@ -110,10 +121,22 @@ export function ListStandardControls<T>({
         size="md"
         leftIcon={<Download className="h-4 w-4" />}
         disabled={!canExport}
+        title={!hasExportPermission ? (exportDisabledReason ?? 'Dışa aktarma yetkiniz yok') : undefined}
         onClick={exportCsv}
       >
         Dışa aktar
       </Button>
+      {shareHref && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="md"
+          leftIcon={<Link2 className="h-4 w-4" />}
+          onClick={copyShareLink}
+        >
+          Link
+        </Button>
+      )}
     </div>
   );
 }

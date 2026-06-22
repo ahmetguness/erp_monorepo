@@ -1,11 +1,19 @@
 'use client';
 
-import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Info, ShieldCheck, UploadCloud } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Info, RotateCcw, ShieldCheck, UploadCloud } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { useDataExport, useDataQualitySummary, useImportPreview, useTemplateDownload } from '@/hooks/useDataExchange';
+import {
+  useCreateDataQualityTask,
+  useDataExport,
+  useDataQualitySummary,
+  useImportBatches,
+  useImportPreview,
+  useRollbackImportBatch,
+  useTemplateDownload,
+} from '@/hooks/useDataExchange';
 import type { DataExchangeEntity } from '@/services/data-exchange.service';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
@@ -67,6 +75,9 @@ export function DataExchangePage() {
   const template = useTemplateDownload();
   const dataExport = useDataExport();
   const quality = useDataQualitySummary();
+  const batches = useImportBatches();
+  const rollbackBatch = useRollbackImportBatch();
+  const createQualityTask = useCreateDataQualityTask();
   const { toast } = useUIStore();
 
   async function handleFile(file: File | undefined) {
@@ -95,6 +106,25 @@ export function DataExchangePage() {
   async function handlePreview() {
     try {
       await preview.mutateAsync({ entity, csv, mapping, partialImport });
+      await batches.refetch();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  }
+
+  async function handleRollback(batchId: string) {
+    try {
+      await rollbackBatch.mutateAsync(batchId);
+      toast.success('Batch rollback olarak işaretlendi.');
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  }
+
+  async function handleCreateQualityTask(issueKey: string) {
+    try {
+      await createQualityTask.mutateAsync(issueKey);
+      toast.success('Düzeltme görevi owner için oluşturuldu.');
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -170,6 +200,17 @@ export function DataExchangePage() {
                       <p className="mt-1 text-xs leading-5 text-slate-500">{issue.description}</p>
                     </div>
                     <Badge variant={SEVERITY_VARIANT[issue.severity]}>{issue.count}</Badge>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={createQualityTask.isPending}
+                      onClick={() => { void handleCreateQualityTask(issue.key); }}
+                    >
+                      Görev oluştur
+                    </Button>
+                    <a href={issue.href} className="text-xs font-medium text-sky-300 hover:text-sky-200">{issue.actionLabel}</a>
                   </div>
                   {issue.sampleRecords.length > 0 && (
                     <div className="mt-3 space-y-1">
@@ -307,6 +348,20 @@ export function DataExchangePage() {
                 {previewData.errors.map((error) => <Badge key={error} variant="danger">{error}</Badge>)}
               </div>
               <p className="mb-3 text-xs text-slate-500">{previewData.batchPlan.rollbackNote}</p>
+              {previewData.duplicateSuggestions.length > 0 && (
+                <div className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+                  <h3 className="text-xs font-semibold text-amber-200">Duplicate Resolution</h3>
+                  <div className="mt-2 grid gap-2 md:grid-cols-2">
+                    {previewData.duplicateSuggestions.slice(0, 6).map((item) => (
+                      <div key={`${item.rowNumber}:${item.field}:${item.value}`} className="rounded-lg border border-amber-500/20 bg-slate-950/30 p-2">
+                        <p className="text-xs font-medium text-amber-100">Satır {item.rowNumber} / {item.field}</p>
+                        <p className="mt-1 truncate text-xs text-amber-200/70">{item.value || item.reason}</p>
+                        <Badge variant="warning">{item.action}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="overflow-auto rounded-lg border border-slate-800">
                 <table className="min-w-full divide-y divide-slate-800 text-sm">
                   <thead className="bg-slate-950/60">
@@ -333,6 +388,56 @@ export function DataExchangePage() {
               </div>
             </section>
           )}
+
+          <section className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-200">Import Batch Geçmişi</h2>
+                <p className="mt-1 text-xs text-slate-500">Preview, row-level hata, duplicate önerisi ve rollback durumları.</p>
+              </div>
+              <Badge variant="neutral">{batches.data?.length ?? 0} batch</Badge>
+            </div>
+            {batches.isLoading ? (
+              <div className="h-24 animate-pulse rounded-lg bg-slate-800/60" />
+            ) : !batches.data || batches.data.length === 0 ? (
+              <p className="rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-500">Henüz batch geçmişi yok.</p>
+            ) : (
+              <div className="space-y-2">
+                {batches.data.slice(0, 8).map((batch) => (
+                  <div key={batch.batchId} className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={batch.status === 'ROLLED_BACK' ? 'neutral' : batch.status === 'BLOCKED' ? 'danger' : 'success'}>{batch.status}</Badge>
+                          <span className="truncate text-sm font-medium text-slate-200">{batch.entity} / {batch.batchId}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {batch.validRows} geçerli, {batch.invalidRows} hatalı, {batch.duplicateSuggestions.length} duplicate önerisi
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
+                        loading={rollbackBatch.isPending}
+                        disabled={batch.status === 'ROLLED_BACK'}
+                        onClick={() => { void handleRollback(batch.batchId); }}
+                      >
+                        Rollback
+                      </Button>
+                    </div>
+                    {batch.rowErrors.length > 0 && (
+                      <div className="mt-2 grid gap-1 text-xs text-slate-500 md:grid-cols-2">
+                        {batch.rowErrors.slice(0, 4).map((row) => (
+                          <p key={row.rowNumber} className="truncate">Satır {row.rowNumber}: {[...row.errors, ...row.warnings].join(', ')}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </main>
       </div>
     </div>

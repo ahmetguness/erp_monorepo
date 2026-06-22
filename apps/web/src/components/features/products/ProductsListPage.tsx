@@ -1,29 +1,38 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { EntityImage } from "@/components/shared/EntityImage";
-import { SavedViewControls } from "@/components/shared/SavedViewControls";
+import { ListStandardControls } from "@/components/shared/ListStandardControls";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { useProducts } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useMasterData";
+import { useListStandardState, type ListFilterState } from "@/hooks/useListStandardState";
 import { formatCurrency } from "@/lib/utils";
 import { Select } from "@/components/ui/Select";
 import Link from "next/link";
 import type { Product } from "@/services/product.service";
-import { getSavedViewFilterString, type SavedViewState } from "@/services/saved-view.service";
+import { getSavedViewFilterString } from "@/services/saved-view.service";
 
 type ActiveFilter = "" | "true" | "false";
+interface ProductListFilters extends ListFilterState {
+  search: string;
+  categoryId: string;
+  activeFilter: ActiveFilter;
+}
 
 const ACTIVE_OPTIONS = [
   { value: "", label: "Tüm Durumlar" },
   { value: "true", label: "Aktif" },
   { value: "false", label: "Pasif" },
 ];
+
+const DEFAULT_PAGE_SIZE = 20;
+const PRODUCT_COLUMN_KEYS = ["code", "category", "unit", "salesPrice", "purchasePrice", "isActive"] as const;
 
 function parseActiveFilter(value: string): ActiveFilter {
   if (value === "true" || value === "false") return value;
@@ -32,40 +41,17 @@ function parseActiveFilter(value: string): ActiveFilter {
 
 export function ProductsListPage() {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>("");
-  const [page, setPage] = useState(1);
-
-  const { data, isLoading } = useProducts({
-    page,
-    limit: 20,
-    search: search || undefined,
-    categoryId: categoryId || undefined,
-    isActive: activeFilter ? activeFilter === "true" : undefined,
-  });
   const { data: categories = [] } = useCategories();
-  const viewState = useMemo<SavedViewState>(() => ({
-    filters: { search, categoryId, activeFilter },
-    pageSize: 20,
-  }), [activeFilter, categoryId, search]);
-
-  const applyView = (state: SavedViewState) => {
-    setSearch(getSavedViewFilterString(state, "search"));
-    setCategoryId(getSavedViewFilterString(state, "categoryId"));
-    setActiveFilter(parseActiveFilter(getSavedViewFilterString(state, "activeFilter")));
-    setPage(1);
-  };
-
   const categoryOptions = [
     { value: "", label: "Tüm Kategoriler" },
     ...categories.map((c) => ({ value: c.id, label: c.name })),
   ];
 
-  const columns: ColumnDef<Product>[] = [
+  const columns = useMemo<ColumnDef<Product>[]>(() => [
     {
       key: "code",
       header: "Kod / Ad",
+      exportValue: (r) => `${r.code} - ${r.name}`,
       render: (r) => (
         <div className="flex items-center gap-3">
           <EntityImage entityType="PRODUCT" entityId={r.id} fallback="package" className="w-10 h-10 rounded-lg shrink-0" />
@@ -80,6 +66,7 @@ export function ProductsListPage() {
       key: "category",
       header: "Kategori",
       width: "140px",
+      exportValue: (r) => r.category?.name ?? "",
       render: (r) => (
         <span className="text-sm text-slate-400">
           {r.category?.name ?? "—"}
@@ -90,6 +77,7 @@ export function ProductsListPage() {
       key: "unit",
       header: "Birim",
       width: "80px",
+      exportValue: (r) => r.unit?.code ?? "",
       render: (r) => (
         <span className="text-sm text-slate-400">{r.unit?.code ?? "—"}</span>
       ),
@@ -123,7 +111,29 @@ export function ProductsListPage() {
       align: "center",
       render: (r) => <ActiveBadge isActive={r.isActive} />,
     },
-  ];
+  ], []);
+
+  const listState = useListStandardState<Product, ProductListFilters>({
+    listKey: "products.list",
+    columns,
+    defaultFilters: { search: "", categoryId: "", activeFilter: "" },
+    defaultPageSize: DEFAULT_PAGE_SIZE,
+    defaultColumnKeys: PRODUCT_COLUMN_KEYS,
+    parseFilters: (state) => ({
+      search: getSavedViewFilterString(state, "search"),
+      categoryId: getSavedViewFilterString(state, "categoryId"),
+      activeFilter: parseActiveFilter(getSavedViewFilterString(state, "activeFilter")),
+    }),
+  });
+  const { search, categoryId, activeFilter } = listState.filters;
+
+  const { data, isLoading } = useProducts({
+    page: listState.page,
+    limit: listState.pageSize,
+    search: search || undefined,
+    categoryId: categoryId || undefined,
+    isActive: activeFilter ? activeFilter === "true" : undefined,
+  });
 
   return (
     <div>
@@ -150,8 +160,7 @@ export function ProductsListPage() {
         <SearchInput
           value={search}
           onChange={(v) => {
-            setSearch(v);
-            setPage(1);
+            listState.patchFilters({ search: v });
           }}
           placeholder="Kod, ad, barkod ara…"
           className="w-64"
@@ -160,8 +169,7 @@ export function ProductsListPage() {
           options={categoryOptions}
           value={categoryId}
           onChange={(e) => {
-            setCategoryId(e.target.value);
-            setPage(1);
+            listState.patchFilters({ categoryId: e.target.value });
           }}
           className="w-48"
         />
@@ -169,16 +177,28 @@ export function ProductsListPage() {
           options={ACTIVE_OPTIONS}
           value={activeFilter}
           onChange={(e) => {
-            setActiveFilter(parseActiveFilter(e.target.value));
-            setPage(1);
+            listState.patchFilters({ activeFilter: parseActiveFilter(e.target.value) });
           }}
           className="w-40"
         />
-        <SavedViewControls module="products" listKey="products.list" currentState={viewState} onApply={applyView} />
+        <ListStandardControls
+          module="products"
+          listKey="products.list"
+          currentState={listState.currentState}
+          onApplyView={listState.applyView}
+          columns={columns}
+          visibleColumnKeys={listState.visibleColumnKeys}
+          onVisibleColumnKeysChange={listState.setVisibleColumnKeys}
+          pageSize={listState.pageSize}
+          onPageSizeChange={listState.setPageSize}
+          exportRows={data?.data ?? []}
+          exportFilename="urunler.csv"
+          shareHref={listState.shareHref}
+        />
       </div>
 
       <DataTable
-        columns={columns}
+        columns={listState.visibleColumns}
         data={data?.data ?? []}
         keyExtractor={(r) => r.id}
         isLoading={isLoading}
@@ -188,11 +208,11 @@ export function ProductsListPage() {
         pagination={
           data
             ? {
-                page,
-                pageSize: 20,
+                page: listState.page,
+                pageSize: listState.pageSize,
                 total: data.meta.total,
                 totalPages: data.meta.totalPages,
-                onChange: setPage,
+                onChange: listState.setPage,
               }
             : undefined
         }

@@ -72,6 +72,7 @@ export async function getDataQualitySummary(db: PrismaClient, tenantId: string):
     contactsMissingEmail,
     contactsMissingTaxNumber,
     productsWithoutMinStock,
+    productsWithoutPriceOrCost,
     negativeStockLevels,
     activeEmployees,
     employeeDocumentAttachments,
@@ -93,6 +94,21 @@ export async function getDataQualitySummary(db: PrismaClient, tenantId: string):
     db.product.findMany({
       where: { tenantId, deletedAt: null, isActive: true, minStockLevel: { lte: 0 } },
       select: { id: true, code: true, name: true, minStockLevel: true },
+      orderBy: { code: 'asc' },
+      take: 50,
+    }),
+    db.product.findMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        isActive: true,
+        OR: [
+          { salesPrice: { lte: 0 } },
+          { purchasePrice: { lte: 0 } },
+          { averageCost: { lte: 0 } },
+        ],
+      },
+      select: { id: true, code: true, name: true, salesPrice: true, purchasePrice: true, averageCost: true },
       orderBy: { code: 'asc' },
       take: 50,
     }),
@@ -201,6 +217,22 @@ export async function getDataQualitySummary(db: PrismaClient, tenantId: string):
         id: level.id,
         label: `${level.product.code} - ${level.product.name}`,
         detail: `${level.warehouse.code} / ${Number(level.quantity).toFixed(3)}`,
+      })),
+    }),
+    buildIssue({
+      key: 'inventory.missing_price_cost',
+      category: 'inventory',
+      severity: 'high',
+      title: 'Fiyat veya maliyeti eksik ürünler',
+      description: 'Satış fiyatı, alış fiyatı veya ortalama maliyeti olmayan ürünler karlılık ve stok değerleme raporlarını bozar.',
+      count: productsWithoutPriceOrCost.length,
+      scoreImpact: 3,
+      actionLabel: 'Ürün listesini aç',
+      href: '/dashboard/products',
+      sampleRecords: sample(productsWithoutPriceOrCost, (product) => ({
+        id: product.id,
+        label: product.name,
+        detail: `Kod: ${product.code} / Satış: ${Number(product.salesPrice).toFixed(2)} / Alış: ${Number(product.purchasePrice).toFixed(2)} / Maliyet: ${Number(product.averageCost).toFixed(4)}`,
       })),
     }),
     buildIssue({

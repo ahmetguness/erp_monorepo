@@ -11,6 +11,9 @@ settingsRoutes.put('/', requirePermission('settings', 'UPDATE'), SettingsControl
 settingsRoutes.get('/business-rules', requirePermission('settings', 'READ'), SettingsController.listBusinessRules);
 settingsRoutes.put('/business-rules', requirePermission('settings', 'UPDATE'), SettingsController.upsertBusinessRule);
 settingsRoutes.get('/security-score', requirePermission('settings', 'READ'), SettingsController.securityScore);
+settingsRoutes.get('/security/dashboard', requirePermission('settings', 'READ'), SettingsController.securityDashboard);
+settingsRoutes.get('/security/sessions', requirePermission('settings', 'READ'), SettingsController.listSecuritySessions);
+settingsRoutes.post('/security/sessions/:sessionId/revoke', requirePermission('settings', 'UPDATE'), SettingsController.revokeSecuritySession);
 settingsRoutes.get('/logo', requirePermission('settings', 'READ'), SettingsController.downloadTenantLogo);
 settingsRoutes.post('/logo', requirePermission('settings', 'UPDATE'), SettingsController.uploadTenantLogo);
 settingsRoutes.delete('/logo', requirePermission('settings', 'DELETE'), SettingsController.deleteTenantLogo);

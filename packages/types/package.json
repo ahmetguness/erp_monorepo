@@ -1,9 +1,31 @@
 {
   "name": "@repo/types",
   "version": "0.0.1",
+  "type": "module",
   "main": "./index.ts",
   "types": "./index.ts",
   "exports": {
-    ".": "./index.ts"
+    ".": {
+      "types": "./index.ts",
+      "default": "./index.ts"
+    },
+    "./contracts": {
+      "types": "./contracts/index.ts",
+      "import": "./contracts/index.ts",
+      "default": "./contracts/index.ts"
+    },
+    "./contracts/api-key": {
+      "types": "./contracts/api-key.ts",
+      "import": "./contracts/api-key.ts",
+      "default": "./contracts/api-key.ts"
+    },
+    "./contracts/common": {
+      "types": "./contracts/common.ts",
+      "import": "./contracts/common.ts",
+      "default": "./contracts/common.ts"
+    }
+  },
+  "peerDependencies": {
+    "zod": "^4.3.6"
   }
 }

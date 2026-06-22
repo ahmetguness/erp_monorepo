@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {
   Plus,
@@ -36,7 +35,7 @@ import {
   useCreateFiscalPeriod,
   useCloseFiscalPeriod,
 } from "@/hooks/useAccounting";
-import { apiClient } from "@/lib/api-client";
+import { useExpenseSummary, useRevenueSummary } from "@/hooks/useReporting";
 import { cn, formatDate, formatCurrency } from "@/lib/utils";
 import type { FiscalPeriod } from "@/services/accounting.service";
 
@@ -61,39 +60,9 @@ function PeriodSummary({
   const dateFrom = period.startDate.split("T")[0];
   const dateTo = period.endDate.split("T")[0];
 
-  const { data: rev } = useQuery({
-    queryKey: ["period-summary", "rev", period.id],
-    queryFn: async () => {
-      const r = await apiClient.get("/api/reports/revenue-summary", {
-        params: { dateFrom, dateTo },
-      });
-      return r.data?.data as
-        | {
-            invoiceCount: number;
-            totalNet: number;
-            totalTax: number;
-            totalGross: number;
-          }
-        | undefined;
-    },
-  });
-
-  const { data: exp } = useQuery({
-    queryKey: ["period-summary", "exp", period.id],
-    queryFn: async () => {
-      const r = await apiClient.get("/api/reports/expense-summary", {
-        params: { dateFrom, dateTo },
-      });
-      return r.data?.data as
-        | {
-            invoiceCount: number;
-            totalNet: number;
-            totalTax: number;
-            totalGross: number;
-          }
-        | undefined;
-    },
-  });
+  const reportRange = { dateFrom, dateTo };
+  const { data: rev } = useRevenueSummary(reportRange);
+  const { data: exp } = useExpenseSummary(reportRange);
 
   const revenue = Number(rev?.totalGross ?? 0);
   const expense = Number(exp?.totalGross ?? 0);

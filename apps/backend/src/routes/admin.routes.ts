@@ -36,6 +36,7 @@ adminRoutes.delete('/overrides/:id', requireAdmin, AdminFeatureController.delete
 // Metrics
 adminRoutes.get('/metrics', requireAdmin, AdminMetricsController.dashboard);
 adminRoutes.get('/metrics/tenants/:id', requireAdmin, AdminMetricsController.tenantMetrics);
+adminRoutes.get('/observability/search', requireAdmin, AdminMetricsController.observabilitySearch);
 adminRoutes.get('/observability', requireAdmin, AdminMetricsController.observability);
 
 // Audit

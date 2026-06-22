@@ -1,9 +1,10 @@
 import { Context } from 'hono';
-import { InvoiceStatus, InvoiceType, Prisma } from '@prisma/client';
+import { AuditAction, EntityType, InvoiceStatus, InvoiceType, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ValidationError, NotFoundError } from '../errors';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { ReportingBuilderService, isKpiConfig, normalizeKpiConfig } from '../services/reporting-builder.service';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -269,17 +270,37 @@ function isDashboardPinnedReport(report: { filters: Prisma.JsonValue }): boolean
   return isKpiConfig(report.filters) && report.filters.pinnedToDashboard === true;
 }
 
+function isReportAllowedByDataset(report: { filters: Prisma.JsonValue }, allowedDatasetKeys: ReadonlySet<string>): boolean {
+  if (!isKpiConfig(report.filters)) return true;
+  try {
+    const config = normalizeKpiConfig(report.filters);
+    return allowedDatasetKeys.has(config.dataset);
+  } catch {
+    return false;
+  }
+}
+
+async function canAccessSavedReport(tenantId: string, userId: string, report: { filters: Prisma.JsonValue }): Promise<boolean> {
+  const registry = await new ReportingBuilderService(prisma).registry(tenantId, userId);
+  const allowedDatasetKeys = new Set(registry.datasets.map((dataset) => dataset.key));
+  return isReportAllowedByDataset(report, allowedDatasetKeys);
+}
+
 export const ReportingBuilderController = {
-  registry(c: Context): Response {
+  async registry(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const service = new ReportingBuilderService(prisma);
-    return c.json({ data: service.registry() });
+    const registry = await service.registry(tenantId, userId);
+    return c.json({ data: registry });
   },
 
   async preview(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const body = await c.req.json<unknown>();
     const service = new ReportingBuilderService(prisma);
-    const preview = await service.preview(tenantId, body);
+    const preview = await service.preview(tenantId, userId, body);
     return c.json({ data: preview });
   },
 };
@@ -287,22 +308,28 @@ export const ReportingBuilderController = {
 export const SavedReportController = {
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const dashboardOnly = c.req.query('dashboard') === '1';
 
     const reports = await prisma.savedReport.findMany({
       where: { tenantId },
       orderBy: { updatedAt: 'desc' },
     });
+    const registry = await new ReportingBuilderService(prisma).registry(tenantId, userId);
+    const allowedDatasetKeys = new Set(registry.datasets.map((dataset) => dataset.key));
+    const accessibleReports = reports.filter((report) => isReportAllowedByDataset(report, allowedDatasetKeys));
 
-    return c.json({ data: dashboardOnly ? reports.filter(isDashboardPinnedReport) : reports });
+    return c.json({ data: dashboardOnly ? accessibleReports.filter(isDashboardPinnedReport) : accessibleReports });
   },
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = c.req.param('id')!;
 
     const report = await prisma.savedReport.findFirst({ where: { id, tenantId } });
     if (!report) return c.json(new NotFoundError('Rapor', id).toJSON(), 404);
+    if (!(await canAccessSavedReport(tenantId, userId, report))) return c.json(new NotFoundError('Rapor', id).toJSON(), 404);
 
     return c.json({ data: report });
   },
@@ -317,6 +344,10 @@ export const SavedReportController = {
       return c.json(new ValidationError('name ve module alanları zorunludur.').toJSON(), 400);
     }
     const filters = toSavedReportFilters(body.filters ?? {});
+    const kpiConfig = isKpiConfig(filters) ? normalizeKpiConfig(filters) : null;
+    if (kpiConfig) {
+      await new ReportingBuilderService(prisma).assertCanUseConfig(tenantId, userId, kpiConfig);
+    }
 
     const report = await prisma.savedReport.create({
       data: {
@@ -339,9 +370,14 @@ export const SavedReportController = {
 
     const report = await prisma.savedReport.findFirst({ where: { id: reportId, tenantId } });
     if (!report) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
+    if (!(await canAccessSavedReport(tenantId, requireUserId(c), report))) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
 
     const body = await c.req.json<Partial<CreateSavedReportDTO>>();
     const filters = body.filters !== undefined ? toSavedReportFilters(body.filters) : undefined;
+    const kpiConfig = filters && isKpiConfig(filters) ? normalizeKpiConfig(filters) : null;
+    if (kpiConfig) {
+      await new ReportingBuilderService(prisma).assertCanUseConfig(tenantId, requireUserId(c), kpiConfig);
+    }
 
     const updated = await prisma.savedReport.update({
       where: { id: reportId },
@@ -362,8 +398,39 @@ export const SavedReportController = {
 
     const report = await prisma.savedReport.findFirst({ where: { id: reportId, tenantId } });
     if (!report) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
+    if (!(await canAccessSavedReport(tenantId, requireUserId(c), report))) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
 
     await prisma.savedReport.delete({ where: { id: reportId } });
     return c.json({ data: { success: true } });
+  },
+
+  async exportAudit(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const reportId = c.req.param('id');
+
+    const report = await prisma.savedReport.findFirst({ where: { id: reportId, tenantId } });
+    if (!report) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
+    if (!(await canAccessSavedReport(tenantId, userId, report))) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
+
+    const { ipAddress, userAgent } = getRequestMeta(c);
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'reporting',
+      entityType: EntityType.OTHER,
+      entityId: report.id,
+      action: AuditAction.EXPORT,
+      newValues: {
+        reportId: report.id,
+        reportName: report.name,
+        reportModule: report.module,
+        exportType: 'saved-report',
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return c.json({ data: { success: true, reportId: report.id, auditedAt: new Date().toISOString() } });
   },
 };

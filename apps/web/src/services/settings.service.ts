@@ -70,10 +70,79 @@ export const TenantSecurityScoreSchema = z.object({
   }),
 });
 
+export const SecuritySessionSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  tenantId: z.string(),
+  status: z.enum(['ACTIVE', 'REVOKED', 'EXPIRED']),
+  createdAt: z.string(),
+  lastSeenAt: z.string(),
+  revokedAt: z.string().nullable(),
+  revokedById: z.string().nullable(),
+  ipAddress: z.string().nullable(),
+  userAgent: z.string().nullable(),
+  deviceLabel: z.string(),
+});
+
+export const WeakPermissionRiskSchema = z.object({
+  roleId: z.string(),
+  roleName: z.string(),
+  severity: z.enum(['critical', 'high', 'medium', 'low']),
+  reason: z.string(),
+  permissionCount: z.coerce.number(),
+  riskyPermissions: z.array(z.object({
+    module: z.string(),
+    action: z.enum(['CREATE', 'READ', 'UPDATE', 'DELETE', 'APPROVE', 'EXPORT']),
+  })),
+  assignedUserCount: z.coerce.number(),
+});
+
+export const ApiKeyRotationRiskSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  keyPrefix: z.string(),
+  severity: z.enum(['critical', 'high', 'medium', 'low']),
+  reason: z.string(),
+  createdAt: z.string(),
+  lastUsedAt: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+});
+
+export const PublicEndpointAbuseMetricSchema = z.object({
+  pathGroup: z.enum(['public', 'admin', 'api']),
+  ipAddress: z.string(),
+  exceededCount: z.coerce.number(),
+  lastExceededAt: z.string(),
+});
+
+export const WebhookSecurityAuditSchema = z.object({
+  missingSecretCount: z.coerce.number(),
+  failedWebhookCount: z.coerce.number(),
+  replayableWebhookCount: z.coerce.number(),
+  duplicateWindowCount: z.coerce.number(),
+  lastFailureAt: z.string().nullable(),
+});
+
+export const SecurityHardeningSnapshotSchema = z.object({
+  generatedAt: z.string(),
+  sessions: z.object({
+    active: z.coerce.number(),
+    revoked: z.coerce.number(),
+    expired: z.coerce.number(),
+    recent: z.array(SecuritySessionSchema),
+  }),
+  apiKeyRotation: z.array(ApiKeyRotationRiskSchema),
+  weakPermissionRisks: z.array(WeakPermissionRiskSchema),
+  publicEndpointAbuse: z.array(PublicEndpointAbuseMetricSchema),
+  webhookAudit: WebhookSecurityAuditSchema,
+});
+
 export type TenantSetting = z.infer<typeof TenantSettingSchema>;
 export type ModuleSetting = z.infer<typeof ModuleSettingSchema>;
 export type BusinessRule = z.infer<typeof BusinessRuleSchema>;
 export type TenantSecurityScore = z.infer<typeof TenantSecurityScoreSchema>;
+export type SecuritySession = z.infer<typeof SecuritySessionSchema>;
+export type SecurityHardeningSnapshot = z.infer<typeof SecurityHardeningSnapshotSchema>;
 
 export async function getTenantSettings(): Promise<TenantSetting[]> {
   const res = await apiClient.get('/api/settings');
@@ -97,6 +166,16 @@ export async function getBusinessRules(): Promise<BusinessRule[]> {
 export async function getTenantSecurityScore(): Promise<TenantSecurityScore> {
   const res = await apiClient.get('/api/settings/security-score');
   return safeParse(SingleResponseSchema(TenantSecurityScoreSchema), res.data, 'getTenantSecurityScore').data;
+}
+
+export async function getSecurityHardeningSnapshot(): Promise<SecurityHardeningSnapshot> {
+  const res = await apiClient.get('/api/settings/security/dashboard');
+  return safeParse(SingleResponseSchema(SecurityHardeningSnapshotSchema), res.data, 'getSecurityHardeningSnapshot').data;
+}
+
+export async function revokeSecuritySession(sessionId: string): Promise<SecuritySession> {
+  const res = await apiClient.post(`/api/settings/security/sessions/${sessionId}/revoke`);
+  return safeParse(SingleResponseSchema(SecuritySessionSchema), res.data, 'revokeSecuritySession').data;
 }
 
 export async function upsertBusinessRule(key: BusinessRule['key'], value: BusinessRule['value']): Promise<BusinessRule> {

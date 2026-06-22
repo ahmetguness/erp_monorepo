@@ -12,6 +12,8 @@ import {
   X,
   Clock,
   Activity,
+  Globe2,
+  AlertTriangle,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
@@ -26,11 +28,14 @@ import {
   useRevokeApiKey,
   useDeleteApiKey,
   useApiKeyActivity,
+  useExternalApiManifest,
 } from "@/hooks/useApiKeys";
 import { formatDate } from "@/lib/utils";
-import type { ApiKey } from "@/services/api-key.service";
+import { API_KEY_SCOPE_VALUES, type ApiKey, type ApiKeyScope } from "@/services/api-key.service";
 
-const AVAILABLE_SCOPES = [
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+
+const AVAILABLE_SCOPES: Array<{ key: ApiKeyScope; label: string; desc: string }> = [
   {
     key: "products:read",
     label: "Ürünler — Okuma",
@@ -86,6 +91,16 @@ const AVAILABLE_SCOPES = [
     label: "Siparişler — Yazma",
     desc: "Satış siparişi oluşturma",
   },
+  {
+    key: "inventory:read",
+    label: "Stok - Okuma",
+    desc: "Depo bazli stok seviyelerini goruntuleme",
+  },
+  {
+    key: "inventory:write",
+    label: "Stok - Yazma",
+    desc: "Stok hareketi kaydetme",
+  },
 ];
 
 const SCOPE_MODULES = [
@@ -109,6 +124,11 @@ const SCOPE_MODULES = [
     label: "Siparişler",
     actions: ["read", "write"] as const,
   },
+  {
+    module: "inventory",
+    label: "Stok",
+    actions: ["read", "write"] as const,
+  },
 ];
 
 const ACTION_LABELS: Record<string, string> = {
@@ -118,6 +138,23 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 type ActivityField = "method" | "path" | "scope" | "status";
+
+interface CreateApiKeyFormState {
+  name: string;
+  expiresAt: string;
+  scopes: ApiKeyScope[];
+}
+
+const API_KEY_SCOPE_SET = new Set<string>(API_KEY_SCOPE_VALUES);
+
+function isApiKeyScope(value: string): value is ApiKeyScope {
+  return API_KEY_SCOPE_SET.has(value);
+}
+
+function scopeKeyOf(module: string, action: string): ApiKeyScope | null {
+  const scope = `${module}:${action}`;
+  return isApiKeyScope(scope) ? scope : null;
+}
 
 function isActivityRecord(values: unknown): values is Partial<Record<ActivityField, string | number>> {
   return typeof values === "object" && values !== null && !Array.isArray(values);
@@ -137,10 +174,10 @@ export function ApiKeysPage() {
   const [detailKey, setDetailKey] = useState<ApiKey | null>(null);
   const [rawKey, setRawKey] = useState("");
   const [copied, setCopied] = useState(false);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<CreateApiKeyFormState>({
     name: "",
     expiresAt: "",
-    scopes: [] as string[],
+    scopes: [],
   });
 
   const { data, isLoading } = useApiKeys({ page, limit: 20 });
@@ -148,8 +185,9 @@ export function ApiKeysPage() {
   const revokeKey = useRevokeApiKey();
   const deleteKey = useDeleteApiKey();
   const { data: activity = [] } = useApiKeyActivity(detailKey?.id ?? "");
+  const { data: manifest } = useExternalApiManifest();
 
-  const toggleScope = (scope: string) => {
+  const toggleScope = (scope: ApiKeyScope) => {
     setForm((p) => ({
       ...p,
       scopes: p.scopes.includes(scope)
@@ -229,6 +267,30 @@ export function ApiKeysPage() {
           {r.lastUsedAt ? formatDate(r.lastUsedAt) : "Hiç kullanılmadı"}
         </span>
       ),
+    },
+    {
+      key: "lastIpAddress",
+      header: "Son IP",
+      width: "120px",
+      render: (r) => (
+        <span className="text-slate-500 text-xs font-mono">
+          {r.lastIpAddress ?? "-"}
+        </span>
+      ),
+    },
+    {
+      key: "errorRate",
+      header: "Hata",
+      width: "95px",
+      render: (r) => {
+        const errorRate = r.errorRate ?? 0;
+        return (
+          <span className={`inline-flex items-center gap-1 text-xs ${errorRate > 10 ? "text-red-400" : "text-slate-500"}`}>
+            {errorRate > 10 && <AlertTriangle className="h-3 w-3" />}
+            %{errorRate}
+          </span>
+        );
+      },
     },
     {
       key: "expiresAt",
@@ -323,6 +385,42 @@ export function ApiKeysPage() {
           </Button>
         }
       />
+
+      {manifest && (
+        <div className="mb-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Globe2 className="h-3.5 w-3.5" />
+              OpenAPI
+            </div>
+            <p className="mt-1 text-sm font-semibold text-slate-100">v{manifest.version}</p>
+            <a
+              href={`${API_BASE}/api/api-keys/openapi.json`}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex text-xs font-medium text-sky-300 hover:text-sky-200"
+            >
+              Spec dosyasini ac
+            </a>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Activity className="h-3.5 w-3.5" />
+              Rate limit
+            </div>
+            <p className="mt-1 text-sm font-semibold text-slate-100">{manifest.rateLimit.perMinute}/dk</p>
+            <p className="mt-2 text-xs text-slate-500">API key bazli uygulanir.</p>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Shield className="h-3.5 w-3.5" />
+              Manifest
+            </div>
+            <p className="mt-1 text-sm font-semibold text-slate-100">{manifest.endpoints.length} endpoint</p>
+            <p className="mt-2 text-xs text-slate-500">{manifest.scopes.length} scope, sandbox header: {manifest.auth.sandboxHeader}</p>
+          </div>
+        </div>
+      )}
 
       <DataTable
         columns={columns}
@@ -480,7 +578,9 @@ export function ApiKeysPage() {
                   type="button"
                   onClick={() => {
                     const allKeys = SCOPE_MODULES.flatMap((m) =>
-                      m.actions.map((a) => `${m.module}:${a}`),
+                      m.actions
+                        .map((a) => scopeKeyOf(m.module, a))
+                        .filter((scope): scope is ApiKeyScope => scope !== null),
                     );
                     const allSelected = allKeys.every((k) =>
                       form.scopes.includes(k),
@@ -493,7 +593,9 @@ export function ApiKeysPage() {
                   className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex-shrink-0"
                 >
                   {SCOPE_MODULES.flatMap((m) =>
-                    m.actions.map((a) => `${m.module}:${a}`),
+                    m.actions
+                      .map((a) => scopeKeyOf(m.module, a))
+                      .filter((scope): scope is ApiKeyScope => scope !== null),
                   ).every((k) => form.scopes.includes(k))
                     ? "Tümünü Kaldır"
                     : "Tümünü Seç"}
@@ -528,11 +630,11 @@ export function ApiKeysPage() {
                         </td>
                         {(["read", "write", "delete"] as const).map(
                           (action) => {
-                            const scopeKey = `${mod.module}:${action}`;
+                            const scopeKey = scopeKeyOf(mod.module, action);
                             const available = (
                               mod.actions as readonly string[]
                             ).includes(action);
-                            const selected = form.scopes.includes(scopeKey);
+                            const selected = scopeKey !== null && form.scopes.includes(scopeKey);
                             return (
                               <td
                                 key={action}
@@ -541,7 +643,9 @@ export function ApiKeysPage() {
                                 {available ? (
                                   <button
                                     type="button"
-                                    onClick={() => toggleScope(scopeKey)}
+                                    onClick={() => {
+                                      if (scopeKey !== null) toggleScope(scopeKey);
+                                    }}
                                     className={`w-6 h-6 mx-auto rounded-md flex items-center justify-center transition-colors ${
                                       selected
                                         ? "bg-sky-500/15 hover:bg-red-500/15"

@@ -22,6 +22,8 @@ export type Attachment = z.infer<typeof AttachmentSchema>;
 
 export const DocumentCenterItemSchema = z.object({
   id: z.string(),
+  documentId: z.string().optional().default(''),
+  versionId: z.string().optional().default(''),
   source: z.enum(['ATTACHMENT', 'MAIL']),
   category: z.enum(['CUSTOMER', 'EMPLOYEE', 'SALES', 'PURCHASING', 'SERVICE', 'INVENTORY', 'CONTRACT', 'MAIL', 'OTHER']),
   fileName: z.string(),
@@ -83,6 +85,8 @@ export const DocumentCenterSummarySchema = z.object({
   oldVersionCount: z.coerce.number(),
   ocrReadyCount: z.coerce.number(),
   ocrProviderRequiredCount: z.coerce.number(),
+  contractRenewalAlertCount: z.coerce.number().catch(0),
+  employeeChecklistMissingCount: z.coerce.number().catch(0),
 });
 
 const DocumentCenterResponseSchema = PaginatedResponseSchema(DocumentCenterItemSchema).extend({
@@ -119,6 +123,13 @@ export interface AttachmentMetadataInput {
   validUntil?: string | null;
   version?: number;
 }
+
+export const BulkAttachmentMetadataResultSchema = z.object({
+  updatedCount: z.coerce.number(),
+  skippedCount: z.coerce.number(),
+});
+
+export type BulkAttachmentMetadataResult = z.infer<typeof BulkAttachmentMetadataResultSchema>;
 
 function appendAttachmentMetadata(formData: FormData, metadata?: AttachmentMetadataInput): void {
   if (metadata?.category) formData.append('category', metadata.category);
@@ -189,4 +200,9 @@ export async function renameAttachment(id: string, fileName: string): Promise<At
 export async function updateAttachmentMetadata(id: string, input: AttachmentMetadataInput & { fileName?: string }): Promise<Attachment> {
   const res = await apiClient.patch(`/api/attachments/${id}`, input);
   return safeParse(SingleResponseSchema(AttachmentSchema), res.data, 'updateAttachmentMetadata').data;
+}
+
+export async function bulkUpdateAttachmentMetadata(ids: readonly string[], metadata: AttachmentMetadataInput): Promise<BulkAttachmentMetadataResult> {
+  const res = await apiClient.post('/api/attachments/bulk-metadata', { ids, metadata });
+  return safeParse(SingleResponseSchema(BulkAttachmentMetadataResultSchema), res.data, 'bulkUpdateAttachmentMetadata').data;
 }

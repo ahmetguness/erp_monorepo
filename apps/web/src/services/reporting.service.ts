@@ -58,6 +58,13 @@ const ReportingDatasetDefinitionSchema = z.object({
 const ReportingRegistrySchema = z.object({
   datasets: z.array(ReportingDatasetDefinitionSchema),
   chartTypes: z.array(z.object({ key: z.enum(['number', 'bar', 'line', 'pie']), label: z.string() })),
+  capabilities: z.object({
+    savedKpi: z.boolean(),
+    dashboardPinning: z.boolean(),
+    scheduledReportEmail: z.boolean(),
+    exportAudit: z.boolean(),
+    permissionAwareDatasetFields: z.boolean(),
+  }),
 });
 
 export const KpiReportConfigSchema = z.object({
@@ -89,6 +96,12 @@ const KpiPreviewSchema = z.object({
   scheduleEmail: KpiReportConfigSchema.shape.scheduleEmail,
 });
 
+const ReportExportAuditResultSchema = z.object({
+  success: z.boolean(),
+  reportId: z.string(),
+  auditedAt: z.string(),
+});
+
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
@@ -101,6 +114,7 @@ export type ReportingRegistry = z.infer<typeof ReportingRegistrySchema>;
 export type ReportingDatasetDefinition = z.infer<typeof ReportingDatasetDefinitionSchema>;
 export type KpiReportConfig = z.infer<typeof KpiReportConfigSchema>;
 export type KpiPreview = z.infer<typeof KpiPreviewSchema>;
+export type ReportExportAuditResult = z.infer<typeof ReportExportAuditResultSchema>;
 
 // ─────────────────────────────────────────────
 // Service functions
@@ -161,4 +175,9 @@ export async function createSavedReport(data: { name: string; module: string; fi
 
 export async function deleteSavedReport(id: string): Promise<void> {
   await apiClient.delete(`/api/reports/saved/${id}`);
+}
+
+export async function recordSavedReportExportAudit(id: string): Promise<ReportExportAuditResult> {
+  const res = await apiClient.post(`/api/reports/saved/${id}/export-audit`);
+  return safeParse(SingleResponseSchema(ReportExportAuditResultSchema), res.data, 'recordSavedReportExportAudit').data;
 }

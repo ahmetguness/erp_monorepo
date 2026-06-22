@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { Download, Edit3, ExternalLink, FileText, FileUp, History, Mail, ScanText, Search, Shield, Tags, Upload } from 'lucide-react';
+import { Download, Edit3, ExternalLink, FileText, FileUp, History, Layers3, Mail, ScanText, Search, Shield, Tags, Upload } from 'lucide-react';
 import { FeaturePageShell } from '@/components/shared/FeaturePageShell';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
-import { useAttachmentAccessLog, useAttachmentEntityOptions, useDocumentCenter, useUpdateAttachmentMetadata, useUploadAttachment, useUploadAttachmentVersion } from '@/hooks/useAttachments';
+import { useAttachmentAccessLog, useAttachmentEntityOptions, useBulkUpdateAttachmentMetadata, useDocumentCenter, useUpdateAttachmentMetadata, useUploadAttachment, useUploadAttachmentVersion } from '@/hooks/useAttachments';
+import { useBulkSelection } from '@/hooks/useBulkSelection';
 import { cn, formatDateTime } from '@/lib/utils';
 import {
   downloadAttachment,
@@ -206,6 +207,24 @@ interface VersionFormState {
   version: string;
 }
 
+interface BulkMetadataFormState {
+  category: DocumentCenterCategory | '';
+  tags: string;
+  documentKind: DocumentKind | '';
+  confidentiality: DocumentConfidentiality | '';
+  validFrom: string;
+  validUntil: string;
+}
+
+const DEFAULT_BULK_METADATA_FORM: BulkMetadataFormState = {
+  category: '',
+  tags: '',
+  documentKind: '',
+  confidentiality: '',
+  validFrom: '',
+  validUntil: '',
+};
+
 function dateInputValue(value: string | null): string {
   return value ? value.slice(0, 10) : '';
 }
@@ -220,6 +239,8 @@ export function DocumentCenterPage() {
   const [editForm, setEditForm] = useState<EditFormState | null>(null);
   const [versionForm, setVersionForm] = useState<VersionFormState | null>(null);
   const [accessLogId, setAccessLogId] = useState<string | null>(null);
+  const [isBulkMetadataOpen, setIsBulkMetadataOpen] = useState(false);
+  const [bulkMetadataForm, setBulkMetadataForm] = useState<BulkMetadataFormState>(DEFAULT_BULK_METADATA_FORM);
 
   const params = useMemo(
     () => ({
@@ -236,8 +257,19 @@ export function DocumentCenterPage() {
   const upload = useUploadAttachment();
   const uploadVersion = useUploadAttachmentVersion();
   const updateMetadata = useUpdateAttachmentMetadata();
+  const bulkUpdateMetadata = useBulkUpdateAttachmentMetadata();
   const { data: accessLogs = [], isLoading: accessLogsLoading } = useAttachmentAccessLog(accessLogId);
   const { data: entityOptions = [] } = useAttachmentEntityOptions(uploadForm.entityType, uploadForm.entitySearch.trim() || undefined);
+  const documentItems = data?.data ?? [];
+  const selectableAttachmentIds = useMemo(
+    () => documentItems.filter((item) => item.source === 'ATTACHMENT').map((item) => item.id),
+    [documentItems],
+  );
+  const bulkSelection = useBulkSelection(selectableAttachmentIds);
+  const selectableAttachmentIdSet = useMemo(() => new Set(selectableAttachmentIds), [selectableAttachmentIds]);
+  const toggleSelectableRow = (id: string) => {
+    if (selectableAttachmentIdSet.has(id)) bulkSelection.toggleOne(id);
+  };
 
   const handleDownload = async (item: DocumentCenterItem) => {
     if (item.source !== 'ATTACHMENT') return;
@@ -317,6 +349,23 @@ export function DocumentCenterPage() {
       },
     });
     setVersionForm(null);
+  };
+
+  const submitBulkMetadata = async () => {
+    const metadata = {
+      ...(bulkMetadataForm.category && { category: bulkMetadataForm.category }),
+      ...(bulkMetadataForm.tags.trim() && { tags: tagsFromInput(bulkMetadataForm.tags) }),
+      ...(bulkMetadataForm.documentKind && { documentKind: bulkMetadataForm.documentKind }),
+      ...(bulkMetadataForm.confidentiality && { confidentiality: bulkMetadataForm.confidentiality }),
+      ...(bulkMetadataForm.validFrom && { validFrom: bulkMetadataForm.validFrom }),
+      ...(bulkMetadataForm.validUntil && { validUntil: bulkMetadataForm.validUntil }),
+    };
+
+    if (Object.keys(metadata).length === 0 || bulkSelection.selectedIdList.length === 0) return;
+    await bulkUpdateMetadata.mutateAsync({ ids: bulkSelection.selectedIdList, metadata });
+    bulkSelection.clearSelection();
+    setBulkMetadataForm(DEFAULT_BULK_METADATA_FORM);
+    setIsBulkMetadataOpen(false);
   };
 
   const columns: ColumnDef<DocumentCenterItem>[] = [
@@ -491,11 +540,13 @@ export function DocumentCenterPage() {
         action={<Button leftIcon={<Upload className="h-4 w-4" />} onClick={() => setIsUploadOpen(true)}>Yeni dosya yükle</Button>}
     >
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
         <StatCard label="Toplam" value={String(summary?.totalDocuments ?? 0)} hint="Filtreye uyan kayıt" />
         <StatCard label="Dosyalar" value={String(summary?.attachmentCount ?? 0)} hint="İndirilebilir ekler" />
         <StatCard label="Mail ekleri" value={String(summary?.mailAttachmentCount ?? 0)} hint="Mail geçmişi metadata" />
         <StatCard label="Boyut" value={formatFileSize(summary?.totalSizeBytes ?? 0)} hint="Listelenen dosya hacmi" />
+        <StatCard label="Yenileme" value={String(summary?.contractRenewalAlertCount ?? 0)} hint="Sozlesme alarmi" />
+        <StatCard label="Personel evrak" value={String(summary?.employeeChecklistMissingCount ?? 0)} hint="Checklist eksigi" />
       </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
@@ -543,10 +594,43 @@ export function DocumentCenterPage() {
         </div>
       </div>
 
+      {bulkSelection.selectedCount > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <span className="rounded-lg bg-slate-950/70 px-2.5 py-1 text-xs font-semibold text-sky-200">
+              {bulkSelection.selectedCount} dosya seçili
+            </span>
+            <button
+              type="button"
+              onClick={bulkSelection.clearSelection}
+              className="rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-900 hover:text-slate-200"
+            >
+              Temizle
+            </button>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            leftIcon={<Layers3 className="h-4 w-4" />}
+            onClick={() => setIsBulkMetadataOpen(true)}
+          >
+            Metadata güncelle
+          </Button>
+        </div>
+      )}
+
       <DataTable
         columns={columns}
-        data={data?.data ?? []}
+        data={documentItems}
         keyExtractor={(row) => row.id}
+        selection={{
+          selectedIds: bulkSelection.selectedIds,
+          isPageSelected: bulkSelection.isPageSelected,
+          isPagePartiallySelected: bulkSelection.isPagePartiallySelected,
+          onToggleRow: toggleSelectableRow,
+          onTogglePage: bulkSelection.togglePage,
+        }}
         isLoading={isLoading}
         emptyTitle="Doküman bulunamadı"
         emptyDescription="Filtreleri değiştirerek tekrar deneyin."
@@ -737,6 +821,88 @@ export function DocumentCenterPage() {
             />
           </div>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={isBulkMetadataOpen}
+        onClose={() => setIsBulkMetadataOpen(false)}
+        title="Toplu metadata güncelle"
+        description="Seçili dosyaların kategori, etiket, gizlilik ve geçerlilik bilgilerini tek seferde güncelleyin."
+        size="lg"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setIsBulkMetadataOpen(false)}>Vazgeç</Button>
+            <Button
+              onClick={() => void submitBulkMetadata()}
+              loading={bulkUpdateMetadata.isPending}
+              disabled={bulkSelection.selectedCount === 0}
+            >
+              {bulkSelection.selectedCount} dosyayı güncelle
+            </Button>
+          </>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
+            {bulkSelection.selectedCount} dosya seçili. Boş bırakılan alanlar değiştirilmez.
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Select
+              label="Kategori"
+              value={bulkMetadataForm.category}
+              options={[
+                { value: '', label: 'Değiştirme' },
+                ...CATEGORIES.filter((item) => item.value !== 'MAIL').map((item) => ({ value: item.value, label: item.label })),
+              ]}
+              onChange={(event) => {
+                const next = event.target.value;
+                setBulkMetadataForm((current) => ({ ...current, category: isCategory(next) ? next : '' }));
+              }}
+            />
+            <Select
+              label="Doküman tipi"
+              value={bulkMetadataForm.documentKind}
+              options={[
+                { value: '', label: 'Değiştirme' },
+                ...DOCUMENT_KINDS.map((item) => ({ value: item.value, label: item.label })),
+              ]}
+              onChange={(event) => {
+                const next = event.target.value;
+                setBulkMetadataForm((current) => ({ ...current, documentKind: isDocumentKind(next) ? next : '' }));
+              }}
+            />
+            <Select
+              label="Gizlilik"
+              value={bulkMetadataForm.confidentiality}
+              options={[
+                { value: '', label: 'Değiştirme' },
+                ...CONFIDENTIALITIES.map((item) => ({ value: item.value, label: item.label })),
+              ]}
+              onChange={(event) => {
+                const next = event.target.value;
+                setBulkMetadataForm((current) => ({ ...current, confidentiality: isConfidentiality(next) ? next : '' }));
+              }}
+            />
+            <Input
+              label="Etiketler"
+              value={bulkMetadataForm.tags}
+              onChange={(event) => setBulkMetadataForm((current) => ({ ...current, tags: event.target.value }))}
+              helperText="Doluysa seçili dosyaların etiketleri bu listeyle değişir."
+            />
+            <Input
+              label="Başlangıç tarihi"
+              type="date"
+              value={bulkMetadataForm.validFrom}
+              onChange={(event) => setBulkMetadataForm((current) => ({ ...current, validFrom: event.target.value }))}
+            />
+            <Input
+              label="Bitiş / geçerlilik tarihi"
+              type="date"
+              value={bulkMetadataForm.validUntil}
+              onChange={(event) => setBulkMetadataForm((current) => ({ ...current, validUntil: event.target.value }))}
+            />
+          </div>
+        </div>
       </Modal>
 
       <Modal

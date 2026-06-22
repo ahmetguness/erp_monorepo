@@ -1,5 +1,6 @@
 import { Context, Next } from 'hono';
 import { rateLimiter } from '../lib/rateLimiter';
+import { recordPublicEndpointAbuse, type PublicEndpointAbuseMetric } from '../services/security-hardening.service.js';
 
 const DEFAULT_LIMIT = 300;
 const DEFAULT_WINDOW_MS = 60_000;
@@ -29,10 +30,15 @@ export async function globalRateLimit(c: Context, next: Next): Promise<Response 
   }
 
   const ip = getClientIp(c);
-  const pathGroup = c.req.path.startsWith('/api/public') ? 'public' : c.req.path.startsWith('/api/admin') ? 'admin' : 'api';
+  const pathGroup: PublicEndpointAbuseMetric['pathGroup'] = c.req.path.startsWith('/api/public')
+    ? 'public'
+    : c.req.path.startsWith('/api/admin')
+      ? 'admin'
+      : 'api';
   const limit = readPositiveInt(process.env.GLOBAL_RATE_LIMIT_PER_MINUTE, DEFAULT_LIMIT);
   const exceeded = await rateLimiter.check(`global:${pathGroup}:${ip}`, limit, DEFAULT_WINDOW_MS);
   if (exceeded) {
+    if (pathGroup === 'public') recordPublicEndpointAbuse(pathGroup, ip);
     return c.json({ error: { code: 'RATE_LIMITED', message: 'Cok fazla istek. Lutfen biraz sonra tekrar deneyin.' } }, 429);
   }
 
@@ -40,6 +46,7 @@ export async function globalRateLimit(c: Context, next: Next): Promise<Response 
     const writeLimit = readPositiveInt(process.env.GLOBAL_WRITE_RATE_LIMIT_PER_MINUTE, WRITE_LIMIT);
     const writeExceeded = await rateLimiter.check(`global_write:${pathGroup}:${ip}`, writeLimit, WRITE_WINDOW_MS);
     if (writeExceeded) {
+      if (pathGroup === 'public') recordPublicEndpointAbuse(pathGroup, ip);
       return c.json({ error: { code: 'RATE_LIMITED', message: 'Cok fazla yazma istegi. Lutfen biraz sonra tekrar deneyin.' } }, 429);
     }
   }

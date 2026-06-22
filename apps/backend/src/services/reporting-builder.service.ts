@@ -1,4 +1,4 @@
-import { InvoiceStatus, InvoiceType, Prisma, type PrismaClient } from '@prisma/client';
+import { InvoiceStatus, InvoiceType, PermissionAction, Prisma, type PrismaClient } from '@prisma/client';
 import { ValidationError } from '../errors';
 
 export type ReportingDatasetKey = 'invoices' | 'payments' | 'stock' | 'contacts';
@@ -20,6 +20,18 @@ export interface ReportingDatasetDefinition {
   metrics: ReportingMetricDefinition[];
   groupBy: { key: string; label: string }[];
   filters: { key: string; label: string; type: 'dateRange' | 'select' }[];
+}
+
+export interface ReportingRegistryResult {
+  datasets: readonly ReportingDatasetDefinition[];
+  chartTypes: readonly { key: ReportingChartType; label: string }[];
+  capabilities: {
+    savedKpi: boolean;
+    dashboardPinning: boolean;
+    scheduledReportEmail: boolean;
+    exportAudit: boolean;
+    permissionAwareDatasetFields: boolean;
+  };
 }
 
 export interface KpiScheduleEmailConfig {
@@ -229,6 +241,27 @@ function normalizeSchedule(value: Record<string, unknown>): KpiScheduleEmailConf
   };
 }
 
+async function readableModules(db: PrismaClient, tenantId: string, userId: string): Promise<Set<string> | null> {
+  const tenantUser = await db.tenantUser.findFirst({
+    where: { tenantId, userId, isActive: true },
+    select: {
+      isOwner: true,
+      roleRef: {
+        select: {
+          permissions: {
+            where: { action: PermissionAction.READ },
+            select: { module: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!tenantUser) throw new ValidationError('Rapor dataset izinleri doğrulanamadı.');
+  if (tenantUser.isOwner) return null;
+  return new Set(tenantUser.roleRef?.permissions.map((permission) => permission.module) ?? []);
+}
+
 export function normalizeKpiConfig(value: unknown): KpiReportConfig {
   if (!isRecord(value)) throw new ValidationError('KPI yapılandırması zorunludur.');
 
@@ -261,21 +294,43 @@ export function normalizeKpiConfig(value: unknown): KpiReportConfig {
   };
 }
 
-export function isKpiConfig(value: Prisma.JsonValue): value is Prisma.JsonObject {
+export function isKpiConfig(value: unknown): value is Record<string, unknown> {
   return isRecord(value) && value.reportType === 'KPI';
 }
 
 export class ReportingBuilderService {
   constructor(private readonly db: PrismaClient) {}
 
-  registry(): { datasets: readonly ReportingDatasetDefinition[]; chartTypes: readonly { key: ReportingChartType; label: string }[] } {
-    return { datasets: DATASETS, chartTypes: CHART_TYPES };
+  async registry(tenantId: string, userId: string): Promise<ReportingRegistryResult> {
+    const modules = await readableModules(this.db, tenantId, userId);
+    const datasets = modules ? DATASETS.filter((dataset) => modules.has(dataset.module)) : DATASETS;
+
+    return {
+      datasets,
+      chartTypes: CHART_TYPES,
+      capabilities: {
+        savedKpi: true,
+        dashboardPinning: true,
+        scheduledReportEmail: true,
+        exportAudit: true,
+        permissionAwareDatasetFields: true,
+      },
+    };
   }
 
-  async preview(tenantId: string, input: unknown): Promise<KpiPreviewResult> {
+  async assertCanUseConfig(tenantId: string, userId: string, config: KpiReportConfig): Promise<void> {
+    const dataset = datasetByKey(config.dataset);
+    const modules = await readableModules(this.db, tenantId, userId);
+    if (modules && !modules.has(dataset.module)) {
+      throw new ValidationError('Bu KPI dataset alanı için okuma yetkiniz yok.');
+    }
+  }
+
+  async preview(tenantId: string, userId: string, input: unknown): Promise<KpiPreviewResult> {
     const config = normalizeKpiConfig(input);
     const dataset = datasetByKey(config.dataset);
     const metric = metricByKey(dataset, config.metric);
+    await this.assertCanUseConfig(tenantId, userId, config);
     const range = resolveDateRange(config);
     const value = await this.metricValue(tenantId, config, range.dateFrom, range.dateTo);
 

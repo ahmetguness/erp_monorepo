@@ -34,6 +34,19 @@ export interface MailHistoryFilters {
   limit: number;
 }
 
+export interface MailDeliverySummary {
+  total: number;
+  outboundCount: number;
+  inboundCount: number;
+  pendingCount: number;
+  sentCount: number;
+  failedCount: number;
+  attachmentCount: number;
+  recipientCount: number;
+  lastSentAt: string | null;
+  lastFailureAt: string | null;
+}
+
 function htmlToPreview(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, ' ')
@@ -174,6 +187,62 @@ export class MailHistoryService {
     return {
       ...mail,
       bcc: visibleBcc(mail.bcc, userId, userEmail, mail.sentBy?.id),
+    };
+  }
+
+  static async summary(tenantId: string, userId: string): Promise<MailDeliverySummary> {
+    const userEmail = await getTenantUserEmail(tenantId, userId);
+    if (!userEmail) {
+      return {
+        total: 0,
+        outboundCount: 0,
+        inboundCount: 0,
+        pendingCount: 0,
+        sentCount: 0,
+        failedCount: 0,
+        attachmentCount: 0,
+        recipientCount: 0,
+        lastSentAt: null,
+        lastFailureAt: null,
+      };
+    }
+
+    const where: Prisma.MailMessageWhereInput = {
+      tenantId,
+      ...visibleToUserWhere(userId, userEmail),
+    };
+    const rows = await prisma.mailMessage.findMany({
+      where,
+      select: {
+        direction: true,
+        status: true,
+        to: true,
+        cc: true,
+        bcc: true,
+        attachmentCount: true,
+        sentAt: true,
+        createdAt: true,
+      },
+    });
+
+    const lastSent = rows
+      .filter((row) => row.status === MailDeliveryStatus.SENT && row.sentAt)
+      .sort((left, right) => (right.sentAt?.getTime() ?? 0) - (left.sentAt?.getTime() ?? 0))[0];
+    const lastFailure = rows
+      .filter((row) => row.status === MailDeliveryStatus.FAILED)
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0];
+
+    return {
+      total: rows.length,
+      outboundCount: rows.filter((row) => row.direction === MailDirection.OUTBOUND).length,
+      inboundCount: rows.filter((row) => row.direction === MailDirection.INBOUND).length,
+      pendingCount: rows.filter((row) => row.status === MailDeliveryStatus.PENDING).length,
+      sentCount: rows.filter((row) => row.status === MailDeliveryStatus.SENT).length,
+      failedCount: rows.filter((row) => row.status === MailDeliveryStatus.FAILED).length,
+      attachmentCount: rows.reduce((count, row) => count + row.attachmentCount, 0),
+      recipientCount: rows.reduce((count, row) => count + row.to.length + row.cc.length + visibleBcc(row.bcc, userId, userEmail).length, 0),
+      lastSentAt: lastSent?.sentAt?.toISOString() ?? null,
+      lastFailureAt: lastFailure?.createdAt.toISOString() ?? null,
     };
   }
 

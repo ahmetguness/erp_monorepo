@@ -1,13 +1,18 @@
 import { Context } from 'hono';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { deleteCookie, setCookie } from 'hono/cookie';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { prisma } from '../lib/prisma';
 import { ValidationError, ForbiddenError, NotFoundError } from '../errors';
 import { PermissionAction, Prisma } from '@prisma/client';
 import { requireTenantId } from '../utils/context.js';
 import { logger } from '../lib/logger';
 import { rateLimiter } from '../lib/rateLimiter';
+import {
+  createSecuritySession,
+  revokeSecuritySession,
+  type RequestSecurityMeta,
+} from '../services/security-hardening.service.js';
 
 // ─────────────────────────────────────────────
 // Config
@@ -16,6 +21,7 @@ import { rateLimiter } from '../lib/rateLimiter';
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
 
+const RESOLVED_JWT_SECRET = JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '7d';
 const AUTH_COOKIE_NAME = 'axon_token';
 const REMEMBER_ME_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
@@ -49,6 +55,7 @@ interface RegisterDTO {
 interface JwtPayload {
   userId: string;
   tenantId: string;
+  sessionId?: string;
   iat?: number;
   exp?: number;
 }
@@ -111,6 +118,33 @@ function clearAuthCookie(c: Context): void {
 
 function getClientIp(c: Context): string {
   return c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip')?.trim() || 'unknown';
+}
+
+function getAuthRequestMeta(c: Context): RequestSecurityMeta {
+  return {
+    ipAddress: getClientIp(c),
+    userAgent: c.req.header('user-agent') ?? null,
+  };
+}
+
+function getTokenPayloadFromRequest(c: Context): JwtPayload | null {
+  const auth = c.req.header('Authorization');
+  const cookieToken = getCookie(c, AUTH_COOKIE_NAME);
+  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : cookieToken;
+  if (!token) return null;
+
+  try {
+    const payload = jwt.verify(token, RESOLVED_JWT_SECRET);
+    if (typeof payload === 'string') return null;
+    if (typeof payload.userId !== 'string' || typeof payload.tenantId !== 'string') return null;
+    return {
+      userId: payload.userId,
+      tenantId: payload.tenantId,
+      sessionId: typeof payload.sessionId === 'string' ? payload.sessionId : undefined,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function normalizeEmail(email: string): string {
@@ -236,12 +270,14 @@ export const AuthController = {
     }
 
     // JWT oluştur
+    const session = await createSecuritySession(prisma, tenant.id, user.id, getAuthRequestMeta(c));
     const payload: JwtPayload = {
       userId: user.id,
       tenantId: tenant.id,
+      sessionId: session.id,
     };
 
-    const token = jwt.sign(payload, JWT_SECRET, {
+    const token = jwt.sign(payload, RESOLVED_JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
     });
     setAuthCookie(c, token, body.rememberMe ?? true);
@@ -367,12 +403,14 @@ export const AuthController = {
       return { user: newUser, tenant: newTenant };
     });
 
+    const session = await createSecuritySession(prisma, result.tenant.id, result.user.id, getAuthRequestMeta(c));
     const payload: JwtPayload = {
       userId: result.user.id,
       tenantId: result.tenant.id,
+      sessionId: session.id,
     };
 
-    const token = jwt.sign(payload, JWT_SECRET, {
+    const token = jwt.sign(payload, RESOLVED_JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
     });
     setAuthCookie(c, token, true);
@@ -408,6 +446,10 @@ export const AuthController = {
    * HttpOnly auth cookie'sini temizler.
    */
   async logout(c: Context): Promise<Response> {
+    const payload = getTokenPayloadFromRequest(c);
+    if (payload?.sessionId) {
+      await revokeSecuritySession(prisma, payload.tenantId, payload.sessionId, payload.userId, getAuthRequestMeta(c));
+    }
     clearAuthCookie(c);
     return c.json({ data: { success: true } });
   },
