@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { 
   View, 
   Text, 
@@ -21,6 +21,19 @@ import { useAuthStore } from '../store/auth.store';
 
 const { width, height } = Dimensions.get('window');
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getLoginErrorMessage(error: unknown): string {
+  const response = isRecord(error) ? error.response : undefined;
+  const data = isRecord(response) ? response.data : undefined;
+  const errorBody = isRecord(data) ? data.error : undefined;
+  const message = isRecord(errorBody) ? errorBody.message : undefined;
+  if (typeof message === 'string' && message.trim()) return message;
+  return 'Giris basarisiz. Lutfen bilgilerinizi kontrol edin.';
+}
+
 export default function LoginScreen({ onBack }: ScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,7 +44,7 @@ export default function LoginScreen({ onBack }: ScreenProps) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      setErrorMsg('Lütfen e-posta ve şifrenizi girin.');
+      setErrorMsg('LÃ¼tfen e-posta ve ÅŸifrenizi girin.');
       return;
     }
 
@@ -41,11 +54,10 @@ export default function LoginScreen({ onBack }: ScreenProps) {
     try {
       const data = await login({ email, password });
       setAuthData(data.user, data.tenant);
-      // Başarılı giriş sonrası Zustand store güncellenir,
-      // App.tsx içindeki isAuthenticated true olacağı için ekran otomatik değişir.
-    } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'Giriş başarısız. Lütfen bilgilerinizi kontrol edin.';
-      setErrorMsg(msg);
+      // BaÅŸarÄ±lÄ± giriÅŸ sonrasÄ± Zustand store gÃ¼ncellenir,
+      // App.tsx iÃ§indeki isAuthenticated true olacaÄŸÄ± iÃ§in ekran otomatik deÄŸiÅŸir.
+    } catch (error: unknown) {
+      setErrorMsg(getLoginErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -75,8 +87,8 @@ export default function LoginScreen({ onBack }: ScreenProps) {
               <View style={styles.logoWrapper}>
                 <Logo size="md" />
               </View>
-              <Text style={styles.title}>Hoş Geldiniz</Text>
-              <Text style={styles.subtitle}>Hesabınıza giriş yapın</Text>
+              <Text style={styles.title}>HoÅŸ Geldiniz</Text>
+              <Text style={styles.subtitle}>HesabÄ±nÄ±za giriÅŸ yapÄ±n</Text>
             </View>
 
             {errorMsg ? (
@@ -100,8 +112,8 @@ export default function LoginScreen({ onBack }: ScreenProps) {
               />
 
               <Input 
-                label="Şifre"
-                placeholder="••••••••"
+                label="Åžifre"
+                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                 value={password}
                 onChangeText={(val) => { setPassword(val); setErrorMsg(''); }}
                 secureTextEntry
@@ -109,13 +121,13 @@ export default function LoginScreen({ onBack }: ScreenProps) {
                 icon={<Ionicons name="lock-closed-outline" size={20} color="#94A3B8" />}
                 rightLabel={
                   <TouchableOpacity hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
-                    <Text style={styles.forgotPasswordText}>Şifremi Unuttum</Text>
+                    <Text style={styles.forgotPasswordText}>Åžifremi Unuttum</Text>
                   </TouchableOpacity>
                 }
               />
 
               <Button 
-                title="Giriş Yap" 
+                title="GiriÅŸ Yap"
                 onPress={handleLogin} 
                 isLoading={isLoading}
                 style={styles.submitButton}
@@ -123,18 +135,18 @@ export default function LoginScreen({ onBack }: ScreenProps) {
             </View>
           </View>
 
-          {/* Alt boşluğu doldurmak için Yardım/Destek alanı */}
+          {/* Alt boÅŸluÄŸu doldurmak iÃ§in YardÄ±m/Destek alanÄ± */}
           <View style={styles.supportContainer}>
-            <Text style={styles.supportText}>Yardıma mı ihtiyacınız var? </Text>
+            <Text style={styles.supportText}>YardÄ±ma mÄ± ihtiyacÄ±nÄ±z var? </Text>
             <TouchableOpacity hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
-              <Text style={styles.supportLink}>Destek Ekibine Ulaşın</Text>
+              <Text style={styles.supportLink}>Destek Ekibine UlaÅŸÄ±n</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.spacer} />
 
           <View style={styles.bottomFooter}>
-            <Text style={styles.footerText}>Axon ERP © 2026</Text>
+            <Text style={styles.footerText}>Axon ERP Â© 2026</Text>
           </View>
 
         </ScrollView>
