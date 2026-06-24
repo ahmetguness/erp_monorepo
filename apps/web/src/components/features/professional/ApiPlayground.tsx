@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, type ReactNode } from "react";
 import {
   Play,
   Copy,
@@ -175,19 +175,45 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 // Syntax highlight (minimal)
 // ─────────────────────────────────────────────
 
-function highlightJson(json: string): string {
-  return json
-    .replace(
-      /("(?:[^"\\]|\\.)*")\s*:/g,
-      '<span class="text-violet-400">$1</span>:',
-    )
-    .replace(
-      /:\s*("(?:[^"\\]|\\.)*")/g,
-      ': <span class="text-emerald-400">$1</span>',
-    )
-    .replace(/:\s*(true|false)/g, ': <span class="text-amber-400">$1</span>')
-    .replace(/:\s*(\d+\.?\d*)/g, ': <span class="text-sky-400">$1</span>')
-    .replace(/:\s*(null)/g, ': <span class="text-slate-500">$1</span>');
+function highlightJson(json: string): ReactNode[] {
+  const tokenPattern =
+    /"(?:[^"\\]|\\.)*"(?=\s*:)|"(?:[^"\\]|\\.)*"|-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\btrue\b|\bfalse\b|\bnull\b/g;
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of json.matchAll(tokenPattern)) {
+    const value = match[0];
+    const index = match.index;
+
+    if (index > lastIndex) {
+      nodes.push(json.slice(lastIndex, index));
+    }
+
+    const nextChar = json.slice(index + value.length).match(/^\s*:/);
+    const className = nextChar
+      ? "text-violet-400"
+      : value.startsWith('"')
+        ? "text-emerald-400"
+        : value === "null"
+          ? "text-slate-500"
+          : value === "true" || value === "false"
+            ? "text-amber-400"
+            : "text-sky-400";
+
+    nodes.push(
+      <span key={`${index}-${value}`} className={className}>
+        {value}
+      </span>,
+    );
+
+    lastIndex = index + value.length;
+  }
+
+  if (lastIndex < json.length) {
+    nodes.push(json.slice(lastIndex));
+  }
+
+  return nodes;
 }
 
 // ─────────────────────────────────────────────
@@ -605,8 +631,9 @@ export function ApiPlayground() {
                 </div>
                 <pre
                   className={`${statusBg} border border-slate-800 rounded-xl p-4 text-xs font-mono overflow-x-auto max-h-[400px] overflow-y-auto leading-relaxed`}
-                  dangerouslySetInnerHTML={{ __html: highlightJson(response) }}
-                />
+                >
+                  {highlightJson(response)}
+                </pre>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-center">

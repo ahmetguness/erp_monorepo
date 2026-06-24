@@ -6,6 +6,9 @@ import { prisma } from '../lib/prisma';
 import { ValidationError, ForbiddenError, NotFoundError } from '../errors';
 import { PermissionAction, Prisma } from '@prisma/client';
 import { requireTenantId } from '../utils/context.js';
+import { validatePasswordStrength } from '../utils/password-policy.js';
+import { getValidatedBody } from '../middleware/validateBody';
+import { loginBodySchema, registerBodySchema } from '../schemas/request-body.schemas';
 import { logger } from '../lib/logger';
 import { rateLimiter } from '../lib/rateLimiter';
 import {
@@ -151,14 +154,6 @@ function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
 }
 
-function validatePasswordPolicy(password: string): ValidationError | null {
-  if (password.length < 10) return new ValidationError('Sifre en az 10 karakter olmalidir.');
-  if (!/[a-z]/.test(password)) return new ValidationError('Sifre en az bir kucuk harf icermelidir.');
-  if (!/[A-Z]/.test(password)) return new ValidationError('Sifre en az bir buyuk harf icermelidir.');
-  if (!/[0-9]/.test(password)) return new ValidationError('Sifre en az bir rakam icermelidir.');
-  return null;
-}
-
 // ─────────────────────────────────────────────
 // Auth Controller
 // ─────────────────────────────────────────────
@@ -175,7 +170,7 @@ export const AuthController = {
       return c.json({ error: { code: 'RATE_LIMITED', message: 'Çok fazla giriş denemesi. Lütfen 15 dakika sonra tekrar deneyin.' } }, 429);
     }
 
-    const body = await c.req.json<LoginDTO>();
+    const body = getValidatedBody(c, loginBodySchema);
 
     if (!body.email || !body.password) {
       return c.json(
@@ -333,7 +328,7 @@ export const AuthController = {
       return c.json({ error: { code: 'RATE_LIMITED', message: 'Çok fazla kayıt denemesi. Lütfen 15 dakika sonra tekrar deneyin.' } }, 429);
     }
 
-    const body = await c.req.json<RegisterDTO>();
+    const body = getValidatedBody(c, registerBodySchema);
 
     if (!body.email || !body.name || !body.password || !body.companyName) {
       return c.json(
@@ -342,8 +337,7 @@ export const AuthController = {
       );
     }
 
-    const passwordPolicyError = validatePasswordPolicy(body.password);
-    if (passwordPolicyError) return c.json(passwordPolicyError.toJSON(), 400);
+    validatePasswordStrength(body.password);
 
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizeEmail(body.email) },

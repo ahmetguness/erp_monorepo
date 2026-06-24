@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { validatePasswordStrength } from '../utils/password-policy.js';
 import { sendMail } from './mail.service';
 import { invitationEmail } from './mail-templates.service';
 
@@ -122,6 +123,8 @@ export async function acceptInvitation(
   name: string,
   password: string,
 ) {
+  validatePasswordStrength(password);
+
   const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
   const normalizedEmail = email.toLowerCase().trim();
 

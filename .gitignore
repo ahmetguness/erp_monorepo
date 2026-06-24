@@ -2,6 +2,8 @@
 /apps/backend/dbdiagram.dbml
 .vscode
 a.txt
+a2.txt
+sec.txt
 BACKEND_AUDIT_REPORT.md
 AGENTS.md
 .agents
@@ -13,3 +15,4 @@ packages/types/node_modules
 ci-artifacts
 apps/backend/ci-artifacts
 .github
+endpoints.txt

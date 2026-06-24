@@ -2,6 +2,12 @@ import { Context } from 'hono';
 import { InvoiceType, InvoiceStatus, AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
+import { getValidatedBody } from '../middleware/validateBody';
+import {
+  createInvoiceBodySchema,
+  updateInvoiceBodySchema,
+  type CreateInvoiceBody,
+} from '../schemas/request-body.schemas';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
@@ -19,14 +25,7 @@ import {
 // DTOs
 // ─────────────────────────────────────────────
 
-interface InvoiceLineDTO {
-  productId?: string;
-  taxRateId?: string;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  discount?: number;
-}
+type InvoiceLineDTO = CreateInvoiceBody['lines'][number];
 
 interface CreateInvoiceDTO {
   contactId: string;
@@ -218,7 +217,7 @@ export const InvoiceController = {
     const userId = c.get('userId') as string | undefined;
     const { ipAddress, userAgent } = getRequestMeta(c);
 
-    const body = await c.req.json<CreateInvoiceDTO>();
+    const body = getValidatedBody(c, createInvoiceBodySchema);
 
     if (!body.contactId || !body.type || !body.date || !body.lines?.length) {
       return c.json(
@@ -350,7 +349,7 @@ export const InvoiceController = {
       );
     }
 
-    const body = await c.req.json<UpdateInvoiceDTO>();
+    const body = getValidatedBody(c, updateInvoiceBodySchema);
 
     const updated = await prisma.invoice.update({
       where: { id: invoiceId },

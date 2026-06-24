@@ -2,6 +2,13 @@ import { Context } from 'hono';
 import { AuditAction, EntityType, MovementType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
+import { getValidatedBody } from '../middleware/validateBody';
+import {
+  createStockCountBodySchema,
+  createStockMovementBodySchema,
+  finalizeStockCountBodySchema,
+  type CreateStockCountBody,
+} from '../schemas/request-body.schemas';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
@@ -36,17 +43,7 @@ interface StockLevelListQuery {
   belowMin?: string;
 }
 
-interface CreateStockCountDTO {
-  warehouseId: string;
-  date: string;
-  notes?: string;
-  items: Array<{
-    productId: string;
-    locationId?: string;
-    expectedQty: number;
-    countedQty: number;
-  }>;
-}
+type CreateStockCountDTO = CreateStockCountBody;
 
 interface FinalizeStockCountDTO {
   applyAdjustments: boolean;
@@ -155,16 +152,7 @@ export const StockController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
 
-    const body = await c.req.json<{
-      productId: string;
-      type: MovementType;
-      quantity: number;
-      warehouseId: string;
-      unitCost?: number;
-      lotId?: string;
-      batchId?: string;
-      notes?: string;
-    }>();
+    const body = getValidatedBody(c, createStockMovementBodySchema);
 
     if (!body.productId || !body.type || !body.quantity || !body.warehouseId) {
       return c.json(
@@ -400,7 +388,7 @@ export const StockController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
 
-    const body = await c.req.json<CreateStockCountDTO>();
+    const body = getValidatedBody(c, createStockCountBodySchema);
 
     if (!body.warehouseId || !body.date || !body.items?.length) {
       return c.json(
@@ -464,7 +452,7 @@ export const StockController = {
       return c.json(new ValidationError('Sayım zaten tamamlandı.').toJSON(), 400);
     }
 
-    const body = await c.req.json<FinalizeStockCountDTO>();
+    const body = getValidatedBody(c, finalizeStockCountBodySchema);
     const inventoryRules = await getInventoryRules(prisma, tenantId);
     const hasDifference = stockCount.items.some((item) => Number(item.difference) !== 0);
 

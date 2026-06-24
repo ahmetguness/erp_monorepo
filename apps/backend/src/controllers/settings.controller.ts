@@ -3,6 +3,12 @@ import { randomUUID } from 'crypto';
 import { basename, extname } from 'path';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
+import { getValidatedBody } from '../middleware/validateBody';
+import {
+  businessRuleBodySchema,
+  moduleSettingBodySchema,
+  tenantSettingBodySchema,
+} from '../schemas/request-body.schemas';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { getRequestMeta } from '../utils/audit.js';
 import { bufferToArrayBuffer, storageService } from '../services/storage.service.js';
@@ -70,7 +76,7 @@ export const SettingsController = {
   async upsertTenantSetting(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<{ key: string; value: string }>();
+    const body = getValidatedBody(c, tenantSettingBodySchema);
     if (!body.key || body.value === undefined) {
       return c.json(new ValidationError('key ve value zorunludur.').toJSON(), 400);
     }
@@ -134,7 +140,7 @@ export const SettingsController = {
 
   async upsertBusinessRule(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const body = await c.req.json<{ key: string; value: unknown }>();
+    const body = getValidatedBody(c, businessRuleBodySchema);
     if (!body.key || body.value === undefined) {
       return c.json(new ValidationError('key ve value zorunludur.').toJSON(), 400);
     }
@@ -227,7 +233,7 @@ export const SettingsController = {
   async upsertModuleSetting(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<{ module: string; key: string; value: string }>();
+    const body = getValidatedBody(c, moduleSettingBodySchema);
     if (!body.module || !body.key || body.value === undefined) {
       return c.json(new ValidationError('module, key ve value zorunludur.').toJSON(), 400);
     }

@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, Lock, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import axios from 'axios';
+import { getPasswordPolicyError, PASSWORD_POLICY_MESSAGE } from '@/lib/password-policy';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -65,8 +66,9 @@ function SetPasswordContent() {
     e.preventDefault();
     setFormError('');
 
-    if (password.length < 8) {
-      setFormError('Şifre en az 8 karakter olmalıdır.');
+    const passwordPolicyError = getPasswordPolicyError(password);
+    if (passwordPolicyError) {
+      setFormError(passwordPolicyError);
       return;
     }
     if (password !== confirmPassword) {
@@ -166,7 +168,7 @@ function SetPasswordContent() {
             <input
               id="password"
               type={showPassword ? 'text' : 'password'}
-              placeholder="En az 8 karakter"
+              placeholder={PASSWORD_POLICY_MESSAGE}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoFocus

@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, Lock, User as UserIcon, Loader2, CheckCircle2, XCircle, Building2 } from 'lucide-react';
 import axios from 'axios';
+import { getPasswordPolicyError, PASSWORD_POLICY_MESSAGE } from '@/lib/password-policy';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -59,7 +60,8 @@ function InviteContent() {
     e.preventDefault();
     setFormError('');
     if (!name.trim()) { setFormError('Ad soyad zorunludur.'); return; }
-    if (password.length < 8) { setFormError('Şifre en az 8 karakter olmalıdır.'); return; }
+    const passwordPolicyError = getPasswordPolicyError(password);
+    if (passwordPolicyError) { setFormError(passwordPolicyError); return; }
     if (password !== confirmPassword) { setFormError('Şifreler eşleşmiyor.'); return; }
 
     setStatus('submitting');
@@ -151,7 +153,7 @@ function InviteContent() {
             <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">
               <Lock className="w-[18px] h-[18px]" />
             </div>
-            <input id="password" type={showPassword ? 'text' : 'password'} placeholder="En az 8 karakter"
+            <input id="password" type={showPassword ? 'text' : 'password'} placeholder={PASSWORD_POLICY_MESSAGE}
               value={password} onChange={(e) => setPassword(e.target.value)}
               className="w-full h-12 pl-11 pr-11 bg-slate-900/80 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/40 focus:bg-slate-900 transition-all" />
             <button type="button" onClick={() => setShowPassword(!showPassword)}

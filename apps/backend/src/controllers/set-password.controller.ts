@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { ValidationError } from '../errors';
 import { logger } from '../lib/logger';
+import { validatePasswordStrength } from '../utils/password-policy.js';
 
 import { rateLimiter } from '../lib/rateLimiter';
 
@@ -50,9 +51,7 @@ export class SetPasswordController {
       return c.json(new ValidationError('token, email ve password zorunludur.').toJSON(), 400);
     }
 
-    if (password.length < 8) {
-      return c.json(new ValidationError('Şifre en az 8 karakter olmalıdır.').toJSON(), 400);
-    }
+    validatePasswordStrength(password);
 
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },

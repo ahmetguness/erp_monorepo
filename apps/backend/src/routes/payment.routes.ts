@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { PaymentController } from '../controllers/payment.controller';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
+import { validateBody } from '../middleware/validateBody';
+import { cancelReasonBodySchema, createPaymentBodySchema } from '../schemas/request-body.schemas';
 import { MODULE_KEYS } from '../types/module.types';
 
 const paymentRoutes = new Hono();
@@ -23,7 +25,7 @@ paymentRoutes.delete('/cash-accounts/:id', requirePermission('accounting', 'DELE
 // Payments
 paymentRoutes.get('/', requirePermission('accounting', 'READ'), PaymentController.listPayments);
 paymentRoutes.get('/:id', requirePermission('accounting', 'READ'), PaymentController.getPaymentById);
-paymentRoutes.post('/', requirePermission('accounting', 'CREATE'), PaymentController.createPayment);
-paymentRoutes.post('/:id/cancel', requirePermission('accounting', 'UPDATE'), PaymentController.cancelPayment);
+paymentRoutes.post('/', requirePermission('accounting', 'CREATE'), validateBody(createPaymentBodySchema), PaymentController.createPayment);
+paymentRoutes.post('/:id/cancel', requirePermission('accounting', 'UPDATE'), validateBody(cancelReasonBodySchema), PaymentController.cancelPayment);
 
 export { paymentRoutes };

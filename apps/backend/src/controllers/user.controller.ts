@@ -3,7 +3,10 @@ import bcrypt from 'bcryptjs';
 import { AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError, ForbiddenError } from '../errors';
+import { getValidatedBody } from '../middleware/validateBody';
+import { createUserBodySchema, updateUserBodySchema } from '../schemas/request-body.schemas';
 import { requireTenantId } from '../utils/context.js';
+import { validatePasswordStrength } from '../utils/password-policy.js';
 import { getPaginationParams } from '../utils/pagination.js';
 import { logger } from '../lib/logger';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
@@ -116,7 +119,7 @@ export const UserController = {
     const userId = c.get('userId') as string | undefined;
     const { ipAddress, userAgent } = getRequestMeta(c);
 
-    const body = await c.req.json<CreateUserDTO>();
+    const body = getValidatedBody(c, createUserBodySchema);
 
     if (!body.email || !body.name || !body.password) {
       return c.json(
@@ -128,6 +131,8 @@ export const UserController = {
         400,
       );
     }
+
+    validatePasswordStrength(body.password);
 
     // Email benzersizlik kontrolü
     const existingUser = await prisma.user.findUnique({
@@ -217,7 +222,7 @@ export const UserController = {
       return c.json(new NotFoundError('Kullanıcı', userId).toJSON(), 404);
     }
 
-    const body = await c.req.json<UpdateUserDTO>();
+    const body = getValidatedBody(c, updateUserBodySchema);
 
     const [updatedUser] = await prisma.$transaction([
       prisma.user.update({

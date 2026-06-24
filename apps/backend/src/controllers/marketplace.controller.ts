@@ -726,8 +726,8 @@ export const TrendyolSyncController = {
     const tenantId = requireTenantId(c);
     const jobId = c.req.param('jobId')!;
 
-    const job = await TrendyolWorker.getJob(jobId);
-    if (!job || job.tenantId !== tenantId) return c.json(new NotFoundError('Job', jobId).toJSON(), 404);
+    const job = await TrendyolWorker.getJob(jobId, tenantId);
+    if (!job) return c.json(new NotFoundError('Job', jobId).toJSON(), 404);
 
     return c.json({ data: job });
   },

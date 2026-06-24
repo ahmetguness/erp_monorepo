@@ -31,6 +31,7 @@ import { adminRoutes } from './routes/admin.routes';
 import { requireAuth } from './middleware/requireAuth';
 import { requirePermission } from './middleware/requirePermission';
 import { csrfProtection } from './middleware/csrfProtection';
+import { securityHeaders } from './middleware/securityHeaders';
 import { BaseError } from './errors';
 
 // Professional Plan Route Imports
@@ -134,6 +135,8 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
+
+app.use('*', securityHeaders);
 
 app.use('*', cors({
   origin: (origin) => {

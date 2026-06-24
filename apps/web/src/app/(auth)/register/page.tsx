@@ -7,13 +7,14 @@ import { z } from 'zod';
 import Link from 'next/link';
 import { useRegister } from '@/hooks/useAuth';
 import { Eye, EyeOff, Building2, User, Mail, Lock, Loader2 } from 'lucide-react';
+import { isPasswordStrong, PASSWORD_POLICY_MESSAGE } from '@/lib/password-policy';
 
 const registerSchema = z
   .object({
     companyName: z.string().min(2, 'Şirket adı en az 2 karakter olmalıdır'),
     name: z.string().min(2, 'Ad Soyad en az 2 karakter olmalıdır'),
     email: z.string().min(1, 'E-posta zorunludur').email('Geçerli bir e-posta girin'),
-    password: z.string().min(8, 'Şifre en az 8 karakter olmalıdır'),
+    password: z.string().min(1, 'Şifre zorunludur').refine(isPasswordStrong, PASSWORD_POLICY_MESSAGE),
     confirmPassword: z.string().min(1, 'Şifre tekrarı zorunludur'),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -138,7 +139,7 @@ export default function RegisterPage() {
                 id="reg-password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="new-password"
-                placeholder="En az 8 karakter"
+                placeholder={PASSWORD_POLICY_MESSAGE}
                 {...register('password')}
                 className={`${inputBase} pr-11 ${errors.password ? inputErr : inputOk}`}
               />

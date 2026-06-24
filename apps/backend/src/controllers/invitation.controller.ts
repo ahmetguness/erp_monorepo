@@ -67,10 +67,6 @@ export class InvitationController {
     if (!token || !email || !name || !password) {
       return c.json({ error: 'token, email, name ve password zorunludur.' }, 400);
     }
-    if (password.length < 8) {
-      return c.json({ error: 'Şifre en az 8 karakter olmalıdır.' }, 400);
-    }
-
     const result = await acceptInvitation(token, email, name, password);
     return c.json(result, result.success ? 200 : 400);
   }

@@ -82,8 +82,8 @@ export const TrendyolWorker = {
     return job.id;
   },
 
-  async getJob(jobId: string) {
-    return prisma.marketplaceSyncJob.findUnique({ where: { id: jobId } });
+  async getJob(jobId: string, tenantId: string) {
+    return prisma.marketplaceSyncJob.findFirst({ where: { id: jobId, tenantId } });
   },
 };
 

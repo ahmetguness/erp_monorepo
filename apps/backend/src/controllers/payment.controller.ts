@@ -1,13 +1,14 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
+import { getValidatedBody } from '../middleware/validateBody';
+import { cancelReasonBodySchema, createPaymentBodySchema } from '../schemas/request-body.schemas';
 import { requireTenantId } from '../utils/context.js';
 import { getRequestMeta } from '../utils/audit.js';
 import {
   createPayment,
   getPaymentById,
   listPayments,
-  parseCreatePaymentInput,
   type CreatePaymentInput,
   type ListPaymentsInput,
 } from '../services/payment.service.js';
@@ -192,7 +193,7 @@ export const PaymentController = {
     const tenantId = requireTenantId(c);
     const userId = c.get('userId') as string | undefined;
     const { ipAddress, userAgent } = getRequestMeta(c);
-    const body: CreatePaymentDTO = parseCreatePaymentInput(await c.req.json());
+    const body: CreatePaymentDTO = getValidatedBody(c, createPaymentBodySchema);
 
     const payment = await createPayment({
       tenantId,
@@ -218,12 +219,7 @@ export const PaymentController = {
     const paymentId = c.req.param('id')!;
     const { ipAddress, userAgent } = getRequestMeta(c);
 
-    let body: Record<string, unknown>;
-    try {
-      body = await c.req.json() as Record<string, unknown>;
-    } catch {
-      throw new ValidationError('Geçersiz JSON gövdesi.');
-    }
+    const body = getValidatedBody(c, cancelReasonBodySchema);
 
     const reason = readRequiredReason(body);
 

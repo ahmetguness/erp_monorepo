@@ -11,6 +11,8 @@ import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { sendMail } from '../services/mail.service.js';
 import { tenantReadyEmail } from '../services/mail-templates.service.js';
 import { getObservabilitySnapshot } from '../services/observability.service.js';
+import { rateLimiter } from '../lib/rateLimiter';
+import { logger } from '../lib/logger';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
@@ -24,6 +26,10 @@ const RESOLVED_ADMIN_SECRET = ADMIN_JWT_SECRET;
 
 const ADMIN_COOKIE_NAME = 'axon_admin_token';
 const ADMIN_COOKIE_MAX_AGE = 24 * 60 * 60; // 24h
+const ADMIN_LOGIN_LIMIT = 5;
+const ADMIN_LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const ADMIN_LOGIN_LOCKOUT_FAILURES = 10;
+const ADMIN_LOGIN_LOCKOUT_WINDOW_MS = 60 * 60 * 1000;
 
 const VALID_PLANS = Object.values(Plan);
 const VALID_STATUSES = Object.values(TenantStatus);
@@ -36,6 +42,32 @@ const VALID_MODULES = [
 
 function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
+}
+
+function getClientIp(c: Context): string {
+  return c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip')?.trim() || 'unknown';
+}
+
+function getAdminLoginLimitKeys(ip: string, email: string): {
+  ipAttemptKey: string;
+  emailAttemptKey: string;
+  ipFailureKey: string;
+} {
+  return {
+    ipAttemptKey: `admin-login:ip:${ip}`,
+    emailAttemptKey: `admin-login:email:${email}`,
+    ipFailureKey: `admin-login-failed:ip:${ip}`,
+  };
+}
+
+function recordAdminLoginFailure(c: Context, email: string, reason: 'invalid_admin' | 'invalid_password' | 'ip_locked'): void {
+  const meta = getRequestMeta(c);
+  logger.warn('[AdminAudit] Admin login başarısız', {
+    email,
+    reason,
+    ipAddress: meta.ipAddress,
+    userAgent: meta.userAgent,
+  });
 }
 
 function isFeatureKey(value: string): value is FeatureKey {
@@ -147,16 +179,50 @@ async function notifyTenantOwners(
 
 export const AdminAuthController = {
   async login(c: Context): Promise<Response> {
-    const { email, password } = await c.req.json<{ email: string; password: string }>();
+    const ip = getClientIp(c);
+    const rawBody = await c.req.json<{ email?: unknown; password?: unknown }>().catch(() => null);
+    const email = typeof rawBody?.email === 'string' ? normalizeEmail(rawBody.email) : '';
+    const password = typeof rawBody?.password === 'string' ? rawBody.password : '';
+    const { ipAttemptKey, emailAttemptKey, ipFailureKey } = getAdminLoginLimitKeys(ip, email || 'unknown');
+
+    if (await rateLimiter.isBlocked(ipFailureKey, ADMIN_LOGIN_LOCKOUT_FAILURES)) {
+      recordAdminLoginFailure(c, email || 'unknown', 'ip_locked');
+      return c.json({ error: 'Çok fazla başarısız giriş denemesi. Lütfen 1 saat sonra tekrar deneyin.' }, 429);
+    }
+
+    if (await rateLimiter.check(ipAttemptKey, ADMIN_LOGIN_LIMIT, ADMIN_LOGIN_WINDOW_MS)) {
+      return c.json({ error: 'Çok fazla giriş denemesi.' }, 429);
+    }
+
+    if (email && await rateLimiter.check(emailAttemptKey, ADMIN_LOGIN_LIMIT, ADMIN_LOGIN_WINDOW_MS)) {
+      return c.json({ error: 'Çok fazla giriş denemesi.' }, 429);
+    }
     if (!email || !password) return c.json(new ValidationError('Email ve şifre zorunludur.').toJSON(), 400);
 
     const admin = await prisma.adminUser.findUnique({ where: { email } });
-    if (!admin || !admin.isActive) return c.json({ error: 'Geçersiz kimlik bilgileri.' }, 401);
+    if (!admin || !admin.isActive) {
+      recordAdminLoginFailure(c, email, 'invalid_admin');
+      if (await rateLimiter.check(ipFailureKey, ADMIN_LOGIN_LOCKOUT_FAILURES - 1, ADMIN_LOGIN_LOCKOUT_WINDOW_MS)) {
+        return c.json({ error: 'Çok fazla başarısız giriş denemesi. Lütfen 1 saat sonra tekrar deneyin.' }, 429);
+      }
+      return c.json({ error: 'Geçersiz kimlik bilgileri.' }, 401);
+    }
 
     const valid = await bcrypt.compare(password, admin.password);
-    if (!valid) return c.json({ error: 'Geçersiz kimlik bilgileri.' }, 401);
+    if (!valid) {
+      recordAdminLoginFailure(c, email, 'invalid_password');
+      if (await rateLimiter.check(ipFailureKey, ADMIN_LOGIN_LOCKOUT_FAILURES - 1, ADMIN_LOGIN_LOCKOUT_WINDOW_MS)) {
+        return c.json({ error: 'Çok fazla başarısız giriş denemesi. Lütfen 1 saat sonra tekrar deneyin.' }, 429);
+      }
+      return c.json({ error: 'Geçersiz kimlik bilgileri.' }, 401);
+    }
 
     await prisma.adminUser.update({ where: { id: admin.id }, data: { lastLoginAt: new Date() } });
+    await Promise.all([
+      rateLimiter.reset(ipAttemptKey),
+      rateLimiter.reset(emailAttemptKey),
+      rateLimiter.reset(ipFailureKey),
+    ]);
 
     const token = jwt.sign({ adminId: admin.id, email: admin.email, role: 'admin' }, RESOLVED_ADMIN_SECRET, { expiresIn: '24h' });
 
@@ -622,15 +688,33 @@ export const AdminFeatureController = {
   },
 
   async deleteOverride(c: Context): Promise<Response> {
-    const id = c.req.param('id')!;
+    const id = c.req.param('id');
+    if (!id) return c.json(new ValidationError('id parametresi zorunludur.').toJSON(), 400);
     const override = await prisma.tenantFeatureOverride.findUnique({ where: { id } });
-    await prisma.tenantFeatureOverride.delete({ where: { id } }).catch(() => null);
-    if (override) {
-      await notifyTenantOwners(prisma, override.tenantId, 'Tenant özellik ayarınız admin tarafından kaldırıldı', [
-        `Özellik: ${override.featureKey}`,
-        `Kaldırılan değer: ${formatNotificationValue(override.value)}`,
-      ]);
-    }
+    if (!override) return c.json(new NotFoundError('Feature override', id).toJSON(), 404);
+
+    await prisma.tenantFeatureOverride.delete({ where: { id } });
+
+    await createAuditLog(prisma, {
+      tenantId: override.tenantId,
+      module: 'admin',
+      entityType: EntityType.OTHER,
+      entityId: id,
+      action: AuditAction.DELETE,
+      oldValues: {
+        featureKey: override.featureKey,
+        value: override.value,
+        isEnabled: override.isEnabled,
+        reason: override.reason,
+        expiresAt: override.expiresAt?.toISOString() ?? null,
+      },
+      ...getRequestMeta(c),
+    });
+
+    await notifyTenantOwners(prisma, override.tenantId, 'Tenant özelliğiniz admin tarafından kaldırıldı', [
+      `Özellik: ${override.featureKey}`,
+      `Kaldırılan değer: ${formatNotificationValue(override.value)}`,
+    ]);
     return c.json({ data: { success: true } });
   },
 };

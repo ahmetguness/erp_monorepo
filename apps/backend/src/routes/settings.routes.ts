@@ -1,15 +1,21 @@
 import { Hono } from 'hono';
 import { SettingsController } from '../controllers/settings.controller';
 import { requirePermission } from '../middleware/requirePermission';
+import { validateBody } from '../middleware/validateBody';
+import {
+  businessRuleBodySchema,
+  moduleSettingBodySchema,
+  tenantSettingBodySchema,
+} from '../schemas/request-body.schemas';
 
 // Settings tüm planlara açık — requireAuth zaten tenantApi seviyesinde uygulanıyor
 const settingsRoutes = new Hono();
 
 // Tenant settings
 settingsRoutes.get('/', requirePermission('settings', 'READ'), SettingsController.listTenantSettings);
-settingsRoutes.put('/', requirePermission('settings', 'UPDATE'), SettingsController.upsertTenantSetting);
+settingsRoutes.put('/', requirePermission('settings', 'UPDATE'), validateBody(tenantSettingBodySchema), SettingsController.upsertTenantSetting);
 settingsRoutes.get('/business-rules', requirePermission('settings', 'READ'), SettingsController.listBusinessRules);
-settingsRoutes.put('/business-rules', requirePermission('settings', 'UPDATE'), SettingsController.upsertBusinessRule);
+settingsRoutes.put('/business-rules', requirePermission('settings', 'UPDATE'), validateBody(businessRuleBodySchema), SettingsController.upsertBusinessRule);
 settingsRoutes.get('/security-score', requirePermission('settings', 'READ'), SettingsController.securityScore);
 settingsRoutes.get('/security/dashboard', requirePermission('settings', 'READ'), SettingsController.securityDashboard);
 settingsRoutes.get('/security/sessions', requirePermission('settings', 'READ'), SettingsController.listSecuritySessions);
@@ -21,6 +27,6 @@ settingsRoutes.delete('/:key', requirePermission('settings', 'DELETE'), Settings
 
 // Module settings
 settingsRoutes.get('/modules', requirePermission('settings', 'READ'), SettingsController.listModuleSettings);
-settingsRoutes.put('/modules', requirePermission('settings', 'UPDATE'), SettingsController.upsertModuleSetting);
+settingsRoutes.put('/modules', requirePermission('settings', 'UPDATE'), validateBody(moduleSettingBodySchema), SettingsController.upsertModuleSetting);
 
 export { settingsRoutes };

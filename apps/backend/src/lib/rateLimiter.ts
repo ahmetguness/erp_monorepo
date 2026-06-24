@@ -54,6 +54,26 @@ export const rateLimiter = {
   },
 
   /**
+   * Belirtilen anahtarın mevcut pencerede blok seviyesine ulaşıp ulaşmadığını
+   * sayaç artırmadan kontrol eder.
+   */
+  async isBlocked(key: string, limit: number): Promise<boolean> {
+    if (redis) {
+      const current = await redis.get(key);
+      return current !== null && Number(current) >= limit;
+    }
+
+    const now = Date.now();
+    const entry = inMemoryStore.get(key);
+    if (!entry) return false;
+    if (now > entry.resetAt) {
+      inMemoryStore.delete(key);
+      return false;
+    }
+    return entry.count >= limit;
+  },
+
+  /**
    * Limiti sıfırlar (başarılı login sonrası vb. durumlarda çağrılabilir).
    * @param key Sıfırlanacak anahtar
    */
