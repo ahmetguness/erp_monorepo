@@ -20,6 +20,16 @@ You can start editing the page by modifying `app/page.js`. The page auto-updates
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Runtime Env
+
+`NEXT_PUBLIC_*` values are bundled into the browser and are not secrets. Use them only for public URLs and labels.
+
+Checklist:
+
+- Do not put API keys, tokens, private webhook secrets, database URLs, or credentials in `NEXT_PUBLIC_*`.
+- Keep `NEXT_PUBLIC_API_URL` limited to the public backend base URL.
+- Keep `NEXT_PUBLIC_N8N_PUBLIC_WEBHOOK_URL` limited to an unauthenticated public webhook URL; private N8N credentials stay server-side.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

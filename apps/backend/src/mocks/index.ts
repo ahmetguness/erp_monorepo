@@ -14,6 +14,7 @@
 
 import { logger } from '../lib/logger';
 import { startTrendyolMock, stopTrendyolMock, MOCK_PORT as TRENDYOL_PORT } from './trendyol.mock';
+import { getMarketplaceMockChannels } from '../config/env';
 
 export interface MockInfo {
   channel: string;
@@ -24,19 +25,7 @@ export interface MockInfo {
 const activeMocks: MockInfo[] = [];
 
 function getEnabledChannels(): string[] {
-  // MARKETPLACE_MOCK=trendyol,hepsiburada veya MARKETPLACE_MOCK=all
-  const marketplaceMock = process.env.MARKETPLACE_MOCK?.toLowerCase();
-  if (marketplaceMock) {
-    if (marketplaceMock === 'all') return ['trendyol', 'hepsiburada', 'n11', 'amazon', 'ciceksepeti'];
-    return marketplaceMock.split(',').map((s) => s.trim()).filter(Boolean);
-  }
-
-  // Geriye uyumluluk: TRENDYOL_MOCK=true
-  if (process.env.TRENDYOL_MOCK === 'true') return ['trendyol'];
-
-  if (process.env.NODE_ENV !== 'production') return ['trendyol'];
-
-  return [];
+  return [...getMarketplaceMockChannels()];
 }
 
 export function startMarketplaceMocks(): void {

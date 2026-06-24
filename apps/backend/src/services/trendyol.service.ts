@@ -16,21 +16,14 @@
 
 import { logger } from '../lib/logger';
 import { decrypt } from '../utils/encryption.js';
+import { isMarketplaceMockChannelEnabled } from '../config/env';
 
 // ─────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────
 
 function isTrendyolMockEnabled(): boolean {
-  if (process.env.TRENDYOL_MOCK === 'true') return true;
-
-  const marketplaceMock = process.env.MARKETPLACE_MOCK?.toLowerCase();
-  if (!marketplaceMock) return false;
-
-  return marketplaceMock
-    .split(',')
-    .map((channel) => channel.trim())
-    .some((channel) => channel === 'all' || channel === 'trendyol');
+  return isMarketplaceMockChannelEnabled('trendyol');
 }
 
 function isKnownMockCredentials(creds: TrendyolCredentials): boolean {

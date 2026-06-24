@@ -68,18 +68,10 @@ import { startMarketplaceMocks } from './mocks';
 import { registerDomainEventListeners } from './domain-events';
 import { recordHttpRequest, recordUnhandledError, runWithObservabilityContext } from './services/observability.service';
 import { globalRateLimit } from './middleware/globalRateLimit';
+import { assertValidStartupEnv, getRuntimeConfigChecks } from './config/env';
 
 // ── Startup env var kontrolü ─────────────────
-const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET', 'ADMIN_JWT_SECRET'] as const;
-for (const key of REQUIRED_ENV_VARS) {
-  if (!process.env[key]) {
-    throw new Error(`Zorunlu ortam değişkeni eksik: ${key}. Uygulama başlatılamaz.`);
-  }
-}
-
-if (process.env.NODE_ENV === 'production' && !process.env.ENCRYPTION_KEY) {
-  throw new Error('Zorunlu ortam değişkeni eksik: ENCRYPTION_KEY. Uygulama başlatılamaz.');
-}
+assertValidStartupEnv();
 
 // OpenAI opsiyonel — sadece chat aktifse gerekli
 if (!process.env.OPENAI_API_KEY) {
@@ -213,10 +205,11 @@ app.get('/health', async (c) => {
   // Redis kontrolü (opsiyonel)
   checks.redis = process.env.REDIS_URL ? 'ok' : 'disabled';
 
-  const hasError = Object.values(checks).includes('error');
+  const runtimeConfig = getRuntimeConfigChecks();
+  const hasError = Object.values(checks).includes('error') || runtimeConfig.some((check) => check.status === 'error');
   const status = hasError ? 'degraded' : 'ok';
 
-  return c.json({ status, checks, uptime: process.uptime() }, hasError ? 503 : 200);
+  return c.json({ status, checks, runtimeConfig, uptime: process.uptime() }, hasError ? 503 : 200);
 });
 
 // ── Public webhooks (CSRF'den önce — harici çağrıcılar Origin göndermez) ──

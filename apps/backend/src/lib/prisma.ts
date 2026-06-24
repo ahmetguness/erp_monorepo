@@ -5,10 +5,17 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
+const prismaLogLevels: Prisma.PrismaClientOptions['log'] =
+  process.env.PRISMA_QUERY_LOG === 'true'
+    ? ['query', 'error', 'warn']
+    : process.env.NODE_ENV === 'production'
+      ? ['error']
+      : ['error', 'warn'];
+
 export const prisma =
   globalThis.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    log: prismaLogLevels,
   });
 
 // ── Soft delete koruması ─────────────────────

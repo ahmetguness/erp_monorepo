@@ -1,6 +1,12 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { getStorageStatus } from '../services/storage.service.js';
+import {
+  ENV_REGISTRY,
+  getRuntimeConfigChecks,
+  validateEnvRegistry,
+  type RuntimeConfigStatus,
+} from '../config/env.js';
 
 type SecurityStatus = 'pass' | 'warn' | 'fail';
 
@@ -10,6 +16,61 @@ interface SecurityCheck {
   status: SecurityStatus;
   message: string;
   details?: string[];
+}
+
+function toSecurityStatus(status: RuntimeConfigStatus): SecurityStatus {
+  switch (status) {
+    case 'ok':
+      return 'pass';
+    case 'error':
+      return 'fail';
+    case 'warn':
+    case 'disabled':
+      return 'warn';
+  }
+}
+
+function envRegistryCheck(): SecurityCheck {
+  const issues = validateEnvRegistry();
+  const errors = issues.filter((issue) => issue.severity === 'error');
+  const warnings = issues.filter((issue) => issue.severity === 'warn');
+  return {
+    key: 'env:registry',
+    label: 'Env registry',
+    status: errors.length > 0 ? 'fail' : warnings.length > 0 ? 'warn' : 'pass',
+    message: errors.length > 0
+      ? `${errors.length} runtime env validation hatasi var.`
+      : warnings.length > 0
+        ? `${warnings.length} runtime env uyarisi var.`
+        : `${ENV_REGISTRY.length} env degiskeni merkezi registry ile izlendi.`,
+    details: issues.length > 0
+      ? issues.map((issue) => `${issue.name}: ${issue.message}`)
+      : ['secret values are never returned', 'public values are marked as public'],
+  };
+}
+
+function publicEnvCheck(): SecurityCheck {
+  const publicEntries = ENV_REGISTRY.filter((entry) => entry.secretClass === 'public');
+  return {
+    key: 'env:public-safety',
+    label: 'Public env safety',
+    status: 'pass',
+    message: 'Public env degerleri secret degildir; NEXT_PUBLIC_* degerleri browser bundle icinde gorunur.',
+    details: [
+      ...publicEntries.map((entry) => `${entry.name}: ${entry.securityNote}`),
+      'NEXT_PUBLIC_API_URL and NEXT_PUBLIC_N8N_PUBLIC_WEBHOOK_URL must never contain tokens or credentials.',
+    ],
+  };
+}
+
+function runtimeConfigChecks(): SecurityCheck[] {
+  return getRuntimeConfigChecks().map((check) => ({
+    key: check.key,
+    label: check.label,
+    status: toSecurityStatus(check.status),
+    message: check.message,
+    details: check.details,
+  }));
 }
 
 function checkEnv(name: string, requiredInProduction = true): SecurityCheck {
@@ -113,6 +174,9 @@ export const AdminSecurityController = {
       checkEnv('ADMIN_JWT_SECRET'),
       checkEnv('ENCRYPTION_KEY'),
       checkEnv('ALLOWED_ORIGINS', false),
+      envRegistryCheck(),
+      publicEnvCheck(),
+      ...runtimeConfigChecks(),
       redisCheck(),
       databasePoolCheck(),
       workerCheck(),

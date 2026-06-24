@@ -16,10 +16,12 @@
     "test:tenant-isolation": "tsx scripts/check-tenant-isolation.ts",
     "test:permission-gating": "tsx scripts/check-permission-gating.ts",
     "test:quality": "npm run test:code-quality && npm run test:contracts && npm run test:tenant-isolation && npm run test:permission-gating && npm run test:web-smoke && npm run test:integration && npm run db:health",
+    "ci:artifacts": "tsx scripts/generate-ci-artifacts.ts",
     "start": "node dist/index.js",
     "db:health": "tsx scripts/check-db-health.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:dry-run": "tsx scripts/migration-dry-run.ts",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts"
