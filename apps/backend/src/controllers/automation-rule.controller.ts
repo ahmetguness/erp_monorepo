@@ -3,7 +3,7 @@ import { AuditAction, AutomationAction, AutomationTrigger, EntityType } from '@p
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { AutomationRuleService } from '../services/automation-rule.service.js';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { toInputJson } from '../utils/json.js';
 
@@ -89,7 +89,7 @@ export const AutomationRuleController = {
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const existing = await prisma.automationRule.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) return c.json(new NotFoundError('Otomasyon kurali', id).toJSON(), 404);
 
@@ -131,7 +131,7 @@ export const AutomationRuleController = {
 
   async run(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const rule = await prisma.automationRule.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!rule) return c.json(new NotFoundError('Otomasyon kurali', id).toJSON(), 404);
     const result = await AutomationRuleService.runRule(rule);
@@ -147,7 +147,7 @@ export const AutomationRuleController = {
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const existing = await prisma.automationRule.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) return c.json(new NotFoundError('Otomasyon kurali', id).toJSON(), 404);
     await prisma.automationRule.update({ where: { id }, data: { deletedAt: new Date(), isActive: false, updatedById: userId } });

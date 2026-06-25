@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { AuditAction, EntityType, InvoiceStatus, InvoiceType, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ValidationError, NotFoundError } from '../errors';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { ReportingBuilderService, isKpiConfig, normalizeKpiConfig } from '../services/reporting-builder.service';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
@@ -325,7 +325,7 @@ export const SavedReportController = {
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const report = await prisma.savedReport.findFirst({ where: { id, tenantId } });
     if (!report) return c.json(new NotFoundError('Rapor', id).toJSON(), 404);

@@ -9,7 +9,7 @@ import {
 import type { TrendyolProductItemInput } from '../services/trendyol.service';
 import { TrendyolWorker } from '../services/trendyol-worker.service';
 import type { JobParams } from '../services/trendyol-worker.service';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { getPaginationParams } from '../utils/pagination.js';
 import { encrypt } from '../utils/encryption.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
@@ -209,7 +209,7 @@ export const MarketplaceIntegrationController = {
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const integration = await prisma.marketplaceIntegration.findFirst({
       where: { id, tenantId },
@@ -266,7 +266,7 @@ export const MarketplaceIntegrationController = {
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.marketplaceIntegration.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Entegrasyon', id).toJSON(), 404);
@@ -319,7 +319,7 @@ export const MarketplaceIntegrationController = {
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.marketplaceIntegration.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Entegrasyon', id).toJSON(), 404);
@@ -408,7 +408,7 @@ export const MarketplaceListingController = {
 
   async publishToMarketplace(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const listing = await prisma.marketplaceListing.findFirst({
       where: { id, tenantId },
@@ -458,7 +458,7 @@ export const MarketplaceListingController = {
 
   async updateMarketplaceProduct(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const listing = await prisma.marketplaceListing.findFirst({
       where: { id, tenantId },
@@ -506,7 +506,7 @@ export const MarketplaceListingController = {
 
   async deleteMarketplaceProduct(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const listing = await prisma.marketplaceListing.findFirst({
       where: { id, tenantId },
@@ -542,7 +542,7 @@ export const MarketplaceListingController = {
 
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.marketplaceListing.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Listeleme', id).toJSON(), 404);
@@ -563,7 +563,7 @@ export const MarketplaceListingController = {
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.marketplaceListing.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Listeleme', id).toJSON(), 404);
@@ -606,7 +606,7 @@ export const MarketplaceOrderController = {
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const order = await prisma.marketplaceOrder.findFirst({
       where: { id, tenantId },
@@ -621,7 +621,7 @@ export const MarketplaceOrderController = {
 
   async changeStatus(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const order = await prisma.marketplaceOrder.findFirst({ where: { id, tenantId } });
     if (!order) return c.json(new NotFoundError('Pazaryeri Siparişi', id).toJSON(), 404);
@@ -638,7 +638,7 @@ export const MarketplaceOrderController = {
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const order = await prisma.marketplaceOrder.findFirst({ where: { id, tenantId } });
     if (!order) return c.json(new NotFoundError('Pazaryeri Siparişi', id).toJSON(), 404);
@@ -664,7 +664,7 @@ export const TrendyolSyncController = {
   /** POST /marketplace/integrations/:id/trendyol/test */
   async testConnection(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const integration = await prisma.marketplaceIntegration.findFirst({
       where: { id, tenantId, channel: 'TRENDYOL' },
@@ -686,7 +686,7 @@ export const TrendyolSyncController = {
    */
   async syncOrders(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const integration = await prisma.marketplaceIntegration.findFirst({
       where: { id, tenantId, channel: 'TRENDYOL' },
@@ -708,7 +708,7 @@ export const TrendyolSyncController = {
    */
   async syncStock(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const integration = await prisma.marketplaceIntegration.findFirst({
       where: { id, tenantId, channel: 'TRENDYOL' },
@@ -724,7 +724,7 @@ export const TrendyolSyncController = {
   /** GET /marketplace/integrations/:id/trendyol/jobs/:jobId — job status */
   async getJobStatus(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const jobId = c.req.param('jobId')!;
+    const jobId = requireParam(c, 'jobId');
 
     const job = await TrendyolWorker.getJob(jobId, tenantId);
     if (!job) return c.json(new NotFoundError('Job', jobId).toJSON(), 404);
@@ -735,8 +735,8 @@ export const TrendyolSyncController = {
   /** GET /marketplace/integrations/:id/trendyol/batch/:batchRequestId */
   async getBatchResult(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
-    const batchRequestId = c.req.param('batchRequestId')!;
+    const id = requireParam(c, 'id');
+    const batchRequestId = requireParam(c, 'batchRequestId');
 
     const integration = await prisma.marketplaceIntegration.findFirst({
       where: { id, tenantId, channel: 'TRENDYOL' },
@@ -756,7 +756,7 @@ export const TrendyolSyncController = {
 export const TrendyolLookupController = {
   async categories(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const query = c.req.query('q');
     const integration = await prisma.marketplaceIntegration.findFirst({ where: { id, tenantId, channel: 'TRENDYOL' } });
     if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
@@ -767,7 +767,7 @@ export const TrendyolLookupController = {
 
   async brands(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const query = c.req.query('q')?.trim() ?? '';
     if (query.length < 2) return c.json({ data: [] });
 
@@ -780,7 +780,7 @@ export const TrendyolLookupController = {
 
   async attributes(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const categoryId = Number(c.req.query('categoryId'));
     if (!Number.isInteger(categoryId) || categoryId <= 0) {
       return c.json(new ValidationError('Geçerli categoryId zorunludur.').toJSON(), 400);
@@ -795,7 +795,7 @@ export const TrendyolLookupController = {
 
   async cargoProviders(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const integration = await prisma.marketplaceIntegration.findFirst({ where: { id, tenantId, channel: 'TRENDYOL' } });
     if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
 
@@ -851,7 +851,7 @@ export const MarketplaceMonitoringController = {
 
   async getSyncJob(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const job = await prisma.marketplaceSyncJob.findFirst({ where: { id, tenantId } });
     if (!job) return c.json(new NotFoundError('Sync Job', id).toJSON(), 404);
@@ -861,7 +861,7 @@ export const MarketplaceMonitoringController = {
 
   async retrySyncJob(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const job = await prisma.marketplaceSyncJob.findFirst({ where: { id, tenantId } });
     if (!job) return c.json(new NotFoundError('Sync Job', id).toJSON(), 404);
@@ -912,7 +912,7 @@ export const MarketplaceMonitoringController = {
 
   async getWebhookEvent(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const event = await prisma.marketplaceWebhookEvent.findFirst({ where: { id, tenantId } });
     if (!event) return c.json(new NotFoundError('Webhook Event', id).toJSON(), 404);
@@ -922,7 +922,7 @@ export const MarketplaceMonitoringController = {
 
   async replayWebhookEvent(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const event = await prisma.marketplaceWebhookEvent.findFirst({
       where: { id, tenantId },

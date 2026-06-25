@@ -1,3 +1,4 @@
+import { requireParam } from '../utils/context.js';
 import { Context } from 'hono';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -443,7 +444,7 @@ export const AdminTenantController = {
   },
 
   async getById(c: Context): Promise<Response> {
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const tenant = await prisma.tenant.findFirst({
       where: { id, deletedAt: null },
       include: {
@@ -462,7 +463,7 @@ export const AdminTenantController = {
   },
 
   async updatePlan(c: Context): Promise<Response> {
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const body = await c.req.json<{ plan: Plan }>();
     if (!body.plan || !VALID_PLANS.includes(body.plan)) {
       return c.json(new ValidationError('Geçerli bir plan seçiniz: STARTER, PROFESSIONAL, ENTERPRISE').toJSON(), 400);
@@ -495,7 +496,7 @@ export const AdminTenantController = {
   },
 
   async updateStatus(c: Context): Promise<Response> {
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const body = await c.req.json<{ status: TenantStatus }>();
     if (!body.status || !VALID_STATUSES.includes(body.status)) {
       return c.json(new ValidationError('Geçerli bir durum seçiniz.').toJSON(), 400);
@@ -528,7 +529,7 @@ export const AdminTenantController = {
   },
 
   async updateTenant(c: Context): Promise<Response> {
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const body = await c.req.json<{
       maxUsers?: number | null; modules?: string[]; notes?: string;
       isCustomPricing?: boolean; trialEndsAt?: string | null;
@@ -754,7 +755,7 @@ export const AdminMetricsController = {
   },
 
   async tenantMetrics(c: Context): Promise<Response> {
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const tenant = await prisma.tenant.findFirst({ where: { id, deletedAt: null } });
     if (!tenant) return c.json(new NotFoundError('Tenant', id).toJSON(), 404);
 

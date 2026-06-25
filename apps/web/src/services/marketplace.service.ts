@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { apiClient } from '@/lib/api-client';
+import { API_BASE_URL } from '@/lib/constants';
 import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema } from '@/types/api.types';
 
@@ -187,8 +188,7 @@ export function getIntegrationHealth(integration: MarketplaceIntegration): Marke
 }
 
 export function buildMarketplaceWebhookUrl(integrationId: string): string {
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-  return `${apiBase.replace(/\/$/, '')}/api/public/marketplace/webhook/${integrationId}`;
+  return `${API_BASE_URL}/api/public/marketplace/webhook/${integrationId}`;
 }
 
 // ─── Listings ─────────────────────────────────

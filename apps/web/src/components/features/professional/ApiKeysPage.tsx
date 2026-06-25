@@ -30,10 +30,9 @@ import {
   useApiKeyActivity,
   useExternalApiManifest,
 } from "@/hooks/useApiKeys";
+import { API_BASE_URL } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
 import { API_KEY_SCOPE_VALUES, type ApiKey, type ApiKeyScope } from "@/services/api-key.service";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 const AVAILABLE_SCOPES: Array<{ key: ApiKeyScope; label: string; desc: string }> = [
   {
@@ -395,7 +394,7 @@ export function ApiKeysPage() {
             </div>
             <p className="mt-1 text-sm font-semibold text-slate-100">v{manifest.version}</p>
             <a
-              href={`${API_BASE}/api/api-keys/openapi.json`}
+              href={`${API_BASE_URL}/api/api-keys/openapi.json`}
               target="_blank"
               rel="noreferrer"
               className="mt-2 inline-flex text-xs font-medium text-sky-300 hover:text-sky-200"

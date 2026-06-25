@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { EDocumentType, EDocumentStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -75,7 +75,7 @@ export const EDocumentController = {
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const doc = await prisma.eDocument.findFirst({
       where: { id, tenantId },
@@ -133,7 +133,7 @@ export const EDocumentController = {
 
   async updateStatus(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.eDocument.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('E-Belge', id).toJSON(), 404);

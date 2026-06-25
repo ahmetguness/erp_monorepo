@@ -5,7 +5,7 @@ import { ForbiddenError } from '../errors';
 import { TenantFeatureService } from '../services/tenant-feature.service';
 import { resolveAuditFieldValueLabels } from '../services/audit/field-label-resolver.js';
 import { formatAuditLogBusiness } from '../services/audit/formatter.js';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // AuditLog Controller
@@ -291,7 +291,7 @@ export const AuditLogController = {
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     // Plan bazlı tarih kısıtlaması — eski kayıtlara erişimi engelle
     const feature = await tenantFeatureService.resolveFeature(tenantId, FeatureKey.AUDIT_LOG);

@@ -3,7 +3,7 @@ import { AiPermissionCheckResult, AiRequestStatus, AiRequestType, AuditAction, E
 import { prisma } from '../lib/prisma';
 import { ForbiddenError, NotFoundError, ValidationError } from '../errors';
 import { IntelligenceService, type PermissionView } from '../services/intelligence.service.js';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { listAiRequestLogs, recordAiRequestLog } from '../services/ai-governance.service';
 import {
@@ -177,7 +177,7 @@ export const IntelligenceController = {
       return c.json(new ForbiddenError('attachments:READ yetkisi gerekli.').toJSON(), 403);
     }
 
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const data = await IntelligenceService.getDocumentDraft(context.tenantId, id);
     if (!data) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
     return c.json({ data });

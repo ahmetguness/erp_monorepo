@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { NotificationStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { SmartNotificationService, type SmartNotificationAction } from '../services/smart-notification.service.js';
 
 // ─────────────────────────────────────────────
@@ -21,7 +21,7 @@ export const NotificationController = {
   async smartAction(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const body = await c.req.json<unknown>().catch(() => null);
     const action = typeof body === 'object' && body !== null && 'action' in body && typeof body.action === 'string'
       ? body.action
@@ -71,7 +71,7 @@ export const NotificationController = {
   async markAsRead(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const notif = await prisma.notification.findFirst({ where: { id, tenantId, userId } });
     if (!notif) return c.json(new NotFoundError('Bildirim', id).toJSON(), 404);
@@ -110,7 +110,7 @@ export const NotificationController = {
   async archive(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const notif = await prisma.notification.findFirst({ where: { id, tenantId, userId } });
     if (!notif) return c.json(new NotFoundError('Bildirim', id).toJSON(), 404);
@@ -126,7 +126,7 @@ export const NotificationController = {
   async delete(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     await prisma.notification.deleteMany({ where: { id, tenantId, userId } });
     return c.json({ data: { success: true } });

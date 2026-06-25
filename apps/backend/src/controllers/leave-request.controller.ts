@@ -3,7 +3,7 @@ import { LeaveType, LeaveStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Leave Request Controller — İzin talebi CRUD + onay
@@ -41,7 +41,7 @@ export const LeaveRequestController = {
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const lr = await prisma.leaveRequest.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -89,7 +89,7 @@ export const LeaveRequestController = {
 
   async approve(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const lr = await prisma.leaveRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!lr) return c.json(new NotFoundError('İzin Talebi', id).toJSON(), 404);
@@ -105,7 +105,7 @@ export const LeaveRequestController = {
 
   async reject(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const lr = await prisma.leaveRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!lr) return c.json(new NotFoundError('İzin Talebi', id).toJSON(), 404);
@@ -117,7 +117,7 @@ export const LeaveRequestController = {
 
   async cancel(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const lr = await prisma.leaveRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!lr) return c.json(new NotFoundError('İzin Talebi', id).toJSON(), 404);

@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Work Center Controller — İş merkezi CRUD
@@ -30,7 +30,7 @@ export const WorkCenterController = {
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const wc = await prisma.workCenter.findFirst({
       where: { id, tenantId },
@@ -57,7 +57,7 @@ export const WorkCenterController = {
 
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.workCenter.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('İş Merkezi', id).toJSON(), 404);
@@ -79,7 +79,7 @@ export const WorkCenterController = {
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.workCenter.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('İş Merkezi', id).toJSON(), 404);
@@ -93,7 +93,7 @@ export const WorkCenterController = {
 
   async getCapacityCalendar(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const capacities = await prisma.workCenterCapacity.findMany({
       where: { tenantId, workCenterId: id },

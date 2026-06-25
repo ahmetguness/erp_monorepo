@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { getPaginationParams } from '../utils/pagination.js';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { createEventContext, domainEvents } from '../domain-events';
 import {
@@ -106,7 +106,7 @@ export const WorkOrderController = {
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const wo = await prisma.workOrder.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -219,7 +219,7 @@ export const WorkOrderController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
     const requestMeta = getRequestMeta(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const wo = await prisma.workOrder.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -425,7 +425,7 @@ export const WorkOrderController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
     const requestMeta = getRequestMeta(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const wo = await prisma.workOrder.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -643,8 +643,8 @@ export const WorkOrderController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
     const requestMeta = getRequestMeta(c);
-    const workOrderId = c.req.param('id')!;
-    const operationId = c.req.param('operationId')!;
+    const workOrderId = requireParam(c, 'id');
+    const operationId = requireParam(c, 'operationId');
 
     const body = await c.req.json<{
       status?: WorkOrderStatus;
@@ -694,7 +694,7 @@ export const WorkOrderController = {
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const wo = await prisma.workOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!wo) return c.json(new NotFoundError('İş Emri', id).toJSON(), 404);

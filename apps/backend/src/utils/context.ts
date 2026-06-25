@@ -1,27 +1,26 @@
 import type { Context } from 'hono';
-import { ForbiddenError } from '../errors/index.js';
+import { ForbiddenError, ValidationError } from '../errors/index.js';
 
-/**
- * Hono context içinden tenantId değerini alır.
- * Eğer tenantId yoksa veya string değilse ForbiddenError fırlatır.
- * requireAuth middleware'i çalıştıktan sonra her zaman string olmalıdır.
- */
 export function requireTenantId(c: Context): string {
   const tenantId = c.get('tenantId') as string | undefined;
   if (!tenantId || typeof tenantId !== 'string') {
-    throw new ForbiddenError('Tenant kimliği bulunamadı.');
+    throw new ForbiddenError('Tenant kimligi bulunamadi.');
   }
   return tenantId;
 }
 
-/**
- * Hono context içinden userId değerini alır.
- * Eğer userId yoksa veya string değilse ForbiddenError fırlatır.
- */
 export function requireUserId(c: Context): string {
   const userId = c.get('userId') as string | undefined;
   if (!userId || typeof userId !== 'string') {
-    throw new ForbiddenError('Kullanıcı kimliği bulunamadı.');
+    throw new ForbiddenError('Kullanici kimligi bulunamadi.');
   }
   return userId;
+}
+
+export function requireParam(c: Context, name: string): string {
+  const value = c.req.param(name);
+  if (!value) {
+    throw new ValidationError(`${name} parametresi zorunludur.`);
+  }
+  return value;
 }

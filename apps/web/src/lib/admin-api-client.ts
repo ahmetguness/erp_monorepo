@@ -1,9 +1,8 @@
 import axios from 'axios';
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+import { API_URL } from '@/lib/constants';
 
 export const adminApiClient = axios.create({
-  baseURL: BASE_URL,
+  baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
 });

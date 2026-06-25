@@ -1,3 +1,4 @@
+import { requireParam } from '../utils/context.js';
 import { Context } from 'hono';
 import {
   createDemoRequest,
@@ -114,7 +115,7 @@ export class DemoController {
    * Admin – Enterprise demo talebini onayla ve provision et.
    */
   static async approve(c: Context) {
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const adminId = (c.get('userId') as string) || 'admin';
 
     const result = await approveDemoRequest(id, adminId);
@@ -126,7 +127,7 @@ export class DemoController {
    * Admin – demo talebini reddet.
    */
   static async reject(c: Context) {
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const body = await c.req.json().catch(() => ({}));
     const adminId = (c.get('userId') as string) || 'admin';
 

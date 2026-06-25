@@ -7,8 +7,7 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+import { API_BASE_URL } from '@/lib/constants';
 
 // ─────────────────────────────────────────────
 // Types
@@ -176,7 +175,7 @@ export function LandingChatBot() {
     resetStream();
 
     try {
-      const res = await fetch(`${API_URL}/api/public/chat/stream`, {
+      const res = await fetch(`${API_BASE_URL}/api/public/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg, sessionId }),

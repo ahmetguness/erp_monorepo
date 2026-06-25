@@ -3,13 +3,13 @@ import { PurchaseOrderStatus, PurchaseRequestStatus, AuditAction, EntityType } f
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { resolveStockLevelLocationId, recordInventoryCosting } from '../services/inventory-rules.service';
 
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 // DTOs
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 
 interface OrderItemDTO {
   productId: string;
@@ -41,9 +41,9 @@ interface ListQuery {
   contactId?: string;
 }
 
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 // Helpers
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 
 function computeItems(items: OrderItemDTO[]) {
   let totalNet = 0;
@@ -65,13 +65,13 @@ function computeItems(items: OrderItemDTO[]) {
   return { lineData, totalNet, totalTax, totalGross: totalNet + totalTax };
 }
 
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 // Purchase Order Controller
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 
 export const PurchaseOrderController = {
 
-  // ── Purchase Requests ────────────────────────
+  // -- Purchase Requests ------------------------
 
   async listRequests(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
@@ -134,7 +134,7 @@ export const PurchaseOrderController = {
     const id = c.req.param('id');
 
     const request = await prisma.purchaseRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
-    if (!request) return c.json(new NotFoundError('Satın alma talebi', id).toJSON(), 404);
+    if (!request) return c.json(new NotFoundError('Satin alma talebi', id).toJSON(), 404);
 
     if (request.status !== PurchaseRequestStatus.DRAFT && request.status !== PurchaseRequestStatus.PENDING_APPROVAL) {
       return c.json(new ValidationError('Sadece taslak veya onay bekleyen talepler onaylanabilir.').toJSON(), 400);
@@ -159,9 +159,9 @@ export const PurchaseOrderController = {
       where: { id, tenantId, deletedAt: null },
       include: { items: true },
     });
-    if (!request) return c.json(new NotFoundError('Satın alma talebi', id).toJSON(), 404);
+    if (!request) return c.json(new NotFoundError('Satin alma talebi', id).toJSON(), 404);
     if (request.status !== PurchaseRequestStatus.APPROVED) {
-      return c.json(new ValidationError('Sadece onaylı talepler siparişe dönüştürülebilir.').toJSON(), 400);
+      return c.json(new ValidationError('Sadece onayli talepler siparise donusturulebilir.').toJSON(), 400);
     }
     const number = await generateDocumentNumber(tenantId, 'purchase_order', 'PO-', 'purchaseOrder');
 
@@ -179,7 +179,7 @@ export const PurchaseOrderController = {
           tenantId, contactId: body.contactId, number,
           date: new Date(), status: PurchaseOrderStatus.DRAFT,
           totalNet, totalTax, totalGross,
-          notes: `Talepten dönüştürüldü: ${request.number}`,
+          notes: `Talepten donusturuldu: ${request.number}`,
           items: { create: lineData.map((l) => ({ tenantId, ...l })) },
         },
         include: { items: true, contact: { select: { id: true, name: true } } },
@@ -191,7 +191,7 @@ export const PurchaseOrderController = {
       });
 
       await tx.purchaseOrderHistory.create({
-        data: { tenantId, orderId: po.id, toStatus: PurchaseOrderStatus.DRAFT, notes: `Talepten oluşturuldu: ${request.number}` },
+        data: { tenantId, orderId: po.id, toStatus: PurchaseOrderStatus.DRAFT, notes: `Talepten olusturuldu: ${request.number}` },
       });
 
       return po;
@@ -200,7 +200,7 @@ export const PurchaseOrderController = {
     return c.json({ data: order }, 201);
   },
 
-  // ── Purchase Orders ──────────────────────────
+  // -- Purchase Orders --------------------------
 
   async listOrders(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
@@ -246,7 +246,7 @@ export const PurchaseOrderController = {
       },
     });
 
-    if (!order) return c.json(new NotFoundError('Satın alma siparişi', id).toJSON(), 404);
+    if (!order) return c.json(new NotFoundError('Satin alma siparisi', id).toJSON(), 404);
     return c.json({ data: order });
   },
 
@@ -255,7 +255,7 @@ export const PurchaseOrderController = {
     const id = c.req.param('id');
 
     const order = await prisma.purchaseOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
-    if (!order) return c.json(new NotFoundError('Satın alma siparişi', id).toJSON(), 404);
+    if (!order) return c.json(new NotFoundError('Satin alma siparisi', id).toJSON(), 404);
 
     const history = await prisma.purchaseOrderHistory.findMany({
       where: { tenantId, orderId: id },
@@ -315,12 +315,12 @@ export const PurchaseOrderController = {
 
   async sendOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const order = await prisma.purchaseOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
-    if (!order) return c.json(new NotFoundError('Satın alma siparişi', id).toJSON(), 404);
+    if (!order) return c.json(new NotFoundError('Satin alma siparisi', id).toJSON(), 404);
     if (order.status !== PurchaseOrderStatus.DRAFT) {
-      return c.json(new ValidationError('Sadece taslak siparişler gönderilebilir.').toJSON(), 400);
+      return c.json(new ValidationError('Sadece taslak siparisler gonderilebilir.').toJSON(), 400);
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -338,7 +338,7 @@ export const PurchaseOrderController = {
 
   async receiveOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const body = await c.req.json<{
       warehouseId: string;
@@ -353,10 +353,10 @@ export const PurchaseOrderController = {
       where: { id, tenantId, deletedAt: null },
       include: { items: true },
     });
-    if (!order) return c.json(new NotFoundError('Satın alma siparişi', id).toJSON(), 404);
+    if (!order) return c.json(new NotFoundError('Satin alma siparisi', id).toJSON(), 404);
 
     if (order.status !== PurchaseOrderStatus.SENT && order.status !== PurchaseOrderStatus.PARTIALLY_RECEIVED) {
-      return c.json(new ValidationError('Sadece gönderilmiş veya kısmi teslim alınmış siparişler teslim alınabilir.').toJSON(), 400);
+      return c.json(new ValidationError('Sadece gonderilmis veya kismi teslim alinmis siparisler teslim alinabilir.').toJSON(), 400);
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -377,11 +377,11 @@ export const PurchaseOrderController = {
             type: 'IN', quantity: recv.receivedQty,
             unitCost: orderItem.unitPrice,
             toWarehouseId: body.warehouseId,
-            notes: `Satın alma teslimi: ${order.number}`,
+            notes: `Satin alma teslimi: ${order.number}`,
           },
         });
 
-        // Update stock level — find existing to match locationId
+        // Update stock level - find existing to match locationId
         const existingLevel = await tx.stockLevel.findFirst({
           where: { tenantId, productId: orderItem.productId, warehouseId: body.warehouseId },
         });
@@ -431,13 +431,13 @@ export const PurchaseOrderController = {
         where: { id, tenantId },
         include: { contact: { select: { id: true, name: true } }, items: true },
       });
-      if (!po) throw new NotFoundError('SatÄ±n alma sipariÅŸi', id);
+      if (!po) throw new NotFoundError('Satın alma siparişi', id);
 
       await tx.purchaseOrderHistory.create({
         data: {
           tenantId, orderId: id,
           fromStatus: order.status, toStatus: newStatus,
-          notes: `${body.items.length} kalem teslim alındı`,
+          notes: `${body.items.length} kalem teslim alindi`,
         },
       });
 
@@ -449,13 +449,13 @@ export const PurchaseOrderController = {
 
   async cancelOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const order = await prisma.purchaseOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
-    if (!order) return c.json(new NotFoundError('Satın alma siparişi', id).toJSON(), 404);
+    if (!order) return c.json(new NotFoundError('Satin alma siparisi', id).toJSON(), 404);
 
     if (order.status === PurchaseOrderStatus.RECEIVED || order.status === PurchaseOrderStatus.CANCELLED) {
-      return c.json(new ValidationError('Teslim alınmış veya iptal edilmiş siparişler iptal edilemez.').toJSON(), 400);
+      return c.json(new ValidationError('Teslim alinmis veya iptal edilmis siparisler iptal edilemez.').toJSON(), 400);
     }
 
     const updated = await prisma.$transaction(async (tx) => {

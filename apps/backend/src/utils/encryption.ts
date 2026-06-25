@@ -4,9 +4,9 @@ const ALGORITHM = 'aes-256-gcm';
 const PREFIX = 'enc:v1:';
 
 function getKey(): Buffer {
-  const secret = process.env.ENCRYPTION_KEY || (process.env.NODE_ENV === 'production' ? undefined : process.env.JWT_SECRET);
+  const secret = process.env.ENCRYPTION_KEY;
   if (!secret) {
-    throw new Error('ENCRYPTION_KEY is required for credential encryption.');
+    throw new Error('ENCRYPTION_KEY environment variable is required.');
   }
   return crypto.createHash('sha256').update(secret).digest();
 }

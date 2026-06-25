@@ -5,9 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, Lock, User as UserIcon, Loader2, CheckCircle2, XCircle, Building2 } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL } from '@/lib/constants';
 import { getPasswordPolicyError, PASSWORD_POLICY_MESSAGE } from '@/lib/password-policy';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 type Status = 'validating' | 'ready' | 'submitting' | 'success' | 'error';
 
@@ -45,7 +44,7 @@ function InviteContent() {
   useEffect(() => {
     if (!token || !email) return;
     axios
-      .post(`${API_URL}/api/public/invitations/validate`, { token, email })
+      .post(`${API_BASE_URL}/api/public/invitations/validate`, { token, email })
       .then((res) => {
         setTenantName(res.data.tenantName || '');
         setStatus('ready');
@@ -66,7 +65,7 @@ function InviteContent() {
 
     setStatus('submitting');
     try {
-      await axios.post(`${API_URL}/api/public/invitations/accept`, { token, email, name: name.trim(), password });
+      await axios.post(`${API_BASE_URL}/api/public/invitations/accept`, { token, email, name: name.trim(), password });
       setStatus('success');
     } catch (err: unknown) {
       setStatus('ready');

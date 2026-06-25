@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // BOM Controller — Ürün ağacı CRUD
@@ -33,7 +33,7 @@ export const BOMController = {
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const bom = await prisma.bOM.findFirst({
       where: { id, tenantId },
@@ -82,7 +82,7 @@ export const BOMController = {
 
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.bOM.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('BOM', id).toJSON(), 404);
@@ -105,7 +105,7 @@ export const BOMController = {
 
   async addItem(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const bomId = c.req.param('id')!;
+    const bomId = requireParam(c, 'id');
 
     const bom = await prisma.bOM.findFirst({ where: { id: bomId, tenantId } });
     if (!bom) return c.json(new NotFoundError('BOM', bomId).toJSON(), 404);
@@ -123,7 +123,7 @@ export const BOMController = {
 
   async removeItem(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const itemId = c.req.param('itemId')!;
+    const itemId = requireParam(c, 'itemId');
 
     const item = await prisma.bOMItem.findFirst({ where: { id: itemId, tenantId } });
     if (!item) return c.json(new NotFoundError('BOM Kalemi', itemId).toJSON(), 404);
@@ -136,7 +136,7 @@ export const BOMController = {
 
   async addRouting(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const bomId = c.req.param('id')!;
+    const bomId = requireParam(c, 'id');
 
     const bom = await prisma.bOM.findFirst({ where: { id: bomId, tenantId } });
     if (!bom) return c.json(new NotFoundError('BOM', bomId).toJSON(), 404);
@@ -153,7 +153,7 @@ export const BOMController = {
 
   async removeRouting(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const routingId = c.req.param('routingId')!;
+    const routingId = requireParam(c, 'routingId');
 
     const routing = await prisma.routingOperation.findFirst({ where: { id: routingId, tenantId } });
     if (!routing) return c.json(new NotFoundError('Routing', routingId).toJSON(), 404);

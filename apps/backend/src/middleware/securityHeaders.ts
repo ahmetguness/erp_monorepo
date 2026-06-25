@@ -1,5 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 
+type ContentSecurityPolicyMode = 'report-only' | 'enforce' | 'both';
+
 const COMMON_SECURITY_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ['X-Content-Type-Options', 'nosniff'],
   ['X-Frame-Options', 'DENY'],
@@ -9,6 +11,7 @@ const COMMON_SECURITY_HEADERS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 const STRICT_TRANSPORT_SECURITY = 'max-age=31536000; includeSubDomains';
+const DEFAULT_CSP_MODE: ContentSecurityPolicyMode = 'both';
 
 function readAllowedConnectSources(): string[] {
   return (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
@@ -27,15 +30,25 @@ function readAllowedConnectSources(): string[] {
     });
 }
 
-function buildContentSecurityPolicyReportOnly(): string {
+function readContentSecurityPolicyMode(): ContentSecurityPolicyMode {
+  const mode = process.env.CONTENT_SECURITY_POLICY_MODE?.trim().toLowerCase();
+  return mode === 'report-only' || mode === 'enforce' || mode === 'both'
+    ? mode
+    : DEFAULT_CSP_MODE;
+}
+
+function buildContentSecurityPolicy(): string {
   const connectSources = ["'self'", ...readAllowedConnectSources()];
   const directives: ReadonlyArray<readonly [string, readonly string[]]> = [
     ['default-src', ["'self'"]],
+    ['base-uri', ["'self'"]],
+    ['object-src', ["'none'"]],
     ['script-src', ["'self'"]],
     ['style-src', ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com']],
     ['font-src', ["'self'", 'https://fonts.gstatic.com']],
     ['img-src', ["'self'", 'data:', 'blob:']],
     ['connect-src', connectSources],
+    ['form-action', ["'self'"]],
     ['frame-ancestors', ["'none'"]],
   ];
 
@@ -52,7 +65,14 @@ export const securityHeaders: MiddlewareHandler = async (c, next) => {
       c.header(name, value);
     }
 
-    c.header('Content-Security-Policy-Report-Only', buildContentSecurityPolicyReportOnly());
+    const contentSecurityPolicy = buildContentSecurityPolicy();
+    const cspMode = readContentSecurityPolicyMode();
+    if (cspMode === 'report-only' || cspMode === 'both') {
+      c.header('Content-Security-Policy-Report-Only', contentSecurityPolicy);
+    }
+    if (cspMode === 'enforce' || cspMode === 'both') {
+      c.header('Content-Security-Policy', contentSecurityPolicy);
+    }
 
     if (process.env.NODE_ENV === 'production') {
       c.header('Strict-Transport-Security', STRICT_TRANSPORT_SECURITY);

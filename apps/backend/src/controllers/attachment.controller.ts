@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { basename, extname } from 'path';
 import { prisma } from '../lib/prisma';
 import { ForbiddenError, NotFoundError, ValidationError } from '../errors';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { bufferToArrayBuffer, storageService } from '../services/storage.service.js';
 import {
@@ -71,7 +71,7 @@ function parseDateField(value: string | undefined): Date | undefined {
   if (!value) return undefined;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new ValidationError('Geçerli bir tarih girin.');
+    throw new ValidationError('Gecerli bir tarih girin.');
   }
   return date;
 }
@@ -80,7 +80,7 @@ function parsePositiveVersion(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const version = Number.parseInt(value, 10);
   if (!Number.isInteger(version) || version < 1 || version > 999) {
-    throw new ValidationError('Versiyon 1 ile 999 arasında olmalıdır.');
+    throw new ValidationError('Versiyon 1 ile 999 arasinda olmalidir.');
   }
   return version;
 }
@@ -114,27 +114,27 @@ function readStringArrayRequired(body: Record<string, unknown>, key: string): st
 function parseCategoryInput(value: string | undefined): DocumentCenterCategory | null {
   if (!value) return null;
   const category = parseDocumentCenterCategory(value);
-  if (!category) throw new ValidationError('Geçerli bir kategori seçin.');
+  if (!category) throw new ValidationError('Gecerli bir kategori secin.');
   return category;
 }
 
 function parseKindInput(value: string | undefined): DocumentKind | null {
   if (!value) return null;
   const documentKind = parseDocumentKind(value);
-  if (!documentKind) throw new ValidationError('Geçerli bir doküman tipi seçin.');
+  if (!documentKind) throw new ValidationError('Gecerli bir dokuman tipi secin.');
   return documentKind;
 }
 
 function parseConfidentialityInput(value: string | undefined): DocumentConfidentiality | null {
   if (!value) return null;
   const confidentiality = parseDocumentConfidentiality(value);
-  if (!confidentiality) throw new ValidationError('Geçerli bir gizlilik seviyesi seçin.');
+  if (!confidentiality) throw new ValidationError('Gecerli bir gizlilik seviyesi secin.');
   return confidentiality;
 }
 
 function validateDocumentDates(validFrom: Date | null | undefined, validUntil: Date | null | undefined): void {
   if (validFrom && validUntil && validFrom > validUntil) {
-    throw new ValidationError('Başlangıç tarihi bitiş tarihinden sonra olamaz.');
+    throw new ValidationError('Baslangic tarihi bitis tarihinden sonra olamaz.');
   }
 }
 
@@ -171,7 +171,7 @@ function parseAttachmentMetadataUpdate(body: Record<string, unknown>): Attachmen
 async function ensureEntityBelongsToTenant(tenantId: string, entityType: EntityType, entityId: string): Promise<void> {
   const count = await countEntity(tenantId, entityType, entityId);
   if (count === 0) {
-    throw new ValidationError('Ek dosya bağlanacak kayıt bu tenant içinde bulunamadı.');
+    throw new ValidationError('Ek dosya baglanacak kayit bu tenant icinde bulunamadi.');
   }
 }
 
@@ -352,10 +352,10 @@ function validateFile(file: File): { safeName: string; extension: string; mimeTy
   const mimeType = file.type || 'application/octet-stream';
 
   if (file.size <= 0) {
-    throw new ValidationError('Boş dosya yüklenemez.');
+    throw new ValidationError('Bos dosya yuklenemez.');
   }
   if (file.size > MAX_FILE_SIZE) {
-    throw new ValidationError('Dosya boyutu 10MB sınırını aşamaz.');
+    throw new ValidationError('Dosya boyutu 10MB sinirini asamaz.');
   }
   if (!ALLOWED_EXTENSIONS.has(extension) || !ALLOWED_MIME_TYPES.has(mimeType)) {
     throw new ValidationError('Bu dosya tipi desteklenmiyor.');
@@ -404,7 +404,7 @@ export const AttachmentController = {
     const search = c.req.query('search')?.trim() || undefined;
 
     if (!rawEntityType || !isEntityType(rawEntityType)) {
-      return c.json(new ValidationError('Geçerli entityType zorunludur.').toJSON(), 400);
+      return c.json(new ValidationError('Gecerli entityType zorunludur.').toJSON(), 400);
     }
 
     const data = await findEntityOptions(tenantId, rawEntityType, search);
@@ -418,7 +418,7 @@ export const AttachmentController = {
     const entityId = c.req.query('entityId');
 
     if (!rawEntityType || !isEntityType(rawEntityType) || !entityId) {
-      return c.json(new ValidationError('Geçerli entityType ve entityId zorunludur.').toJSON(), 400);
+      return c.json(new ValidationError('Gecerli entityType ve entityId zorunludur.').toJSON(), 400);
     }
 
     await ensureEntityBelongsToTenant(tenantId, rawEntityType, entityId);
@@ -451,7 +451,7 @@ export const AttachmentController = {
       return c.json(new ValidationError('file, entityType ve entityId zorunludur.').toJSON(), 400);
     }
     if (!isEntityType(rawEntityType)) {
-      return c.json(new ValidationError('Geçersiz entityType.').toJSON(), 400);
+      return c.json(new ValidationError('Gecersiz entityType.').toJSON(), 400);
     }
 
     await ensureEntityBelongsToTenant(tenantId, rawEntityType, rawEntityId);
@@ -507,7 +507,7 @@ export const AttachmentController = {
   async download(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
     if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
@@ -543,7 +543,7 @@ export const AttachmentController = {
   async accessLog(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
     if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
@@ -588,7 +588,7 @@ export const AttachmentController = {
   async uploadVersion(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const current = await prisma.attachment.findFirst({ where: { id, tenantId } });
     if (!current) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
@@ -671,7 +671,7 @@ export const AttachmentController = {
   async rename(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
     if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
@@ -704,7 +704,7 @@ export const AttachmentController = {
     if (version !== undefined) data.version = version;
 
     if (Object.keys(data).length === 0) {
-      return c.json(new ValidationError('Güncellenecek en az bir alan gönderilmelidir.').toJSON(), 400);
+      return c.json(new ValidationError('Guncellenecek en az bir alan gonderilmelidir.').toJSON(), 400);
     }
 
     await prisma.attachment.updateMany({
@@ -756,14 +756,14 @@ export const AttachmentController = {
     const body = readRecord(await c.req.json<unknown>().catch(() => null));
     const ids = readStringArrayRequired(body, 'ids');
     if (ids.length === 0) {
-      return c.json(new ValidationError('GÃ¼ncellenecek dosya seÃ§ilmelidir.').toJSON(), 400);
+      return c.json(new ValidationError('Güncellenecek dosya seçilmelidir.').toJSON(), 400);
     }
 
     const metadata = isRecord(body.metadata) ? body.metadata : body;
     const metadataUpdate = parseAttachmentMetadataUpdate(metadata);
     const { data } = metadataUpdate;
     if (Object.keys(data).length === 0) {
-      return c.json(new ValidationError('GÃ¼ncellenecek en az bir metadata alanÄ± gÃ¶nderilmelidir.').toJSON(), 400);
+      return c.json(new ValidationError('Güncellenecek en az bir metadata alanı gönderilmelidir.').toJSON(), 400);
     }
 
     const attachments = await prisma.attachment.findMany({
@@ -841,7 +841,7 @@ export const AttachmentController = {
   async delete(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
     if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);

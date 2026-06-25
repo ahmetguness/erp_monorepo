@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 import { assertAccountingPeriodOpen } from '../services/financial-integrity.service';
 
 // ─────────────────────────────────────────────
@@ -74,7 +74,7 @@ export const ReconciliationController = {
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const reconciliation = await prisma.reconciliation.findFirst({
       where: { id, tenantId },
@@ -134,7 +134,7 @@ export const ReconciliationController = {
 
   async addLine(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const reconciliation = await prisma.reconciliation.findFirst({
       where: { id, tenantId },
@@ -173,7 +173,7 @@ export const ReconciliationController = {
 
   async finalize(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const reconciliation = await prisma.reconciliation.findFirst({
       where: { id, tenantId },

@@ -4,7 +4,7 @@ import { apiKeyRateLimit, authenticateApiKey, requireScope } from '../middleware
 import { requireFeature } from '../middleware/requireFeature';
 import { prisma } from '../lib/prisma';
 import { ValidationError, NotFoundError } from '../errors';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 import { validateTenantOwnership, buildOwnershipChecks } from '../utils/validateTenantOwnership';
 import { getExternalApiManifest, getExternalOpenApiDocument } from '../services/external-api-registry.service.js';
 
@@ -51,7 +51,7 @@ externalRoutes.get('/products', requireScope('products:read'), async (c) => {
 
 externalRoutes.get('/products/:id', requireScope('products:read'), async (c) => {
   const tenantId = requireTenantId(c);
-  const id = c.req.param('id')!;
+  const id = requireParam(c, 'id');
 
   const product = await prisma.product.findFirst({
     where: { id, tenantId, deletedAt: null },
@@ -106,7 +106,7 @@ externalRoutes.post('/products', requireScope('products:write'), async (c) => {
 
 externalRoutes.patch('/products/:id', requireScope('products:write'), async (c) => {
   const tenantId = requireTenantId(c);
-  const id = c.req.param('id')!;
+  const id = requireParam(c, 'id');
   const body = await c.req.json<{
     name?: string; barcode?: string; description?: string;
     purchasePrice?: number; salesPrice?: number; minStockLevel?: number; isActive?: boolean;
@@ -134,7 +134,7 @@ externalRoutes.patch('/products/:id', requireScope('products:write'), async (c) 
 
 externalRoutes.delete('/products/:id', requireScope('products:delete'), async (c) => {
   const tenantId = requireTenantId(c);
-  const id = c.req.param('id')!;
+  const id = requireParam(c, 'id');
 
   const existing = await prisma.product.findFirst({ where: { id, tenantId, deletedAt: null } });
   if (!existing) return c.json(new NotFoundError('Ürün', id).toJSON(), 404);
@@ -172,7 +172,7 @@ externalRoutes.get('/contacts', requireScope('contacts:read'), async (c) => {
 
 externalRoutes.get('/contacts/:id', requireScope('contacts:read'), async (c) => {
   const tenantId = requireTenantId(c);
-  const id = c.req.param('id')!;
+  const id = requireParam(c, 'id');
 
   const contact = await prisma.contact.findFirst({
     where: { id, tenantId, deletedAt: null },
@@ -219,7 +219,7 @@ externalRoutes.post('/contacts', requireScope('contacts:write'), async (c) => {
 
 externalRoutes.patch('/contacts/:id', requireScope('contacts:write'), async (c) => {
   const tenantId = requireTenantId(c);
-  const id = c.req.param('id')!;
+  const id = requireParam(c, 'id');
   const body = await c.req.json<{
     name?: string; email?: string; phone?: string; address?: string; city?: string;
     creditLimit?: number; paymentTermDays?: number; isActive?: boolean;
@@ -248,7 +248,7 @@ externalRoutes.patch('/contacts/:id', requireScope('contacts:write'), async (c) 
 
 externalRoutes.delete('/contacts/:id', requireScope('contacts:delete'), async (c) => {
   const tenantId = requireTenantId(c);
-  const id = c.req.param('id')!;
+  const id = requireParam(c, 'id');
 
   const existing = await prisma.contact.findFirst({ where: { id, tenantId, deletedAt: null } });
   if (!existing) return c.json(new NotFoundError('Cari hesap', id).toJSON(), 404);
@@ -288,7 +288,7 @@ externalRoutes.get('/invoices', requireScope('invoices:read'), async (c) => {
 
 externalRoutes.get('/invoices/:id', requireScope('invoices:read'), async (c) => {
   const tenantId = requireTenantId(c);
-  const id = c.req.param('id')!;
+  const id = requireParam(c, 'id');
 
   const invoice = await prisma.invoice.findFirst({
     where: { id, tenantId, deletedAt: null },
@@ -381,7 +381,7 @@ externalRoutes.post('/invoices', requireScope('invoices:write'), async (c) => {
 
 externalRoutes.post('/invoices/:id/cancel', requireScope('invoices:delete'), async (c) => {
   const tenantId = requireTenantId(c);
-  const id = c.req.param('id')!;
+  const id = requireParam(c, 'id');
 
   const existing = await prisma.invoice.findFirst({ where: { id, tenantId, deletedAt: null } });
   if (!existing) return c.json(new NotFoundError('Fatura', id).toJSON(), 404);

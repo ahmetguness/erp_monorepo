@@ -3,7 +3,7 @@ import { DeliveryNoteType, DeliveryNoteStatus, AuditAction, EntityType } from '@
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { processDeliveryNoteStock } from '../services/inventory-rules.service';
 
@@ -99,7 +99,7 @@ export const DeliveryNoteController = {
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const note = await prisma.deliveryNote.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -227,7 +227,7 @@ export const DeliveryNoteController = {
 
   async updateStatus(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.deliveryNote.findFirst({
       where: { id, tenantId, deletedAt: null },

@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { getTenantPermissionContext } from '../lib/tenant-permissions';
 import { ForbiddenError, NotFoundError, ValidationError } from '../errors';
 import { createTask } from '../services/task.service.js';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
@@ -409,7 +409,7 @@ export const TaskController = {
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const existing = await prisma.task.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Gorev', id).toJSON(), 404);
 

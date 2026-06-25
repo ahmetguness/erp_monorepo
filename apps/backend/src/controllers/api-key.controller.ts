@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { getExternalApiManifest, getExternalOpenApiDocument } from '../services/external-api-registry.service.js';
 
@@ -243,7 +243,7 @@ export const ApiKeyController = {
 
   async activity(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.apiKey.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -271,7 +271,7 @@ export const ApiKeyController = {
   async revoke(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.apiKey.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -309,7 +309,7 @@ export const ApiKeyController = {
   async delete(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.apiKey.findFirst({
       where: { id, tenantId, deletedAt: null },

@@ -5,9 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, Lock, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL } from '@/lib/constants';
 import { getPasswordPolicyError, PASSWORD_POLICY_MESSAGE } from '@/lib/password-policy';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 type Status = 'validating' | 'ready' | 'submitting' | 'success' | 'error';
 
@@ -49,7 +48,7 @@ function SetPasswordContent() {
     if (!token || !email) return;
 
     axios
-      .post(`${API_URL}/api/public/set-password/validate`, { token, email })
+      .post(`${API_BASE_URL}/api/public/set-password/validate`, { token, email })
       .then((res) => {
         setUserName(res.data.name || '');
         setStatus('ready');
@@ -79,7 +78,7 @@ function SetPasswordContent() {
     setStatus('submitting');
 
     try {
-      await axios.post(`${API_URL}/api/public/set-password`, {
+      await axios.post(`${API_BASE_URL}/api/public/set-password`, {
         token,
         email,
         password,

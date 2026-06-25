@@ -8,7 +8,7 @@ import {
 import { NotFoundError, ValidationError } from '../errors/index.js';
 import { prisma } from '../lib/prisma.js';
 import { replayDomainEventOutbox } from '../services/domain-event-outbox-worker.service.js';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 
 const VALID_STATUSES: readonly string[] = Object.values(DomainEventOutboxStatus);
 
@@ -95,7 +95,7 @@ export const DomainEventController = {
 
   async replay(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     try {
       const result = await replayDomainEventOutbox(tenantId, id, true);

@@ -6,7 +6,7 @@ import {
   listInvitations,
   cancelInvitation,
 } from '../services/invitation.service';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 
 export class InvitationController {
   /** POST /api/invitations — Owner davet gönderir */
@@ -43,7 +43,7 @@ export class InvitationController {
   /** POST /api/invitations/:id/cancel — Daveti iptal et */
   static async cancel(c: Context) {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
     const result = await cancelInvitation(id, tenantId);
     return c.json(result, result.success ? 200 : 400);
   }

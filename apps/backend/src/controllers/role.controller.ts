@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { AuditAction, EntityType, PermissionAction } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import {
   listPermissionMatrix,
@@ -88,7 +88,7 @@ export const RoleController = {
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const role = await prisma.role.findFirst({
       where: { id, tenantId },
@@ -152,7 +152,7 @@ export const RoleController = {
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.role.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Rol', id).toJSON(), 404);
@@ -190,7 +190,7 @@ export const RoleController = {
   async delete(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.role.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Rol', id).toJSON(), 404);
@@ -218,7 +218,7 @@ export const RoleController = {
   async addPermission(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const roleId = c.req.param('id')!;
+    const roleId = requireParam(c, 'id');
 
     const role = await prisma.role.findFirst({ where: { id: roleId, tenantId } });
     if (!role) return c.json(new NotFoundError('Rol', roleId).toJSON(), 404);
@@ -254,8 +254,8 @@ export const RoleController = {
   async removePermission(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const roleId = c.req.param('id')!;
-    const permissionId = c.req.param('permissionId')!;
+    const roleId = requireParam(c, 'id');
+    const permissionId = requireParam(c, 'permissionId');
 
     const role = await prisma.role.findFirst({ where: { id: roleId, tenantId } });
     if (!role) return c.json(new NotFoundError('Rol', roleId).toJSON(), 404);

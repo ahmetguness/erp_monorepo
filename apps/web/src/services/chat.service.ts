@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api-client';
+import { API_BASE_URL } from '@/lib/constants';
 
 export interface ChatResponse {
   output: string;
@@ -40,9 +41,7 @@ export async function sendChatMessage(message: string, context?: ChatPageContext
 }
 
 export async function openChatStream(message: string, context?: ChatPageContext, signal?: AbortSignal): Promise<Response> {
-
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-  return fetch(`${baseUrl}/api/chat/stream`, {
+  return fetch(`${API_BASE_URL}/api/chat/stream`, {
     method: 'POST',
     credentials: 'include',
     headers: {

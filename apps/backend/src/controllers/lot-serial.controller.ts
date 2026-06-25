@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { LotUsedRefType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -97,7 +97,7 @@ export const LotSerialController = {
 
   async assignToMovement(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.lotSerialNumber.findFirst({
       where: { id, tenantId },

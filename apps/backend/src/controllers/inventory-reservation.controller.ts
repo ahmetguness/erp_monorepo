@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { ReservationRefType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { assertCanReserveStock } from '../services/inventory-rules.service';
 
 // ─────────────────────────────────────────────
@@ -118,7 +118,7 @@ export const InventoryReservationController = {
 
   async release(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.inventoryReservation.findFirst({
       where: { id, tenantId },

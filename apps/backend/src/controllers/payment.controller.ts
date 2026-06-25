@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { getValidatedBody } from '../middleware/validateBody';
 import { cancelReasonBodySchema, createPaymentBodySchema } from '../schemas/request-body.schemas';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 import { getRequestMeta } from '../utils/audit.js';
 import {
   createPayment,
@@ -77,7 +77,7 @@ export const PaymentController = {
 
   async updateBankAccount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.bankAccount.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) return c.json(new NotFoundError('Banka hesabı', id).toJSON(), 404);
@@ -100,7 +100,7 @@ export const PaymentController = {
 
   async deleteBankAccount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.bankAccount.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) return c.json(new NotFoundError('Banka hesabı', id).toJSON(), 404);
@@ -144,7 +144,7 @@ export const PaymentController = {
 
   async updateCashAccount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.cashAccount.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) return c.json(new NotFoundError('Kasa hesabı', id).toJSON(), 404);
@@ -164,7 +164,7 @@ export const PaymentController = {
 
   async deleteCashAccount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.cashAccount.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) return c.json(new NotFoundError('Kasa hesabı', id).toJSON(), 404);
@@ -216,7 +216,7 @@ export const PaymentController = {
   async cancelPayment(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = c.get('userId') as string | undefined;
-    const paymentId = c.req.param('id')!;
+    const paymentId = requireParam(c, 'id');
     const { ipAddress, userAgent } = getRequestMeta(c);
 
     const body = getValidatedBody(c, cancelReasonBodySchema);

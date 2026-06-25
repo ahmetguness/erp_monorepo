@@ -10,7 +10,7 @@ import {
   type CreateStockCountBody,
 } from '../schemas/request-body.schemas';
 import { generateDocumentNumber } from '../utils/generate-number.js';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { createEventContext, domainEvents } from '../domain-events';
 import {
@@ -365,7 +365,7 @@ export const StockController = {
 
   async getStockCount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const countId = c.req.param('id')!;
+    const countId = requireParam(c, 'id');
 
     const stockCount = await prisma.stockCount.findFirst({
       where: { id: countId, tenantId },
@@ -440,7 +440,7 @@ export const StockController = {
   async finalizeStockCount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const countId = c.req.param('id')!;
+    const countId = requireParam(c, 'id');
 
     const stockCount = await prisma.stockCount.findFirst({
       where: { id: countId, tenantId },

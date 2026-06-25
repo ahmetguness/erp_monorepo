@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { CheckNoteType, CheckStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -105,7 +105,7 @@ export const CheckPromissoryController = {
 
   async updateStatus(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.checkPromissoryNote.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -146,7 +146,7 @@ export const CheckPromissoryController = {
 
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.checkPromissoryNote.findFirst({
       where: { id, tenantId, deletedAt: null },
@@ -175,7 +175,7 @@ export const CheckPromissoryController = {
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.checkPromissoryNote.findFirst({
       where: { id, tenantId, deletedAt: null },

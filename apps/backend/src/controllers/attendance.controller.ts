@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Attendance Controller — Puantaj / Giriş-Çıkış
@@ -96,7 +96,7 @@ export const AttendanceController = {
 
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.attendance.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Puantaj', id).toJSON(), 404);
@@ -116,7 +116,7 @@ export const AttendanceController = {
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.attendance.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Puantaj', id).toJSON(), 404);

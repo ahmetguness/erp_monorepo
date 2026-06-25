@@ -32,6 +32,7 @@ import { requireAuth } from './middleware/requireAuth';
 import { requirePermission } from './middleware/requirePermission';
 import { csrfProtection } from './middleware/csrfProtection';
 import { securityHeaders } from './middleware/securityHeaders';
+import { validateJsonRequestBody } from './middleware/validateBody';
 import { BaseError } from './errors';
 
 // Professional Plan Route Imports
@@ -184,6 +185,7 @@ app.use('*', async (c, next) => {
 
 // ── Routes ───────────────────────────────────
 app.use('*', globalRateLimit);
+app.use('*', validateJsonRequestBody);
 
 app.get('/', (c) => c.json({ status: 'ok', service: 'Axon ERP API' }));
 

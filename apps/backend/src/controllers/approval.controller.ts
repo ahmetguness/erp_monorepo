@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { ApprovalModule, ApprovalStatus, ApprovalActionType, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
-import { requireTenantId } from '../utils/context.js';
+import { requireTenantId, requireParam } from '../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -105,7 +105,7 @@ export const ApprovalController = {
 
   async getFlow(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const flow = await prisma.approvalFlow.findFirst({
       where: { id, tenantId },
@@ -159,7 +159,7 @@ export const ApprovalController = {
 
   async updateFlow(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.approvalFlow.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Onay akışı', id).toJSON(), 404);
@@ -196,7 +196,7 @@ export const ApprovalController = {
 
   async deleteFlow(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.approvalFlow.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Onay akışı', id).toJSON(), 404);
@@ -275,7 +275,7 @@ export const ApprovalController = {
 
   async addAction(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const requestId = c.req.param('id')!;
+    const requestId = requireParam(c, 'id');
 
     const request = await prisma.approvalRequest.findFirst({
       where: { id: requestId, tenantId },
@@ -337,7 +337,7 @@ export const ApprovalController = {
 
   async deleteRequest(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id')!;
+    const id = requireParam(c, 'id');
 
     const existing = await prisma.approvalRequest.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('Onay talebi', id).toJSON(), 404);

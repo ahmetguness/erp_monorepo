@@ -15,6 +15,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { API_BASE_URL } from "@/lib/constants";
 
 // ─────────────────────────────────────────────
 // Config
@@ -169,8 +170,6 @@ function isValidJson(str: string): boolean {
   }
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-
 // ─────────────────────────────────────────────
 // Syntax highlight (minimal)
 // ─────────────────────────────────────────────
@@ -263,7 +262,7 @@ export function ApiPlayground() {
     setStatusCode(null);
 
     const sanitizedKey = sanitizeApiKey(apiKey);
-    const url = `${API_BASE}${endpoint.path}${endpoint.params ?? ""}`;
+    const url = `${API_BASE_URL}${endpoint.path}${endpoint.params ?? ""}`;
     const start = performance.now();
 
     try {
@@ -339,7 +338,7 @@ export function ApiPlayground() {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const curlCommand = `curl -X ${endpoint.method} "${API_BASE}${endpoint.path}${endpoint.params ?? ""}" \\\n  -H "x-api-key: ${apiKey || "YOUR_API_KEY"}" \\\n  -H "x-sandbox-mode: ${sandboxMode ? "true" : "false"}" \\\n  -H "Content-Type: application/json"${endpoint.hasBody && body.trim() ? ` \\\n  -d '${body.replace(/\n/g, "")}'` : ""}`;
+  const curlCommand = `curl -X ${endpoint.method} "${API_BASE_URL}${endpoint.path}${endpoint.params ?? ""}" \\\n  -H "x-api-key: ${apiKey || "YOUR_API_KEY"}" \\\n  -H "x-sandbox-mode: ${sandboxMode ? "true" : "false"}" \\\n  -H "Content-Type: application/json"${endpoint.hasBody && body.trim() ? ` \\\n  -d '${body.replace(/\n/g, "")}'` : ""}`;
 
   const statusColor =
     statusCode === null
