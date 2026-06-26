@@ -17,7 +17,7 @@
     "test:permission-gating": "tsx scripts/check-permission-gating.ts",
     "test:quality": "npm run test:code-quality && npm run test:contracts && npm run test:tenant-isolation && npm run test:permission-gating && npm run test:web-smoke && npm run test:integration && npm run db:health",
     "ci:artifacts": "tsx scripts/generate-ci-artifacts.ts",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "db:health": "tsx scripts/check-db-health.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

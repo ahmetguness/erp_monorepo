@@ -1,0 +1,138 @@
+name: axon-erp
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: axonerp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d axonerp"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: axon-erp-migrate
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+      target: migrator
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/axonerp?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  seed:
+    profiles: ["seed"]
+    image: axon-erp-migrate
+    command: ["npm", "run", "db:seed"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/axonerp?schema=public
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      APP_ROLE: api
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/axonerp?schema=public&connection_limit=5&pool_timeout=10
+      REDIS_URL: redis://redis:6379
+      APP_URL: http://localhost:3000
+      ALLOWED_ORIGINS: http://localhost:3000
+      JWT_SECRET: change-me-jwt-secret
+      JWT_EXPIRES_IN: 7d
+      ADMIN_JWT_SECRET: change-me-admin-jwt-secret
+      ENCRYPTION_KEY: change-me-32-byte-encryption-key!!
+      API_KEY_PEPPER: change-me-api-key-pepper
+      CONTENT_SECURITY_POLICY_MODE: both
+      STORAGE_DRIVER: local
+      ALLOW_LOCAL_UPLOADS_IN_PRODUCTION: "true"
+    ports:
+      - "3001:3001"
+    volumes:
+      - backend-uploads:/app/apps/backend/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    environment:
+      NODE_ENV: production
+      APP_ROLE: worker
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/axonerp?schema=public&connection_limit=5&pool_timeout=10
+      REDIS_URL: redis://redis:6379
+      APP_URL: http://localhost:3000
+      ALLOWED_ORIGINS: http://localhost:3000
+      JWT_SECRET: change-me-jwt-secret
+      JWT_EXPIRES_IN: 7d
+      ADMIN_JWT_SECRET: change-me-admin-jwt-secret
+      ENCRYPTION_KEY: change-me-32-byte-encryption-key!!
+      API_KEY_PEPPER: change-me-api-key-pepper
+      CONTENT_SECURITY_POLICY_MODE: both
+      STORAGE_DRIVER: local
+      ALLOW_LOCAL_UPLOADS_IN_PRODUCTION: "true"
+      MARKETPLACE_WORKER_ENABLED: "true"
+      DOMAIN_EVENT_OUTBOX_WORKER_ENABLED: "true"
+    volumes:
+      - backend-uploads:/app/apps/backend/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3001
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
+  backend-uploads:

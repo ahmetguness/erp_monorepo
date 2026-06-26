@@ -11,9 +11,101 @@ CREATE TYPE "SyncJobStatus" AS ENUM ('PENDING', 'RUNNING', 'DONE', 'FAILED');
 CREATE TYPE "SyncJobType" AS ENUM ('SYNC_ORDERS', 'SYNC_STOCK', 'SYNC_PRODUCTS');
 
 -- AlterEnum: AppModule — add CONTACTS, INVOICING, APPROVALS
-ALTER TYPE "AppModule" ADD VALUE 'CONTACTS';
-ALTER TYPE "AppModule" ADD VALUE 'INVOICING';
-ALTER TYPE "AppModule" ADD VALUE 'APPROVALS';
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'AppModule') THEN
+    CREATE TYPE "AppModule" AS ENUM (
+      'ACCOUNTING',
+      'INVENTORY',
+      'CRM',
+      'SALES',
+      'PURCHASING',
+      'WAREHOUSE',
+      'PRODUCTION',
+      'SERVICE',
+      'HR',
+      'PAYROLL',
+      'MARKETPLACE',
+      'REPORTING'
+    );
+  END IF;
+END $$;
+
+ALTER TYPE "AppModule" ADD VALUE IF NOT EXISTS 'CONTACTS';
+ALTER TYPE "AppModule" ADD VALUE IF NOT EXISTS 'INVOICING';
+ALTER TYPE "AppModule" ADD VALUE IF NOT EXISTS 'APPROVALS';
+
+-- CreateEnum: missing demo/invitation enums from the current Prisma schema
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'DemoRequestStatus') THEN
+    CREATE TYPE "DemoRequestStatus" AS ENUM (
+      'PENDING',
+      'APPROVED',
+      'PROVISIONING',
+      'PROVISIONED',
+      'REJECTED',
+      'EXPIRED',
+      'CANCELLED'
+    );
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'InvitationStatus') THEN
+    CREATE TYPE "InvitationStatus" AS ENUM (
+      'PENDING',
+      'ACCEPTED',
+      'EXPIRED',
+      'CANCELLED'
+    );
+  END IF;
+END $$;
+
+-- CreateTable: demo_requests
+CREATE TABLE IF NOT EXISTS "demo_requests" (
+  "id" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  "fullName" TEXT NOT NULL,
+  "companyName" TEXT NOT NULL,
+  "email" TEXT NOT NULL,
+  "phone" TEXT,
+  "plan" "Plan" NOT NULL DEFAULT 'STARTER',
+  "status" "DemoRequestStatus" NOT NULL DEFAULT 'PENDING',
+  "tenantId" TEXT,
+  "setPasswordToken" TEXT,
+  "setPasswordExpiry" TIMESTAMP(3),
+  "notes" TEXT,
+  "rejectedReason" TEXT,
+  "processedAt" TIMESTAMP(3),
+  "processedBy" TEXT,
+  CONSTRAINT "demo_requests_pkey" PRIMARY KEY ("id")
+);
+
+CREATE INDEX IF NOT EXISTS "demo_requests_email_idx" ON "demo_requests"("email");
+CREATE INDEX IF NOT EXISTS "demo_requests_status_idx" ON "demo_requests"("status");
+CREATE INDEX IF NOT EXISTS "demo_requests_createdAt_idx" ON "demo_requests"("createdAt");
+
+-- CreateTable: invitations
+CREATE TABLE IF NOT EXISTS "invitations" (
+  "id" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  "tenantId" TEXT NOT NULL,
+  "email" TEXT NOT NULL,
+  "roleId" TEXT,
+  "status" "InvitationStatus" NOT NULL DEFAULT 'PENDING',
+  "tokenHash" TEXT NOT NULL,
+  "expiresAt" TIMESTAMP(3) NOT NULL,
+  "invitedBy" TEXT NOT NULL,
+  "acceptedAt" TIMESTAMP(3),
+  CONSTRAINT "invitations_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "invitations_tokenHash_key" ON "invitations"("tokenHash");
+CREATE UNIQUE INDEX IF NOT EXISTS "invitations_tenantId_email_key" ON "invitations"("tenantId", "email");
+CREATE INDEX IF NOT EXISTS "invitations_tenantId_idx" ON "invitations"("tenantId");
+CREATE INDEX IF NOT EXISTS "invitations_status_idx" ON "invitations"("status");
+CREATE INDEX IF NOT EXISTS "invitations_tokenHash_idx" ON "invitations"("tokenHash");
 
 -- AlterTable: attendances — add updatedAt
 ALTER TABLE "attendances" ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW();
