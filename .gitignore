@@ -8,6 +8,7 @@ packages/types/node_modules
 ci-artifacts
 apps/backend/ci-artifacts
 .github
+rapor.md
 
 # Local environment files
 .env

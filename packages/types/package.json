@@ -1,7 +1,7 @@
 {
   "name": "@repo/types",
   "version": "0.0.1",
-  "type": "module",
+  "type": "commonjs",
   "main": "./index.ts",
   "types": "./index.ts",
   "exports": {
@@ -23,6 +23,13 @@
       "types": "./contracts/common.ts",
       "import": "./contracts/common.ts",
       "default": "./contracts/common.ts"
+    },
+    "./plans": {
+      "types": "./plans.d.ts",
+      "browser": "./plans.mjs",
+      "import": "./plans.mjs",
+      "require": "./plans.cjs",
+      "default": "./plans.mjs"
     }
   },
   "peerDependencies": {

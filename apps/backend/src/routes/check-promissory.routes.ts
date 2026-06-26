@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
-import { Plan } from '@prisma/client';
-import { requirePlan } from '../middleware/requirePlan';
+import { ACCESS_POLICIES } from '@repo/types/plans';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 import { CheckPromissoryController } from '../controllers/check-promissory.controller';
 
 const checkPromissoryRoutes = new Hono();
 
-checkPromissoryRoutes.use('*', requirePlan(Plan.PROFESSIONAL));
+checkPromissoryRoutes.use('*', requireAccess(ACCESS_POLICIES.checkPromissory));
 
 checkPromissoryRoutes.get('/', requirePermission('accounting', 'READ'), CheckPromissoryController.list);
 checkPromissoryRoutes.post('/', requirePermission('accounting', 'CREATE'), CheckPromissoryController.create);

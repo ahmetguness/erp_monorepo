@@ -1,19 +1,14 @@
 import { Hono } from 'hono';
-import { FeatureKey, Plan } from '@prisma/client';
-import { requirePlan } from '../middleware/requirePlan';
-import { requireFeature } from '../middleware/requireFeature';
-import { requireModule } from '../middleware/requireModule';
+import { ACCESS_POLICIES } from '@repo/types/plans';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { MODULE_KEYS } from '../types/module.types';
 import { WorkCenterController } from '../controllers/work-center.controller';
 import { BOMController } from '../controllers/bom.controller';
 import { WorkOrderController } from '../controllers/work-order.controller';
 
 const productionRoutes = new Hono();
 
-productionRoutes.use('*', requirePlan(Plan.ENTERPRISE));
-productionRoutes.use('*', requireFeature(FeatureKey.PRODUCTION));
-productionRoutes.use('*', requireModule(MODULE_KEYS.PRODUCTION));
+productionRoutes.use('*', requireAccess(ACCESS_POLICIES.production));
 
 // İş Merkezleri
 productionRoutes.get('/work-centers', requirePermission('production', 'READ'), WorkCenterController.list);

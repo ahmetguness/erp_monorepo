@@ -35,6 +35,8 @@ services:
       context: .
       dockerfile: apps/backend/Dockerfile
       target: migrator
+    env_file:
+      - apps/backend/.env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/axonerp?schema=public
     depends_on:
@@ -46,6 +48,8 @@ services:
     profiles: ["seed"]
     image: axon-erp-migrate
     command: ["npm", "run", "db:seed"]
+    env_file:
+      - apps/backend/.env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/axonerp?schema=public
     depends_on:
@@ -57,6 +61,8 @@ services:
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
+    env_file:
+      - apps/backend/.env
     environment:
       NODE_ENV: production
       PORT: 3001
@@ -65,11 +71,6 @@ services:
       REDIS_URL: redis://redis:6379
       APP_URL: http://localhost:3000
       ALLOWED_ORIGINS: http://localhost:3000
-      JWT_SECRET: change-me-jwt-secret
-      JWT_EXPIRES_IN: 7d
-      ADMIN_JWT_SECRET: change-me-admin-jwt-secret
-      ENCRYPTION_KEY: change-me-32-byte-encryption-key!!
-      API_KEY_PEPPER: change-me-api-key-pepper
       CONTENT_SECURITY_POLICY_MODE: both
       STORAGE_DRIVER: local
       ALLOW_LOCAL_UPLOADS_IN_PRODUCTION: "true"
@@ -92,6 +93,8 @@ services:
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
+    env_file:
+      - apps/backend/.env
     environment:
       NODE_ENV: production
       APP_ROLE: worker
@@ -99,11 +102,6 @@ services:
       REDIS_URL: redis://redis:6379
       APP_URL: http://localhost:3000
       ALLOWED_ORIGINS: http://localhost:3000
-      JWT_SECRET: change-me-jwt-secret
-      JWT_EXPIRES_IN: 7d
-      ADMIN_JWT_SECRET: change-me-admin-jwt-secret
-      ENCRYPTION_KEY: change-me-32-byte-encryption-key!!
-      API_KEY_PEPPER: change-me-api-key-pepper
       CONTENT_SECURITY_POLICY_MODE: both
       STORAGE_DRIVER: local
       ALLOW_LOCAL_UPLOADS_IN_PRODUCTION: "true"

@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
-import { Plan } from '@prisma/client';
-import { requirePlan } from '../middleware/requirePlan';
+import { ACCESS_POLICIES } from '@repo/types/plans';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 import { EDocumentController } from '../controllers/e-document.controller';
 
 const eDocumentRoutes = new Hono();
 
-eDocumentRoutes.use('*', requirePlan(Plan.PROFESSIONAL));
+eDocumentRoutes.use('*', requireAccess(ACCESS_POLICIES.eDocuments));
 
 eDocumentRoutes.get('/', requirePermission('invoicing', 'READ'), EDocumentController.list);
 eDocumentRoutes.get('/:id', requirePermission('invoicing', 'READ'), EDocumentController.getById);

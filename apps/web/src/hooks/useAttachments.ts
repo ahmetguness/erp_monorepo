@@ -127,7 +127,7 @@ export function useBulkUpdateAttachmentMetadata() {
       bulkUpdateAttachmentMetadata(ids, metadata),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['attachments'] });
-      toast.success(`${result.updatedCount} dosyanÄ±n metadata bilgisi gÃ¼ncellendi.`);
+      toast.success(`${result.updatedCount} dosyanın metadata bilgisi güncellendi.`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

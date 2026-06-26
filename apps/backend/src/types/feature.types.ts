@@ -1,4 +1,5 @@
 import { FeatureKey, FeatureType, Plan } from '@prisma/client';
+import { STARTER_OPEN_MODULES as SHARED_STARTER_OPEN_MODULES } from '@repo/types/plans';
 
 // ─────────────────────────────────────────────
 // Feature Types
@@ -43,7 +44,7 @@ export const STARTER_FEATURE_DEFAULTS: Record<FeatureKey, string> = {
   [FeatureKey.MULTI_WAREHOUSE]: 'false',
   [FeatureKey.ROLE_MANAGEMENT]: 'false',
   [FeatureKey.APPROVALS]: 'false',
-  [FeatureKey.CRM]: 'false',
+  [FeatureKey.CRM]: 'true',
   [FeatureKey.SALES]: 'true',
   [FeatureKey.PURCHASING]: 'false',
   [FeatureKey.PRODUCTION]: 'false',
@@ -63,12 +64,8 @@ export const UNLIMITED_VALUE = 'unlimited';
 // ─────────────────────────────────────────────
 
 export const STARTER_OPEN_MODULES: readonly string[] = [
-  'accounting',
-  'inventory',
-  'contacts',
-  'invoicing',
-  'reporting',
-] as const;
+  ...SHARED_STARTER_OPEN_MODULES,
+];
 
 export const STARTER_CLOSED_MODULES: readonly string[] = [
   'purchasing',

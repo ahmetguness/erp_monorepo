@@ -1,14 +1,12 @@
 import { Hono } from 'hono';
-import { FeatureKey, Plan } from '@prisma/client';
-import { requirePlan } from '../middleware/requirePlan';
-import { requireFeature } from '../middleware/requireFeature';
+import { ACCESS_POLICIES } from '@repo/types/plans';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 import { ApiKeyController } from '../controllers/api-key.controller';
 
 const apiKeyRoutes = new Hono();
 
-apiKeyRoutes.use('*', requirePlan(Plan.PROFESSIONAL));
-apiKeyRoutes.use('*', requireFeature(FeatureKey.API_ACCESS));
+apiKeyRoutes.use('*', requireAccess(ACCESS_POLICIES.apiKeys));
 
 apiKeyRoutes.get('/manifest', requirePermission('api_keys', 'READ'), ApiKeyController.manifest);
 apiKeyRoutes.get('/openapi.json', requirePermission('api_keys', 'READ'), ApiKeyController.openApi);

@@ -1,19 +1,14 @@
 import { Hono } from 'hono';
-import { FeatureKey, Plan } from '@prisma/client';
-import { requirePlan } from '../middleware/requirePlan';
-import { requireFeature } from '../middleware/requireFeature';
-import { requireModule } from '../middleware/requireModule';
+import { ACCESS_POLICIES } from '@repo/types/plans';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { MODULE_KEYS } from '../types/module.types';
 import { EmployeeController } from '../controllers/employee.controller';
 import { LeaveRequestController } from '../controllers/leave-request.controller';
 import { AttendanceController } from '../controllers/attendance.controller';
 
 const hrRoutes = new Hono();
 
-hrRoutes.use('*', requirePlan(Plan.ENTERPRISE));
-hrRoutes.use('*', requireFeature(FeatureKey.HR));
-hrRoutes.use('*', requireModule(MODULE_KEYS.HR));
+hrRoutes.use('*', requireAccess(ACCESS_POLICIES.hr));
 
 // Personel
 hrRoutes.get('/employees', requirePermission('hr', 'READ'), EmployeeController.list);

@@ -5,6 +5,8 @@ import { demoReadyEmail, demoEnterpriseNotifyEmail } from './mail-templates.serv
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
+import { modulesForPlan } from '../utils/tenant-modules';
+import type { PlanName } from '@repo/types/plans';
 
 // ── Tipler ───────────────────────────────────
 
@@ -249,7 +251,7 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
           plan: demoRequest.plan,
           status: 'TRIAL',
           trialEndsAt,
-          modules: getModulesForPlan(demoRequest.plan),
+          modules: modulesForPlan(demoRequest.plan as PlanName),
         },
       });
 
@@ -368,19 +370,6 @@ export async function rejectDemoRequest(demoRequestId: string, rejectedBy: strin
 }
 
 // ── Plan'a göre modüller ─────────────────────
-
-function getModulesForPlan(plan: string): string[] {
-  switch (plan) {
-    case 'STARTER':
-      return ['ACCOUNTING', 'INVENTORY'];
-    case 'PROFESSIONAL':
-      return ['ACCOUNTING', 'INVENTORY', 'CRM', 'SALES', 'PURCHASING', 'WAREHOUSE'];
-    case 'ENTERPRISE':
-      return ['ACCOUNTING', 'INVENTORY', 'CRM', 'SALES', 'PURCHASING', 'WAREHOUSE', 'PRODUCTION', 'SERVICE', 'HR', 'PAYROLL', 'MARKETPLACE', 'REPORTING'];
-    default:
-      return ['ACCOUNTING', 'INVENTORY'];
-  }
-}
 
 // ── Demo seed verileri ───────────────────────
 

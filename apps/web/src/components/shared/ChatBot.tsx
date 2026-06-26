@@ -148,7 +148,7 @@ function saveRecentRecords(records: ChatRecentRecord[], userId?: string) {
   if (!userId) return;
   try {
     inMemoryRecentRecords.set(userId, records.slice(0, MAX_RECENT_RECORDS));
-  } catch { /* quota aÅŸÄ±mÄ± vb. */ }
+  } catch { /* quota aşımı vb. */ }
 }
 
 function inferEntityFromPath(pathname: string): Pick<ChatPageContext, 'entityType' | 'entityId'> {

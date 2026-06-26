@@ -7,6 +7,7 @@ process.env.MARKETPLACE_WORKER_ENABLED = 'false';
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import {
+  AppModule,
   ContactType,
   DeliveryNoteType,
   DomainEventOutboxStatus,
@@ -197,7 +198,16 @@ async function seedTenant(runId: string, suffix: 'a' | 'b') {
       email: `tenant-${runId}-${suffix}@example.com`,
       plan: Plan.ENTERPRISE,
       status: TenantStatus.ACTIVE,
-      modules: ['contacts', 'invoicing', 'accounting', 'inventory', 'attachments', 'settings', 'production', 'reporting', 'purchasing', 'api_keys'],
+      modules: [
+        AppModule.CONTACTS,
+        AppModule.INVOICING,
+        AppModule.ACCOUNTING,
+        AppModule.INVENTORY,
+        AppModule.PRODUCTION,
+        AppModule.REPORTING,
+        AppModule.PURCHASING,
+        AppModule.APPROVALS,
+      ],
     },
   });
   createdTenantIds.push(tenant.id);
@@ -458,7 +468,7 @@ async function testPermissionSimulatorSmoke(ctx: TestContext): Promise<void> {
   })).modules;
   await prisma.tenant.update({
     where: { id: ctx.tenantAId },
-    data: { modules: originalModules.filter((module) => module !== 'inventory') },
+    data: { modules: originalModules.filter((module) => module !== AppModule.INVENTORY) },
   });
 
   try {

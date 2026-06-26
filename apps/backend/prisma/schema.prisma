@@ -490,6 +490,9 @@ enum AppModule {
   CONTACTS
   INVOICING
   APPROVALS
+  MAIL
+  WORKFLOW
+  DOCUMENTS
 }
 
 // ─── Marketplace Job Enum'ları ───────────────
@@ -555,10 +558,7 @@ model Tenant {
   /// DEĞİŞİKLİK 5: Enterprise müşteriler için fiyat tablosunu bypass et
   isCustomPricing   Boolean        @default(false)
 
-  /// Legacy: serbest string array. Typed kullanım için AppModule enum'una bakın.
-  /// Migration notu: Bu alan zamanla AppModule[] tipine geçirilecek,
-  ///   şimdilik uygulama katmanında AppModule enum değerleriyle senkron tutulur.
-  modules String[] @default([])
+  modules AppModule[] @default([])
   notes   String?
 
   // Relations

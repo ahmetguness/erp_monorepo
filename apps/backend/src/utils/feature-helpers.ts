@@ -50,7 +50,7 @@ export function getStarterDefault(key: FeatureKey): string {
  * Tenant modüller listesinde verilen modülün aktif olup olmadığını kontrol eder.
  * modules alanı string[] (legacy) olduğundan lowercase karşılaştırma yapılır.
  */
-export function isModuleInList(modules: string[], module: string): boolean {
+export function isModuleInList(modules: readonly string[], module: string): boolean {
   return modules.map((m) => m.toLowerCase()).includes(module.toLowerCase());
 }
 

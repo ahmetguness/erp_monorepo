@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { ACCESS_POLICIES } from '@repo/types/plans';
 import { listPermissionMatrix, type PermissionMatrixEntry } from '../src/services/permission-simulator.service';
 import { CheckIssue, joinRoutePath, normalizePath, readText, reportIssues, toProjectPath } from './lib/static-checks';
 
@@ -69,6 +70,19 @@ function extractMountedRoutes(indexText: string): Map<string, string> {
 }
 
 function extractGates(text: string): RouteGates {
+  const accessMatch = /requireAccess\(ACCESS_POLICIES\.([A-Za-z0-9_]+)\)/.exec(text);
+  if (accessMatch) {
+    const policyKey = accessMatch[1] as keyof typeof ACCESS_POLICIES;
+    const policy = ACCESS_POLICIES[policyKey];
+    if (policy) {
+      return {
+        moduleGate: policy.module,
+        minPlan: policy.minPlan as PlanName | undefined,
+        featureKey: policy.featureKey,
+      };
+    }
+  }
+
   const plan = parsePlan(/requirePlan\(Plan\.([A-Z_]+)\)/.exec(text)?.[1]);
   const featureKey = /requireFeature\(FeatureKey\.([A-Z_]+)\)/.exec(text)?.[1];
   const moduleGateRaw = /requireModule\(MODULE_KEYS\.([A-Z_]+)\)/.exec(text)?.[1];
@@ -157,7 +171,16 @@ function extractWebNavManifest(): Map<string, WebNavGate> {
     const body = match[0];
     const href = normalizePath(match[1]);
     const module = /module:\s*'([^']+)'/.exec(body)?.[1];
-    const plan = parsePlan(/plan:\s*'([^']+)'/.exec(body)?.[1]);
+    let planRaw = /plan:\s*([A-Za-z0-9_']+)/.exec(body)?.[1];
+    if (planRaw) planRaw = planRaw.replace(/'/g, '');
+    let plan: PlanName | undefined = undefined;
+    if (planRaw === 'PROFESSIONAL_PLAN' || planRaw === 'PROFESSIONAL') {
+      plan = 'PROFESSIONAL';
+    } else if (planRaw === 'ENTERPRISE_PLAN' || planRaw === 'ENTERPRISE') {
+      plan = 'ENTERPRISE';
+    } else if (planRaw === 'STARTER') {
+      plan = 'STARTER';
+    }
     const existing = manifest.get(href);
     manifest.set(href, {
       href,

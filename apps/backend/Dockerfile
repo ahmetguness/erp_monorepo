@@ -6,21 +6,25 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN apk add --no-cache openssl
 
 FROM base AS deps
+COPY packages/types /app/packages/types
 COPY apps/backend/package.json apps/backend/package-lock.json ./
 RUN npm ci
 
 FROM deps AS builder
+COPY packages/types /app/packages/types
 COPY apps/backend ./
 RUN npm run db:generate
 RUN npm run build
 
 FROM deps AS migrator
+COPY packages/types /app/packages/types
 COPY apps/backend ./
 RUN npm run db:generate
 CMD ["npx", "prisma", "migrate", "deploy"]
 
 FROM base AS runner
 ENV NODE_ENV=production
+COPY packages/types /app/packages/types
 COPY apps/backend/package.json apps/backend/package-lock.json ./
 COPY apps/backend/prisma ./prisma
 RUN npm ci --omit=dev && npm cache clean --force

@@ -1,4 +1,5 @@
 import { Plan, TenantStatus } from '@prisma/client';
+import { PLAN_RANK } from '@repo/types/plans';
 
 export { Plan, TenantStatus };
 
@@ -19,9 +20,9 @@ export interface PlanLimits {
 }
 
 export const PLAN_HIERARCHY: Record<Plan, number> = {
-  [Plan.STARTER]: 1,
-  [Plan.PROFESSIONAL]: 2,
-  [Plan.ENTERPRISE]: 3,
+  [Plan.STARTER]: PLAN_RANK.STARTER,
+  [Plan.PROFESSIONAL]: PLAN_RANK.PROFESSIONAL,
+  [Plan.ENTERPRISE]: PLAN_RANK.ENTERPRISE,
 };
 
 /**

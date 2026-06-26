@@ -1,15 +1,13 @@
 import { Hono } from 'hono';
-import { FeatureKey, Plan } from '@prisma/client';
-import { requirePlan } from '../middleware/requirePlan';
-import { requireFeature } from '../middleware/requireFeature';
+import { ACCESS_POLICIES } from '@repo/types/plans';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 import { MailController } from '../controllers/mail.controller';
 
 export const mailRoutes = new Hono();
 
 // Mail Enterprise plan + feature gerektiriyor
-mailRoutes.use('*', requirePlan(Plan.ENTERPRISE));
-mailRoutes.use('*', requireFeature(FeatureKey.HR)); // HR feature altında mail erişimi
+mailRoutes.use('*', requireAccess(ACCESS_POLICIES.mail));
 
 mailRoutes.get('/', requirePermission('mail', 'READ'), MailController.list);
 mailRoutes.get('/summary', requirePermission('mail', 'READ'), MailController.summary);

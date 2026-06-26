@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { setCookie, deleteCookie } from 'hono/cookie';
-import { AuditAction, EntityType, FeatureKey, Plan, Prisma, TenantStatus } from '@prisma/client';
+import { AppModule, AuditAction, EntityType, FeatureKey, Plan, Prisma, TenantStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ValidationError, NotFoundError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
@@ -15,6 +15,7 @@ import { getObservabilitySnapshot } from '../services/observability.service.js';
 import { rateLimiter } from '../lib/rateLimiter';
 import { logger } from '../lib/logger';
 import { getTrustedClientIp } from '../utils/request-ip.js';
+import { toAppModule, VALID_MODULE_KEYS } from '../utils/tenant-modules';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
@@ -36,11 +37,7 @@ const ADMIN_LOGIN_LOCKOUT_WINDOW_MS = 60 * 60 * 1000;
 const VALID_PLANS = Object.values(Plan);
 const VALID_STATUSES = Object.values(TenantStatus);
 const VALID_FEATURE_KEYS: readonly string[] = Object.values(FeatureKey);
-const VALID_MODULES = [
-  'accounting', 'inventory', 'crm', 'sales', 'purchasing', 'warehouse',
-  'production', 'service', 'hr', 'payroll', 'marketplace', 'reporting',
-  'contacts', 'invoicing', 'approvals',
-];
+const VALID_MODULES = VALID_MODULE_KEYS;
 
 function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
@@ -94,16 +91,20 @@ function parseNullableDate(value: string | null | undefined, field: string): Dat
   return date;
 }
 
-function validateModules(modules: string[] | undefined): string[] | undefined {
+function validateModules(modules: string[] | undefined): AppModule[] | undefined {
   if (modules === undefined) return undefined;
   if (!Array.isArray(modules)) throw new ValidationError('modules alanı liste olmalıdır.');
 
   const uniqueModules = Array.from(new Set(modules.map((module) => module.trim().toLowerCase()).filter(Boolean)));
-  const invalidModules = uniqueModules.filter((module) => !VALID_MODULES.includes(module));
+  const invalidModules = uniqueModules.filter((module) => !(VALID_MODULES as readonly string[]).includes(module));
   if (invalidModules.length > 0) {
     throw new ValidationError(`Geçersiz modül: ${invalidModules.join(', ')}`);
   }
-  return uniqueModules;
+  return uniqueModules.map((module) => {
+    const appModule = toAppModule(module);
+    if (!appModule) throw new ValidationError(`Geçersiz modül: ${module}`);
+    return appModule;
+  });
 }
 
 function formatNotificationValue(value: unknown): string {
@@ -335,7 +336,7 @@ export const AdminTenantController = {
       return c.json(new ValidationError('maxUsers pozitif bir tam sayı veya boş olmalıdır.').toJSON(), 400);
     }
 
-    let modules: string[] | undefined;
+    let modules: AppModule[] | undefined;
     let trialEndsAt: Date | null | undefined;
     let subscriptionStart: Date | null | undefined;
     let subscriptionEnd: Date | null | undefined;
@@ -541,7 +542,7 @@ export const AdminTenantController = {
     const tenant = await prisma.tenant.findFirst({ where: { id, deletedAt: null } });
     if (!tenant) return c.json(new NotFoundError('Tenant', id).toJSON(), 404);
 
-    let modules: string[] | undefined;
+    let modules: AppModule[] | undefined;
     let trialEndsAt: Date | null | undefined;
     let subscriptionStart: Date | null | undefined;
     let subscriptionEnd: Date | null | undefined;

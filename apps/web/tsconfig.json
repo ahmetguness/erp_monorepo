@@ -6,6 +6,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@repo/types/plans": [
+        "../../packages/types/plans.d.ts"
       ]
     },
     "target": "ES2017",

@@ -520,7 +520,7 @@ export const DataExchangeController = {
           mapping: body.mapping,
           partialImport: body.partialImport,
           canImportValidRows,
-          rollbackAvailable: true,
+          rollbackAvailable: !body.partialImport || invalidRows === 0,
           rollbackNote: batch.rollbackNote,
         },
       },

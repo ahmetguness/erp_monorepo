@@ -44,7 +44,7 @@ export default function LoginScreen({ onBack }: ScreenProps) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      setErrorMsg('LÃ¼tfen e-posta ve ÅŸifrenizi girin.');
+      setErrorMsg('Lütfen e-posta ve şifrenizi girin.');
       return;
     }
 
@@ -54,8 +54,8 @@ export default function LoginScreen({ onBack }: ScreenProps) {
     try {
       const data = await login({ email, password });
       setAuthData(data.user, data.tenant);
-      // BaÅŸarÄ±lÄ± giriÅŸ sonrasÄ± Zustand store gÃ¼ncellenir,
-      // App.tsx iÃ§indeki isAuthenticated true olacaÄŸÄ± iÃ§in ekran otomatik deÄŸiÅŸir.
+      // Başarılı giriş sonrası Zustand store güncellenir,
+      // App.tsx içindeki isAuthenticated true olacağı için ekran otomatik değişir.
     } catch (error: unknown) {
       setErrorMsg(getLoginErrorMessage(error));
     } finally {
@@ -87,8 +87,8 @@ export default function LoginScreen({ onBack }: ScreenProps) {
               <View style={styles.logoWrapper}>
                 <Logo size="md" />
               </View>
-              <Text style={styles.title}>HoÅŸ Geldiniz</Text>
-              <Text style={styles.subtitle}>HesabÄ±nÄ±za giriÅŸ yapÄ±n</Text>
+              <Text style={styles.title}>Hoş Geldiniz</Text>
+              <Text style={styles.subtitle}>Hesabınıza giriş yapın</Text>
             </View>
 
             {errorMsg ? (
@@ -112,7 +112,7 @@ export default function LoginScreen({ onBack }: ScreenProps) {
               />
 
               <Input 
-                label="Åžifre"
+                label="Şifre"
                 placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                 value={password}
                 onChangeText={(val) => { setPassword(val); setErrorMsg(''); }}
@@ -121,13 +121,13 @@ export default function LoginScreen({ onBack }: ScreenProps) {
                 icon={<Ionicons name="lock-closed-outline" size={20} color="#94A3B8" />}
                 rightLabel={
                   <TouchableOpacity hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
-                    <Text style={styles.forgotPasswordText}>Åžifremi Unuttum</Text>
+                    <Text style={styles.forgotPasswordText}>Şifremi Unuttum</Text>
                   </TouchableOpacity>
                 }
               />
 
               <Button 
-                title="GiriÅŸ Yap"
+                title="Giriş Yap"
                 onPress={handleLogin} 
                 isLoading={isLoading}
                 style={styles.submitButton}
@@ -135,11 +135,11 @@ export default function LoginScreen({ onBack }: ScreenProps) {
             </View>
           </View>
 
-          {/* Alt boÅŸluÄŸu doldurmak iÃ§in YardÄ±m/Destek alanÄ± */}
+          {/* Alt boşluğu doldurmak için Yardım/Destek alanı */}
           <View style={styles.supportContainer}>
-            <Text style={styles.supportText}>YardÄ±ma mÄ± ihtiyacÄ±nÄ±z var? </Text>
+            <Text style={styles.supportText}>Yardıma mı ihtiyacınız var? </Text>
             <TouchableOpacity hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
-              <Text style={styles.supportLink}>Destek Ekibine UlaÅŸÄ±n</Text>
+              <Text style={styles.supportLink}>Destek Ekibine Ulaşın</Text>
             </TouchableOpacity>
           </View>
 

@@ -1,11 +1,13 @@
-import { PrismaClient } from '@prisma/client';
+﻿import { FeatureKey, FeatureType, Plan, PrismaClient } from '@prisma/client';
+import { PLAN_FEATURE_ROWS, type PlanFeatureRow } from '@repo/types/plans';
 import bcrypt from 'bcryptjs';
+import { modulesForPlan } from '../src/utils/tenant-modules';
 
 const prisma = new PrismaClient();
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Helpers
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function d(dateStr: string): Date {
   return new Date(dateStr);
@@ -15,14 +17,14 @@ async function hash(pw: string): Promise<string> {
   return bcrypt.hash(pw, 12);
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // MAIN
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function main() {
-  console.log('\n🌱 Seed başlıyor...\n');
+  console.log('\nðŸŒ± Seed başlıyor...\n');
 
-  // ── 1. Admin User ────────────────────────────
+  // â”€â”€ 1. Admin User â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await prisma.adminUser.upsert({
     where: { email: 'admin@axonerp.com' },
     create: {
@@ -33,149 +35,107 @@ async function main() {
     },
     update: { password: await hash('admin1234') },
   });
-  console.log('  ✓ Admin: admin@axonerp.com / admin1234');
+  console.log('  âœ“ Admin: admin@axonerp.com / admin1234');
 
-  // ── 2. Plan Features ─────────────────────────
+  // â”€â”€ 2. Plan Features â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await seedPlanFeatures();
-  console.log('  ✓ Plan features (Starter / Professional / Enterprise)');
+  console.log('  âœ“ Plan features (Starter / Professional / Enterprise)');
 
-  // ── 3. Demo Tenant (Enterprise) ──────────────
+  // â”€â”€ 3. Demo Tenant (Enterprise) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { tenant, users } = await seedTenant();
-  console.log(`  ✓ Tenant: ${tenant.companyName} (Enterprise)`);
-  console.log(`  ✓ Kullanıcılar: ${users.map(u => u.email).join(', ')}`);
+  console.log(`  âœ“ Tenant: ${tenant.companyName} (Enterprise)`);
+  console.log(`  âœ“ Kullanıcılar: ${users.map(u => u.email).join(', ')}`);
 
-  // ── 4. Master Data ───────────────────────────
+  // â”€â”€ 4. Master Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const master = await seedMasterData(tenant.id);
-  console.log('  ✓ Master data (birim, kategori, KDV, döviz, hesap planı)');
+  console.log('  âœ“ Master data (birim, kategori, KDV, döviz, hesap planı)');
 
-  // ── 5. Warehouse & Locations ─────────────────
+  // â”€â”€ 5. Warehouse & Locations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { warehouse, warehouse2, locations } = await seedWarehouses(tenant.id);
-  console.log('  ✓ Depolar ve lokasyonlar');
+  console.log('  âœ“ Depolar ve lokasyonlar');
 
-  // ── 6. Products & Stock ──────────────────────
+  // â”€â”€ 6. Products & Stock â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const products = await seedProducts(tenant.id, master, warehouse, warehouse2, locations);
-  console.log(`  ✓ ${products.length} ürün ve stok seviyeleri`);
+  console.log(`  âœ“ ${products.length} ürün ve stok seviyeleri`);
 
-  // ── 7. Contacts ──────────────────────────────
+  // â”€â”€ 7. Contacts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const contacts = await seedContacts(tenant.id);
-  console.log(`  ✓ ${contacts.length} cari hesap`);
+  console.log(`  âœ“ ${contacts.length} cari hesap`);
 
-  // ── 8. Sales ─────────────────────────────────
+  // â”€â”€ 8. Sales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { invoices, payments } = await seedSales(tenant.id, contacts, products, master, warehouse);
-  console.log(`  ✓ Satış: ${invoices.length} fatura, ${payments.length} ödeme`);
+  console.log(`  âœ“ Satış: ${invoices.length} fatura, ${payments.length} ödeme`);
 
-  // ── 9. Purchasing ────────────────────────────
+  // â”€â”€ 9. Purchasing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await seedPurchasing(tenant.id, contacts, products, master, warehouse);
-  console.log('  ✓ Satın alma: talepler ve siparişler');
+  console.log('  âœ“ Satın alma: talepler ve siparişler');
 
-  // ── 10. Accounting ───────────────────────────
+  // â”€â”€ 10. Accounting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await seedAccounting(tenant.id, master.accounts, invoices);
-  console.log('  ✓ Muhasebe: yevmiye fişleri, mali dönem');
+  console.log('  âœ“ Muhasebe: yevmiye fişleri, mali dönem');
 
-  // ── 11. HR & Payroll ─────────────────────────
+  // â”€â”€ 11. HR & Payroll â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await seedHR(tenant.id);
-  console.log('  ✓ İK: personel, izin, puantaj, bordro');
+  console.log('  âœ“ İK: personel, izin, puantaj, bordro');
 
-  // ── 12. Production ───────────────────────────
+  // â”€â”€ 12. Production â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await seedProduction(tenant.id, products, master, warehouse, warehouse2);
-  console.log('  ✓ Üretim: iş merkezleri, BOM, iş emirleri');
+  console.log('  âœ“ Üretim: iş merkezleri, BOM, iş emirleri');
 
-  // ── 13. Service ──────────────────────────────
+  // â”€â”€ 13. Service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await seedService(tenant.id, contacts, products);
-  console.log('  ✓ Servis: müşteri varlıkları, servis talepleri');
+  console.log('  âœ“ Servis: müşteri varlıkları, servis talepleri');
 
-  // ── 14. Marketplace ──────────────────────────
+  // â”€â”€ 14. Marketplace â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await seedMarketplace(tenant.id, products);
-  console.log('  ✓ Pazaryeri: Trendyol entegrasyonu');
+  console.log('  âœ“ Pazaryeri: Trendyol entegrasyonu');
 
-  // ── 15. Roles & Permissions ──────────────────
+  // â”€â”€ 15. Roles & Permissions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await seedRoles(tenant.id, users);
-  console.log('  ✓ Roller ve izinler');
+  console.log('  âœ“ Roller ve izinler');
 
-  // ── 16. Notifications ────────────────────────
+  // â”€â”€ 16. Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await seedNotifications(tenant.id, users[0].id);
-  console.log('  ✓ Bildirimler');
+  console.log('  âœ“ Bildirimler');
 
-  // ── 17. Settings ─────────────────────────────
+  // â”€â”€ 17. Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await seedSettings(tenant.id);
-  console.log('  ✓ Tenant ayarları');
+  console.log('  âœ“ Tenant ayarları');
 
-  console.log('\n✅ Seed tamamlandı!\n');
+  console.log('\nâœ… Seed tamamlandı!\n');
   console.log('  Giriş: admin@axondemo.com / demo1234');
   console.log('  Admin: admin@axonerp.com / admin1234\n');
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // PLAN FEATURES
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedPlanFeatures() {
-  const features = [
-    // STARTER
-    { plan: 'STARTER' as const, key: 'max_users',        featureKey: 'MAX_USERS' as const,        value: '5',         type: 'LIMIT' as const },
-    { plan: 'STARTER' as const, key: 'max_products',     featureKey: 'MAX_PRODUCTS' as const,     value: '500',       type: 'LIMIT' as const },
-    { plan: 'STARTER' as const, key: 'multi_warehouse',  featureKey: 'MULTI_WAREHOUSE' as const,  value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'role_management',  featureKey: 'ROLE_MANAGEMENT' as const,  value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'approvals',        featureKey: 'APPROVALS' as const,        value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'crm',              featureKey: 'CRM' as const,              value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'sales',            featureKey: 'SALES' as const,            value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'purchasing',       featureKey: 'PURCHASING' as const,       value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'production',       featureKey: 'PRODUCTION' as const,       value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'service',          featureKey: 'SERVICE' as const,          value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'marketplace',      featureKey: 'MARKETPLACE' as const,      value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'payroll',          featureKey: 'PAYROLL' as const,          value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'hr',               featureKey: 'HR' as const,               value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'api_access',       featureKey: 'API_ACCESS' as const,       value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'STARTER' as const, key: 'audit_log',        featureKey: 'AUDIT_LOG' as const,        value: 'basic',     type: 'ENUM' as const },
-    { plan: 'STARTER' as const, key: 'custom_reporting', featureKey: 'CUSTOM_REPORTING' as const, value: 'false',     type: 'BOOLEAN' as const },
-    // PROFESSIONAL
-    { plan: 'PROFESSIONAL' as const, key: 'max_users',        featureKey: 'MAX_USERS' as const,        value: '25',        type: 'LIMIT' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'max_products',     featureKey: 'MAX_PRODUCTS' as const,     value: '5000',      type: 'LIMIT' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'multi_warehouse',  featureKey: 'MULTI_WAREHOUSE' as const,  value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'role_management',  featureKey: 'ROLE_MANAGEMENT' as const,  value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'approvals',        featureKey: 'APPROVALS' as const,        value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'crm',              featureKey: 'CRM' as const,              value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'sales',            featureKey: 'SALES' as const,            value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'purchasing',       featureKey: 'PURCHASING' as const,       value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'production',       featureKey: 'PRODUCTION' as const,       value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'service',          featureKey: 'SERVICE' as const,          value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'marketplace',      featureKey: 'MARKETPLACE' as const,      value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'payroll',          featureKey: 'PAYROLL' as const,          value: 'false',     type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'hr',               featureKey: 'HR' as const,               value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'api_access',       featureKey: 'API_ACCESS' as const,       value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'audit_log',        featureKey: 'AUDIT_LOG' as const,        value: 'standard',  type: 'ENUM' as const },
-    { plan: 'PROFESSIONAL' as const, key: 'custom_reporting', featureKey: 'CUSTOM_REPORTING' as const, value: 'true',      type: 'BOOLEAN' as const },
-    // ENTERPRISE
-    { plan: 'ENTERPRISE' as const, key: 'max_users',        featureKey: 'MAX_USERS' as const,        value: 'unlimited', type: 'LIMIT' as const },
-    { plan: 'ENTERPRISE' as const, key: 'max_products',     featureKey: 'MAX_PRODUCTS' as const,     value: 'unlimited', type: 'LIMIT' as const },
-    { plan: 'ENTERPRISE' as const, key: 'multi_warehouse',  featureKey: 'MULTI_WAREHOUSE' as const,  value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'role_management',  featureKey: 'ROLE_MANAGEMENT' as const,  value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'approvals',        featureKey: 'APPROVALS' as const,        value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'crm',              featureKey: 'CRM' as const,              value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'sales',            featureKey: 'SALES' as const,            value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'purchasing',       featureKey: 'PURCHASING' as const,       value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'production',       featureKey: 'PRODUCTION' as const,       value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'service',          featureKey: 'SERVICE' as const,          value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'marketplace',      featureKey: 'MARKETPLACE' as const,      value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'payroll',          featureKey: 'PAYROLL' as const,          value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'hr',               featureKey: 'HR' as const,               value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'api_access',       featureKey: 'API_ACCESS' as const,       value: 'true',      type: 'BOOLEAN' as const },
-    { plan: 'ENTERPRISE' as const, key: 'audit_log',        featureKey: 'AUDIT_LOG' as const,        value: 'full',      type: 'ENUM' as const },
-    { plan: 'ENTERPRISE' as const, key: 'custom_reporting', featureKey: 'CUSTOM_REPORTING' as const, value: 'true',      type: 'BOOLEAN' as const },
-  ];
+  const features = PLAN_FEATURE_ROWS.map(toPrismaPlanFeature);
 
   for (const f of features) {
     await prisma.planFeature.upsert({
       where: { plan_key: { plan: f.plan, key: f.key } },
       create: f,
-      update: { value: f.value },
+      update: { value: f.value, type: f.type, featureKey: f.featureKey },
     });
   }
 }
 
+function toPrismaPlanFeature(feature: PlanFeatureRow) {
+  return {
+    plan: Plan[feature.plan],
+    key: feature.key,
+    featureKey: FeatureKey[feature.featureKey],
+    value: feature.value,
+    type: FeatureType[feature.type],
+  };
+}
+
 // ─────────────────────────────────────────────
 // TENANT & USERS
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedTenant() {
   // Önce mevcut tenant'ı temizle (idempotent seed)
@@ -201,11 +161,7 @@ async function seedTenant() {
       sector: 'Teknoloji',
       plan: 'ENTERPRISE',
       status: 'ACTIVE',
-      modules: [
-        'accounting', 'inventory', 'contacts', 'invoicing', 'reporting',
-        'purchasing', 'production', 'service', 'marketplace', 'payroll',
-        'hr', 'approvals', 'warehouse',
-      ],
+      modules: modulesForPlan('ENTERPRISE'),
       subscriptionStart: d('2026-01-01'),
       subscriptionEnd: d('2026-12-31'),
     },
@@ -268,9 +224,9 @@ async function seedTenant() {
   return { tenant, users: [userAdmin, userSales, userAccounting, userWarehouse] };
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // MASTER DATA
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedMasterData(tenantId: string) {
   // Units
@@ -301,10 +257,10 @@ async function seedMasterData(tenantId: string) {
 
   // Currencies
   await Promise.all([
-    prisma.currency.create({ data: { tenantId, code: 'TRY', name: 'Türk Lirası',     symbol: '₺', defaultRate: 1,    isBase: true } }),
+    prisma.currency.create({ data: { tenantId, code: 'TRY', name: 'Türk Lirası',     symbol: 'â‚º', defaultRate: 1,    isBase: true } }),
     prisma.currency.create({ data: { tenantId, code: 'USD', name: 'Amerikan Doları', symbol: '$', defaultRate: 32.5 } }),
-    prisma.currency.create({ data: { tenantId, code: 'EUR', name: 'Euro',            symbol: '€', defaultRate: 35.2 } }),
-    prisma.currency.create({ data: { tenantId, code: 'GBP', name: 'İngiliz Sterlini',symbol: '£', defaultRate: 41.0 } }),
+    prisma.currency.create({ data: { tenantId, code: 'EUR', name: 'Euro',            symbol: 'â‚¬', defaultRate: 35.2 } }),
+    prisma.currency.create({ data: { tenantId, code: 'GBP', name: 'İngiliz Sterlini',symbol: 'Â£', defaultRate: 41.0 } }),
   ]);
 
   // Currency Rates (son 3 gün)
@@ -361,9 +317,9 @@ async function seedMasterData(tenantId: string) {
   return { unitAdet, unitKg, unitLt, unitMt, unitKutu, unitPaket, catBilgisayar, catTelefon, catAksesuar, catOfis, catHammadde, catYarimMamul, catElektronik, kdv0, kdv10, kdv20, accounts, fiscalPeriod };
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // WAREHOUSES
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedWarehouses(tenantId: string) {
   const warehouse = await prisma.warehouse.create({
@@ -385,9 +341,9 @@ async function seedWarehouses(tenantId: string) {
   return { warehouse, warehouse2, locations };
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // PRODUCTS & STOCK
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedProducts(
   tenantId: string,
@@ -442,9 +398,9 @@ async function seedProducts(
   return products;
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // CONTACTS
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedContacts(tenantId: string) {
   return Promise.all([
@@ -463,9 +419,9 @@ async function seedContacts(tenantId: string) {
   ]);
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // SALES (Quotes, Orders, Invoices, Payments, AccountEntries)
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedSales(
   tenantId: string,
@@ -477,7 +433,7 @@ async function seedSales(
   const { kdv20, kdv10 } = master;
   const [c1, c2, c3, c4, c5] = contacts;
 
-  // ── Sales Quotes ─────────────────────────────
+  // â”€â”€ Sales Quotes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const quote1 = await prisma.salesQuote.create({
     data: {
       tenantId, contactId: c1.id, number: 'TKL-000001',
@@ -502,7 +458,7 @@ async function seedSales(
     },
   });
 
-  // ── Sales Orders ─────────────────────────────
+  // â”€â”€ Sales Orders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const order1 = await prisma.salesOrder.create({
     data: {
       tenantId, contactId: c1.id, quoteId: quote1.id, number: 'SIP-000001',
@@ -554,7 +510,7 @@ async function seedSales(
     },
   });
 
-  // ── Delivery Notes ────────────────────────────
+  // â”€â”€ Delivery Notes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const dn1 = await prisma.deliveryNote.create({
     data: {
       tenantId, number: 'DN-000001', type: 'OUTBOUND', status: 'DELIVERED',
@@ -580,7 +536,7 @@ async function seedSales(
     },
   });
 
-  // ── Invoices ─────────────────────────────────
+  // â”€â”€ Invoices â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const inv1 = await prisma.invoice.create({
     data: {
       tenantId, contactId: c1.id, salesOrderId: order1.id,
@@ -636,7 +592,7 @@ async function seedSales(
     },
   });
 
-  // ── Bank & Cash Accounts ──────────────────────
+  // â”€â”€ Bank & Cash Accounts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const bankAccount = await prisma.bankAccount.create({
     data: { tenantId, name: 'Garanti Vadesiz TRY', bankName: 'Garanti BBVA', accountNumber: '1234567', iban: 'TR12 0006 2000 1234 5678 9012 34', currencyCode: 'TRY' },
   });
@@ -646,7 +602,7 @@ async function seedSales(
   await prisma.cashAccount.create({ data: { tenantId, name: 'Ana Kasa TRY', currencyCode: 'TRY' } });
   await prisma.cashAccount.create({ data: { tenantId, name: 'Döviz Kasası USD', currencyCode: 'USD' } });
 
-  // ── Payments ─────────────────────────────────
+  // â”€â”€ Payments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const pay1 = await prisma.payment.create({
     data: { tenantId, contactId: c1.id, bankAccountId: bankAccount.id, date: d('2026-03-25'), amount: 31556.4, method: 'BANK_TRANSFER', reference: 'EFT-2026-001', status: 'COMPLETED', notes: 'INV-000001 ödemesi' },
   });
@@ -657,7 +613,7 @@ async function seedSales(
   });
   await prisma.paymentAllocation.create({ data: { tenantId, paymentId: pay2.id, invoiceId: inv2.id, amount: 10000 } });
 
-  // ── Account Entries ───────────────────────────
+  // â”€â”€ Account Entries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   await prisma.accountEntry.createMany({
     data: [
       { tenantId, contactId: c1.id, date: d('2026-03-22'), debit: 31556.4, credit: 0,       balance: 31556.4, description: 'INV-000001 satış faturası', refType: 'INVOICE', refId: inv1.id },
@@ -671,9 +627,9 @@ async function seedSales(
   return { invoices: [inv1, inv2, inv3, inv4], payments: [pay1, pay2], bankAccount, bankAccountUSD };
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // PURCHASING
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedPurchasing(
   tenantId: string,
@@ -769,9 +725,9 @@ async function seedPurchasing(
   await prisma.purchaseRequest.update({ where: { id: pr1.id }, data: { status: 'ORDERED', purchaseOrderId: po1.id } });
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // ACCOUNTING
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedAccounting(
   tenantId: string,
@@ -867,9 +823,9 @@ async function seedAccounting(
   });
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // HR & PAYROLL
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedHR(tenantId: string) {
   const employees = await Promise.all([
@@ -939,9 +895,9 @@ async function seedHR(tenantId: string) {
   return employees;
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // PRODUCTION
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedProduction(
   tenantId: string,
@@ -1036,9 +992,9 @@ async function seedProduction(
   return { bom1, workOrders: [wo1, wo2, wo3] };
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // SERVICE
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedService(
   tenantId: string,
@@ -1067,9 +1023,9 @@ async function seedService(
       ]},
       activities: { create: [
         { tenantId, activityType: 'NOTE',          notes: 'Müşteri cihazı teslim etti', createdAt: d('2026-04-05') },
-        { tenantId, activityType: 'STATUS_CHANGE',  notes: 'OPEN → IN_PROGRESS',        createdAt: d('2026-04-06') },
+        { tenantId, activityType: 'STATUS_CHANGE',  notes: 'OPEN â†’ IN_PROGRESS',        createdAt: d('2026-04-06') },
         { tenantId, activityType: 'CALL',           notes: 'Müşteri bilgilendirildi, parça bekleniyor', createdAt: d('2026-04-07') },
-        { tenantId, activityType: 'STATUS_CHANGE',  notes: 'IN_PROGRESS → COMPLETED',   createdAt: d('2026-04-10') },
+        { tenantId, activityType: 'STATUS_CHANGE',  notes: 'IN_PROGRESS â†’ COMPLETED',   createdAt: d('2026-04-10') },
       ]},
       history: { create: [
         { tenantId, toStatus: 'OPEN' },
@@ -1093,7 +1049,7 @@ async function seedService(
       ]},
       activities: { create: [
         { tenantId, activityType: 'NOTE',         notes: 'Cihaz teslim alındı, inceleme başladı' },
-        { tenantId, activityType: 'STATUS_CHANGE', notes: 'OPEN → IN_PROGRESS' },
+        { tenantId, activityType: 'STATUS_CHANGE', notes: 'OPEN â†’ IN_PROGRESS' },
       ]},
       history: { create: [
         { tenantId, toStatus: 'OPEN' },
@@ -1137,9 +1093,9 @@ async function seedService(
   return [sr1, sr2, sr3, sr4];
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // MARKETPLACE
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedMarketplace(tenantId: string, products: { id: string }[]) {
   const integration = await prisma.marketplaceIntegration.create({
@@ -1229,9 +1185,9 @@ async function seedMarketplace(tenantId: string, products: { id: string }[]) {
   return { integration, listings, orders };
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // ROLES & PERMISSIONS
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedRoles(tenantId: string, users: { id: string }[]) {
   const [, userSales, userAccounting, userWarehouse] = users;
@@ -1308,9 +1264,9 @@ async function seedRoles(tenantId: string, users: { id: string }[]) {
   return { roleSales, roleAccounting, roleWarehouse };
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // NOTIFICATIONS
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedNotifications(tenantId: string, userId: string) {
   await prisma.notification.createMany({
@@ -1327,9 +1283,9 @@ async function seedNotifications(tenantId: string, userId: string) {
   });
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // SETTINGS
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedSettings(tenantId: string) {
   await prisma.tenantSetting.createMany({
@@ -1369,9 +1325,9 @@ async function seedSettings(tenantId: string) {
   });
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // STOCK COUNT (Sayım)
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedStockCount(tenantId: string, products: { id: string }[], warehouseId: string) {
   await prisma.stockCount.create({
@@ -1389,9 +1345,9 @@ async function seedStockCount(tenantId: string, products: { id: string }[], ware
   });
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // INVENTORY RESERVATIONS & LOT/SERIAL
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedInventoryExtras(tenantId: string, products: { id: string }[], warehouseId: string) {
   // Inventory Reservations
@@ -1430,15 +1386,15 @@ async function seedInventoryExtras(tenantId: string, products: { id: string }[],
   });
 }
 
-// ─────────────────────────────────────────────
-// MAIN — update to call new functions
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// MAIN â€” update to call new functions
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Update main to include stock count and inventory extras
 const _originalMain = main;
 
 async function runSeed() {
-  console.log('\n🌱 Seed başlıyor...\n');
+  console.log('\nðŸŒ± Seed başlıyor...\n');
 
   // 1. Admin
   await prisma.adminUser.upsert({
@@ -1446,96 +1402,98 @@ async function runSeed() {
     create: { email: 'admin@axonerp.com', name: 'Platform Admin', password: await hash('admin1234'), isActive: true },
     update: { password: await hash('admin1234') },
   });
-  console.log('  ✓ Admin: admin@axonerp.com / admin1234');
+  console.log('  âœ“ Admin: admin@axonerp.com / admin1234');
 
   // 2. Plan Features
   await seedPlanFeatures();
-  console.log('  ✓ Plan features (Starter / Professional / Enterprise)');
+  console.log('  âœ“ Plan features (Starter / Professional / Enterprise)');
 
   // 3. Tenant & Users
   const { tenant, users } = await seedTenant();
-  console.log(`  ✓ Tenant: ${tenant.companyName} (Enterprise)`);
-  console.log(`  ✓ Kullanıcılar: ${users.map(u => u.email).join(', ')}`);
+  console.log(`  âœ“ Tenant: ${tenant.companyName} (Enterprise)`);
+  console.log(`  âœ“ Kullanıcılar: ${users.map(u => u.email).join(', ')}`);
 
   // 4. Master Data
   const master = await seedMasterData(tenant.id);
-  console.log('  ✓ Master data (birim, kategori, KDV, döviz, hesap planı)');
+  console.log('  âœ“ Master data (birim, kategori, KDV, döviz, hesap planı)');
 
   // 5. Warehouses
   const { warehouse, warehouse2, locations } = await seedWarehouses(tenant.id);
-  console.log('  ✓ Depolar ve lokasyonlar');
+  console.log('  âœ“ Depolar ve lokasyonlar');
 
   // 6. Products & Stock
   const products = await seedProducts(tenant.id, master, warehouse, warehouse2, locations);
-  console.log(`  ✓ ${products.length} ürün ve stok seviyeleri`);
+  console.log(`  âœ“ ${products.length} ürün ve stok seviyeleri`);
 
   // 7. Contacts
   const contacts = await seedContacts(tenant.id);
-  console.log(`  ✓ ${contacts.length} cari hesap`);
+  console.log(`  âœ“ ${contacts.length} cari hesap`);
 
   // 8. Sales
   const { invoices, payments } = await seedSales(tenant.id, contacts, products, master, warehouse);
-  console.log(`  ✓ Satış: ${invoices.length} fatura, ${payments.length} ödeme`);
+  console.log(`  âœ“ Satış: ${invoices.length} fatura, ${payments.length} ödeme`);
 
   // 9. Purchasing
   await seedPurchasing(tenant.id, contacts, products, master, warehouse);
-  console.log('  ✓ Satın alma: talepler ve siparişler');
+  console.log('  âœ“ Satın alma: talepler ve siparişler');
 
   // 10. Accounting
   await seedAccounting(tenant.id, master.accounts, invoices);
-  console.log('  ✓ Muhasebe: yevmiye fişleri, mali dönem, mutabakat');
+  console.log('  âœ“ Muhasebe: yevmiye fişleri, mali dönem, mutabakat');
 
   // 11. HR & Payroll
   await seedHR(tenant.id);
-  console.log('  ✓ İK: personel, izin, puantaj, bordro');
+  console.log('  âœ“ İK: personel, izin, puantaj, bordro');
 
   // 12. Production
   await seedProduction(tenant.id, products, master, warehouse, warehouse2);
-  console.log('  ✓ Üretim: iş merkezleri, BOM, iş emirleri');
+  console.log('  âœ“ Üretim: iş merkezleri, BOM, iş emirleri');
 
   // 13. Service
   await seedService(tenant.id, contacts, products);
-  console.log('  ✓ Servis: müşteri varlıkları, servis talepleri');
+  console.log('  âœ“ Servis: müşteri varlıkları, servis talepleri');
 
   // 14. Marketplace
   await seedMarketplace(tenant.id, products);
-  console.log('  ✓ Pazaryeri: Trendyol entegrasyonu, siparişler');
+  console.log('  âœ“ Pazaryeri: Trendyol entegrasyonu, siparişler');
 
   // 15. Roles & Permissions
   await seedRoles(tenant.id, users);
-  console.log('  ✓ Roller, izinler ve onay akışları');
+  console.log('  âœ“ Roller, izinler ve onay akışları');
 
   // 16. Notifications
   await seedNotifications(tenant.id, users[0].id);
-  console.log('  ✓ Bildirimler');
+  console.log('  âœ“ Bildirimler');
 
   // 17. Settings
   await seedSettings(tenant.id);
-  console.log('  ✓ Tenant ayarları ve kayıtlı raporlar');
+  console.log('  âœ“ Tenant ayarları ve kayıtlı raporlar');
 
   // 18. Stock Count
   await seedStockCount(tenant.id, products, warehouse.id);
-  console.log('  ✓ Stok sayımı');
+  console.log('  âœ“ Stok sayımı');
 
   // 19. Inventory Extras
   await seedInventoryExtras(tenant.id, products, warehouse.id);
-  console.log('  ✓ Rezervasyonlar, parti/seri numaraları, stok değerleme');
+  console.log('  âœ“ Rezervasyonlar, parti/seri numaraları, stok değerleme');
 
-  console.log('\n✅ Seed tamamlandı!\n');
-  console.log('  📧 Kullanıcı girişi:');
+  console.log('\nâœ… Seed tamamlandı!\n');
+  console.log('  ðŸ“§ Kullanıcı girişi:');
   console.log('     admin@axondemo.com    / demo1234  (Tenant Admin)');
   console.log('     satis@axondemo.com    / demo1234  (Satış)');
   console.log('     muhasebe@axondemo.com / demo1234  (Muhasebe)');
   console.log('     depo@axondemo.com     / demo1234  (Depo)');
-  console.log('  🔑 Platform admin:');
+  console.log('  ðŸ”‘ Platform admin:');
   console.log('     admin@axonerp.com     / admin1234\n');
 }
 
 runSeed()
   .catch((e) => {
-    console.error('❌ Seed hatası:', e);
+    console.error('âŒ Seed hatası:', e);
     process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+

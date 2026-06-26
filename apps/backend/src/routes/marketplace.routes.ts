@@ -1,10 +1,7 @@
 import { Hono } from 'hono';
-import { FeatureKey, Plan } from '@prisma/client';
-import { requirePlan } from '../middleware/requirePlan';
-import { requireFeature } from '../middleware/requireFeature';
-import { requireModule } from '../middleware/requireModule';
+import { ACCESS_POLICIES } from '@repo/types/plans';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { MODULE_KEYS } from '../types/module.types';
 import {
   MarketplaceIntegrationController,
   MarketplaceListingController,
@@ -16,9 +13,7 @@ import {
 
 const marketplaceRoutes = new Hono();
 
-marketplaceRoutes.use('*', requirePlan(Plan.ENTERPRISE));
-marketplaceRoutes.use('*', requireFeature(FeatureKey.MARKETPLACE));
-marketplaceRoutes.use('*', requireModule(MODULE_KEYS.MARKETPLACE));
+marketplaceRoutes.use('*', requireAccess(ACCESS_POLICIES.marketplace));
 
 // Entegrasyonlar
 marketplaceRoutes.get('/integrations', requirePermission('marketplace', 'READ'), MarketplaceIntegrationController.list);

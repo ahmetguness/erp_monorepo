@@ -26,14 +26,16 @@ BEGIN
       'HR',
       'PAYROLL',
       'MARKETPLACE',
-      'REPORTING'
+      'REPORTING',
+      'CONTACTS',
+      'INVOICING',
+      'APPROVALS',
+      'MAIL',
+      'WORKFLOW',
+      'DOCUMENTS'
     );
   END IF;
 END $$;
-
-ALTER TYPE "AppModule" ADD VALUE IF NOT EXISTS 'CONTACTS';
-ALTER TYPE "AppModule" ADD VALUE IF NOT EXISTS 'INVOICING';
-ALTER TYPE "AppModule" ADD VALUE IF NOT EXISTS 'APPROVALS';
 
 -- CreateEnum: missing demo/invitation enums from the current Prisma schema
 DO $$

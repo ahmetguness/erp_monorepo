@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
-import { Plan } from '@prisma/client';
-import { requirePlan } from '../middleware/requirePlan';
+import { ACCESS_POLICIES } from '@repo/types/plans';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 import { DeliveryNoteController } from '../controllers/delivery-note.controller';
 
 const deliveryNoteRoutes = new Hono();
 
-deliveryNoteRoutes.use('*', requirePlan(Plan.PROFESSIONAL));
+deliveryNoteRoutes.use('*', requireAccess(ACCESS_POLICIES.deliveryNotes));
 
 deliveryNoteRoutes.get('/', requirePermission('invoicing', 'READ'), DeliveryNoteController.list);
 deliveryNoteRoutes.get('/:id', requirePermission('invoicing', 'READ'), DeliveryNoteController.getById);

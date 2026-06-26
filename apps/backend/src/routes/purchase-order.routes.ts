@@ -1,15 +1,12 @@
 import { Hono } from 'hono';
-import { FeatureKey } from '@prisma/client';
+import { ACCESS_POLICIES } from '@repo/types/plans';
 import { PurchaseOrderController } from '../controllers/purchase-order.controller';
-import { requireFeature } from '../middleware/requireFeature';
-import { requireModule } from '../middleware/requireModule';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { MODULE_KEYS } from '../types/module.types';
 
 const purchaseOrderRoutes = new Hono();
 
-purchaseOrderRoutes.use('*', requireModule(MODULE_KEYS.PURCHASING));
-purchaseOrderRoutes.use('*', requireFeature(FeatureKey.PURCHASING));
+purchaseOrderRoutes.use('*', requireAccess(ACCESS_POLICIES.purchasing));
 
 purchaseOrderRoutes.get('/requests', requirePermission('purchasing', 'READ'), PurchaseOrderController.listRequests);
 purchaseOrderRoutes.post('/requests', requirePermission('purchasing', 'CREATE'), PurchaseOrderController.createRequest);

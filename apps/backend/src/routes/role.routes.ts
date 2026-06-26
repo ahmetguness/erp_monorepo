@@ -1,14 +1,12 @@
 import { Hono } from 'hono';
-import { FeatureKey, Plan } from '@prisma/client';
-import { requirePlan } from '../middleware/requirePlan';
-import { requireFeature } from '../middleware/requireFeature';
+import { ACCESS_POLICIES } from '@repo/types/plans';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 import { RoleController } from '../controllers/role.controller';
 
 const roleRoutes = new Hono();
 
-roleRoutes.use('*', requirePlan(Plan.PROFESSIONAL));
-roleRoutes.use('*', requireFeature(FeatureKey.ROLE_MANAGEMENT));
+roleRoutes.use('*', requireAccess(ACCESS_POLICIES.roles));
 
 roleRoutes.get('/', requirePermission('roles', 'READ'), RoleController.list);
 roleRoutes.get('/permission-simulator/matrix', requirePermission('roles', 'READ'), RoleController.permissionMatrix);

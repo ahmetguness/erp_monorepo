@@ -1,18 +1,13 @@
 import { Hono } from 'hono';
-import { FeatureKey, Plan } from '@prisma/client';
-import { requirePlan } from '../middleware/requirePlan';
-import { requireFeature } from '../middleware/requireFeature';
-import { requireModule } from '../middleware/requireModule';
+import { ACCESS_POLICIES } from '@repo/types/plans';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { MODULE_KEYS } from '../types/module.types';
 import { CustomerAssetController } from '../controllers/customer-asset.controller';
 import { ServiceRequestController } from '../controllers/service-request.controller';
 
 const serviceRoutes = new Hono();
 
-serviceRoutes.use('*', requirePlan(Plan.ENTERPRISE));
-serviceRoutes.use('*', requireFeature(FeatureKey.SERVICE));
-serviceRoutes.use('*', requireModule(MODULE_KEYS.SERVICE));
+serviceRoutes.use('*', requireAccess(ACCESS_POLICIES.service));
 
 // Müşteri Varlıkları
 serviceRoutes.get('/assets', requirePermission('service', 'READ'), CustomerAssetController.list);

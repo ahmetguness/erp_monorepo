@@ -68,15 +68,15 @@ const permissionMatrix: readonly PermissionMatrixEntry[] = [
   { id: 'invoices:create', label: 'Fatura olustur', route: '/api/invoices', method: 'POST', module: 'invoicing', action: PermissionAction.CREATE, moduleGate: 'invoicing', webAction: 'Yeni fatura butonu' },
   { id: 'payments:create', label: 'Odeme kaydet', route: '/api/payments', method: 'POST', module: 'accounting', action: PermissionAction.CREATE, moduleGate: 'accounting', webAction: 'Odeme ekle aksiyonu' },
   { id: 'stock:movements', label: 'Stok hareketleri', route: '/api/stock/movements', method: 'GET', module: 'inventory', action: PermissionAction.READ, moduleGate: 'inventory', webHref: '/dashboard/stock/movements', webAction: 'Stok hareketleri sayfasi' },
-  { id: 'purchase-orders:list', label: 'Satin alma siparisleri', route: '/api/purchase-orders', method: 'GET', module: 'purchasing', action: PermissionAction.READ, moduleGate: 'purchasing', webHref: '/dashboard/purchase-orders', webAction: 'Satin alma menusu', featureKey: FeatureKey.PURCHASING },
-  { id: 'delivery-notes:create', label: 'Irsaliye olustur', route: '/api/delivery-notes', method: 'POST', module: 'invoicing', action: PermissionAction.CREATE, webHref: '/dashboard/delivery-notes', webAction: 'Yeni irsaliye butonu', minPlan: Plan.PROFESSIONAL },
+  { id: 'purchase-orders:list', label: 'Satin alma siparisleri', route: '/api/purchase-orders', method: 'GET', module: 'purchasing', action: PermissionAction.READ, moduleGate: 'purchasing', webHref: '/dashboard/purchase-orders', webAction: 'Satin alma menusu', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.PURCHASING },
+  { id: 'delivery-notes:create', label: 'Irsaliye olustur', route: '/api/delivery-notes', method: 'POST', module: 'invoicing', action: PermissionAction.CREATE, moduleGate: 'invoicing', webHref: '/dashboard/delivery-notes', webAction: 'Yeni irsaliye butonu', minPlan: Plan.PROFESSIONAL },
   { id: 'roles:list', label: 'Rol yonetimi', route: '/api/roles', method: 'GET', module: 'roles', action: PermissionAction.READ, webHref: '/dashboard/roles', webAction: 'Rol yonetimi sayfasi', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.ROLE_MANAGEMENT },
-  { id: 'approvals:list', label: 'Onay akislari', route: '/api/approvals/flows', method: 'GET', module: 'approvals', action: PermissionAction.READ, webHref: '/dashboard/approvals', webAction: 'Onay merkezi', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.APPROVALS },
+  { id: 'approvals:list', label: 'Onay akislari', route: '/api/approvals/flows', method: 'GET', module: 'approvals', action: PermissionAction.READ, moduleGate: 'approvals', webHref: '/dashboard/approvals', webAction: 'Onay merkezi', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.APPROVALS },
   { id: 'hr:employees', label: 'Personel listesi', route: '/api/hr/employees', method: 'GET', module: 'hr', action: PermissionAction.READ, moduleGate: 'hr', webHref: '/dashboard/hr/employees', webAction: 'IK menusu', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.HR },
   { id: 'payroll:list', label: 'Bordro listesi', route: '/api/payroll', method: 'GET', module: 'payroll', action: PermissionAction.READ, moduleGate: 'payroll', webHref: '/dashboard/hr/payroll', webAction: 'Bordro sayfasi', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.PAYROLL },
   { id: 'marketplace:integrations', label: 'Pazaryeri entegrasyonlari', route: '/api/marketplace/integrations', method: 'GET', module: 'marketplace', action: PermissionAction.READ, moduleGate: 'marketplace', webHref: '/dashboard/marketplace/integrations', webAction: 'Pazaryeri menusu', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.MARKETPLACE },
   { id: 'api-keys:list', label: 'API anahtarlari', route: '/api/api-keys', method: 'GET', module: 'api_keys', action: PermissionAction.READ, webHref: '/dashboard/api-keys', webAction: 'API anahtarlari sayfasi', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.API_ACCESS },
-  { id: 'mail:center', label: 'Mail merkezi', route: '/api/mail', method: 'GET', module: 'mail', action: PermissionAction.READ, webHref: '/dashboard/mail', webAction: 'Mail merkezi', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.HR },
+  { id: 'mail:center', label: 'Mail merkezi', route: '/api/mail', method: 'GET', module: 'mail', action: PermissionAction.READ, moduleGate: 'mail', webHref: '/dashboard/mail', webAction: 'Mail merkezi', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.HR },
   { id: 'chat:send', label: 'AI asistan', route: '/api/chat', method: 'POST', module: 'chat', action: PermissionAction.CREATE, webAction: 'Chat paneli', minPlan: Plan.ENTERPRISE },
 ];
 
@@ -130,8 +130,11 @@ export function parsePermissionSimulationInput(value: unknown): PermissionSimula
 
 function hasModuleAccess(tenantModules: string[], moduleGate: string | undefined): boolean {
   if (!moduleGate) return true;
-  if (tenantModules.length > 0) return tenantModules.includes(moduleGate);
-  return STARTER_OPEN_MODULES.some((module) => module === moduleGate);
+  const normalizedGate = moduleGate.toLowerCase();
+  if (tenantModules.length > 0) {
+    return tenantModules.some((m) => m.toLowerCase() === normalizedGate);
+  }
+  return STARTER_OPEN_MODULES.some((module) => module.toLowerCase() === normalizedGate);
 }
 
 export function listPermissionMatrix(): PermissionMatrixEntry[] {

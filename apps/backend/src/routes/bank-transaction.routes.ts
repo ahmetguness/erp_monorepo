@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
-import { Plan } from '@prisma/client';
-import { requirePlan } from '../middleware/requirePlan';
+import { ACCESS_POLICIES } from '@repo/types/plans';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 import { BankTransactionController } from '../controllers/bank-transaction.controller';
 
 const bankTransactionRoutes = new Hono();
 
-bankTransactionRoutes.use('*', requirePlan(Plan.PROFESSIONAL));
+bankTransactionRoutes.use('*', requireAccess(ACCESS_POLICIES.bankTransactions));
 
 bankTransactionRoutes.get('/', requirePermission('accounting', 'READ'), BankTransactionController.list);
 bankTransactionRoutes.post('/', requirePermission('accounting', 'CREATE'), BankTransactionController.create);

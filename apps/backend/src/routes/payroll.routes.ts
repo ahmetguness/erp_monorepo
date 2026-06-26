@@ -1,17 +1,12 @@
 import { Hono } from 'hono';
-import { FeatureKey, Plan } from '@prisma/client';
-import { requirePlan } from '../middleware/requirePlan';
-import { requireFeature } from '../middleware/requireFeature';
-import { requireModule } from '../middleware/requireModule';
+import { ACCESS_POLICIES } from '@repo/types/plans';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { MODULE_KEYS } from '../types/module.types';
 import { PayrollController } from '../controllers/payroll.controller';
 
 const payrollRoutes = new Hono();
 
-payrollRoutes.use('*', requirePlan(Plan.ENTERPRISE));
-payrollRoutes.use('*', requireFeature(FeatureKey.PAYROLL));
-payrollRoutes.use('*', requireModule(MODULE_KEYS.PAYROLL));
+payrollRoutes.use('*', requireAccess(ACCESS_POLICIES.payroll));
 
 payrollRoutes.get('/', requirePermission('payroll', 'READ'), PayrollController.list);
 payrollRoutes.post('/', requirePermission('payroll', 'CREATE'), PayrollController.create);
