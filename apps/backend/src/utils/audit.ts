@@ -1,5 +1,7 @@
 import { AuditAction, EntityType, Prisma } from '@prisma/client';
+import type { Context } from 'hono';
 import { prisma } from '../lib/prisma.js';
+import { getTrustedClientIpOrNull } from './request-ip.js';
 
 // ─────────────────────────────────────────────
 // Audit Log Helper
@@ -51,12 +53,12 @@ export async function createAuditLog(
 /**
  * Hono Context'inden IP ve User-Agent bilgisini alır.
  */
-export function getRequestMeta(c: { req: { header: (name: string) => string | undefined } }): {
+export function getRequestMeta(c: Context): {
   ipAddress: string | null;
   userAgent: string | null;
 } {
   return {
-    ipAddress: c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? null,
+    ipAddress: getTrustedClientIpOrNull(c),
     userAgent: c.req.header('user-agent') ?? null,
   };
 }

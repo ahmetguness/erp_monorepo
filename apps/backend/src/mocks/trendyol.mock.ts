@@ -21,6 +21,7 @@
 
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
+import { createHmac } from 'crypto';
 import { logger } from '../lib/logger';
 
 export const MOCK_PORT = 3099;
@@ -271,14 +272,17 @@ mock.post('/mock/webhook/:integrationId', async (c) => {
   const targetBase = (rawBody.targetUrl ?? DEFAULT_BACKEND_URL).replace(/\/$/, '');
   const targetUrl = `${targetBase}/api/public/marketplace/webhook/${integrationId}`;
   const payload = buildWebhookPayload(rawBody.packageIds);
+  const requestBody = JSON.stringify(payload);
+  const timestamp = String(Date.now());
+  const signature = rawBody.apiKey ? signWebhookBody(rawBody.apiKey, timestamp, requestBody) : null;
 
   const res = await fetch(targetUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(rawBody.apiKey ? { 'x-api-key': rawBody.apiKey } : {}),
+      ...(signature ? { 'X-Timestamp': timestamp, 'X-Signature': `sha256=${signature}` } : {}),
     },
-    body: JSON.stringify(payload),
+    body: requestBody,
   });
 
   const response = await res.json().catch((): unknown => null);
@@ -453,6 +457,12 @@ function isMockWebhookRequest(value: unknown): value is MockWebhookRequest {
   return (targetUrl === undefined || typeof targetUrl === 'string')
     && (apiKey === undefined || typeof apiKey === 'string')
     && (packageIds === undefined || isNumberArray(packageIds));
+}
+
+function signWebhookBody(secret: string, timestamp: string, rawBody: string): string {
+  return createHmac('sha256', secret)
+    .update(`${timestamp}.${rawBody}`)
+    .digest('hex');
 }
 
 function hasClose(value: unknown): value is { close(): void } {

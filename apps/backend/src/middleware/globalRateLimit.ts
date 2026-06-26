@@ -1,6 +1,7 @@
 import { Context, Next } from 'hono';
 import { rateLimiter } from '../lib/rateLimiter';
 import { recordPublicEndpointAbuse, type PublicEndpointAbuseMetric } from '../services/security-hardening.service.js';
+import { getTrustedClientIp } from '../utils/request-ip.js';
 
 const DEFAULT_LIMIT = 300;
 const DEFAULT_WINDOW_MS = 60_000;
@@ -14,11 +15,6 @@ function readPositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function getClientIp(c: Context): string {
-  const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
-  return forwarded || c.req.header('x-real-ip')?.trim() || 'unknown';
-}
-
 function isWriteMethod(method: string): boolean {
   return method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
 }
@@ -29,7 +25,7 @@ export async function globalRateLimit(c: Context, next: Next): Promise<Response 
     return;
   }
 
-  const ip = getClientIp(c);
+  const ip = getTrustedClientIp(c);
   const pathGroup: PublicEndpointAbuseMetric['pathGroup'] = c.req.path.startsWith('/api/public')
     ? 'public'
     : c.req.path.startsWith('/api/admin')

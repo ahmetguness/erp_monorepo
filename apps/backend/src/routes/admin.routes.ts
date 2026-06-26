@@ -43,6 +43,7 @@ adminRoutes.get('/observability', requireAdmin, AdminMetricsController.observabi
 adminRoutes.get('/audit-logs', requireAdmin, AdminAuditController.list);
 
 // Security checklist
+adminRoutes.get('/security/runtime-health', requireAdmin, AdminSecurityController.runtimeHealth);
 adminRoutes.get('/security/checklist', requireAdmin, AdminSecurityController.checklist);
 
 export { adminRoutes };

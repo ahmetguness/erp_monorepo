@@ -14,6 +14,7 @@ import { tenantReadyEmail } from '../services/mail-templates.service.js';
 import { getObservabilitySnapshot } from '../services/observability.service.js';
 import { rateLimiter } from '../lib/rateLimiter';
 import { logger } from '../lib/logger';
+import { getTrustedClientIp } from '../utils/request-ip.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
@@ -46,7 +47,7 @@ function normalizeEmail(email: string): string {
 }
 
 function getClientIp(c: Context): string {
-  return c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip')?.trim() || 'unknown';
+  return getTrustedClientIp(c);
 }
 
 function getAdminLoginLimitKeys(ip: string, email: string): {

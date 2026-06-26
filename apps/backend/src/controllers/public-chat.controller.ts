@@ -9,6 +9,7 @@ import { sanitizeOutput } from '../lib/output-sanitizer';
 import { rateLimiter } from '../lib/rateLimiter';
 import { AiPermissionCheckResult, AiRequestStatus, AiRequestType } from '@prisma/client';
 import { AI_MODELS, AI_PROMPT_VERSIONS, recordAiRequestLog } from '../services/ai-governance.service';
+import { getTrustedClientIp } from '../utils/request-ip.js';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PUBLIC_RATE_LIMIT_PER_MINUTE = 10;
@@ -18,7 +19,7 @@ const PUBLIC_DAILY_REQUEST_BUDGET = Number(process.env.PUBLIC_CHAT_DAILY_REQUEST
 const MAX_MESSAGE_LENGTH = 500;
 
 function getClientIp(c: Context): string {
-  return c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'unknown';
+  return getTrustedClientIp(c);
 }
 
 async function checkPublicRateLimit(ip: string, sessionId: string): Promise<{ allowed: boolean; reason?: string }> {

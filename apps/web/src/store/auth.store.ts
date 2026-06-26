@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { AuthUser, TenantInfo } from '@repo/types';
 
 // ─────────────────────────────────────────────
@@ -28,40 +27,41 @@ const initialState: AuthState = {
   isAuthenticated: false,
 };
 
-export const useAuthStore = create<AuthStore>()(
-  persist(
-    (set) => ({
-      ...initialState,
+const LEGACY_AUTH_STORAGE_KEY = 'axon-auth';
 
-      login: (user, tenant) => {
-        set({ user, tenant, isAuthenticated: true });
-      },
+function clearLegacyAuthStorage(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
+}
 
-      logout: () => {
-        if (typeof window !== 'undefined') {
-          document.cookie = 'axon_token=; path=/; max-age=0';
-        }
-        set(initialState);
-      },
+clearLegacyAuthStorage();
 
-      updateUser: (partial) =>
-        set((state) => ({
-          user: state.user ? { ...state.user, ...partial } : null,
-        })),
+export const useAuthStore = create<AuthStore>()((set) => ({
+  ...initialState,
 
-      syncFromServer: (user, tenant) =>
-        set({ user, tenant }),
-    }),
-    {
-      name: 'axon-auth',
-      partialize: (state) => ({
-        user: state.user,
-        tenant: state.tenant,
-        isAuthenticated: state.isAuthenticated,
-      }),
-    },
-  ),
-);
+  login: (user, tenant) => {
+    clearLegacyAuthStorage();
+    set({ user, tenant, isAuthenticated: true });
+  },
+
+  logout: () => {
+    if (typeof window !== 'undefined') {
+      document.cookie = 'axon_token=; path=/; max-age=0';
+    }
+    clearLegacyAuthStorage();
+    set(initialState);
+  },
+
+  updateUser: (partial) =>
+    set((state) => ({
+      user: state.user ? { ...state.user, ...partial } : null,
+    })),
+
+  syncFromServer: (user, tenant) => {
+    clearLegacyAuthStorage();
+    set({ user, tenant, isAuthenticated: true });
+  },
+}));
 
 // Selectors
 export const selectUser = (state: AuthStore) => state.user;

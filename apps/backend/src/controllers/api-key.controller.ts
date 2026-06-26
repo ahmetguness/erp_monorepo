@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { createApiKeyHash } from '../utils/api-key-hash.js';
 import { getExternalApiManifest, getExternalOpenApiDocument } from '../services/external-api-registry.service.js';
 
 // ─────────────────────────────────────────────
@@ -201,7 +202,7 @@ export const ApiKeyController = {
 
     // Generate random key
     const rawKey = crypto.randomBytes(32).toString('hex');
-    const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
+    const keyHash = createApiKeyHash(rawKey);
     const keyPrefix = rawKey.substring(0, 8);
 
     const apiKey = await prisma.apiKey.create({

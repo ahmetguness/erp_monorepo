@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { ValidationError } from '../errors';
 import { logger } from '../lib/logger';
 import { validatePasswordStrength } from '../utils/password-policy.js';
+import { getTrustedClientIp } from '../utils/request-ip.js';
 
 import { rateLimiter } from '../lib/rateLimiter';
 
@@ -39,7 +40,7 @@ export class SetPasswordController {
    * Token ile şifre belirleme (demo + password reset).
    */
   static async setPassword(c: Context) {
-    const ip = c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'unknown';
+    const ip = getTrustedClientIp(c);
     if (await rateLimiter.check(`set-password:${ip}`, RATE_LIMIT, RATE_WINDOW)) {
       return c.json({ error: 'Çok fazla deneme. Lütfen 15 dakika sonra tekrar deneyin.' }, 429);
     }
@@ -95,7 +96,7 @@ export class SetPasswordController {
    * Token geçerliliğini kontrol et.
    */
   static async validateToken(c: Context) {
-    const ip = c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'unknown';
+    const ip = getTrustedClientIp(c);
     if (await rateLimiter.check(`validate-token:${ip}`, RATE_LIMIT, RATE_WINDOW)) {
       return c.json({ error: 'Çok fazla deneme. Lütfen 15 dakika sonra tekrar deneyin.' }, 429);
     }

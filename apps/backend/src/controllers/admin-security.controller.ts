@@ -18,6 +18,17 @@ interface SecurityCheck {
   details?: string[];
 }
 
+type HealthCheckStatus = 'ok' | 'error' | 'disabled';
+
+async function databaseHealthStatus(): Promise<HealthCheckStatus> {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return 'ok';
+  } catch {
+    return 'error';
+  }
+}
+
 function toSecurityStatus(status: RuntimeConfigStatus): SecurityStatus {
   switch (status) {
     case 'ok':
@@ -164,6 +175,20 @@ function storageCheck(): SecurityCheck {
 }
 
 export const AdminSecurityController = {
+  async runtimeHealth(c: Context): Promise<Response> {
+    const checks: Record<string, HealthCheckStatus> = {
+      db: await databaseHealthStatus(),
+      openai: process.env.OPENAI_API_KEY ? 'ok' : 'disabled',
+      mail: process.env.RESEND_API_KEY ? 'ok' : 'disabled',
+      redis: process.env.REDIS_URL ? 'ok' : 'disabled',
+    };
+    const runtimeConfig = getRuntimeConfigChecks();
+    const hasError = Object.values(checks).includes('error') || runtimeConfig.some((check) => check.status === 'error');
+    const status = hasError ? 'degraded' : 'ok';
+
+    return c.json({ data: { status, checks, runtimeConfig, uptime: process.uptime() } }, hasError ? 503 : 200);
+  },
+
   async checklist(c: Context): Promise<Response> {
     const missingWebhookSecretCount = await prisma.marketplaceIntegration.count({
       where: { channel: 'TRENDYOL', isActive: true, OR: [{ apiSecret: null }, { apiSecret: '' }] },

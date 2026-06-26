@@ -1,18 +1,16 @@
-.kiro
 /apps/backend/dbdiagram.dbml
 .vscode
-a.txt
-a2.txt
-sec.txt
-BACKEND_AUDIT_REPORT.md
 AGENTS.md
-.agents
 skills
-b.txt
 apps/backend/uploads
 packages/types/contracts/README.md
 packages/types/node_modules
 ci-artifacts
 apps/backend/ci-artifacts
 .github
-endpoints.txt
+security_rapor.md
+
+# Local environment files
+.env
+.env.*
+!.env.example

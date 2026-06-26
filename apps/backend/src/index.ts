@@ -70,7 +70,7 @@ import { startMarketplaceMocks } from './mocks';
 import { registerDomainEventListeners } from './domain-events';
 import { recordHttpRequest, recordUnhandledError, runWithObservabilityContext } from './services/observability.service';
 import { globalRateLimit } from './middleware/globalRateLimit';
-import { assertValidStartupEnv, getRuntimeConfigChecks } from './config/env';
+import { assertValidStartupEnv } from './config/env';
 
 // ── Startup env var kontrolü ─────────────────
 assertValidStartupEnv();
@@ -189,33 +189,8 @@ app.use('*', validateJsonRequestBody);
 
 app.get('/', (c) => c.json({ status: 'ok', service: 'Axon ERP API' }));
 
-// ── Health Check (genişletilmiş) ─────────────
-app.get('/health', async (c) => {
-  const checks: Record<string, 'ok' | 'error' | 'disabled'> = {};
-
-  // DB kontrolü
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    checks.db = 'ok';
-  } catch {
-    checks.db = 'error';
-  }
-
-  // OpenAI kontrolü (opsiyonel)
-  checks.openai = process.env.OPENAI_API_KEY ? 'ok' : 'disabled';
-
-  // Resend (mail) kontrolü (opsiyonel)
-  checks.mail = process.env.RESEND_API_KEY ? 'ok' : 'disabled';
-
-  // Redis kontrolü (opsiyonel)
-  checks.redis = process.env.REDIS_URL ? 'ok' : 'disabled';
-
-  const runtimeConfig = getRuntimeConfigChecks();
-  const hasError = Object.values(checks).includes('error') || runtimeConfig.some((check) => check.status === 'error');
-  const status = hasError ? 'degraded' : 'ok';
-
-  return c.json({ status, checks, runtimeConfig, uptime: process.uptime() }, hasError ? 503 : 200);
-});
+// ── Public Health Check ─────────────────────
+app.get('/health', (c) => c.json({ status: 'ok' }));
 
 // ── Public webhooks (CSRF'den önce — harici çağrıcılar Origin göndermez) ──
 app.post('/api/public/trendyol/webhook/:integrationId', TrendyolWebhookController.handle);

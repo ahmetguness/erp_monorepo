@@ -8,6 +8,7 @@ import {
 import { prisma } from '../lib/prisma';
 import { DemoRequestStatus } from '@prisma/client';
 import { getPaginationParams } from '../utils/pagination.js';
+import { getTrustedClientIp } from '../utils/request-ip.js';
 
 import { rateLimiter } from '../lib/rateLimiter';
 
@@ -21,7 +22,7 @@ export class DemoController {
    */
   static async create(c: Context) {
     // Rate limit kontrolü
-    const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
+    const ip = getTrustedClientIp(c);
     if (await rateLimiter.check(`demo:${ip}`, DemoController.RATE_LIMIT, DemoController.RATE_WINDOW)) {
       return c.json({ success: false, code: 'RATE_LIMITED', message: 'Çok fazla talep gönderdiniz. Lütfen 15 dakika sonra tekrar deneyin.' }, 429);
     }

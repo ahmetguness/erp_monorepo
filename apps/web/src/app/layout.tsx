@@ -1,13 +1,6 @@
-import { IBM_Plex_Sans } from "next/font/google";
 import { Providers } from "@/lib/providers";
 import { ToastContainer } from "@/components/ui/Toast";
 import "./globals.css";
-
-const ibmPlexSans = IBM_Plex_Sans({
-  variable: "--font-ibm-plex",
-  subsets: ["latin", "latin-ext"],
-  weight: ["300", "400", "500", "600", "700"],
-});
 
 export const metadata = {
   title: "Axon ERP | Profesyonel Kurumsal İş Yönetim Yazılımı",
@@ -29,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="tr" data-scroll-behavior="smooth" className={`${ibmPlexSans.variable} scroll-smooth`}>
+    <html lang="tr" data-scroll-behavior="smooth" className="scroll-smooth">
       <head>
         <meta charSet="utf-8" />
       </head>

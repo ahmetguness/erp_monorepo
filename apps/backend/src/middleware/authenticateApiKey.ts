@@ -1,15 +1,15 @@
 import { Context, Next } from 'hono';
-import crypto from 'crypto';
 import { AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ForbiddenError } from '../errors';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { createApiKeyHash, createLegacyApiKeyHash, isLegacyApiKeyHash } from '../utils/api-key-hash.js';
 import { rateLimiter } from '../lib/rateLimiter.js';
 import { getExternalApiRateLimitPerMinute } from '../services/external-api-registry.service.js';
 
 /**
  * API Key authentication middleware.
- * Reads `x-api-key` header, hashes it with SHA256, and looks up the matching key.
+ * Reads `x-api-key` header, hashes it with HMAC-SHA256, and looks up the matching key.
  * Sets tenantId and apiKeyId on the context if valid.
  *
  * Usage: Can be used as an alternative to JWT auth for programmatic access.
@@ -23,11 +23,12 @@ export function authenticateApiKey() {
       return c.json(new ForbiddenError('API anahtarı bulunamadı. x-api-key header gerekli.').toJSON(), 401);
     }
 
-    const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
+    const keyHash = createApiKeyHash(rawKey);
+    const legacyKeyHash = createLegacyApiKeyHash(rawKey);
 
     const apiKey = await prisma.apiKey.findFirst({
       where: {
-        keyHash,
+        keyHash: { in: [keyHash, legacyKeyHash] },
         isActive: true,
         deletedAt: null,
         OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
@@ -36,6 +37,7 @@ export function authenticateApiKey() {
         id: true,
         tenantId: true,
         scopes: true,
+        keyHash: true,
         lastUsedAt: true,
       },
     });
@@ -44,10 +46,15 @@ export function authenticateApiKey() {
       return c.json(new ForbiddenError('Geçersiz veya süresi dolmuş API anahtarı.').toJSON(), 401);
     }
 
-    // Update lastUsedAt (fire-and-forget)
+    const shouldUpgradeLegacyHash = isLegacyApiKeyHash(rawKey, apiKey.keyHash);
+
+    // Update lastUsedAt and opportunistically upgrade legacy SHA-256 hashes.
     prisma.apiKey.update({
       where: { id: apiKey.id },
-      data: { lastUsedAt: new Date() },
+      data: {
+        lastUsedAt: new Date(),
+        ...(shouldUpgradeLegacyHash ? { keyHash } : {}),
+      },
     }).catch(() => {});
 
     // Set context for downstream handlers

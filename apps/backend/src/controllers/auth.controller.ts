@@ -11,6 +11,7 @@ import { getValidatedBody } from '../middleware/validateBody';
 import { loginBodySchema, registerBodySchema } from '../schemas/request-body.schemas';
 import { logger } from '../lib/logger';
 import { rateLimiter } from '../lib/rateLimiter';
+import { getTrustedClientIp } from '../utils/request-ip.js';
 import {
   createSecuritySession,
   revokeSecuritySession,
@@ -120,7 +121,7 @@ function clearAuthCookie(c: Context): void {
 }
 
 function getClientIp(c: Context): string {
-  return c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip')?.trim() || 'unknown';
+  return getTrustedClientIp(c);
 }
 
 function getAuthRequestMeta(c: Context): RequestSecurityMeta {
@@ -323,7 +324,7 @@ export const AuthController = {
    */
   async register(c: Context): Promise<Response> {
     // Rate limit: IP başına 15 dakikada max 5 kayıt
-    const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
+    const ip = getTrustedClientIp(c);
     if (await rateLimiter.check(`register:${ip}`, 5, 15 * 60 * 1000)) {
       return c.json({ error: { code: 'RATE_LIMITED', message: 'Çok fazla kayıt denemesi. Lütfen 15 dakika sonra tekrar deneyin.' } }, 429);
     }

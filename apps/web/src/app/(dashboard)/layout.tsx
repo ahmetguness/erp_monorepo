@@ -16,13 +16,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   // Sayfa yüklendiğinde /api/auth/me'den güncel plan + modules çek → store'a yaz
-  useMe();
+  const meQuery = useMe();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !meQuery.isLoading && !meQuery.isFetching) {
       router.replace('/login');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, meQuery.isFetching, meQuery.isLoading, router]);
 
   // Auth yoksa login'e yönlenene kadar spinner göster (beyaz ekranı önler)
   if (!isAuthenticated) {

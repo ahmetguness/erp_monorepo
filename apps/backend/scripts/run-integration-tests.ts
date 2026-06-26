@@ -24,6 +24,7 @@ import {
   WorkOrderStatus,
 } from '@prisma/client';
 import { prisma } from '../src/lib/prisma';
+import { createApiKeyHash } from '../src/utils/api-key-hash';
 
 interface TestContext {
   tenantAId: string;
@@ -729,7 +730,7 @@ async function testApiKeyScopeAndTenantIsolation(ctx: TestContext): Promise<void
     data: {
       tenantId: ctx.tenantAId,
       name: 'Integration External Read',
-      keyHash: crypto.createHash('sha256').update(rawKey).digest('hex'),
+      keyHash: createApiKeyHash(rawKey),
       keyPrefix: rawKey.slice(0, 8),
       scopes: ['products:read'],
       createdById: ctx.ownerAId,

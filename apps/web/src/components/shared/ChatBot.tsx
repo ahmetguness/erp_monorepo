@@ -25,9 +25,10 @@ interface Message {
   error?: boolean;
 }
 
-const STORAGE_KEY_PREFIX = 'axon_chat_messages_';
-const RECENT_RECORDS_KEY_PREFIX = 'axon_chat_recent_records_';
+const LEGACY_STORAGE_KEY_PREFIX = 'axon_chat_messages_';
+const LEGACY_RECENT_RECORDS_KEY_PREFIX = 'axon_chat_recent_records_';
 const MAX_RECENT_RECORDS = 8;
+const inMemoryRecentRecords = new Map<string, ChatRecentRecord[]>();
 
 // ─────────────────────────────────────────────
 // rAF-based smooth streaming hook
@@ -128,25 +129,11 @@ function parseSuggestions(text: string): { content: string; suggestions: string[
   return { content: text, suggestions: [] };
 }
 
-/** localStorage'dan mesajları yükle */
-function loadMessages(userId?: string): Message[] | null {
-  if (!userId) return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_PREFIX + userId);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    return parsed.map((m: { id: string; role: 'user' | 'assistant'; content: string; timestamp: string; usedData?: boolean; suggestions?: string[]; error?: boolean }) => ({ ...m, timestamp: new Date(m.timestamp) }));
-  } catch { return null; }
-}
-
-/** localStorage'a mesajları kaydet */
-function saveMessages(messages: Message[], userId?: string) {
-  if (!userId) return;
-  try {
-    const toSave = messages.slice(-50);
-    localStorage.setItem(STORAGE_KEY_PREFIX + userId, JSON.stringify(toSave));
-  } catch { /* quota aşımı vb. */ }
+/** Eski kalici chat anahtarlarini temizle. Yeni sohbet gecmisi cihazda saklanmaz. */
+function clearLegacyChatStorage(userId?: string): void {
+  if (!userId || typeof window === 'undefined') return;
+  window.localStorage.removeItem(LEGACY_STORAGE_KEY_PREFIX + userId);
+  window.localStorage.removeItem(LEGACY_RECENT_RECORDS_KEY_PREFIX + userId);
 }
 
 // ─────────────────────────────────────────────
@@ -154,51 +141,14 @@ function saveMessages(messages: Message[], userId?: string) {
 // ─────────────────────────────────────────────
 
 function parseRecentRecords(userId?: string): ChatRecentRecord[] {
-  if (!userId) return [];
-  try {
-    const raw = localStorage.getItem(RECENT_RECORDS_KEY_PREFIX + userId);
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.flatMap((item) => {
-      if (typeof item !== 'object' || item === null) return [];
-      const entityType = Reflect.get(item, 'entityType');
-      const entityId = Reflect.get(item, 'entityId');
-      const label = Reflect.get(item, 'label');
-      const path = Reflect.get(item, 'path');
-      const viewedAt = Reflect.get(item, 'viewedAt');
-      if (
-        !isChatEntityType(entityType) ||
-        typeof entityId !== 'string' ||
-        typeof label !== 'string' ||
-        typeof path !== 'string' ||
-        typeof viewedAt !== 'string'
-      ) {
-        return [];
-      }
-      return [{ entityType, entityId, label, path, viewedAt }];
-    }).slice(0, MAX_RECENT_RECORDS);
-  } catch {
-    return [];
-  }
+  return userId ? inMemoryRecentRecords.get(userId) ?? [] : [];
 }
 
 function saveRecentRecords(records: ChatRecentRecord[], userId?: string) {
   if (!userId) return;
   try {
-    localStorage.setItem(RECENT_RECORDS_KEY_PREFIX + userId, JSON.stringify(records.slice(0, MAX_RECENT_RECORDS)));
+    inMemoryRecentRecords.set(userId, records.slice(0, MAX_RECENT_RECORDS));
   } catch { /* quota aÅŸÄ±mÄ± vb. */ }
-}
-
-function isChatEntityType(value: unknown): value is ChatEntityType {
-  return (
-    value === 'contact' ||
-    value === 'invoice' ||
-    value === 'sales_quote' ||
-    value === 'sales_order' ||
-    value === 'employee' ||
-    value === 'product'
-  );
 }
 
 function inferEntityFromPath(pathname: string): Pick<ChatPageContext, 'entityType' | 'entityId'> {
@@ -326,6 +276,7 @@ export function ChatBot() {
   }, [pathname]);
 
   useEffect(() => {
+    clearLegacyChatStorage(user?.id);
     setRecentRecords(parseRecentRecords(user?.id));
   }, [user?.id]);
 
@@ -367,25 +318,15 @@ export function ChatBot() {
     prevUserIdRef.current = currentUserId;
   }, [user?.id, user?.name]);
 
-  // ── Başlangıç: localStorage'dan yükle veya welcome mesajı ──
+  // ── Başlangıç: oturum belleğinde welcome mesajı ──
   useEffect(() => {
     if (messages.length > 0) return;
-    const saved = loadMessages(user?.id);
-    if (saved && saved.length > 0) {
-      setMessages(saved);
-    } else {
-      const name = user?.name?.split(' ')[0] ?? 'Merhaba';
-      setMessages([{
-        id: 'welcome', role: 'assistant', timestamp: new Date(),
-        content: `Merhaba ${name}! 👋 Ben Axon ERP asistanınızım. Cari hesaplar, faturalar, stok ve raporlar hakkında sorularınızı yanıtlayabilirim.`,
-      }]);
-    }
-  }, [user, messages.length]);
-
-  // ── Mesajlar değişince localStorage'a kaydet ──
-  useEffect(() => {
-    if (messages.length > 0) saveMessages(messages, user?.id);
-  }, [messages, user?.id]);
+    const name = user?.name?.split(' ')[0] ?? 'Merhaba';
+    setMessages([{
+      id: 'welcome', role: 'assistant', timestamp: new Date(),
+      content: `Merhaba ${name}! 👋 Ben Axon ERP asistanınızım. Cari hesaplar, faturalar, stok ve raporlar hakkında sorularınızı yanıtlayabilirim.`,
+    }]);
+  }, [user?.name, messages.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -402,7 +343,7 @@ export function ChatBot() {
       id: 'welcome', role: 'assistant', timestamp: new Date(),
       content: `Sohbet temizlendi. Size nasıl yardımcı olabilirim, ${name}?`,
     }]);
-    localStorage.removeItem(STORAGE_KEY_PREFIX + (user?.id ?? ''));
+    clearLegacyChatStorage(user?.id);
 
     // Backend conversation history'yi de temizle
     try {
