@@ -10,6 +10,7 @@ import { ChatBot } from '@/components/shared/ChatBot';
 import { DemoBanner } from '@/components/shared/DemoBanner';
 import { Spinner } from '@/components/ui/Spinner';
 import { OnboardingTooltip } from '@/components/shared/OnboardingTooltip';
+import { QuickStartWizard } from '@/components/shared/QuickStartWizard';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -45,6 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       <ChatBot />
       <OnboardingTooltip />
+      <QuickStartWizard />
     </div>
   );
 }

@@ -11,7 +11,10 @@ import {
   getTenantSecurityScore,
   getSecurityHardeningSnapshot,
   revokeSecuritySession,
+  runQuickStart,
+  cleanDemoData,
   type BusinessRule,
+  type QuickStartDTO,
 } from '@/services/settings.service';
 
 export function useTenantSettings() {
@@ -105,6 +108,32 @@ export function useDeleteTenantLogo() {
       qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
       qc.invalidateQueries({ queryKey: ['settings', 'tenant-logo'] });
       toast.success('Logo silindi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useRunQuickStart() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (data: QuickStartDTO) => runQuickStart(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
+      toast.success('Hızlı başlangıç kurulumu tamamlandı!');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useCleanDemoData() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: () => cleanDemoData(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
+      toast.success('Demo veriler temizlendi ve canlı moda geçildi.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

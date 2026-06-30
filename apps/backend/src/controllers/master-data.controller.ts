@@ -10,8 +10,8 @@ import { requireTenantId } from '../utils/context.js';
 interface CreateUnitDTO { name: string; code: string; }
 interface CreateCategoryDTO { name: string; parentId?: string; }
 interface UpdateCategoryDTO { name?: string; parentId?: string; }
-interface CreateTaxRateDTO { name: string; rate: number; }
-interface UpdateTaxRateDTO { name?: string; rate?: number; isActive?: boolean; }
+interface CreateTaxRateDTO { name: string; rate: number; isWithholding?: boolean; }
+interface UpdateTaxRateDTO { name?: string; rate?: number; isActive?: boolean; isWithholding?: boolean; }
 interface CreateCurrencyDTO {
   code: string; name: string; symbol: string;
   defaultRate?: number; isBase?: boolean;
@@ -110,7 +110,7 @@ export const MasterDataController = {
     const tenantId = requireTenantId(c);
     const body = await c.req.json<CreateTaxRateDTO>();
     if (!body.name || body.rate === undefined) return c.json(new ValidationError('name ve rate zorunludur.').toJSON(), 400);
-    const taxRate = await prisma.taxRate.create({ data: { tenantId, name: body.name, rate: body.rate } });
+    const taxRate = await prisma.taxRate.create({ data: { tenantId, name: body.name, rate: body.rate, isWithholding: body.isWithholding ?? false } });
     return c.json({ data: taxRate }, 201);
   },
 
@@ -126,6 +126,7 @@ export const MasterDataController = {
         ...(body.name !== undefined && { name: body.name }),
         ...(body.rate !== undefined && { rate: body.rate }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
+        ...(body.isWithholding !== undefined && { isWithholding: body.isWithholding }),
       },
     });
     return c.json({ data: updated });

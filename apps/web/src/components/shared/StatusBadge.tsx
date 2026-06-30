@@ -1,5 +1,5 @@
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
-import { InvoiceStatus, OrderStatus, QuoteStatus, PaymentStatus, FiscalPeriodStatus } from '@repo/types';
+import type { InvoiceStatus, OrderStatus, QuoteStatus, PaymentStatus, FiscalPeriodStatus } from '@repo/types';
 import type { PurchaseOrderStatus } from '@/services/purchase.service';
 
 // ─────────────────────────────────────────────

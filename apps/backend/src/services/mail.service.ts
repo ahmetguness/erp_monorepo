@@ -49,6 +49,14 @@ export function buildResendEmailPayload(options: SendMailOptions): CreateEmailOp
 
 // ── Genel mail gönderme ──────────────────────
 export async function sendMail(options: SendMailOptions): Promise<MailResult> {
+  if (process.env.MOCK_MAIL === 'true') {
+    logger.info(`[MOCK MAIL] Gönderilen Mail:
+      Kime: ${Array.isArray(options.to) ? options.to.join(', ') : options.to}
+      Konu: ${options.subject}
+      İçerik (HTML): ${options.html.substring(0, 500)}${options.html.length > 500 ? '...' : ''}`);
+    return { success: true, id: `mock-email-id-${Date.now()}` };
+  }
+
   if (!resend) {
     logger.warn('Resend yapılandırılmamış – mail gönderilmedi.');
     return { success: false, error: 'RESEND_API_KEY tanımlı değil' };

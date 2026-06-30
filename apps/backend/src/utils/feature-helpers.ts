@@ -48,10 +48,18 @@ export function getStarterDefault(key: FeatureKey): string {
 
 /**
  * Tenant modüller listesinde verilen modülün aktif olup olmadığını kontrol eder.
- * modules alanı string[] (legacy) olduğundan lowercase karşılaştırma yapılır.
+ * modules alanı string[] (legacy) olduğundan lowercase karşılaştırma ve alias kontrolü yapılır.
  */
 export function isModuleInList(modules: readonly string[], module: string): boolean {
-  return modules.map((m) => m.toLowerCase()).includes(module.toLowerCase());
+  if (!modules || modules.length === 0) return false;
+  const normalized = modules.map((m) => String(m).toLowerCase());
+  const req = module.toLowerCase();
+  if (req === 'sales') return normalized.includes('sales') || normalized.includes('invoicing') || normalized.includes('contacts');
+  if (req === 'crm') return normalized.includes('crm') || normalized.includes('contacts');
+  if (req === 'inventory') return normalized.includes('inventory') || normalized.includes('warehouse');
+  if (req === 'warehouse') return normalized.includes('warehouse') || normalized.includes('inventory');
+  if (req === 'mail') return normalized.includes('mail') || normalized.includes('mailcenter');
+  return normalized.includes(req);
 }
 
 /**

@@ -46,6 +46,7 @@ const lineSchema = z.object({
   description: z.string().min(1, 'Açıklama zorunludur'),
   productId: z.string().optional(),
   taxRateId: z.string().optional(),
+  withholdingRateId: z.string().optional(),
   quantity: requiredQuantityString(),
   unitPrice: requiredNonNegativeMoneyString('Birim fiyat negatif olamaz'),
   discount: optionalPercentString(),
@@ -100,7 +101,8 @@ export function InvoiceFormPage() {
   const contacts = contactsData?.data ?? [];
   const products = productsData?.data ?? [];
 
-  const taxRateOptions = [{ value: '', label: '— KDV yok —' }, ...taxRates.map((t) => ({ value: t.id, label: `${t.name} (%${t.rate})` }))];
+  const vatRateOptions = [{ value: '', label: '— KDV yok —' }, ...taxRates.filter((t) => !t.isWithholding).map((t) => ({ value: t.id, label: `${t.name} (%${t.rate})` }))];
+  const withholdingRateOptions = [{ value: '', label: '— Stopaj yok —' }, ...taxRates.filter((t) => t.isWithholding).map((t) => ({ value: t.id, label: `${t.name} (%${t.rate})` }))];
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -108,7 +110,7 @@ export function InvoiceFormPage() {
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       type: 'SALES', date: today, dueDate: addDaysString(today, 30),
-      lines: [{ description: '', quantity: '1', unitPrice: '0', discount: '0' }],
+      lines: [{ description: '', quantity: '1', unitPrice: '0', discount: '0', taxRateId: '', withholdingRateId: '' }],
     },
   });
 
@@ -147,11 +149,14 @@ export function InvoiceFormPage() {
     const net = qty * price * (1 - disc / 100);
     const taxRate = taxRates.find((t) => t.id === line.taxRateId);
     const taxAmt = net * ((taxRate?.rate ?? 0) / 100);
-    return { net, taxAmt, gross: net + taxAmt };
+    const withholdingRate = taxRates.find((t) => t.id === line.withholdingRateId);
+    const withholdingAmt = net * ((withholdingRate?.rate ?? 0) / 100);
+    return { net, taxAmt, withholdingAmt, gross: net + taxAmt - withholdingAmt };
   });
   const totalNet = lineTotals.reduce((s, l) => s + l.net, 0);
   const totalTax = lineTotals.reduce((s, l) => s + l.taxAmt, 0);
-  const totalGross = totalNet + totalTax;
+  const totalWithholding = lineTotals.reduce((s, l) => s + l.withholdingAmt, 0);
+  const totalGross = totalNet + totalTax - totalWithholding;
   const smartLines: SmartFormLine[] = watchedLines.map((line, index) => ({
     productId: line.productId || undefined,
     quantity: parseDecimalInput(line.quantity),
@@ -176,7 +181,9 @@ export function InvoiceFormPage() {
       dueDate: optionalText(data.dueDate), notes: optionalText(data.notes),
       lines: data.lines.map((l) => ({
         description: l.description, productId: optionalText(l.productId),
-        taxRateId: optionalText(l.taxRateId), quantity: parseDecimalInput(l.quantity),
+        taxRateId: optionalText(l.taxRateId), 
+        withholdingRateId: optionalText(l.withholdingRateId),
+        quantity: parseDecimalInput(l.quantity),
         unitPrice: parseDecimalInput(l.unitPrice), discount: parseDecimalInput(l.discount),
       })),
     }, {
@@ -322,8 +329,8 @@ export function InvoiceFormPage() {
                         )}
                       </div>
 
-                      {/* Bottom: qty, price, discount, tax, total */}
-                      <div className="grid grid-cols-5 gap-3 mt-3 ml-4">
+                      {/* Bottom: qty, price, discount, VAT, withholding, total */}
+                      <div className="grid grid-cols-6 gap-3 mt-3 ml-4">
                         <div>
                           <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                             <Hash className="w-2.5 h-2.5" />Miktar
@@ -357,7 +364,15 @@ export function InvoiceFormPage() {
                           <select
                             className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
                             {...register(`lines.${idx}.taxRateId`)}>
-                            {taxRateOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            {vatRateOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Stopaj</label>
+                          <select
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
+                            {...register(`lines.${idx}.withholdingRateId`)}>
+                            {withholdingRateOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
                         </div>
                         <div>
@@ -465,6 +480,12 @@ export function InvoiceFormPage() {
                     <span className="text-slate-500">KDV</span>
                     <span className="text-slate-300 font-medium tabular-nums">{formatCurrency(totalTax)}</span>
                   </div>
+                  {totalWithholding > 0 && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500">Stopaj / Tevkifat</span>
+                      <span className="text-amber-400 font-medium tabular-nums">-{formatCurrency(totalWithholding)}</span>
+                    </div>
+                  )}
                   <div className="h-px bg-slate-800" />
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-white">Genel Toplam</span>

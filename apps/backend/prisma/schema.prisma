@@ -659,6 +659,7 @@ model Tenant {
   // Invitation & DemoRequest back-relations
   invitations              Invitation[]
   demoRequests             DemoRequest[]
+  collectionReminders      CollectionReminder[]
 
   @@index([status])
   @@index([deletedAt])
@@ -1263,10 +1264,12 @@ model TaxRate {
   name     String
   rate     Decimal @db.Decimal(5, 2)
   isActive Boolean @default(true)
+  isWithholding Boolean @default(false)
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   products     Product[]
   invoiceLines InvoiceLine[]
+  withholdingLines InvoiceLine[] @relation("InvoiceLineWithholding")
 
   @@map("tax_rates")
 }
@@ -1348,6 +1351,7 @@ model Contact {
   customerAssets  CustomerAsset[]
   payments        Payment[]
   deliveryNotes   DeliveryNote[]
+  collectionReminders CollectionReminder[]
 
   @@unique([tenantId, code])
   @@index([tenantId, type])
@@ -2044,6 +2048,7 @@ model Invoice {
   deletedAt       DateTime?
   createdById     String?
   updatedById     String?
+  totalWithholding Decimal      @db.Decimal(18, 2) @default(0)
 
   tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact       Contact             @relation(fields: [contactId], references: [id])
@@ -2053,6 +2058,7 @@ model Invoice {
   eDocuments    EDocument[]
   payments      PaymentAllocation[]
   history       InvoiceHistory[]
+  collectionReminders CollectionReminder[]
 
   @@unique([tenantId, number])
   @@index([tenantId, status])
@@ -2073,17 +2079,20 @@ model InvoiceLine {
   invoiceId   String
   productId   String?
   taxRateId   String?
+  withholdingRateId String?
   description String
   quantity    Decimal @db.Decimal(18, 3)
   unitPrice   Decimal @db.Decimal(18, 2)
   discount    Decimal @db.Decimal(5, 2) @default(0)
   taxAmount   Decimal @db.Decimal(18, 2) @default(0)
+  withholdingAmount Decimal @db.Decimal(18, 2) @default(0)
   lineTotal   Decimal @db.Decimal(18, 2)
   sortOrder   Int     @default(0)
 
   invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id])
   taxRate TaxRate? @relation(fields: [taxRateId], references: [id])
+  withholdingRate TaxRate? @relation("InvoiceLineWithholding", fields: [withholdingRateId], references: [id])
   tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, invoiceId])
@@ -2256,6 +2265,7 @@ model Payment {
   date          DateTime
   amount        Decimal       @db.Decimal(18, 2)
   method        PaymentMethod @default(CASH)
+  direction     String        @default("RECEIVE")
   reference     String?
   status        PaymentStatus @default(PENDING)
   notes         String?
@@ -3215,4 +3225,24 @@ model Invitation {
   @@index([status])
   @@index([tokenHash])
   @@map("invitations")
+}
+
+model CollectionReminder {
+  id         String   @id @default(cuid())
+  tenantId   String
+  contactId  String
+  invoiceId  String?
+  amount     Decimal  @db.Decimal(18, 2)
+  dueDate    DateTime
+  status     String   @default("PENDING") // PENDING, SENT, CANCELLED
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("collection_reminders")
 }

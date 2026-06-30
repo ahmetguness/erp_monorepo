@@ -68,19 +68,23 @@ async function computeLineTotals(
   lineData: Array<{
     productId: string | null;
     taxRateId: string | null;
+    withholdingRateId: string | null;
     description: string;
     quantity: number;
     unitPrice: number;
     discount: number;
     taxAmount: number;
+    withholdingAmount: number;
     lineTotal: number;
   }>;
   totalNet: number;
   totalTax: number;
+  totalWithholding: number;
   totalGross: number;
 }> {
   let totalNet = 0;
   let totalTax = 0;
+  let totalWithholding = 0;
 
   const lineData = await Promise.all(
     lines.map(async (line) => {
@@ -96,26 +100,45 @@ async function computeLineTotals(
         taxRate = tr ? Number(tr.rate) : 0;
       }
 
+      let withholdingRate = 0;
+      if (line.withholdingRateId) {
+        const wr = await prisma.taxRate.findFirst({
+          where: { id: line.withholdingRateId, tenantId, isWithholding: true },
+          select: { rate: true },
+        });
+        withholdingRate = wr ? Number(wr.rate) : 0;
+      }
+
       const taxAmount = net * (taxRate / 100);
-      const lineTotal = net + taxAmount;
+      const withholdingAmount = net * (withholdingRate / 100);
+      const lineTotal = net + taxAmount - withholdingAmount;
 
       totalNet += net;
       totalTax += taxAmount;
+      totalWithholding += withholdingAmount;
 
       return {
         productId: line.productId ?? null,
         taxRateId: line.taxRateId ?? null,
+        withholdingRateId: line.withholdingRateId ?? null,
         description: line.description,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         discount,
         taxAmount,
+        withholdingAmount,
         lineTotal,
       };
     }),
   );
 
-  return { lineData, totalNet, totalTax, totalGross: totalNet + totalTax };
+  return {
+    lineData,
+    totalNet,
+    totalTax,
+    totalWithholding,
+    totalGross: totalNet + totalTax - totalWithholding,
+  };
 }
 
 function addDays(baseDate: Date, days: number): Date {
@@ -183,6 +206,7 @@ export const InvoiceController = {
           include: {
             product: { select: { id: true, code: true, name: true } },
             taxRate: { select: { id: true, name: true, rate: true } },
+            withholdingRate: { select: { id: true, name: true, rate: true } },
           },
         },
         payments: true,
@@ -233,7 +257,7 @@ export const InvoiceController = {
       return c.json(new NotFoundError('Cari hesap', body.contactId).toJSON(), 404);
     }
 
-    const { lineData, totalNet, totalTax, totalGross } = await computeLineTotals(
+    const { lineData, totalNet, totalTax, totalWithholding, totalGross } = await computeLineTotals(
       body.lines,
       tenantId,
     );
@@ -261,6 +285,7 @@ export const InvoiceController = {
           notes: body.notes ?? null,
           totalNet,
           totalTax,
+          totalWithholding,
           totalGross,
           lines: {
             create: lineData.map((l) => ({ ...l, tenantId })),

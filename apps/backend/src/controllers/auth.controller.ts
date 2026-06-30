@@ -17,6 +17,7 @@ import {
   revokeSecuritySession,
   type RequestSecurityMeta,
 } from '../services/security-hardening.service.js';
+import { modulesForPlan } from '../utils/tenant-modules.js';
 
 // ─────────────────────────────────────────────
 // Config
@@ -382,7 +383,7 @@ export const AuthController = {
           email: body.email.toLowerCase().trim(),
           plan: 'STARTER',
           status: 'TRIAL',
-          modules: [],
+          modules: modulesForPlan('STARTER'),
         },
       });
 

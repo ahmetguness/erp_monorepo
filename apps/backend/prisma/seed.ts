@@ -42,9 +42,10 @@ async function main() {
   console.log('  âœ“ Plan features (Starter / Professional / Enterprise)');
 
   // â”€â”€ 3. Demo Tenant (Enterprise) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const { tenant, users } = await seedTenant();
+  const { tenant, users, planAccounts } = await seedTenant();
   console.log(`  âœ“ Tenant: ${tenant.companyName} (Enterprise)`);
   console.log(`  âœ“ Kullanıcılar: ${users.map(u => u.email).join(', ')}`);
+  console.log(`  âœ“ Plan demo hesapları: ${planAccounts.map(({ user }) => user.email).join(', ')}`);
 
   // â”€â”€ 4. Master Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const master = await seedMasterData(tenant.id);
@@ -133,19 +134,85 @@ function toPrismaPlanFeature(feature: PlanFeatureRow) {
   };
 }
 
+type DemoPlan = 'STARTER' | 'PROFESSIONAL';
+
+async function seedPlanDemoAccount(input: {
+  slug: string;
+  companyName: string;
+  taxNumber: string;
+  taxOffice: string;
+  email: string;
+  ownerName: string;
+  phone: string;
+  sector: string;
+  plan: DemoPlan;
+  password: string;
+}) {
+  const tenant = await prisma.tenant.create({
+    data: {
+      slug: input.slug,
+      companyName: input.companyName,
+      taxNumber: input.taxNumber,
+      taxOffice: input.taxOffice,
+      email: `info@${input.slug}.com`,
+      phone: input.phone,
+      address: 'Demo Mahallesi No:1',
+      city: 'İstanbul',
+      country: 'TR',
+      sector: input.sector,
+      plan: input.plan,
+      status: 'ACTIVE',
+      modules: modulesForPlan(input.plan),
+      subscriptionStart: d('2026-01-01'),
+      subscriptionEnd: d('2026-12-31'),
+    },
+  });
+
+  const user = await prisma.user.create({
+    data: {
+      email: input.email,
+      name: input.ownerName,
+      phone: input.phone,
+      password: input.password,
+      isActive: true,
+    },
+  });
+
+  await prisma.tenantUser.create({
+    data: { tenantId: tenant.id, userId: user.id, isOwner: true, isActive: true },
+  });
+
+  return { tenant, user };
+}
+
 // ─────────────────────────────────────────────
 // TENANT & USERS
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function seedTenant() {
   // Önce mevcut tenant'ı temizle (idempotent seed)
-  const existing = await prisma.tenant.findUnique({ where: { slug: 'axon-demo' } });
-  if (existing) {
-    // Cascade delete ile tüm bağlı verileri sil
-    await prisma.tenant.delete({ where: { id: existing.id } });
+  for (const slug of ['axon-demo', 'axon-starter-demo', 'axon-pro-demo']) {
+    const existing = await prisma.tenant.findUnique({ where: { slug } });
+    if (existing) {
+      // Cascade delete ile tüm bağlı verileri sil
+      await prisma.tenant.delete({ where: { id: existing.id } });
+    }
   }
   // Tüm kullanıcıları da temizle (tenant dışı)
-  await prisma.user.deleteMany({ where: { email: { in: ['admin@axondemo.com', 'satis@axondemo.com', 'muhasebe@axondemo.com', 'depo@axondemo.com'] } } });
+  await prisma.user.deleteMany({
+    where: {
+      email: {
+        in: [
+          'admin@axondemo.com',
+          'satis@axondemo.com',
+          'muhasebe@axondemo.com',
+          'depo@axondemo.com',
+          'starter@axondemo.com',
+          'pro@axondemo.com',
+        ],
+      },
+    },
+  });
 
   const tenant = await prisma.tenant.create({
     data: {
@@ -221,7 +288,37 @@ async function seedTenant() {
     data: { tenantId: tenant.id, userId: userWarehouse.id, isOwner: false, isActive: true },
   });
 
-  return { tenant, users: [userAdmin, userSales, userAccounting, userWarehouse] };
+  const starterAccount = await seedPlanDemoAccount({
+    slug: 'axon-starter-demo',
+    companyName: 'Axon Starter Demo Ltd. Şti.',
+    taxNumber: '1234567891',
+    taxOffice: 'Kadıköy',
+    email: 'starter@axondemo.com',
+    ownerName: 'Starter Demo',
+    phone: '+90 532 555 0111',
+    sector: 'Perakende',
+    plan: 'STARTER',
+    password: pw,
+  });
+
+  const professionalAccount = await seedPlanDemoAccount({
+    slug: 'axon-pro-demo',
+    companyName: 'Axon Pro Demo Ltd. Şti.',
+    taxNumber: '1234567892',
+    taxOffice: 'Şişli',
+    email: 'pro@axondemo.com',
+    ownerName: 'Pro Demo',
+    phone: '+90 532 555 0121',
+    sector: 'Toptan Ticaret',
+    plan: 'PROFESSIONAL',
+    password: pw,
+  });
+
+  return {
+    tenant,
+    users: [userAdmin, userSales, userAccounting, userWarehouse],
+    planAccounts: [starterAccount, professionalAccount],
+  };
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1409,9 +1506,10 @@ async function runSeed() {
   console.log('  âœ“ Plan features (Starter / Professional / Enterprise)');
 
   // 3. Tenant & Users
-  const { tenant, users } = await seedTenant();
+  const { tenant, users, planAccounts } = await seedTenant();
   console.log(`  âœ“ Tenant: ${tenant.companyName} (Enterprise)`);
   console.log(`  âœ“ Kullanıcılar: ${users.map(u => u.email).join(', ')}`);
+  console.log(`  âœ“ Plan demo hesapları: ${planAccounts.map(({ user }) => user.email).join(', ')}`);
 
   // 4. Master Data
   const master = await seedMasterData(tenant.id);
@@ -1483,6 +1581,8 @@ async function runSeed() {
   console.log('     satis@axondemo.com    / demo1234  (Satış)');
   console.log('     muhasebe@axondemo.com / demo1234  (Muhasebe)');
   console.log('     depo@axondemo.com     / demo1234  (Depo)');
+  console.log('     starter@axondemo.com  / demo1234  (Starter)');
+  console.log('     pro@axondemo.com      / demo1234  (Professional)');
   console.log('  ðŸ”‘ Platform admin:');
   console.log('     admin@axonerp.com     / admin1234\n');
 }

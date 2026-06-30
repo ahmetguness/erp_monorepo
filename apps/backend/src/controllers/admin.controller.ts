@@ -15,7 +15,7 @@ import { getObservabilitySnapshot } from '../services/observability.service.js';
 import { rateLimiter } from '../lib/rateLimiter';
 import { logger } from '../lib/logger';
 import { getTrustedClientIp } from '../utils/request-ip.js';
-import { toAppModule, VALID_MODULE_KEYS } from '../utils/tenant-modules';
+import { modulesForPlan, toAppModule, VALID_MODULE_KEYS } from '../utils/tenant-modules';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
@@ -396,7 +396,7 @@ export const AdminTenantController = {
           plan,
           status,
           maxUsers: body.maxUsers ?? null,
-          modules: modules ?? [],
+          modules: (modules && modules.length > 0) ? modules : modulesForPlan(plan as any),
           notes: body.notes?.trim() || null,
           isCustomPricing: body.isCustomPricing ?? false,
           trialEndsAt,
@@ -476,7 +476,7 @@ export const AdminTenantController = {
 
     const updated = await prisma.tenant.update({
       where: { id },
-      data: { plan: body.plan, planChangedAt: new Date() },
+      data: { plan: body.plan, modules: modulesForPlan(body.plan as any), planChangedAt: new Date() },
     });
 
     await createAuditLog(prisma, {

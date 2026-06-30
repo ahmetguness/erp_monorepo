@@ -11,6 +11,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { useEDocuments, useCreateEDocument, useUpdateEDocumentStatus } from '@/hooks/useEDocuments';
 import { formatDate } from '@/lib/utils';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import type { EDocument, EDocumentStatus } from '@/services/e-document.service';
 
 const TYPE_MAP: Record<string, string> = { E_INVOICE: 'E-Fatura', E_ARCHIVE: 'E-Arşiv', E_WAYBILL: 'E-İrsaliye' };
@@ -32,6 +33,7 @@ const TYPE_OPTIONS: Array<{ value: EDocumentFormType; label: string }> = [
 ];
 
 export function EDocumentsPage() {
+  const { isStarter } = usePlanFeatures();
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -62,6 +64,8 @@ export function EDocumentsPage() {
     },
   ];
 
+  const filteredTypeOptions = TYPE_OPTIONS.filter(o => !isStarter || o.value !== 'E_WAYBILL');
+
   return (
     <div>
       <PageHeader title="E-Belgeler" subtitle="E-Fatura, E-Arşiv ve E-İrsaliye belgelerini yönetin."
@@ -74,7 +78,7 @@ export function EDocumentsPage() {
         }
       />
       <div className="flex items-center gap-3 mb-4">
-        <Select label="" options={[{ value: '', label: 'Tüm Tipler' }, ...Object.entries(TYPE_MAP).map(([k, v]) => ({ value: k, label: v }))]}
+        <Select label="" options={[{ value: '', label: 'Tüm Tipler' }, ...Object.entries(TYPE_MAP).filter(([k]) => !isStarter || k !== 'E_WAYBILL').map(([k, v]) => ({ value: k, label: v }))]}
           value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }} />
         <Select label="" options={[{ value: '', label: 'Tüm Durumlar' }, ...Object.entries(STATUS_MAP).map(([k, v]) => ({ value: k, label: v.label }))]}
           value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} />
@@ -95,9 +99,9 @@ export function EDocumentsPage() {
           }}>Oluştur</Button>
         </>}>
         <div className="space-y-4">
-          <Select label="Belge Tipi" required options={TYPE_OPTIONS}
+          <Select label="Belge Tipi" required options={filteredTypeOptions}
             value={form.type} onChange={(e) => {
-              const nextType = TYPE_OPTIONS.find((option) => option.value === e.target.value)?.value ?? 'E_INVOICE';
+              const nextType = filteredTypeOptions.find((option) => option.value === e.target.value)?.value ?? 'E_INVOICE';
               setForm((p) => ({ ...p, type: nextType, invoiceId: '', deliveryNoteId: '' }));
             }} />
           {(form.type === 'E_INVOICE' || form.type === 'E_ARCHIVE') && (

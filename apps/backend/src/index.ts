@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { prisma } from './lib/prisma';
 import { logger, printBanner } from './lib/logger';
@@ -19,6 +20,7 @@ import { paymentRoutes } from './routes/payment.routes';
 import { authRoutes } from './routes/auth.routes';
 import { settingsRoutes } from './routes/settings.routes';
 import { notificationRoutes } from './routes/notification.routes';
+import { collectionReminderRoutes } from './routes/collection-reminder.routes';
 import { taskRoutes } from './routes/task.routes';
 import { searchRoutes } from './routes/search.routes';
 import { dataExchangeRoutes } from './routes/data-exchange.routes';
@@ -33,7 +35,7 @@ import { requirePermission } from './middleware/requirePermission';
 import { csrfProtection } from './middleware/csrfProtection';
 import { securityHeaders } from './middleware/securityHeaders';
 import { validateJsonRequestBody } from './middleware/validateBody';
-import { BaseError } from './errors';
+import { BaseError, ValidationError } from './errors';
 
 // Professional Plan Route Imports
 import { apiKeyRoutes } from './routes/api-key.routes';
@@ -231,6 +233,7 @@ tenantApi.route('/stock', stockRoutes);
 tenantApi.route('/master', masterDataRoutes);
 tenantApi.route('/reports', reportingRoutes);
 tenantApi.route('/settings', settingsRoutes);
+tenantApi.route('/collection-reminders', collectionReminderRoutes);
 tenantApi.route('/notifications', notificationRoutes);
 tenantApi.route('/tasks', taskRoutes);
 tenantApi.route('/search', searchRoutes);
@@ -291,6 +294,27 @@ app.onError((err, c) => {
   if (err instanceof BaseError && err.isOperational) {
     logger.warn(`Operational error: ${err.message}`, { requestId, correlationId });
     return c.json(err.toJSON(), err.statusCode as 400);
+  }
+
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    const target = Array.isArray(err.meta?.target) ? err.meta.target.filter((field): field is string => typeof field === 'string') : [];
+    const fieldLabels: Record<string, string> = {
+      taxNumber: 'Vergi numarası',
+      email: 'E-posta',
+      code: 'Kod',
+      slug: 'Slug',
+      iban: 'IBAN',
+      number: 'Numara',
+    };
+    const fields = Object.fromEntries(
+      target.map((field) => [field, `${fieldLabels[field] ?? field} zaten kullanımda.`]),
+    );
+    const message = target.length === 1
+      ? `${fieldLabels[target[0]] ?? target[0]} zaten kullanımda.`
+      : 'Bu kayıt için benzersiz olması gereken bir alan zaten kullanımda.';
+    const validationError = new ValidationError(message, Object.keys(fields).length > 0 ? fields : undefined);
+    logger.warn(`Prisma unique constraint violation: ${target.join(', ') || 'unknown'}`, { requestId, correlationId });
+    return c.json(validationError.toJSON(), 400);
   }
 
   logger.error(`Unhandled error: ${err.message}`, { requestId, correlationId });

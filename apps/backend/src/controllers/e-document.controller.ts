@@ -98,6 +98,18 @@ export const EDocumentController = {
       return c.json(new ValidationError('type alanı zorunludur.').toJSON(), 400);
     }
 
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true },
+    });
+
+    if (tenant?.plan === 'STARTER' && body.type === EDocumentType.E_WAYBILL) {
+      return c.json(
+        new ValidationError('Starter planı e-İrsaliye desteklememektedir.').toJSON(),
+        400,
+      );
+    }
+
     // E_WAYBILL requires deliveryNoteId; E_INVOICE/E_ARCHIVE requires invoiceId
     if (body.type === EDocumentType.E_WAYBILL && !body.deliveryNoteId) {
       return c.json(

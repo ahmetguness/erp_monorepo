@@ -214,3 +214,32 @@ export async function upsertModuleSetting(module: string, key: string, value: st
   const res = await apiClient.put('/api/settings/modules', { module, key, value });
   return safeParse(SingleResponseSchema(ModuleSettingSchema), res.data, 'upsertModuleSetting').data;
 }
+
+export interface QuickStartDTO {
+  companyName: string;
+  taxNumber?: string;
+  taxOffice?: string;
+  address?: string;
+  city?: string;
+  warehouseName: string;
+  currencyCode: string;
+  firstProductCode: string;
+  firstProductName: string;
+  firstProductPrice: number;
+  firstProductTaxRate: number;
+  firstContactName: string;
+  firstContactCode: string;
+  firstContactType: 'CUSTOMER' | 'SUPPLIER' | 'BOTH';
+  firstContactEmail?: string;
+  firstContactPhone?: string;
+}
+
+export async function runQuickStart(data: QuickStartDTO): Promise<unknown> {
+  const res = await apiClient.post('/api/settings/quick-start', data);
+  return res.data;
+}
+
+export async function cleanDemoData(): Promise<unknown> {
+  const res = await apiClient.post('/api/settings/clean-demo-data');
+  return res.data;
+}

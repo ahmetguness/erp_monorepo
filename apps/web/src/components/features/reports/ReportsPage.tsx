@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, Pin, Save, Trash2, TrendingDown, TrendingUp, Package, Users } from 'lucide-react';
+import { Download, Pin, Save, Trash2, TrendingDown, TrendingUp, Package, Users, Coins, BarChart3 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { Button } from '@/components/ui/Button';
@@ -15,12 +15,16 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   getRevenueSummary, getExpenseSummary, getStockSummary, getContactBalance,
   getSavedReports, deleteSavedReport, createSavedReport, getReportingRegistry, previewKpi, recordSavedReportExportAudit,
+  getCollectionList,
   KpiReportConfigSchema,
   type KpiPreview,
   type KpiReportConfig,
   type SavedReport,
+  type CollectionList,
+  type StockSummary,
+  type ContactBalance,
 } from '@/services/reporting.service';
-import { formatCurrency, formatDate, todayInputDate } from '@/lib/utils';
+import { cn, formatCurrency, formatDate, todayInputDate } from '@/lib/utils';
 
 // ─────────────────────────────────────────────
 // Stat card
@@ -53,6 +57,10 @@ function getDefaultRange() {
   return { from, to };
 }
 
+function isDateRangePreset(value: unknown): value is 'THIS_MONTH' | 'LAST_30_DAYS' | 'THIS_YEAR' | 'CUSTOM' {
+  return typeof value === 'string' && ['THIS_MONTH', 'LAST_30_DAYS', 'THIS_YEAR', 'CUSTOM'].includes(value);
+}
+
 const DEFAULT_KPI_CONFIG: KpiReportConfig = {
   reportType: 'KPI',
   dataset: 'invoices',
@@ -71,27 +79,9 @@ function parseKpiConfig(value: Record<string, unknown>): KpiReportConfig | null 
   return parsed.success ? parsed.data : null;
 }
 
-function scheduleLabel(config: KpiReportConfig): string {
-  if (!config.scheduleEmail.enabled) return 'Zamanlama yok';
-  const frequency: Record<KpiReportConfig['scheduleEmail']['frequency'], string> = {
-    DAILY: 'Günlük',
-    WEEKLY: 'Haftalık',
-    MONTHLY: 'Aylık',
-  };
-  return `${frequency[config.scheduleEmail.frequency]} e-posta`;
-}
-
-function isDateRangePreset(value: string): value is KpiReportConfig['dateRangePreset'] {
-  return value === 'THIS_MONTH' || value === 'LAST_30_DAYS' || value === 'THIS_YEAR' || value === 'CUSTOM';
-}
-
-function isScheduleFrequency(value: string): value is KpiReportConfig['scheduleEmail']['frequency'] {
-  return value === 'DAILY' || value === 'WEEKLY' || value === 'MONTHLY';
-}
-
-function parseRecipientInput(value: string): string[] {
-  return Array.from(new Set(value.split(/[,\n;]/).map((item) => item.trim()).filter(Boolean))).slice(0, 10);
-}
+type CollectionPaymentItem = CollectionList['payments'][number];
+type StockReportItem = StockSummary['belowMinStock'][number];
+type ContactReportItem = ContactBalance['contacts'][number];
 
 // ─────────────────────────────────────────────
 // Reports Page
@@ -107,6 +97,7 @@ export function ReportsPage() {
   const [kpiName, setKpiName] = useState('Aylık satış geliri');
   const [kpiConfig, setKpiConfig] = useState<KpiReportConfig>(DEFAULT_KPI_CONFIG);
   const [kpiPreview, setKpiPreview] = useState<KpiPreview | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'collections' | 'stock' | 'contacts'>('overview');
 
   const { data: revenue, isLoading: loadingRevenue } = useQuery({
     queryKey: ['reports', 'revenue', dateFrom, dateTo],
@@ -120,14 +111,20 @@ export function ReportsPage() {
     enabled: !!dateFrom && !!dateTo,
   });
 
-  const { data: stock } = useQuery({
+  const { data: stock, isLoading: loadingStock } = useQuery({
     queryKey: ['reports', 'stock'],
     queryFn: getStockSummary,
   });
 
-  const { data: contactBalance } = useQuery({
+  const { data: contactBalance, isLoading: loadingContactBalance } = useQuery({
     queryKey: ['reports', 'contact-balance'],
     queryFn: getContactBalance,
+  });
+
+  const { data: collectionList, isLoading: loadingCollections } = useQuery({
+    queryKey: ['reports', 'collections', dateFrom, dateTo],
+    queryFn: () => getCollectionList(dateFrom, dateTo),
+    enabled: !!dateFrom && !!dateTo,
   });
 
   const { data: savedReports = [], isLoading: loadingSaved } = useQuery({
@@ -201,7 +198,7 @@ export function ReportsPage() {
         return (
           <div>
             <span className="text-slate-200 font-medium">{r.name}</span>
-            {config && <p className="mt-1 text-xs text-slate-500">{config.dataset} / {config.metric} · {scheduleLabel(config)}</p>}
+            {config && <p className="mt-1 text-xs text-slate-500">{config.dataset} / {config.metric} · {config.scheduleEmail.enabled ? 'Zamanlanmış' : 'Zamanlama yok'}</p>}
           </div>
         );
       },
@@ -241,299 +238,450 @@ export function ReportsPage() {
     },
   ];
 
+  const collectionColumns: ColumnDef<CollectionPaymentItem>[] = [
+    { key: 'contact', header: 'Cari', render: (r) => <span className="text-slate-200 font-medium">{r.contact?.name}</span> },
+    {
+      key: 'account',
+      header: 'Hesap',
+      render: (r) => <span className="text-slate-400 text-xs">{r.bankAccount?.name ?? r.cashAccount?.name ?? '—'}</span>,
+    },
+    { key: 'date', header: 'Tarih', width: '120px', render: (r) => <span className="text-slate-400 text-xs">{formatDate(r.date)}</span> },
+    { key: 'description', header: 'Açıklama', render: (r) => <span className="text-slate-400 text-xs truncate max-w-xs">{r.description ?? '—'}</span> },
+    {
+      key: 'amount',
+      header: 'Tutar',
+      width: '150px',
+      align: 'right',
+      render: (r) => <span className="font-mono font-bold text-emerald-400">{formatCurrency(r.amount)}</span>,
+    },
+  ];
+
+  const stockReportColumns: ColumnDef<StockReportItem>[] = [
+    { key: 'productCode', header: 'Ürün Kodu', width: '120px', render: (r) => <span className="font-mono text-slate-400 text-xs">{r.productCode}</span> },
+    { key: 'productName', header: 'Ürün Adı', render: (r) => <span className="text-slate-200 font-medium">{r.productName}</span> },
+    { key: 'warehouseName', header: 'Depo', render: (r) => <span className="text-slate-400 text-xs">{r.warehouseName}</span> },
+    {
+      key: 'quantity',
+      header: 'Stok Miktarı',
+      width: '120px',
+      align: 'right',
+      render: (r) => <span className="font-mono text-red-400 font-bold">{r.quantity}</span>,
+    },
+    {
+      key: 'minStockLevel',
+      header: 'Kritik Seviye',
+      width: '120px',
+      align: 'right',
+      render: (r) => <span className="font-mono text-slate-500 text-xs">{r.minStockLevel}</span>,
+    },
+  ];
+
+  const contactReportColumns: ColumnDef<ContactReportItem>[] = [
+    { key: 'code', header: 'Cari Kodu', width: '120px', render: (r) => <span className="font-mono text-slate-400 text-xs">{r.code ?? '—'}</span> },
+    { key: 'name', header: 'Cari Adı', render: (r) => <span className="text-slate-200 font-medium">{r.name}</span> },
+    {
+      key: 'type',
+      header: 'Tür',
+      width: '100px',
+      render: (r) => <span className="text-slate-400 text-xs uppercase">{r.type === 'CUSTOMER' ? 'Müşteri' : r.type === 'SUPPLIER' ? 'Tedarikçi' : 'Diğer'}</span>,
+    },
+    {
+      key: 'balance',
+      header: 'Bakiye',
+      width: '150px',
+      align: 'right',
+      render: (r) => {
+        const val = Number(r.balance);
+        return (
+          <span className={cn('font-mono font-bold', val > 0 ? 'text-emerald-400' : val < 0 ? 'text-red-400' : 'text-slate-400')}>
+            {val > 0 ? '+' : ''}{formatCurrency(val)}
+          </span>
+        );
+      },
+    },
+    { key: 'lastEntryDate', header: 'Son İşlem', width: '120px', render: (r) => <span className="text-slate-500 text-xs">{r.lastEntryDate ? formatDate(r.lastEntryDate) : '—'}</span> },
+  ];
+
   const profit = (revenue?.totalGross ?? 0) - (expense?.totalGross ?? 0);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader title="Raporlar" subtitle="İşletmenizin finansal ve operasyonel özetleri." />
 
-      {/* Date range filter */}
-      <div className="flex flex-wrap items-end gap-3">
-        <FormRow cols={2} className="w-auto">
-          <DatePicker label="Başlangıç" value={dateFrom} onValueChange={(value) => setDateFrom(value ?? '')} />
-          <DatePicker label="Bitiş" value={dateTo} onValueChange={(value) => setDateTo(value ?? '')} />
-        </FormRow>
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-slate-800 pb-px">
+        {[
+          { id: 'overview', label: 'Finansal Özet', icon: BarChart3 },
+          { id: 'collections', label: 'Tahsilat Listesi', icon: Coins },
+          { id: 'stock', label: 'Kritik Stok Raporu', icon: Package },
+          { id: 'contacts', label: 'Cari Bakiye Raporu', icon: Users },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all outline-none',
+                activeTab === tab.id
+                  ? 'border-sky-500 text-sky-400 font-semibold bg-sky-500/5 rounded-t-lg'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard
-          label="Gelir"
-          value={loadingRevenue ? '…' : formatCurrency(revenue?.totalGross ?? 0)}
-          sub={revenue ? `${revenue.invoiceCount} satış faturası` : undefined}
-          icon={<TrendingUp className="w-4 h-4 text-emerald-400" />}
-          accent="bg-emerald-500/10"
-        />
-        <StatCard
-          label="Gider"
-          value={loadingExpense ? '…' : formatCurrency(expense?.totalGross ?? 0)}
-          sub={expense ? `${expense.invoiceCount} alış faturası` : undefined}
-          icon={<TrendingDown className="w-4 h-4 text-red-400" />}
-          accent="bg-red-500/10"
-        />
-        <StatCard
-          label="Net Kar/Zarar"
-          value={formatCurrency(profit)}
-          sub={profit >= 0 ? 'Kârlı dönem' : 'Zararlı dönem'}
-          icon={<TrendingUp className="w-4 h-4 text-sky-400" />}
-          accent="bg-sky-500/10"
-        />
-        <StatCard
-          label="Stok Değeri"
-          value={stock ? formatCurrency(stock.summary.totalStockValue) : '—'}
-          sub={stock ? `${stock.summary.belowMinStockCount} kritik ürün` : undefined}
-          icon={<Package className="w-4 h-4 text-amber-400" />}
-          accent="bg-amber-500/10"
-        />
-      </div>
-
-      {/* Cari bakiye özeti */}
-      {contactBalance && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Users className="w-4 h-4 text-sky-400" />
-              <h3 className="text-sm font-semibold text-white">Cari Bakiye Özeti</h3>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Toplam Alacak</span>
-                <span className="text-emerald-400 font-medium">{formatCurrency(contactBalance.summary.totalReceivable)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Toplam Borç</span>
-                <span className="text-red-400 font-medium">{formatCurrency(contactBalance.summary.totalPayable)}</span>
-              </div>
-              <div className="flex justify-between text-sm border-t border-slate-800 pt-2">
-                <span className="text-slate-300 font-medium">Net Pozisyon</span>
-                <span className={`font-semibold ${contactBalance.summary.totalReceivable - contactBalance.summary.totalPayable >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {formatCurrency(contactBalance.summary.totalReceivable - contactBalance.summary.totalPayable)}
-                </span>
-              </div>
-            </div>
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          {/* Date range filter */}
+          <div className="flex flex-wrap items-end gap-3 bg-slate-900/40 p-4 border border-slate-800 rounded-xl">
+            <FormRow cols={2} className="w-auto">
+              <DatePicker label="Başlangıç" value={dateFrom} onValueChange={(value) => setDateFrom(value ?? '')} />
+              <DatePicker label="Bitiş" value={dateTo} onValueChange={(value) => setDateTo(value ?? '')} />
+            </FormRow>
           </div>
 
-          {/* Kritik stok */}
-          {stock && stock.belowMinStock.length > 0 && (
-            <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-amber-300 mb-3">Kritik Stok ({stock.belowMinStock.length})</h3>
-              <div className="space-y-2">
-                {stock.belowMinStock.slice(0, 5).map((item) => (
-                  <div key={item.productId} className="flex items-center justify-between text-sm">
-                    <div>
-                      <p className="text-amber-200">{item.productName}</p>
-                      <p className="text-xs text-amber-600">{item.warehouseName}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-red-400 font-medium">{item.quantity}</p>
-                      <p className="text-xs text-amber-600">min: {item.minStockLevel}</p>
-                    </div>
+          {/* Summary cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard
+              label="Gelir"
+              value={loadingRevenue ? '…' : formatCurrency(revenue?.totalGross ?? 0)}
+              sub={revenue ? `${revenue.invoiceCount} satış faturası` : undefined}
+              icon={<TrendingUp className="w-4 h-4 text-emerald-400" />}
+              accent="bg-emerald-500/10"
+            />
+            <StatCard
+              label="Gider"
+              value={loadingExpense ? '…' : formatCurrency(expense?.totalGross ?? 0)}
+              sub={expense ? `${expense.invoiceCount} alış faturası` : undefined}
+              icon={<TrendingDown className="w-4 h-4 text-red-400" />}
+              accent="bg-red-500/10"
+            />
+            <StatCard
+              label="Net Kar/Zarar"
+              value={formatCurrency(profit)}
+              sub={profit >= 0 ? 'Kârlı dönem' : 'Zararlı dönem'}
+              icon={<TrendingUp className="w-4 h-4 text-sky-400" />}
+              accent="bg-sky-500/10"
+            />
+            <StatCard
+              label="Stok Değeri"
+              value={stock ? formatCurrency(stock.summary.totalStockValue) : '—'}
+              sub={stock ? `${stock.summary.belowMinStockCount} kritik ürün` : undefined}
+              icon={<Package className="w-4 h-4 text-amber-400" />}
+              accent="bg-amber-500/10"
+            />
+          </div>
+
+          {/* Cari bakiye ve stok özet */}
+          {contactBalance && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="w-4 h-4 text-sky-400" />
+                  <h3 className="text-sm font-semibold text-white">Cari Bakiye Özeti</h3>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Toplam Alacak</span>
+                    <span className="text-emerald-400 font-medium">{formatCurrency(contactBalance.summary.totalReceivable)}</span>
                   </div>
-                ))}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Toplam Borç</span>
+                    <span className="text-red-400 font-medium">{formatCurrency(contactBalance.summary.totalPayable)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm border-t border-slate-800 pt-2">
+                    <span className="text-slate-300 font-medium">Net Pozisyon</span>
+                    <span className={`font-semibold ${contactBalance.summary.totalReceivable - contactBalance.summary.totalPayable >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {formatCurrency(contactBalance.summary.totalReceivable - contactBalance.summary.totalPayable)}
+                    </span>
+                  </div>
+                </div>
               </div>
+
+              {stock && stock.belowMinStock.length > 0 && (
+                <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl p-5">
+                  <h3 className="text-sm font-semibold text-amber-300 mb-3">Kritik Stok Önizleme ({stock.belowMinStock.length})</h3>
+                  <div className="space-y-2">
+                    {stock.belowMinStock.slice(0, 5).map((item) => (
+                      <div key={item.productId} className="flex items-center justify-between text-sm">
+                        <div>
+                          <p className="text-amber-200">{item.productName}</p>
+                          <p className="text-xs text-amber-600">{item.warehouseName}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-red-400 font-medium">{item.quantity}</p>
+                          <p className="text-xs text-amber-600">min: {item.minStockLevel}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
+
+          <FeatureGate feature="customReporting">
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-white">KPI Builder</h2>
+                  <p className="text-xs text-slate-500">Dataset, metrik, grafik ve dashboard pin ayarını tek kayıtta yönetin.</p>
+                </div>
+                {kpiPreview && (
+                  <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-2 text-right">
+                    <p className="text-xs text-sky-300">{kpiPreview.metricLabel}</p>
+                    <p className="text-lg font-semibold text-white">{kpiPreview.formattedValue}</p>
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-slate-300">KPI adı</span>
+                  <input
+                    value={kpiName}
+                    onChange={(event) => setKpiName(event.target.value)}
+                    className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-slate-300">Dataset</span>
+                  <select
+                    value={selectedDataset?.key ?? ''}
+                    onChange={(event) => {
+                      const dataset = registry?.datasets.find((item) => item.key === event.target.value);
+                      if (!dataset) return;
+                      setKpiConfig((current) => ({ ...current, dataset: dataset.key, metric: dataset.metrics[0]?.key ?? current.metric, groupBy: null }));
+                      setKpiPreview(null);
+                    }}
+                    className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+                  >
+                    {!selectedDataset && <option value="" disabled>Dataset seçin</option>}
+                    {registry?.datasets.map((dataset) => <option key={dataset.key} value={dataset.key}>{dataset.label}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-slate-300">Metrik</span>
+                  <select
+                    value={kpiConfig.metric}
+                    onChange={(event) => {
+                      setKpiConfig((current) => ({ ...current, metric: event.target.value }));
+                      setKpiPreview(null);
+                    }}
+                    className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+                  >
+                    {selectedDataset?.metrics.map((metric) => <option key={metric.key} value={metric.key}>{metric.label}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-slate-300">Grafik</span>
+                  <select
+                    value={kpiConfig.chartType}
+                    onChange={(event) => {
+                      const chartType = registry?.chartTypes.find((item) => item.key === event.target.value)?.key;
+                      if (chartType) setKpiConfig((current) => ({ ...current, chartType }));
+                    }}
+                    className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+                  >
+                    {registry?.chartTypes.map((chart) => <option key={chart.key} value={chart.key}>{chart.label}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-slate-300">Gruplama</span>
+                  <select
+                    value={kpiConfig.groupBy ?? ''}
+                    onChange={(event) => {
+                      setKpiConfig((current) => ({ ...current, groupBy: event.target.value || null }));
+                      setKpiPreview(null);
+                    }}
+                    className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+                  >
+                    <option value="">Gruplama yok</option>
+                    {selectedDataset?.groupBy.map((group) => <option key={group.key} value={group.key}>{group.label}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-slate-300">Tarih</span>
+                  <select
+                    value={kpiConfig.dateRangePreset}
+                    onChange={(event) => {
+                      const { value } = event.target;
+                      if (isDateRangePreset(value)) setKpiConfig((current) => ({ ...current, dateRangePreset: value }));
+                      setKpiPreview(null);
+                    }}
+                    className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+                  >
+                    <option value="THIS_MONTH">Bu ay</option>
+                    <option value="LAST_30_DAYS">Son 30 gün</option>
+                    <option value="THIS_YEAR">Bu yıl</option>
+                    <option value="CUSTOM">Özel</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-slate-300">Başlangıç</span>
+                  <input
+                    type="date"
+                    value={kpiConfig.dateFrom ?? ''}
+                    disabled={kpiConfig.dateRangePreset !== 'CUSTOM'}
+                    onChange={(event) => setKpiConfig((current) => ({ ...current, dateFrom: event.target.value || null }))}
+                    className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60 disabled:opacity-50"
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-slate-300">Bitiş</span>
+                  <input
+                    type="date"
+                    value={kpiConfig.dateTo ?? ''}
+                    disabled={kpiConfig.dateRangePreset !== 'CUSTOM'}
+                    onChange={(event) => setKpiConfig((current) => ({ ...current, dateTo: event.target.value || null }))}
+                    className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60 disabled:opacity-50"
+                  />
+                </label>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-4 text-xs text-slate-400">
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={kpiConfig.pinnedToDashboard}
+                      onChange={(event) => setKpiConfig((current) => ({ ...current, pinnedToDashboard: event.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-700 bg-slate-950"
+                    />
+                    Dashboarda sabitle
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={kpiConfig.scheduleEmail.enabled}
+                      onChange={(event) => setKpiConfig((current) => ({ ...current, scheduleEmail: { ...current.scheduleEmail, enabled: event.target.checked } }))}
+                      className="h-4 w-4 rounded border-slate-700 bg-slate-950"
+                    />
+                    Zamanlanmış e-posta
+                  </label>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="secondary" leftIcon={<TrendingUp className="h-4 w-4" />} loading={previewKpiMutation.isPending} disabled={!selectedDataset} onClick={() => previewKpiMutation.mutate(kpiConfig)}>
+                    Önizle
+                  </Button>
+                  <Button leftIcon={<Save className="h-4 w-4" />} loading={createKpiReport.isPending} disabled={!kpiName.trim() || !selectedDataset} onClick={() => createKpiReport.mutate()}>
+                    KPI kaydet
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </FeatureGate>
+
+          {/* Saved reports */}
+          <FeatureGate feature="customReporting">
+            <div>
+              <h2 className="text-sm font-semibold text-white mb-3">Kayıtlı Raporlar</h2>
+              <DataTable
+                columns={savedColumns}
+                data={savedReports}
+                keyExtractor={(r) => r.id}
+                isLoading={loadingSaved}
+                emptyTitle="Kayıtlı rapor yok"
+                emptyDescription="Raporları kaydetmek için ilgili rapor sayfasından 'Kaydet' butonunu kullanın."
+              />
+            </div>
+          </FeatureGate>
         </div>
       )}
 
-      <FeatureGate feature="customReporting">
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-white">KPI Builder</h2>
-              <p className="text-xs text-slate-500">Dataset, metrik, grafik ve dashboard pin ayarını tek kayıtta yönetin.</p>
-            </div>
-            {kpiPreview && (
-              <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-2 text-right">
-                <p className="text-xs text-sky-300">{kpiPreview.metricLabel}</p>
-                <p className="text-lg font-semibold text-white">{kpiPreview.formattedValue}</p>
-              </div>
-            )}
+      {activeTab === 'collections' && (
+        <div className="space-y-6">
+          {/* Date range filter */}
+          <div className="flex flex-wrap items-end gap-3 bg-slate-900/40 p-4 border border-slate-800 rounded-xl">
+            <FormRow cols={2} className="w-auto">
+              <DatePicker label="Başlangıç" value={dateFrom} onValueChange={(value) => setDateFrom(value ?? '')} />
+              <DatePicker label="Bitiş" value={dateTo} onValueChange={(value) => setDateTo(value ?? '')} />
+            </FormRow>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-slate-300">KPI adı</span>
-              <input
-                value={kpiName}
-                onChange={(event) => setKpiName(event.target.value)}
-                className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-slate-300">Dataset</span>
-              <select
-                value={selectedDataset?.key ?? ''}
-                onChange={(event) => {
-                  const dataset = registry?.datasets.find((item) => item.key === event.target.value);
-                  if (!dataset) return;
-                  setKpiConfig((current) => ({ ...current, dataset: dataset.key, metric: dataset.metrics[0]?.key ?? current.metric, groupBy: null }));
-                  setKpiPreview(null);
-                }}
-                className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
-              >
-                {!selectedDataset && <option value="" disabled>Dataset seçin</option>}
-                {registry?.datasets.map((dataset) => <option key={dataset.key} value={dataset.key}>{dataset.label}</option>)}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-slate-300">Metrik</span>
-              <select
-                value={kpiConfig.metric}
-                onChange={(event) => {
-                  setKpiConfig((current) => ({ ...current, metric: event.target.value }));
-                  setKpiPreview(null);
-                }}
-                className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
-              >
-                {selectedDataset?.metrics.map((metric) => <option key={metric.key} value={metric.key}>{metric.label}</option>)}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-slate-300">Grafik</span>
-              <select
-                value={kpiConfig.chartType}
-                onChange={(event) => {
-                  const chartType = registry?.chartTypes.find((item) => item.key === event.target.value)?.key;
-                  if (chartType) setKpiConfig((current) => ({ ...current, chartType }));
-                }}
-                className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
-              >
-                {registry?.chartTypes.map((chart) => <option key={chart.key} value={chart.key}>{chart.label}</option>)}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-slate-300">Gruplama</span>
-              <select
-                value={kpiConfig.groupBy ?? ''}
-                onChange={(event) => {
-                  setKpiConfig((current) => ({ ...current, groupBy: event.target.value || null }));
-                  setKpiPreview(null);
-                }}
-                className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
-              >
-                <option value="">Gruplama yok</option>
-                {selectedDataset?.groupBy.map((group) => <option key={group.key} value={group.key}>{group.label}</option>)}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-slate-300">Tarih</span>
-              <select
-                value={kpiConfig.dateRangePreset}
-                onChange={(event) => {
-                  const { value } = event.target;
-                  if (isDateRangePreset(value)) setKpiConfig((current) => ({ ...current, dateRangePreset: value }));
-                  setKpiPreview(null);
-                }}
-                className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
-              >
-                <option value="THIS_MONTH">Bu ay</option>
-                <option value="LAST_30_DAYS">Son 30 gün</option>
-                <option value="THIS_YEAR">Bu yıl</option>
-                <option value="CUSTOM">Özel</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-slate-300">Başlangıç</span>
-              <input
-                type="date"
-                value={kpiConfig.dateFrom ?? ''}
-                disabled={kpiConfig.dateRangePreset !== 'CUSTOM'}
-                onChange={(event) => setKpiConfig((current) => ({ ...current, dateFrom: event.target.value || null }))}
-                className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60 disabled:opacity-50"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-slate-300">Bitiş</span>
-              <input
-                type="date"
-                value={kpiConfig.dateTo ?? ''}
-                disabled={kpiConfig.dateRangePreset !== 'CUSTOM'}
-                onChange={(event) => setKpiConfig((current) => ({ ...current, dateTo: event.target.value || null }))}
-                className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60 disabled:opacity-50"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-slate-300">E-posta sıklığı</span>
-              <select
-                value={kpiConfig.scheduleEmail.frequency}
-                onChange={(event) => {
-                  const { value } = event.target;
-                  if (isScheduleFrequency(value)) setKpiConfig((current) => ({ ...current, scheduleEmail: { ...current.scheduleEmail, frequency: value, enabled: true } }));
-                }}
-                className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
-              >
-                <option value="DAILY">Günlük</option>
-                <option value="WEEKLY">Haftalık</option>
-                <option value="MONTHLY">Aylık</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5 md:col-span-2">
-              <span className="text-xs font-medium text-slate-300">E-posta alıcıları</span>
-              <input
-                value={kpiConfig.scheduleEmail.recipients.join(', ')}
-                onChange={(event) => {
-                  const recipients = parseRecipientInput(event.target.value);
-                  setKpiConfig((current) => ({
-                    ...current,
-                    scheduleEmail: {
-                      ...current.scheduleEmail,
-                      recipients,
-                      enabled: recipients.length > 0 || current.scheduleEmail.enabled,
-                    },
-                  }));
-                }}
-                placeholder="finans@firma.com, owner@firma.com"
-                className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
-              />
-            </label>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <StatCard
+              label="Toplam Tahsilat Tutarı"
+              value={loadingCollections ? '…' : formatCurrency(collectionList?.summary.totalCollected ?? 0)}
+              sub="Belirtilen tarih aralığındaki toplam tahsilatlar"
+              icon={<Coins className="w-4 h-4 text-emerald-400" />}
+              accent="bg-emerald-500/10"
+            />
+            <StatCard
+              label="İşlem Sayısı"
+              value={loadingCollections ? '…' : String(collectionList?.summary.count ?? 0)}
+              sub="Toplam başarılı tahsilat makbuzu"
+              icon={<TrendingUp className="w-4 h-4 text-sky-400" />}
+              accent="bg-sky-500/10"
+            />
           </div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-4 text-xs text-slate-400">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={kpiConfig.pinnedToDashboard}
-                  onChange={(event) => setKpiConfig((current) => ({ ...current, pinnedToDashboard: event.target.checked }))}
-                  className="h-4 w-4 rounded border-slate-700 bg-slate-950"
-                />
-                Dashboarda sabitle
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={kpiConfig.scheduleEmail.enabled}
-                  onChange={(event) => setKpiConfig((current) => ({ ...current, scheduleEmail: { ...current.scheduleEmail, enabled: event.target.checked } }))}
-                  className="h-4 w-4 rounded border-slate-700 bg-slate-950"
-                />
-                Zamanlanmış e-posta
-              </label>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="secondary" leftIcon={<TrendingUp className="h-4 w-4" />} loading={previewKpiMutation.isPending} disabled={!selectedDataset} onClick={() => previewKpiMutation.mutate(kpiConfig)}>
-                Önizle
-              </Button>
-              <Button leftIcon={<Save className="h-4 w-4" />} loading={createKpiReport.isPending} disabled={!kpiName.trim() || !selectedDataset} onClick={() => createKpiReport.mutate()}>
-                KPI kaydet
-              </Button>
-            </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-white mb-4">Tahsilat İşlemleri Listesi</h3>
+            <DataTable
+              columns={collectionColumns}
+              data={collectionList?.payments ?? []}
+              keyExtractor={(r) => r.id}
+              isLoading={loadingCollections}
+              emptyTitle="Tahsilat kaydı bulunamadı"
+              emptyDescription="Bu tarih aralığında kaydedilmiş tahsilat işlemi yok."
+            />
           </div>
         </div>
-      </FeatureGate>
+      )}
 
-      {/* Saved reports */}
-      <FeatureGate feature="customReporting">
-        <div>
-          <h2 className="text-sm font-semibold text-white mb-3">Kayıtlı Raporlar</h2>
+      {activeTab === 'stock' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Kritik Stok Seviyesindeki Ürünler</h3>
+            <p className="text-xs text-slate-500 mt-1">Stok seviyesi belirlenen minimum sınırın altına düşen tüm ürünlerin listesi.</p>
+          </div>
           <DataTable
-            columns={savedColumns}
-            data={savedReports}
-            keyExtractor={(r) => r.id}
-            isLoading={loadingSaved}
-            emptyTitle="Kayıtlı rapor yok"
-            emptyDescription="Raporları kaydetmek için ilgili rapor sayfasından 'Kaydet' butonunu kullanın."
+            columns={stockReportColumns}
+            data={stock?.belowMinStock ?? []}
+            keyExtractor={(r) => r.productId + r.warehouseName}
+            isLoading={loadingStock}
+            emptyTitle="Kritik stokta ürün yok"
+            emptyDescription="Harika! Tüm ürünlerinizin stok miktarı minimum limitlerin üzerinde."
           />
         </div>
-      </FeatureGate>
+      )}
+
+      {activeTab === 'contacts' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <StatCard
+              label="Toplam Alacaklar"
+              value={loadingContactBalance ? '…' : formatCurrency(contactBalance?.summary.totalReceivable ?? 0)}
+              sub="Müşterilerden beklenen toplam ödemeler"
+              icon={<TrendingUp className="w-4 h-4 text-emerald-400" />}
+              accent="bg-emerald-500/10"
+            />
+            <StatCard
+              label="Toplam Borçlar"
+              value={loadingContactBalance ? '…' : formatCurrency(contactBalance?.summary.totalPayable ?? 0)}
+              sub="Tedarikçilere yapılacak toplam ödemeler"
+              icon={<TrendingDown className="w-4 h-4 text-red-400" />}
+              accent="bg-red-500/10"
+            />
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-white mb-4">Cari Bakiyeler Listesi</h3>
+            <DataTable
+              columns={contactReportColumns}
+              data={contactBalance?.contacts ?? []}
+              keyExtractor={(r) => r.contactId}
+              isLoading={loadingContactBalance}
+              emptyTitle="Cari bakiye kaydı bulunamadı"
+              emptyDescription="Sistemde bakiye kaydı bulunan cari hesap yok."
+            />
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         isOpen={!!deleteTarget}

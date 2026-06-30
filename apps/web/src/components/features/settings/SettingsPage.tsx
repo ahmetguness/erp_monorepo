@@ -7,6 +7,7 @@ import {
   Globe, Calendar, Receipt, DollarSign, Clock,
   Calculator, Package, FileText, ShieldCheck,
   KeyRound, Monitor, ShieldAlert, Activity,
+  RefreshCw, Trash2,
 } from 'lucide-react';
 import { FeaturePageShell } from '@/components/shared/FeaturePageShell';
 import { ImageUploadBox, type ImageUploadStatus } from '@/components/shared/ImageUploadBox';
@@ -28,6 +29,7 @@ import {
   useTenantSecurityScore,
   useSecurityHardeningSnapshot,
   useRevokeSecuritySession,
+  useCleanDemoData,
 } from '@/hooks/useSettings';
 import { cn } from '@/lib/utils';
 import type { TenantSetting, ModuleSetting, BusinessRule } from '@/services/settings.service';
@@ -352,6 +354,8 @@ export function SettingsPage() {
   const deleteLogo = useDeleteTenantLogo();
   const upsertBusinessRule = useUpsertBusinessRule();
   const revokeSession = useRevokeSecuritySession();
+  const cleanDemo = useCleanDemoData();
+
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
@@ -362,6 +366,7 @@ export function SettingsPage() {
   const [newKey, setNewKey] = useState('');
   const [newValue, setNewValue] = useState('');
   const [newModule, setNewModule] = useState('');
+  const [cleanConfirmOpen, setCleanConfirmOpen] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -888,6 +893,78 @@ export function SettingsPage() {
       {loadingModule && Object.keys(moduleGroups).length === 0 && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-sm text-slate-600">Modül ayarları yükleniyor…</div>
       )}
+
+      {/* ── Canlıya Geçiş ve Demo Veri Temizliği ── */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-800/60">
+          <div className="p-2 rounded-lg bg-rose-500/10">
+            <Trash2 className="w-4 h-4 text-rose-400" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-white">Canlıya Geçiş ve Demo Veri Temizliği</h2>
+            <p className="text-xs text-slate-500">Sistemi gerçek kullanıma hazırlamak için örnek verileri temizleyin</p>
+          </div>
+        </div>
+        <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="text-sm text-slate-300">
+              Sistemdeki tüm faturalar, teklifler, ödemeler, stok hareketleri, e-belge taslakları ve hatırlatıcılar gibi işlemsel veriler tamamen silinir. 
+              Tanımladığınız ürünler, cari hesaplar, depolar ve vergi ayarları korunur.
+            </p>
+            <p className="text-xs text-rose-400/80 mt-2 font-medium">
+              * Bu işlem geri alınamaz. Lütfen işleme başlamadan önce emin olun.
+            </p>
+          </div>
+          <div className="shrink-0">
+            <Button
+              variant="outline"
+              leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+              onClick={() => setCleanConfirmOpen(true)}
+              className="border-rose-500/30 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/50"
+            >
+              Demo Verileri Temizle
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Clean confirmation modal ────────────── */}
+      <Modal 
+        isOpen={cleanConfirmOpen} 
+        onClose={() => setCleanConfirmOpen(false)} 
+        title="Demo Verileri Temizle" 
+        description="Örnek verileri temizleyip canlı moda geçmek istediğinizden emin misiniz?" 
+        size="sm"
+        footer={<>
+          <Button variant="ghost" size="sm" onClick={() => setCleanConfirmOpen(false)}>İptal</Button>
+          <Button 
+            size="sm" 
+            leftIcon={<Trash2 className="w-3.5 h-3.5" />} 
+            onClick={() => cleanDemo.mutate(undefined, { onSuccess: () => setCleanConfirmOpen(false) })} 
+            loading={cleanDemo.isPending}
+            className="bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/20"
+          >
+            Verileri Temizle
+          </Button>
+        </>}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-300">
+            Aşağıdaki veriler kalıcı olarak silinecektir:
+          </p>
+          <ul className="list-disc list-inside text-xs text-slate-400 space-y-1 pl-1">
+            <li>Tüm Satış Siparişleri & Teklifleri</li>
+            <li>Tüm Kesilmiş/Taslak Faturalar</li>
+            <li>Tüm Kasa, Banka ve Ödeme Hareketleri</li>
+            <li>Tüm Depo Giriş/Çıkış Stok Hareketleri</li>
+            <li>E-Arşiv / E-Fatura Taslak Belgeleri</li>
+            <li>Kayıtlı Tahsilat Hatırlatıcıları</li>
+          </ul>
+          <p className="text-xs text-amber-400 font-medium bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg mt-2">
+            Şirket bilgileri, ilk depo, ilk ürün, ilk cari ve vergi oranları gibi temel kurulum verileriniz silinmez, korunur.
+          </p>
+        </div>
+      </Modal>
 
       {/* ── Add setting modal ───────────────────── */}
       <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title="Yeni Ayar Ekle" description="Sistem veya modül ayarı ekleyin." size="sm"

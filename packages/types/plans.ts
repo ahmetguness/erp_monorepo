@@ -2,9 +2,11 @@ export const PLAN = {
   STARTER: 'STARTER',
   PROFESSIONAL: 'PROFESSIONAL',
   ENTERPRISE: 'ENTERPRISE',
-};
+} as const;
 
-export const PLAN_RANK = {
+export type PlanName = typeof PLAN[keyof typeof PLAN];
+
+export const PLAN_RANK: Record<PlanName, number> = {
   [PLAN.STARTER]: 1,
   [PLAN.PROFESSIONAL]: 2,
   [PLAN.ENTERPRISE]: 3,
@@ -27,13 +29,17 @@ export const FEATURE_KEY = {
   API_ACCESS: 'API_ACCESS',
   AUDIT_LOG: 'AUDIT_LOG',
   CUSTOM_REPORTING: 'CUSTOM_REPORTING',
-};
+} as const;
+
+export type FeatureKeyName = typeof FEATURE_KEY[keyof typeof FEATURE_KEY];
 
 export const FEATURE_TYPE = {
   BOOLEAN: 'BOOLEAN',
   LIMIT: 'LIMIT',
   ENUM: 'ENUM',
-};
+} as const;
+
+export type FeatureTypeName = typeof FEATURE_TYPE[keyof typeof FEATURE_TYPE];
 
 export const MODULE_KEY = {
   ACCOUNTING: 'accounting',
@@ -52,9 +58,11 @@ export const MODULE_KEY = {
   MAIL: 'mail',
   WORKFLOW: 'workflow',
   DOCUMENTS: 'documents',
-};
+} as const;
 
-export const STARTER_OPEN_MODULES = [
+export type ModuleKey = typeof MODULE_KEY[keyof typeof MODULE_KEY];
+
+export const STARTER_OPEN_MODULES: readonly ModuleKey[] = [
   MODULE_KEY.ACCOUNTING,
   MODULE_KEY.INVENTORY,
   MODULE_KEY.CONTACTS,
@@ -63,7 +71,30 @@ export const STARTER_OPEN_MODULES = [
   MODULE_KEY.DOCUMENTS,
 ];
 
-export const PLAN_FEATURES = {
+export interface PlanFeatureFlags {
+  maxUsers: number | null;
+  maxProducts: number | null;
+  multiWarehouse: boolean;
+  roleManagement: boolean;
+  approvals: boolean;
+  crm: boolean;
+  sales: boolean;
+  purchasing: boolean;
+  production: boolean;
+  service: boolean;
+  marketplace: boolean;
+  payroll: boolean;
+  hr: boolean;
+  apiAccess: boolean;
+  advancedAuditLog: boolean;
+  customReporting: boolean;
+  documentCenter: boolean;
+  smartNotifications: boolean;
+  workflowCenter: boolean;
+  mailCenter: boolean;
+}
+
+export const PLAN_FEATURES: Record<PlanName, PlanFeatureFlags> = {
   [PLAN.STARTER]: {
     maxUsers: 5,
     maxProducts: 500,
@@ -132,7 +163,7 @@ export const PLAN_FEATURES = {
   },
 };
 
-export const PLAN_MODULES = {
+export const PLAN_MODULES: Record<PlanName, readonly ModuleKey[]> = {
   [PLAN.STARTER]: [
     MODULE_KEY.ACCOUNTING,
     MODULE_KEY.INVENTORY,
@@ -173,7 +204,15 @@ export const PLAN_MODULES = {
   ],
 };
 
-export const PLAN_FEATURE_ROWS = [
+export interface PlanFeatureRow {
+  plan: PlanName;
+  key: string;
+  featureKey: FeatureKeyName;
+  value: string;
+  type: FeatureTypeName;
+}
+
+export const PLAN_FEATURE_ROWS: readonly PlanFeatureRow[] = [
   { plan: PLAN.STARTER, key: 'max_users', featureKey: FEATURE_KEY.MAX_USERS, value: '5', type: FEATURE_TYPE.LIMIT },
   { plan: PLAN.STARTER, key: 'max_products', featureKey: FEATURE_KEY.MAX_PRODUCTS, value: '500', type: FEATURE_TYPE.LIMIT },
   { plan: PLAN.STARTER, key: 'multi_warehouse', featureKey: FEATURE_KEY.MULTI_WAREHOUSE, value: 'false', type: FEATURE_TYPE.BOOLEAN },
@@ -224,13 +263,19 @@ export const PLAN_FEATURE_ROWS = [
   { plan: PLAN.ENTERPRISE, key: 'custom_reporting', featureKey: FEATURE_KEY.CUSTOM_REPORTING, value: 'true', type: FEATURE_TYPE.BOOLEAN },
 ];
 
-export const ACCESS_POLICIES = {
+export interface AccessPolicy {
+  minPlan?: PlanName;
+  featureKey?: FeatureKeyName;
+  module?: ModuleKey;
+}
+
+export const ACCESS_POLICIES: Record<string, AccessPolicy> = {
   purchasing: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.PURCHASING, module: MODULE_KEY.PURCHASING },
   approvals: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.APPROVALS, module: MODULE_KEY.APPROVALS },
   apiKeys: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.API_ACCESS },
   roles: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.ROLE_MANAGEMENT },
   deliveryNotes: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVOICING },
-  eDocuments: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVOICING },
+  eDocuments: { minPlan: PLAN.STARTER, module: MODULE_KEY.INVOICING },
   bankTransactions: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.ACCOUNTING },
   checkPromissory: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.ACCOUNTING },
   reconciliations: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.ACCOUNTING },
@@ -243,15 +288,15 @@ export const ACCESS_POLICIES = {
   marketplace: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.MARKETPLACE, module: MODULE_KEY.MARKETPLACE },
   hr: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.HR, module: MODULE_KEY.HR },
   payroll: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.PAYROLL, module: MODULE_KEY.PAYROLL },
-  mail: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.HR, module: MODULE_KEY.MAIL },
+  mail: { minPlan: PLAN.ENTERPRISE, module: MODULE_KEY.MAIL },
   chat: { minPlan: PLAN.ENTERPRISE },
   aiGovernance: { minPlan: PLAN.ENTERPRISE },
 };
 
-export function isPlanAtLeast(currentPlan, requiredPlan) {
+export function isPlanAtLeast(currentPlan: PlanName, requiredPlan: PlanName): boolean {
   return PLAN_RANK[currentPlan] >= PLAN_RANK[requiredPlan];
 }
 
-export function normalizeModuleKey(module) {
+export function normalizeModuleKey(module: string): string {
   return String(module).toLowerCase();
 }

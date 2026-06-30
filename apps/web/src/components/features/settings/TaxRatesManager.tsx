@@ -25,6 +25,7 @@ const taxRateSchema = z.object({
     (v) => !isNaN(Number(v)) && Number(v) >= 0 && Number(v) <= 100,
     'Geçerli bir oran girin (0-100)',
   ),
+  isWithholding: z.boolean().optional(),
 });
 
 type TaxRateForm = z.infer<typeof taxRateSchema>;
@@ -46,12 +47,12 @@ export function TaxRatesManager() {
     resolver: zodResolver(taxRateSchema),
   });
 
-  const openCreate = () => { reset({ name: '', rate: '' }); setModalState({ open: true, editing: null }); };
-  const openEdit = (t: TaxRate) => { reset({ name: t.name, rate: String(t.rate) }); setModalState({ open: true, editing: t }); };
+  const openCreate = () => { reset({ name: '', rate: '', isWithholding: false }); setModalState({ open: true, editing: null }); };
+  const openEdit = (t: TaxRate) => { reset({ name: t.name, rate: String(t.rate), isWithholding: !!t.isWithholding }); setModalState({ open: true, editing: t }); };
   const closeModal = () => { setModalState({ open: false, editing: null }); reset(); };
 
   const onSubmit = (data: TaxRateForm) => {
-    const payload = { name: data.name, rate: Number(data.rate) };
+    const payload = { name: data.name, rate: Number(data.rate), isWithholding: !!data.isWithholding };
     if (modalState.editing) {
       updateTaxRate.mutate({ id: modalState.editing.id, data: payload }, { onSuccess: closeModal });
     } else {
@@ -61,6 +62,10 @@ export function TaxRatesManager() {
 
   const columns: ColumnDef<TaxRate>[] = [
     { key: 'name', header: 'Ad', render: (r) => <span className="text-slate-200">{r.name}</span> },
+    {
+      key: 'isWithholding', header: 'Tür', width: '120px',
+      render: (r) => <Badge variant={r.isWithholding ? 'warning' : 'info'}>{r.isWithholding ? 'Stopaj / Tevkifat' : 'KDV'}</Badge>,
+    },
     {
       key: 'rate', header: 'Oran', width: '100px', align: 'right',
       render: (r) => <span className="font-mono text-sky-400">%{r.rate}</span>,
@@ -88,8 +93,8 @@ export function TaxRatesManager() {
   return (
     <div>
       <PageHeader
-        title="KDV Oranları"
-        subtitle="Fatura ve ürünlerde kullanılan vergi oranlarını yönetin."
+        title="Vergi Oranları"
+        subtitle="Fatura ve ürünlerde kullanılan vergi ve stopaj oranlarını yönetin."
         action={
           <Button leftIcon={<Plus className="w-4 h-4" />} onClick={openCreate}>
             Yeni Oran
@@ -102,13 +107,13 @@ export function TaxRatesManager() {
         data={taxRates}
         keyExtractor={(r) => r.id}
         isLoading={isLoading}
-        emptyTitle="Henüz KDV oranı eklenmemiş"
+        emptyTitle="Henüz vergi veya stopaj oranı eklenmemiş"
       />
 
       <Modal
         isOpen={modalState.open}
         onClose={closeModal}
-        title={modalState.editing ? 'KDV Oranı Düzenle' : 'Yeni KDV Oranı'}
+        title={modalState.editing ? 'Vergi Oranı Düzenle' : 'Yeni Vergi Oranı'}
         size="sm"
         footer={
           <>
@@ -119,9 +124,19 @@ export function TaxRatesManager() {
       >
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <FormRow cols={2}>
-            <Input label="Ad" required placeholder="KDV %18" error={errors.name?.message} {...register('name')} />
+            <Input label="Ad" required placeholder="KDV %18 veya Stopaj %2" error={errors.name?.message} {...register('name')} />
             <Input label="Oran (%)" required type="number" step="0.01" placeholder="18" error={errors.rate?.message} {...register('rate')} />
           </FormRow>
+          <div className="flex items-center gap-2 pt-2">
+            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-sky-500 focus:ring-sky-500/30"
+                {...register('isWithholding')}
+              />
+              Tevkifat / Stopaj oranı (KDV matrahından düşülür)
+            </label>
+          </div>
         </form>
       </Modal>
     </div>

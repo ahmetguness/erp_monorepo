@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { SettingsController } from '../controllers/settings.controller';
+import { QuickStartController } from '../controllers/quick-start.controller';
 import { requirePermission } from '../middleware/requirePermission';
 import { validateBody } from '../middleware/validateBody';
 import {
@@ -28,5 +29,9 @@ settingsRoutes.delete('/:key', requirePermission('settings', 'DELETE'), Settings
 // Module settings
 settingsRoutes.get('/modules', requirePermission('settings', 'READ'), SettingsController.listModuleSettings);
 settingsRoutes.put('/modules', requirePermission('settings', 'UPDATE'), validateBody(moduleSettingBodySchema), SettingsController.upsertModuleSetting);
+
+// Quick Start Wizard & Demo cleanup
+settingsRoutes.post('/quick-start', requirePermission('settings', 'UPDATE'), QuickStartController.setup);
+settingsRoutes.post('/clean-demo-data', requirePermission('settings', 'DELETE'), QuickStartController.cleanDemoData);
 
 export { settingsRoutes };

@@ -49,7 +49,7 @@ import {
   Bot,
   type LucideIcon,
 } from 'lucide-react';
-import { ACCESS_POLICIES } from '@/lib/plans';
+import { ACCESS_POLICIES } from './plans';
 
 export interface NavItem {
   label: string;
@@ -86,7 +86,7 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: 'Siparişler', href: '/dashboard/sales-orders', icon: ShoppingCart, module: 'sales' },
           { label: 'Faturalar', href: '/dashboard/invoices', icon: Receipt, module: 'invoicing' },
           { label: 'İrsaliyeler', href: '/dashboard/delivery-notes', icon: Truck, plan: PROFESSIONAL_PLAN, module: 'invoicing' },
-          { label: 'E-Belgeler', href: '/dashboard/e-documents', icon: FileCheck, plan: PROFESSIONAL_PLAN, module: 'invoicing' },
+          { label: 'E-Belgeler', href: '/dashboard/e-documents', icon: FileCheck, module: 'invoicing' },
         ],
       },
       {
@@ -183,6 +183,7 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: 'Ödemeler', href: '/dashboard/payments', icon: Banknote, module: 'accounting' },
           { label: 'Banka Hesapları', href: '/dashboard/payments/bank-accounts', icon: Landmark, module: 'accounting' },
           { label: 'Kasa Hesapları', href: '/dashboard/payments/cash-accounts', icon: Coins, module: 'accounting' },
+          { label: 'Tahsilat Hatırlatıcıları', href: '/dashboard/collection-reminders', icon: ClockIcon, module: 'accounting' },
           { label: 'Banka Hareketleri', href: '/dashboard/bank-transactions', icon: Building2, plan: PROFESSIONAL_PLAN, module: 'accounting' },
           { label: 'Çek / Senet', href: '/dashboard/check-promissory', icon: ScrollText, plan: PROFESSIONAL_PLAN, module: 'accounting' },
         ],

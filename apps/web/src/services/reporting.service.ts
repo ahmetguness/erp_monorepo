@@ -181,3 +181,23 @@ export async function recordSavedReportExportAudit(id: string): Promise<ReportEx
   const res = await apiClient.post(`/api/reports/saved/${id}/export-audit`);
   return safeParse(SingleResponseSchema(ReportExportAuditResultSchema), res.data, 'recordSavedReportExportAudit').data;
 }
+
+const CollectionListSchema = SingleResponseSchema(z.object({
+  payments: z.array(z.object({
+    id: z.string(),
+    amount: z.coerce.number(),
+    date: z.string(),
+    description: z.string().nullable(),
+    contact: z.object({ id: z.string(), name: z.string(), code: z.string().nullable() }),
+    bankAccount: z.object({ id: z.string(), name: z.string() }).nullable(),
+    cashAccount: z.object({ id: z.string(), name: z.string() }).nullable(),
+  })),
+  summary: z.object({ totalCollected: z.coerce.number(), count: z.coerce.number() }),
+}));
+
+export type CollectionList = z.infer<typeof CollectionListSchema>['data'];
+
+export async function getCollectionList(dateFrom?: string, dateTo?: string): Promise<CollectionList> {
+  const res = await apiClient.get('/api/reports/collection-list', { params: { dateFrom, dateTo } });
+  return safeParse(CollectionListSchema, res.data, 'getCollectionList').data;
+}

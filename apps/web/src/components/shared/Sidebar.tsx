@@ -28,28 +28,26 @@ function hasPlanAccess(tenantPlan: string, requiredPlan?: string): boolean {
   return (PLAN_RANK[tenantPlan] ?? 0) >= (PLAN_RANK[requiredPlan] ?? 0);
 }
 
-function hasModuleAccess(tenantModules: string[], requiredModule?: string): boolean {
-  if (!requiredModule) return true;           // modül kısıtı yok → her zaman görünür
-  if (tenantModules.length === 0) return true; // boş liste → kısıtlama yok (legacy)
-  return tenantModules.includes(requiredModule);
+function hasModuleAccess(tenantModules: string[] | undefined | null, requiredModule?: string): boolean {
+  if (!requiredModule) return true;
+  if (!tenantModules || tenantModules.length === 0) return true;
+  const normalized = tenantModules.map((m) => String(m).toLowerCase());
+  const req = requiredModule.toLowerCase();
+  if (req === 'sales') return normalized.includes('sales') || normalized.includes('invoicing') || normalized.includes('contacts');
+  if (req === 'inventory') return normalized.includes('inventory') || normalized.includes('warehouse');
+  if (req === 'mail') return normalized.includes('mail') || normalized.includes('mailcenter');
+  return normalized.includes(req);
 }
 
-function hasAccess(tenantPlan: string, tenantModules: string[], item: { plan?: string; module?: string }): boolean {
+function hasAccess(tenantPlan: string, tenantModules: string[] | undefined | null, item: { plan?: string; module?: string }): boolean {
   const hasRequiredPlan = hasPlanAccess(tenantPlan, item.plan);
+  if (!tenantModules || tenantModules.length === 0) return hasRequiredPlan;
 
-  // Eğer modül listesi doluysa -> Kısıtlayıcı Model: SADECE listedeki modüller (ve modülsüzler) gösterilir
-  if (tenantModules.length > 0) {
-    if (!item.module) {
-      // Dashboard, Rol Yönetimi, Ayarlar vb. modül bağımsızlar için planı yeterli mi kontrol et
-      return hasRequiredPlan;
-    }
-    // "warehouse" modülü açıldıysa nav-config'deki "inventory" menüsünün görünmesini sağla
-    const hasRequiredModule = tenantModules.includes(item.module) || (tenantModules.includes('warehouse') && item.module === 'inventory');
-    return hasRequiredPlan && hasRequiredModule;
+  if (!item.module) {
+    return hasRequiredPlan;
   }
-
-  // Eğer özel modül tanımlanmamışsa -> Normal Plan Kontrolü
-  return hasRequiredPlan;
+  const hasRequiredModule = hasModuleAccess(tenantModules, item.module);
+  return hasRequiredPlan && hasRequiredModule;
 }
 
 function normalizeSearchText(value: string): string {

@@ -25,6 +25,7 @@ export const registerBodySchema = z.object({
 export const invoiceLineBodySchema = z.object({
   productId: optionalString,
   taxRateId: optionalString,
+  withholdingRateId: optionalString,
   description: nonEmptyString,
   quantity: positiveNumber,
   unitPrice: nonNegativeNumber,
@@ -136,3 +137,13 @@ export type CreateStockCountBody = z.infer<typeof createStockCountBodySchema>;
 export type FinalizeStockCountBody = z.infer<typeof finalizeStockCountBodySchema>;
 export type CreateUserBody = z.infer<typeof createUserBodySchema>;
 export type UpdateUserBody = z.infer<typeof updateUserBodySchema>;
+
+export const createCollectionReminderBodySchema = z.object({
+  contactId: nonEmptyString,
+  invoiceId: optionalString,
+  amount: positiveNumber,
+  dueDate: nonEmptyString,
+  notes: optionalString,
+}).strict();
+
+export type CreateCollectionReminderBody = z.infer<typeof createCollectionReminderBodySchema>;

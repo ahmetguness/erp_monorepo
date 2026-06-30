@@ -111,21 +111,21 @@ export class StarterAccessService {
    * Kapalı modüle erişimde ModuleDisabledError fırlatır.
    */
   async enforceModuleAccess(tenantId: string, module: ModuleKey): Promise<void> {
-    // Starter plan için açık modüller statik olarak tanımlı
-    if (isModuleInList([...STARTER_OPEN_MODULES], module)) {
-      // Açık modül → DB'den tenant modules listesini de kontrol et
-      const tenant = await this.prisma.tenant.findUniqueOrThrow({
-        where: { id: tenantId },
-        select: { modules: true },
-      });
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { plan: true, modules: true },
+    });
 
-      // Tenant modules listesi boşsa açık modüllere izin ver
-      if (tenant.modules.length === 0 || isModuleInList(tenant.modules, module)) {
+    if (tenant.modules.length > 0) {
+      if (isModuleInList(tenant.modules, module)) {
+        return;
+      }
+    } else {
+      if (isModuleInList([...STARTER_OPEN_MODULES], module)) {
         return;
       }
     }
 
-    // Kapalı modül veya tenant listesinde yok
     throw new ModuleDisabledError(module);
   }
 

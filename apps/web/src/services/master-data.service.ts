@@ -30,6 +30,7 @@ export const TaxRateSchema = z.object({
   name: z.string(),
   rate: z.coerce.number(),
   isActive: z.boolean(),
+  isWithholding: z.boolean().default(false),
 });
 
 export const CurrencySchema = z.object({
@@ -66,8 +67,8 @@ export type Currency = z.infer<typeof CurrencySchema>;
 export interface CreateUnitDTO { name: string; code: string; }
 export interface CreateCategoryDTO { name: string; parentId?: string; }
 export interface UpdateCategoryDTO { name?: string; parentId?: string; }
-export interface CreateTaxRateDTO { name: string; rate: number; }
-export interface UpdateTaxRateDTO { name?: string; rate?: number; isActive?: boolean; }
+export interface CreateTaxRateDTO { name: string; rate: number; isWithholding?: boolean; }
+export interface UpdateTaxRateDTO { name?: string; rate?: number; isActive?: boolean; isWithholding?: boolean; }
 export interface CreateCurrencyDTO {
   code: string; name: string; symbol: string;
   defaultRate?: number; isBase?: boolean;

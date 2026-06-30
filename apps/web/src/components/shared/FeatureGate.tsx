@@ -8,7 +8,7 @@ import Link from 'next/link';
 
 interface FeatureGateProps {
   feature?: FeatureFlag | FeatureFlag[];
-  plan?: Extract<PlanName, 'PROFESSIONAL' | 'ENTERPRISE'>;
+  plan?: PlanName;
   children: React.ReactNode;
   fallback?: React.ReactNode;
 }

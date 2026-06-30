@@ -217,6 +217,46 @@ export const ReportingController = {
       },
     });
   },
+
+  async collectionList(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const dateFrom = c.req.query('dateFrom');
+    const dateTo = c.req.query('dateTo');
+
+    const payments = await prisma.payment.findMany({
+      where: {
+        tenantId,
+        direction: 'RECEIVE',
+        deletedAt: null,
+        ...(dateFrom || dateTo
+          ? {
+              date: {
+                ...(dateFrom && { gte: new Date(dateFrom) }),
+                ...(dateTo && { lte: new Date(dateTo) }),
+              },
+            }
+          : {}),
+      },
+      include: {
+        contact: { select: { id: true, name: true, code: true } },
+        bankAccount: { select: { id: true, name: true } },
+        cashAccount: { select: { id: true, name: true } },
+      },
+      orderBy: { date: 'desc' },
+    });
+
+    const totalCollected = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+
+    return c.json({
+      data: {
+        payments,
+        summary: {
+          totalCollected,
+          count: payments.length,
+        },
+      },
+    });
+  },
 };
 
 // ─────────────────────────────────────────────

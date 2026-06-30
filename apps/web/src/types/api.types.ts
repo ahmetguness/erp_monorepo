@@ -78,11 +78,19 @@ export function isApiError(value: unknown): value is ApiError {
 
 export function getErrorMessage(error: unknown): string {
   if (isApiError(error)) return error.error.message;
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as { response?: { data?: unknown } }).response;
+    if (isApiError(response?.data)) return response.data.error.message;
+  }
   if (error instanceof Error) return error.message;
   return 'Beklenmeyen bir hata oluştu.';
 }
 
 export function getErrorCode(error: unknown): string | null {
   if (isApiError(error)) return error.error.code;
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as { response?: { data?: unknown } }).response;
+    if (isApiError(response?.data)) return response.data.error.code;
+  }
   return null;
 }
