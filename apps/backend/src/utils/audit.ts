@@ -2,6 +2,7 @@ import { AuditAction, EntityType, Prisma } from '@prisma/client';
 import type { Context } from 'hono';
 import { prisma } from '../lib/prisma.js';
 import { getTrustedClientIpOrNull } from './request-ip.js';
+import { createAuditCriticalActionAlert } from '../services/audit-alert.service.js';
 
 // ─────────────────────────────────────────────
 // Audit Log Helper
@@ -44,6 +45,14 @@ export async function createAuditLog(
         ipAddress: params.ipAddress ?? null,
         userAgent: params.userAgent ?? null,
       },
+    });
+    await createAuditCriticalActionAlert(db, {
+      tenantId: params.tenantId,
+      actorUserId: params.userId ?? null,
+      module: params.module,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      action: params.action,
     });
   } catch {
     // Audit log hatası ana işlemi durdurmamalı

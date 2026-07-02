@@ -3,7 +3,7 @@ import { JournalEntryType, AccountType, FiscalPeriodStatus } from '@prisma/clien
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
-import { requireTenantId, requireUserId } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import {
   assertJournalBalanced,
   resolveOpenFiscalPeriodId,
@@ -11,6 +11,7 @@ import {
 } from '../services/financial/index.js';
 import { computeTrialBalance, assertTrialBalanceBalanced } from '../services/financial/trial-balance.js';
 import { getContactStatement, verifyContactAccountBalance } from '../services/financial/account-entry-reconciliation.js';
+import { getAccountingClosingChecklist } from '../services/accounting-closing-checklist.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -517,6 +518,16 @@ export const AccountingExtController = {
     });
 
     return c.json({ data: updated });
+  },
+
+  async getFiscalPeriodClosingChecklist(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const periodId = requireParam(c, 'id');
+
+    const checklist = await getAccountingClosingChecklist(prisma, tenantId, periodId);
+    if (!checklist) return c.json(new NotFoundError('Dönem', periodId).toJSON(), 404);
+
+    return c.json({ data: checklist });
   },
 
   async lockFiscalPeriod(c: Context): Promise<Response> {

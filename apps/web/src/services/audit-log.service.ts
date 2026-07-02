@@ -63,7 +63,11 @@ export interface AuditLogParams extends PaginationParams {
   entityId?: string;
   action?: string;
   userId?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
+
+export type AuditLogExportParams = Pick<AuditLogParams, 'module' | 'entityType' | 'entityId' | 'action' | 'userId' | 'dateFrom' | 'dateTo'>;
 
 export async function getAuditLogs(params: AuditLogParams) {
   const res = await apiClient.get('/api/audit-logs', { params });
@@ -75,7 +79,7 @@ export async function getAuditLogById(id: string): Promise<AuditLog> {
   return safeParse(SingleResponseSchema(AuditLogSchema), res.data, 'getAuditLogById').data;
 }
 
-export async function exportAuditLogs(params?: Pick<AuditLogParams, 'module'> & { dateFrom?: string; dateTo?: string }): Promise<AuditLogExport> {
+export async function exportAuditLogs(params?: AuditLogExportParams): Promise<AuditLogExport> {
   const res = await apiClient.get('/api/audit-logs/export', { params });
   return safeParse(AuditLogExportSchema, res.data, 'exportAuditLogs');
 }

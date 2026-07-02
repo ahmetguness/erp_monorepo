@@ -5,9 +5,29 @@ import { AlertTriangle } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { WarehouseSelect } from '@/components/shared/EntitySelect';
-import { useStockAlerts, useStockLevels, useStockReorderSuggestions } from '@/hooks/useStock';
+import { useAdvancedStockSuggestions, useStockAlerts, useStockLevels } from '@/hooks/useStock';
 import { cn, formatCurrency } from '@/lib/utils';
-import type { StockLevel } from '@/services/stock.service';
+import type { AdvancedStockSuggestion, StockLevel } from '@/services/stock.service';
+
+const PRIORITY_LABEL: Record<AdvancedStockSuggestion['priority'], string> = {
+  CRITICAL: 'Kritik',
+  HIGH: 'Yuksek',
+  MEDIUM: 'Orta',
+  LOW: 'Dusuk',
+};
+
+const PRIORITY_CLASS: Record<AdvancedStockSuggestion['priority'], string> = {
+  CRITICAL: 'bg-red-500/10 text-red-300 border-red-500/20',
+  HIGH: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+  MEDIUM: 'bg-sky-500/10 text-sky-300 border-sky-500/20',
+  LOW: 'bg-slate-800 text-slate-300 border-slate-700',
+};
+
+const VELOCITY_TREND_LABEL: Record<AdvancedStockSuggestion['salesVelocity']['trend'], string> = {
+  ACCELERATING: 'Hizlaniyor',
+  STABLE: 'Stabil',
+  DECELERATING: 'Yavasliyor',
+};
 
 export function StockLevelsPage() {
   const [warehouseId, setWarehouseId] = useState('');
@@ -17,11 +37,11 @@ export function StockLevelsPage() {
     warehouseId: warehouseId || undefined,
     belowMin: belowMin || undefined,
   });
-  const { data: reorderSuggestions = [] } = useStockReorderSuggestions();
+  const { data: advancedSuggestions = [] } = useAdvancedStockSuggestions();
   const { data: stockAlerts } = useStockAlerts(5);
   const visibleSuggestions = warehouseId
-    ? reorderSuggestions.filter((suggestion) => suggestion.warehouseId === warehouseId)
-    : reorderSuggestions;
+    ? advancedSuggestions.filter((suggestion) => suggestion.warehouseId === warehouseId)
+    : advancedSuggestions;
 
   const columns: ColumnDef<StockLevel>[] = [
     {
@@ -104,20 +124,32 @@ export function StockLevelsPage() {
           <div className="px-3 py-2 border-b border-amber-500/10 flex items-center justify-between">
             <div className="flex items-center gap-2 text-amber-300 text-sm font-medium">
               <AlertTriangle className="w-4 h-4" />
-              Satın alma önerileri
+              Gelişmiş stok önerileri
             </div>
             <span className="text-xs text-amber-200/70">{visibleSuggestions.length} kalem</span>
           </div>
           <div className="divide-y divide-amber-500/10">
             {visibleSuggestions.slice(0, 5).map((suggestion) => (
-              <div key={`${suggestion.productId}-${suggestion.warehouseId}`} className="px-3 py-2 grid grid-cols-[minmax(0,1fr)_110px_120px] gap-3 items-center text-sm">
+              <div key={`${suggestion.productId}-${suggestion.warehouseId}`} className="grid gap-3 px-3 py-2 text-sm md:grid-cols-[minmax(0,1fr)_120px_110px_120px] md:items-center">
                 <div className="min-w-0">
                   <p className="text-slate-200 truncate">{suggestion.productName}</p>
                   <p className="text-xs text-slate-500 font-mono truncate">{suggestion.productCode} · {suggestion.warehouseName}</p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    <span className={cn('rounded-md border px-1.5 py-0.5 text-[10px] font-semibold', PRIORITY_CLASS[suggestion.priority])}>
+                      {PRIORITY_LABEL[suggestion.priority]}
+                    </span>
+                    <span className="rounded-md border border-slate-700 bg-slate-950/50 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+                      {VELOCITY_TREND_LABEL[suggestion.salesVelocity.trend]}
+                    </span>
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="text-amber-300 font-medium">{suggestion.suggestedQuantity}</p>
                   <p className="text-[11px] text-slate-500">önerilen</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-slate-300">{suggestion.pendingReservationQty}</p>
+                  <p className="text-[11px] text-slate-500">{suggestion.reservationCount} rezervasyon</p>
                 </div>
                 <div className="text-right">
                   <p className="text-slate-300">{formatCurrency(suggestion.estimatedCost)}</p>

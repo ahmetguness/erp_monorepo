@@ -22,6 +22,7 @@ import {
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { FeatureGate } from "@/components/shared/FeatureGate";
 import { FiscalPeriodStatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -38,6 +39,7 @@ import {
 import { useExpenseSummary, useRevenueSummary } from "@/hooks/useReporting";
 import { cn, formatDate, formatCurrency } from "@/lib/utils";
 import type { FiscalPeriod } from "@/services/accounting.service";
+import { ClosingChecklistPanel } from "./ClosingChecklistPanel";
 
 const schema = z.object({
   name: z.string().min(1, "Ad zorunludur"),
@@ -357,10 +359,15 @@ export function FiscalPeriodsPage() {
 
       {/* Period summary panel */}
       {selectedPeriod && (
-        <PeriodSummary
-          period={selectedPeriod}
-          onClose={() => setSelectedPeriod(null)}
-        />
+        <div className="space-y-4">
+          <PeriodSummary
+            period={selectedPeriod}
+            onClose={() => setSelectedPeriod(null)}
+          />
+          <FeatureGate plan="PROFESSIONAL" fallback={null}>
+            <ClosingChecklistPanel period={selectedPeriod} />
+          </FeatureGate>
+        </div>
       )}
 
       <DataTable

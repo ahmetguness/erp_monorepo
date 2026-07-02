@@ -47,7 +47,8 @@ export function useConvertRequestToOrder() {
   const qc = useQueryClient();
   const { toast } = useUIStore();
   return useMutation({
-    mutationFn: ({ id, contactId }: { id: string; contactId: string }) => convertRequestToOrder(id, contactId),
+    mutationFn: ({ id, contactId, items }: { id: string; contactId: string; items?: Array<{ productId: string; unitPrice: number }> }) =>
+      convertRequestToOrder(id, contactId, items),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['purchase'] });
       toast.success('Talep siparişe dönüştürüldü.');

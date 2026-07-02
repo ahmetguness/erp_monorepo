@@ -18,6 +18,7 @@ import {
   assertStockCountApproval,
   getInventoryRules,
   getReorderSuggestions,
+  getAdvancedStockSuggestions,
   recordInventoryCosting,
   resolveStockLevelLocationId,
   convertReorderSuggestionsToPurchaseRequest,
@@ -103,6 +104,12 @@ export const StockController = {
   async listReorderSuggestions(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const suggestions = await getReorderSuggestions(prisma, tenantId);
+    return c.json({ data: suggestions });
+  },
+
+  async listAdvancedSuggestions(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const suggestions = await getAdvancedStockSuggestions(prisma, tenantId);
     return c.json({ data: suggestions });
   },
 

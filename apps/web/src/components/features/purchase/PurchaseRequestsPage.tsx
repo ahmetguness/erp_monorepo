@@ -53,6 +53,39 @@ export function PurchaseRequestsPage() {
   const [convertTarget, setConvertTarget] = useState<PurchaseRequest | null>(null);
   const [convertContactId, setConvertContactId] = useState('');
 
+  const [compareTarget, setCompareTarget] = useState<PurchaseRequest | null>(null);
+  const [supplierQuotes, setSupplierQuotes] = useState<Array<{ contactId: string; prices: Record<string, string> }>>([
+    { contactId: '', prices: {} },
+    { contactId: '', prices: {} },
+  ]);
+
+  const addSupplierColumn = () => {
+    if (supplierQuotes.length < 3) {
+      setSupplierQuotes([...supplierQuotes, { contactId: '', prices: {} }]);
+    }
+  };
+
+  const removeSupplierColumn = (idx: number) => {
+    const copy = [...supplierQuotes];
+    copy.splice(idx, 1);
+    setSupplierQuotes(copy);
+  };
+
+  const updateSupplierContact = (idx: number, contactId: string) => {
+    const copy = [...supplierQuotes];
+    copy[idx] = { ...copy[idx], contactId };
+    setSupplierQuotes(copy);
+  };
+
+  const updateSupplierItemPrice = (idx: number, productId: string, value: string) => {
+    const copy = [...supplierQuotes];
+    copy[idx] = {
+      ...copy[idx],
+      prices: { ...copy[idx].prices, [productId]: value },
+    };
+    setSupplierQuotes(copy);
+  };
+
   const { data, isLoading } = usePurchaseRequests({ page, limit: 20 });
   const createReq = useCreatePurchaseRequest();
   const approveReq = useApprovePurchaseRequest();
@@ -100,10 +133,16 @@ export function PurchaseRequestsPage() {
             </button>
           )}
           {r.status === 'APPROVED' && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); setConvertTarget(r); }}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-colors">
-              <ArrowRight className="w-3 h-3" />Siparişe Dönüştür
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={(e) => { e.stopPropagation(); setCompareTarget(r); }}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-violet-400 bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 transition-colors">
+                <TrendingDown className="w-3 h-3" />Teklif Karşılaştır
+              </button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); setConvertTarget(r); }}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-colors">
+                <ArrowRight className="w-3 h-3" />Siparişe Dönüştür
+              </button>
+            </div>
           )}
         </div>
       ),
@@ -317,6 +356,195 @@ export function PurchaseRequestsPage() {
           </Button>
         </>}>
         <ContactSelect label="Tedarikçi" required type={['SUPPLIER', 'BOTH']} value={convertContactId} onChange={setConvertContactId} />
+      </Modal>
+
+      {/* Compare quotes modal */}
+      <Modal
+        isOpen={!!compareTarget}
+        onClose={() => { setCompareTarget(null); setSupplierQuotes([{ contactId: '', prices: {} }, { contactId: '', prices: {} }]); }}
+        title="Tedarikçi Teklif Karşılaştırma"
+        description={`"${compareTarget?.number}" talebi için tedarikçilerden gelen birim fiyatları kıyaslayın ve en uygun seçeneği belirleyin.`}
+        size="xl"
+      >
+        <div className="space-y-6">
+          {/* Header controls */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400">
+              Karşılaştırmak istediğiniz tedarikçileri seçin ve teklif birim fiyatlarını girin.
+            </span>
+            {supplierQuotes.length < 3 && (
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<Plus className="w-3.5 h-3.5" />}
+                onClick={addSupplierColumn}
+              >
+                Tedarikçi Sütunu Ekle
+              </Button>
+            )}
+          </div>
+
+          {/* Comparison Matrix */}
+          <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-900/20">
+            <table className="w-full min-w-[600px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                  <th className="p-4 w-[250px] align-middle text-left">Talep Edilen Ürün & Miktar</th>
+                  {supplierQuotes.map((q, idx) => (
+                    <th key={idx} className="p-4 align-top border-l border-slate-800/80 min-w-[200px]">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-slate-500 font-bold">TEDARİKÇİ #{idx + 1}</span>
+                          {supplierQuotes.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => removeSupplierColumn(idx)}
+                              className="text-slate-500 hover:text-red-400 transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <ContactSelect
+                          label=""
+                          required
+                          type={['SUPPLIER', 'BOTH']}
+                          value={q.contactId}
+                          onChange={(val) => updateSupplierContact(idx, val)}
+                        />
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-slate-300">
+                {compareTarget?.items?.map((item) => {
+                  const product = products.find((p) => p.id === item.productId);
+                  const quantity = Number(item.quantity);
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-900/10">
+                      <td className="p-4">
+                        <p className="font-semibold text-white">{product?.name || item.description || 'Bilinmeyen Ürün'}</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Adet: <span className="font-mono text-white font-medium">{quantity}</span>
+                        </p>
+                      </td>
+                      {supplierQuotes.map((q, idx) => (
+                        <td key={idx} className="p-4 border-l border-slate-800/80">
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-500 font-medium block">Birim Teklif</label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                step="1"
+                                min="0"
+                                placeholder={product ? String(product.purchasePrice) : '0'}
+                                value={q.prices[item.productId] ?? ''}
+                                onChange={(e) => updateSupplierItemPrice(idx, item.productId, e.target.value)}
+                                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white pl-3 pr-8 py-1.5 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-slate-800 transition-all"
+                              />
+                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-500">TL</span>
+                            </div>
+                            <div className="text-right text-[10px] text-slate-500 font-medium mt-1">
+                              Satır Toplamı: <span className="text-slate-300 tabular-nums">
+                                {formatCurrency(quantity * Number(q.prices[item.productId] || 0))}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+
+                {/* Total row */}
+                {(() => {
+                  // Compute totals
+                  const totals = supplierQuotes.map((q) => {
+                    if (!q.contactId) return 0;
+                    return compareTarget?.items?.reduce((sum, item) => {
+                      const qty = Number(item.quantity);
+                      const price = Number(q.prices[item.productId] || 0);
+                      return sum + qty * price;
+                    }, 0) ?? 0;
+                  });
+
+                  // Identify cheapest
+                  const minTotal = Math.min(...totals.filter((t) => t > 0));
+                  const cheapestIdx = totals.findIndex((t) => t === minTotal && t > 0);
+
+                  return (
+                    <>
+                      <tr className="bg-slate-950/20 font-bold">
+                        <td className="p-4 text-slate-400">GENEL TOPLAM</td>
+                        {supplierQuotes.map((q, idx) => {
+                          const isCheapest = idx === cheapestIdx;
+                          const total = totals[idx];
+                          return (
+                            <td key={idx} className={cn('p-4 border-l border-slate-800/80', isCheapest && 'bg-emerald-500/[0.03]')}>
+                              <div className="flex flex-col items-end gap-1.5">
+                                <span className={cn('text-base tabular-nums', isCheapest ? 'text-emerald-400 text-lg' : 'text-white')}>
+                                  {formatCurrency(total)}
+                                </span>
+                                {isCheapest && (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+                                    Önerilen Tedarikçi
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      {/* Action buttons row */}
+                      <tr className="bg-slate-950/30">
+                        <td className="p-4" />
+                        {supplierQuotes.map((q, idx) => {
+                          const total = totals[idx];
+                          const hasSelectedSupplier = !!q.contactId;
+                          const isCheapest = idx === cheapestIdx;
+                          return (
+                            <td key={idx} className={cn('p-4 border-l border-slate-800/80', isCheapest && 'bg-emerald-500/[0.03]')}>
+                              <Button
+                                size="sm"
+                                disabled={!hasSelectedSupplier || total === 0}
+                                className={cn(
+                                  'w-full shadow-md text-xs',
+                                  isCheapest
+                                    ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 shadow-emerald-500/15'
+                                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                                )}
+                                onClick={() => {
+                                  if (compareTarget && q.contactId) {
+                                    convertReq.mutate({
+                                      id: compareTarget.id,
+                                      contactId: q.contactId,
+                                      items: compareTarget.items?.map((item) => ({
+                                        productId: item.productId,
+                                        unitPrice: Number(q.prices[item.productId] || 0),
+                                      })),
+                                    }, {
+                                      onSuccess: () => {
+                                        setCompareTarget(null);
+                                        setSupplierQuotes([{ contactId: '', prices: {} }, { contactId: '', prices: {} }]);
+                                      }
+                                    });
+                                  }
+                                }}
+                              >
+                                Sipariş Oluştur
+                              </Button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </>
+                  );
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </Modal>
     </div>
   );

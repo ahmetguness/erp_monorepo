@@ -177,6 +177,11 @@ export async function deleteSavedReport(id: string): Promise<void> {
   await apiClient.delete(`/api/reports/saved/${id}`);
 }
 
+export async function updateSavedReport(id: string, data: { name?: string; filters?: Record<string, unknown>; columns?: string[]; isShared?: boolean }): Promise<SavedReport> {
+  const res = await apiClient.patch(`/api/reports/saved/${id}`, data);
+  return safeParse(SingleResponseSchema(SavedReportSchema), res.data, 'updateSavedReport').data;
+}
+
 export async function recordSavedReportExportAudit(id: string): Promise<ReportExportAuditResult> {
   const res = await apiClient.post(`/api/reports/saved/${id}/export-audit`);
   return safeParse(SingleResponseSchema(ReportExportAuditResultSchema), res.data, 'recordSavedReportExportAudit').data;
@@ -200,4 +205,29 @@ export type CollectionList = z.infer<typeof CollectionListSchema>['data'];
 export async function getCollectionList(dateFrom?: string, dateTo?: string): Promise<CollectionList> {
   const res = await apiClient.get('/api/reports/collection-list', { params: { dateFrom, dateTo } });
   return safeParse(CollectionListSchema, res.data, 'getCollectionList').data;
+}
+
+export const CashflowForecastSchema = z.object({
+  startingBalance: z.coerce.number(),
+  periods: z.array(z.object({
+    label: z.string(),
+    range: z.string(),
+    inflow: z.object({
+      invoices: z.coerce.number(),
+      checks: z.coerce.number(),
+      total: z.coerce.number(),
+    }),
+    outflow: z.object({
+      invoices: z.coerce.number(),
+      total: z.coerce.number(),
+    }),
+    netFlow: z.coerce.number(),
+    endingBalance: z.coerce.number(),
+  })),
+});
+export type CashflowForecast = z.infer<typeof CashflowForecastSchema>;
+
+export async function getCashflowForecast(): Promise<CashflowForecast> {
+  const res = await apiClient.get('/api/reports/cashflow-forecast');
+  return safeParse(SingleResponseSchema(CashflowForecastSchema), res.data, 'getCashflowForecast').data;
 }

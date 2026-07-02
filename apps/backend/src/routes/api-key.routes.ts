@@ -10,6 +10,8 @@ apiKeyRoutes.use('*', requireAccess(ACCESS_POLICIES.apiKeys));
 
 apiKeyRoutes.get('/manifest', requirePermission('api_keys', 'READ'), ApiKeyController.manifest);
 apiKeyRoutes.get('/openapi.json', requirePermission('api_keys', 'READ'), ApiKeyController.openApi);
+apiKeyRoutes.get('/postman.json', requirePermission('api_keys', 'READ'), ApiKeyController.postman);
+apiKeyRoutes.get('/sandbox', requirePermission('api_keys', 'READ'), ApiKeyController.sandbox);
 apiKeyRoutes.get('/', requirePermission('api_keys', 'READ'), ApiKeyController.list);
 apiKeyRoutes.get('/:id/activity', requirePermission('api_keys', 'READ'), ApiKeyController.activity);
 apiKeyRoutes.post('/', requirePermission('api_keys', 'CREATE'), ApiKeyController.create);

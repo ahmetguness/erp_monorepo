@@ -9,6 +9,7 @@ import {
   deleteApiKey,
   getApiKeyActivity,
   getExternalApiManifest,
+  getIntegrationSandbox,
   type ListParams,
   type CreateApiKeyDTO,
 } from '@/services/api-key.service';
@@ -17,6 +18,7 @@ const KEYS = {
   list: (p: ListParams) => ['api-keys', p] as const,
   activity: (id: string) => ['api-keys', id, 'activity'] as const,
   manifest: ['api-keys', 'manifest'] as const,
+  sandbox: ['api-keys', 'sandbox'] as const,
 };
 
 export function useApiKeys(params: ListParams) {
@@ -35,6 +37,9 @@ export function useApiKeyActivity(id: string) {
 }
 export function useExternalApiManifest() {
   return useQuery({ queryKey: KEYS.manifest, queryFn: getExternalApiManifest, staleTime: 10 * 60 * 1000 });
+}
+export function useIntegrationSandbox() {
+  return useQuery({ queryKey: KEYS.sandbox, queryFn: getIntegrationSandbox, staleTime: 10 * 60 * 1000 });
 }
 export function useRevokeApiKey() {
   const qc = useQueryClient(); const { toast } = useUIStore();

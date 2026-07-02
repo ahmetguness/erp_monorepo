@@ -6,7 +6,7 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   getWarehouses, getWarehouseById, createWarehouse, updateWarehouse, transferStock,
   getLocations, createLocation, deleteLocation,
-  getStockLevels, getStockReorderSuggestions, getStockAlerts, getStockMovements, createManualMovement,
+  getStockLevels, getStockReorderSuggestions, getAdvancedStockSuggestions, getStockAlerts, getStockMovements, createManualMovement,
   getStockCounts, getStockCountById, createStockCount, finalizeStockCount,
   type StockLevelParams, type StockMovementParams, type CreateManualMovementDTO,
   type CreateStockCountDTO, type CreateWarehouseDTO, type CreateLocationDTO, type TransferStockDTO,
@@ -18,6 +18,7 @@ export const STOCK_KEYS = {
   locations: (wId: string) => ['warehouses', wId, 'locations'] as const,
   levels: (p: StockLevelParams) => ['stock', 'levels', p] as const,
   reorderSuggestions: ['stock', 'reorder-suggestions'] as const,
+  advancedSuggestions: ['stock', 'advanced-suggestions'] as const,
   alerts: (limit: number) => ['stock', 'alerts', limit] as const,
   movements: (p: StockMovementParams) => ['stock', 'movements', p] as const,
   counts: ['stock', 'counts'] as const,
@@ -119,6 +120,13 @@ export function useStockReorderSuggestions() {
   return useQuery({
     queryKey: STOCK_KEYS.reorderSuggestions,
     queryFn: getStockReorderSuggestions,
+  });
+}
+
+export function useAdvancedStockSuggestions() {
+  return useQuery({
+    queryKey: STOCK_KEYS.advancedSuggestions,
+    queryFn: getAdvancedStockSuggestions,
   });
 }
 

@@ -21,6 +21,7 @@ settingsRoutes.get('/security-score', requirePermission('settings', 'READ'), Set
 settingsRoutes.get('/security/dashboard', requirePermission('settings', 'READ'), SettingsController.securityDashboard);
 settingsRoutes.get('/security/sessions', requirePermission('settings', 'READ'), SettingsController.listSecuritySessions);
 settingsRoutes.post('/security/sessions/:sessionId/revoke', requirePermission('settings', 'UPDATE'), SettingsController.revokeSecuritySession);
+settingsRoutes.get('/setup-checklist', requirePermission('settings', 'READ'), QuickStartController.checklist);
 settingsRoutes.get('/logo', requirePermission('settings', 'READ'), SettingsController.downloadTenantLogo);
 settingsRoutes.post('/logo', requirePermission('settings', 'UPDATE'), SettingsController.uploadTenantLogo);
 settingsRoutes.delete('/logo', requirePermission('settings', 'DELETE'), SettingsController.deleteTenantLogo);

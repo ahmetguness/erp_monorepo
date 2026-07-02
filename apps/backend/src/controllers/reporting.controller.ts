@@ -257,6 +257,133 @@ export const ReportingController = {
       },
     });
   },
+
+  async cashflowForecast(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+
+    const bankTransactions = await prisma.bankTransaction.findMany({
+      where: { tenantId },
+    });
+    let startingBalance = 0;
+    for (const tx of bankTransactions) {
+      const amt = Number(tx.amount);
+      if (tx.type === 'DEPOSIT') {
+        startingBalance += amt;
+      } else {
+        startingBalance -= amt;
+      }
+    }
+
+    const cashPayments = await prisma.payment.findMany({
+      where: {
+        tenantId,
+        cashAccountId: { not: null },
+        status: 'COMPLETED',
+        deletedAt: null,
+      },
+    });
+    for (const p of cashPayments) {
+      const amt = Number(p.amount);
+      if (p.direction === 'RECEIVE') {
+        startingBalance += amt;
+      } else {
+        startingBalance -= amt;
+      }
+    }
+
+    const openInvoices = await prisma.invoice.findMany({
+      where: {
+        tenantId,
+        status: { in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
+        deletedAt: null,
+      },
+      include: {
+        payments: true,
+      },
+    });
+
+    const checks = await prisma.checkPromissoryNote.findMany({
+      where: {
+        tenantId,
+        status: { in: ['PENDING', 'DEPOSITED'] },
+        deletedAt: null,
+      },
+    });
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const getPeriodIdx = (date: Date): number => {
+      const diffTime = date.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays <= 30) return 0;
+      if (diffDays <= 60) return 1;
+      if (diffDays <= 90) return 2;
+      return 3;
+    };
+
+    const periodsData = [
+      { label: '30 Günlük Tahmin', range: '0 - 30 Gün', invoicesIn: 0, checksIn: 0, invoicesOut: 0 },
+      { label: '60 Günlük Tahmin', range: '31 - 60 Gün', invoicesIn: 0, checksIn: 0, invoicesOut: 0 },
+      { label: '90 Günlük Tahmin', range: '61 - 90 Gün', invoicesIn: 0, checksIn: 0, invoicesOut: 0 },
+    ];
+
+    for (const inv of openInvoices) {
+      const paid = inv.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+      const remaining = Number(inv.totalGross) - paid;
+      if (remaining <= 0) continue;
+
+      const dueDate = inv.dueDate ? new Date(inv.dueDate) : new Date(inv.date);
+      const idx = getPeriodIdx(dueDate);
+      if (idx >= 0 && idx < 3) {
+        const isInflow = inv.type === 'SALES' || inv.type === 'RETURN_PURCHASE';
+        if (isInflow) {
+          periodsData[idx].invoicesIn += remaining;
+        } else {
+          periodsData[idx].invoicesOut += remaining;
+        }
+      }
+    }
+
+    for (const check of checks) {
+      const amt = Number(check.amount);
+      const dueDate = new Date(check.dueDate);
+      const idx = getPeriodIdx(dueDate);
+      if (idx >= 0 && idx < 3) {
+        periodsData[idx].checksIn += amt;
+      }
+    }
+
+    let currentBal = startingBalance;
+    const periods = periodsData.map((p) => {
+      const totalInflow = p.invoicesIn + p.checksIn;
+      const totalOutflow = p.invoicesOut;
+      const netFlow = totalInflow - totalOutflow;
+      currentBal += netFlow;
+      return {
+        label: p.label,
+        range: p.range,
+        inflow: {
+          invoices: Number(p.invoicesIn.toFixed(2)),
+          checks: Number(p.checksIn.toFixed(2)),
+          total: Number(totalInflow.toFixed(2)),
+        },
+        outflow: {
+          invoices: Number(p.invoicesOut.toFixed(2)),
+          total: Number(totalOutflow.toFixed(2)),
+        },
+        netFlow: Number(netFlow.toFixed(2)),
+        endingBalance: Number(currentBal.toFixed(2)),
+      };
+    });
+
+    return c.json({
+      data: {
+        startingBalance: Number(startingBalance.toFixed(2)),
+        periods,
+      },
+    });
+  },
 };
 
 // ─────────────────────────────────────────────

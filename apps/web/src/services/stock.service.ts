@@ -103,6 +103,19 @@ export const StockReorderSuggestionSchema = z.object({
   estimatedCost: z.coerce.number(),
 });
 
+export const AdvancedStockSuggestionSchema = StockReorderSuggestionSchema.extend({
+  salesVelocity: z.object({
+    daily30: z.coerce.number(),
+    daily60: z.coerce.number(),
+    daily90: z.coerce.number(),
+    trend: z.enum(['ACCELERATING', 'STABLE', 'DECELERATING']),
+  }),
+  reservationCount: z.coerce.number(),
+  pendingReservationQty: z.coerce.number(),
+  priority: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']),
+  coverageDays: z.coerce.number().nullable(),
+});
+
 export const StockAlertItemSchema = z.object({
   productId: z.string(),
   productCode: z.string(),
@@ -137,6 +150,7 @@ export type StockMovementType = StockMovement['type'];
 export type StockCount = z.infer<typeof StockCountSchema>;
 export type StockCountItem = z.infer<typeof StockCountItemSchema>;
 export type StockReorderSuggestion = z.infer<typeof StockReorderSuggestionSchema>;
+export type AdvancedStockSuggestion = z.infer<typeof AdvancedStockSuggestionSchema>;
 export type StockAlertItem = z.infer<typeof StockAlertItemSchema>;
 export type StockAlertDashboard = z.infer<typeof StockAlertDashboardSchema>;
 
@@ -222,6 +236,7 @@ const StockMovementCreateSchema = SingleResponseSchema(StockMovementSchema).exte
 });
 const StockCountListSchema = SingleResponseSchema(z.array(StockCountSchema));
 const StockReorderSuggestionListSchema = SingleResponseSchema(z.array(StockReorderSuggestionSchema));
+const AdvancedStockSuggestionListSchema = SingleResponseSchema(z.array(AdvancedStockSuggestionSchema));
 const StockAlertDashboardResponseSchema = SingleResponseSchema(StockAlertDashboardSchema);
 
 export async function getStockLevels(params: StockLevelParams): Promise<StockLevel[]> {
@@ -232,6 +247,11 @@ export async function getStockLevels(params: StockLevelParams): Promise<StockLev
 export async function getStockReorderSuggestions(): Promise<StockReorderSuggestion[]> {
   const res = await apiClient.get('/api/stock/reorder-suggestions');
   return safeParse(StockReorderSuggestionListSchema, res.data, 'getStockReorderSuggestions').data;
+}
+
+export async function getAdvancedStockSuggestions(): Promise<AdvancedStockSuggestion[]> {
+  const res = await apiClient.get('/api/stock/advanced-suggestions');
+  return safeParse(AdvancedStockSuggestionListSchema, res.data, 'getAdvancedStockSuggestions').data;
 }
 
 export async function getStockAlerts(limit = 8): Promise<StockAlertDashboard> {

@@ -19,6 +19,7 @@ export const PRODUCT_KEYS = {
 function invalidateProductAndStockQueries(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: PRODUCT_KEYS.all });
   qc.invalidateQueries({ queryKey: ['stock'] });
+  qc.invalidateQueries({ queryKey: ['settings', 'setup-checklist'] });
 }
 
 export function useProducts(params: ProductListParams) {

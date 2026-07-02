@@ -12,8 +12,14 @@ import {
   ToggleLeft,
   ToggleRight,
   Send,
+  Sparkles,
+  ShoppingCart,
+  BadgeDollarSign,
+  CreditCard,
+  Boxes,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { useUIStore } from "@/store/ui.store";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -69,7 +75,52 @@ const ENTITY_TYPES = [
   { value: "OTHER", label: "Diğer" },
 ];
 
+const APPROVAL_TEMPLATES = [
+  {
+    name: "Satın Alma Onayı",
+    module: "PURCHASE_ORDER" as ApprovalModule,
+    description: "Satın alma siparişleri için kademeli onay akışı.",
+    icon: ShoppingCart,
+    steps: [
+      { stepOrder: 1, name: "Departman Müdürü Onayı", isRequired: true },
+      { stepOrder: 2, name: "Finans Direktörü Onayı", isRequired: true },
+      { stepOrder: 3, name: "Genel Müdür Onayı", isRequired: true },
+    ],
+  },
+  {
+    name: "Satış İskonto Onayı",
+    module: "SALES_ORDER" as ApprovalModule,
+    description: "Büyük iskonto oranlı satış siparişleri için onay akışı.",
+    icon: BadgeDollarSign,
+    steps: [
+      { stepOrder: 1, name: "Satış Müdürü Onayı", isRequired: true },
+      { stepOrder: 2, name: "Finans Müdürü Onayı", isRequired: true },
+    ],
+  },
+  {
+    name: "Ödeme Onay Akışı",
+    module: "INVOICE" as ApprovalModule,
+    description: "Tedarikçi fatura ödemeleri ve banka çıkışları için onay akışı.",
+    icon: CreditCard,
+    steps: [
+      { stepOrder: 1, name: "Muhasebe Yetkilisi Onayı", isRequired: true },
+      { stepOrder: 2, name: "CFO Onayı", isRequired: true },
+    ],
+  },
+  {
+    name: "Stok Düzeltme Onayı",
+    module: "OTHER" as ApprovalModule,
+    description: "Sayım farkları ve stok düzeltme fişleri için onay akışı.",
+    icon: Boxes,
+    steps: [
+      { stepOrder: 1, name: "Depo Sorumlusu Onayı", isRequired: true },
+      { stepOrder: 2, name: "Operasyon Müdürü Onayı", isRequired: true },
+    ],
+  },
+];
+
 export function ApprovalsPage() {
+  const { toast } = useUIStore();
   const [tab, setTab] = useState<"flows" | "requests">("flows");
   const [flowPage, setFlowPage] = useState(1);
   const [reqPage, setReqPage] = useState(1);
@@ -390,25 +441,99 @@ export function ApprovalsPage() {
 
       {/* Tables */}
       {tab === "flows" && (
-        <DataTable
-          columns={flowColumns}
-          data={flowsData?.data ?? []}
-          keyExtractor={(r) => r.id}
-          isLoading={flowsLoading}
-          emptyTitle="Onay akışı bulunamadı"
-          emptyDescription="Yeni bir onay akışı oluşturarak başlayın."
-          pagination={
-            flowsData
-              ? {
-                  page: flowPage,
-                  pageSize: 20,
-                  total: flowsData.meta.total,
-                  totalPages: flowsData.meta.totalPages,
-                  onChange: setFlowPage,
-                }
-              : undefined
-          }
-        />
+        <div className="space-y-6">
+          {/* Templates Section */}
+          <div className="space-y-3 bg-slate-950/20 border border-slate-800/80 rounded-2xl p-5">
+            <div className="flex items-center gap-2 text-slate-400 border-b border-slate-800/60 pb-3 mb-1">
+              <Sparkles className="w-4 h-4 text-violet-400" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                Hazır Onay Akışı Şablonları
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {APPROVAL_TEMPLATES.map((tmpl, idx) => {
+                const TmplIcon = tmpl.icon;
+                return (
+                  <div
+                    key={idx}
+                    className="bg-slate-900 border border-slate-800/60 rounded-xl p-4 flex flex-col justify-between hover:border-slate-700 hover:shadow-lg transition-all duration-300 group"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="p-2 rounded-lg bg-slate-800 text-slate-400 group-hover:bg-slate-800/80 transition-colors">
+                          <TmplIcon className="w-4 h-4" />
+                        </div>
+                        <span className="text-[9px] font-bold text-slate-400 bg-slate-850 px-2 py-0.5 rounded-full border border-slate-800/60 uppercase">
+                          {MODULE_MAP[tmpl.module] ?? tmpl.module}
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-white group-hover:text-sky-400 transition-colors">
+                          {tmpl.name}
+                        </h4>
+                        <p className="text-[10px] text-slate-500 leading-relaxed mt-1">
+                          {tmpl.description}
+                        </p>
+                      </div>
+
+                      {/* steps list */}
+                      <div className="pt-2 space-y-1.5 bg-slate-950/40 p-2.5 rounded-xl border border-slate-850">
+                        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                          Akış Adımları:
+                        </span>
+                        {tmpl.steps.map((st) => (
+                          <div key={st.stepOrder} className="flex items-center gap-2 text-[10px] text-slate-400">
+                            <span className="w-3.5 h-3.5 rounded bg-slate-800 text-slate-400 flex items-center justify-center font-bold text-[8px] shrink-0 border border-slate-750">
+                              {st.stepOrder}
+                            </span>
+                            <span className="truncate">{st.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        createFlow.mutate({
+                          name: tmpl.name,
+                          module: tmpl.module,
+                          steps: tmpl.steps,
+                        }, {
+                          onSuccess: () => {
+                            toast.success(`"${tmpl.name}" şablondan başarıyla oluşturuldu.`);
+                          }
+                        });
+                      }}
+                      disabled={createFlow.isPending}
+                      className="mt-4 w-full text-center py-2 rounded-lg text-xs font-bold text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 disabled:opacity-50 transition-all duration-200"
+                    >
+                      Şablonu Uygula
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <DataTable
+            columns={flowColumns}
+            data={flowsData?.data ?? []}
+            keyExtractor={(r) => r.id}
+            isLoading={flowsLoading}
+            emptyTitle="Onay akışı bulunamadı"
+            emptyDescription="Yeni bir onay akışı oluşturarak başlayın."
+            pagination={
+              flowsData
+                ? {
+                    page: flowPage,
+                    pageSize: 20,
+                    total: flowsData.meta.total,
+                    totalPages: flowsData.meta.totalPages,
+                    onChange: setFlowPage,
+                  }
+                : undefined
+            }
+          />
+        </div>
       )}
       {tab === "requests" && (
         <DataTable

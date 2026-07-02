@@ -47,6 +47,7 @@ import {
   Mail,
   FolderOpen,
   Bot,
+  ListChecks,
   type LucideIcon,
 } from 'lucide-react';
 import { ACCESS_POLICIES } from './plans';
@@ -221,6 +222,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Onay Akışları', href: '/dashboard/approvals', icon: GitBranch, plan: PROFESSIONAL_PLAN, module: 'approvals' },
       { label: 'İş Akışı Merkezi', href: '/dashboard/workflow', icon: ClipboardCheck, plan: PROFESSIONAL_PLAN },
+      { label: 'Toplu Islem Merkezi', href: '/dashboard/bulk-operations', icon: ListChecks, plan: PROFESSIONAL_PLAN },
       { label: 'Doküman Merkezi', href: '/dashboard/documents', icon: FolderOpen },
       { label: 'İçe / Dışa Aktarma', href: '/dashboard/data-exchange', icon: UploadCloud },
       { label: 'Rol Yönetimi', href: '/dashboard/roles', icon: Shield, plan: PROFESSIONAL_PLAN },

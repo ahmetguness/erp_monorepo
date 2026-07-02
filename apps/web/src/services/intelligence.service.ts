@@ -153,3 +153,59 @@ export async function recordAiActionAudit(payload: AiActionAuditPayload): Promis
   const res = await apiClient.post('/api/intelligence/ai-governance/action-audit', payload);
   return safeParse(SingleResponseSchema(z.object({ recorded: z.boolean() })), res.data, 'recordAiActionAudit').data;
 }
+
+export const AutomationRuleSchema = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  module: z.string(),
+  trigger: z.enum(['LOW_STOCK', 'OVERDUE_INVOICE', 'HIGH_VALUE_INVOICE', 'LOW_MARGIN', 'CHECK_DUE_SOON']),
+  action: z.enum(['CREATE_TASK', 'CREATE_NOTIFICATION', 'DRAFT_REMINDER_EMAIL', 'REQUEST_APPROVAL', 'CREATE_PURCHASE_REQUEST_DRAFT']),
+  conditions: z.unknown().nullable(),
+  actionConfig: z.unknown().nullable(),
+  isActive: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type AutomationRule = z.infer<typeof AutomationRuleSchema>;
+
+export interface CreateAutomationRuleDTO {
+  name: string;
+  module: string;
+  trigger: string;
+  action: string;
+  description?: string;
+  conditions?: Record<string, unknown>;
+  actionConfig?: Record<string, unknown>;
+  isActive?: boolean;
+}
+
+export async function getAutomationRules(): Promise<AutomationRule[]> {
+  const res = await apiClient.get('/api/automation-rules');
+  return safeParse(SingleResponseSchema(z.array(AutomationRuleSchema)), res.data, 'getAutomationRules').data;
+}
+
+export async function createAutomationRule(data: CreateAutomationRuleDTO): Promise<AutomationRule> {
+  const res = await apiClient.post('/api/automation-rules', data);
+  return safeParse(SingleResponseSchema(AutomationRuleSchema), res.data, 'createAutomationRule').data;
+}
+
+export async function updateAutomationRule(id: string, data: Partial<CreateAutomationRuleDTO> & { isActive?: boolean }): Promise<AutomationRule> {
+  const res = await apiClient.patch(`/api/automation-rules/${id}`, data);
+  return safeParse(SingleResponseSchema(AutomationRuleSchema), res.data, 'updateAutomationRule').data;
+}
+
+export async function deleteAutomationRule(id: string): Promise<void> {
+  await apiClient.delete(`/api/automation-rules/${id}`);
+}
+
+export async function runAutomationRule(id: string): Promise<{ success: boolean; executed: boolean; matchesCount: number }> {
+  const res = await apiClient.post(`/api/automation-rules/${id}/run`);
+  return safeParse(SingleResponseSchema(z.object({ success: z.boolean(), executed: z.boolean(), matchesCount: z.coerce.number() })), res.data, 'runAutomationRule').data;
+}
+
+export async function runActiveAutomationRules(): Promise<{ success: boolean; executedRulesCount: number }> {
+  const res = await apiClient.post('/api/automation-rules/run-active');
+  return safeParse(SingleResponseSchema(z.object({ success: z.boolean(), executedRulesCount: z.coerce.number() })), res.data, 'runActiveAutomationRules').data;
+}

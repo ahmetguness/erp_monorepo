@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { prisma } from '../lib/prisma';
 import { ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
+import { SetupChecklistService } from '../services/setup-checklist.service.js';
 
 interface QuickStartDTO {
   companyName: string;
@@ -23,6 +24,13 @@ interface QuickStartDTO {
 }
 
 export const QuickStartController = {
+  async checklist(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const service = new SetupChecklistService(prisma);
+    const status = await service.status(tenantId);
+    return c.json({ data: status });
+  },
+
   async setup(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const body = await c.req.json<QuickStartDTO>();

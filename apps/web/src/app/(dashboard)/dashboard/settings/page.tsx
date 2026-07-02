@@ -4,6 +4,7 @@ import {
   Database, Sparkles,
 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { SetupChecklistCard } from '@/components/features/settings/SetupChecklistCard';
 
 interface SettingsItem {
   href: string;
@@ -52,6 +53,8 @@ export default function SettingsPage() {
       <PageHeader title="Ayarlar" subtitle="Referans verileri ve sistem yapılandırması." />
 
       <div className="space-y-8">
+        <SetupChecklistCard />
+
         {GROUPS.map((group) => (
           <div key={group.title}>
             <div className="flex items-center gap-2 mb-3">

@@ -114,8 +114,12 @@ export async function approvePurchaseRequest(id: string): Promise<PurchaseReques
   return safeParse(SingleResponseSchema(PurchaseRequestSchema), res.data, 'approvePurchaseRequest').data;
 }
 
-export async function convertRequestToOrder(id: string, contactId: string): Promise<PurchaseOrder> {
-  const res = await apiClient.post(`/api/purchase-orders/requests/${id}/convert`, { contactId });
+export async function convertRequestToOrder(
+  id: string,
+  contactId: string,
+  items?: Array<{ productId: string; unitPrice: number }>,
+): Promise<PurchaseOrder> {
+  const res = await apiClient.post(`/api/purchase-orders/requests/${id}/convert`, { contactId, items });
   return safeParse(SingleResponseSchema(PurchaseOrderSchema), res.data, 'convertRequestToOrder').data;
 }
 

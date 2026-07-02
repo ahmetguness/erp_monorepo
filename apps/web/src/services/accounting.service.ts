@@ -23,6 +23,36 @@ export const FiscalPeriodSchema = z.object({
   closedAt: z.string().nullable(), createdAt: z.string(), updatedAt: z.string(),
 });
 
+export const AccountingClosingChecklistItemSchema = z.object({
+  key: z.enum(['journal_entries', 'reconciliations', 'open_payments', 'stock_valuation']),
+  label: z.string(),
+  description: z.string(),
+  status: z.enum(['PASS', 'WARN', 'FAIL']),
+  count: z.coerce.number(),
+  blocking: z.boolean(),
+  actionLabel: z.string(),
+  href: z.string(),
+});
+
+export const AccountingClosingChecklistSchema = z.object({
+  period: z.object({
+    id: z.string(),
+    name: z.string(),
+    startDate: z.string(),
+    endDate: z.string(),
+    status: z.string(),
+  }),
+  summary: z.object({
+    total: z.coerce.number(),
+    passed: z.coerce.number(),
+    warnings: z.coerce.number(),
+    blockers: z.coerce.number(),
+    canClose: z.boolean(),
+  }),
+  items: z.array(AccountingClosingChecklistItemSchema),
+  generatedAt: z.string(),
+});
+
 export const JournalEntrySchema = z.object({
   id: z.string(), tenantId: z.string(), fiscalPeriodId: z.string().nullable(),
   type: z.string(), number: z.string(), date: z.string(),
@@ -71,6 +101,8 @@ export const PaymentSchema = z.object({
 
 export type LedgerAccount = z.infer<typeof LedgerAccountSchema>;
 export type FiscalPeriod = z.infer<typeof FiscalPeriodSchema>;
+export type AccountingClosingChecklist = z.infer<typeof AccountingClosingChecklistSchema>;
+export type AccountingClosingChecklistItem = z.infer<typeof AccountingClosingChecklistItemSchema>;
 export type JournalEntry = z.infer<typeof JournalEntrySchema>;
 export type BankAccount = z.infer<typeof BankAccountSchema>;
 export type CashAccount = z.infer<typeof CashAccountSchema>;
@@ -139,6 +171,15 @@ export async function createFiscalPeriod(data: CreateFiscalPeriodDTO): Promise<F
 export async function closeFiscalPeriod(id: string): Promise<FiscalPeriod> {
   const res = await apiClient.post(`/api/accounting/fiscal-periods/${id}/close`);
   return safeParse(SingleResponseSchema(FiscalPeriodSchema), res.data, 'closeFiscalPeriod').data;
+}
+
+export async function getFiscalPeriodClosingChecklist(id: string): Promise<AccountingClosingChecklist> {
+  const res = await apiClient.get(`/api/accounting/fiscal-periods/${id}/closing-checklist`);
+  return safeParse(
+    SingleResponseSchema(AccountingClosingChecklistSchema),
+    res.data,
+    'getFiscalPeriodClosingChecklist',
+  ).data;
 }
 
 export async function deleteFiscalPeriod(id: string): Promise<void> {

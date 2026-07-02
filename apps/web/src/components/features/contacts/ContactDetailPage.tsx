@@ -30,6 +30,7 @@ import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { KpiCard } from "@/components/shared/KpiCard";
 import { CreditLimitBar } from "@/components/shared/CreditLimitBar";
 import { EntityActionPanel } from "@/components/shared/EntityActionPanel";
+import { SupplierPerformanceCard } from "@/components/features/contacts/SupplierPerformanceCard";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -556,6 +557,10 @@ export function ContactDetailPage({ id }: Props) {
 
         {/* Right sidebar: Credit + Open Invoices */}
         <div className="space-y-4">
+          {(contact.type === 'SUPPLIER' || contact.type === 'BOTH') && (
+            <SupplierPerformanceCard contactId={id} />
+          )}
+
           {creditLimit > 0 && (
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">

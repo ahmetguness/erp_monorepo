@@ -29,10 +29,12 @@ import {
   useDeleteApiKey,
   useApiKeyActivity,
   useExternalApiManifest,
+  useIntegrationSandbox,
 } from "@/hooks/useApiKeys";
 import { API_BASE_URL } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
 import { API_KEY_SCOPE_VALUES, type ApiKey, type ApiKeyScope } from "@/services/api-key.service";
+import { IntegrationSandboxPanel } from "./IntegrationSandboxPanel";
 
 const AVAILABLE_SCOPES: Array<{ key: ApiKeyScope; label: string; desc: string }> = [
   {
@@ -185,6 +187,19 @@ export function ApiKeysPage() {
   const deleteKey = useDeleteApiKey();
   const { data: activity = [] } = useApiKeyActivity(detailKey?.id ?? "");
   const { data: manifest } = useExternalApiManifest();
+  const { data: sandbox, isLoading: sandboxLoading } = useIntegrationSandbox();
+
+  const apiKeys = data?.data ?? [];
+  const totalRequests = apiKeys.reduce((acc, k) => acc + (k.requestCount ?? 0), 0);
+  const totalErrors = apiKeys.reduce((acc, k) => acc + (k.errorCount ?? 0), 0);
+  const avgErrorRate = totalRequests > 0 ? Math.round((totalErrors / totalRequests) * 1000) / 10 : 0;
+
+  const scopeDistribution: Record<string, number> = {};
+  apiKeys.forEach((key) => {
+    key.scopes.forEach((scope) => {
+      scopeDistribution[scope] = (scopeDistribution[scope] ?? 0) + 1;
+    });
+  });
 
   const toggleScope = (scope: ApiKeyScope) => {
     setForm((p) => ({
@@ -385,41 +400,101 @@ export function ApiKeysPage() {
         }
       />
 
-      {manifest && (
-        <div className="mb-4 grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Globe2 className="h-3.5 w-3.5" />
-              OpenAPI
+      {/* API Kullanım & Analitik Paneli */}
+      <div className="mb-6 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <div className="flex items-center gap-2">
+            <Activity className="w-5 h-5 text-violet-400" />
+            <div>
+              <h3 className="text-sm font-bold text-white">API Kullanım & Analitik Paneli</h3>
+              <p className="text-[11px] text-slate-500 font-medium">Anahtar bazlı trafik, hata oranları, rate limit ve kapsam görünürlüğü.</p>
             </div>
-            <p className="mt-1 text-sm font-semibold text-slate-100">v{manifest.version}</p>
+          </div>
+          {manifest && (
             <a
               href={`${API_BASE_URL}/api/api-keys/openapi.json`}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 inline-flex text-xs font-medium text-sky-300 hover:text-sky-200"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-all duration-200"
             >
-              Spec dosyasini ac
+              <Globe2 className="w-3.5 h-3.5" />
+              OpenAPI Spec (v{manifest.version})
             </a>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Activity className="h-3.5 w-3.5" />
-              Rate limit
+          )}
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          {/* Card 1: API Trafiği */}
+          <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-4 space-y-1.5">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">API Trafiği</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-extrabold text-white">{totalRequests}</span>
+              <span className="text-xs text-slate-500">İstek</span>
             </div>
-            <p className="mt-1 text-sm font-semibold text-slate-100">{manifest.rateLimit.perMinute}/dk</p>
-            <p className="mt-2 text-xs text-slate-500">API key bazli uygulanir.</p>
+            <p className="text-[9px] text-slate-500">Sistem genelinde yapılan toplam API çağrısı.</p>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Shield className="h-3.5 w-3.5" />
-              Manifest
+
+          {/* Card 2: Hata Analizi */}
+          <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-4 space-y-1.5">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Hata Oranı</span>
+            <div className="flex items-baseline gap-2">
+              <span className={`text-2xl font-extrabold ${avgErrorRate > 15 ? 'text-red-400' : avgErrorRate > 5 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                %{avgErrorRate}
+              </span>
+              <span className="text-xs text-slate-500">Ortalama</span>
             </div>
-            <p className="mt-1 text-sm font-semibold text-slate-100">{manifest.endpoints.length} endpoint</p>
-            <p className="mt-2 text-xs text-slate-500">{manifest.scopes.length} scope, sandbox header: {manifest.auth.sandboxHeader}</p>
+            <p className="text-[9px] text-slate-500">Başarısız (&gt;=400) isteklerin oranı.</p>
+          </div>
+
+          {/* Card 3: Rate Limit Koruması */}
+          <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-4 space-y-1.5">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Rate Limit Koruması</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-extrabold text-white">
+                {manifest?.rateLimit.perMinute ?? 60}
+              </span>
+              <span className="text-xs text-slate-500">İstek / dk</span>
+            </div>
+            <p className="text-[9px] text-slate-500">Anahtar başına dakika başı maksimum istek limiti.</p>
+          </div>
+
+          {/* Card 4: Kapsam Dağılımı */}
+          <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-4 space-y-1.5">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Kapsam Görünürlüğü (Scopes)</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-extrabold text-white">
+                {Object.keys(scopeDistribution).length}
+              </span>
+              <span className="text-xs text-slate-500">Etkin Kapsam</span>
+            </div>
+            <p className="text-[9px] text-slate-500">Kullanılan farklı yetki kapsamı sayısı.</p>
           </div>
         </div>
-      )}
+
+        {/* Scope distribution visual list */}
+        {Object.keys(scopeDistribution).length > 0 && (
+          <div className="pt-3 border-t border-slate-800/60 bg-slate-950/20 p-3 rounded-xl border border-slate-850">
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Kapsam Bazlı Dağılım (Etkin Anahtar Sayısı)</span>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(scopeDistribution).map(([scope, count]) => {
+                const info = AVAILABLE_SCOPES.find((a) => a.key === scope);
+                return (
+                  <div
+                    key={scope}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800/80 text-[10px] text-slate-300 font-medium"
+                  >
+                    <span className="text-slate-400 font-mono">{info?.label ?? scope}</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-800" />
+                    <span className="text-sky-400 font-bold">{count} Anahtar</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <IntegrationSandboxPanel sandbox={sandbox} loading={sandboxLoading} />
 
       <DataTable
         columns={columns}

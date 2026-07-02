@@ -6,7 +6,12 @@ import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { createApiKeyHash } from '../utils/api-key-hash.js';
-import { getExternalApiManifest, getExternalOpenApiDocument } from '../services/external-api-registry.service.js';
+import { getExternalApiManifest } from '../services/external-api-registry.service.js';
+import {
+  getIntegrationSandboxOpenApiDocument,
+  getIntegrationSandboxPayload,
+  getIntegrationSandboxPostmanCollection,
+} from '../services/integration-sandbox.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -86,7 +91,18 @@ export const ApiKeyController = {
 
   async openApi(c: Context): Promise<Response> {
     const origin = new URL(c.req.url).origin;
-    return c.json(getExternalOpenApiDocument(origin));
+    return c.json(getIntegrationSandboxOpenApiDocument(origin));
+  },
+
+  async sandbox(c: Context): Promise<Response> {
+    const origin = new URL(c.req.url).origin;
+    return c.json({ data: getIntegrationSandboxPayload(origin) });
+  },
+
+  async postman(c: Context): Promise<Response> {
+    const origin = new URL(c.req.url).origin;
+    c.header('Content-Disposition', 'attachment; filename="axon-erp-external-api.postman_collection.json"');
+    return c.json(getIntegrationSandboxPostmanCollection(origin));
   },
 
   async list(c: Context): Promise<Response> {

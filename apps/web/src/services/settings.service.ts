@@ -137,12 +137,36 @@ export const SecurityHardeningSnapshotSchema = z.object({
   webhookAudit: WebhookSecurityAuditSchema,
 });
 
+export const SetupChecklistItemSchema = z.object({
+  key: z.enum(['contacts', 'products', 'tax_rates', 'currencies', 'invoice_series']),
+  label: z.string(),
+  description: z.string(),
+  completed: z.boolean(),
+  count: z.coerce.number(),
+  href: z.string(),
+  actionLabel: z.string(),
+  severity: z.enum(['required', 'recommended']),
+});
+
+export const SetupChecklistStatusSchema = z.object({
+  summary: z.object({
+    total: z.coerce.number(),
+    completed: z.coerce.number(),
+    remaining: z.coerce.number(),
+    percent: z.coerce.number(),
+  }),
+  items: z.array(SetupChecklistItemSchema),
+  generatedAt: z.string(),
+});
+
 export type TenantSetting = z.infer<typeof TenantSettingSchema>;
 export type ModuleSetting = z.infer<typeof ModuleSettingSchema>;
 export type BusinessRule = z.infer<typeof BusinessRuleSchema>;
 export type TenantSecurityScore = z.infer<typeof TenantSecurityScoreSchema>;
 export type SecuritySession = z.infer<typeof SecuritySessionSchema>;
 export type SecurityHardeningSnapshot = z.infer<typeof SecurityHardeningSnapshotSchema>;
+export type SetupChecklistItem = z.infer<typeof SetupChecklistItemSchema>;
+export type SetupChecklistStatus = z.infer<typeof SetupChecklistStatusSchema>;
 
 export async function getTenantSettings(): Promise<TenantSetting[]> {
   const res = await apiClient.get('/api/settings');
@@ -171,6 +195,11 @@ export async function getTenantSecurityScore(): Promise<TenantSecurityScore> {
 export async function getSecurityHardeningSnapshot(): Promise<SecurityHardeningSnapshot> {
   const res = await apiClient.get('/api/settings/security/dashboard');
   return safeParse(SingleResponseSchema(SecurityHardeningSnapshotSchema), res.data, 'getSecurityHardeningSnapshot').data;
+}
+
+export async function getSetupChecklist(): Promise<SetupChecklistStatus> {
+  const res = await apiClient.get('/api/settings/setup-checklist');
+  return safeParse(SingleResponseSchema(SetupChecklistStatusSchema), res.data, 'getSetupChecklist').data;
 }
 
 export async function revokeSecuritySession(sessionId: string): Promise<SecuritySession> {

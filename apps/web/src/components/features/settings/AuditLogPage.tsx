@@ -1,12 +1,14 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Eye } from 'lucide-react';
+import { Download, Eye } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { FeatureGate } from '@/components/shared/FeatureGate';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { useAuditLogs } from '@/hooks/useAuditLogs';
+import { useAuditLogExport, useAuditLogs } from '@/hooks/useAuditLogs';
 import { useTenantUsers } from '@/hooks/useUsers';
 import { formatDateTime } from '@/lib/utils';
 import type { AuditLog } from '@/services/audit-log.service';
@@ -146,9 +148,19 @@ function JsonPreview({ title, value }: { title: string; value: unknown }) {
 export function AuditLogPage() {
   const [page, setPage] = useState(1);
   const [moduleFilter, setModuleFilter] = useState('');
+  const [actionFilter, setActionFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [detail, setDetail] = useState<AuditLog | null>(null);
 
-  const { data, isLoading } = useAuditLogs({ page, limit: 30, module: moduleFilter || undefined });
+  const auditFilters = {
+    module: moduleFilter || undefined,
+    action: actionFilter || undefined,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
+  };
+  const { data, isLoading } = useAuditLogs({ page, limit: 30, ...auditFilters });
+  const exportQuery = useAuditLogExport(auditFilters);
   const { data: tenantUsers = [] } = useTenantUsers();
   const userLabelById = useMemo(() => {
     const labels = new Map<string, string>();
@@ -158,6 +170,19 @@ export function AuditLogPage() {
     });
     return labels;
   }, [tenantUsers]);
+
+  const handleExport = async () => {
+    const exported = await exportQuery.refetch();
+    if (!exported.data) return;
+
+    const blob = new Blob([JSON.stringify(exported.data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const columns: ColumnDef<AuditLog>[] = [
     {
@@ -243,7 +268,7 @@ export function AuditLogPage() {
     <div className="space-y-4">
       <PageHeader title="Denetim Kaydı" subtitle="Paket limitlerine göre erişilebilir işlem geçmişi." />
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <select
           value={moduleFilter}
           onChange={(event) => {
@@ -259,6 +284,51 @@ export function AuditLogPage() {
             </option>
           ))}
         </select>
+        <select
+          value={actionFilter}
+          onChange={(event) => {
+            setActionFilter(event.target.value);
+            setPage(1);
+          }}
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500"
+        >
+          <option value="">Tüm İşlemler</option>
+          {Object.entries(ACTION_MAP).map(([value, meta]) => (
+            <option key={value} value={value}>
+              {meta.label}
+            </option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(event) => {
+            setDateFrom(event.target.value);
+            setPage(1);
+          }}
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500"
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(event) => {
+            setDateTo(event.target.value);
+            setPage(1);
+          }}
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500"
+        />
+        <FeatureGate plan="PROFESSIONAL" fallback={null}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            leftIcon={<Download className="h-3.5 w-3.5" />}
+            loading={exportQuery.isFetching}
+            onClick={handleExport}
+          >
+            Dışa Aktar
+          </Button>
+        </FeatureGate>
       </div>
 
       <DataTable

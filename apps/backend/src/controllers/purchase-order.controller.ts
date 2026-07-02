@@ -152,7 +152,7 @@ export const PurchaseOrderController = {
     const tenantId = requireTenantId(c);
     const id = c.req.param('id');
 
-    const body = await c.req.json<{ contactId: string }>();
+    const body = await c.req.json<{ contactId: string; items?: { productId: string; unitPrice: number }[] }>();
     if (!body.contactId) return c.json(new ValidationError('contactId zorunludur.').toJSON(), 400);
 
     const request = await prisma.purchaseRequest.findFirst({
@@ -165,12 +165,15 @@ export const PurchaseOrderController = {
     }
     const number = await generateDocumentNumber(tenantId, 'purchase_order', 'PO-', 'purchaseOrder');
 
-    const items: OrderItemDTO[] = request.items.map((i) => ({
-      productId: i.productId,
-      description: i.description ?? undefined,
-      quantity: Number(i.quantity),
-      unitPrice: Number(i.unitPrice ?? 0),
-    }));
+    const items: OrderItemDTO[] = request.items.map((i) => {
+      const customPrice = body.items?.find((item) => item.productId === i.productId)?.unitPrice;
+      return {
+        productId: i.productId,
+        description: i.description ?? undefined,
+        quantity: Number(i.quantity),
+        unitPrice: customPrice !== undefined ? Number(customPrice) : Number(i.unitPrice ?? 0),
+      };
+    });
     const { lineData, totalNet, totalTax, totalGross } = computeItems(items);
 
     const order = await prisma.$transaction(async (tx) => {

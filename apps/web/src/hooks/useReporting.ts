@@ -7,6 +7,7 @@ import {
   getPinnedKpiPreviews,
   getRevenueSummary,
   getStockSummary,
+  getCashflowForecast,
 } from '@/services/reporting.service';
 
 export interface ReportDateRange {
@@ -24,6 +25,7 @@ export const REPORTING_QUERY_KEYS = {
   stockSummary: ['reports', 'stock-summary'] as const,
   contactBalance: ['reports', 'contact-balance'] as const,
   pinnedKpiPreviews: ['reports', 'pinned-kpi'] as const,
+  cashflowForecast: ['reports', 'cashflow-forecast'] as const,
 };
 
 export function useRevenueSummary(range: ReportDateRange, options?: QueryOptions) {
@@ -62,6 +64,14 @@ export function usePinnedKpiPreviews(options?: QueryOptions) {
   return useQuery({
     queryKey: REPORTING_QUERY_KEYS.pinnedKpiPreviews,
     queryFn: getPinnedKpiPreviews,
+    enabled: options?.enabled ?? true,
+  });
+}
+
+export function useCashflowForecast(options?: QueryOptions) {
+  return useQuery({
+    queryKey: REPORTING_QUERY_KEYS.cashflowForecast,
+    queryFn: getCashflowForecast,
     enabled: options?.enabled ?? true,
   });
 }

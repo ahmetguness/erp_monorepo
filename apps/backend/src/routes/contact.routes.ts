@@ -11,6 +11,7 @@ contactRoutes.use('*', requireModule(MODULE_KEYS.CONTACTS));
 contactRoutes.get('/tracking-dashboard', requirePermission('contacts', 'READ'), ContactController.trackingDashboard);
 contactRoutes.get('/', requirePermission('contacts', 'READ'), ContactController.list);
 contactRoutes.get('/:id', requirePermission('contacts', 'READ'), ContactController.getById);
+contactRoutes.get('/:id/performance', requirePermission('contacts', 'READ'), ContactController.getPerformanceScore);
 contactRoutes.post('/', requirePermission('contacts', 'CREATE'), ContactController.create);
 contactRoutes.patch('/:id', requirePermission('contacts', 'UPDATE'), ContactController.update);
 contactRoutes.delete('/:id', requirePermission('contacts', 'DELETE'), ContactController.remove);

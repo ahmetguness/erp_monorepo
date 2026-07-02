@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, LogOut, Search } from 'lucide-react';
+import { ChevronDown, LogOut, Search, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NAV_GROUPS, type NavItem } from '@/lib/nav-config';
 import { useCurrentUser, useLogout } from '@/hooks/useAuth';
@@ -128,12 +128,21 @@ interface NavItemProps {
   tenantPlan: string;
   tenantModules: string[];
   depth?: number;
+  parentLocked?: boolean;
+  parentPlan?: string;
 }
 
-function NavItemRow({ item, tenantPlan, tenantModules, depth = 0 }: NavItemProps) {
+function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked = false, parentPlan }: NavItemProps) {
   const pathname = usePathname();
 
-  const visibleChildren = item.children?.filter((c) => hasAccess(tenantPlan, tenantModules, c));
+  const isLocked = parentLocked || Boolean(item.plan && !hasPlanAccess(tenantPlan, item.plan));
+  const effectivePlan = item.plan || parentPlan || 'PROFESSIONAL';
+
+  const visibleChildren = item.children?.filter((c) => {
+    const isChildLocked = isLocked || Boolean(c.plan && !hasPlanAccess(tenantPlan, c.plan));
+    return hasAccess(tenantPlan, tenantModules, c) || isChildLocked;
+  });
+
   const hasActiveChild = visibleChildren?.some((c) => isPathMatch(pathname, c.href)) ?? false;
 
   const [open, setOpen] = useState(() => {
@@ -147,11 +156,15 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0 }: NavItemProps
     return () => window.clearTimeout(timer);
   }, [hasActiveChild]);
 
-  if (!hasAccess(tenantPlan, tenantModules, item)) return null;
+  if (!hasAccess(tenantPlan, tenantModules, item) && !isLocked) return null;
 
   const isActive = visibleChildren ? hasActiveChild : isPathMatch(pathname, item.href);
 
   const Icon = item.icon;
+
+  const href = isLocked
+    ? `/dashboard/upgrade-preview?feature=${encodeURIComponent(item.label)}&plan=${effectivePlan}&module=${item.module || ''}`
+    : item.href;
 
   // Has children → collapsible
   if (visibleChildren && visibleChildren.length > 0) {
@@ -163,12 +176,15 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0 }: NavItemProps
             'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
             depth > 0 ? 'pl-8' : '',
             isActive
-              ? 'bg-sky-500/10 text-sky-400'
+              ? 'bg-sky-500/10 text-sky-400 font-medium'
+              : isLocked
+              ? 'text-slate-500 hover:text-slate-400 hover:bg-slate-800/20'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
           )}
         >
-          <Icon className="w-4 h-4 shrink-0" />
-          <span className="flex-1 text-left">{item.label}</span>
+          <Icon className={cn('w-4 h-4 shrink-0', isLocked && 'text-slate-600')} />
+          <span className="flex-1 text-left truncate">{item.label}</span>
+          {isLocked && <Lock className="w-3 h-3 text-slate-600 shrink-0 mr-1" />}
           <ChevronDown
             className={cn('w-3.5 h-3.5 shrink-0 transition-transform', open && 'rotate-180')}
           />
@@ -177,7 +193,15 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0 }: NavItemProps
         {open && (
           <div className="mt-0.5 space-y-0.5">
             {visibleChildren.map((child) => (
-              <NavItemRow key={child.href} item={child} tenantPlan={tenantPlan} tenantModules={tenantModules} depth={depth + 1} />
+              <NavItemRow
+                key={child.href}
+                item={child}
+                tenantPlan={tenantPlan}
+                tenantModules={tenantModules}
+                depth={depth + 1}
+                parentLocked={isLocked}
+                parentPlan={effectivePlan}
+              />
             ))}
           </div>
         )}
@@ -188,17 +212,20 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0 }: NavItemProps
   // Leaf item
   return (
     <Link
-      href={item.href}
+      href={href}
       className={cn(
         'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
         depth > 0 ? 'pl-8' : '',
         isActive
           ? 'bg-sky-500/10 text-sky-400 font-medium'
+          : isLocked
+          ? 'text-slate-500 hover:text-slate-400 hover:bg-slate-800/20'
           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
       )}
     >
-      <Icon className="w-4 h-4 shrink-0" />
-      <span className="flex-1">{item.label}</span>
+      <Icon className={cn('w-4 h-4 shrink-0', isLocked && 'text-slate-600')} />
+      <span className="flex-1 truncate">{item.label}</span>
+      {isLocked && <Lock className="w-3 h-3 text-slate-600 shrink-0" />}
     </Link>
   );
 }
@@ -219,12 +246,16 @@ export function Sidebar() {
     () =>
       NAV_GROUPS.map((group) => {
         const accessibleItems = group.items.reduce<NavItem[]>((items, item) => {
-          if (!hasAccess(tenantPlan, tenantModules, item)) return items;
+          const isItemLocked = Boolean(item.plan && !hasPlanAccess(tenantPlan, item.plan));
+          if (!hasAccess(tenantPlan, tenantModules, item) && !isItemLocked) return items;
 
           if (item.children) {
             items.push({
               ...item,
-              children: item.children.filter((child) => hasAccess(tenantPlan, tenantModules, child)),
+              children: item.children.filter((child) => {
+                const isChildLocked = isItemLocked || Boolean(child.plan && !hasPlanAccess(tenantPlan, child.plan));
+                return hasAccess(tenantPlan, tenantModules, child) || isChildLocked;
+              }),
             });
             return items;
           }

@@ -25,6 +25,11 @@ export const MASTER_KEYS = {
   currencies: ['master', 'currencies'] as const,
 };
 
+function invalidateMasterSetupQueries(qc: ReturnType<typeof useQueryClient>, queryKey: readonly unknown[]) {
+  qc.invalidateQueries({ queryKey });
+  qc.invalidateQueries({ queryKey: ['settings', 'setup-checklist'] });
+}
+
 // ─────────────────────────────────────────────
 // Units
 // ─────────────────────────────────────────────
@@ -120,7 +125,7 @@ export function useCreateTaxRate() {
   return useMutation({
     mutationFn: (data: CreateTaxRateDTO) => createTaxRate(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: MASTER_KEYS.taxRates });
+      invalidateMasterSetupQueries(qc, MASTER_KEYS.taxRates);
       toast.success('KDV oranı oluşturuldu.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
@@ -133,7 +138,7 @@ export function useUpdateTaxRate() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTaxRateDTO }) => updateTaxRate(id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: MASTER_KEYS.taxRates });
+      invalidateMasterSetupQueries(qc, MASTER_KEYS.taxRates);
       toast.success('KDV oranı güncellendi.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
@@ -154,7 +159,7 @@ export function useCreateCurrency() {
   return useMutation({
     mutationFn: (data: CreateCurrencyDTO) => createCurrency(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: MASTER_KEYS.currencies });
+      invalidateMasterSetupQueries(qc, MASTER_KEYS.currencies);
       toast.success('Para birimi oluşturuldu.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),

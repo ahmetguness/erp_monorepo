@@ -1,21 +1,27 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, Pin, Save, Trash2, TrendingDown, TrendingUp, Package, Users, Coins, BarChart3 } from 'lucide-react';
+import { Download, Pin, Save, Trash2, TrendingDown, TrendingUp, Package, Users, Coins, BarChart3, Lock, Share2, Mail, Calendar, Shield } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
+import { CashflowForecastPanel } from './CashflowForecastPanel';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormRow } from '@/components/shared/FormField';
 import { FeatureGate } from '@/components/shared/FeatureGate';
+import { Modal } from '@/components/ui/Modal';
 import { useUIStore } from '@/store/ui.store';
+import { useRoles } from '@/hooks/useRoles';
+import { useTenantUsers } from '@/hooks/useUsers';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getRevenueSummary, getExpenseSummary, getStockSummary, getContactBalance,
   getSavedReports, deleteSavedReport, createSavedReport, getReportingRegistry, previewKpi, recordSavedReportExportAudit,
-  getCollectionList,
+  getCollectionList, updateSavedReport,
   KpiReportConfigSchema,
   type KpiPreview,
   type KpiReportConfig,
@@ -88,6 +94,8 @@ type ContactReportItem = ContactBalance['contacts'][number];
 // ─────────────────────────────────────────────
 
 export function ReportsPage() {
+  const router = useRouter();
+  const { isStarter } = usePlanFeatures();
   const qc = useQueryClient();
   const { toast } = useUIStore();
   const defaultRange = getDefaultRange();
@@ -97,7 +105,29 @@ export function ReportsPage() {
   const [kpiName, setKpiName] = useState('Aylık satış geliri');
   const [kpiConfig, setKpiConfig] = useState<KpiReportConfig>(DEFAULT_KPI_CONFIG);
   const [kpiPreview, setKpiPreview] = useState<KpiPreview | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'collections' | 'stock' | 'contacts'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'collections' | 'stock' | 'contacts' | 'cashflow'>('overview');
+
+  const [shareTarget, setShareTarget] = useState<SavedReport | null>(null);
+  const [shareRoles, setShareRoles] = useState<string[]>([]);
+  const [shareUsers, setShareUsers] = useState<string[]>([]);
+  const [sharePublic, setSharePublic] = useState<boolean>(false);
+
+  // Queries for users and roles to populate selectors
+  const { data: usersData } = useTenantUsers();
+  const users = usersData ?? [];
+  const { data: rolesData } = useRoles({ limit: 100 });
+  const roles = rolesData?.data ?? [];
+
+  const updateReport = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name?: string; filters?: Record<string, unknown>; columns?: string[]; isShared?: boolean } }) =>
+      updateSavedReport(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reports', 'saved'] });
+      toast.success('Rapor paylaşım ayarları güncellendi.');
+      setShareTarget(null);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
 
   const { data: revenue, isLoading: loadingRevenue } = useQuery({
     queryKey: ['reports', 'revenue', dateFrom, dateTo],
@@ -223,6 +253,20 @@ export function ReportsPage() {
       render: (r) => (
         <div className="flex justify-end gap-1">
           <button
+            aria-label="Paylaş ve Zamanla"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShareTarget(r);
+              setSharePublic(r.isShared);
+              setShareRoles((r.filters.sharedRoles as string[]) ?? []);
+              setShareUsers((r.filters.sharedUsers as string[]) ?? []);
+            }}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+            title="Paylaşım & Zamanlama Ayarları"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+          </button>
+          <button
             aria-label="Export audit"
             onClick={(e) => { e.stopPropagation(); recordExportAudit.mutate(r.id); }}
             className="p-1.5 rounded-lg text-slate-500 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
@@ -311,10 +355,11 @@ export function ReportsPage() {
       {/* Tabs */}
       <div className="flex gap-2 border-b border-slate-800 pb-px">
         {[
-          { id: 'overview', label: 'Finansal Özet', icon: BarChart3 },
-          { id: 'collections', label: 'Tahsilat Listesi', icon: Coins },
-          { id: 'stock', label: 'Kritik Stok Raporu', icon: Package },
-          { id: 'contacts', label: 'Cari Bakiye Raporu', icon: Users },
+          { id: 'overview', label: 'Finansal Özet', icon: BarChart3, locked: false },
+          { id: 'collections', label: 'Tahsilat Listesi', icon: Coins, locked: false },
+          { id: 'stock', label: 'Kritik Stok Raporu', icon: Package, locked: false },
+          { id: 'contacts', label: 'Cari Bakiye Raporu', icon: Users, locked: false },
+          { id: 'cashflow', label: 'Nakit Akış Tahmini', icon: Coins, locked: isStarter },
         ].map((tab) => {
           const Icon = tab.icon;
           return (
@@ -330,6 +375,7 @@ export function ReportsPage() {
             >
               <Icon className="w-4 h-4" />
               {tab.label}
+              {tab.locked && <Lock className="w-3 h-3 text-amber-500 shrink-0 ml-0.5" />}
             </button>
           );
         })}
@@ -683,6 +729,47 @@ export function ReportsPage() {
         </div>
       )}
 
+      {activeTab === 'cashflow' && isStarter && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-2xl mx-auto text-center space-y-6 my-10 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-600/5 to-sky-600/5 pointer-events-none" />
+          <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto shadow-lg">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold text-white">Gelişmiş Nakit Akışı Tahmini</h3>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              Professional paket ile açılır. Vadesi gelen alacak/borç, çek/senet ve banka hareketlerinden 30/60/90 günlük otomatik projeksiyon ve nakit akış analizi.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left max-w-lg mx-auto pt-2">
+            <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 text-xs">
+              <span className="font-bold text-slate-300 block mb-1">30/60/90 Günlük Tahmin</span>
+              <p className="text-slate-500 text-[10px] leading-relaxed">Gelecek 3 aydaki tüm likit durumunuzu otomatik öngörün.</p>
+            </div>
+            <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 text-xs">
+              <span className="font-bold text-slate-300 block mb-1">Çek / Senet Entegrasyonu</span>
+              <p className="text-slate-500 text-[10px] leading-relaxed">Portföyünüzdeki çek ve senetlerin vade tarihlerini nakit akışına dahil edin.</p>
+            </div>
+            <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 text-xs">
+              <span className="font-bold text-slate-300 block mb-1">Anlık Banka & Kasa</span>
+              <p className="text-slate-500 text-[10px] leading-relaxed">Banka hareketlerinize ve kasa bakiyelerinize göre başlangıç likiditesini güncelleyin.</p>
+            </div>
+          </div>
+          <div className="pt-4">
+            <button
+              onClick={() => router.push('/dashboard/upgrade-preview?feature=Gelişmiş Nakit Akışı Tahmini')}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-sm text-white bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 shadow-lg shadow-sky-500/20 active:scale-[0.98] transition-all"
+            >
+              Professional Plana Yükselt
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'cashflow' && !isStarter && (
+        <CashflowForecastPanel />
+      )}
+
       <ConfirmDialog
         isOpen={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
@@ -690,6 +777,181 @@ export function ReportsPage() {
         message={`"${deleteTarget?.name}" raporunu silmek istediğinize emin misiniz?`}
         isLoading={deleteReport.isPending}
       />
+
+      {/* ── Share & Schedule Modal ── */}
+      <Modal
+        isOpen={!!shareTarget}
+        onClose={() => setShareTarget(null)}
+        title="Rapor Paylaşım & Zamanlama Ayarları"
+        description="Özel raporların kullanıcı/rol bazlı paylaşımını ve e-posta zamanlamalarını düzenleyin."
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShareTarget(null)}
+            >
+              İptal
+            </Button>
+            <Button
+              size="sm"
+              loading={updateReport.isPending}
+              onClick={() => {
+                if (!shareTarget) return;
+                const originalFilters = shareTarget.filters;
+                const updatedFilters = {
+                  ...originalFilters,
+                  sharedRoles: shareRoles,
+                  sharedUsers: shareUsers,
+                };
+                updateReport.mutate({
+                  id: shareTarget.id,
+                  data: {
+                    isShared: sharePublic,
+                    filters: updatedFilters,
+                  },
+                });
+              }}
+            >
+              Değişiklikleri Kaydet
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-6">
+          {/* Bölüm 1: Paylaşım Ayarları */}
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Share2 className="w-3.5 h-3.5" />
+              Erişim & Paylaşım Yetkileri
+            </h4>
+
+            <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
+              <label className="flex items-center gap-2 text-sm text-slate-300 font-medium cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sharePublic}
+                  onChange={(e) => setSharePublic(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-700 bg-slate-900"
+                />
+                Herkese Açık (Tüm tenant ile paylaş)
+              </label>
+
+              <div className="space-y-3 pt-2 border-t border-slate-800/60">
+                <div className="space-y-1.5">
+                  <span className="text-xs text-slate-400 font-medium">Rol Yetkilendirmesi</span>
+                  <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto bg-slate-900/50 p-2.5 rounded-lg border border-slate-850">
+                    {roles.length === 0 ? (
+                      <span className="text-slate-500 text-[11px]">Rol bulunamadı.</span>
+                    ) : (
+                      roles.map((role) => {
+                        const isSelected = shareRoles.includes(role.id);
+                        return (
+                          <button
+                            key={role.id}
+                            type="button"
+                            onClick={() => {
+                              setShareRoles((prev) =>
+                                isSelected ? prev.filter((r) => r !== role.id) : [...prev, role.id]
+                              );
+                            }}
+                            className={cn(
+                              "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-all border",
+                              isSelected
+                                ? "bg-sky-500/10 border-sky-500/30 text-sky-400"
+                                : "bg-slate-800 border-slate-750 text-slate-400 hover:border-slate-700"
+                            )}
+                          >
+                            <Shield className="w-3 h-3" />
+                            {role.name}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-2">
+                  <span className="text-xs text-slate-400 font-medium">Kullanıcı Bazlı Yetkilendirme</span>
+                  <div className="flex flex-col gap-1.5 max-h-32 overflow-y-auto bg-slate-900/50 p-2.5 rounded-lg border border-slate-850">
+                    {users.length === 0 ? (
+                      <span className="text-slate-500 text-[11px]">Kullanıcı bulunamadı.</span>
+                    ) : (
+                      users.map((user) => {
+                        const isSelected = shareUsers.includes(user.userId);
+                        return (
+                          <label key={user.id} className="flex items-center gap-2 text-[11px] text-slate-300 font-medium cursor-pointer hover:text-white transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                setShareUsers((prev) =>
+                                  isSelected ? prev.filter((u) => u !== user.userId) : [...prev, user.userId]
+                                );
+                              }}
+                              className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900"
+                            />
+                            {user.user.name} <span className="text-slate-500 font-normal">({user.user.email})</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bölüm 2: E-posta Zamanlama (Enterprise Upgrade Path) */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5" />
+              Zamanlanmış Rapor Gönderimi
+            </h4>
+
+            <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4 relative overflow-hidden">
+              <div className="flex items-start gap-2.5 text-xs text-amber-500/90 bg-amber-500/10 border border-amber-500/20 p-3 rounded-lg leading-relaxed">
+                <Lock className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block mb-0.5">Enterprise Özelliği</span>
+                  Periyodik e-posta gönderimi ve rapor zamanlama özellikleri yalnızca **Enterprise** planında yer alan kurumsal mail entegrasyonu ile kullanılabilir.
+                </div>
+              </div>
+
+              <div className="opacity-40 pointer-events-none space-y-3 select-none">
+                <label className="flex items-center gap-2 text-xs text-slate-300 font-medium">
+                  <input type="checkbox" checked={false} readOnly className="h-4 w-4 rounded border-slate-700 bg-slate-900" />
+                  E-posta raporlamasını etkinleştir
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-slate-500">Gönderim Sıklığı</span>
+                    <div className="h-8 rounded bg-slate-900 border border-slate-800" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-slate-500">Gönderim Saati</span>
+                    <div className="h-8 rounded bg-slate-900 border border-slate-800" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShareTarget(null);
+                    router.push('/dashboard/upgrade-preview?feature=Rapor Zamanlama ve Enterprise Mail Entegrasyonu');
+                  }}
+                  className="w-full text-center py-2 rounded-lg text-xs font-bold text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-all duration-200"
+                >
+                  Enterprise Plana Yükselt
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -92,6 +92,36 @@ export const ExternalApiManifestSchema = z.object({
   endpoints: z.array(ExternalApiEndpointSchema),
 });
 
+export const IntegrationSandboxExampleSchema = z.object({
+  method: z.enum(['GET', 'POST', 'PATCH', 'DELETE']),
+  path: z.string(),
+  title: z.string(),
+  description: z.string(),
+  group: z.string(),
+  scope: ApiKeyScopeSchema.or(z.string()),
+  sandboxSupported: z.boolean(),
+  sampleUrl: z.string(),
+  curl: z.string(),
+  requestExample: z.unknown().optional(),
+  responseExample: z.unknown(),
+});
+
+export const IntegrationSandboxSchema = z.object({
+  version: z.string(),
+  baseUrl: z.string(),
+  auth: z.object({
+    apiKeyHeader: z.literal('x-api-key'),
+    sandboxHeader: z.literal('x-sandbox-mode'),
+    sandboxHeaderValue: z.literal('true'),
+  }),
+  outputs: z.object({
+    manifestPath: z.literal('/api/api-keys/manifest'),
+    openApiPath: z.literal('/api/api-keys/openapi.json'),
+    postmanPath: z.literal('/api/api-keys/postman.json'),
+  }),
+  examples: z.array(IntegrationSandboxExampleSchema),
+});
+
 export const CreateApiKeySchema = z.object({
   name: z.string().trim().min(1),
   scopes: z.array(ApiKeyScopeSchema).optional(),
@@ -103,6 +133,8 @@ export type ApiKeyWithRaw = z.infer<typeof ApiKeyWithRawSchema>;
 export type ApiKeyActivity = z.infer<typeof ApiKeyActivitySchema>;
 export type CreateApiKeyDTO = z.infer<typeof CreateApiKeySchema>;
 export type ExternalApiManifest = z.infer<typeof ExternalApiManifestSchema>;
+export type IntegrationSandbox = z.infer<typeof IntegrationSandboxSchema>;
+export type IntegrationSandboxExample = z.infer<typeof IntegrationSandboxExampleSchema>;
 
 export interface ListParams extends PaginationParams { isActive?: string }
 
@@ -138,4 +170,9 @@ export async function getExternalApiManifest(): Promise<ExternalApiManifest> {
 export async function getExternalOpenApiSpec(): Promise<unknown> {
   const res = await apiClient.get('/api/api-keys/openapi.json');
   return res.data;
+}
+
+export async function getIntegrationSandbox(): Promise<IntegrationSandbox> {
+  const res = await apiClient.get('/api/api-keys/sandbox');
+  return safeParse(SingleResponseSchema(IntegrationSandboxSchema), res.data, 'getIntegrationSandbox').data;
 }

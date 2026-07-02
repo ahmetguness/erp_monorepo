@@ -283,6 +283,7 @@ export const ACCESS_POLICIES: Record<string, AccessPolicy> = {
   reservations: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVENTORY },
   productBatches: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVENTORY },
   lotSerials: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVENTORY },
+  bulkOperations: { minPlan: PLAN.PROFESSIONAL },
   production: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.PRODUCTION, module: MODULE_KEY.PRODUCTION },
   service: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.SERVICE, module: MODULE_KEY.SERVICE },
   marketplace: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.MARKETPLACE, module: MODULE_KEY.MARKETPLACE },

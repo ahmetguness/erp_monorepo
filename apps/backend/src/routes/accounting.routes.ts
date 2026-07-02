@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
+import { ACCESS_POLICIES } from '@repo/types/plans';
 import { AccountingController, AccountingExtController } from '../controllers/accounting.controller';
+import { requireAccess } from '../middleware/requireAccess';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
 import { MODULE_KEYS } from '../types/module.types';
@@ -25,6 +27,7 @@ accountingRoutes.post('/journal-entries/:id/reverse', requirePermission('account
 // Mali dönemler
 accountingRoutes.get('/fiscal-periods', requirePermission('accounting', 'READ'), AccountingExtController.listFiscalPeriods);
 accountingRoutes.post('/fiscal-periods', requirePermission('accounting', 'CREATE'), AccountingExtController.createFiscalPeriod);
+accountingRoutes.get('/fiscal-periods/:id/closing-checklist', requireAccess(ACCESS_POLICIES.reconciliations), requirePermission('accounting', 'READ'), AccountingExtController.getFiscalPeriodClosingChecklist);
 accountingRoutes.post('/fiscal-periods/:id/close', requirePermission('accounting', 'UPDATE'), AccountingExtController.closeFiscalPeriod);
 accountingRoutes.post('/fiscal-periods/:id/lock', requirePermission('accounting', 'UPDATE'), AccountingExtController.lockFiscalPeriod);
 accountingRoutes.post('/fiscal-periods/:id/reopen', requirePermission('accounting', 'UPDATE'), AccountingExtController.reopenFiscalPeriod);

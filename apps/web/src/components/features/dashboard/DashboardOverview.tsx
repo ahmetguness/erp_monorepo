@@ -14,6 +14,7 @@ import {
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useSmartNotifications } from "@/hooks/useNotifications";
+import { usePlanFeatures } from "@/hooks/usePlanFeatures";
 import {
   useCompleteDashboardTask,
   useDashboardApprovals,
@@ -41,6 +42,8 @@ import type {
 import type { SmartNotification } from "@/services/notification.service";
 import { SalesTargetCard } from "@/components/features/sales/SalesTargetCard";
 import { StockAlertDashboardCard } from "@/components/features/stock/StockAlertDashboardCard";
+import { SetupChecklistCard } from "@/components/features/settings/SetupChecklistCard";
+import { StarterHealthScoreCard } from "@/components/features/dashboard/StarterHealthScoreCard";
 
 /* ── Types ──────────────────────────────────── */
 
@@ -152,6 +155,7 @@ function openAssistant(message: string) {
 
 export function DashboardOverview() {
   const { user, tenant } = useCurrentUser();
+  const { isStarter } = usePlanFeatures();
   const dashboardPreset = detectDashboardPreset(user);
   const canRead = (module: string) => (user ? !user.tenantMembership || canReadModule(user, module) : false);
   const canReadInvoicing = canRead('invoicing');
@@ -162,6 +166,7 @@ export function DashboardOverview() {
   const canReadApprovals = canRead('approvals');
   const canReadTasks = canRead('tasks');
   const canReadNotifications = canRead('notifications');
+  const canReadSettings = canRead('settings');
 
   const [clock, setClock] = useState("");
   useEffect(() => {
@@ -339,6 +344,9 @@ export function DashboardOverview() {
           </div>
         </div>
       </Card>
+
+      <SetupChecklistCard enabled={canReadSettings} compact />
+      <StarterHealthScoreCard enabled={isStarter} />
 
       {pinnedKpis.length > 0 && (
         <Card>

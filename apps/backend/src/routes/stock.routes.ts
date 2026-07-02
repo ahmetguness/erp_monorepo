@@ -17,6 +17,7 @@ stockRoutes.use('*', requireModule(MODULE_KEYS.INVENTORY));
 stockRoutes.get('/alerts', requirePermission('inventory', 'READ'), StockController.stockAlerts);
 stockRoutes.get('/levels', requirePermission('inventory', 'READ'), StockController.listStockLevels);
 stockRoutes.get('/reorder-suggestions', requirePermission('inventory', 'READ'), StockController.listReorderSuggestions);
+stockRoutes.get('/advanced-suggestions', requirePermission('inventory', 'READ'), StockController.listAdvancedSuggestions);
 stockRoutes.get('/movements', requirePermission('inventory', 'READ'), StockController.listMovements);
 stockRoutes.post('/movements', requirePermission('inventory', 'CREATE'), validateBody(createStockMovementBodySchema), StockController.createManualMovement);
 stockRoutes.get('/counts', requirePermission('inventory', 'READ'), StockController.listStockCounts);

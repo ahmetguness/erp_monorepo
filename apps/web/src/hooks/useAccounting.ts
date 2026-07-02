@@ -5,7 +5,7 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getLedgerAccounts, createLedgerAccount, getLedgerAccountById, updateLedgerAccount,
-  getFiscalPeriods, createFiscalPeriod, closeFiscalPeriod, deleteFiscalPeriod,
+  getFiscalPeriods, createFiscalPeriod, closeFiscalPeriod, deleteFiscalPeriod, getFiscalPeriodClosingChecklist,
   getJournalEntries, getJournalEntryById, createJournalEntry, postJournalEntry,
   getBankAccounts, createBankAccount, updateBankAccount, deleteBankAccount,
   getCashAccounts, createCashAccount, updateCashAccount, deleteCashAccount,
@@ -20,6 +20,7 @@ const KEYS = {
   accounts: (p?: { type?: AccountType }) => ['accounting', 'accounts', p] as const,
   account: (id: string) => ['accounting', 'accounts', id] as const,
   periods: ['accounting', 'fiscal-periods'] as const,
+  closingChecklist: (id: string) => ['accounting', 'fiscal-periods', id, 'closing-checklist'] as const,
   entries: (p: JournalEntryListParams) => ['accounting', 'journal-entries', p] as const,
   entry: (id: string) => ['accounting', 'journal-entries', id] as const,
   bankAccounts: ['payments', 'bank-accounts'] as const,
@@ -93,12 +94,23 @@ export function useCloseFiscalPeriod(id: string) {
   const { toast } = useUIStore();
   return useMutation({
     mutationFn: () => closeFiscalPeriod(id),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: KEYS.closingChecklist(id) });
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: KEYS.periods }); toast.success('Dönem kapatıldı.'); },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
 
 // ── Journal Entries ──────────────────────────
+
+export function useFiscalPeriodClosingChecklist(periodId: string | null) {
+  return useQuery({
+    queryKey: KEYS.closingChecklist(periodId ?? ''),
+    queryFn: () => getFiscalPeriodClosingChecklist(periodId ?? ''),
+    enabled: !!periodId,
+  });
+}
 
 export function useJournalEntries(params: JournalEntryListParams) {
   return useQuery({ queryKey: KEYS.entries(params), queryFn: () => getJournalEntries(params) });

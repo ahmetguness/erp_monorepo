@@ -10,12 +10,21 @@ import {
   getBusinessRules, upsertBusinessRule,
   getTenantSecurityScore,
   getSecurityHardeningSnapshot,
+  getSetupChecklist,
   revokeSecuritySession,
   runQuickStart,
   cleanDemoData,
   type BusinessRule,
   type QuickStartDTO,
 } from '@/services/settings.service';
+
+function invalidateSetupData(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
+  qc.invalidateQueries({ queryKey: ['settings', 'setup-checklist'] });
+  qc.invalidateQueries({ queryKey: ['master'] });
+  qc.invalidateQueries({ queryKey: ['contacts'] });
+  qc.invalidateQueries({ queryKey: ['products'] });
+}
 
 export function useTenantSettings() {
   return useQuery({ queryKey: ['settings', 'tenant'], queryFn: getTenantSettings, staleTime: 5 * 60 * 1000 });
@@ -26,7 +35,11 @@ export function useUpsertTenantSetting() {
   const { toast } = useUIStore();
   return useMutation({
     mutationFn: ({ key, value }: { key: string; value: string }) => upsertTenantSetting(key, value),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['settings', 'tenant'] }); toast.success('Ayar kaydedildi.'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
+      qc.invalidateQueries({ queryKey: ['settings', 'setup-checklist'] });
+      toast.success('Ayar kaydedildi.');
+    },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
@@ -36,7 +49,11 @@ export function useDeleteTenantSetting() {
   const { toast } = useUIStore();
   return useMutation({
     mutationFn: (key: string) => deleteTenantSetting(key),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['settings', 'tenant'] }); toast.success('Ayar silindi.'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
+      qc.invalidateQueries({ queryKey: ['settings', 'setup-checklist'] });
+      toast.success('Ayar silindi.');
+    },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
@@ -51,6 +68,15 @@ export function useTenantSecurityScore() {
 
 export function useSecurityHardeningSnapshot() {
   return useQuery({ queryKey: ['settings', 'security-hardening'], queryFn: getSecurityHardeningSnapshot, staleTime: 60 * 1000 });
+}
+
+export function useSetupChecklist(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['settings', 'setup-checklist'],
+    queryFn: getSetupChecklist,
+    enabled: options?.enabled ?? true,
+    staleTime: 60 * 1000,
+  });
 }
 
 export function useRevokeSecuritySession() {
@@ -119,7 +145,7 @@ export function useRunQuickStart() {
   return useMutation({
     mutationFn: (data: QuickStartDTO) => runQuickStart(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
+      invalidateSetupData(qc);
       toast.success('Hızlı başlangıç kurulumu tamamlandı!');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
@@ -132,7 +158,7 @@ export function useCleanDemoData() {
   return useMutation({
     mutationFn: () => cleanDemoData(),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
+      invalidateSetupData(qc);
       toast.success('Demo veriler temizlendi ve canlı moda geçildi.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),

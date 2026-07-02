@@ -226,8 +226,7 @@ export async function getContactById(id: string) {
   const res = await apiClient.get(`/api/contacts/${id}`);
   return safeParse(SingleResponseSchema(ContactDetailSchema), res.data, 'getContactById').data;
 }
-
-export async function createContact(data: CreateContactDTO): Promise<Contact> {
+export async function createContact(data: CreateContactDTO): Promise<Contact> {
   const res = await apiClient.post('/api/contacts', data);
   return safeParse(SingleResponseSchema(ContactSchema), res.data, 'createContact').data;
 }
@@ -244,4 +243,24 @@ export async function deleteContact(id: string): Promise<void> {
 export async function getAccountEntries(contactId: string, params: AccountEntryListParams) {
   const res = await apiClient.get(`/api/contacts/${contactId}/entries`, { params });
   return safeParse(AccountEntryListSchema, res.data, 'getAccountEntries');
+}
+
+export const SupplierPerformanceSchema = z.object({
+  score: z.coerce.number(),
+  leadTimeDays: z.coerce.number(),
+  leadTimeScore: z.coerce.number(),
+  priceDeviationPct: z.coerce.number(),
+  priceDeviationScore: z.coerce.number(),
+  returnRatePct: z.coerce.number(),
+  returnRateScore: z.coerce.number(),
+  openOrderCount: z.coerce.number(),
+  overdueOrderCount: z.coerce.number(),
+  openOrderScore: z.coerce.number(),
+  totalOrders: z.coerce.number(),
+});
+export type SupplierPerformance = z.infer<typeof SupplierPerformanceSchema>;
+
+export async function getSupplierPerformance(contactId: string): Promise<SupplierPerformance> {
+  const res = await apiClient.get(`/api/contacts/${contactId}/performance`);
+  return safeParse(SingleResponseSchema(SupplierPerformanceSchema), res.data, 'getSupplierPerformance').data;
 }
