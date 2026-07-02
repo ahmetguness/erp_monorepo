@@ -5,7 +5,7 @@ import { AlertTriangle } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { WarehouseSelect } from '@/components/shared/EntitySelect';
-import { useStockLevels, useStockReorderSuggestions } from '@/hooks/useStock';
+import { useStockAlerts, useStockLevels, useStockReorderSuggestions } from '@/hooks/useStock';
 import { cn, formatCurrency } from '@/lib/utils';
 import type { StockLevel } from '@/services/stock.service';
 
@@ -18,6 +18,7 @@ export function StockLevelsPage() {
     belowMin: belowMin || undefined,
   });
   const { data: reorderSuggestions = [] } = useStockReorderSuggestions();
+  const { data: stockAlerts } = useStockAlerts(5);
   const visibleSuggestions = warehouseId
     ? reorderSuggestions.filter((suggestion) => suggestion.warehouseId === warehouseId)
     : reorderSuggestions;
@@ -62,6 +63,21 @@ export function StockLevelsPage() {
   return (
     <div>
       <PageHeader title="Stok Seviyeleri" subtitle="Ürünlerin depo bazlı stok durumu." />
+
+      <div className="mb-4 rounded-lg border border-amber-500/15 bg-amber-500/5 px-4 py-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-300" />
+            <div>
+              <p className="text-sm font-semibold text-slate-200">Basit stok alarmi</p>
+              <p className="text-xs text-slate-500">Urun bazinda toplam stok minimum esigin altina dustugunde dashboard uyarisi olusur.</p>
+            </div>
+          </div>
+          <span className="inline-flex h-8 items-center justify-center rounded-lg bg-amber-500/10 px-3 text-xs font-bold text-amber-300">
+            {stockAlerts?.summary.alertCount ?? 0} aktif alarm
+          </span>
+        </div>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <WarehouseSelect value={warehouseId} onChange={setWarehouseId} className="w-48" placeholder="Tüm depolar" />

@@ -9,6 +9,7 @@ ci-artifacts
 apps/backend/ci-artifacts
 .github
 rapor.md
+a.txt
 
 # Local environment files
 .env

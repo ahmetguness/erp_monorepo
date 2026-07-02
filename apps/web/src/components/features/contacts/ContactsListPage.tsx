@@ -31,6 +31,7 @@ import { RowActions, type RowAction } from "@/components/shared/RowActions";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
+import { CustomerTrackingPanel } from "@/components/features/contacts/CustomerTrackingPanel";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useBulkSelection } from "@/hooks/useBulkSelection";
 import { useContacts } from "@/hooks/useContacts";
@@ -456,6 +457,8 @@ export function ContactsListPage() {
           </div>
         }
       />
+
+      <CustomerTrackingPanel />
 
       {/* Summary Bar */}
       {summary && <SummaryBar summary={summary} />}

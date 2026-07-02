@@ -22,6 +22,7 @@ import {
   resolveStockLevelLocationId,
   convertReorderSuggestionsToPurchaseRequest,
 } from '../services/inventory-rules.service';
+import { StockAlertService } from '../services/stock-alert.service';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -57,6 +58,14 @@ interface FinalizeStockCountDTO {
 
 export const StockController = {
   // ── Stock Levels ─────────────────────────────
+
+  async stockAlerts(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const requestedLimit = Number(c.req.query('limit') ?? 8);
+    const limit = Number.isFinite(requestedLimit) ? Math.min(25, Math.max(1, requestedLimit)) : 8;
+    const alerts = await new StockAlertService(prisma).dashboard(tenantId, limit);
+    return c.json({ data: alerts });
+  },
 
   async listStockLevels(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);

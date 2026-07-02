@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import { CustomerTrackingService } from '../services/customer-tracking.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -42,6 +43,10 @@ interface ContactListQuery {
   sortDir?: 'asc' | 'desc';
 }
 
+interface CustomerTrackingQuery {
+  limit?: string;
+}
+
 function toContactAuditSnapshot(contact: Contact): Prisma.InputJsonObject {
   return {
     type: contact.type,
@@ -62,11 +67,20 @@ function toContactAuditSnapshot(contact: Contact): Prisma.InputJsonObject {
   };
 }
 
+const customerTrackingService = new CustomerTrackingService(prisma);
+
 // ─────────────────────────────────────────────
 // Contact Controller
 // ─────────────────────────────────────────────
 
 export const ContactController = {
+  async trackingDashboard(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const query = c.req.query() as CustomerTrackingQuery;
+    const dashboard = await customerTrackingService.dashboard(tenantId, Number(query.limit ?? 8));
+    return c.json({ data: dashboard });
+  },
+
   /**
    * LIST — returns contacts with aggregated financial data:
    *   currentBalance, totalDebit, totalCredit, openInvoiceCount,

@@ -5,7 +5,9 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getProducts, getProductById, createProduct, updateProduct, deleteProduct,
+  downloadProductQuickImportTemplate, previewProductQuickImport, commitProductQuickImport,
   type ProductListParams, type CreateProductDTO, type UpdateProductDTO,
+  type ProductQuickImportInput,
 } from '@/services/product.service';
 
 export const PRODUCT_KEYS = {
@@ -13,6 +15,11 @@ export const PRODUCT_KEYS = {
   list: (p: ProductListParams) => ['products', 'list', p] as const,
   detail: (id: string) => ['products', id] as const,
 };
+
+function invalidateProductAndStockQueries(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: PRODUCT_KEYS.all });
+  qc.invalidateQueries({ queryKey: ['stock'] });
+}
 
 export function useProducts(params: ProductListParams) {
   return useQuery({ queryKey: PRODUCT_KEYS.list(params), queryFn: () => getProducts(params) });
@@ -27,7 +34,7 @@ export function useCreateProduct() {
   const { toast } = useUIStore();
   return useMutation({
     mutationFn: (data: CreateProductDTO) => createProduct(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: PRODUCT_KEYS.all }); toast.success('Ürün oluşturuldu.'); },
+    onSuccess: () => { invalidateProductAndStockQueries(qc); toast.success('Ürün oluşturuldu.'); },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
@@ -38,7 +45,7 @@ export function useUpdateProduct(id: string) {
   return useMutation({
     mutationFn: (data: UpdateProductDTO) => updateProduct(id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: PRODUCT_KEYS.all });
+      invalidateProductAndStockQueries(qc);
       qc.invalidateQueries({ queryKey: PRODUCT_KEYS.detail(id) });
       toast.success('Ürün güncellendi.');
     },
@@ -51,7 +58,30 @@ export function useDeleteProduct() {
   const { toast } = useUIStore();
   return useMutation({
     mutationFn: (id: string) => deleteProduct(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: PRODUCT_KEYS.all }); toast.success('Ürün silindi.'); },
+    onSuccess: () => { invalidateProductAndStockQueries(qc); toast.success('Ürün silindi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useProductQuickImportTemplate() {
+  return useMutation({ mutationFn: downloadProductQuickImportTemplate });
+}
+
+export function useProductQuickImportPreview() {
+  return useMutation({
+    mutationFn: (input: ProductQuickImportInput) => previewProductQuickImport(input),
+  });
+}
+
+export function useCommitProductQuickImport() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (input: ProductQuickImportInput) => commitProductQuickImport(input),
+    onSuccess: (result) => {
+      invalidateProductAndStockQueries(qc);
+      toast.success(`${result.createdCount} urun ice aktarildi.`);
+    },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }

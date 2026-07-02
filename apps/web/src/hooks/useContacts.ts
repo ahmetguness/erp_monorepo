@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
-  getContacts, getContactById, createContact, updateContact, deleteContact, getAccountEntries,
+  getContacts, getContactById, createContact, updateContact, deleteContact, getAccountEntries, getCustomerTrackingDashboard,
   type ContactListParams, type CreateContactDTO, type UpdateContactDTO, type AccountEntryListParams,
 } from '@/services/contact.service';
 
@@ -13,6 +13,7 @@ export const CONTACT_KEYS = {
   list: (params: ContactListParams) => ['contacts', 'list', params] as const,
   detail: (id: string) => ['contacts', id] as const,
   entries: (id: string, params: AccountEntryListParams) => ['contacts', id, 'entries', params] as const,
+  trackingDashboard: (limit: number) => ['contacts', 'tracking-dashboard', limit] as const,
 };
 
 export function useContacts(params: ContactListParams) {
@@ -27,6 +28,13 @@ export function useContact(id: string) {
     queryKey: CONTACT_KEYS.detail(id),
     queryFn: () => getContactById(id),
     enabled: !!id,
+  });
+}
+
+export function useCustomerTrackingDashboard(limit = 8) {
+  return useQuery({
+    queryKey: CONTACT_KEYS.trackingDashboard(limit),
+    queryFn: () => getCustomerTrackingDashboard(limit),
   });
 }
 

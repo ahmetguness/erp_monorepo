@@ -8,6 +8,7 @@ const contactRoutes = new Hono();
 
 contactRoutes.use('*', requireModule(MODULE_KEYS.CONTACTS));
 
+contactRoutes.get('/tracking-dashboard', requirePermission('contacts', 'READ'), ContactController.trackingDashboard);
 contactRoutes.get('/', requirePermission('contacts', 'READ'), ContactController.list);
 contactRoutes.get('/:id', requirePermission('contacts', 'READ'), ContactController.getById);
 contactRoutes.post('/', requirePermission('contacts', 'CREATE'), ContactController.create);

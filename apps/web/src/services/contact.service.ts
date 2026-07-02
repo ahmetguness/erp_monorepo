@@ -93,6 +93,50 @@ export const AccountEntrySchema = z.object({
   createdAt: z.string(),
 });
 
+const CustomerTrackingMoneyDocumentSchema = z.object({
+  id: z.string(),
+  number: z.string(),
+  date: z.string(),
+  status: z.string(),
+  totalGross: z.coerce.number(),
+});
+
+const CustomerTrackingInvoiceSchema = CustomerTrackingMoneyDocumentSchema.extend({
+  dueDate: z.string().nullable(),
+});
+
+const CustomerTrackingReminderSchema = z.object({
+  id: z.string(),
+  dueDate: z.string(),
+  amount: z.coerce.number(),
+  status: z.string(),
+  invoiceNumber: z.string().nullable(),
+});
+
+export const CustomerTrackingRowSchema = z.object({
+  contact: z.object({
+    id: z.string(),
+    name: z.string(),
+    type: z.enum(['CUSTOMER', 'SUPPLIER', 'BOTH']),
+    email: z.string().nullable(),
+    phone: z.string().nullable(),
+  }),
+  openBalance: z.coerce.number(),
+  lastQuote: CustomerTrackingMoneyDocumentSchema.nullable(),
+  lastInvoice: CustomerTrackingInvoiceSchema.nullable(),
+  upcomingCollection: CustomerTrackingReminderSchema.nullable(),
+});
+
+export const CustomerTrackingDashboardSchema = z.object({
+  summary: z.object({
+    customerCount: z.coerce.number(),
+    contactsWithOpenBalance: z.coerce.number(),
+    openBalanceTotal: z.coerce.number(),
+    upcomingCollectionTotal: z.coerce.number(),
+  }),
+  rows: z.array(CustomerTrackingRowSchema),
+});
+
 // ─────────────────────────────────────────────
 // Inferred types
 // ─────────────────────────────────────────────
@@ -106,6 +150,8 @@ export type OpenInvoice = z.infer<typeof OpenInvoiceSchema>;
 export type ContactFinancials = z.infer<typeof FinancialsSchema>;
 export type ListSummary = z.infer<typeof ListSummarySchema>;
 export type RiskLevel = ContactListItem['riskLevel'];
+export type CustomerTrackingDashboard = z.infer<typeof CustomerTrackingDashboardSchema>;
+export type CustomerTrackingRow = z.infer<typeof CustomerTrackingRowSchema>;
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -160,6 +206,7 @@ const AccountEntryListSchema = PaginatedResponseSchema(AccountEntrySchema).exten
     credit: z.coerce.number(),
   }).optional(),
 });
+const CustomerTrackingDashboardResponseSchema = SingleResponseSchema(CustomerTrackingDashboardSchema);
 
 // ─────────────────────────────────────────────
 // Service functions
@@ -168,6 +215,11 @@ const AccountEntryListSchema = PaginatedResponseSchema(AccountEntrySchema).exten
 export async function getContacts(params: ContactListParams) {
   const res = await apiClient.get('/api/contacts', { params });
   return safeParse(ContactListResponseSchema, res.data, 'getContacts');
+}
+
+export async function getCustomerTrackingDashboard(limit = 8): Promise<CustomerTrackingDashboard> {
+  const res = await apiClient.get('/api/contacts/tracking-dashboard', { params: { limit } });
+  return safeParse(CustomerTrackingDashboardResponseSchema, res.data, 'getCustomerTrackingDashboard').data;
 }
 
 export async function getContactById(id: string) {

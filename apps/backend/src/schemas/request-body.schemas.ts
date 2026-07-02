@@ -129,6 +129,16 @@ export const moduleSettingBodySchema = z.object({
   value: z.string(),
 }).strict();
 
+export const salesTargetBodySchema = z.object({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Ay YYYY-MM formatinda olmalidir.'),
+  targetAmount: nonNegativeNumber,
+}).strict();
+
+export const productQuickImportBodySchema = z.object({
+  csv: z.string(),
+  partialImport: z.boolean().optional(),
+}).strict();
+
 export type CreateInvoiceBody = z.infer<typeof createInvoiceBodySchema>;
 export type UpdateInvoiceBody = z.infer<typeof updateInvoiceBodySchema>;
 export type CreatePaymentBody = z.infer<typeof createPaymentBodySchema>;
@@ -137,6 +147,8 @@ export type CreateStockCountBody = z.infer<typeof createStockCountBodySchema>;
 export type FinalizeStockCountBody = z.infer<typeof finalizeStockCountBodySchema>;
 export type CreateUserBody = z.infer<typeof createUserBodySchema>;
 export type UpdateUserBody = z.infer<typeof updateUserBodySchema>;
+export type SalesTargetBody = z.infer<typeof salesTargetBodySchema>;
+export type ProductQuickImportBody = z.infer<typeof productQuickImportBodySchema>;
 
 export const createCollectionReminderBodySchema = z.object({
   contactId: nonEmptyString,

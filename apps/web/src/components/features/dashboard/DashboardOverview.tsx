@@ -39,6 +39,8 @@ import type {
   DashboardTask,
 } from "@/services/dashboard.service";
 import type { SmartNotification } from "@/services/notification.service";
+import { SalesTargetCard } from "@/components/features/sales/SalesTargetCard";
+import { StockAlertDashboardCard } from "@/components/features/stock/StockAlertDashboardCard";
 
 /* ── Types ──────────────────────────────────── */
 
@@ -362,6 +364,9 @@ export function DashboardOverview() {
           </div>
         </Card>
       )}
+
+      <SalesTargetCard enabled={canReadInvoicing} />
+      <StockAlertDashboardCard enabled={canReadInventory} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>

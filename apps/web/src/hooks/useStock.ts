@@ -6,7 +6,7 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   getWarehouses, getWarehouseById, createWarehouse, updateWarehouse, transferStock,
   getLocations, createLocation, deleteLocation,
-  getStockLevels, getStockReorderSuggestions, getStockMovements, createManualMovement,
+  getStockLevels, getStockReorderSuggestions, getStockAlerts, getStockMovements, createManualMovement,
   getStockCounts, getStockCountById, createStockCount, finalizeStockCount,
   type StockLevelParams, type StockMovementParams, type CreateManualMovementDTO,
   type CreateStockCountDTO, type CreateWarehouseDTO, type CreateLocationDTO, type TransferStockDTO,
@@ -18,6 +18,7 @@ export const STOCK_KEYS = {
   locations: (wId: string) => ['warehouses', wId, 'locations'] as const,
   levels: (p: StockLevelParams) => ['stock', 'levels', p] as const,
   reorderSuggestions: ['stock', 'reorder-suggestions'] as const,
+  alerts: (limit: number) => ['stock', 'alerts', limit] as const,
   movements: (p: StockMovementParams) => ['stock', 'movements', p] as const,
   counts: ['stock', 'counts'] as const,
   count: (id: string) => ['stock', 'counts', id] as const,
@@ -63,7 +64,7 @@ export function useTransferStock() {
   return useMutation({
     mutationFn: (data: TransferStockDTO) => transferStock(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['stock', 'levels'] });
+      qc.invalidateQueries({ queryKey: ['stock'] });
       toast.success('Transfer tamamlandı.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
@@ -121,6 +122,14 @@ export function useStockReorderSuggestions() {
   });
 }
 
+export function useStockAlerts(limit = 8, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: STOCK_KEYS.alerts(limit),
+    queryFn: () => getStockAlerts(limit),
+    enabled: options?.enabled ?? true,
+  });
+}
+
 // ── Stock Movements ──────────────────────────
 
 export function useStockMovements(params: StockMovementParams) {
@@ -173,7 +182,7 @@ export function useFinalizeStockCount(id: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: STOCK_KEYS.counts });
       qc.invalidateQueries({ queryKey: STOCK_KEYS.count(id) });
-      qc.invalidateQueries({ queryKey: ['stock', 'levels'] });
+      qc.invalidateQueries({ queryKey: ['stock'] });
       toast.success('Sayım tamamlandı.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),

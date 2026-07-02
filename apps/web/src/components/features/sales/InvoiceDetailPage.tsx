@@ -13,6 +13,7 @@ import { useInvoice, useCancelInvoice } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { EntityImageManager } from '@/components/shared/EntityImageManager';
 import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
+import { DocumentPdfThemePanel } from '@/components/features/sales/DocumentPdfThemePanel';
 import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 
 interface LineRow {
@@ -88,8 +89,8 @@ export function InvoiceDetailPage({ id }: Props) {
           ].join('\n'),
         },
       }]
-    : overdue
-      ? [{
+      : overdue
+        ? [{
           id: `invoice-${id}-collection-task`,
           kind: 'task',
           title: 'Tahsilat takip görevi oluştur',
@@ -108,6 +109,28 @@ export function InvoiceDetailPage({ id }: Props) {
           },
         }]
       : [];
+  const lineRows: LineRow[] = (invoice.lines ?? []).map((line) => ({
+    id: line.id,
+    description: line.description,
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    discount: line.discount,
+    taxAmount: line.taxAmount,
+    lineTotal: line.lineTotal,
+    product: line.product ? { code: line.product.code, name: line.product.name } : undefined,
+    taxRate: line.taxRate ? { name: line.taxRate.name, rate: line.taxRate.rate } : undefined,
+  }));
+  const printableLines = lineRows.map((line) => ({
+    id: line.id,
+    description: line.description,
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    discount: line.discount,
+    taxAmount: line.taxAmount,
+    taxRate: line.taxRate?.rate,
+    lineTotal: line.lineTotal,
+    product: line.product,
+  }));
 
   return (
     <div className="space-y-6">
@@ -145,9 +168,24 @@ export function InvoiceDetailPage({ id }: Props) {
 
       <DataTable
         columns={lineColumns}
-        data={(invoice.lines ?? []) as LineRow[]}
+        data={lineRows}
         keyExtractor={(r) => r.id}
         emptyTitle="Fatura kalemi bulunamadı"
+      />
+
+      <DocumentPdfThemePanel
+        kind="invoice"
+        number={invoice.number}
+        contactName={invoice.contact?.name}
+        contactTaxNumber={invoice.contact?.taxNumber}
+        date={invoice.date}
+        dueDateLabel="Vade"
+        dueDate={invoice.dueDate}
+        notes={invoice.notes}
+        totalNet={invoice.totalNet}
+        totalTax={invoice.totalTax}
+        totalGross={invoice.totalGross}
+        lines={printableLines}
       />
 
       <EntityImageManager

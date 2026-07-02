@@ -12,6 +12,7 @@ import { FullPageSpinner } from '@/components/ui/Spinner';
 import { useSalesQuote, useConvertQuoteToOrder } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
+import { DocumentPdfThemePanel } from '@/components/features/sales/DocumentPdfThemePanel';
 import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 
 interface LineRow {
@@ -121,6 +122,16 @@ export function SalesQuoteDetailPage({ id }: Props) {
         }]
       : []),
   ];
+  const lineRows: LineRow[] = (quote.items ?? []).map((item) => ({
+    id: item.id,
+    description: item.description ?? '',
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    discount: item.discount,
+    taxRate: item.taxRate,
+    lineTotal: item.lineTotal,
+    product: item.product ? { code: item.product.code, name: item.product.name } : undefined,
+  }));
 
   return (
     <div className="space-y-6">
@@ -153,9 +164,23 @@ export function SalesQuoteDetailPage({ id }: Props) {
 
       <DataTable
         columns={lineColumns}
-        data={(quote.items ?? []) as LineRow[]}
+        data={lineRows}
         keyExtractor={(r) => r.id}
         emptyTitle="Kalem bulunamadı"
+      />
+
+      <DocumentPdfThemePanel
+        kind="quote"
+        number={quote.number}
+        contactName={quote.contact?.name}
+        date={quote.date}
+        dueDateLabel="Geçerlilik"
+        dueDate={quote.validUntil}
+        notes={quote.notes}
+        totalNet={quote.totalNet}
+        totalTax={quote.totalTax}
+        totalGross={quote.totalGross}
+        lines={lineRows}
       />
 
         </main>

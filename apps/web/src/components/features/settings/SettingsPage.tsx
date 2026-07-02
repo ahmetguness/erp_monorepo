@@ -15,6 +15,13 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
+import { DocumentPdfThemeSettingsCard } from '@/components/features/settings/DocumentPdfThemeSettingsCard';
+import {
+  DOCUMENT_ACCENT_KEY,
+  DOCUMENT_TEMPLATE_KEY,
+  getDocumentAccentLabel,
+  getDocumentTemplateLabel,
+} from '@/lib/document-pdf-theme';
 import {
   useTenantSettings,
   useUpsertTenantSetting,
@@ -81,6 +88,7 @@ const MODULE_LABELS: Record<string, { label: string; icon: React.ReactNode }> = 
 };
 
 const LOGO_SETTING_KEYS = new Set(['company_logo', 'tenant_logo_storage_path']);
+const DOCUMENT_THEME_SETTING_KEYS = new Set([DOCUMENT_TEMPLATE_KEY, DOCUMENT_ACCENT_KEY]);
 const NEGATIVE_STOCK_POLICY_KEY = 'negative_stock_policy';
 const NEGATIVE_STOCK_POLICY_OPTIONS = [
   { value: 'BLOCK', label: 'Engelle', description: 'Stok çıkışı eksi bakiyeye düşüyorsa işlem durdurulur.' },
@@ -147,6 +155,8 @@ function getModuleLabel(module: string): string {
 function getValueDisplay(key: string, value: string): string {
   if (value === 'true') return 'Açık';
   if (value === 'false') return 'Kapalı';
+  if (key === DOCUMENT_TEMPLATE_KEY) return getDocumentTemplateLabel(value);
+  if (key === DOCUMENT_ACCENT_KEY) return getDocumentAccentLabel(value);
   if (key === NEGATIVE_STOCK_POLICY_KEY) {
     return NEGATIVE_STOCK_POLICY_OPTIONS.find((option) => option.value === value)?.label ?? value;
   }
@@ -438,7 +448,9 @@ export function SettingsPage() {
     (acc[s.module] ??= []).push(s);
     return acc;
   }, {});
-  const visibleTenantSettings = tenantSettings.filter((setting) => !LOGO_SETTING_KEYS.has(setting.key));
+  const visibleTenantSettings = tenantSettings.filter(
+    (setting) => !LOGO_SETTING_KEYS.has(setting.key) && !DOCUMENT_THEME_SETTING_KEYS.has(setting.key),
+  );
   const negativeStockPolicy = moduleSettings.find(
     (setting) => setting.module === 'inventory' && setting.key === NEGATIVE_STOCK_POLICY_KEY,
   )?.value ?? 'ALLOW';
@@ -475,6 +487,8 @@ export function SettingsPage() {
           onChange={handleLogoChange}
         />
       </div>
+
+      <DocumentPdfThemeSettingsCard />
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-800/60">

@@ -8,13 +8,9 @@ import { requireTenantId, requireUserId } from '../utils/context.js';
 import { getDataQualitySummary } from '../services/data-quality.service.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { DataExchangeWorkflowService, duplicateSuggestionsFromWarnings, toJsonObject } from '../services/data-exchange-workflow.service.js';
+import { buildCsv, parseCsv, type CsvParseResult } from '../utils/csv.js';
 
 type DataExchangeEntity = 'products' | 'contacts' | 'stock' | 'invoices';
-
-interface CsvParseResult {
-  headers: string[];
-  rows: Record<string, string>[];
-}
 
 interface ImportWizardBody {
   csv: string;
@@ -104,56 +100,6 @@ async function requireAnyReadAccess(
     return c.json(new ForbiddenError(`Bu islem icin yetkiniz yok (${modules.join('|')}:READ).`).toJSON(), 403);
   }
   return permissions;
-}
-
-function csvEscape(value: string | number | boolean | null | undefined): string {
-  const normalized = value === null || value === undefined ? '' : String(value);
-  if (!/[",\r\n]/.test(normalized)) return normalized;
-  return `"${normalized.replace(/"/g, '""')}"`;
-}
-
-function buildCsv(headers: string[], rows: Record<string, string | number | boolean | null | undefined>[]): string {
-  const lines = [
-    headers.map(csvEscape).join(','),
-    ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(',')),
-  ];
-  return `${lines.join('\r\n')}\r\n`;
-}
-
-function splitCsvLine(line: string): string[] {
-  const values: string[] = [];
-  let current = '';
-  let quoted = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    const next = line[i + 1];
-    if (char === '"' && quoted && next === '"') {
-      current += '"';
-      i += 1;
-    } else if (char === '"') {
-      quoted = !quoted;
-    } else if (char === ',' && !quoted) {
-      values.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-
-  values.push(current.trim());
-  return values;
-}
-
-function parseCsv(csv: string): CsvParseResult {
-  const lines = csv.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim().length > 0);
-  if (lines.length === 0) return { headers: [], rows: [] };
-  const headers = splitCsvLine(lines[0]).map((header) => header.trim());
-  const rows = lines.slice(1).map((line) => {
-    const values = splitCsvLine(line);
-    return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? '']));
-  });
-  return { headers, rows };
 }
 
 function parseMapping(value: unknown): Partial<Record<string, string>> {
