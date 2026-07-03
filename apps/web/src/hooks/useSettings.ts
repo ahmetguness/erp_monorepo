@@ -14,8 +14,20 @@ import {
   revokeSecuritySession,
   runQuickStart,
   cleanDemoData,
+  getCorporateSecuritySettings,
+  updateCorporateSecuritySettings,
+  generateScimToken,
+  getBiSettings,
+  updateBiSettings,
+  generateBiToken,
+  runBiScheduleSimulation,
+  getPortalToken,
+  generatePortalToken,
+  runSlaSweep,
   type BusinessRule,
   type QuickStartDTO,
+  type CorporateSecuritySettings,
+  type BiSettings,
 } from '@/services/settings.service';
 
 function invalidateSetupData(qc: ReturnType<typeof useQueryClient>) {
@@ -175,6 +187,114 @@ export function useUpsertModuleSetting() {
   return useMutation({
     mutationFn: ({ module, key, value }: { module: string; key: string; value: string }) => upsertModuleSetting(module, key, value),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['settings'] }); toast.success('Modül ayarı kaydedildi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useCorporateSecuritySettings() {
+  return useQuery({ queryKey: ['settings', 'corporate-security'], queryFn: getCorporateSecuritySettings, staleTime: 5 * 60 * 1000 });
+}
+
+export function useUpdateCorporateSecuritySettings() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: updateCorporateSecuritySettings,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'corporate-security'] });
+      toast.success('Güvenlik ayarları güncellendi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useGenerateScimToken() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: generateScimToken,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'corporate-security'] });
+      toast.success('Yeni SCIM token üretildi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useBiSettings() {
+  return useQuery({ queryKey: ['settings', 'bi'], queryFn: getBiSettings, staleTime: 5 * 60 * 1000 });
+}
+
+export function useUpdateBiSettings() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: updateBiSettings,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'bi'] });
+      toast.success('BI entegrasyon ayarları kaydedildi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useGenerateBiToken() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: generateBiToken,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'bi'] });
+      toast.success('Yeni BI Connector tokenı üretildi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useRunBiScheduleSimulation() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: runBiScheduleSimulation,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'bi'] });
+      toast.success('Simüle edilmiş planlı BI aktarımı başarıyla çalıştırıldı.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function usePortalToken(contactId: string) {
+  return useQuery({
+    queryKey: ['settings', 'portal-token', contactId],
+    queryFn: () => getPortalToken(contactId),
+    enabled: Boolean(contactId),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useGeneratePortalToken(contactId: string) {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: () => generatePortalToken(contactId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'portal-token', contactId] });
+      toast.success('Müşteri portalı tokenı başarıyla üretildi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useRunSlaSweep() {
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: runSlaSweep,
+    onSuccess: (data) => {
+      toast.success(
+        `SLA taraması tamamlandı: ${data.checked} talep incelendi, ${data.breachedCount} ihlal tespit edildi.`
+      );
+    },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }

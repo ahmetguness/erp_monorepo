@@ -60,6 +60,9 @@ import { marketplaceRoutes } from './routes/marketplace.routes';
 import { hrRoutes } from './routes/hr.routes';
 import { payrollRoutes } from './routes/payroll.routes';
 import { mailRoutes } from './routes/mail.routes';
+import { scimRoutes } from './routes/scim.routes.js';
+import { biRoutes } from './routes/bi.routes.js';
+import { portalRoutes } from './routes/portal.routes.js';
 import { demoPublicRoutes, demoAdminRoutes } from './routes/demo.routes';
 import { invitationRoutes, invitationPublicRoutes } from './routes/invitation.routes';
 import { SetPasswordController } from './controllers/set-password.controller';
@@ -200,6 +203,15 @@ app.get('/health', (c) => c.json({ status: 'ok' }));
 // ── Public webhooks (CSRF'den önce — harici çağrıcılar Origin göndermez) ──
 app.post('/api/public/trendyol/webhook/:integrationId', TrendyolWebhookController.handle);
 app.post('/api/public/marketplace/webhook/:integrationId', TrendyolWebhookController.handle);
+
+// SCIM v2 User provisioning (mounted before CSRF protection as it is programmatic API)
+app.route('/api/scim/v2', scimRoutes);
+
+// BI Data Warehouse Connector endpoints (mounted before CSRF protection)
+app.route('/api/bi/v1', biRoutes);
+
+// Customer Portal endpoints (mounted before CSRF protection)
+app.route('/api/portal/v1', portalRoutes);
 
 // ── CSRF koruması (state-changing isteklerde Origin/Referer doğrulaması) ──
 app.use('*', csrfProtection);

@@ -552,4 +552,94 @@ export const AuthController = {
 
     return c.json({ data: updated });
   },
+
+  async ssoLogin(c: Context): Promise<Response> {
+    let body: Record<string, any>;
+    try {
+      body = await c.req.json();
+    } catch {
+      throw new ValidationError('Geçersiz JSON gövdesi.');
+    }
+
+    const { email, tenantSlug } = body;
+    if (!email || !tenantSlug) {
+      throw new ValidationError('email ve tenantSlug alanları zorunludur.');
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+    });
+
+    if (!tenant) {
+      throw new NotFoundError('İşletme', tenantSlug);
+    }
+
+    if (tenant.plan !== 'ENTERPRISE') {
+      throw new ValidationError('SSO girişi sadece Enterprise planındaki işletmeler için geçerlidir.');
+    }
+
+    const ssoEnabled = await prisma.tenantSetting.findUnique({
+      where: { tenantId_key: { tenantId: tenant.id, key: 'security.sso.enabled' } }
+    });
+
+    if (ssoEnabled?.value !== 'true') {
+      throw new ValidationError('Bu işletme için SSO (Tekli Oturum Açma) etkinleştirilmemiş.');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() }
+    });
+
+    if (!user) {
+      throw new NotFoundError('Kullanıcı', email);
+    }
+
+    // Simulate redirection to Identity Provider (Okta/Entra ID) and then back to our callback
+    const redirectUrl = `/api/auth/sso/callback?email=${encodeURIComponent(user.email)}&tenantId=${tenant.id}&code=sso_mock_code_123`;
+
+    return c.json({ data: { redirectUrl } });
+  },
+
+  async ssoCallback(c: Context): Promise<Response> {
+    const email = c.req.query('email');
+    const tenantId = c.req.query('tenantId');
+    const code = c.req.query('code');
+
+    if (!email || !tenantId || code !== 'sso_mock_code_123') {
+      throw new ValidationError('Geçersiz SSO kimlik doğrulama kodu.');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() }
+    });
+
+    if (!user) {
+      throw new NotFoundError('Kullanıcı', email);
+    }
+
+    // Verify tenant membership
+    const membership = await prisma.tenantUser.findUnique({
+      where: { tenantId_userId: { tenantId, userId: user.id } }
+    });
+
+    if (!membership || !membership.isActive) {
+      throw new ForbiddenError('Bu işletmeye erişim izniniz bulunmuyor.');
+    }
+
+    // Create session
+    const meta = getAuthRequestMeta(c);
+    const session = await createSecuritySession(prisma, tenantId, user.id, meta);
+
+    // Create JWT token
+    const token = jwt.sign(
+      { userId: user.id, tenantId, sessionId: session.id },
+      RESOLVED_JWT_SECRET as string,
+      { expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] }
+    );
+
+    setAuthCookie(c, token, true);
+
+    const frontendUrl = process.env.ALLOWED_ORIGINS?.split(',')[0] || 'http://localhost:3000';
+    return c.redirect(`${frontendUrl}/dashboard`);
+  },
 };

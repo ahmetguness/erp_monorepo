@@ -2,7 +2,7 @@ import { AiPermissionCheckResult, AiRequestStatus, AiRequestType, EntityType, Pr
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { sanitizeOutput } from '../lib/output-sanitizer';
-import type { AiGovernancePolicy } from './ai/policy.service.js';
+import { getAiGovernancePolicy, type AiGovernancePolicy } from './ai/policy.service.js';
 
 export const AI_PROMPT_VERSIONS = {
   PRIVATE_CHAT: 'private-chat:v2',
@@ -139,8 +139,26 @@ export function mapAiEntityType(value: string | undefined | null): EntityType | 
 }
 
 export async function recordAiRequestLog(input: AiGovernanceLogInput): Promise<void> {
-  const inputSummary = redactSummary(input.inputText, input.isPublicOutput ?? false);
-  const outputSummary = redactSummary(input.outputText, input.isPublicOutput ?? false);
+  let shouldLog = true;
+  if (input.policy) {
+    shouldLog = input.policy.logPrompts;
+  } else if (input.tenantId) {
+    try {
+      const policy = await getAiGovernancePolicy(prisma, input.tenantId);
+      shouldLog = policy.logPrompts;
+    } catch {
+      // fallback to true
+    }
+  }
+
+  const inputSummary = shouldLog
+    ? redactSummary(input.inputText, input.isPublicOutput ?? false)
+    : { summary: '[REDACTED_BY_POLICY]', fields: [] };
+
+  const outputSummary = shouldLog
+    ? redactSummary(input.outputText, input.isPublicOutput ?? false)
+    : { summary: '[REDACTED_BY_POLICY]', fields: [] };
+
   const redactedFields = unique([
     ...(input.redactedFields ?? []),
     ...inputSummary.fields,

@@ -35,7 +35,7 @@ function ipv4ToInt(ip: string): number | null {
   return result >>> 0;
 }
 
-function isIpv4InCidr(ip: string, cidr: string): boolean {
+export function isIpv4InCidr(ip: string, cidr: string): boolean {
   const [range, prefixRaw] = cidr.split('/');
   if (!range || !prefixRaw) return false;
 

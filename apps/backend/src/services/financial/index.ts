@@ -53,3 +53,10 @@ export type { ReversePaymentInput } from './payment-reverse.js';
 // Payroll Reverse
 export { reversePayroll } from './payroll-reverse.js';
 export type { ReversePayrollInput } from './payroll-reverse.js';
+
+// Payroll Integration
+export {
+  generateBankPaymentFile,
+  createPayrollAccountingVoucher,
+  runPeriodClosingChecks,
+} from './payroll-integration.service.js';

@@ -11,5 +11,7 @@ authRoutes.post('/register', validateBody(registerBodySchema), AuthController.re
 authRoutes.post('/logout', AuthController.logout);
 authRoutes.get('/me', requireAuth, AuthController.me);
 authRoutes.patch('/me/preferences', requireAuth, AuthController.updatePreferences);
+authRoutes.post('/sso/login', AuthController.ssoLogin);
+authRoutes.get('/sso/callback', AuthController.ssoCallback);
 
 export { authRoutes };

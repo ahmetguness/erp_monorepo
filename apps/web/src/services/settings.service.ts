@@ -272,3 +272,94 @@ export async function cleanDemoData(): Promise<unknown> {
   const res = await apiClient.post('/api/settings/clean-demo-data');
   return res.data;
 }
+
+// ── Corporate Security Settings ─────────────────
+
+export const CorporateSecuritySettingsSchema = z.object({
+  ssoEnabled: z.boolean(),
+  ssoProvider: z.string(),
+  samlMetadataUrl: z.string(),
+  oidcClientId: z.string(),
+  oidcClientSecret: z.string(),
+  scimEnabled: z.boolean(),
+  scimToken: z.string(),
+  ipRestrictionEnabled: z.boolean(),
+  ipWhitelist: z.string(),
+  sessionMaxAgeDays: z.coerce.number(),
+  sessionConcurrentLimit: z.coerce.number(),
+  sessionIdleTimeoutMins: z.coerce.number(),
+});
+
+export type CorporateSecuritySettings = z.infer<typeof CorporateSecuritySettingsSchema>;
+
+export async function getCorporateSecuritySettings(): Promise<CorporateSecuritySettings> {
+  const res = await apiClient.get('/api/settings/security/corporate');
+  return safeParse(SingleResponseSchema(CorporateSecuritySettingsSchema), res.data, 'getCorporateSecuritySettings').data;
+}
+
+export async function updateCorporateSecuritySettings(data: CorporateSecuritySettings): Promise<void> {
+  await apiClient.post('/api/settings/security/corporate', data);
+}
+
+export async function generateScimToken(): Promise<{ token: string }> {
+  const res = await apiClient.post('/api/settings/scim/generate-token');
+  return safeParse(SingleResponseSchema(z.object({ token: z.string() })), res.data, 'generateScimToken').data;
+}
+
+// ── BI & Data Warehouse Settings ────────────────
+
+export const BiSettingsSchema = z.object({
+  enabled: z.boolean(),
+  interval: z.string(),
+  entities: z.string(),
+  lastRun: z.string().nullable(),
+  token: z.string(),
+});
+
+export type BiSettings = z.infer<typeof BiSettingsSchema>;
+
+export async function getBiSettings(): Promise<BiSettings> {
+  const res = await apiClient.get('/api/settings/security/bi');
+  return safeParse(SingleResponseSchema(BiSettingsSchema), res.data, 'getBiSettings').data;
+}
+
+export async function updateBiSettings(data: BiSettings): Promise<void> {
+  await apiClient.post('/api/settings/security/bi', data);
+}
+
+export async function generateBiToken(): Promise<{ token: string }> {
+  const res = await apiClient.post('/api/settings/security/bi/generate-token');
+  return safeParse(SingleResponseSchema(z.object({ token: z.string() })), res.data, 'generateBiToken').data;
+}
+
+export async function runBiScheduleSimulation(): Promise<{ lastRun: string }> {
+  const res = await apiClient.post('/api/settings/security/bi/run-schedule');
+  return safeParse(SingleResponseSchema(z.object({ lastRun: z.string() })), res.data, 'runBiScheduleSimulation').data;
+}
+
+// ── Customer Portal & SLA ──────────────────────
+
+export async function getPortalToken(contactId: string): Promise<{ token: string | null }> {
+  const res = await apiClient.get(`/api/settings/security/portal-tokens/${contactId}`);
+  return safeParse(SingleResponseSchema(z.object({ token: z.string().nullable() })), res.data, 'getPortalToken').data;
+}
+
+export async function generatePortalToken(contactId: string): Promise<{ token: string }> {
+  const res = await apiClient.post(`/api/settings/security/portal-tokens/${contactId}/generate`);
+  return safeParse(SingleResponseSchema(z.object({ token: z.string() })), res.data, 'generatePortalToken').data;
+}
+
+export async function runSlaSweep(): Promise<{ checked: number; breachedCount: number; breached: string[] }> {
+  const res = await apiClient.post('/api/service/requests/check-sla');
+  return safeParse(
+    SingleResponseSchema(
+      z.object({
+        checked: z.number(),
+        breachedCount: z.number(),
+        breached: z.array(z.string()),
+      })
+    ),
+    res.data,
+    'runSlaSweep'
+  ).data;
+}

@@ -4,7 +4,7 @@ import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
 import { requireTenantId, requireParam } from '../utils/context.js';
 import { getRequestMeta } from '../utils/audit.js';
-import { reversePayroll, readRequiredReason } from '../services/financial/index.js';
+import { reversePayroll, readRequiredReason, generateBankPaymentFile, createPayrollAccountingVoucher, runPeriodClosingChecks } from '../services/financial/index.js';
 
 // ─────────────────────────────────────────────
 // Payroll Controller — Bordro CRUD + toplu oluşturma
@@ -248,5 +248,46 @@ export const PayrollController = {
     });
 
     return c.json({ data: { success: true } });
+  },
+
+  async getBankFile(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const period = c.req.query('period');
+    if (!period) throw new ValidationError('period parametresi zorunludur.');
+
+    const result = await generateBankPaymentFile(prisma, tenantId, period);
+
+    c.header('Content-Type', result.mimeType);
+    c.header('Content-Disposition', `attachment; filename="${result.filename}"`);
+    return c.body(result.content);
+  },
+
+  async postAccountingVoucher(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+
+    let body: Record<string, unknown>;
+    try {
+      body = await c.req.json() as Record<string, unknown>;
+    } catch {
+      throw new ValidationError('Geçersiz JSON gövdesi.');
+    }
+
+    const period = body.period;
+    if (typeof period !== 'string' || !period) {
+      throw new ValidationError('period alanı zorunludur.');
+    }
+
+    const result = await createPayrollAccountingVoucher(prisma, tenantId, period, userId);
+    return c.json({ data: result }, 201);
+  },
+
+  async getClosingChecks(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const period = c.req.query('period');
+    if (!period) throw new ValidationError('period parametresi zorunludur.');
+
+    const result = await runPeriodClosingChecks(prisma, tenantId, period);
+    return c.json({ data: result });
   },
 };

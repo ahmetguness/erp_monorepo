@@ -184,3 +184,16 @@ export function useDeletePayroll() {
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
+
+export function useCreatePayrollAccountingVoucher() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: svc.createPayrollAccountingVoucher,
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['payrolls'] });
+      toast.success(`Muhasebe fişi başarıyla oluşturuldu: ${data.number}`);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}

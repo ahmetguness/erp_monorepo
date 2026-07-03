@@ -112,6 +112,10 @@ async function requireOwner(c: Context, tenantId: string): Promise<Response | nu
   return null;
 }
 
+function hasPermission(permissions: PermissionView, module: string, action: PermissionAction): boolean {
+  return permissions.isOwner || permissions.modules.some((p) => p.module === module && p.action === action);
+}
+
 async function entityBelongsToTenant(tenantId: string, entityType: EntityType, entityId: string): Promise<boolean> {
   switch (entityType) {
     case EntityType.INVOICE:
@@ -186,8 +190,9 @@ export const IntelligenceController = {
   async aiGovernanceLogs(c: Context): Promise<Response> {
     const context = await requirePermissions(c);
     if (context instanceof Response) return context;
-    const ownerError = await requireOwner(c, context.tenantId);
-    if (ownerError) return ownerError;
+    if (!hasPermission(context.permissions, 'ai_governance', PermissionAction.READ)) {
+      return c.json(new ForbiddenError('ai_governance:READ yetkisi gerekli.').toJSON(), 403);
+    }
 
     const page = parsePositiveInt(c.req.query('page'), 1, 10_000);
     const limit = parsePositiveInt(c.req.query('limit'), 20, 100);
@@ -205,8 +210,9 @@ export const IntelligenceController = {
   async aiGovernancePolicy(c: Context): Promise<Response> {
     const context = await requirePermissions(c);
     if (context instanceof Response) return context;
-    const ownerError = await requireOwner(c, context.tenantId);
-    if (ownerError) return ownerError;
+    if (!hasPermission(context.permissions, 'ai_governance', PermissionAction.READ)) {
+      return c.json(new ForbiddenError('ai_governance:READ yetkisi gerekli.').toJSON(), 403);
+    }
 
     const policy = await getAiGovernancePolicy(prisma, context.tenantId);
     return c.json({ data: { policy, redactionRegistry: getAiRedactionRegistry() } });
@@ -215,8 +221,9 @@ export const IntelligenceController = {
   async updateAiGovernancePolicy(c: Context): Promise<Response> {
     const context = await requirePermissions(c);
     if (context instanceof Response) return context;
-    const ownerError = await requireOwner(c, context.tenantId);
-    if (ownerError) return ownerError;
+    if (!hasPermission(context.permissions, 'ai_governance', PermissionAction.UPDATE)) {
+      return c.json(new ForbiddenError('ai_governance:UPDATE yetkisi gerekli.').toJSON(), 403);
+    }
 
     const body: unknown = await c.req.json().catch(() => null);
     if (!isRecord(body)) return c.json(new ValidationError('Gecersiz AI politika istegi.').toJSON(), 400);

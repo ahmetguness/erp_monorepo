@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Eye, Trash2, DollarSign, CheckCircle, Zap } from "lucide-react";
+import { Plus, Eye, Trash2, DollarSign, CheckCircle, Zap, CheckCircle2, XCircle, Download, BookOpen } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { EmployeeSelect } from "@/components/shared/EntitySelect";
@@ -17,9 +17,10 @@ import {
   useGenerateBulkPayroll,
   useMarkPayrollPaid,
   useDeletePayroll,
+  useCreatePayrollAccountingVoucher,
 } from "@/hooks/useHR";
 import { formatCurrency } from "@/lib/utils";
-import type { Payroll } from "@/services/hr.service";
+import { getPayrollBankFile, getPayrollClosingChecks, type Payroll, type PeriodClosingChecksResult } from "@/services/hr.service";
 
 export function PayrollPage() {
   const [page, setPage] = useState(1);
@@ -35,6 +36,12 @@ export function PayrollPage() {
   });
   const [bulkPeriod, setBulkPeriod] = useState("");
 
+  // Integration States
+  const [checksOpen, setChecksOpen] = useState(false);
+  const [checksResult, setChecksResult] = useState<PeriodClosingChecksResult | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
+  const [isDownloadingBankFile, setIsDownloadingBankFile] = useState(false);
+
   const { data, isLoading } = usePayrolls({
     page,
     limit: 20,
@@ -45,6 +52,44 @@ export function PayrollPage() {
   const generateBulk = useGenerateBulkPayroll();
   const markPaid = useMarkPayrollPaid();
   const remove = useDeletePayroll();
+  const postVoucher = useCreatePayrollAccountingVoucher();
+
+  const handleRunClosingChecks = async () => {
+    try {
+      setIsChecking(true);
+      const result = await getPayrollClosingChecks(periodFilter);
+      setChecksResult(result);
+      setChecksOpen(true);
+    } catch (err) {
+      // Error handled
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const handleDownloadBankFile = async () => {
+    try {
+      setIsDownloadingBankFile(true);
+      const blob = await getPayrollBankFile(periodFilter);
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `banka_odeme_listesi_${periodFilter}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+    } catch (err) {
+      // Handled
+    } finally {
+      setIsDownloadingBankFile(false);
+    }
+  };
+
+  const handlePostAccountingVoucher = () => {
+    if (confirm(`${periodFilter} dönemi için bordro tahakkuk muhasebe fişini oluşturmak istediğinize emin misiniz?`)) {
+      postVoucher.mutate(periodFilter);
+    }
+  };
 
   const columns: ColumnDef<Payroll>[] = [
     {
@@ -177,7 +222,7 @@ export function PayrollPage() {
         }
       />
 
-      <div className="flex items-end gap-3 mb-5">
+      <div className="flex items-end justify-between gap-3 mb-5">
         <Input
           label="Dönem Filtresi"
           placeholder="ör. 2026-03"
@@ -188,6 +233,38 @@ export function PayrollPage() {
           }}
           className="w-40"
         />
+
+        {/^\d{4}-\d{2}$/.test(periodFilter) && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRunClosingChecks}
+              loading={isChecking}
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              Kapanış Kontrolleri
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleDownloadBankFile}
+              loading={isDownloadingBankFile}
+            >
+              <Download className="w-4 h-4 text-sky-400" />
+              Banka Ödeme Dosyası (.csv)
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handlePostAccountingVoucher}
+              loading={postVoucher.isPending}
+            >
+              <BookOpen className="w-4 h-4 text-violet-400" />
+              Muhasebe Fişi Oluştur
+            </Button>
+          </div>
+        )}
       </div>
 
       <DataTable
@@ -414,6 +491,59 @@ export function PayrollPage() {
             <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
           </div>
         )}
+      </Modal>
+
+      {/* Closing Checks Modal */}
+      <Modal
+        isOpen={checksOpen}
+        onClose={() => setChecksOpen(false)}
+        title={`${periodFilter} Dönemi Bordro Kapanış Kontrolleri`}
+        size="md"
+        footer={
+          <Button size="sm" onClick={() => setChecksOpen(false)}>
+            Tamam
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <div className={`p-4 rounded-xl border ${checksResult?.success ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+            <div className="flex items-start gap-3">
+              {checksResult?.success ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              ) : (
+                <XCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+              )}
+              <div>
+                <h4 className={`text-sm font-semibold ${checksResult?.success ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {checksResult?.success ? 'Kontroller Başarıyla Tamamlandı' : 'Kontroller Sırasında Hata Tespit Edildi'}
+                </h4>
+                <p className="text-xs text-slate-400 mt-1">
+                  {checksResult?.success
+                    ? 'Bu dönem bordrosu kapanış için uygundur. Herhangi bir engel bulunmamaktadır.'
+                    : 'Lütfen aşağıda belirtilen hataları düzelttikten sonra tekrar deneyiniz.'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="divide-y divide-slate-800 border-y border-slate-800">
+            {checksResult?.checks.map((check, index) => (
+              <div key={index} className="flex items-start justify-between py-3">
+                <div className="space-y-1">
+                  <span className="text-sm font-medium text-white">{check.name}</span>
+                  <span className="block text-xs text-slate-500">{check.message}</span>
+                </div>
+                <span className="shrink-0 mt-0.5">
+                  {check.passed ? (
+                    <span className="text-emerald-400 text-xs font-medium bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">Geçti</span>
+                  ) : (
+                    <span className="text-red-400 text-xs font-medium bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">Başarısız</span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </Modal>
     </div>
   );

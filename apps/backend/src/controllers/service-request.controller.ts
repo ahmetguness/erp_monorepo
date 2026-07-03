@@ -1,10 +1,40 @@
 import { Context } from 'hono';
-import { ServiceStatus, ServiceActivityType, Priority } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { getPaginationParams } from '../utils/pagination.js';
-import { requireTenantId, requireParam } from '../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
+import { ServiceStatus, ServiceActivityType, Priority, AuditAction, EntityType } from '@prisma/client';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+
+export function calculateSla(
+  createdAt: Date,
+  priority: Priority,
+  status: ServiceStatus,
+  closedAt: Date | null
+) {
+  const limits: Record<Priority, number> = {
+    CRITICAL: 2,
+    HIGH: 4,
+    MEDIUM: 24,
+    LOW: 72,
+  };
+  const limitHours = limits[priority] || 24;
+  const limitMs = limitHours * 60 * 60 * 1000;
+  const targetDate = new Date(createdAt.getTime() + limitMs);
+  const resolvedAt = closedAt || (['COMPLETED', 'CANCELLED'].includes(status) ? new Date() : null);
+  const comparisonDate = resolvedAt || new Date();
+  const isBreached = comparisonDate.getTime() > targetDate.getTime();
+  const remainingMs = targetDate.getTime() - comparisonDate.getTime();
+  const remainingMinutes = Math.round(remainingMs / (60 * 1000));
+
+  return {
+    limitHours,
+    targetDate: targetDate.toISOString(),
+    isBreached,
+    remainingMinutes,
+  };
+}
 
 // ─────────────────────────────────────────────
 // Service Request Controller
@@ -50,7 +80,12 @@ export const ServiceRequestController = {
       }),
     ]);
 
-    return c.json({ data, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
+    const dataWithSla = data.map((row) => ({
+      ...row,
+      sla: calculateSla(row.createdAt, row.priority, row.status, row.closedAt),
+    }));
+
+    return c.json({ data: dataWithSla, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
   },
 
   async getById(c: Context): Promise<Response> {
@@ -68,7 +103,11 @@ export const ServiceRequestController = {
       },
     });
     if (!sr) return c.json(new NotFoundError('Servis Talebi', id).toJSON(), 404);
-    return c.json({ data: sr });
+    const srWithSla = {
+      ...sr,
+      sla: calculateSla(sr.createdAt, sr.priority, sr.status, sr.closedAt),
+    };
+    return c.json({ data: srWithSla });
   },
 
   async create(c: Context): Promise<Response> {
@@ -124,7 +163,7 @@ export const ServiceRequestController = {
         where: { id },
         data: {
           status: body.status,
-          ...(body.status === 'COMPLETED' && { closedAt: new Date() }),
+          closedAt: ['COMPLETED', 'CANCELLED'].includes(body.status) ? new Date() : null,
         },
       });
       await tx.serviceRequestHistory.create({
@@ -239,5 +278,60 @@ export const ServiceRequestController = {
 
     await prisma.serviceRequest.update({ where: { id }, data: { deletedAt: new Date() } });
     return c.json({ data: { success: true } });
+  },
+
+  async checkSlaBreaches(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+
+    const activeRequests = await prisma.serviceRequest.findMany({
+      where: {
+        tenantId,
+        status: { in: ['OPEN', 'IN_PROGRESS', 'WAITING_PARTS', 'WAITING_CUSTOMER'] },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        number: true,
+        priority: true,
+        status: true,
+        subject: true,
+        createdAt: true,
+        closedAt: true,
+      },
+    });
+
+    const breached: string[] = [];
+    for (const request of activeRequests) {
+      const sla = calculateSla(request.createdAt, request.priority, request.status, request.closedAt);
+      if (sla.isBreached) {
+        breached.push(`${request.number} (${request.subject})`);
+      }
+    }
+
+    const { ipAddress, userAgent } = getRequestMeta(c);
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'service',
+      entityType: EntityType.OTHER,
+      entityId: 'sla_sweep',
+      action: AuditAction.UPDATE,
+      newValues: {
+        checkedCount: activeRequests.length,
+        breachedCount: breached.length,
+        breachedTickets: breached,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return c.json({
+      data: {
+        checked: activeRequests.length,
+        breachedCount: breached.length,
+        breached,
+      },
+    });
   },
 };

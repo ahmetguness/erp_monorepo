@@ -131,9 +131,9 @@ export const NAV_GROUPS: NavGroup[] = [
         plan: ENTERPRISE_PLAN,
         module: 'production',
         children: [
-          { label: 'MRP Planlama', href: '/dashboard/production/mrp', icon: GitBranch, module: 'production' },
-          { label: 'Kapasite Planlama', href: '/dashboard/production/capacity-planning', icon: CalendarRange, module: 'production' },
-          { label: 'Kalite Kontrol', href: '/dashboard/production/quality-control', icon: ClipboardCheck, module: 'production' },
+          { label: 'MRP Planlama', href: '/dashboard/production/mrp', icon: GitBranch, plan: ENTERPRISE_PLAN, module: 'production' },
+          { label: 'Kapasite Planlama', href: '/dashboard/production/capacity-planning', icon: CalendarRange, plan: ENTERPRISE_PLAN, module: 'production' },
+          { label: 'Kalite Kontrol', href: '/dashboard/production/quality-control', icon: ClipboardCheck, plan: ENTERPRISE_PLAN, module: 'production' },
           { label: 'İş Emirleri', href: '/dashboard/production/work-orders', icon: ClipboardList, module: 'production' },
           { label: 'Ürün Ağaçları', href: '/dashboard/production/boms', icon: Layers, module: 'production' },
           { label: 'İş Merkezleri', href: '/dashboard/production/work-centers', icon: Cog, module: 'production' },
@@ -146,8 +146,8 @@ export const NAV_GROUPS: NavGroup[] = [
         plan: ENTERPRISE_PLAN,
         module: 'service',
         children: [
-          { label: 'Bakım Yönetimi', href: '/dashboard/service/maintenance', icon: CalendarDays, module: 'service' },
-          { label: 'Saha Servis Mobil', href: '/dashboard/service/mobile-flow', icon: Route, module: 'service' },
+          { label: 'Bakım Yönetimi', href: '/dashboard/service/maintenance', icon: CalendarDays, plan: ENTERPRISE_PLAN, module: 'service' },
+          { label: 'Saha Servis Mobil', href: '/dashboard/service/mobile-flow', icon: Route, plan: ENTERPRISE_PLAN, module: 'service' },
           { label: 'Servis Talepleri', href: '/dashboard/service/requests', icon: Wrench, module: 'service' },
           { label: 'Müşteri Varlıkları', href: '/dashboard/service/assets', icon: Monitor, module: 'service' },
         ],

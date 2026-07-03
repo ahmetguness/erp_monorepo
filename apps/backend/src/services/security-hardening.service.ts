@@ -201,7 +201,45 @@ export async function createSecuritySession(
   };
 
   const sessions = await readSessions(db, tenantId);
-  await writeSessions(db, tenantId, [session, ...sessions.filter((item) => item.id !== session.id)]);
+
+  // Check concurrent sessions limit for Enterprise plan
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { plan: true },
+  });
+
+  let activeSessionsList = [session, ...sessions.filter((item) => item.id !== session.id)];
+
+  if (tenant?.plan === 'ENTERPRISE') {
+    const limitSetting = await db.tenantSetting.findUnique({
+      where: { tenantId_key: { tenantId, key: 'security.session.concurrent_limit' } },
+    });
+    const limit = limitSetting ? Number.parseInt(limitSetting.value, 10) : null;
+
+    if (limit && Number.isInteger(limit) && limit > 0) {
+      const activeUserSessions = activeSessionsList.filter((s) => s.userId === userId && s.status === 'ACTIVE');
+      if (activeUserSessions.length > limit) {
+        // Sort by lastSeenAt ascending (oldest first)
+        const sortedActive = [...activeUserSessions].sort((a, b) => a.lastSeenAt.localeCompare(b.lastSeenAt));
+        const toRevokeCount = activeUserSessions.length - limit;
+        const toRevokeIds = new Set(sortedActive.slice(0, toRevokeCount).map((s) => s.id));
+
+        activeSessionsList = activeSessionsList.map((s) => {
+          if (toRevokeIds.has(s.id)) {
+            return {
+              ...s,
+              status: 'REVOKED' as const,
+              revokedAt: createdAt,
+              revokedById: userId,
+            };
+          }
+          return s;
+        });
+      }
+    }
+  }
+
+  await writeSessions(db, tenantId, activeSessionsList);
 
   await createAuditLog(db, {
     tenantId,

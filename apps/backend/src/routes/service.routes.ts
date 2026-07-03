@@ -27,6 +27,7 @@ serviceRoutes.get('/requests/:id', requirePermission('service', 'READ'), Service
 serviceRoutes.post('/requests', requirePermission('service', 'CREATE'), ServiceRequestController.create);
 serviceRoutes.patch('/requests/:id', requirePermission('service', 'UPDATE'), ServiceRequestController.update);
 serviceRoutes.post('/requests/:id/status', requirePermission('service', 'UPDATE'), ServiceRequestController.changeStatus);
+serviceRoutes.post('/requests/check-sla', requirePermission('service', 'UPDATE'), ServiceRequestController.checkSlaBreaches);
 serviceRoutes.post('/requests/:id/assign', requirePermission('service', 'UPDATE'), ServiceRequestController.assign);
 serviceRoutes.post('/requests/:id/items', requirePermission('service', 'UPDATE'), ServiceRequestController.addItem);
 serviceRoutes.delete('/requests/:id/items/:itemId', requirePermission('service', 'UPDATE'), ServiceRequestController.removeItem);

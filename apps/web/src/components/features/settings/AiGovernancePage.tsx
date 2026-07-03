@@ -143,8 +143,8 @@ export function AiGovernancePage() {
           <div className="mb-4 flex items-center gap-3">
             <span className="rounded-lg bg-sky-500/10 p-2 text-sky-300"><Bot className="h-4 w-4" /></span>
             <div>
-              <h2 className="text-sm font-semibold text-slate-100">Tenant AI Politikasi</h2>
-              <p className="text-xs text-slate-500">Owner tarafindan yonetilir.</p>
+              <h2 className="text-sm font-semibold text-slate-100">Tenant AI Politikası</h2>
+              <p className="text-xs text-slate-500">Owner veya ai_governance yetkili roller tarafından yönetilir.</p>
             </div>
             <Button
               className="ml-auto"

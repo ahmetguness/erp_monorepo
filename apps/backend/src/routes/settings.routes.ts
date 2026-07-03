@@ -21,6 +21,15 @@ settingsRoutes.get('/security-score', requirePermission('settings', 'READ'), Set
 settingsRoutes.get('/security/dashboard', requirePermission('settings', 'READ'), SettingsController.securityDashboard);
 settingsRoutes.get('/security/sessions', requirePermission('settings', 'READ'), SettingsController.listSecuritySessions);
 settingsRoutes.post('/security/sessions/:sessionId/revoke', requirePermission('settings', 'UPDATE'), SettingsController.revokeSecuritySession);
+settingsRoutes.get('/security/corporate', requirePermission('settings', 'READ'), SettingsController.getCorporateSecuritySettings);
+settingsRoutes.post('/security/corporate', requirePermission('settings', 'UPDATE'), SettingsController.updateCorporateSecuritySettings);
+settingsRoutes.post('/security/scim/generate-token', requirePermission('settings', 'UPDATE'), SettingsController.generateScimToken);
+settingsRoutes.get('/security/portal-tokens/:contactId', requirePermission('settings', 'READ'), SettingsController.getPortalToken);
+settingsRoutes.post('/security/portal-tokens/:contactId/generate', requirePermission('settings', 'UPDATE'), SettingsController.generatePortalToken);
+settingsRoutes.get('/security/bi', requirePermission('settings', 'READ'), SettingsController.getBiSettings);
+settingsRoutes.post('/security/bi', requirePermission('settings', 'UPDATE'), SettingsController.updateBiSettings);
+settingsRoutes.post('/security/bi/generate-token', requirePermission('settings', 'UPDATE'), SettingsController.generateBiToken);
+settingsRoutes.post('/security/bi/run-schedule', requirePermission('settings', 'UPDATE'), SettingsController.runBiScheduleSimulation);
 settingsRoutes.get('/setup-checklist', requirePermission('settings', 'READ'), QuickStartController.checklist);
 settingsRoutes.get('/logo', requirePermission('settings', 'READ'), SettingsController.downloadTenantLogo);
 settingsRoutes.post('/logo', requirePermission('settings', 'UPDATE'), SettingsController.uploadTenantLogo);

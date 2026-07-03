@@ -189,3 +189,25 @@ export const markPayrollPaid = (id: string) =>
   apiClient.post<{ data: Payroll }>(`/api/payroll/${id}/pay`, {}).then((r) => r.data.data);
 
 export const deletePayroll = (id: string) => apiClient.delete(`/api/payroll/${id}`);
+
+// ─── Payroll Integrations ─────────────────────
+
+export interface ClosingCheckItem {
+  name: string;
+  passed: boolean;
+  message: string;
+}
+
+export interface PeriodClosingChecksResult {
+  success: boolean;
+  checks: ClosingCheckItem[];
+}
+
+export const getPayrollBankFile = (period: string) =>
+  apiClient.get('/api/payroll/integration/bank-file', { params: { period }, responseType: 'blob' }).then((r) => r.data);
+
+export const createPayrollAccountingVoucher = (period: string) =>
+  apiClient.post<{ data: { id: string; number: string; totalGross: number; totalNet: number; totalDeductions: number } }>('/api/payroll/integration/accounting-voucher', { period }).then((r) => r.data.data);
+
+export const getPayrollClosingChecks = (period: string) =>
+  apiClient.get<{ data: PeriodClosingChecksResult }>('/api/payroll/integration/closing-checks', { params: { period } }).then((r) => r.data.data);
