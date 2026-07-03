@@ -5,10 +5,16 @@ import { requirePermission } from '../middleware/requirePermission';
 import { WorkCenterController } from '../controllers/work-center.controller';
 import { BOMController } from '../controllers/bom.controller';
 import { WorkOrderController } from '../controllers/work-order.controller';
+import { MrpPlanningController } from '../controllers/mrp-planning.controller';
+import { CapacityPlanningController } from '../controllers/capacity-planning.controller';
+import { QualityControlController } from '../controllers/quality-control.controller';
 
 const productionRoutes = new Hono();
 
 productionRoutes.use('*', requireAccess(ACCESS_POLICIES.production));
+productionRoutes.get('/capacity-planning', requirePermission('production', 'READ'), CapacityPlanningController.get);
+productionRoutes.get('/mrp', requirePermission('production', 'READ'), MrpPlanningController.get);
+productionRoutes.get('/quality-control', requirePermission('production', 'READ'), QualityControlController.get);
 
 // İş Merkezleri
 productionRoutes.get('/work-centers', requirePermission('production', 'READ'), WorkCenterController.list);

@@ -41,6 +41,7 @@ import {
   ShoppingBag,
   UserCheck,
   CalendarDays,
+  Route,
   ClockIcon,
   Wallet,
   UploadCloud,
@@ -130,6 +131,9 @@ export const NAV_GROUPS: NavGroup[] = [
         plan: ENTERPRISE_PLAN,
         module: 'production',
         children: [
+          { label: 'MRP Planlama', href: '/dashboard/production/mrp', icon: GitBranch, module: 'production' },
+          { label: 'Kapasite Planlama', href: '/dashboard/production/capacity-planning', icon: CalendarRange, module: 'production' },
+          { label: 'Kalite Kontrol', href: '/dashboard/production/quality-control', icon: ClipboardCheck, module: 'production' },
           { label: 'İş Emirleri', href: '/dashboard/production/work-orders', icon: ClipboardList, module: 'production' },
           { label: 'Ürün Ağaçları', href: '/dashboard/production/boms', icon: Layers, module: 'production' },
           { label: 'İş Merkezleri', href: '/dashboard/production/work-centers', icon: Cog, module: 'production' },
@@ -142,6 +146,8 @@ export const NAV_GROUPS: NavGroup[] = [
         plan: ENTERPRISE_PLAN,
         module: 'service',
         children: [
+          { label: 'Bakım Yönetimi', href: '/dashboard/service/maintenance', icon: CalendarDays, module: 'service' },
+          { label: 'Saha Servis Mobil', href: '/dashboard/service/mobile-flow', icon: Route, module: 'service' },
           { label: 'Servis Talepleri', href: '/dashboard/service/requests', icon: Wrench, module: 'service' },
           { label: 'Müşteri Varlıkları', href: '/dashboard/service/assets', icon: Monitor, module: 'service' },
         ],
@@ -201,6 +207,7 @@ export const NAV_GROUPS: NavGroup[] = [
         plan: ENTERPRISE_PLAN,
         module: 'hr',
         children: [
+          { label: 'Gelişmiş İK', href: '/dashboard/hr/advanced', icon: GitBranch, plan: ENTERPRISE_PLAN, module: 'hr' },
           { label: 'Personel', href: '/dashboard/hr/employees', icon: UserCheck, plan: ENTERPRISE_PLAN, module: 'hr' },
           { label: 'İzin Talepleri', href: '/dashboard/hr/leave-requests', icon: CalendarDays, module: 'hr' },
           { label: 'Puantaj', href: '/dashboard/hr/attendance', icon: ClockIcon, module: 'hr' },

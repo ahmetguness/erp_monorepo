@@ -170,3 +170,14 @@ export function useDeleteWorkOrder() {
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
+export function useMrpPlanning(params?: { horizonDays?: number }) {
+  return useQuery({ queryKey: ['production', 'mrp', params], queryFn: () => svc.getMrpPlanning(params) });
+}
+
+export function useCapacityPlanning(params?: { horizonDays?: number }) {
+  return useQuery({ queryKey: ['production', 'capacity-planning', params], queryFn: () => svc.getCapacityPlanning(params) });
+}
+
+export function useQualityControl(params?: { horizonDays?: number }) {
+  return useQuery({ queryKey: ['production', 'quality-control', params], queryFn: () => svc.getQualityControl(params) });
+}

@@ -5,10 +5,12 @@ import { requirePermission } from '../middleware/requirePermission';
 import { EmployeeController } from '../controllers/employee.controller';
 import { LeaveRequestController } from '../controllers/leave-request.controller';
 import { AttendanceController } from '../controllers/attendance.controller';
+import { AdvancedHrController } from '../controllers/advanced-hr.controller';
 
 const hrRoutes = new Hono();
 
 hrRoutes.use('*', requireAccess(ACCESS_POLICIES.hr));
+hrRoutes.get('/advanced', requirePermission('hr', 'READ'), AdvancedHrController.get);
 
 // Personel
 hrRoutes.get('/employees', requirePermission('hr', 'READ'), EmployeeController.list);

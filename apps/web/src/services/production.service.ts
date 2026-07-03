@@ -60,6 +60,184 @@ export interface WorkOrder {
   _count?: { items: number; operations: number };
 }
 
+export interface MrpProductRef {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface MrpProductionRecommendation {
+  product: MrpProductRef;
+  bom: { id: string; name: string; version: string };
+  demandQty: number;
+  stockQty: number;
+  openWorkOrderQty: number;
+  recommendedQty: number;
+  capacityHours: number;
+  capacityAvailableHours: number;
+  capacityGapHours: number;
+}
+
+export interface MrpPurchaseRecommendation {
+  product: MrpProductRef;
+  source: 'finished_good_without_bom' | 'bom_component';
+  parentProduct?: MrpProductRef;
+  grossRequirementQty: number;
+  stockQty: number;
+  openPurchaseQty: number;
+  recommendedQty: number;
+}
+
+export interface MrpCapacityRecommendation {
+  workCenter: MrpProductRef;
+  requiredHours: number;
+  availableHours: number;
+  allocatedHours: number;
+  gapHours: number;
+}
+
+export interface MrpPlanningResult {
+  summary: {
+    horizonDays: number;
+    demandProducts: number;
+    productionRecommendationCount: number;
+    purchaseRecommendationCount: number;
+    capacityGapCount: number;
+  };
+  productionRecommendations: MrpProductionRecommendation[];
+  purchaseRecommendations: MrpPurchaseRecommendation[];
+  capacityRecommendations: MrpCapacityRecommendation[];
+}
+
+export interface CapacityShiftSummary {
+  shiftCount: number;
+  hoursPerShift: number;
+  totalHours: number;
+}
+
+export interface CapacityCalendarRow {
+  workCenter: MrpProductRef;
+  date: string;
+  capacityHours: number;
+  allocatedHours: number;
+  availableHours: number;
+  utilizationPct: number;
+  shifts: CapacityShiftSummary;
+}
+
+export interface CapacityBottleneckRow {
+  workCenter: MrpProductRef;
+  capacityHours: number;
+  allocatedHours: number;
+  queuedHours: number;
+  totalLoadHours: number;
+  availableHours: number;
+  utilizationPct: number;
+  severity: 'normal' | 'watch' | 'critical';
+}
+
+export type CapacityWorkOrderStatus = 'PLANNED' | 'IN_PROGRESS' | 'PAUSED';
+
+export interface CapacitySequenceRow {
+  id: string;
+  workOrderId: string;
+  workOrderNumber: string;
+  product: MrpProductRef;
+  workCenter: MrpProductRef;
+  operationName: string;
+  status: CapacityWorkOrderStatus;
+  stepOrder: number;
+  plannedStartAt: string | null;
+  plannedEndAt: string | null;
+  workOrderStartDate: string | null;
+  workOrderEndDate: string | null;
+  plannedQty: number;
+  estimatedHours: number;
+  queueRank: number;
+}
+
+export interface CapacityPlanningResult {
+  summary: {
+    horizonDays: number;
+    workCenterCount: number;
+    calendarDays: number;
+    bottleneckCount: number;
+    criticalBottleneckCount: number;
+    queuedOperationCount: number;
+  };
+  calendar: CapacityCalendarRow[];
+  bottlenecks: CapacityBottleneckRow[];
+  sequence: CapacitySequenceRow[];
+}
+
+export type QualityFormType = 'INPUT' | 'OUTPUT';
+export type QualityFormStatus = 'ready' | 'needs_review' | 'blocked';
+export type QualityIssueSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type QualityIssueType = 'scrap' | 'under_production' | 'material_shortage' | 'paused_order';
+export type QualityActionStatus = 'open' | 'in_progress' | 'done' | 'suggested';
+export type QualityActionPriority = 'low' | 'medium' | 'high' | 'critical';
+
+export interface QualityChecklistItem {
+  key: string;
+  label: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface QualityFormRow {
+  id: string;
+  type: QualityFormType;
+  status: QualityFormStatus;
+  workOrderId: string;
+  workOrderNumber: string;
+  product: MrpProductRef;
+  plannedQty: number;
+  producedQty: number;
+  completionPct: number;
+  checklist: QualityChecklistItem[];
+}
+
+export interface QualityNonconformityRow {
+  id: string;
+  type: QualityIssueType;
+  severity: QualityIssueSeverity;
+  workOrderId: string;
+  workOrderNumber: string;
+  product: MrpProductRef;
+  title: string;
+  detail: string;
+  quantityImpact: number;
+  detectedAt: string;
+}
+
+export interface QualityCorrectiveActionRow {
+  id: string;
+  source: 'task' | 'suggested';
+  status: QualityActionStatus;
+  priority: QualityActionPriority;
+  workOrderId: string;
+  workOrderNumber: string;
+  title: string;
+  detail: string | null;
+  dueAt: string | null;
+}
+
+export interface QualityControlResult {
+  summary: {
+    horizonDays: number;
+    inputFormCount: number;
+    outputFormCount: number;
+    blockedFormCount: number;
+    nonconformityCount: number;
+    criticalIssueCount: number;
+    correctiveActionCount: number;
+  };
+  inputForms: QualityFormRow[];
+  outputForms: QualityFormRow[];
+  nonconformities: QualityNonconformityRow[];
+  correctiveActions: QualityCorrectiveActionRow[];
+}
+
 // ─────────────────────────────────────────────
 // Work Centers
 // ─────────────────────────────────────────────
@@ -145,3 +323,13 @@ export const updateWorkOrderOperation = (workOrderId: string, operationId: strin
 
 export const deleteWorkOrder = (id: string) =>
   apiClient.delete(`/api/production/work-orders/${id}`);
+
+// MRP Planning
+export const getMrpPlanning = (params?: { horizonDays?: number }) =>
+  apiClient.get<{ data: MrpPlanningResult }>('/api/production/mrp', { params }).then((r) => r.data.data);
+
+export const getCapacityPlanning = (params?: { horizonDays?: number }) =>
+  apiClient.get<{ data: CapacityPlanningResult }>('/api/production/capacity-planning', { params }).then((r) => r.data.data);
+
+export const getQualityControl = (params?: { horizonDays?: number }) =>
+  apiClient.get<{ data: QualityControlResult }>('/api/production/quality-control', { params }).then((r) => r.data.data);

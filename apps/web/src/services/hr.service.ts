@@ -40,6 +40,64 @@ export interface Payroll {
 
 export interface Department { name: string | null; count: number; }
 
+export type HrReviewStatus = 'ready' | 'scheduled' | 'missing';
+export type HrTrainingStatus = 'complete' | 'planned' | 'missing';
+export type HrAssetStatus = 'assigned' | 'missing';
+
+export interface AdvancedHrEmployeeRef {
+  id: string;
+  fullName: string;
+  department: string | null;
+  position: string | null;
+}
+
+export interface PerformanceReviewRow {
+  employee: AdvancedHrEmployeeRef;
+  status: HrReviewStatus;
+  openActionCount: number;
+  lastReviewAt: string | null;
+  nextReviewAt: string;
+}
+
+export interface TrainingMatrixRow {
+  employee: AdvancedHrEmployeeRef;
+  status: HrTrainingStatus;
+  completedCount: number;
+  plannedCount: number;
+  missingTopics: string[];
+}
+
+export interface HrAssetAssignmentRow {
+  employee: AdvancedHrEmployeeRef;
+  status: HrAssetStatus;
+  assetCount: number;
+  documentCount: number;
+  lastAssignedAt: string | null;
+}
+
+export interface OrganizationNode {
+  id: string;
+  parentId: string | null;
+  label: string;
+  type: 'department' | 'position' | 'employee';
+  employeeCount: number;
+}
+
+export interface AdvancedHrResult {
+  summary: {
+    employeeCount: number;
+    departmentCount: number;
+    reviewMissingCount: number;
+    trainingMissingCount: number;
+    assetMissingCount: number;
+    organizationNodeCount: number;
+  };
+  performanceReviews: PerformanceReviewRow[];
+  trainingMatrix: TrainingMatrixRow[];
+  assetAssignments: HrAssetAssignmentRow[];
+  organization: OrganizationNode[];
+}
+
 type Paginated<T> = { data: T[]; meta: { total: number; page: number; pageSize: number; totalPages: number } };
 
 // ─── Employees ────────────────────────────────
@@ -64,6 +122,9 @@ export const deleteEmployee = (id: string) => apiClient.delete(`/api/hr/employee
 
 export const getDepartments = () =>
   apiClient.get<{ data: Department[] }>('/api/hr/employees/departments').then((r) => r.data.data);
+
+export const getAdvancedHr = () =>
+  apiClient.get<{ data: AdvancedHrResult }>('/api/hr/advanced').then((r) => r.data.data);
 
 // ─── Leave Requests ───────────────────────────
 

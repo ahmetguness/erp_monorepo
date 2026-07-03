@@ -128,3 +128,26 @@ export function useDeleteServiceRequest() {
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
+
+export function useMaintenanceManagement(params?: { horizonDays?: number }) {
+  return useQuery({ queryKey: ['service', 'maintenance', params], queryFn: () => svc.getMaintenanceManagement(params) });
+}
+
+export function useFieldServiceMobileFlow(params?: { assignedToId?: string }) {
+  return useQuery({ queryKey: ['service', 'mobile-flow', params], queryFn: () => svc.getFieldServiceMobileFlow(params) });
+}
+
+export function useCreateFieldServiceCheckpoint() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: ({ serviceRequestId, data }: { serviceRequestId: string; data: Parameters<typeof svc.createFieldServiceCheckpoint>[1] }) =>
+      svc.createFieldServiceCheckpoint(serviceRequestId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['service', 'mobile-flow'] });
+      qc.invalidateQueries({ queryKey: ['service-requests'] });
+      toast.success('Saha servis adimi kaydedildi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}

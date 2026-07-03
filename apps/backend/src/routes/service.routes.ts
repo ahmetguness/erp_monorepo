@@ -4,10 +4,15 @@ import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 import { CustomerAssetController } from '../controllers/customer-asset.controller';
 import { ServiceRequestController } from '../controllers/service-request.controller';
+import { MaintenanceManagementController } from '../controllers/maintenance-management.controller';
+import { FieldServiceMobileController } from '../controllers/field-service-mobile.controller';
 
 const serviceRoutes = new Hono();
 
 serviceRoutes.use('*', requireAccess(ACCESS_POLICIES.service));
+serviceRoutes.get('/maintenance', requirePermission('service', 'READ'), MaintenanceManagementController.get);
+serviceRoutes.get('/mobile-flow', requirePermission('service', 'READ'), FieldServiceMobileController.get);
+serviceRoutes.post('/mobile-flow/:id/checkpoint', requirePermission('service', 'UPDATE'), FieldServiceMobileController.checkpoint);
 
 // Müşteri Varlıkları
 serviceRoutes.get('/assets', requirePermission('service', 'READ'), CustomerAssetController.list);

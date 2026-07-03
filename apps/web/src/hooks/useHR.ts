@@ -49,6 +49,10 @@ export function useDepartments() {
   return useQuery({ queryKey: ['departments'], queryFn: svc.getDepartments });
 }
 
+export function useAdvancedHr() {
+  return useQuery({ queryKey: ['hr', 'advanced'], queryFn: svc.getAdvancedHr });
+}
+
 // ─── Leave Requests ───────────────────────────
 
 export function useLeaveRequests(params?: { page?: number; limit?: number; status?: string; employeeId?: string }) {
