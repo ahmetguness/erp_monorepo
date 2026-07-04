@@ -5,6 +5,7 @@ import {
   createDataQualityTask,
   downloadTemplate,
   exportData,
+  getEdiB2BHub,
   getDataQualitySummary,
   getImportBatches,
   previewImport,
@@ -35,6 +36,13 @@ export function useDataQualitySummary() {
   return useQuery({
     queryKey: ['data-exchange', 'quality'],
     queryFn: getDataQualitySummary,
+  });
+}
+
+export function useEdiB2BHub() {
+  return useQuery({
+    queryKey: ['data-exchange', 'b2b'],
+    queryFn: getEdiB2BHub,
   });
 }
 

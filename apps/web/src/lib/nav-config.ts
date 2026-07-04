@@ -231,7 +231,15 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'İş Akışı Merkezi', href: '/dashboard/workflow', icon: ClipboardCheck, plan: PROFESSIONAL_PLAN },
       { label: 'Toplu Islem Merkezi', href: '/dashboard/bulk-operations', icon: ListChecks, plan: PROFESSIONAL_PLAN },
       { label: 'Doküman Merkezi', href: '/dashboard/documents', icon: FolderOpen },
-      { label: 'İçe / Dışa Aktarma', href: '/dashboard/data-exchange', icon: UploadCloud },
+      {
+        label: 'İçe / Dışa Aktarma',
+        href: '/dashboard/data-exchange',
+        icon: UploadCloud,
+        children: [
+          { label: 'CSV Veri Aktarımı', href: '/dashboard/data-exchange', icon: UploadCloud },
+          { label: 'EDI / B2B Entegrasyonları', href: '/dashboard/data-exchange/b2b', icon: Link2, plan: ENTERPRISE_PLAN, module: 'marketplace' },
+        ],
+      },
       { label: 'Rol Yönetimi', href: '/dashboard/roles', icon: Shield, plan: PROFESSIONAL_PLAN },
       { label: 'API Anahtarları', href: '/dashboard/api-keys', icon: Key, plan: PROFESSIONAL_PLAN },
     ],

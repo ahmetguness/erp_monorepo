@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
+import { ACCESS_POLICIES } from '@repo/types/plans';
 import { StockController } from '../controllers/stock.controller';
+import { requireAccess } from '../middleware/requireAccess';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
 import { validateBody } from '../middleware/validateBody';
@@ -17,7 +19,7 @@ stockRoutes.use('*', requireModule(MODULE_KEYS.INVENTORY));
 stockRoutes.get('/alerts', requirePermission('inventory', 'READ'), StockController.stockAlerts);
 stockRoutes.get('/levels', requirePermission('inventory', 'READ'), StockController.listStockLevels);
 stockRoutes.get('/reorder-suggestions', requirePermission('inventory', 'READ'), StockController.listReorderSuggestions);
-stockRoutes.get('/advanced-suggestions', requirePermission('inventory', 'READ'), StockController.listAdvancedSuggestions);
+stockRoutes.get('/advanced-suggestions', requireAccess(ACCESS_POLICIES.advancedStockSuggestions), requirePermission('inventory', 'READ'), StockController.listAdvancedSuggestions);
 stockRoutes.get('/movements', requirePermission('inventory', 'READ'), StockController.listMovements);
 stockRoutes.post('/movements', requirePermission('inventory', 'CREATE'), validateBody(createStockMovementBodySchema), StockController.createManualMovement);
 stockRoutes.get('/counts', requirePermission('inventory', 'READ'), StockController.listStockCounts);

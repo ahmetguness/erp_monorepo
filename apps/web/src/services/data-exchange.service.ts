@@ -106,6 +106,77 @@ export const DataQualityTaskResultSchema = z.object({
 
 export type DataQualityTaskResult = z.infer<typeof DataQualityTaskResultSchema>;
 
+export const EdiB2BDirectionSchema = z.enum(['inbound', 'outbound']);
+export const EdiB2BDocumentTypeSchema = z.enum(['sales_order', 'purchase_order', 'delivery_note', 'invoice']);
+export const EdiB2BExchangeStatusSchema = z.enum(['ready', 'draft', 'in_progress', 'completed', 'blocked']);
+
+export const EdiB2BSummarySchema = z.object({
+  partnerCount: z.coerce.number(),
+  readyDocumentCount: z.coerce.number(),
+  blockedDocumentCount: z.coerce.number(),
+  inboundOrderCount: z.coerce.number(),
+  outboundDeliveryCount: z.coerce.number(),
+  outboundInvoiceCount: z.coerce.number(),
+  issueCount: z.coerce.number(),
+});
+
+export const EdiB2BPartnerSchema = z.object({
+  contactId: z.string(),
+  code: z.string().nullable(),
+  name: z.string(),
+  type: z.enum(['CUSTOMER', 'SUPPLIER', 'BOTH']),
+  directions: z.array(EdiB2BDirectionSchema),
+  status: z.enum(['active', 'needs_mapping']),
+  documentCount: z.coerce.number(),
+  totalValue: z.coerce.number(),
+  lastActivityAt: z.string().nullable(),
+  issues: z.array(z.string()),
+});
+
+export const EdiB2BDocumentFlowSchema = z.object({
+  key: EdiB2BDocumentTypeSchema,
+  title: z.string(),
+  direction: EdiB2BDirectionSchema,
+  scope: z.string(),
+  endpoint: z.string(),
+  format: z.enum(['JSON', 'CSV']),
+  status: z.enum(['configured', 'needs_mapping']),
+  readyCount: z.coerce.number(),
+  blockedCount: z.coerce.number(),
+  note: z.string(),
+});
+
+export const EdiB2BExchangeItemSchema = z.object({
+  id: z.string(),
+  number: z.string(),
+  documentType: EdiB2BDocumentTypeSchema,
+  direction: EdiB2BDirectionSchema,
+  partnerName: z.string(),
+  status: EdiB2BExchangeStatusSchema,
+  amount: z.coerce.number().nullable(),
+  documentDate: z.string(),
+  href: z.string(),
+});
+
+export const EdiB2BEndpointExampleSchema = z.object({
+  method: z.enum(['GET', 'POST']),
+  path: z.string(),
+  scope: z.string(),
+  description: z.string(),
+});
+
+export const EdiB2BHubSchema = z.object({
+  generatedAt: z.string(),
+  summary: EdiB2BSummarySchema,
+  partners: z.array(EdiB2BPartnerSchema),
+  documentFlows: z.array(EdiB2BDocumentFlowSchema),
+  exchangeQueue: z.array(EdiB2BExchangeItemSchema),
+  endpointExamples: z.array(EdiB2BEndpointExampleSchema),
+});
+
+export type EdiB2BHub = z.infer<typeof EdiB2BHubSchema>;
+export type EdiB2BExchangeStatus = z.infer<typeof EdiB2BExchangeStatusSchema>;
+
 export interface ImportPreviewInput {
   entity: DataExchangeEntity;
   csv: string;
@@ -140,6 +211,11 @@ export async function getDataQualitySummary(): Promise<DataQualitySummary> {
 export async function createDataQualityTask(issueKey: string): Promise<DataQualityTaskResult> {
   const res = await apiClient.post(`/api/data-exchange/quality/${encodeURIComponent(issueKey)}/task`);
   return safeParse(SingleResponseSchema(DataQualityTaskResultSchema), res.data, 'createDataQualityTask').data;
+}
+
+export async function getEdiB2BHub(): Promise<EdiB2BHub> {
+  const res = await apiClient.get('/api/data-exchange/b2b');
+  return safeParse(SingleResponseSchema(EdiB2BHubSchema), res.data, 'getEdiB2BHub').data;
 }
 
 export async function downloadTemplate(entity: DataExchangeEntity): Promise<Blob> {

@@ -11,7 +11,7 @@ import {
 } from '../schemas/request-body.schemas';
 import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
-import { AuditAction, EntityType } from '@prisma/client';
+import { AuditAction, EntityType, Plan } from '@prisma/client';
 import { bufferToArrayBuffer, storageService } from '../services/storage.service.js';
 import { BusinessRulesService } from '../services/business-rules.service.js';
 import { getTenantSecurityScore } from '../services/tenant-security.service.js';
@@ -29,6 +29,50 @@ const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 const ALLOWED_LOGO_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_LOGO_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const businessRulesService = new BusinessRulesService(prisma);
+
+type JsonObject = Record<string, unknown>;
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function readJsonObject(c: Context): Promise<JsonObject> {
+  let value: unknown;
+  try {
+    value = await c.req.json();
+  } catch {
+    throw new ValidationError('Gecersiz JSON govdesi.');
+  }
+
+  if (!isJsonObject(value)) {
+    throw new ValidationError('JSON govdesi nesne olmalidir.');
+  }
+
+  return value;
+}
+
+function readBoolean(value: unknown): boolean {
+  return value === true;
+}
+
+function readString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function readPositiveNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+async function assertEnterpriseTenant(tenantId: string, message: string): Promise<void> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { plan: true },
+  });
+
+  if (tenant?.plan !== Plan.ENTERPRISE) {
+    throw new ValidationError(message);
+  }
+}
 
 function isInternalTenantSettingKey(key: string | undefined): boolean {
   return typeof key === 'string' && INTERNAL_TENANT_SETTING_KEYS.some((internalKey) => internalKey === key);
@@ -299,25 +343,20 @@ export const SettingsController = {
       throw new ValidationError('Kurumsal güvenlik ayarları sadece Enterprise plan müşterileri içindir.');
     }
 
-    let body: Record<string, any>;
-    try {
-      body = await c.req.json();
-    } catch {
-      throw new ValidationError('Geçersiz JSON gövdesi.');
-    }
+    const body = await readJsonObject(c);
 
     const updates = [
-      { key: 'security.sso.enabled', value: body.ssoEnabled ? 'true' : 'false' },
-      { key: 'security.sso.provider', value: body.ssoProvider || 'saml' },
-      { key: 'security.sso.saml_metadata_url', value: body.samlMetadataUrl || '' },
-      { key: 'security.sso.oidc_client_id', value: body.oidcClientId || '' },
-      { key: 'security.sso.oidc_client_secret', value: body.oidcClientSecret || '' },
-      { key: 'security.scim.enabled', value: body.scimEnabled ? 'true' : 'false' },
-      { key: 'security.ip_restriction.enabled', value: body.ipRestrictionEnabled ? 'true' : 'false' },
-      { key: 'security.ip_whitelist', value: body.ipWhitelist || '' },
-      { key: 'security.session.max_age_days', value: String(body.sessionMaxAgeDays || 7) },
-      { key: 'security.session.concurrent_limit', value: String(body.sessionConcurrentLimit || 5) },
-      { key: 'security.session.idle_timeout_mins', value: String(body.sessionIdleTimeoutMins || 30) },
+      { key: 'security.sso.enabled', value: readBoolean(body.ssoEnabled) ? 'true' : 'false' },
+      { key: 'security.sso.provider', value: readString(body.ssoProvider, 'saml') },
+      { key: 'security.sso.saml_metadata_url', value: readString(body.samlMetadataUrl) },
+      { key: 'security.sso.oidc_client_id', value: readString(body.oidcClientId) },
+      { key: 'security.sso.oidc_client_secret', value: readString(body.oidcClientSecret) },
+      { key: 'security.scim.enabled', value: readBoolean(body.scimEnabled) ? 'true' : 'false' },
+      { key: 'security.ip_restriction.enabled', value: readBoolean(body.ipRestrictionEnabled) ? 'true' : 'false' },
+      { key: 'security.ip_whitelist', value: readString(body.ipWhitelist) },
+      { key: 'security.session.max_age_days', value: String(readPositiveNumber(body.sessionMaxAgeDays, 7)) },
+      { key: 'security.session.concurrent_limit', value: String(readPositiveNumber(body.sessionConcurrentLimit, 5)) },
+      { key: 'security.session.idle_timeout_mins', value: String(readPositiveNumber(body.sessionIdleTimeoutMins, 30)) },
     ];
 
     for (const update of updates) {
@@ -402,17 +441,12 @@ export const SettingsController = {
       throw new ValidationError('BI ayarları sadece Enterprise plan müşterileri içindir.');
     }
 
-    let body: Record<string, any>;
-    try {
-      body = await c.req.json();
-    } catch {
-      throw new ValidationError('Geçersiz JSON gövdesi.');
-    }
+    const body = await readJsonObject(c);
 
     const updates = [
-      { key: 'bi.schedule.enabled', value: body.enabled ? 'true' : 'false' },
-      { key: 'bi.schedule.interval', value: body.interval || 'daily' },
-      { key: 'bi.schedule.entities', value: body.entities || 'products,contacts,invoices' },
+      { key: 'bi.schedule.enabled', value: readBoolean(body.enabled) ? 'true' : 'false' },
+      { key: 'bi.schedule.interval', value: readString(body.interval, 'daily') },
+      { key: 'bi.schedule.entities', value: readString(body.entities, 'products,contacts,invoices') },
     ];
 
     for (const update of updates) {
@@ -490,6 +524,8 @@ export const SettingsController = {
     const tenantId = requireTenantId(c);
     const contactId = requireParam(c, 'contactId');
 
+    await assertEnterpriseTenant(tenantId, 'Musteri portali sadece Enterprise plani kapsamindadir.');
+
     // Verify contact belongs to tenant
     const contact = await prisma.contact.findFirst({
       where: { id: contactId, tenantId, deletedAt: null },
@@ -510,6 +546,8 @@ export const SettingsController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
     const contactId = requireParam(c, 'contactId');
+
+    await assertEnterpriseTenant(tenantId, 'Musteri portali sadece Enterprise plani kapsamindadir.');
 
     // Verify contact belongs to tenant
     const contact = await prisma.contact.findFirst({

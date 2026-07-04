@@ -172,9 +172,8 @@ export class CustomerTrackingService {
     const quotes = await this.prisma.salesQuote.findMany({
       where: { tenantId, contactId: { in: contactIds }, deletedAt: null },
       select: { id: true, contactId: true, number: true, date: true, status: true, totalGross: true },
-      distinct: ['contactId'],
-      orderBy: { date: 'desc' },
-      take: contactIds.length,
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      take: contactIds.length * 3,
     });
 
     const map = new Map<string, CustomerTrackingMoneyDocument>();
@@ -202,9 +201,8 @@ export class CustomerTrackingService {
         type: InvoiceType.SALES,
       },
       select: { id: true, contactId: true, number: true, date: true, dueDate: true, status: true, totalGross: true },
-      distinct: ['contactId'],
-      orderBy: { date: 'desc' },
-      take: contactIds.length,
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      take: contactIds.length * 3,
     });
 
     const map = new Map<string, CustomerTrackingInvoice>();
@@ -240,9 +238,8 @@ export class CustomerTrackingService {
         status: true,
         invoice: { select: { number: true } },
       },
-      distinct: ['contactId'],
-      orderBy: { dueDate: 'asc' },
-      take: contactIds.length,
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
+      take: contactIds.length * 3,
     });
 
     const map = new Map<string, CustomerTrackingReminder>();

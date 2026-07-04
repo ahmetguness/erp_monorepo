@@ -40,12 +40,15 @@ const MODULE_OPTIONS = [
   { key: 'contacts', label: 'Cari Hesaplar' },
   { key: 'invoicing', label: 'Faturalama' },
   { key: 'approvals', label: 'Onaylar' },
+  { key: 'workflow', label: 'İş Akışı' },
+  { key: 'documents', label: 'Dokümanlar' },
+  { key: 'mail', label: 'Mail' },
 ] as const;
 
 // Plan bazlı varsayılan modüller
 const PLAN_DEFAULT_MODULES: Record<PlanKey, string[]> = {
-  STARTER: ['accounting', 'inventory', 'sales', 'contacts', 'invoicing', 'reporting'],
-  PROFESSIONAL: ['accounting', 'inventory', 'crm', 'sales', 'purchasing', 'warehouse', 'reporting', 'contacts', 'invoicing', 'approvals'],
+  STARTER: ['accounting', 'inventory', 'sales', 'contacts', 'invoicing', 'reporting', 'documents'],
+  PROFESSIONAL: ['accounting', 'inventory', 'crm', 'sales', 'purchasing', 'warehouse', 'reporting', 'contacts', 'invoicing', 'approvals', 'workflow', 'documents'],
   ENTERPRISE: MODULE_OPTIONS.map((m) => m.key),
 };
 

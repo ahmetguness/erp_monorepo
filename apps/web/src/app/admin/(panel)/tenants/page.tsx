@@ -41,11 +41,14 @@ const MODULE_OPTIONS = [
   { key: 'contacts', label: 'Cari Hesaplar' },
   { key: 'invoicing', label: 'Faturalama' },
   { key: 'approvals', label: 'Onaylar' },
+  { key: 'workflow', label: 'İş Akışı' },
+  { key: 'documents', label: 'Dokümanlar' },
+  { key: 'mail', label: 'Mail' },
 ] as const;
 
 const PLAN_MODULES = {
-  STARTER: ['accounting', 'inventory', 'crm', 'sales', 'purchasing', 'warehouse', 'reporting', 'contacts', 'invoicing'],
-  PROFESSIONAL: ['accounting', 'inventory', 'crm', 'sales', 'purchasing', 'warehouse', 'reporting', 'contacts', 'invoicing', 'approvals'],
+  STARTER: ['accounting', 'inventory', 'crm', 'sales', 'reporting', 'contacts', 'invoicing', 'documents'],
+  PROFESSIONAL: ['accounting', 'inventory', 'crm', 'sales', 'purchasing', 'warehouse', 'reporting', 'contacts', 'invoicing', 'approvals', 'workflow', 'documents'],
   ENTERPRISE: MODULE_OPTIONS.map((module) => module.key),
 } as const;
 

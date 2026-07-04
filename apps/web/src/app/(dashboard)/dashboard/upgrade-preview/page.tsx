@@ -120,6 +120,7 @@ export default function UpgradePreviewPage() {
   const activeContent = matchedKey ? FEATURE_METRICS[matchedKey] : DEFAULT_METRIC;
 
   const planLabel = plan === 'ENTERPRISE' ? 'Enterprise' : 'Professional';
+  const isEnterprisePlan = plan === 'ENTERPRISE';
   const planBadgeClass = plan === 'ENTERPRISE' 
     ? 'text-amber-400 bg-amber-500/10 border-amber-500/30' 
     : 'text-violet-400 bg-violet-500/10 border-violet-500/30';
@@ -173,7 +174,7 @@ export default function UpgradePreviewPage() {
               className="px-6 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-sky-600 hover:from-violet-500 hover:to-sky-500 text-white font-bold text-sm shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
             >
               <Cpu className="h-4 w-4" />
-              Professional'a Yükselt
+              {`${planLabel}'a Yükselt`}
             </button>
             <Button
               variant="outline"
@@ -230,17 +231,17 @@ export default function UpgradePreviewPage() {
               <tr className="hover:bg-slate-900/20">
                 <td className="p-4 font-semibold text-slate-200">Kullanıcı Limiti</td>
                 <td className="p-4">Maksimum 5 Kullanıcı</td>
-                <td className="p-4 font-semibold text-emerald-400">Maksimum 25 Kullanıcı (Limitsiz Destek)</td>
+                <td className="p-4 font-semibold text-emerald-400">{isEnterprisePlan ? 'Limitsiz Kullanıcı' : 'Maksimum 25 Kullanıcı'}</td>
               </tr>
               <tr className="hover:bg-slate-900/20">
                 <td className="p-4 font-semibold text-slate-200">Ürün Tanımı Limiti</td>
                 <td className="p-4">500 Ürün</td>
-                <td className="p-4 font-semibold text-emerald-400">5000 Ürün</td>
+                <td className="p-4 font-semibold text-emerald-400">{isEnterprisePlan ? 'Limitsiz Ürün' : '5000 Ürün'}</td>
               </tr>
               <tr className="hover:bg-slate-900/20">
                 <td className="p-4 font-semibold text-slate-200">Depo Sayısı</td>
                 <td className="p-4">Tek Depo</td>
-                <td className="p-4 font-semibold text-emerald-400">Çoklu Depo (5 Adet)</td>
+                <td className="p-4 font-semibold text-emerald-400">{isEnterprisePlan ? 'Çoklu Depo ve Kurumsal Operasyonlar' : 'Çoklu Depo'}</td>
               </tr>
               <tr className="hover:bg-slate-900/20">
                 <td className="p-4 font-semibold text-slate-200">Gelişmiş Stok Takibi</td>

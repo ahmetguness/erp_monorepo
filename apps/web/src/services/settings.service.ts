@@ -302,7 +302,7 @@ export async function updateCorporateSecuritySettings(data: CorporateSecuritySet
 }
 
 export async function generateScimToken(): Promise<{ token: string }> {
-  const res = await apiClient.post('/api/settings/scim/generate-token');
+  const res = await apiClient.post('/api/settings/security/scim/generate-token');
   return safeParse(SingleResponseSchema(z.object({ token: z.string() })), res.data, 'generateScimToken').data;
 }
 

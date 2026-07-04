@@ -1,5 +1,4 @@
 'use client';
-'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
