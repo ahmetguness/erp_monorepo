@@ -20,12 +20,16 @@ apiClient.interceptors.response.use(
       const parsed = ApiErrorSchema.safeParse(error.response.data);
       if (parsed.success) {
         if (error.response.status === 401 && typeof window !== 'undefined') {
+          const currentPath = `${window.location.pathname}${window.location.search}`;
+          document.cookie = 'axon_token=; path=/; max-age=0';
           // Store'u temizle ve login'e yönlendir
           // Dinamik import ile circular dependency'den kaçın
           import('@/store/auth.store').then(({ useAuthStore }) => {
             useAuthStore.getState().logout();
           }).catch(() => {});
-          window.location.replace('/login');
+          const loginUrl = new URL('/login', window.location.origin);
+          if (currentPath.startsWith('/dashboard')) loginUrl.searchParams.set('from', currentPath);
+          window.location.replace(loginUrl.toString());
         }
         return Promise.reject(parsed.data);
       }

@@ -17,6 +17,17 @@ interface CreateCurrencyDTO {
   defaultRate?: number; isBase?: boolean;
 }
 
+const KNOWN_CURRENCY_SYMBOLS: Readonly<Record<string, string>> = {
+  EUR: '\u20ac',
+  GBP: '\u00a3',
+  TRY: '\u20ba',
+  USD: '$',
+};
+
+function normalizeCurrencySymbol(code: string, symbol: string): string {
+  return KNOWN_CURRENCY_SYMBOLS[code.toUpperCase()] ?? symbol;
+}
+
 // ─────────────────────────────────────────────
 // Master Data Controller — Unit, Category, TaxRate, Currency
 // ─────────────────────────────────────────────
@@ -137,7 +148,12 @@ export const MasterDataController = {
   async listCurrencies(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const currencies = await prisma.currency.findMany({ where: { tenantId }, orderBy: { code: 'asc' } });
-    return c.json({ data: currencies });
+    return c.json({
+      data: currencies.map((currency) => ({
+        ...currency,
+        symbol: normalizeCurrencySymbol(currency.code, currency.symbol),
+      })),
+    });
   },
 
   async createCurrency(c: Context): Promise<Response> {
@@ -147,8 +163,20 @@ export const MasterDataController = {
     const existing = await prisma.currency.findUnique({ where: { tenantId_code: { tenantId, code: body.code } } });
     if (existing) return c.json(new ValidationError(`"${body.code}" para birimi zaten tanımlı.`).toJSON(), 400);
     const currency = await prisma.currency.create({
-      data: { tenantId, code: body.code, name: body.name, symbol: body.symbol, defaultRate: body.defaultRate ?? 1, isBase: body.isBase ?? false },
+      data: {
+        tenantId,
+        code: body.code,
+        name: body.name,
+        symbol: normalizeCurrencySymbol(body.code, body.symbol),
+        defaultRate: body.defaultRate ?? 1,
+        isBase: body.isBase ?? false,
+      },
     });
-    return c.json({ data: currency }, 201);
+    return c.json({
+      data: {
+        ...currency,
+        symbol: normalizeCurrencySymbol(currency.code, currency.symbol),
+      },
+    }, 201);
   },
 };

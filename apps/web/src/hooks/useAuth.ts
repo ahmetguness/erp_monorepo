@@ -24,7 +24,9 @@ export function useLogin() {
     onSuccess: (data, vars) => {
       storeLogin(data.user, data.tenant);
       toast.success(`Hoş geldiniz, ${data.user.name}`);
-      router.push('/dashboard');
+      const from = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('from') : null;
+      const target = from && from.startsWith('/') && !from.startsWith('//') ? from : '/dashboard';
+      router.push(target);
     },
     onError: (error: unknown) => {
       toast.error(getErrorMessage(error));

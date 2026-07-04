@@ -31,6 +31,17 @@ const currencySchema = z.object({
 
 type CurrencyForm = z.infer<typeof currencySchema>;
 
+const KNOWN_CURRENCY_SYMBOLS: Readonly<Record<string, string>> = {
+  EUR: '\u20ac',
+  GBP: '\u00a3',
+  TRY: '\u20ba',
+  USD: '$',
+};
+
+function currencySymbol(currency: Currency): string {
+  return KNOWN_CURRENCY_SYMBOLS[currency.code.toUpperCase()] ?? currency.symbol;
+}
+
 // ─────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────
@@ -52,7 +63,7 @@ export function CurrenciesManager() {
 
   const columns: ColumnDef<Currency>[] = [
     { key: 'code', header: 'Kod', width: '80px', render: (r) => <span className="font-mono font-semibold text-sky-400">{r.code}</span> },
-    { key: 'symbol', header: 'Sembol', width: '70px', render: (r) => <span className="text-slate-300">{r.symbol}</span> },
+    { key: 'symbol', header: 'Sembol', width: '70px', render: (r) => <span className="text-slate-300">{currencySymbol(r)}</span> },
     { key: 'name', header: 'Ad', render: (r) => <span className="text-slate-200">{r.name}</span> },
     {
       key: 'defaultRate', header: 'Kur', width: '120px', align: 'right',

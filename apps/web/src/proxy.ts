@@ -28,13 +28,15 @@ export function proxy(request: NextRequest): NextResponse {
   // Unauthenticated → redirect to login
   if (!isPublic && !token) {
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('from', pathname);
+    loginUrl.searchParams.set('from', `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(loginUrl);
   }
 
   // Already authenticated → redirect away from auth pages
   if (token && (pathname === '/login' || pathname === '/register')) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    const from = request.nextUrl.searchParams.get('from');
+    const target = from && from.startsWith('/') && !from.startsWith('//') ? from : '/dashboard';
+    return NextResponse.redirect(new URL(target, request.url));
   }
 
   return NextResponse.next();
