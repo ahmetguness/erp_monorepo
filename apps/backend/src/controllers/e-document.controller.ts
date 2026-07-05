@@ -32,11 +32,132 @@ interface UpdateEDocumentStatusDTO {
   responsePayload?: unknown;
 }
 
+type EDocumentCreditStatus = 'configured' | 'not_configured';
+
+interface EDocumentSummaryStatusCount {
+  status: EDocumentStatus;
+  count: number;
+}
+
+interface EDocumentSummary {
+  total: number;
+  pending: number;
+  sendingErrors: number;
+  accepted: number;
+  rejected: number;
+  creditBalance: number | null;
+  creditStatus: EDocumentCreditStatus;
+  statusCounts: EDocumentSummaryStatusCount[];
+  latestError: {
+    id: string;
+    status: EDocumentStatus;
+    providerMessage: string | null;
+    retryCount: number;
+    createdAt: string;
+  } | null;
+  generatedAt: string;
+}
+
+function parseCreditBalance(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+const E_DOCUMENT_STATUSES = [
+  EDocumentStatus.PENDING,
+  EDocumentStatus.PROCESSING,
+  EDocumentStatus.SENT,
+  EDocumentStatus.ACCEPTED,
+  EDocumentStatus.REJECTED,
+  EDocumentStatus.CANCELLED,
+  EDocumentStatus.ERROR,
+] as const;
+
 // ─────────────────────────────────────────────
 // E-Document Controller
 // ─────────────────────────────────────────────
 
 export const EDocumentController = {
+  async summary(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+
+    const [
+      total,
+      pendingCount,
+      processingCount,
+      sentCount,
+      acceptedCount,
+      rejectedCount,
+      cancelledCount,
+      errorCount,
+      creditSetting,
+      latestError,
+    ] = await prisma.$transaction([
+      prisma.eDocument.count({ where: { tenantId } }),
+      prisma.eDocument.count({ where: { tenantId, status: EDocumentStatus.PENDING } }),
+      prisma.eDocument.count({ where: { tenantId, status: EDocumentStatus.PROCESSING } }),
+      prisma.eDocument.count({ where: { tenantId, status: EDocumentStatus.SENT } }),
+      prisma.eDocument.count({ where: { tenantId, status: EDocumentStatus.ACCEPTED } }),
+      prisma.eDocument.count({ where: { tenantId, status: EDocumentStatus.REJECTED } }),
+      prisma.eDocument.count({ where: { tenantId, status: EDocumentStatus.CANCELLED } }),
+      prisma.eDocument.count({ where: { tenantId, status: EDocumentStatus.ERROR } }),
+      prisma.tenantSetting.findFirst({
+        where: {
+          tenantId,
+          key: { in: ['e_document_credit_balance', 'edocument_credit_balance', 'e_document_credits'] },
+          value: { not: '' },
+        },
+        select: { value: true },
+      }),
+      prisma.eDocument.findFirst({
+        where: {
+          tenantId,
+          status: { in: [EDocumentStatus.ERROR, EDocumentStatus.REJECTED] },
+        },
+        select: {
+          id: true,
+          status: true,
+          providerMessage: true,
+          retryCount: true,
+          createdAt: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+      }),
+    ]);
+
+    const statusCountMap: Record<(typeof E_DOCUMENT_STATUSES)[number], number> = {
+      [EDocumentStatus.PENDING]: pendingCount,
+      [EDocumentStatus.PROCESSING]: processingCount,
+      [EDocumentStatus.SENT]: sentCount,
+      [EDocumentStatus.ACCEPTED]: acceptedCount,
+      [EDocumentStatus.REJECTED]: rejectedCount,
+      [EDocumentStatus.CANCELLED]: cancelledCount,
+      [EDocumentStatus.ERROR]: errorCount,
+    };
+    const creditBalance = parseCreditBalance(creditSetting?.value);
+
+    const summary: EDocumentSummary = {
+      total,
+      pending: pendingCount + processingCount,
+      sendingErrors: errorCount + rejectedCount,
+      accepted: acceptedCount,
+      rejected: rejectedCount,
+      creditBalance,
+      creditStatus: creditBalance === null ? 'not_configured' : 'configured',
+      statusCounts: E_DOCUMENT_STATUSES.map((status) => ({ status, count: statusCountMap[status] })),
+      latestError: latestError
+        ? {
+            ...latestError,
+            createdAt: latestError.createdAt.toISOString(),
+          }
+        : null,
+      generatedAt: new Date().toISOString(),
+    };
+
+    return c.json({ data: summary });
+  },
+
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 

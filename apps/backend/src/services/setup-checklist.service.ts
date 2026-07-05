@@ -1,6 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 
-export type SetupChecklistItemKey = 'contacts' | 'products' | 'tax_rates' | 'currencies' | 'invoice_series';
+export type SetupChecklistItemKey =
+  | 'company_profile'
+  | 'tax_rates'
+  | 'currencies'
+  | 'invoice_series'
+  | 'products'
+  | 'contacts'
+  | 'data_quality';
 export type SetupChecklistSeverity = 'required' | 'recommended';
 
 export interface SetupChecklistItem {
@@ -28,11 +35,13 @@ export interface SetupChecklistStatus {
 }
 
 interface SetupChecklistCounts {
+  companyProfile: number;
   contacts: number;
   products: number;
   taxRates: number;
   currencies: number;
   invoiceSeries: number;
+  dataQuality: number;
 }
 
 function makeItem(
@@ -79,13 +88,22 @@ export class SetupChecklistService {
 
   private async getCounts(tenantId: string): Promise<SetupChecklistCounts> {
     const [
+      tenant,
       contacts,
       products,
       taxRates,
       currencies,
       invoiceSequences,
       invoicePrefixSettings,
+      contactsMissingTaxNumber,
+      productsWithoutMinStock,
+      productsMissingTaxRate,
+      negativeStockLevels,
     ] = await this.prisma.$transaction([
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { companyName: true, taxNumber: true, taxOffice: true, address: true, city: true },
+      }),
       this.prisma.contact.count({ where: { tenantId, deletedAt: null, isActive: true } }),
       this.prisma.product.count({ where: { tenantId, deletedAt: null, isActive: true } }),
       this.prisma.taxRate.count({ where: { tenantId, isActive: true, isWithholding: false } }),
@@ -104,34 +122,37 @@ export class SetupChecklistService {
           value: { not: '' },
         },
       }),
+      this.prisma.contact.count({
+        where: { tenantId, deletedAt: null, isActive: true, OR: [{ taxNumber: null }, { taxNumber: '' }] },
+      }),
+      this.prisma.product.count({ where: { tenantId, deletedAt: null, isActive: true, minStockLevel: { lte: 0 } } }),
+      this.prisma.product.count({ where: { tenantId, deletedAt: null, isActive: true, taxRateId: null } }),
+      this.prisma.stockLevel.count({ where: { tenantId, quantity: { lt: 0 } } }),
     ]);
 
+    const companyProfile = tenant?.companyName?.trim() && tenant.taxNumber?.trim() && tenant.taxOffice?.trim() && tenant.address?.trim() && tenant.city?.trim() ? 1 : 0;
+    const dataQualityIssueCount = contactsMissingTaxNumber + productsWithoutMinStock + productsMissingTaxRate + negativeStockLevels;
+
     return {
+      companyProfile,
       contacts,
       products,
       taxRates,
       currencies,
       invoiceSeries: invoiceSequences + invoicePrefixSettings,
+      dataQuality: dataQualityIssueCount === 0 && contacts > 0 && products > 0 ? 1 : 0,
     };
   }
 
   private buildItems(counts: SetupChecklistCounts): SetupChecklistItem[] {
     return [
       makeItem(
-        'contacts',
-        'Cari hesap',
-        'Ilk musteri veya tedarikci kartini olusturun.',
-        counts.contacts,
-        '/dashboard/contacts/new',
-        'Cari ekle',
-      ),
-      makeItem(
-        'products',
-        'Urun / hizmet',
-        'Fatura ve tekliflerde kullanilacak ilk urun veya hizmeti ekleyin.',
-        counts.products,
-        '/dashboard/products/new',
-        'Urun ekle',
+        'company_profile',
+        'Sirket bilgileri',
+        'Unvan, vergi bilgileri, adres ve sehir alanlarini tamamlayin.',
+        counts.companyProfile,
+        '/dashboard/settings/general',
+        'Sirket bilgilerini gir',
       ),
       makeItem(
         'tax_rates',
@@ -151,12 +172,35 @@ export class SetupChecklistService {
       ),
       makeItem(
         'invoice_series',
-        'Fatura seri ayari',
-        'Otomatik fatura numarasi icin seri ve prefix ayarini hazirlayin.',
+        'Fatura prefixi',
+        'Otomatik fatura numarasi icin prefix ve seri ayarini hazirlayin.',
         counts.invoiceSeries,
         '/dashboard/settings/general',
-        'Seri ayarla',
-        'recommended',
+        'Prefix ayarla',
+      ),
+      makeItem(
+        'products',
+        'Ilk urun',
+        'Fatura ve tekliflerde kullanilacak ilk urun veya hizmeti ekleyin.',
+        counts.products,
+        '/dashboard/products/new',
+        'Urun ekle',
+      ),
+      makeItem(
+        'contacts',
+        'Ilk cari hesap',
+        'Ilk musteri veya tedarikci kartini olusturun.',
+        counts.contacts,
+        '/dashboard/contacts/new',
+        'Cari ekle',
+      ),
+      makeItem(
+        'data_quality',
+        'Veri kalite kontrolu',
+        'Eksik vergi no, KDV, minimum stok ve eksi stok kontrollerini temizleyin.',
+        counts.dataQuality,
+        '/dashboard',
+        'Kalite skorunu incele',
       ),
     ];
   }

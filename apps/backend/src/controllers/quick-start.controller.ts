@@ -12,6 +12,7 @@ interface QuickStartDTO {
   city?: string;
   warehouseName: string;
   currencyCode: string; // e.g. "TRY"
+  invoicePrefix: string;
   firstProductCode: string;
   firstProductName: string;
   firstProductPrice: number;
@@ -19,6 +20,7 @@ interface QuickStartDTO {
   firstContactName: string;
   firstContactCode: string;
   firstContactType: 'CUSTOMER' | 'SUPPLIER' | 'BOTH';
+  firstContactTaxNumber: string;
   firstContactEmail?: string;
   firstContactPhone?: string;
 }
@@ -42,8 +44,9 @@ export const QuickStartController = {
     const taxOffice = optionalText(body.taxOffice);
     const address = optionalText(body.address);
     const city = optionalText(body.city);
+    const invoicePrefix = optionalText(body.invoicePrefix)?.toLocaleUpperCase('tr-TR') ?? null;
 
-    if (!body.companyName?.trim() || !taxOffice || !taxNumber || !address || !city || !body.warehouseName?.trim() || !body.currencyCode?.trim() || !body.firstProductCode?.trim() || !body.firstProductName?.trim() || !body.firstContactName?.trim() || !body.firstContactCode?.trim()) {
+    if (!body.companyName?.trim() || !taxOffice || !taxNumber || !address || !city || !body.warehouseName?.trim() || !body.currencyCode?.trim() || !invoicePrefix || !body.firstProductCode?.trim() || !body.firstProductName?.trim() || !body.firstContactName?.trim() || !body.firstContactCode?.trim() || !body.firstContactTaxNumber?.trim()) {
       throw new ValidationError('Şirket adı, vergi bilgileri, adres, şehir, depo adı, para birimi, ürün bilgileri ve cari bilgileri zorunludur.', {
         ...(!body.companyName?.trim() && { companyName: 'Şirket adı zorunludur.' }),
         ...(!taxOffice && { taxOffice: 'Vergi dairesi zorunludur.' }),
@@ -52,6 +55,7 @@ export const QuickStartController = {
         ...(!city && { city: 'Şehir zorunludur.' }),
         ...(!body.warehouseName?.trim() && { warehouseName: 'Depo adı zorunludur.' }),
         ...(!body.currencyCode?.trim() && { currencyCode: 'Para birimi zorunludur.' }),
+        ...(!invoicePrefix && { invoicePrefix: 'Fatura prefixi zorunludur.' }),
         ...(!body.firstProductCode?.trim() && { firstProductCode: 'Ürün kodu zorunludur.' }),
         ...(!body.firstProductName?.trim() && { firstProductName: 'Ürün adı zorunludur.' }),
         ...(!body.firstContactCode?.trim() && { firstContactCode: 'Cari kodu zorunludur.' }),
@@ -98,6 +102,18 @@ export const QuickStartController = {
         update: {
           isBase: true,
         },
+      });
+
+      await tx.numberSequence.upsert({
+        where: { tenantId_module: { tenantId, module: 'invoice' } },
+        create: { tenantId, module: 'invoice', prefix: invoicePrefix, lastNum: 0, padding: 6 },
+        update: { prefix: invoicePrefix, padding: 6 },
+      });
+
+      await tx.tenantSetting.upsert({
+        where: { tenantId_key: { tenantId, key: 'invoice_prefix' } },
+        create: { tenantId, key: 'invoice_prefix', value: invoicePrefix },
+        update: { value: invoicePrefix },
       });
 
       // Seed standard tax rates if they do not exist
@@ -163,6 +179,7 @@ export const QuickStartController = {
           name: body.firstProductName.trim(),
           salesPrice: body.firstProductPrice,
           purchasePrice: body.firstProductPrice * 0.7,
+          minStockLevel: 1,
           unitId: unit.id,
           taxRateId: firstTaxRateId,
           costingMethod: 'MOVING_AVERAGE',
@@ -172,6 +189,7 @@ export const QuickStartController = {
           name: body.firstProductName.trim(),
           salesPrice: body.firstProductPrice,
           purchasePrice: body.firstProductPrice * 0.7,
+          minStockLevel: 1,
           unitId: unit.id,
           taxRateId: firstTaxRateId,
           costingMethod: 'MOVING_AVERAGE',
@@ -188,6 +206,8 @@ export const QuickStartController = {
           code: body.firstContactCode.trim(),
           name: body.firstContactName.trim(),
           type: body.firstContactType,
+          taxNumber: body.firstContactTaxNumber.trim(),
+          taxOffice,
           email: optionalText(body.firstContactEmail),
           phone: optionalText(body.firstContactPhone),
           isActive: true,
@@ -195,6 +215,8 @@ export const QuickStartController = {
         update: {
           name: body.firstContactName.trim(),
           type: body.firstContactType,
+          taxNumber: body.firstContactTaxNumber.trim(),
+          taxOffice,
           email: optionalText(body.firstContactEmail),
           phone: optionalText(body.firstContactPhone),
           isActive: true,
@@ -209,7 +231,7 @@ export const QuickStartController = {
         update: { value: 'true' },
       });
 
-      return { product, contact, warehouse, currency };
+      return { product, contact, warehouse, currency, invoicePrefix };
     });
 
     return c.json({ success: true, data: result });
@@ -235,8 +257,12 @@ export const QuickStartController = {
 
       // 2. Sequence reset
       await tx.numberSequence.updateMany({
-        where: { tenantId },
+        where: { tenantId, module: { notIn: ['invoice', 'INVOICE'] } },
         data: { lastNum: 0 },
+      });
+
+      await tx.numberSequence.deleteMany({
+        where: { tenantId, module: { in: ['invoice', 'INVOICE'] } },
       });
 
       // 3. Clear master files so we reset onboarding
@@ -248,7 +274,7 @@ export const QuickStartController = {
 
       // 4. Remove onboarding status
       await tx.tenantSetting.deleteMany({
-        where: { tenantId, key: 'wizard_completed' },
+        where: { tenantId, key: { in: ['wizard_completed', 'invoice_prefix'] } },
       });
     });
 

@@ -200,11 +200,34 @@ const CollectionListSchema = SingleResponseSchema(z.object({
   summary: z.object({ totalCollected: z.coerce.number(), count: z.coerce.number() }),
 }));
 
+const TopProductsSchema = SingleResponseSchema(z.object({
+  period: z.object({ from: z.string(), to: z.string() }),
+  products: z.array(z.object({
+    productId: z.string(),
+    productCode: z.string(),
+    productName: z.string(),
+    quantity: z.coerce.number(),
+    revenue: z.coerce.number(),
+    invoiceCount: z.coerce.number(),
+  })),
+  summary: z.object({
+    count: z.coerce.number(),
+    totalQuantity: z.coerce.number(),
+    totalRevenue: z.coerce.number(),
+  }),
+}));
+
 export type CollectionList = z.infer<typeof CollectionListSchema>['data'];
+export type TopProducts = z.infer<typeof TopProductsSchema>['data'];
 
 export async function getCollectionList(dateFrom?: string, dateTo?: string): Promise<CollectionList> {
   const res = await apiClient.get('/api/reports/collection-list', { params: { dateFrom, dateTo } });
   return safeParse(CollectionListSchema, res.data, 'getCollectionList').data;
+}
+
+export async function getTopProducts(dateFrom: string, dateTo: string, limit = 10): Promise<TopProducts> {
+  const res = await apiClient.get('/api/reports/top-products', { params: { dateFrom, dateTo, limit } });
+  return safeParse(TopProductsSchema, res.data, 'getTopProducts').data;
 }
 
 export const CashflowForecastSchema = z.object({

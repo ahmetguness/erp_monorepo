@@ -138,7 +138,7 @@ export const SecurityHardeningSnapshotSchema = z.object({
 });
 
 export const SetupChecklistItemSchema = z.object({
-  key: z.enum(['contacts', 'products', 'tax_rates', 'currencies', 'invoice_series']),
+  key: z.enum(['company_profile', 'tax_rates', 'currencies', 'invoice_series', 'products', 'contacts', 'data_quality']),
   label: z.string(),
   description: z.string(),
   completed: z.boolean(),
@@ -252,6 +252,7 @@ export interface QuickStartDTO {
   city?: string;
   warehouseName: string;
   currencyCode: string;
+  invoicePrefix: string;
   firstProductCode: string;
   firstProductName: string;
   firstProductPrice: number;
@@ -259,6 +260,7 @@ export interface QuickStartDTO {
   firstContactName: string;
   firstContactCode: string;
   firstContactType: 'CUSTOMER' | 'SUPPLIER' | 'BOTH';
+  firstContactTaxNumber: string;
   firstContactEmail?: string;
   firstContactPhone?: string;
 }

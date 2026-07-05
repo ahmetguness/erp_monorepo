@@ -43,14 +43,42 @@ export function StarterHealthScoreCard({ enabled = true }: StarterHealthScoreCar
   const issues = data?.issues ?? [];
   const tone = getScoreTone(score);
 
-  // Define the standard checks so that we display all three checks even if there are 0 issues
+  // Keep the visible checklist stable even when a check has no active issue.
   const allChecks = [
+    {
+      key: 'missing_invoice_prefix',
+      label: 'Fatura Prefixi',
+      defaultDescription: 'Otomatik fatura numarasi icin prefix ve seri ayari hazir.',
+      href: '/dashboard/settings/general',
+      actionLabel: 'Ayarlari Gor',
+    },
     {
       key: 'missing_tax_rate',
       label: 'Ürün KDV Tanımları',
       defaultDescription: 'Tüm aktif ürünlerinizde KDV oranı tanımlanmış durumda.',
       href: '/dashboard/products',
       actionLabel: 'Ürünleri Gör',
+    },
+    {
+      key: 'missing_contact_tax_number',
+      label: 'Cari Vergi Bilgisi',
+      defaultDescription: 'Aktif carilerde temel vergi bilgileri tamamlanmis durumda.',
+      href: '/dashboard/contacts',
+      actionLabel: 'Carileri Gor',
+    },
+    {
+      key: 'missing_min_stock',
+      label: 'Minimum Stok',
+      defaultDescription: 'Aktif urunlerde minimum stok esikleri tanimli.',
+      href: '/dashboard/products',
+      actionLabel: 'Urunleri Gor',
+    },
+    {
+      key: 'missing_cash_bank_account',
+      label: 'Kasa/Banka Hesabi',
+      defaultDescription: 'Aktif kasa veya banka hesabi tanimli.',
+      href: '/dashboard/payments/cash-accounts',
+      actionLabel: 'Hesaplari Gor',
     },
     {
       key: 'negative_stock',
@@ -111,7 +139,7 @@ export function StarterHealthScoreCard({ enabled = true }: StarterHealthScoreCar
           </div>
 
           {/* Checklist of Issues */}
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {allChecks.map((check) => {
               const activeIssue = issues.find((issue) => issue.key === check.key);
               const hasIssue = !!activeIssue;

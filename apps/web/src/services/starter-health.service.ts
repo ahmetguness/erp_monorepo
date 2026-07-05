@@ -6,7 +6,15 @@ import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema } from '@/types/api.types';
 
 export const StarterHealthIssueSchema = z.object({
-  key: z.enum(['missing_tax_rate', 'negative_stock', 'overdue_invoice']),
+  key: z.enum([
+    'missing_tax_rate',
+    'negative_stock',
+    'overdue_invoice',
+    'missing_contact_tax_number',
+    'missing_min_stock',
+    'missing_invoice_prefix',
+    'missing_cash_bank_account',
+  ]),
   title: z.string(),
   description: z.string(),
   count: z.coerce.number(),

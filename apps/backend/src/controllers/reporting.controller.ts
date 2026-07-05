@@ -6,6 +6,22 @@ import { requireTenantId, requireUserId, requireParam } from '../utils/context.j
 import { ReportingBuilderService, isKpiConfig, normalizeKpiConfig } from '../services/reporting-builder.service';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
+interface TopSellingProductRow {
+  productId: string;
+  productCode: string;
+  productName: string;
+  quantity: number;
+  revenue: number;
+  invoiceCount: number;
+}
+
+function parseReportLimit(value: string | undefined, fallback: number, max: number): number {
+  if (!value) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.min(parsed, max);
+}
+
 // ─────────────────────────────────────────────
 // DTOs
 // ─────────────────────────────────────────────
@@ -253,6 +269,97 @@ export const ReportingController = {
         summary: {
           totalCollected,
           count: payments.length,
+        },
+      },
+    });
+  },
+
+  async topProducts(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const query = {
+      dateFrom: c.req.query('dateFrom'),
+      dateTo: c.req.query('dateTo'),
+      limit: c.req.query('limit'),
+    };
+
+    if (!query.dateFrom || !query.dateTo) {
+      return c.json(
+        new ValidationError('dateFrom ve dateTo parametreleri zorunludur.').toJSON(),
+        400,
+      );
+    }
+
+    const limit = parseReportLimit(query.limit, 10, 50);
+    const lines = await prisma.invoiceLine.findMany({
+      where: {
+        tenantId,
+        productId: { not: null },
+        invoice: {
+          tenantId,
+          type: InvoiceType.SALES,
+          status: { not: InvoiceStatus.CANCELLED },
+          deletedAt: null,
+          date: { gte: new Date(query.dateFrom), lte: new Date(query.dateTo) },
+        },
+      },
+      select: {
+        productId: true,
+        quantity: true,
+        lineTotal: true,
+        invoiceId: true,
+        product: { select: { id: true, code: true, name: true } },
+      },
+    });
+
+    const productMap = new Map<string, TopSellingProductRow & { invoiceIds: Set<string> }>();
+
+    for (const line of lines) {
+      const product = line.product;
+      if (!product || !line.productId) continue;
+
+      const current = productMap.get(product.id) ?? {
+        productId: product.id,
+        productCode: product.code,
+        productName: product.name,
+        quantity: 0,
+        revenue: 0,
+        invoiceCount: 0,
+        invoiceIds: new Set<string>(),
+      };
+
+      current.quantity += Number(line.quantity);
+      current.revenue += Number(line.lineTotal);
+      current.invoiceIds.add(line.invoiceId);
+      current.invoiceCount = current.invoiceIds.size;
+      productMap.set(product.id, current);
+    }
+
+    const products = Array.from(productMap.values())
+      .map((product) => ({
+        productId: product.productId,
+        productCode: product.productCode,
+        productName: product.productName,
+        quantity: product.quantity,
+        revenue: product.revenue,
+        invoiceCount: product.invoiceCount,
+      }))
+      .sort((left, right) => {
+        if (right.quantity !== left.quantity) return right.quantity - left.quantity;
+        return right.revenue - left.revenue;
+      })
+      .slice(0, limit);
+
+    const totalQuantity = products.reduce((sum, product) => sum + product.quantity, 0);
+    const totalRevenue = products.reduce((sum, product) => sum + product.revenue, 0);
+
+    return c.json({
+      data: {
+        period: { from: query.dateFrom, to: query.dateTo },
+        products,
+        summary: {
+          count: products.length,
+          totalQuantity,
+          totalRevenue,
         },
       },
     });

@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { CustomerTrackingPanel } from "@/components/features/contacts/CustomerTrackingPanel";
+import { StarterCsvImportWizard } from "@/components/shared/StarterCsvImportWizard";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useBulkSelection } from "@/hooks/useBulkSelection";
 import { useContacts } from "@/hooks/useContacts";
@@ -457,6 +458,8 @@ export function ContactsListPage() {
           </div>
         }
       />
+
+      <StarterCsvImportWizard entity="contacts" />
 
       <CustomerTrackingPanel />
 

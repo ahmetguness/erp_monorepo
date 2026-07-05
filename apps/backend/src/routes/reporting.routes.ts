@@ -17,6 +17,7 @@ reportingRoutes.get('/expense-summary', requirePermission('reporting', 'READ'), 
 reportingRoutes.get('/stock-summary', requirePermission('reporting', 'READ'), ReportingController.stockSummary);
 reportingRoutes.get('/contact-balance', requirePermission('reporting', 'READ'), ReportingController.contactBalance);
 reportingRoutes.get('/collection-list', requirePermission('reporting', 'READ'), ReportingController.collectionList);
+reportingRoutes.get('/top-products', requirePermission('reporting', 'READ'), ReportingController.topProducts);
 reportingRoutes.get('/cashflow-forecast', requireAccess(ACCESS_POLICIES.cashflowForecast), requirePermission('reporting', 'READ'), ReportingController.cashflowForecast);
 
 reportingRoutes.get('/registry', requireFeature(FeatureKey.CUSTOM_REPORTING), requirePermission('reporting', 'READ'), ReportingBuilderController.registry);

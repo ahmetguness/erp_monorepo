@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, CheckCircle2, PackageX } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, PackageX, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useStockAlerts } from '@/hooks/useStock';
 import { cn } from '@/lib/utils';
@@ -15,7 +15,15 @@ function formatQuantity(value: number): string {
 }
 
 function severityLabel(item: StockAlertItem): string {
-  return item.severity === 'OUT_OF_STOCK' ? 'Stok yok' : 'Minimum alti';
+  if (item.severity === 'OUT_OF_STOCK') return 'Stok yok';
+  if (item.severity === 'RUNNING_OUT') return 'Bitmek uzere';
+  return 'Minimum alti';
+}
+
+function severityClass(item: StockAlertItem): string {
+  if (item.severity === 'OUT_OF_STOCK') return 'bg-red-500/10 text-red-300';
+  if (item.severity === 'RUNNING_OUT') return 'bg-sky-500/10 text-sky-300';
+  return 'bg-amber-500/10 text-amber-300';
 }
 
 export function StockAlertDashboardCard({ enabled }: StockAlertDashboardCardProps) {
@@ -40,10 +48,13 @@ export function StockAlertDashboardCard({ enabled }: StockAlertDashboardCardProp
             {hasAlerts ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-slate-100">Basit stok alarmi</h2>
+            <h2 className="text-sm font-semibold text-slate-100">Akilli stok uyarilari</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              Urun bazinda toplam stok, minimum stok esigi ile karsilastirilir.
+              Tek depo stoklari minimum esik, bitis riski ve satis hizina gore izlenir.
             </p>
+            {data?.summary.singleWarehouse && data.summary.warehouseName && (
+              <p className="mt-1 text-[11px] text-slate-600">Depo: {data.summary.warehouseName}</p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -63,6 +74,22 @@ export function StockAlertDashboardCard({ enabled }: StockAlertDashboardCardProp
       </div>
 
       <div className="mt-4">
+        {!isLoading && hasAlerts && data && (
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            <div className="rounded-lg border border-red-500/10 bg-red-500/[0.04] px-3 py-2">
+              <p className="text-[10px] text-red-300">Stok yok</p>
+              <p className="mt-1 text-base font-semibold text-red-200">{data.summary.outOfStockCount}</p>
+            </div>
+            <div className="rounded-lg border border-amber-500/10 bg-amber-500/[0.04] px-3 py-2">
+              <p className="text-[10px] text-amber-300">Min. alti</p>
+              <p className="mt-1 text-base font-semibold text-amber-200">{data.summary.lowStockCount}</p>
+            </div>
+            <div className="rounded-lg border border-sky-500/10 bg-sky-500/[0.04] px-3 py-2">
+              <p className="text-[10px] text-sky-300">Bitiyor</p>
+              <p className="mt-1 text-base font-semibold text-sky-200">{data.summary.runningOutCount}</p>
+            </div>
+          </div>
+        )}
         {isLoading ? (
           <div className="grid gap-2 md:grid-cols-3">
             {[1, 2, 3].map((item) => <div key={item} className="h-16 animate-pulse rounded-xl bg-slate-800/60" />)}
@@ -82,7 +109,7 @@ export function StockAlertDashboardCard({ enabled }: StockAlertDashboardCardProp
                   </div>
                   <span className={cn(
                     'shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold',
-                    item.severity === 'OUT_OF_STOCK' ? 'bg-red-500/10 text-red-300' : 'bg-amber-500/10 text-amber-300',
+                    severityClass(item),
                   )}>
                     {severityLabel(item)}
                   </span>
@@ -94,13 +121,35 @@ export function StockAlertDashboardCard({ enabled }: StockAlertDashboardCardProp
                   </p>
                   <p className="text-xs text-amber-200">Min {formatQuantity(item.minStockLevel)}</p>
                 </div>
+                <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950/50 px-2 py-2">
+                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="inline-flex items-center gap-1 text-slate-500">
+                      <TrendingUp className="h-3 w-3" />
+                      Gunluk satis
+                    </span>
+                    <span className="font-mono text-slate-300">{formatQuantity(item.dailySalesVelocity)}</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
+                    <span className="text-slate-500">Tahmini bitis</span>
+                    <span className="font-mono text-slate-300">
+                      {item.estimatedDaysToStockout === null ? '-' : `${item.estimatedDaysToStockout} gun`}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
+                    <span className="text-slate-500">Siparis onerisi</span>
+                    <span className="font-mono font-semibold text-emerald-300">
+                      {formatQuantity(item.reorderSuggestedQuantity)}
+                      {item.unitCode ? ` ${item.unitCode}` : ''}
+                    </span>
+                  </div>
+                </div>
               </Link>
             ))}
           </div>
         ) : (
           <div className="flex items-center gap-2 rounded-xl border border-emerald-500/10 bg-emerald-500/[0.04] px-3 py-3 text-sm text-emerald-200">
             <PackageX className="h-4 w-4" />
-            Minimum stok altinda urun yok.
+            Minimum stok altinda veya bitmek uzere olan urun yok.
           </div>
         )}
       </div>

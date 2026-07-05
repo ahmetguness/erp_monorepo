@@ -25,6 +25,30 @@ export type EDocument = z.infer<typeof EDocumentSchema>;
 export type EDocumentType = EDocument['type'];
 export type EDocumentStatus = EDocument['status'];
 
+export const EDocumentSummarySchema = z.object({
+  total: z.coerce.number(),
+  pending: z.coerce.number(),
+  sendingErrors: z.coerce.number(),
+  accepted: z.coerce.number(),
+  rejected: z.coerce.number(),
+  creditBalance: z.coerce.number().nullable(),
+  creditStatus: z.enum(['configured', 'not_configured']),
+  statusCounts: z.array(z.object({
+    status: EDocumentSchema.shape.status,
+    count: z.coerce.number(),
+  })),
+  latestError: z.object({
+    id: z.string(),
+    status: EDocumentSchema.shape.status,
+    providerMessage: z.string().nullable(),
+    retryCount: z.coerce.number(),
+    createdAt: z.string(),
+  }).nullable(),
+  generatedAt: z.string(),
+});
+
+export type EDocumentSummary = z.infer<typeof EDocumentSummarySchema>;
+
 export interface CreateEDocumentDTO {
   invoiceId?: string; deliveryNoteId?: string;
   type: EDocumentType; uuid?: string; providerCode?: string;
@@ -35,6 +59,11 @@ export interface ListParams extends PaginationParams { type?: string; status?: s
 export async function getEDocuments(params: ListParams) {
   const res = await apiClient.get('/api/e-documents', { params });
   return safeParse(PaginatedResponseSchema(EDocumentSchema), res.data, 'getEDocuments');
+}
+
+export async function getEDocumentSummary(): Promise<EDocumentSummary> {
+  const res = await apiClient.get('/api/e-documents/summary');
+  return safeParse(SingleResponseSchema(EDocumentSummarySchema), res.data, 'getEDocumentSummary').data;
 }
 
 export async function getEDocumentById(id: string): Promise<EDocument> {

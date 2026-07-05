@@ -17,7 +17,7 @@ import { Select } from "@/components/ui/Select";
 import Link from "next/link";
 import type { Product } from "@/services/product.service";
 import { getSavedViewFilterString } from "@/services/saved-view.service";
-import { ProductQuickImportWizard } from "@/components/features/products/ProductQuickImportWizard";
+import { StarterCsvImportWizard } from "@/components/shared/StarterCsvImportWizard";
 
 type ActiveFilter = "" | "true" | "false";
 interface ProductListFilters extends ListFilterState {
@@ -157,7 +157,7 @@ export function ProductsListPage() {
         }
       />
 
-      <ProductQuickImportWizard />
+      <StarterCsvImportWizard entity="products" />
 
       <div className="flex flex-wrap gap-3 mb-4">
         <SearchInput

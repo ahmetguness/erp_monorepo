@@ -44,6 +44,7 @@ import { SalesTargetCard } from "@/components/features/sales/SalesTargetCard";
 import { StockAlertDashboardCard } from "@/components/features/stock/StockAlertDashboardCard";
 import { SetupChecklistCard } from "@/components/features/settings/SetupChecklistCard";
 import { StarterHealthScoreCard } from "@/components/features/dashboard/StarterHealthScoreCard";
+import { StarterEDocumentControlCard } from "@/components/features/dashboard/StarterEDocumentControlCard";
 
 /* ── Types ──────────────────────────────────── */
 
@@ -347,6 +348,7 @@ export function DashboardOverview() {
 
       <SetupChecklistCard enabled={canReadSettings} compact />
       <StarterHealthScoreCard enabled={isStarter} />
+      <StarterEDocumentControlCard enabled={isStarter && canReadInvoicing} />
 
       {pinnedKpis.length > 0 && (
         <Card>

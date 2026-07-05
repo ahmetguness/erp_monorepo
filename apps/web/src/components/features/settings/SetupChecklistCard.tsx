@@ -30,7 +30,7 @@ export function SetupChecklistCard({ enabled = true, compact = false }: SetupChe
   const items = data?.items ?? [];
   const summary = data?.summary;
   const completed = summary?.completed ?? 0;
-  const total = summary?.total ?? 5;
+  const total = summary?.total ?? 7;
   const percent = summary?.percent ?? 0;
   const finished = summary ? summary.remaining === 0 : false;
 
@@ -43,7 +43,7 @@ export function SetupChecklistCard({ enabled = true, compact = false }: SetupChe
           </div>
           <div>
             <h2 className="text-sm font-semibold text-slate-100">Kurulum kontrol listesi</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Cari, urun, vergi, para birimi ve fatura seri hazirligi</p>
+            <p className="mt-0.5 text-xs text-slate-500">Sirket, vergi, para birimi, fatura prefixi, ilk urun, ilk cari ve veri kalite hazirligi</p>
           </div>
         </div>
         <div className="min-w-36">
@@ -63,7 +63,7 @@ export function SetupChecklistCard({ enabled = true, compact = false }: SetupChe
       {isLoading ? (
         <div className="px-5 py-6 text-sm text-slate-500">Kurulum durumu yukleniyor...</div>
       ) : (
-        <div className={cn('grid gap-2 p-4', compact ? 'lg:grid-cols-5' : 'md:grid-cols-2 xl:grid-cols-5')}>
+        <div className={cn('grid gap-2 p-4', compact ? 'lg:grid-cols-7' : 'md:grid-cols-2 xl:grid-cols-4')}>
           {items.map((item) => (
             <Link
               key={item.key}

@@ -8,6 +8,7 @@ const eDocumentRoutes = new Hono();
 
 eDocumentRoutes.use('*', requireAccess(ACCESS_POLICIES.eDocuments));
 
+eDocumentRoutes.get('/summary', requirePermission('invoicing', 'READ'), EDocumentController.summary);
 eDocumentRoutes.get('/', requirePermission('invoicing', 'READ'), EDocumentController.list);
 eDocumentRoutes.get('/:id', requirePermission('invoicing', 'READ'), EDocumentController.getById);
 eDocumentRoutes.post('/', requirePermission('invoicing', 'CREATE'), EDocumentController.create);

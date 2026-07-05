@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, Pin, Save, Trash2, TrendingDown, TrendingUp, Package, Users, Coins, BarChart3, Lock, Share2, Mail, Calendar, Shield } from 'lucide-react';
+import { Download, Pin, Save, Trash2, TrendingDown, TrendingUp, Package, Users, Coins, BarChart3, Lock, Share2, Mail, Calendar, Shield, Trophy, type LucideIcon } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { CashflowForecastPanel } from './CashflowForecastPanel';
@@ -21,7 +21,7 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   getRevenueSummary, getExpenseSummary, getStockSummary, getContactBalance,
   getSavedReports, deleteSavedReport, createSavedReport, getReportingRegistry, previewKpi, recordSavedReportExportAudit,
-  getCollectionList, updateSavedReport,
+  getCollectionList, getTopProducts, updateSavedReport,
   KpiReportConfigSchema,
   type KpiPreview,
   type KpiReportConfig,
@@ -29,6 +29,7 @@ import {
   type CollectionList,
   type StockSummary,
   type ContactBalance,
+  type TopProducts,
 } from '@/services/reporting.service';
 import { cn, formatCurrency, formatDate, todayInputDate } from '@/lib/utils';
 
@@ -88,6 +89,21 @@ function parseKpiConfig(value: Record<string, unknown>): KpiReportConfig | null 
 type CollectionPaymentItem = CollectionList['payments'][number];
 type StockReportItem = StockSummary['belowMinStock'][number];
 type ContactReportItem = ContactBalance['contacts'][number];
+type TopProductItem = TopProducts['products'][number];
+type ReportTab = 'overview' | 'collections' | 'stock' | 'contacts' | 'topProducts' | 'cashflow';
+type PreparedReportTab = Extract<ReportTab, 'overview' | 'collections' | 'stock' | 'topProducts'>;
+
+const PREPARED_REPORT_TEMPLATES: Array<{
+  id: PreparedReportTab;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+}> = [
+  { id: 'overview', label: 'Aylik satis', description: 'Secili donemdeki satis, gider ve net sonuc ozeti.', icon: BarChart3 },
+  { id: 'collections', label: 'Tahsilat listesi', description: 'Tarih araligindaki tahsilat hareketleri.', icon: Coins },
+  { id: 'stock', label: 'Stok kritik seviye', description: 'Minimum seviyenin altindaki urunler.', icon: Package },
+  { id: 'topProducts', label: 'En cok satan urunler', description: 'Satis miktarina gore ilk urunler.', icon: Trophy },
+];
 
 // ─────────────────────────────────────────────
 // Reports Page
@@ -105,7 +121,7 @@ export function ReportsPage() {
   const [kpiName, setKpiName] = useState('Aylık satış geliri');
   const [kpiConfig, setKpiConfig] = useState<KpiReportConfig>(DEFAULT_KPI_CONFIG);
   const [kpiPreview, setKpiPreview] = useState<KpiPreview | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'collections' | 'stock' | 'contacts' | 'cashflow'>('overview');
+  const [activeTab, setActiveTab] = useState<ReportTab>('overview');
 
   const [shareTarget, setShareTarget] = useState<SavedReport | null>(null);
   const [shareRoles, setShareRoles] = useState<string[]>([]);
@@ -154,6 +170,12 @@ export function ReportsPage() {
   const { data: collectionList, isLoading: loadingCollections } = useQuery({
     queryKey: ['reports', 'collections', dateFrom, dateTo],
     queryFn: () => getCollectionList(dateFrom, dateTo),
+    enabled: !!dateFrom && !!dateTo,
+  });
+
+  const { data: topProducts, isLoading: loadingTopProducts } = useQuery({
+    queryKey: ['reports', 'top-products', dateFrom, dateTo],
+    queryFn: () => getTopProducts(dateFrom, dateTo, 10),
     enabled: !!dateFrom && !!dateTo,
   });
 
@@ -320,6 +342,32 @@ export function ReportsPage() {
     },
   ];
 
+  const topProductsColumns: ColumnDef<TopProductItem>[] = [
+    { key: 'productCode', header: 'Urun Kodu', width: '120px', render: (r) => <span className="font-mono text-slate-400 text-xs">{r.productCode}</span> },
+    { key: 'productName', header: 'Urun Adi', render: (r) => <span className="text-slate-200 font-medium">{r.productName}</span> },
+    {
+      key: 'quantity',
+      header: 'Satis Miktari',
+      width: '140px',
+      align: 'right',
+      render: (r) => <span className="font-mono font-bold text-sky-400">{r.quantity}</span>,
+    },
+    {
+      key: 'revenue',
+      header: 'Satis Tutari',
+      width: '150px',
+      align: 'right',
+      render: (r) => <span className="font-mono font-bold text-emerald-400">{formatCurrency(r.revenue)}</span>,
+    },
+    {
+      key: 'invoiceCount',
+      header: 'Fatura',
+      width: '100px',
+      align: 'right',
+      render: (r) => <span className="font-mono text-slate-400 text-xs">{r.invoiceCount}</span>,
+    },
+  ];
+
   const contactReportColumns: ColumnDef<ContactReportItem>[] = [
     { key: 'code', header: 'Cari Kodu', width: '120px', render: (r) => <span className="font-mono text-slate-400 text-xs">{r.code ?? '—'}</span> },
     { key: 'name', header: 'Cari Adı', render: (r) => <span className="text-slate-200 font-medium">{r.name}</span> },
@@ -347,25 +395,68 @@ export function ReportsPage() {
   ];
 
   const profit = (revenue?.totalGross ?? 0) - (expense?.totalGross ?? 0);
+  const reportTabs: Array<{ id: ReportTab; label: string; icon: LucideIcon; locked: boolean }> = [
+    { id: 'overview', label: 'Finansal Ozet', icon: BarChart3, locked: false },
+    { id: 'collections', label: 'Tahsilat Listesi', icon: Coins, locked: false },
+    { id: 'stock', label: 'Kritik Stok Raporu', icon: Package, locked: false },
+    { id: 'topProducts', label: 'En Cok Satanlar', icon: Trophy, locked: false },
+    { id: 'contacts', label: 'Cari Bakiye Raporu', icon: Users, locked: false },
+    { id: 'cashflow', label: 'Nakit Akis Tahmini', icon: Coins, locked: isStarter },
+  ];
 
   return (
     <div className="space-y-6">
       <PageHeader title="Raporlar" subtitle="İşletmenizin finansal ve operasyonel özetleri." />
 
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Hazir rapor sablonlari</h2>
+            <p className="text-xs text-slate-500">Starter icin duzenlenemeyen, dogrudan kullanilabilen temel raporlar.</p>
+          </div>
+          <span className="inline-flex w-fit items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-400">
+            <Shield className="h-3.5 w-3.5" />
+            Salt okunur
+          </span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {PREPARED_REPORT_TEMPLATES.map((template) => {
+            const Icon = template.icon;
+            const isActive = activeTab === template.id;
+            return (
+              <button
+                key={template.id}
+                type="button"
+                onClick={() => setActiveTab(template.id)}
+                className={cn(
+                  'min-h-[112px] rounded-lg border p-4 text-left transition-all outline-none',
+                  isActive
+                    ? 'border-sky-500/60 bg-sky-500/10 shadow-sm shadow-sky-950/40'
+                    : 'border-slate-800 bg-slate-950/35 hover:border-slate-700 hover:bg-slate-950/60'
+                )}
+              >
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <span className={cn('rounded-lg p-2', isActive ? 'bg-sky-500/15 text-sky-300' : 'bg-slate-900 text-slate-400')}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="rounded-md border border-slate-700 px-2 py-0.5 text-[11px] font-medium text-slate-500">Hazir</span>
+                </div>
+                <p className="text-sm font-semibold text-slate-100">{template.label}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{template.description}</p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Tabs */}
       <div className="flex gap-2 border-b border-slate-800 pb-px">
-        {[
-          { id: 'overview', label: 'Finansal Özet', icon: BarChart3, locked: false },
-          { id: 'collections', label: 'Tahsilat Listesi', icon: Coins, locked: false },
-          { id: 'stock', label: 'Kritik Stok Raporu', icon: Package, locked: false },
-          { id: 'contacts', label: 'Cari Bakiye Raporu', icon: Users, locked: false },
-          { id: 'cashflow', label: 'Nakit Akış Tahmini', icon: Coins, locked: isStarter },
-        ].map((tab) => {
+        {reportTabs.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              onClick={() => setActiveTab(tab.id)}
               className={cn(
                 'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all outline-none',
                 activeTab === tab.id
@@ -693,6 +784,56 @@ export function ReportsPage() {
             emptyTitle="Kritik stokta ürün yok"
             emptyDescription="Harika! Tüm ürünlerinizin stok miktarı minimum limitlerin üzerinde."
           />
+        </div>
+      )}
+
+      {activeTab === 'topProducts' && (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-end gap-3 bg-slate-900/40 p-4 border border-slate-800 rounded-xl">
+            <FormRow cols={2} className="w-auto">
+              <DatePicker label="Baslangic" value={dateFrom} onValueChange={(value) => setDateFrom(value ?? '')} />
+              <DatePicker label="Bitis" value={dateTo} onValueChange={(value) => setDateTo(value ?? '')} />
+            </FormRow>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StatCard
+              label="Listelenen Urun"
+              value={loadingTopProducts ? '...' : String(topProducts?.summary.count ?? 0)}
+              sub="Satis miktarina gore ilk 10"
+              icon={<Trophy className="w-4 h-4 text-amber-400" />}
+              accent="bg-amber-500/10"
+            />
+            <StatCard
+              label="Toplam Satis Miktari"
+              value={loadingTopProducts ? '...' : String(topProducts?.summary.totalQuantity ?? 0)}
+              sub="Listelenen urunlerin toplam adedi"
+              icon={<Package className="w-4 h-4 text-sky-400" />}
+              accent="bg-sky-500/10"
+            />
+            <StatCard
+              label="Toplam Satis Tutari"
+              value={loadingTopProducts ? '...' : formatCurrency(topProducts?.summary.totalRevenue ?? 0)}
+              sub="Listelenen urunlerden elde edilen ciro"
+              icon={<TrendingUp className="w-4 h-4 text-emerald-400" />}
+              accent="bg-emerald-500/10"
+            />
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-white">En Cok Satan Urunler</h3>
+              <p className="text-xs text-slate-500 mt-1">Secili tarih araligindaki satis faturalarina gore miktar bazli siralama.</p>
+            </div>
+            <DataTable
+              columns={topProductsColumns}
+              data={topProducts?.products ?? []}
+              keyExtractor={(r) => r.productId}
+              isLoading={loadingTopProducts}
+              emptyTitle="Satis verisi bulunamadi"
+              emptyDescription="Bu tarih araliginda urun satiri olan satis faturasi yok."
+            />
+          </div>
         </div>
       )}
 
