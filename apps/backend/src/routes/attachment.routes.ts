@@ -1,9 +1,13 @@
 import { Hono } from 'hono';
+import { ACCESS_POLICIES } from '@repo/types/plans';
 import { AttachmentController } from '../controllers/attachment.controller';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 
-// Attachments tüm planlara açık — requireAuth zaten tenantApi seviyesinde uygulanıyor
+// Document center is Starter-enabled by default, but can be disabled via feature override.
 const attachmentRoutes = new Hono();
+
+attachmentRoutes.use('*', requireAccess(ACCESS_POLICIES.documentCenter));
 
 attachmentRoutes.get('/library', requirePermission('attachments', 'READ'), AttachmentController.library);
 attachmentRoutes.get('/entity-options', requirePermission('attachments', 'READ'), AttachmentController.entityOptions);

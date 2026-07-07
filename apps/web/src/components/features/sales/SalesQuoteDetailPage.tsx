@@ -13,6 +13,7 @@ import { useSalesQuote, useConvertQuoteToOrder } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 import { DocumentPdfThemePanel } from '@/components/features/sales/DocumentPdfThemePanel';
+import { SalesConversionFlowCard } from '@/components/features/sales/SalesConversionFlowCard';
 import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 
 interface LineRow {
@@ -149,6 +150,8 @@ export function SalesQuoteDetailPage({ id }: Props) {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="space-y-6">
+      <SalesConversionFlowCard stage="quote" compact />
+
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
         <div className="flex items-center gap-3 mb-2">
           <QuoteStatusBadge status={quote.status} />

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { FormRow } from '@/components/shared/FormField';
 import { ContactSelect, ProductSelect } from '@/components/shared/EntitySelect';
 import { SmartFormSidePanel, type SmartFormLine } from '@/components/shared/SmartFormSidePanel';
-import { useCreateInvoice, useSalesOrders, useSalesQuotes } from '@/hooks/useSales';
+import { useCreateInvoice, useSalesOrder, useSalesOrders, useSalesQuotes } from '@/hooks/useSales';
 import { useStockLevels } from '@/hooks/useStock';
 import { useContacts } from '@/hooks/useContacts';
 import { useProducts } from '@/hooks/useProducts';
@@ -37,6 +37,7 @@ import {
 } from '@/lib/form-standard';
 import { cn, formatCurrency } from '@/lib/utils';
 import type { BusinessRule } from '@/services/settings.service';
+import type { InvoiceLineDTO } from '@/services/sales.service';
 
 // ─────────────────────────────────────────────
 // Schema
@@ -75,6 +76,10 @@ function getNumberRule(rules: BusinessRule[], key: BusinessRule['key'], fallback
   return typeof rule?.value === 'number' ? rule.value : fallback;
 }
 
+function findTaxRateIdByRate(taxRates: Array<{ id: string; rate: number }>, rate: number): string {
+  return taxRates.find((taxRate) => Number(taxRate.rate) === Number(rate))?.id ?? '';
+}
+
 // ─────────────────────────────────────────────
 // Type selector config
 // ─────────────────────────────────────────────
@@ -92,7 +97,11 @@ const INVOICE_TYPES = [
 
 export function InvoiceFormPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialContactId = searchParams.get('contactId') ?? '';
+  const sourceSalesOrderId = searchParams.get('salesOrderId') ?? '';
   const createInvoice = useCreateInvoice();
+  const { data: sourceSalesOrder } = useSalesOrder(sourceSalesOrderId);
   const { data: contactsData } = useContacts({ limit: 200 });
   const { data: productsData } = useProducts({ page: 1, limit: 200 });
   const { data: taxRates = [] } = useTaxRates();
@@ -114,7 +123,9 @@ export function InvoiceFormPage() {
     },
   });
 
-  const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
+  const { fields, append, remove, replace } = useFieldArray({ control, name: 'lines' });
+  const sourceOrderAppliedRef = useRef<string | null>(null);
+  const initialContactAppliedRef = useRef(false);
   useDirtyStateWarning(isDirty && !createInvoice.isSuccess);
   const watchedLines = useWatch({ control, name: 'lines' }) ?? [];
   const watchType = useWatch({ control, name: 'type' });
@@ -137,6 +148,31 @@ export function InvoiceFormPage() {
     if (!watchDate || dirtyFields.dueDate) return;
     setValue('dueDate', addDaysString(watchDate, invoiceDueDays), { shouldDirty: false, shouldValidate: true });
   }, [dirtyFields.dueDate, invoiceDueDays, setValue, watchDate]);
+
+  useEffect(() => {
+    if (!initialContactId || sourceSalesOrderId || initialContactAppliedRef.current) return;
+    setValue('contactId', initialContactId, { shouldDirty: false, shouldValidate: true });
+    initialContactAppliedRef.current = true;
+  }, [initialContactId, setValue, sourceSalesOrderId]);
+
+  useEffect(() => {
+    if (!sourceSalesOrder || sourceOrderAppliedRef.current === sourceSalesOrder.id) return;
+    if ((sourceSalesOrder.items ?? []).some((item) => Number(item.taxRate) > 0) && taxRates.length === 0) return;
+
+    setValue('type', 'SALES', { shouldDirty: false, shouldValidate: true });
+    setValue('contactId', sourceSalesOrder.contactId, { shouldDirty: false, shouldValidate: true });
+    setValue('notes', `Siparisten olusturuldu: ${sourceSalesOrder.number}`, { shouldDirty: false });
+    replace((sourceSalesOrder.items ?? []).map((item) => ({
+      productId: item.productId,
+      description: item.description ?? item.product?.name ?? sourceSalesOrder.number,
+      quantity: String(item.quantity),
+      unitPrice: String(item.unitPrice),
+      discount: String(item.discount ?? 0),
+      taxRateId: findTaxRateIdByRate(taxRates, item.taxRate),
+      withholdingRateId: '',
+    })));
+    sourceOrderAppliedRef.current = sourceSalesOrder.id;
+  }, [replace, setValue, sourceSalesOrder, taxRates]);
 
   const selectedContact = contacts.find((c) => c.id === watchContact);
   const activeType = INVOICE_TYPES.find((t) => t.value === watchType) ?? INVOICE_TYPES[0];
@@ -178,6 +214,7 @@ export function InvoiceFormPage() {
   const onSubmit = (data: InvoiceForm) => {
     createInvoice.mutate({
       contactId: data.contactId, type: data.type, date: data.date,
+      salesOrderId: optionalText(sourceSalesOrderId),
       dueDate: optionalText(data.dueDate), notes: optionalText(data.notes),
       lines: data.lines.map((l) => ({
         description: l.description, productId: optionalText(l.productId),
@@ -185,7 +222,7 @@ export function InvoiceFormPage() {
         withholdingRateId: optionalText(l.withholdingRateId),
         quantity: parseDecimalInput(l.quantity),
         unitPrice: parseDecimalInput(l.unitPrice), discount: parseDecimalInput(l.discount),
-      })),
+      } satisfies InvoiceLineDTO)),
     }, {
       onSuccess: (inv) => router.push(`/dashboard/invoices/${inv.id}`),
       onError: (error) => {

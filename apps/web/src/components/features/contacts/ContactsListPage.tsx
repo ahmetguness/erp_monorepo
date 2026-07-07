@@ -19,6 +19,7 @@ import {
   TrendingDown,
   Users,
   FileText,
+  Info,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
@@ -33,6 +34,13 @@ import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { CustomerTrackingPanel } from "@/components/features/contacts/CustomerTrackingPanel";
 import { StarterCsvImportWizard } from "@/components/shared/StarterCsvImportWizard";
+import {
+  CONTACT_RISK_SCORE_LABELS,
+  CONTACT_RISK_SCORE_VARIANTS,
+  CONTACT_TYPE_LABELS,
+  CONTACT_TYPE_VARIANTS,
+  formatMissingInfo,
+} from "@/components/features/contacts/contact-display";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useBulkSelection } from "@/hooks/useBulkSelection";
 import { useContacts } from "@/hooks/useContacts";
@@ -70,19 +78,8 @@ const BALANCE_OPTIONS = [
   { value: "risky", label: "Riskli Hesaplar" },
 ];
 
-const TYPE_LABELS: Record<ContactType, string> = {
-  CUSTOMER: "Müşteri",
-  SUPPLIER: "Tedarikçi",
-  BOTH: "Her İkisi",
-};
-const TYPE_VARIANTS: Record<ContactType, "info" | "warning" | "purple"> = {
-  CUSTOMER: "info",
-  SUPPLIER: "warning",
-  BOTH: "purple",
-};
-
 const DEFAULT_PAGE_SIZE = 25;
-const CONTACT_COLUMN_KEYS = ['name', 'type', 'taxNumber', 'balance', 'openInvoices', 'risk', 'lastTx', 'isActive', 'actions'] as const;
+const CONTACT_COLUMN_KEYS = ['name', 'type', 'taxNumber', 'balance', 'openInvoices', 'risk', 'missingInfo', 'lastTx', 'isActive', 'actions'] as const;
 
 function parseContactType(value: string): ContactType | "" {
   return value === "CUSTOMER" || value === "SUPPLIER" || value === "BOTH" ? value : "";
@@ -133,6 +130,10 @@ function SummaryBar({
     totalPayable?: number;
     netBalance?: number;
     riskyAccountCount?: number;
+    missingInfoCount?: number;
+    customerCount?: number;
+    supplierCount?: number;
+    bothCount?: number;
     totalAccounts?: number;
   };
 }) {
@@ -140,10 +141,14 @@ function SummaryBar({
   const pay = Number(summary.totalPayable) || 0;
   const net = Number(summary.netBalance) || 0;
   const risky = Number(summary.riskyAccountCount) || 0;
+  const missing = Number(summary.missingInfoCount) || 0;
+  const customers = Number(summary.customerCount) || 0;
+  const suppliers = Number(summary.supplierCount) || 0;
+  const both = Number(summary.bothCount) || 0;
   const total = Number(summary.totalAccounts) || 0;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+    <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
       <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
         <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
           <Users className="w-4 h-4 text-sky-400" />
@@ -153,6 +158,20 @@ function SummaryBar({
             Toplam Hesap
           </p>
           <p className="text-base font-semibold text-white">{total}</p>
+        </div>
+      </div>
+      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+          <Users className="w-4 h-4 text-violet-400" />
+        </div>
+        <div>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+            Musteri / Satici
+          </p>
+          <p className="text-base font-semibold text-white">
+            {customers} / {suppliers}
+            {both > 0 ? <span className="text-xs text-violet-300"> +{both}</span> : null}
+          </p>
         </div>
       </div>
       <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
@@ -205,6 +224,17 @@ function SummaryBar({
             Riskli Hesap
           </p>
           <p className="text-base font-semibold text-red-400">{risky}</p>
+        </div>
+      </div>
+      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+          <Info className="w-4 h-4 text-amber-400" />
+        </div>
+        <div>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+            Eksik Bilgi
+          </p>
+          <p className="text-base font-semibold text-amber-400">{missing}</p>
         </div>
       </div>
     </div>
@@ -326,10 +356,10 @@ export function ContactsListPage() {
     {
       key: "type",
       header: "Tip",
-      width: "90px",
-      exportValue: (r) => TYPE_LABELS[r.type],
+      width: "125px",
+      exportValue: (r) => CONTACT_TYPE_LABELS[r.type],
       render: (r) => (
-        <Badge variant={TYPE_VARIANTS[r.type]}>{TYPE_LABELS[r.type]}</Badge>
+        <Badge variant={CONTACT_TYPE_VARIANTS[r.type]}>{CONTACT_TYPE_LABELS[r.type]}</Badge>
       ),
     },
     {
@@ -395,23 +425,43 @@ export function ContactsListPage() {
     {
       key: "risk",
       header: "Risk",
-      width: "80px",
+      width: "100px",
       align: "center",
-      exportValue: (r) => r.riskLevel,
+      exportValue: (r) => r.riskScore,
       render: (r) => {
         const cfg = RISK_CONFIG[r.riskLevel as RiskLevel];
         if (!cfg || r.riskLevel === "none")
-          return <span className="text-slate-700">—</span>;
+          return (
+            <Badge variant={CONTACT_RISK_SCORE_VARIANTS[r.riskScoreLevel]}>
+              {CONTACT_RISK_SCORE_LABELS[r.riskScoreLevel]} %{r.riskScore}
+            </Badge>
+          );
         const Icon = cfg.icon;
         return (
           <span
-            className={`inline-flex items-center justify-center w-7 h-7 rounded-lg ${cfg.bg}`}
-            title={`${cfg.label} (%${r.riskRatio})`}
+            className={`inline-flex h-7 items-center justify-center gap-1.5 rounded-lg px-2 ${cfg.bg}`}
+            title={`${cfg.label} (%${r.riskRatio}) - risk skoru %${r.riskScore}`}
           >
             <Icon className={`w-3.5 h-3.5 ${cfg.color}`} />
+            <span className="text-[11px] font-semibold text-slate-300">%{r.riskScore}</span>
           </span>
         );
       },
+    },
+    {
+      key: "missingInfo",
+      header: "Bilgi Uyarisi",
+      width: "140px",
+      exportValue: (r) => formatMissingInfo(r.missingInfoKeys, 6),
+      render: (r) => (
+        r.hasMissingInfo ? (
+          <Badge variant="warning" className="max-w-[132px] truncate">
+            {formatMissingInfo(r.missingInfoKeys)}
+          </Badge>
+        ) : (
+          <Badge variant="success">Tam</Badge>
+        )
+      ),
     },
     {
       key: "lastTx",

@@ -11,6 +11,7 @@ import { SearchInput } from "@/components/shared/SearchInput";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { useProducts } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useMasterData";
+import { usePlanFeatures } from "@/hooks/usePlanFeatures";
 import { useListStandardState, type ListFilterState } from "@/hooks/useListStandardState";
 import { formatCurrency } from "@/lib/utils";
 import { Select } from "@/components/ui/Select";
@@ -18,6 +19,8 @@ import Link from "next/link";
 import type { Product } from "@/services/product.service";
 import { getSavedViewFilterString } from "@/services/saved-view.service";
 import { StarterCsvImportWizard } from "@/components/shared/StarterCsvImportWizard";
+import { ProductLimitNotice } from "./ProductLimitNotice";
+import { getProductLimitStatus, PRODUCT_LIMIT_UPGRADE_HREF } from "./product-limit";
 
 type ActiveFilter = "" | "true" | "false";
 interface ProductListFilters extends ListFilterState {
@@ -42,6 +45,7 @@ function parseActiveFilter(value: string): ActiveFilter {
 
 export function ProductsListPage() {
   const router = useRouter();
+  const planFeatures = usePlanFeatures();
   const { data: categories = [] } = useCategories();
   const categoryOptions = [
     { value: "", label: "Tüm Kategoriler" },
@@ -135,6 +139,14 @@ export function ProductsListPage() {
     categoryId: categoryId || undefined,
     isActive: activeFilter ? activeFilter === "true" : undefined,
   });
+  const { data: productUsage } = useProducts({ page: 1, limit: 1 });
+  const productLimitStatus = getProductLimitStatus(
+    productUsage?.meta.total ?? 0,
+    planFeatures.maxProducts,
+  );
+  const newProductHref = productLimitStatus.isLimitReached
+    ? PRODUCT_LIMIT_UPGRADE_HREF
+    : "/dashboard/products/new";
 
   return (
     <div>
@@ -143,7 +155,7 @@ export function ProductsListPage() {
         subtitle="Ürün kataloğunuzu yönetin."
         action={
           <Link
-            href="/dashboard/products/new"
+            href={newProductHref}
             className="group relative inline-flex items-center gap-2.5 h-10 px-5 rounded-xl font-medium text-sm text-white
                        bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500
                        shadow-lg shadow-sky-500/20 hover:shadow-sky-500/30
@@ -152,10 +164,12 @@ export function ProductsListPage() {
             <span className="flex items-center justify-center w-5 h-5 rounded-md bg-white/15 group-hover:bg-white/20 transition-colors">
               <Plus className="w-3.5 h-3.5" />
             </span>
-            Yeni Ürün
+            {productLimitStatus.isLimitReached ? "Limiti Yukselt" : "Yeni Ürün"}
           </Link>
         }
       />
+
+      <ProductLimitNotice status={productLimitStatus} />
 
       <StarterCsvImportWizard entity="products" />
 

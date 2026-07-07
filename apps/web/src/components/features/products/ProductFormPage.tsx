@@ -38,7 +38,9 @@ import {
   useProduct,
   useCreateProduct,
   useUpdateProduct,
+  useProducts,
 } from "@/hooks/useProducts";
+import { usePlanFeatures } from "@/hooks/usePlanFeatures";
 import { useAttachments } from "@/hooks/useAttachments";
 import {
   useUnits,
@@ -69,6 +71,8 @@ import {
   toProductPayload,
   type ProductForm,
 } from "./product-form/schema";
+import { ProductLimitNotice } from "./ProductLimitNotice";
+import { getProductLimitStatus, PRODUCT_LIMIT_UPGRADE_HREF } from "./product-limit";
 
 function isImageAttachment(attachment: Attachment): boolean {
   return attachment.mimeType?.startsWith("image/") ?? false;
@@ -268,10 +272,12 @@ export function ProductFormPage({ editId }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const isEdit = !!editId;
+  const planFeatures = usePlanFeatures();
 
   const { data: existing, isLoading: loadingExisting } = useProduct(
     editId ?? "",
   );
+  const { data: productUsage } = useProducts({ page: 1, limit: 1 });
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct(editId ?? "");
 
@@ -443,6 +449,17 @@ export function ProductFormPage({ editId }: Props) {
     }
   }, [existing, reset]);
 
+  const productLimitStatus = getProductLimitStatus(
+    productUsage?.meta.total ?? 0,
+    planFeatures.maxProducts,
+  );
+
+  useEffect(() => {
+    if (!isEdit && productUsage && productLimitStatus.isLimitReached) {
+      router.replace(PRODUCT_LIMIT_UPGRADE_HREF);
+    }
+  }, [isEdit, productUsage, productLimitStatus.isLimitReached, router]);
+
   const onSubmit = async (data: ProductForm) => {
     if (isSubmitLocked(isSubmitting, createProduct.isPending || updateProduct.isPending)) return;
     const payload = toProductPayload(data);
@@ -507,7 +524,9 @@ export function ProductFormPage({ editId }: Props) {
     }
   };
 
-  if (isEdit && loadingExisting) return <FullPageSpinner />;
+  if ((isEdit && loadingExisting) || (!isEdit && productUsage && productLimitStatus.isLimitReached)) {
+    return <FullPageSpinner />;
+  }
 
   const isImageBusy = imageStatus === "uploading" || imageStatus === "removing";
   const isPending =
@@ -581,6 +600,8 @@ export function ProductFormPage({ editId }: Props) {
           </div>
         </div>
       </div>
+
+      {!isEdit && <ProductLimitNotice status={productLimitStatus} compact />}
 
       {/* ── Main layout: form + sidebar ─────────── */}
       <div className="flex gap-6">

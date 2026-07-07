@@ -12,6 +12,7 @@ import { InvoiceStatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
+import { SalesConversionFlowCard } from '@/components/features/sales/SalesConversionFlowCard';
 import { useCurrentUser } from '@/hooks/useAuth';
 import { useBulkSelection } from '@/hooks/useBulkSelection';
 import { useInvoices } from '@/hooks/useSales';
@@ -113,8 +114,9 @@ export function InvoicesListPage() {
       <PageHeader
         title="Faturalar"
         subtitle="Satış ve alış faturalarınızı yönetin."
-        action={<Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => router.push('/dashboard/invoices/new')}>Yeni Fatura</Button>}
+        action={<Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => router.push('/dashboard/invoices/new')}>Hizli Fatura</Button>}
       />
+      <SalesConversionFlowCard stage="invoice" />
       <div className="flex flex-wrap gap-3 mb-4">
         <Select options={TYPE_OPTIONS} value={type} onChange={(e) => { setType(parseInvoiceType(e.target.value)); setPage(1); }} className="w-40" />
         <Select options={STATUS_OPTIONS} value={status} onChange={(e) => { setStatus(parseInvoiceStatus(e.target.value)); setPage(1); }} className="w-44" />

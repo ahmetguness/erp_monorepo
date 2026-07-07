@@ -470,6 +470,7 @@ enum FeatureKey {
   API_ACCESS
   AUDIT_LOG
   CUSTOM_REPORTING
+  DOCUMENT_CENTER
 }
 
 // ─── DEĞİŞİKLİK 4 ───────────────────────────

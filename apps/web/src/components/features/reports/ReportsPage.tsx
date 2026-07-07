@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormRow } from '@/components/shared/FormField';
-import { FeatureGate } from '@/components/shared/FeatureGate';
 import { Modal } from '@/components/ui/Modal';
 import { useUIStore } from '@/store/ui.store';
 import { useRoles } from '@/hooks/useRoles';
@@ -32,6 +31,7 @@ import {
   type TopProducts,
 } from '@/services/reporting.service';
 import { cn, formatCurrency, formatDate, todayInputDate } from '@/lib/utils';
+import { CustomReportingLockedPanel } from './CustomReportingLockedPanel';
 
 // ─────────────────────────────────────────────
 // Stat card
@@ -111,7 +111,7 @@ const PREPARED_REPORT_TEMPLATES: Array<{
 
 export function ReportsPage() {
   const router = useRouter();
-  const { isStarter } = usePlanFeatures();
+  const { customReporting, isStarter } = usePlanFeatures();
   const qc = useQueryClient();
   const { toast } = useUIStore();
   const defaultRange = getDefaultRange();
@@ -188,6 +188,7 @@ export function ReportsPage() {
         return [];
       }
     },
+    enabled: customReporting,
   });
 
   const { data: registry } = useQuery({
@@ -209,6 +210,7 @@ export function ReportsPage() {
         };
       }
     },
+    enabled: customReporting,
   });
 
   const selectedDataset = registry?.datasets.find((dataset) => dataset.key === kpiConfig.dataset);
@@ -562,8 +564,19 @@ export function ReportsPage() {
             </div>
           )}
 
-          <FeatureGate feature="customReporting">
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+          {customReporting ? (
+            <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-5">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-white">Ozel raporlar</h2>
+                  <p className="text-xs text-slate-500">KPI Builder ve kayitli raporlar duzenlenebilir custom reporting alanidir.</p>
+                </div>
+                <span className="inline-flex w-fit items-center gap-1 rounded-lg border border-sky-500/20 bg-sky-500/10 px-2 py-1 text-xs text-sky-300">
+                  <Save className="h-3.5 w-3.5" />
+                  Duzenlenebilir
+                </span>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/25 p-5">
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-white">KPI Builder</h2>
@@ -710,10 +723,8 @@ export function ReportsPage() {
                 </div>
               </div>
             </div>
-          </FeatureGate>
 
           {/* Saved reports */}
-          <FeatureGate feature="customReporting">
             <div>
               <h2 className="text-sm font-semibold text-white mb-3">Kayıtlı Raporlar</h2>
               <DataTable
@@ -725,7 +736,10 @@ export function ReportsPage() {
                 emptyDescription="Raporları kaydetmek için ilgili rapor sayfasından 'Kaydet' butonunu kullanın."
               />
             </div>
-          </FeatureGate>
+            </section>
+          ) : (
+            <CustomReportingLockedPanel />
+          )}
         </div>
       )}
 

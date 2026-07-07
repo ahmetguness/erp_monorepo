@@ -55,8 +55,11 @@ export const AccountingClosingChecklistSchema = z.object({
 
 export const JournalEntrySchema = z.object({
   id: z.string(), tenantId: z.string(), fiscalPeriodId: z.string().nullable(),
-  type: z.string(), number: z.string(), date: z.string(),
+  type: z.enum(['MANUAL', 'AUTO_INVOICE', 'AUTO_PAYMENT', 'AUTO_PAYROLL', 'OPENING', 'CLOSING']),
+  number: z.string(), date: z.string(),
   description: z.string().nullable(), isPosted: z.boolean(),
+  refType: z.string().nullable().optional().default(null),
+  refId: z.string().nullable().optional().default(null),
   postedAt: z.string().nullable(), createdAt: z.string(), updatedAt: z.string(),
   lines: z.array(z.object({
     id: z.string(), accountId: z.string(), debit: z.coerce.number(), credit: z.coerce.number(),

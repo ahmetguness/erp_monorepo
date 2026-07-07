@@ -40,6 +40,11 @@ export const ContactListItemSchema = ContactSchema.extend({
   overdueInvoiceCount: z.coerce.number().optional().default(0),
   riskLevel: z.enum(['safe', 'warning', 'exceeded', 'none']).optional().default('none'),
   riskRatio: z.coerce.number().optional().default(0),
+  riskScore: z.coerce.number().optional().default(0),
+  riskScoreLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional().default('LOW'),
+  missingInfoKeys: z.array(z.enum(['taxNumber', 'taxOffice', 'email', 'phone', 'address', 'paymentTermDays'])).optional().default([]),
+  missingInfoCount: z.coerce.number().optional().default(0),
+  hasMissingInfo: z.boolean().optional().default(false),
 });
 
 export const ListSummarySchema = z.object({
@@ -47,6 +52,10 @@ export const ListSummarySchema = z.object({
   totalPayable: z.coerce.number(),
   netBalance: z.coerce.number(),
   riskyAccountCount: z.coerce.number(),
+  missingInfoCount: z.coerce.number().optional().default(0),
+  customerCount: z.coerce.number().optional().default(0),
+  supplierCount: z.coerce.number().optional().default(0),
+  bothCount: z.coerce.number().optional().default(0),
   totalAccounts: z.coerce.number(),
 });
 
@@ -60,6 +69,8 @@ export const FinancialsSchema = z.object({
   overdueInvoiceCount: z.coerce.number(),
   riskLevel: z.enum(['safe', 'warning', 'exceeded', 'none']),
   riskRatio: z.coerce.number(),
+  riskScore: z.coerce.number().optional().default(0),
+  riskScoreLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional().default('LOW'),
 });
 
 export const OpenInvoiceSchema = z.object({
@@ -76,6 +87,9 @@ export const OpenInvoiceSchema = z.object({
 /** Detail endpoint returns contact + financials + openInvoices */
 export const ContactDetailSchema = ContactSchema.extend({
   financials: FinancialsSchema.optional(),
+  missingInfoKeys: z.array(z.enum(['taxNumber', 'taxOffice', 'email', 'phone', 'address', 'paymentTermDays'])).optional().default([]),
+  missingInfoCount: z.coerce.number().optional().default(0),
+  hasMissingInfo: z.boolean().optional().default(false),
   openInvoices: z.array(OpenInvoiceSchema).optional(),
 });
 
@@ -150,6 +164,8 @@ export type OpenInvoice = z.infer<typeof OpenInvoiceSchema>;
 export type ContactFinancials = z.infer<typeof FinancialsSchema>;
 export type ListSummary = z.infer<typeof ListSummarySchema>;
 export type RiskLevel = ContactListItem['riskLevel'];
+export type ContactRiskScoreLevel = ContactListItem['riskScoreLevel'];
+export type ContactMissingInfoKey = ContactListItem['missingInfoKeys'][number];
 export type CustomerTrackingDashboard = z.infer<typeof CustomerTrackingDashboardSchema>;
 export type CustomerTrackingRow = z.infer<typeof CustomerTrackingRowSchema>;
 

@@ -168,6 +168,7 @@ export interface CreateSalesOrderDTO {
 export interface InvoiceLineDTO {
   productId?: string;
   taxRateId?: string;
+  withholdingRateId?: string;
   description: string;
   quantity: number;
   unitPrice: number;
@@ -177,6 +178,8 @@ export interface InvoiceLineDTO {
 export interface CreateInvoiceDTO {
   contactId: string;
   type: InvoiceType;
+  salesOrderId?: string;
+  purchaseOrderId?: string;
   date: string;
   dueDate?: string;
   notes?: string;

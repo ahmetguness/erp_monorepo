@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { CustomerTrackingService } from '../services/customer-tracking.service.js';
+import { getContactInsights } from '../services/contact-insights.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -188,15 +189,18 @@ export const ContactController = {
         totalDebit: 0, totalCredit: 0, currentBalance: 0, lastTransactionDate: null,
       };
       const creditLimit = Number(contact.creditLimit ?? 0);
-      const usedCredit = Math.max(fin.currentBalance, 0);
-      const riskRatio = creditLimit > 0 ? usedCredit / creditLimit : 0;
-
-      let riskLevel: 'safe' | 'warning' | 'exceeded' | 'none' = 'none';
-      if (creditLimit > 0) {
-        if (riskRatio > 1) riskLevel = 'exceeded';
-        else if (riskRatio > 0.8) riskLevel = 'warning';
-        else riskLevel = 'safe';
-      }
+      const insights = getContactInsights({
+        type: contact.type,
+        taxNumber: contact.taxNumber,
+        taxOffice: contact.taxOffice,
+        email: contact.email,
+        phone: contact.phone,
+        address: contact.address,
+        creditLimit,
+        paymentTermDays: contact.paymentTermDays,
+        currentBalance: fin.currentBalance,
+        overdueInvoiceCount: overdueMap.get(contact.id) ?? 0,
+      });
 
       return {
         ...contact,
@@ -204,8 +208,7 @@ export const ContactController = {
         ...fin,
         openInvoiceCount: openInvoiceMap.get(contact.id) ?? 0,
         overdueInvoiceCount: overdueMap.get(contact.id) ?? 0,
-        riskLevel,
-        riskRatio: Math.round(riskRatio * 100),
+        ...insights,
       };
     });
 
@@ -220,10 +223,41 @@ export const ContactController = {
     }
 
     // Summary totals for the entire filtered set (across all pages)
-    const summaryAgg = await prisma.accountEntry.aggregate({
-      where: { tenantId, contact: { deletedAt: null, ...( query.type ? { type: query.type } : {}) } },
-      _sum: { debit: true, credit: true },
-    });
+    const summaryContactWhere: Prisma.ContactWhereInput = {
+      tenantId,
+      deletedAt: null,
+      ...(query.type ? { type: query.type } : {}),
+    };
+
+    const [summaryAgg, typeAgg, missingInfoCount] = await Promise.all([
+      prisma.accountEntry.aggregate({
+        where: { tenantId, contact: summaryContactWhere },
+        _sum: { debit: true, credit: true },
+      }),
+      prisma.contact.groupBy({
+        by: ['type'],
+        where: summaryContactWhere,
+        _count: true,
+      }),
+      prisma.contact.count({
+        where: {
+          ...summaryContactWhere,
+          OR: [
+            { taxNumber: null },
+            { taxNumber: '' },
+            { taxOffice: null },
+            { taxOffice: '' },
+            { email: null },
+            { email: '' },
+            { phone: null },
+            { phone: '' },
+            { address: null },
+            { address: '' },
+            { type: { in: [ContactType.CUSTOMER, ContactType.BOTH] }, paymentTermDays: null },
+          ],
+        },
+      }),
+    ]);
 
     const riskyCount = await prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(DISTINCT c.id)::bigint as count
@@ -246,6 +280,10 @@ export const ContactController = {
       totalPayable: Number(summaryAgg._sum.credit ?? 0),
       netBalance: Number(summaryAgg._sum.debit ?? 0) - Number(summaryAgg._sum.credit ?? 0),
       riskyAccountCount: Number(riskyCount[0]?.count ?? 0),
+      missingInfoCount,
+      customerCount: typeAgg.find((item) => item.type === ContactType.CUSTOMER)?._count ?? 0,
+      supplierCount: typeAgg.find((item) => item.type === ContactType.SUPPLIER)?._count ?? 0,
+      bothCount: typeAgg.find((item) => item.type === ContactType.BOTH)?._count ?? 0,
       totalAccounts: total,
     };
 
@@ -299,15 +337,18 @@ export const ContactController = {
     const totalCredit = Number(balanceAgg._sum.credit ?? 0);
     const currentBalance = totalDebit - totalCredit;
     const creditLimit = Number(contact.creditLimit ?? 0);
-    const usedCredit = Math.max(currentBalance, 0);
-    const riskRatio = creditLimit > 0 ? usedCredit / creditLimit : 0;
-
-    let riskLevel: 'safe' | 'warning' | 'exceeded' | 'none' = 'none';
-    if (creditLimit > 0) {
-      if (riskRatio > 1) riskLevel = 'exceeded';
-      else if (riskRatio > 0.8) riskLevel = 'warning';
-      else riskLevel = 'safe';
-    }
+    const insights = getContactInsights({
+      type: contact.type,
+      taxNumber: contact.taxNumber,
+      taxOffice: contact.taxOffice,
+      email: contact.email,
+      phone: contact.phone,
+      address: contact.address,
+      creditLimit,
+      paymentTermDays: contact.paymentTermDays,
+      currentBalance,
+      overdueInvoiceCount: overdueCount,
+    });
 
     return c.json({
       data: {
@@ -321,9 +362,14 @@ export const ContactController = {
           transactionCount: balanceAgg._count,
           openInvoiceCount: openInvoices.length,
           overdueInvoiceCount: overdueCount,
-          riskLevel,
-          riskRatio: Math.round(riskRatio * 100),
+          riskLevel: insights.riskLevel,
+          riskRatio: insights.riskRatio,
+          riskScore: insights.riskScore,
+          riskScoreLevel: insights.riskScoreLevel,
         },
+        missingInfoKeys: insights.missingInfoKeys,
+        missingInfoCount: insights.missingInfoCount,
+        hasMissingInfo: insights.hasMissingInfo,
         openInvoices: openInvoices.map((inv) => ({
           ...inv,
           totalGross: Number(inv.totalGross),

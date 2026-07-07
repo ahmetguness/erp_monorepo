@@ -1,8 +1,14 @@
-import { CheckCircle, Pencil, RotateCcw } from "lucide-react";
+import { CheckCircle, ExternalLink, Pencil, RotateCcw } from "lucide-react";
+import Link from "next/link";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/Badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { JournalEntry } from "@/services/accounting.service";
+import {
+  getJournalEntrySourceInfo,
+  getJournalEntryTypeLabel,
+  getJournalEntryTypeVariant,
+} from "./display";
 
 interface JournalEntryColumnActions {
   onEdit: (entry: JournalEntry) => void;
@@ -16,7 +22,7 @@ export function createJournalEntryColumns(actions: JournalEntryColumnActions): C
     {
       key: "number",
       header: "Fiş No",
-      width: "120px",
+      width: "150px",
       render: (row) => (
         <div>
           <span className="font-mono text-sky-400">{row.number}</span>
@@ -25,6 +31,11 @@ export function createJournalEntryColumns(actions: JournalEntryColumnActions): C
               STORNO
             </span>
           )}
+          <div className="mt-1">
+            <Badge variant={getJournalEntryTypeVariant(row.type)}>
+              {getJournalEntryTypeLabel(row.type)}
+            </Badge>
+          </div>
         </div>
       ),
     },
@@ -44,6 +55,27 @@ export function createJournalEntryColumns(actions: JournalEntryColumnActions): C
           {row.description ?? "—"}
         </span>
       ),
+    },
+    {
+      key: "source",
+      header: "Kaynak Belge",
+      width: "150px",
+      render: (row) => {
+        const source = getJournalEntrySourceInfo(row);
+        if (!source) return <span className="text-xs text-slate-600">Manuel fis</span>;
+        if (!source.href) return <span className="text-xs font-medium text-slate-400">{source.label}</span>;
+
+        return (
+          <Link
+            href={source.href}
+            onClick={(event) => event.stopPropagation()}
+            className="inline-flex items-center gap-1 text-xs font-medium text-sky-300 hover:text-sky-200"
+          >
+            {source.label}
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+        );
+      },
     },
     {
       key: "totalDebit",
@@ -140,7 +172,7 @@ export function createJournalEntryColumns(actions: JournalEntryColumnActions): C
               className="inline-flex items-center gap-1 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
             >
               <RotateCcw className="h-3 w-3" />
-              Storno
+              Ters Kayit
             </button>
           )}
         </div>

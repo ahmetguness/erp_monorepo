@@ -55,6 +55,7 @@ export const STARTER_FEATURE_DEFAULTS: Record<FeatureKey, string> = {
   [FeatureKey.API_ACCESS]: 'false',
   [FeatureKey.AUDIT_LOG]: 'basic',
   [FeatureKey.CUSTOM_REPORTING]: 'false',
+  [FeatureKey.DOCUMENT_CENTER]: 'true',
 };
 
 export const UNLIMITED_VALUE = 'unlimited';

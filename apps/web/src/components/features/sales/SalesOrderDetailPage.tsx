@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, Receipt, XCircle } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { OrderStatusBadge, InvoiceStatusBadge } from '@/components/shared/StatusBadge';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
+import { SalesConversionFlowCard } from '@/components/features/sales/SalesConversionFlowCard';
 import { useSalesOrder, useCancelSalesOrder, useUpdateSalesOrder } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
@@ -51,6 +52,8 @@ export function SalesOrderDetailPage({ id }: Props) {
   if (!order) return <div className="text-slate-400 text-sm">Sipariş bulunamadı.</div>;
 
   const remainingToInvoice = Math.max(0, Number(order.totalGross) - Number(order.invoicedAmount));
+  const canCreateInvoice = order.status !== 'CANCELLED' && remainingToInvoice > 0;
+  const invoiceHref = `/dashboard/invoices/new?salesOrderId=${order.id}`;
   const recommendedActions: RecommendedEntityAction[] = order.status !== 'CANCELLED' && order.status !== 'DELIVERED' && remainingToInvoice > 0
     ? [{
         id: `sales-order-${id}-invoice-followup`,
@@ -90,6 +93,11 @@ export function SalesOrderDetailPage({ id }: Props) {
                 Onayla
               </Button>
             )}
+            {canCreateInvoice && (
+              <Button variant="secondary" leftIcon={<Receipt className="w-4 h-4" />} onClick={() => router.push(invoiceHref)}>
+                Faturaya Donustur
+              </Button>
+            )}
             {order.status !== 'CANCELLED' && order.status !== 'DELIVERED' && (
               <Button variant="danger" leftIcon={<XCircle className="w-4 h-4" />} onClick={() => setCancelOpen(true)}>İptal Et</Button>
             )}
@@ -99,6 +107,8 @@ export function SalesOrderDetailPage({ id }: Props) {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="space-y-6">
+      <SalesConversionFlowCard stage="order" invoiceHref={invoiceHref} />
+
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
         <div className="flex items-center gap-3 mb-4"><OrderStatusBadge status={order.status} /></div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">

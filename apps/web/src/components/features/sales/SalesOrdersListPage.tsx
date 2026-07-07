@@ -19,6 +19,13 @@ const STATUS_OPTIONS = [
   { value: 'CANCELLED', label: 'İptal' },
 ];
 
+function invoiceProgressLabel(order: SalesOrder): string {
+  const remaining = Math.max(0, Number(order.totalGross) - Number(order.invoicedAmount));
+  if (remaining <= 0) return 'Tamamlandi';
+  if (Number(order.invoicedAmount) > 0) return `${formatCurrency(remaining)} kaldi`;
+  return 'Fatura bekliyor';
+}
+
 export function SalesOrdersListPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
@@ -31,6 +38,19 @@ export function SalesOrdersListPage() {
     { key: 'date', header: 'Tarih', width: '110px', render: (r) => <span className="text-slate-400">{formatDate(r.date)}</span> },
     { key: 'dueDate', header: 'Vade', width: '110px', render: (r) => <span className="text-slate-400">{r.dueDate ? formatDate(r.dueDate) : '—'}</span> },
     { key: 'status', header: 'Durum', width: '140px', render: (r) => <OrderStatusBadge status={r.status} /> },
+    {
+      key: 'invoiceFlow',
+      header: 'Faturalama',
+      width: '145px',
+      render: (r) => {
+        const remaining = Math.max(0, Number(r.totalGross) - Number(r.invoicedAmount));
+        return (
+          <span className={remaining > 0 ? 'text-xs font-medium text-amber-300' : 'text-xs font-medium text-emerald-300'}>
+            {invoiceProgressLabel(r)}
+          </span>
+        );
+      },
+    },
     { key: 'totalGross', header: 'Toplam', width: '130px', align: 'right', render: (r) => <span className="font-semibold text-slate-200">{formatCurrency(r.totalGross)}</span> },
   ];
 

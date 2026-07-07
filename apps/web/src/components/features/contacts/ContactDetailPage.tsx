@@ -31,6 +31,13 @@ import { KpiCard } from "@/components/shared/KpiCard";
 import { CreditLimitBar } from "@/components/shared/CreditLimitBar";
 import { EntityActionPanel } from "@/components/shared/EntityActionPanel";
 import { SupplierPerformanceCard } from "@/components/features/contacts/SupplierPerformanceCard";
+import {
+  CONTACT_MISSING_INFO_LABELS,
+  CONTACT_RISK_SCORE_LABELS,
+  CONTACT_RISK_SCORE_VARIANTS,
+  CONTACT_TYPE_LABELS,
+  CONTACT_TYPE_VARIANTS,
+} from "@/components/features/contacts/contact-display";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -46,7 +53,7 @@ import {
 } from "@/hooks/useContacts";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { RecommendedEntityAction } from "@/components/shared/RecommendedActionsPanel";
-import type { AccountEntry, OpenInvoice } from "@/services/contact.service";
+import type { AccountEntry, ContactMissingInfoKey, OpenInvoice } from "@/services/contact.service";
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -60,6 +67,33 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
         {label}
       </span>
       <span className="text-sm text-slate-300">{value}</span>
+    </div>
+  );
+}
+
+function MissingInfoPanel({ keys, onEdit }: { keys: ContactMissingInfoKey[]; onEdit: () => void }) {
+  if (keys.length === 0) return null;
+
+  return (
+    <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.05] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-sm font-semibold text-amber-200">
+            <AlertTriangle className="h-4 w-4" />
+            Eksik bilgi uyarisi
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {keys.map((key) => (
+              <Badge key={key} variant="warning">
+                {CONTACT_MISSING_INFO_LABELS[key]}
+              </Badge>
+            ))}
+          </div>
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={onEdit}>
+          Tamamla
+        </Button>
+      </div>
     </div>
   );
 }
@@ -283,17 +317,6 @@ export function ContactDetailPage({ id }: Props) {
   if (!contact)
     return <div className="text-slate-400 text-sm">Cari hesap bulunamadı.</div>;
 
-  const TYPE_LABELS = {
-    CUSTOMER: "Müşteri",
-    SUPPLIER: "Tedarikçi",
-    BOTH: "Her İkisi",
-  };
-  const TYPE_VARIANTS = {
-    CUSTOMER: "info",
-    SUPPLIER: "warning",
-    BOTH: "purple",
-  } as const;
-
   const fin = contact.financials ?? {
     totalDebit: 0,
     totalCredit: 0,
@@ -304,6 +327,8 @@ export function ContactDetailPage({ id }: Props) {
     overdueInvoiceCount: 0,
     riskLevel: "none" as const,
     riskRatio: 0,
+    riskScore: 0,
+    riskScoreLevel: "LOW" as const,
   };
   const openInvoices = contact.openInvoices ?? [];
   const creditLimit = contact.creditLimit ? Number(contact.creditLimit) : 0;
@@ -475,10 +500,19 @@ export function ContactDetailPage({ id }: Props) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Contact Info */}
         <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Badge variant={TYPE_VARIANTS[contact.type]}>
-              {TYPE_LABELS[contact.type]}
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <Badge variant={CONTACT_TYPE_VARIANTS[contact.type]}>
+              {CONTACT_TYPE_LABELS[contact.type]}
             </Badge>
+            <Badge variant={CONTACT_RISK_SCORE_VARIANTS[fin.riskScoreLevel]}>
+              Risk skoru: %{fin.riskScore} - {CONTACT_RISK_SCORE_LABELS[fin.riskScoreLevel]}
+            </Badge>
+          </div>
+          <MissingInfoPanel
+            keys={contact.missingInfoKeys ?? []}
+            onEdit={() => router.push(`/dashboard/contacts/${id}/edit`)}
+          />
+          <div className="flex items-center gap-2 mb-4">
             <ActiveBadge isActive={contact.isActive} />
             {contact.paymentTermDays != null && (
               <Badge variant="neutral" dot>

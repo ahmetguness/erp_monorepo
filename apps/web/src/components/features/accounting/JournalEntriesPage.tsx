@@ -221,6 +221,18 @@ export function JournalEntriesPage() {
         onChange={setStatusFilter}
       />
 
+      <div className="mb-4 rounded-xl border border-sky-500/15 bg-sky-500/[0.04] p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-100">Kaynak belge ve ters kayit takibi</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Otomatik yevmiye fislerinde kaynak belge linki tabloda gorunur. Onayli fisler icin Ters Kayit aksiyonu ile storno olusturabilirsiniz.
+            </p>
+          </div>
+          <Badge variant="info">Starter</Badge>
+        </div>
+      </div>
+
       <JournalEntryTable
         columns={columns}
         entries={filteredEntries}
