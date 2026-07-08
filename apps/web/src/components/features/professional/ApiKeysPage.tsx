@@ -169,6 +169,22 @@ function readActivityField(values: unknown, key: ActivityField): string {
   return "-";
 }
 
+function getStatusClass(status: number | null | undefined): string {
+  if (status === null || status === undefined) return "text-slate-500";
+  if (status >= 500) return "text-red-400";
+  if (status >= 400) return "text-amber-400";
+  return "text-emerald-400";
+}
+
+function getActivityStatusClass(status: string): string {
+  const parsed = Number(status);
+  return Number.isFinite(parsed) ? getStatusClass(parsed) : "text-slate-500";
+}
+
+function formatMaybeDate(value: string | null | undefined): string {
+  return value ? formatDate(value) : "-";
+}
+
 export function ApiKeysPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
@@ -191,8 +207,14 @@ export function ApiKeysPage() {
 
   const apiKeys = data?.data ?? [];
   const totalRequests = apiKeys.reduce((acc, k) => acc + (k.requestCount ?? 0), 0);
+  const totalSuccessfulRequests = apiKeys.reduce((acc, k) => acc + (k.successfulRequestCount ?? 0), 0);
   const totalErrors = apiKeys.reduce((acc, k) => acc + (k.errorCount ?? 0), 0);
+  const totalRateLimited = apiKeys.reduce((acc, k) => acc + (k.rateLimitedCount ?? 0), 0);
   const avgErrorRate = totalRequests > 0 ? Math.round((totalErrors / totalRequests) * 1000) / 10 : 0;
+  const latestRequestAt = apiKeys
+    .map((key) => key.lastRequestAt ?? key.lastUsedAt ?? null)
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
 
   const scopeDistribution: Record<string, number> = {};
   apiKeys.forEach((key) => {
@@ -293,6 +315,17 @@ export function ApiKeysPage() {
       ),
     },
     {
+      key: "requestCount",
+      header: "Istek",
+      width: "90px",
+      align: "right",
+      render: (r) => (
+        <span className="text-xs tabular-nums text-slate-300">
+          {r.requestCount ?? 0}
+        </span>
+      ),
+    },
+    {
       key: "errorRate",
       header: "Hata",
       width: "95px",
@@ -322,6 +355,17 @@ export function ApiKeysPage() {
           </span>
         );
       },
+    },
+    {
+      key: "lastStatus",
+      header: "Son",
+      width: "70px",
+      align: "right",
+      render: (r) => (
+        <span className={`text-xs tabular-nums ${getStatusClass(r.lastStatus)}`}>
+          {r.lastStatus ?? "-"}
+        </span>
+      ),
     },
     {
       key: "isActive",
@@ -423,7 +467,7 @@ export function ApiKeysPage() {
           )}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           {/* Card 1: API Trafiği */}
           <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-4 space-y-1.5">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">API Trafiği</span>
@@ -468,6 +512,21 @@ export function ApiKeysPage() {
               <span className="text-xs text-slate-500">Etkin Kapsam</span>
             </div>
             <p className="text-[9px] text-slate-500">Kullanılan farklı yetki kapsamı sayısı.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-850 bg-slate-950/20 p-3">
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Basarili Istek</span>
+            <p className="mt-1 text-sm font-semibold text-emerald-300">{totalSuccessfulRequests}</p>
+          </div>
+          <div className="rounded-xl border border-slate-850 bg-slate-950/20 p-3">
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Limit Asimi</span>
+            <p className={`mt-1 text-sm font-semibold ${totalRateLimited > 0 ? "text-amber-300" : "text-emerald-300"}`}>{totalRateLimited}</p>
+          </div>
+          <div className="rounded-xl border border-slate-850 bg-slate-950/20 p-3">
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Son Istek</span>
+            <p className="mt-1 text-sm font-semibold text-slate-200">{formatMaybeDate(latestRequestAt)}</p>
           </div>
         </div>
 
@@ -830,6 +889,22 @@ export function ApiKeysPage() {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">
+                <div className="text-[10px] text-slate-500 mb-1">Istek / Hata</div>
+                <div className="text-sm text-white">
+                  {detailKey.requestCount ?? 0} / %{detailKey.errorRate ?? 0}
+                </div>
+              </div>
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">
+                <div className="text-[10px] text-slate-500 mb-1">Rate Limit</div>
+                <div className="text-sm text-white">
+                  {detailKey.rateLimitPerMinute ?? manifest?.rateLimit.perMinute ?? 0}/dk
+                  <span className="ml-2 text-xs text-amber-400">{detailKey.rateLimitedCount ?? 0} asim</span>
+                </div>
+              </div>
+            </div>
+
             {/* Scopes */}
             <div>
               <h4 className="text-xs font-medium text-slate-400 mb-3">
@@ -839,6 +914,7 @@ export function ApiKeysPage() {
                 <div className="space-y-2">
                   {detailKey.scopes.map((s) => {
                     const info = AVAILABLE_SCOPES.find((a) => a.key === s);
+                    const manifestScope = manifest?.scopes.find((item) => item.scope === s);
                     return (
                       <div
                         key={s}
@@ -854,6 +930,7 @@ export function ApiKeysPage() {
                           {info && (
                             <span className="block text-[10px] text-slate-500">
                               {info.desc}
+                              {manifestScope ? ` - ${manifestScope.endpoints.length} endpoint` : ""}
                             </span>
                           )}
                         </div>
@@ -895,8 +972,10 @@ export function ApiKeysPage() {
                           {readActivityField(item.newValues, "scope")}
                         </p>
                       </div>
-                      <span className="text-right text-[10px] text-slate-500">
-                        {readActivityField(item.newValues, "status")}
+                      <span className="text-right text-[10px]">
+                        <span className={getActivityStatusClass(readActivityField(item.newValues, "status"))}>
+                          {readActivityField(item.newValues, "status")}
+                        </span>
                       </span>
                     </div>
                   ))}

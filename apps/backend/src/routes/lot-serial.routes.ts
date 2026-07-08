@@ -9,6 +9,7 @@ const lotSerialRoutes = new Hono();
 lotSerialRoutes.use('*', requireAccess(ACCESS_POLICIES.lotSerials));
 
 lotSerialRoutes.get('/', requirePermission('inventory', 'READ'), LotSerialController.list);
+lotSerialRoutes.get('/traceability', requirePermission('inventory', 'READ'), LotSerialController.traceability);
 lotSerialRoutes.post('/', requirePermission('inventory', 'CREATE'), LotSerialController.create);
 lotSerialRoutes.post('/:id/assign', requirePermission('inventory', 'UPDATE'), LotSerialController.assignToMovement);
 

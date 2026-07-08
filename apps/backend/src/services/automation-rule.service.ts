@@ -41,6 +41,24 @@ function getAssignedToId(rule: AutomationRule): string | null {
   return getStringField(rule.actionConfig, 'assignedToId') ?? null;
 }
 
+async function getNotificationUserIds(tenantId: string, assignedToId: string | null): Promise<string[]> {
+  if (assignedToId) return [assignedToId];
+
+  const owners = await prisma.tenantUser.findMany({
+    where: { tenantId, isActive: true, isOwner: true },
+    select: { userId: true },
+    take: 5,
+  });
+  if (owners.length > 0) return owners.map((owner) => owner.userId);
+
+  const users = await prisma.tenantUser.findMany({
+    where: { tenantId, isActive: true },
+    select: { userId: true },
+    take: 5,
+  });
+  return users.map((user) => user.userId);
+}
+
 async function findMatches(rule: AutomationRule): Promise<AutomationMatch[]> {
   const now = new Date();
   const soon = new Date(now.getTime() + 7 * 86_400_000);
@@ -184,8 +202,12 @@ export const AutomationRuleService = {
   async runRule(rule: AutomationRule): Promise<AutomationRunResult> {
     const matches = await findMatches(rule);
     const assignedToId = getAssignedToId(rule);
+    const notificationUserIds = rule.action === AutomationAction.CREATE_NOTIFICATION
+      ? await getNotificationUserIds(rule.tenantId, assignedToId)
+      : [];
     let tasksCreated = 0;
     let notificationsCreated = 0;
+    let handledMatches = 0;
 
     for (const match of matches) {
       if (
@@ -194,6 +216,11 @@ export const AutomationRuleService = {
         rule.action === AutomationAction.REQUEST_APPROVAL ||
         rule.action === AutomationAction.CREATE_PURCHASE_REQUEST_DRAFT
       ) {
+        const source = `automation:${rule.id}:${match.sourceKey}`;
+        const existingTask = await prisma.task.findUnique({
+          where: { tenantId_source: { tenantId: rule.tenantId, source } },
+          select: { id: true },
+        });
         await createTask(rule.tenantId, {
           title: match.title,
           detail: match.detail,
@@ -203,25 +230,46 @@ export const AutomationRuleService = {
           entityType: match.entityType,
           entityId: match.entityId,
           href: match.href,
-          source: `automation:${rule.id}:${match.sourceKey}`,
+          source,
           assignedToId,
           dueAt: match.dueAt,
         });
-        tasksCreated += 1;
-      } else if (rule.action === AutomationAction.CREATE_NOTIFICATION && assignedToId) {
-        await prisma.notification.create({
-          data: {
+        if (!existingTask) tasksCreated += 1;
+        handledMatches += 1;
+      } else if (rule.action === AutomationAction.CREATE_NOTIFICATION && notificationUserIds.length > 0) {
+        const existingNotifications = await prisma.notification.findMany({
+          where: {
             tenantId: rule.tenantId,
-            userId: assignedToId,
+            userId: { in: notificationUserIds },
+            title: match.title,
+            entityType: match.entityType,
+            entityId: match.entityId,
+            status: NotificationStatus.UNREAD,
+          },
+          select: { userId: true },
+        });
+        const existingUserIds = new Set(existingNotifications.map((notification) => notification.userId));
+        const newNotificationUserIds = notificationUserIds.filter((userId) => !existingUserIds.has(userId));
+
+        if (newNotificationUserIds.length === 0) {
+          handledMatches += 1;
+          continue;
+        }
+
+        await prisma.notification.createMany({
+          data: newNotificationUserIds.map((userId) => ({
+            tenantId: rule.tenantId,
+            userId,
             title: match.title,
             message: match.detail,
             module: match.module,
             entityType: match.entityType,
             entityId: match.entityId,
             status: NotificationStatus.UNREAD,
-          },
+          })),
         });
-        notificationsCreated += 1;
+        notificationsCreated += newNotificationUserIds.length;
+        handledMatches += 1;
       }
     }
 
@@ -229,7 +277,7 @@ export const AutomationRuleService = {
       matched: matches.length,
       tasksCreated,
       notificationsCreated,
-      skipped: matches.length - tasksCreated - notificationsCreated,
+      skipped: matches.length - handledMatches,
     };
 
     await prisma.automationRule.updateMany({

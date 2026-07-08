@@ -20,11 +20,20 @@ export const AutomationRuleTemplateSchema = z.object({
   key: z.string(),
   title: z.string(),
   description: z.string(),
-  trigger: z.string(),
-  action: z.string(),
+  trigger: z.enum(['LOW_STOCK', 'OVERDUE_INVOICE', 'HIGH_VALUE_INVOICE', 'LOW_MARGIN', 'CHECK_DUE_SOON']),
+  action: z.enum(['CREATE_TASK', 'CREATE_NOTIFICATION', 'DRAFT_REMINDER_EMAIL', 'REQUEST_APPROVAL', 'CREATE_PURCHASE_REQUEST_DRAFT']),
   module: z.string(),
   requiredModules: z.array(z.string()),
   requiredPermission: z.string(),
+  conditionLabel: z.string(),
+  actionLabel: z.string(),
+  outcomeLabel: z.string(),
+  conditions: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+  actionConfig: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+  steps: z.array(z.object({
+    label: z.string(),
+    description: z.string(),
+  })),
 });
 
 export const SectorTemplateSchema = z.object({
@@ -173,8 +182,8 @@ export type AutomationRule = z.infer<typeof AutomationRuleSchema>;
 export interface CreateAutomationRuleDTO {
   name: string;
   module: string;
-  trigger: string;
-  action: string;
+  trigger: AutomationRule['trigger'];
+  action: AutomationRule['action'];
   description?: string;
   conditions?: Record<string, unknown>;
   actionConfig?: Record<string, unknown>;
@@ -200,12 +209,20 @@ export async function deleteAutomationRule(id: string): Promise<void> {
   await apiClient.delete(`/api/automation-rules/${id}`);
 }
 
-export async function runAutomationRule(id: string): Promise<{ success: boolean; executed: boolean; matchesCount: number }> {
+export const AutomationRunResultSchema = z.object({
+  matched: z.coerce.number(),
+  tasksCreated: z.coerce.number(),
+  notificationsCreated: z.coerce.number(),
+  skipped: z.coerce.number(),
+});
+export type AutomationRunResult = z.infer<typeof AutomationRunResultSchema>;
+
+export async function runAutomationRule(id: string): Promise<AutomationRunResult> {
   const res = await apiClient.post(`/api/automation-rules/${id}/run`);
-  return safeParse(SingleResponseSchema(z.object({ success: z.boolean(), executed: z.boolean(), matchesCount: z.coerce.number() })), res.data, 'runAutomationRule').data;
+  return safeParse(SingleResponseSchema(AutomationRunResultSchema), res.data, 'runAutomationRule').data;
 }
 
-export async function runActiveAutomationRules(): Promise<{ success: boolean; executedRulesCount: number }> {
+export async function runActiveAutomationRules(): Promise<AutomationRunResult> {
   const res = await apiClient.post('/api/automation-rules/run-active');
-  return safeParse(SingleResponseSchema(z.object({ success: z.boolean(), executedRulesCount: z.coerce.number() })), res.data, 'runActiveAutomationRules').data;
+  return safeParse(SingleResponseSchema(AutomationRunResultSchema), res.data, 'runActiveAutomationRules').data;
 }

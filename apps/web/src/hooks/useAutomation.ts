@@ -40,7 +40,7 @@ export function useCreateAutomationRule() {
     mutationFn: (data: CreateAutomationRuleDTO) => createAutomationRule(data),
     onSuccess: (rule) => {
       qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.all });
-      toast.success(`"${rule.name}" otomasyon kuralı oluşturuldu.`);
+      toast.success(`"${rule.name}" otomasyon kurali olusturuldu.`);
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -54,7 +54,7 @@ export function useUpdateAutomationRule() {
       updateAutomationRule(id, data),
     onSuccess: (rule) => {
       qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.all });
-      toast.success(`"${rule.name}" otomasyon kuralı güncellendi.`);
+      toast.success(`"${rule.name}" otomasyon kurali guncellendi.`);
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -67,7 +67,7 @@ export function useDeleteAutomationRule() {
     mutationFn: (id: string) => deleteAutomationRule(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.all });
-      toast.success('Otomasyon kuralı silindi.');
+      toast.success('Otomasyon kurali silindi.');
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -78,10 +78,11 @@ export function useRunAutomationRule() {
   return useMutation({
     mutationFn: (id: string) => runAutomationRule(id),
     onSuccess: (result) => {
-      if (result.executed) {
-        toast.success(`Kural çalıştırıldı. Eşleşen ${result.matchesCount} kayıt için işlem yapıldı.`);
+      const actionCount = result.tasksCreated + result.notificationsCreated;
+      if (actionCount > 0) {
+        toast.success(`Kural calistirildi. ${result.matched} eslesmeden ${actionCount} aksiyon olusturuldu.`);
       } else {
-        toast.info('Kural pasif olduğu için çalıştırılamadı.');
+        toast.info(`Kural calisti; eslesen ${result.matched} kayit icin yeni aksiyon olusmadi.`);
       }
     },
     onError: (e) => toast.error(getErrorMessage(e)),
@@ -93,7 +94,8 @@ export function useRunActiveAutomationRules() {
   return useMutation({
     mutationFn: () => runActiveAutomationRules(),
     onSuccess: (result) => {
-      toast.success(`Tüm aktif kurallar tetiklendi. Toplam ${result.executedRulesCount} kural başarıyla yürütüldü.`);
+      const actionCount = result.tasksCreated + result.notificationsCreated;
+      toast.success(`Aktif kurallar tetiklendi. ${result.matched} eslesmeden ${actionCount} aksiyon olusturuldu.`);
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });

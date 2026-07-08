@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 import { getPaginationParams } from '../utils/pagination.js';
 import { assertCanConsumeStock, resolveStockLevelLocationId, recordInventoryCosting } from '../services/inventory-rules.service';
+import { WarehouseInsightsService } from '../services/warehouse-insights.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -67,8 +68,12 @@ export const WarehouseController = {
         take: limit,
       }),
     ]);
+    const insights = await new WarehouseInsightsService(prisma).getInsights(tenantId, warehouses.map((warehouse) => warehouse.id));
 
-    return c.json({ data: warehouses, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
+    return c.json({
+      data: warehouses.map((warehouse) => ({ ...warehouse, insight: insights.get(warehouse.id) ?? null })),
+      meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) },
+    });
   },
 
   /**
@@ -95,7 +100,8 @@ export const WarehouseController = {
       return c.json(new NotFoundError('Depo', warehouseId).toJSON(), 404);
     }
 
-    return c.json({ data: warehouse });
+    const insights = await new WarehouseInsightsService(prisma).getInsights(tenantId, [warehouse.id]);
+    return c.json({ data: { ...warehouse, insight: insights.get(warehouse.id) ?? null } });
   },
 
   /**

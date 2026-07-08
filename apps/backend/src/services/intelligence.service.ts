@@ -1,11 +1,9 @@
-import { InvoiceStatus, InvoiceType, MovementType, PaymentStatus, PermissionAction } from '@prisma/client';
+import { AutomationAction, AutomationTrigger, InvoiceStatus, InvoiceType, MovementType, PaymentStatus, PermissionAction } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { storageService } from './storage.service.js';
 
 type RecommendationSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 type RecommendationKind = 'LOW_STOCK' | 'PURCHASE_SUGGESTION' | 'SLOW_MOVING_STOCK' | 'COLLECTION_RISK' | 'LOW_MARGIN';
-type AutomationRuleTrigger = 'LOW_STOCK' | 'OVERDUE_INVOICE' | 'HIGH_VALUE_INVOICE' | 'LOW_MARGIN' | 'CHECK_DUE_SOON';
-type AutomationRuleAction = 'CREATE_PURCHASE_REQUEST_DRAFT' | 'CREATE_NOTIFICATION' | 'REQUEST_APPROVAL' | 'DRAFT_REMINDER_EMAIL' | 'CREATE_TASK';
 type SectorKey = 'retail' | 'manufacturing' | 'technical_service' | 'ecommerce' | 'wholesale';
 
 export interface PermissionView {
@@ -30,11 +28,17 @@ interface AutomationRuleTemplate {
   key: string;
   title: string;
   description: string;
-  trigger: AutomationRuleTrigger;
-  action: AutomationRuleAction;
+  trigger: AutomationTrigger;
+  action: AutomationAction;
   module: string;
   requiredModules: string[];
   requiredPermission: string;
+  conditionLabel: string;
+  actionLabel: string;
+  outcomeLabel: string;
+  conditions: Record<string, string | number | boolean>;
+  actionConfig: Record<string, string | number | boolean>;
+  steps: Array<{ label: string; description: string }>;
 }
 
 interface SectorTemplate {
@@ -61,53 +65,103 @@ function money(value: number): string {
 const AUTOMATION_TEMPLATES: AutomationRuleTemplate[] = [
   {
     key: 'low-stock-purchase-draft',
-    title: 'Kritik stok icin satin alma taslagi',
-    description: 'Minimum stok altina dusen urunler icin satin alma talebi taslagi hazirlar.',
-    trigger: 'LOW_STOCK',
-    action: 'CREATE_PURCHASE_REQUEST_DRAFT',
+    title: 'Stok minimum altina dustugunde gorev olustur',
+    description: 'Minimum stok seviyesi tanimli urunler limitin altina dustugunde tamamlanacak miktari hesaplar ve stok ekibine gorev acar.',
+    trigger: AutomationTrigger.LOW_STOCK,
+    action: AutomationAction.CREATE_TASK,
     module: 'inventory',
-    requiredModules: ['inventory', 'purchasing'],
-    requiredPermission: 'inventory:READ + purchasing:CREATE',
+    requiredModules: ['inventory'],
+    requiredPermission: 'inventory:READ',
+    conditionLabel: 'Urunun toplam stogu minimum stok seviyesinin altinda',
+    actionLabel: 'Stok ekibi icin otomatik gorev olustur',
+    outcomeLabel: 'Gorev, urun kartina ve stok seviyeleri ekranina baglanir.',
+    conditions: { minStockRequired: true, scope: 'single_warehouse_total' },
+    actionConfig: { taskType: 'AUTOMATION', priorityPolicy: 'deficit_based' },
+    steps: [
+      { label: 'Tetikleyici', description: 'Stok seviyesi minimumun altina iner.' },
+      { label: 'Kosul', description: 'Urun aktif ve minimum stok seviyesi tanimlidir.' },
+      { label: 'Aksiyon', description: 'Eksik miktar detayli otomatik gorev olusturulur.' },
+    ],
   },
   {
     key: 'overdue-invoice-reminder',
-    title: 'Geciken fatura hatirlatmasi',
-    description: 'Vadesi gecen satis faturalarini takip eder ve mail taslagi olusturur.',
-    trigger: 'OVERDUE_INVOICE',
-    action: 'DRAFT_REMINDER_EMAIL',
+    title: 'Fatura vadesi gectiginde bildirim',
+    description: 'Vadesi gecen satis faturalarini izler ve sorumlu kullanicilara sistem ici tahsilat bildirimi gonderir.',
+    trigger: AutomationTrigger.OVERDUE_INVOICE,
+    action: AutomationAction.CREATE_NOTIFICATION,
     module: 'invoicing',
     requiredModules: ['invoicing'],
     requiredPermission: 'invoicing:READ',
+    conditionLabel: 'Satis faturasi vadesi gecmis ve kapatilmamis',
+    actionLabel: 'Sistem ici tahsilat bildirimi gonder',
+    outcomeLabel: 'Bildirim fatura kaydina baglanir; atanmis kullanici yoksa tenant owner bilgilendirilir.',
+    conditions: { invoiceType: 'SALES', statuses: 'SENT,PARTIALLY_PAID,OVERDUE' },
+    actionConfig: { channel: 'in_app', audience: 'assigned_or_owner' },
+    steps: [
+      { label: 'Tetikleyici', description: 'Fatura vade tarihi bugunden eski olur.' },
+      { label: 'Kosul', description: 'Fatura iptal edilmemis ve tamamen odenmemistir.' },
+      { label: 'Aksiyon', description: 'Tahsilat takibi icin sistem bildirimi olusturulur.' },
+    ],
   },
   {
     key: 'high-value-invoice-approval',
     title: 'Yuksek tutarli fatura onayi',
     description: 'Belirlenen limit uzerindeki faturalar icin onay akisi onerir.',
-    trigger: 'HIGH_VALUE_INVOICE',
-    action: 'REQUEST_APPROVAL',
+    trigger: AutomationTrigger.HIGH_VALUE_INVOICE,
+    action: AutomationAction.REQUEST_APPROVAL,
     module: 'approvals',
     requiredModules: ['invoicing', 'approvals'],
     requiredPermission: 'invoicing:READ + approvals:CREATE',
+    conditionLabel: 'Fatura tutari 100.000 TRY ve uzeri',
+    actionLabel: 'Onay kontrol gorevi olustur',
+    outcomeLabel: 'Yuksek tutarli faturalar finans kontrol listesine duser.',
+    conditions: { minAmount: 100000, currency: 'TRY' },
+    actionConfig: { approvalScope: 'finance_review' },
+    steps: [
+      { label: 'Tetikleyici', description: 'Yuksek tutarli fatura kaydi bulunur.' },
+      { label: 'Kosul', description: 'Fatura iptal edilmemis ve limitin uzerindedir.' },
+      { label: 'Aksiyon', description: 'Finans onay kontrolu icin gorev acilir.' },
+    ],
   },
   {
     key: 'low-margin-product-alert',
     title: 'Dusuk kar marji uyarisi',
     description: 'Satis fiyati maliyete yaklasan urunler icin fiyat gozden gecirme gorevi onerir.',
-    trigger: 'LOW_MARGIN',
-    action: 'CREATE_TASK',
+    trigger: AutomationTrigger.LOW_MARGIN,
+    action: AutomationAction.CREATE_TASK,
     module: 'inventory',
     requiredModules: ['inventory'],
     requiredPermission: 'inventory:READ',
+    conditionLabel: 'Urun marji %12 altinda',
+    actionLabel: 'Fiyat gozden gecirme gorevi olustur',
+    outcomeLabel: 'Dusuk marjli urunler fiyat kontrol listesine eklenir.',
+    conditions: { maxMarginRate: 0.12 },
+    actionConfig: { taskType: 'AUTOMATION', priorityPolicy: 'margin_based' },
+    steps: [
+      { label: 'Tetikleyici', description: 'Urun satis fiyati ve maliyeti karsilastirilir.' },
+      { label: 'Kosul', description: 'Marj hedef esigin altindadir.' },
+      { label: 'Aksiyon', description: 'Fiyat kontrol gorevi olusturulur.' },
+    ],
   },
   {
     key: 'check-due-soon-task',
     title: 'Yaklasan cek/senet gorevi',
     description: 'Vadesi yaklasan cek ve senetler icin tahsilat veya banka aksiyonu gorevi onerir.',
-    trigger: 'CHECK_DUE_SOON',
-    action: 'CREATE_TASK',
+    trigger: AutomationTrigger.CHECK_DUE_SOON,
+    action: AutomationAction.CREATE_TASK,
     module: 'accounting',
     requiredModules: ['accounting'],
     requiredPermission: 'accounting:READ',
+    conditionLabel: 'Cek/senet vadesi 7 gun icinde',
+    actionLabel: 'Muhasebe takip gorevi olustur',
+    outcomeLabel: 'Yaklasan vadeler muhasebe gorev listesinde gorunur.',
+    conditions: { dueInDays: 7 },
+    actionConfig: { taskType: 'AUTOMATION', priorityPolicy: 'due_date_based' },
+    steps: [
+      { label: 'Tetikleyici', description: 'Cek veya senet vadesi yaklasir.' },
+      { label: 'Kosul', description: 'Kayit beklemede veya bankaya verilmis durumdadir.' },
+      { label: 'Aksiyon', description: 'Vade takip gorevi olusturulur.' },
+    ],
   },
 ];
 

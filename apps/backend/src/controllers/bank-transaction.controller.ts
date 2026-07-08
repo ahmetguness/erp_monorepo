@@ -3,6 +3,9 @@ import { BankTransactionType, BankTransactionRefType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireParam } from '../utils/context.js';
+import {
+  BankTransactionMatchingService,
+} from '../services/bank-transaction-matching.service';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -28,9 +31,31 @@ interface CreateBankTransactionDTO {
 }
 
 interface MatchPaymentDTO {
-  refType: BankTransactionRefType;
+  refType: string;
   refId: string;
 }
+
+function readMatchTargetType(value: string): 'PAYMENT' | 'INVOICE' | 'CONTACT' {
+  if (value === 'PAYMENT' || value === 'INVOICE' || value === 'CONTACT') return value;
+  throw new ValidationError('Gecersiz eslestirme tipi.');
+}
+
+function readStoredRefType(value: string): BankTransactionRefType | null {
+  switch (value) {
+    case BankTransactionRefType.PAYMENT:
+      return BankTransactionRefType.PAYMENT;
+    case BankTransactionRefType.INVOICE:
+      return BankTransactionRefType.INVOICE;
+    case BankTransactionRefType.RECONCILIATION:
+      return BankTransactionRefType.RECONCILIATION;
+    case BankTransactionRefType.OTHER:
+      return BankTransactionRefType.OTHER;
+    default:
+      return null;
+  }
+}
+
+const matchingService = new BankTransactionMatchingService(prisma);
 
 // ─────────────────────────────────────────────
 // Bank Transaction Controller
@@ -129,12 +154,49 @@ export const BankTransactionController = {
       return c.json(new ValidationError('refType ve refId zorunludur.').toJSON(), 400);
     }
 
-    const updated = await prisma.bankTransaction.update({
-      where: { id },
-      data: {
-        refType: body.refType,
-        refId: body.refId,
-      },
+    const storedRefType = readStoredRefType(body.refType);
+    if (storedRefType === BankTransactionRefType.RECONCILIATION || storedRefType === BankTransactionRefType.OTHER) {
+      const updated = await prisma.bankTransaction.update({
+        where: { id },
+        data: {
+          refType: storedRefType,
+          refId: body.refId,
+        },
+        include: {
+          bankAccount: { select: { id: true, name: true, bankName: true } },
+        },
+      });
+
+      return c.json({ data: updated });
+    }
+
+    const updated = await matchingService.approve(tenantId, id, {
+      refType: readMatchTargetType(body.refType),
+      refId: body.refId,
+    });
+
+    return c.json({ data: updated });
+  },
+
+  async suggestions(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
+    const result = await matchingService.suggest(tenantId, id);
+    return c.json({ data: result });
+  },
+
+  async approveMatch(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
+    const body = await c.req.json<MatchPaymentDTO>();
+
+    if (!body.refType || !body.refId) {
+      return c.json(new ValidationError('refType ve refId zorunludur.').toJSON(), 400);
+    }
+
+    const updated = await matchingService.approve(tenantId, id, {
+      refType: readMatchTargetType(body.refType),
+      refId: body.refId,
     });
 
     return c.json({ data: updated });

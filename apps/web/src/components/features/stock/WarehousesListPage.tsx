@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, MapPin } from 'lucide-react';
+import { CheckCircle2, Clock, Layers3, Plus, MapPin } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -23,6 +23,10 @@ const warehouseSchema = z.object({
   address: z.string().optional(),
 });
 type WarehouseForm = z.infer<typeof warehouseSchema>;
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(value);
+}
 
 export function WarehousesListPage() {
   const router = useRouter();
@@ -60,7 +64,41 @@ export function WarehousesListPage() {
     },
     {
       key: 'stockLevels', header: 'Stok Kalemi', width: '110px', align: 'right',
-      render: (r) => <span className="text-slate-300">{r._count?.stockLevels ?? 0}</span>,
+      render: (r) => <span className="text-slate-300">{r.insight?.stockItemCount ?? r._count?.stockLevels ?? 0}</span>,
+    },
+    {
+      key: 'locations',
+      header: 'Lokasyon',
+      width: '120px',
+      render: (r) => (
+        <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+          <Layers3 className="h-3.5 w-3.5 text-sky-400" />
+          {r.insight?.locationCount ?? r.locations?.length ?? 0}
+        </span>
+      ),
+    },
+    {
+      key: 'value',
+      header: 'Stok Degeri',
+      width: '130px',
+      align: 'right',
+      render: (r) => <span className="text-xs font-medium text-emerald-300">{formatCurrency(r.insight?.totalValue ?? 0)}</span>,
+    },
+    {
+      key: 'approval',
+      header: 'Transfer Onayi',
+      width: '140px',
+      render: (r) => r.insight?.approval.transferApprovalConfigured ? (
+        <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Hazir
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1.5 text-xs text-amber-300">
+          <Clock className="h-3.5 w-3.5" />
+          Akis yok
+        </span>
+      ),
     },
     {
       key: 'isActive', header: 'Durum', width: '80px', align: 'center',

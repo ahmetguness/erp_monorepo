@@ -596,7 +596,7 @@ export const SavedReportController = {
   async runSchedule(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const reportId = c.req.param('id');
+    const reportId = requireParam(c, 'id');
 
     const report = await prisma.savedReport.findFirst({ where: { id: reportId, tenantId } });
     if (!report) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);

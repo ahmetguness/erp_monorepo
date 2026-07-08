@@ -202,16 +202,30 @@ export function WorkflowCenterPage() {
                       </p>
                     </div>
 
+                    <div className="space-y-2">
+                      {tmpl.steps.map((step) => (
+                        <div key={`${tmpl.key}-${step.label}`} className="rounded-lg border border-slate-800 bg-slate-950/30 p-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{step.label}</p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed text-slate-300">{step.description}</p>
+                        </div>
+                      ))}
+                    </div>
+
                     <div className="pt-2 space-y-1 bg-slate-950/40 p-2.5 rounded-lg border border-slate-850 text-[10px]">
                       <div className="flex items-center justify-between text-slate-400">
                         <span className="text-slate-500">Tetikleyici:</span>
                         <span className="font-semibold">{TRIGGER_LABELS[tmpl.trigger] ?? tmpl.trigger}</span>
                       </div>
                       <div className="flex items-center justify-between text-slate-400">
+                        <span className="text-slate-500">KoÅŸul:</span>
+                        <span className="max-w-40 truncate text-right font-semibold text-slate-300">{tmpl.conditionLabel}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-400">
                         <span className="text-slate-500">Aksiyon:</span>
-                        <span className="font-semibold text-sky-400">{ACTION_LABELS[tmpl.action] ?? tmpl.action}</span>
+                        <span className="max-w-40 truncate text-right font-semibold text-sky-400">{tmpl.actionLabel || ACTION_LABELS[tmpl.action] || tmpl.action}</span>
                       </div>
                     </div>
+                    <p className="text-[10px] leading-relaxed text-emerald-300/80">{tmpl.outcomeLabel}</p>
                   </div>
                   <button
                     onClick={() => {
@@ -221,6 +235,8 @@ export function WorkflowCenterPage() {
                         trigger: tmpl.trigger,
                         action: tmpl.action,
                         description: tmpl.description,
+                        conditions: tmpl.conditions,
+                        actionConfig: tmpl.actionConfig,
                         isActive: true,
                       });
                     }}

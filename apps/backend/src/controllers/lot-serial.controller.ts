@@ -3,6 +3,7 @@ import { LotUsedRefType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireParam } from '../utils/context.js';
+import { LotSerialTraceabilityService } from '../services/lot-serial-traceability.service';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -14,6 +15,12 @@ interface LotSerialListQuery {
   productId?: string;
   batchId?: string;
   isUsed?: string;
+}
+
+interface TraceabilityQuery {
+  lotId?: string;
+  batchId?: string;
+  productId?: string;
 }
 
 interface CreateLotSerialDTO {
@@ -30,6 +37,8 @@ interface AssignToMovementDTO {
 // ─────────────────────────────────────────────
 // Lot / Serial Number Controller
 // ─────────────────────────────────────────────
+
+const traceabilityService = new LotSerialTraceabilityService(prisma);
 
 export const LotSerialController = {
   async list(c: Context): Promise<Response> {
@@ -93,6 +102,17 @@ export const LotSerialController = {
     });
 
     return c.json({ data: lot }, 201);
+  },
+
+  async traceability(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const query = c.req.query() as TraceabilityQuery;
+    const report = await traceabilityService.getReport(tenantId, {
+      lotId: query.lotId,
+      batchId: query.batchId,
+      productId: query.productId,
+    });
+    return c.json({ data: report });
   },
 
   async assignToMovement(c: Context): Promise<Response> {

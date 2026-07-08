@@ -36,8 +36,12 @@ export const ApiKeySchema = z.object({
   revokedAt: z.string().nullable().optional(),
   revokedById: z.string().nullable().optional(),
   requestCount: z.coerce.number().optional(),
+  successfulRequestCount: z.coerce.number().optional(),
   errorCount: z.coerce.number().optional(),
   errorRate: z.coerce.number().optional(),
+  rateLimitedCount: z.coerce.number().optional(),
+  rateLimitPerMinute: z.coerce.number().optional(),
+  lastRequestAt: z.string().nullable().optional(),
   lastIpAddress: z.string().nullable().optional(),
   lastStatus: z.coerce.number().nullable().optional(),
 });

@@ -214,6 +214,11 @@ export function ReportsPage() {
   });
 
   const selectedDataset = registry?.datasets.find((dataset) => dataset.key === kpiConfig.dataset);
+  const canSaveKpiReport = Boolean(
+    kpiName.trim()
+    && selectedDataset
+    && (!kpiConfig.scheduleEmail.enabled || kpiConfig.scheduleEmail.recipients.length > 0),
+  );
 
   const deleteReport = useMutation({
     mutationFn: (id: string) => deleteSavedReport(id),
@@ -285,7 +290,7 @@ export function ReportsPage() {
       key: 'actions', header: '', width: '88px', align: 'right',
       render: (r) => {
         const config = parseKpiConfig(r.filters);
-        const canRunSchedule = Boolean(config?.scheduleEmail.enabled);
+        const canRunSchedule = Boolean(config?.scheduleEmail.enabled && config.scheduleEmail.recipients.length > 0);
         return (
           <div className="flex justify-end gap-1">
           <button
@@ -778,7 +783,7 @@ export function ReportsPage() {
                   <Button variant="secondary" leftIcon={<TrendingUp className="h-4 w-4" />} loading={previewKpiMutation.isPending} disabled={!selectedDataset} onClick={() => previewKpiMutation.mutate(kpiConfig)}>
                     Önizle
                   </Button>
-                  <Button leftIcon={<Save className="h-4 w-4" />} loading={createKpiReport.isPending} disabled={!kpiName.trim() || !selectedDataset} onClick={() => createKpiReport.mutate()}>
+                  <Button leftIcon={<Save className="h-4 w-4" />} loading={createKpiReport.isPending} disabled={!canSaveKpiReport} onClick={() => createKpiReport.mutate()}>
                     KPI kaydet
                   </Button>
                 </div>

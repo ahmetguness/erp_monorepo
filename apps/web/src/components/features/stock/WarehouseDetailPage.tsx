@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Pencil } from 'lucide-react';
+import { CheckCircle2, Clock, Layers3, PackageSearch, Plus, Pencil, WalletCards } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -30,6 +30,14 @@ type EditForm = z.infer<typeof editSchema>;
 type LocationForm = z.infer<typeof locationSchema>;
 
 interface Props { id: string }
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(value);
+}
+
+function formatQuantity(value: number): string {
+  return new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 3 }).format(value);
+}
 
 export function WarehouseDetailPage({ id }: Props) {
   const router = useRouter();
@@ -60,6 +68,27 @@ export function WarehouseDetailPage({ id }: Props) {
   const locationColumns: ColumnDef<WarehouseLocation>[] = [
     { key: 'code', header: 'Kod', width: '100px', render: (r) => <span className="font-mono text-sky-400">{r.code}</span> },
     { key: 'name', header: 'Ad', render: (r) => <span className="text-slate-200">{r.name}</span> },
+    {
+      key: 'stockItemCount',
+      header: 'Stok Kalemi',
+      width: '110px',
+      align: 'right',
+      render: (r) => <span className="text-slate-300">{warehouse?.insight?.locations.find((item) => item.id === r.id)?.stockItemCount ?? 0}</span>,
+    },
+    {
+      key: 'totalQuantity',
+      header: 'Miktar',
+      width: '110px',
+      align: 'right',
+      render: (r) => <span className="text-slate-400">{formatQuantity(warehouse?.insight?.locations.find((item) => item.id === r.id)?.totalQuantity ?? 0)}</span>,
+    },
+    {
+      key: 'totalValue',
+      header: 'Deger',
+      width: '120px',
+      align: 'right',
+      render: (r) => <span className="text-emerald-300">{formatCurrency(warehouse?.insight?.locations.find((item) => item.id === r.id)?.totalValue ?? 0)}</span>,
+    },
     { key: 'isActive', header: 'Durum', width: '80px', align: 'center', render: (r) => <ActiveBadge isActive={r.isActive} /> },
   ];
 
@@ -81,6 +110,37 @@ export function WarehouseDetailPage({ id }: Props) {
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
         <ActiveBadge isActive={warehouse.isActive} />
         {warehouse.address && <p className="text-sm text-slate-400 mt-2">{warehouse.address}</p>}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <Layers3 className="mb-3 h-5 w-5 text-sky-400" />
+          <p className="text-2xl font-semibold text-white">{warehouse.insight?.locationCount ?? locations.length}</p>
+          <p className="text-xs text-slate-500">Aktif lokasyon</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <PackageSearch className="mb-3 h-5 w-5 text-violet-400" />
+          <p className="text-2xl font-semibold text-white">{warehouse.insight?.stockItemCount ?? 0}</p>
+          <p className="text-xs text-slate-500">Stok kalemi</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <WalletCards className="mb-3 h-5 w-5 text-emerald-400" />
+          <p className="text-2xl font-semibold text-white">{formatCurrency(warehouse.insight?.totalValue ?? 0)}</p>
+          <p className="text-xs text-slate-500">Depo bazli stok degeri</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          {warehouse.insight?.approval.transferApprovalConfigured ? (
+            <CheckCircle2 className="mb-3 h-5 w-5 text-emerald-400" />
+          ) : (
+            <Clock className="mb-3 h-5 w-5 text-amber-400" />
+          )}
+          <p className="text-sm font-semibold text-white">
+            {warehouse.insight?.approval.transferApprovalConfigured ? 'Transfer onayi hazir' : 'Transfer onay akisi yok'}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            {warehouse.insight?.approval.pendingTransferApprovalCount ?? 0} bekleyen onay
+          </p>
+        </div>
       </div>
 
       <div>

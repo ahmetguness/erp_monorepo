@@ -17,6 +17,27 @@ export const WarehouseSchema = z.object({
   isActive: z.boolean(),
   locations: z.array(z.object({ id: z.string(), name: z.string(), code: z.string() })).optional(),
   _count: z.object({ stockLevels: z.coerce.number() }).optional(),
+  insight: z.object({
+    warehouseId: z.string(),
+    locationCount: z.coerce.number(),
+    stockItemCount: z.coerce.number(),
+    totalQuantity: z.coerce.number(),
+    totalValue: z.coerce.number(),
+    unlocatedStockItemCount: z.coerce.number(),
+    locations: z.array(z.object({
+      id: z.string(),
+      code: z.string(),
+      name: z.string(),
+      stockItemCount: z.coerce.number(),
+      totalQuantity: z.coerce.number(),
+      totalValue: z.coerce.number(),
+    })),
+    approval: z.object({
+      transferApprovalConfigured: z.boolean(),
+      activeTransferFlowCount: z.coerce.number(),
+      pendingTransferApprovalCount: z.coerce.number(),
+    }),
+  }).nullable().optional(),
 });
 
 export const LocationSchema = z.object({
