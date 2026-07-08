@@ -471,6 +471,7 @@ enum FeatureKey {
   AUDIT_LOG
   CUSTOM_REPORTING
   DOCUMENT_CENTER
+  SMART_NOTIFICATIONS
 }
 
 // ─── DEĞİŞİKLİK 4 ───────────────────────────

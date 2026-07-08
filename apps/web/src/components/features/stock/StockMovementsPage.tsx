@@ -8,6 +8,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { ProductSelect, WarehouseSelect } from '@/components/shared/EntitySelect';
@@ -16,6 +17,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { FormRow } from '@/components/shared/FormField';
 import { useStockMovements, useCreateManualMovement } from '@/hooks/useStock';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { cn, formatDate } from '@/lib/utils';
 import type { StockMovement, StockMovementType } from '@/services/stock.service';
 
@@ -59,8 +61,10 @@ type ManualMovementForm = z.infer<typeof manualMovementSchema>;
 // ─────────────────────────────────────────────
 
 export function StockMovementsPage() {
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
+  const { multiWarehouse } = usePlanFeatures();
 
   const { data, isLoading } = useStockMovements({ page, limit: 20 });
   const createMovement = useCreateManualMovement();
@@ -118,7 +122,7 @@ export function StockMovementsPage() {
     <div>
       <PageHeader
         title="Stok Hareketleri"
-        subtitle="Tüm stok giriş, çıkış ve transfer hareketleri."
+        subtitle={multiWarehouse ? 'Tüm stok giriş, çıkış ve transfer hareketleri.' : 'Tek depo stok giriş, çıkış ve düzeltme hareketleri.'}
         action={
           <Link
             href="#"
@@ -135,6 +139,26 @@ export function StockMovementsPage() {
           </Link>
         }
       />
+
+      {!multiWarehouse && (
+        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-amber-100">Depo transferleri Professional ile acilir</p>
+              <p className="mt-1 text-xs text-amber-100/75">
+                Starter tek depo akisi icindir. Depolar arasi transfer menusu kilitli upsell olarak gosterilir.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push('/dashboard/upgrade-preview?feature=Depo%20Transferleri&plan=PROFESSIONAL&module=inventory')}
+            >
+              Yukseltmeyi Gor
+            </Button>
+          </div>
+        </div>
+      )}
 
       <DataTable
         columns={columns}

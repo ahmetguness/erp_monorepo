@@ -117,6 +117,7 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: 'Depolar', href: '/dashboard/warehouses', icon: Warehouse, module: 'inventory' },
           { label: 'Stok Seviyeleri', href: '/dashboard/stock/levels', icon: Layers, module: 'inventory' },
           { label: 'Stok Hareketleri', href: '/dashboard/stock/movements', icon: ArrowLeftRight, module: 'inventory' },
+          { label: 'Depo Transferleri', href: '/dashboard/stock/movements', icon: ArrowLeftRight, plan: PROFESSIONAL_PLAN, module: 'inventory' },
           { label: 'Sayımlar', href: '/dashboard/stock/counts', icon: ClipboardCheck, module: 'inventory' },
           { label: 'Stok Değerleme', href: '/dashboard/stock-valuations', icon: TrendingUp, plan: PROFESSIONAL_PLAN, module: 'inventory' },
           { label: 'Rezervasyonlar', href: '/dashboard/reservations', icon: BookmarkCheck, plan: PROFESSIONAL_PLAN, module: 'inventory' },

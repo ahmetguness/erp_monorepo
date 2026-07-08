@@ -26,6 +26,7 @@ export const FEATURE_KEY = {
     AUDIT_LOG: 'AUDIT_LOG',
     CUSTOM_REPORTING: 'CUSTOM_REPORTING',
     DOCUMENT_CENTER: 'DOCUMENT_CENTER',
+    SMART_NOTIFICATIONS: 'SMART_NOTIFICATIONS',
 };
 export const FEATURE_TYPE = {
     BOOLEAN: 'BOOLEAN',
@@ -184,6 +185,7 @@ export const PLAN_FEATURE_ROWS = [
     { plan: PLAN.STARTER, key: 'audit_log', featureKey: FEATURE_KEY.AUDIT_LOG, value: 'basic', type: FEATURE_TYPE.ENUM },
     { plan: PLAN.STARTER, key: 'custom_reporting', featureKey: FEATURE_KEY.CUSTOM_REPORTING, value: 'false', type: FEATURE_TYPE.BOOLEAN },
     { plan: PLAN.STARTER, key: 'document_center', featureKey: FEATURE_KEY.DOCUMENT_CENTER, value: 'true', type: FEATURE_TYPE.BOOLEAN },
+    { plan: PLAN.STARTER, key: 'smart_notifications', featureKey: FEATURE_KEY.SMART_NOTIFICATIONS, value: 'true', type: FEATURE_TYPE.BOOLEAN },
     { plan: PLAN.PROFESSIONAL, key: 'max_users', featureKey: FEATURE_KEY.MAX_USERS, value: '25', type: FEATURE_TYPE.LIMIT },
     { plan: PLAN.PROFESSIONAL, key: 'max_products', featureKey: FEATURE_KEY.MAX_PRODUCTS, value: '5000', type: FEATURE_TYPE.LIMIT },
     { plan: PLAN.PROFESSIONAL, key: 'multi_warehouse', featureKey: FEATURE_KEY.MULTI_WAREHOUSE, value: 'true', type: FEATURE_TYPE.BOOLEAN },
@@ -201,6 +203,7 @@ export const PLAN_FEATURE_ROWS = [
     { plan: PLAN.PROFESSIONAL, key: 'audit_log', featureKey: FEATURE_KEY.AUDIT_LOG, value: 'standard', type: FEATURE_TYPE.ENUM },
     { plan: PLAN.PROFESSIONAL, key: 'custom_reporting', featureKey: FEATURE_KEY.CUSTOM_REPORTING, value: 'true', type: FEATURE_TYPE.BOOLEAN },
     { plan: PLAN.PROFESSIONAL, key: 'document_center', featureKey: FEATURE_KEY.DOCUMENT_CENTER, value: 'true', type: FEATURE_TYPE.BOOLEAN },
+    { plan: PLAN.PROFESSIONAL, key: 'smart_notifications', featureKey: FEATURE_KEY.SMART_NOTIFICATIONS, value: 'true', type: FEATURE_TYPE.BOOLEAN },
     { plan: PLAN.ENTERPRISE, key: 'max_users', featureKey: FEATURE_KEY.MAX_USERS, value: 'unlimited', type: FEATURE_TYPE.LIMIT },
     { plan: PLAN.ENTERPRISE, key: 'max_products', featureKey: FEATURE_KEY.MAX_PRODUCTS, value: 'unlimited', type: FEATURE_TYPE.LIMIT },
     { plan: PLAN.ENTERPRISE, key: 'multi_warehouse', featureKey: FEATURE_KEY.MULTI_WAREHOUSE, value: 'true', type: FEATURE_TYPE.BOOLEAN },
@@ -218,6 +221,7 @@ export const PLAN_FEATURE_ROWS = [
     { plan: PLAN.ENTERPRISE, key: 'audit_log', featureKey: FEATURE_KEY.AUDIT_LOG, value: 'full', type: FEATURE_TYPE.ENUM },
     { plan: PLAN.ENTERPRISE, key: 'custom_reporting', featureKey: FEATURE_KEY.CUSTOM_REPORTING, value: 'true', type: FEATURE_TYPE.BOOLEAN },
     { plan: PLAN.ENTERPRISE, key: 'document_center', featureKey: FEATURE_KEY.DOCUMENT_CENTER, value: 'true', type: FEATURE_TYPE.BOOLEAN },
+    { plan: PLAN.ENTERPRISE, key: 'smart_notifications', featureKey: FEATURE_KEY.SMART_NOTIFICATIONS, value: 'true', type: FEATURE_TYPE.BOOLEAN },
 ];
 export const ACCESS_POLICIES = {
     purchasing: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.PURCHASING, module: MODULE_KEY.PURCHASING },
@@ -226,6 +230,8 @@ export const ACCESS_POLICIES = {
     roles: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.ROLE_MANAGEMENT },
     deliveryNotes: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVOICING },
     documentCenter: { minPlan: PLAN.STARTER, featureKey: FEATURE_KEY.DOCUMENT_CENTER, module: MODULE_KEY.DOCUMENTS },
+    smartNotifications: { minPlan: PLAN.STARTER, featureKey: FEATURE_KEY.SMART_NOTIFICATIONS },
+    smartNotificationExternalActions: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.SMART_NOTIFICATIONS },
     eDocuments: { minPlan: PLAN.STARTER, module: MODULE_KEY.INVOICING },
     bankTransactions: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.ACCOUNTING },
     checkPromissory: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.ACCOUNTING },

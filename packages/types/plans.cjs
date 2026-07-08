@@ -31,6 +31,7 @@ exports.FEATURE_KEY = {
     AUDIT_LOG: 'AUDIT_LOG',
     CUSTOM_REPORTING: 'CUSTOM_REPORTING',
     DOCUMENT_CENTER: 'DOCUMENT_CENTER',
+    SMART_NOTIFICATIONS: 'SMART_NOTIFICATIONS',
 };
 exports.FEATURE_TYPE = {
     BOOLEAN: 'BOOLEAN',
@@ -189,6 +190,7 @@ exports.PLAN_FEATURE_ROWS = [
     { plan: exports.PLAN.STARTER, key: 'audit_log', featureKey: exports.FEATURE_KEY.AUDIT_LOG, value: 'basic', type: exports.FEATURE_TYPE.ENUM },
     { plan: exports.PLAN.STARTER, key: 'custom_reporting', featureKey: exports.FEATURE_KEY.CUSTOM_REPORTING, value: 'false', type: exports.FEATURE_TYPE.BOOLEAN },
     { plan: exports.PLAN.STARTER, key: 'document_center', featureKey: exports.FEATURE_KEY.DOCUMENT_CENTER, value: 'true', type: exports.FEATURE_TYPE.BOOLEAN },
+    { plan: exports.PLAN.STARTER, key: 'smart_notifications', featureKey: exports.FEATURE_KEY.SMART_NOTIFICATIONS, value: 'true', type: exports.FEATURE_TYPE.BOOLEAN },
     { plan: exports.PLAN.PROFESSIONAL, key: 'max_users', featureKey: exports.FEATURE_KEY.MAX_USERS, value: '25', type: exports.FEATURE_TYPE.LIMIT },
     { plan: exports.PLAN.PROFESSIONAL, key: 'max_products', featureKey: exports.FEATURE_KEY.MAX_PRODUCTS, value: '5000', type: exports.FEATURE_TYPE.LIMIT },
     { plan: exports.PLAN.PROFESSIONAL, key: 'multi_warehouse', featureKey: exports.FEATURE_KEY.MULTI_WAREHOUSE, value: 'true', type: exports.FEATURE_TYPE.BOOLEAN },
@@ -206,6 +208,7 @@ exports.PLAN_FEATURE_ROWS = [
     { plan: exports.PLAN.PROFESSIONAL, key: 'audit_log', featureKey: exports.FEATURE_KEY.AUDIT_LOG, value: 'standard', type: exports.FEATURE_TYPE.ENUM },
     { plan: exports.PLAN.PROFESSIONAL, key: 'custom_reporting', featureKey: exports.FEATURE_KEY.CUSTOM_REPORTING, value: 'true', type: exports.FEATURE_TYPE.BOOLEAN },
     { plan: exports.PLAN.PROFESSIONAL, key: 'document_center', featureKey: exports.FEATURE_KEY.DOCUMENT_CENTER, value: 'true', type: exports.FEATURE_TYPE.BOOLEAN },
+    { plan: exports.PLAN.PROFESSIONAL, key: 'smart_notifications', featureKey: exports.FEATURE_KEY.SMART_NOTIFICATIONS, value: 'true', type: exports.FEATURE_TYPE.BOOLEAN },
     { plan: exports.PLAN.ENTERPRISE, key: 'max_users', featureKey: exports.FEATURE_KEY.MAX_USERS, value: 'unlimited', type: exports.FEATURE_TYPE.LIMIT },
     { plan: exports.PLAN.ENTERPRISE, key: 'max_products', featureKey: exports.FEATURE_KEY.MAX_PRODUCTS, value: 'unlimited', type: exports.FEATURE_TYPE.LIMIT },
     { plan: exports.PLAN.ENTERPRISE, key: 'multi_warehouse', featureKey: exports.FEATURE_KEY.MULTI_WAREHOUSE, value: 'true', type: exports.FEATURE_TYPE.BOOLEAN },
@@ -223,6 +226,7 @@ exports.PLAN_FEATURE_ROWS = [
     { plan: exports.PLAN.ENTERPRISE, key: 'audit_log', featureKey: exports.FEATURE_KEY.AUDIT_LOG, value: 'full', type: exports.FEATURE_TYPE.ENUM },
     { plan: exports.PLAN.ENTERPRISE, key: 'custom_reporting', featureKey: exports.FEATURE_KEY.CUSTOM_REPORTING, value: 'true', type: exports.FEATURE_TYPE.BOOLEAN },
     { plan: exports.PLAN.ENTERPRISE, key: 'document_center', featureKey: exports.FEATURE_KEY.DOCUMENT_CENTER, value: 'true', type: exports.FEATURE_TYPE.BOOLEAN },
+    { plan: exports.PLAN.ENTERPRISE, key: 'smart_notifications', featureKey: exports.FEATURE_KEY.SMART_NOTIFICATIONS, value: 'true', type: exports.FEATURE_TYPE.BOOLEAN },
 ];
 exports.ACCESS_POLICIES = {
     purchasing: { minPlan: exports.PLAN.PROFESSIONAL, featureKey: exports.FEATURE_KEY.PURCHASING, module: exports.MODULE_KEY.PURCHASING },
@@ -231,6 +235,8 @@ exports.ACCESS_POLICIES = {
     roles: { minPlan: exports.PLAN.PROFESSIONAL, featureKey: exports.FEATURE_KEY.ROLE_MANAGEMENT },
     deliveryNotes: { minPlan: exports.PLAN.PROFESSIONAL, module: exports.MODULE_KEY.INVOICING },
     documentCenter: { minPlan: exports.PLAN.STARTER, featureKey: exports.FEATURE_KEY.DOCUMENT_CENTER, module: exports.MODULE_KEY.DOCUMENTS },
+    smartNotifications: { minPlan: exports.PLAN.STARTER, featureKey: exports.FEATURE_KEY.SMART_NOTIFICATIONS },
+    smartNotificationExternalActions: { minPlan: exports.PLAN.PROFESSIONAL, featureKey: exports.FEATURE_KEY.SMART_NOTIFICATIONS },
     eDocuments: { minPlan: exports.PLAN.STARTER, module: exports.MODULE_KEY.INVOICING },
     bankTransactions: { minPlan: exports.PLAN.PROFESSIONAL, module: exports.MODULE_KEY.ACCOUNTING },
     checkPromissory: { minPlan: exports.PLAN.PROFESSIONAL, module: exports.MODULE_KEY.ACCOUNTING },

@@ -1,18 +1,19 @@
 'use client';
 'use no memo';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Mail, X, Clock, CheckCircle2, XCircle, Ban, Send, Loader2 } from 'lucide-react';
+import { AlertTriangle, UserPlus, Mail, X, Clock, CheckCircle2, XCircle, Ban, Send, Loader2, Users } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { getUserLimitState } from '@/components/features/settings/users/user-limit';
 import { getInvitations, createInvitation, cancelInvitation, type Invitation } from '@/services/invitation.service';
 import { useTenantUsers, useUpdateUserRole } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { useUIStore } from '@/store/ui.store';
-import { useCurrentUser } from '@/hooks/useAuth';
 import { getErrorMessage } from '@/types/api.types';
 import { cn } from '@/lib/utils';
 
@@ -24,7 +25,7 @@ const STATUS_MAP: Record<string, { label: string; variant: BadgeVariant; icon: t
 };
 
 export default function UsersAndInvitesPage() {
-  const { tenant } = useCurrentUser();
+  const planFeatures = usePlanFeatures();
   const { toast } = useUIStore();
   const qc = useQueryClient();
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -64,6 +65,21 @@ export default function UsersAndInvitesPage() {
 
   const pendingInvites = invitations.filter((i) => i.status === 'PENDING');
   const pastInvites = invitations.filter((i) => i.status !== 'PENDING');
+  const activeUserCount = useMemo(
+    () => users.filter((tenantUser) => tenantUser.isActive && tenantUser.user.isActive).length,
+    [users],
+  );
+  const userLimit = useMemo(
+    () => getUserLimitState({
+      maxUsers: planFeatures.maxUsers,
+      activeUsers: activeUserCount,
+      pendingInvites: pendingInvites.length,
+    }),
+    [activeUserCount, pendingInvites.length, planFeatures.maxUsers],
+  );
+  const inviteLimitMessage = userLimit.isFull && userLimit.maxUsers !== null
+    ? `${userLimit.maxUsers} kullanici limitine ulasildi. Yeni davet icin bir daveti iptal edin, pasif kullanicilari kontrol edin veya plani yukseltin.`
+    : null;
 
   return (
     <div>
@@ -72,12 +88,60 @@ export default function UsersAndInvitesPage() {
         subtitle="Ekip üyelerinizi yönetin ve yeni kullanıcılar davet edin."
         action={
           <Button size="sm" leftIcon={<UserPlus className="w-3.5 h-3.5" />}
-            onClick={() => setInviteOpen(true)}
+            onClick={() => {
+              if (userLimit.isInviteBlocked && inviteLimitMessage) {
+                toast.error(inviteLimitMessage);
+                return;
+              }
+              setInviteOpen(true);
+            }}
+            disabled={userLimit.isInviteBlocked}
             className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 shadow-lg shadow-blue-500/20">
             Kullanıcı Davet Et
           </Button>
         }
       />
+
+      {userLimit.isLimited && (
+        <div className={cn(
+          'mb-6 rounded-xl border px-4 py-3',
+          userLimit.isFull ? 'border-amber-500/40 bg-amber-500/10' : 'border-slate-800 bg-slate-900',
+        )}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className={cn(
+                'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+                userLimit.isFull ? 'bg-amber-500/15 text-amber-300' : 'bg-blue-500/15 text-blue-300',
+              )}>
+                {userLimit.isFull ? <AlertTriangle className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-100">Kullanici limiti</p>
+                <p className="text-xs text-slate-400">
+                  {userLimit.activeUsers} aktif kullanici, {userLimit.pendingInvites} bekleyen davet. Limit: {userLimit.maxUsers} kullanici.
+                </p>
+                {userLimit.isFull && (
+                  <p className="mt-1 text-xs text-amber-200">
+                    Yeni kullanici daveti gondermeden once mevcut davetleri iptal edin veya plani yukseltin.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="min-w-40">
+              <div className="mb-1 flex items-center justify-between text-[11px] text-slate-400">
+                <span>{userLimit.reservedUsers}/{userLimit.maxUsers}</span>
+                <span>{userLimit.remainingSlots} bos slot</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                <div
+                  className={cn('h-full rounded-full', userLimit.isFull ? 'bg-amber-400' : 'bg-blue-400')}
+                  style={{ width: `${userLimit.usagePercent}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mevcut Üyeler */}
       <div className="mb-8">
@@ -210,7 +274,7 @@ export default function UsersAndInvitesPage() {
           <>
             <Button variant="ghost" size="sm" onClick={() => { setInviteOpen(false); setEmail(''); setSelectedRoleId(''); }}>İptal</Button>
             <Button size="sm" loading={sendInvite.isPending}
-              disabled={!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)}
+              disabled={userLimit.isInviteBlocked || !email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)}
               leftIcon={<Send className="w-3.5 h-3.5" />}
               onClick={() => sendInvite.mutate()}
               className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500">
@@ -219,6 +283,17 @@ export default function UsersAndInvitesPage() {
           </>
         }>
         <div className="space-y-4">
+          {userLimit.isLimited && (
+            <div className={cn(
+              'rounded-xl border px-3 py-2.5 text-xs',
+              userLimit.isFull ? 'border-amber-500/40 bg-amber-500/10 text-amber-100' : 'border-blue-500/30 bg-blue-500/10 text-blue-100',
+            )}>
+              {userLimit.isFull
+                ? 'Kullanici limiti dolu. Davet gonderimi yeni bir slot acilana kadar kapali.'
+                : `${userLimit.remainingSlots} kullanici slotu kaldi. Bekleyen davetler limite dahil gosterilir.`}
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">E-posta Adresi</label>
             <div className="relative">
@@ -227,7 +302,12 @@ export default function UsersAndInvitesPage() {
               </div>
               <input type="email" placeholder="kullanici@sirket.com" value={email}
                 onChange={(e) => setEmail(e.target.value)} autoFocus
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); sendInvite.mutate(); } }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (!userLimit.isInviteBlocked) sendInvite.mutate();
+                  }
+                }}
                 className="w-full h-12 pl-11 pr-4 bg-slate-900/80 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/40 transition-all" />
             </div>
           </div>

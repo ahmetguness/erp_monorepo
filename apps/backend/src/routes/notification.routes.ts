@@ -1,9 +1,13 @@
 import { Hono } from 'hono';
+import { ACCESS_POLICIES } from '@repo/types/plans';
 import { NotificationController } from '../controllers/notification.controller';
+import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 
-// Notifications tüm planlara açık — requireAuth zaten tenantApi seviyesinde uygulanıyor
+// Notifications are available from Starter, but can be disabled through feature overrides.
 const notificationRoutes = new Hono();
+
+notificationRoutes.use('*', requireAccess(ACCESS_POLICIES.smartNotifications));
 
 notificationRoutes.get('/smart', requirePermission('notifications', 'READ'), NotificationController.smart);
 notificationRoutes.post('/smart/:id/action', requirePermission('notifications', 'UPDATE'), NotificationController.smartAction);

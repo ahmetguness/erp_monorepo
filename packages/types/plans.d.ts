@@ -23,6 +23,7 @@ export declare const FEATURE_KEY: {
     readonly AUDIT_LOG: "AUDIT_LOG";
     readonly CUSTOM_REPORTING: "CUSTOM_REPORTING";
     readonly DOCUMENT_CENTER: "DOCUMENT_CENTER";
+    readonly SMART_NOTIFICATIONS: "SMART_NOTIFICATIONS";
 };
 export type FeatureKeyName = typeof FEATURE_KEY[keyof typeof FEATURE_KEY];
 export declare const FEATURE_TYPE: {
