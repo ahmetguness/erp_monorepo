@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -18,6 +18,10 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
+import {
+  compareSupplierQuotes,
+  type SupplierQuoteDraft,
+} from '@/components/features/purchase/purchase-quote-comparison';
 import {
   usePurchaseRequests, useCreatePurchaseRequest,
   useApprovePurchaseRequest, useConvertRequestToOrder,
@@ -47,6 +51,10 @@ const requestSchema = z.object({
 });
 type RequestForm = z.infer<typeof requestSchema>;
 
+function createEmptySupplierQuote(): SupplierQuoteDraft {
+  return { contactId: '', prices: {}, leadTimeDays: '', qualityScore: '' };
+}
+
 export function PurchaseRequestsPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
@@ -54,14 +62,14 @@ export function PurchaseRequestsPage() {
   const [convertContactId, setConvertContactId] = useState('');
 
   const [compareTarget, setCompareTarget] = useState<PurchaseRequest | null>(null);
-  const [supplierQuotes, setSupplierQuotes] = useState<Array<{ contactId: string; prices: Record<string, string> }>>([
-    { contactId: '', prices: {} },
-    { contactId: '', prices: {} },
+  const [supplierQuotes, setSupplierQuotes] = useState<SupplierQuoteDraft[]>([
+    createEmptySupplierQuote(),
+    createEmptySupplierQuote(),
   ]);
 
   const addSupplierColumn = () => {
     if (supplierQuotes.length < 3) {
-      setSupplierQuotes([...supplierQuotes, { contactId: '', prices: {} }]);
+      setSupplierQuotes([...supplierQuotes, createEmptySupplierQuote()]);
     }
   };
 
@@ -86,6 +94,18 @@ export function PurchaseRequestsPage() {
     setSupplierQuotes(copy);
   };
 
+  const updateSupplierLeadTime = (idx: number, value: string) => {
+    const copy = [...supplierQuotes];
+    copy[idx] = { ...copy[idx], leadTimeDays: value };
+    setSupplierQuotes(copy);
+  };
+
+  const updateSupplierQualityScore = (idx: number, value: string) => {
+    const copy = [...supplierQuotes];
+    copy[idx] = { ...copy[idx], qualityScore: value };
+    setSupplierQuotes(copy);
+  };
+
   const { data, isLoading } = usePurchaseRequests({ page, limit: 20 });
   const createReq = useCreatePurchaseRequest();
   const approveReq = useApprovePurchaseRequest();
@@ -93,6 +113,10 @@ export function PurchaseRequestsPage() {
 
   const { data: productsData } = useProducts({ page: 1, limit: 200 });
   const products = productsData?.data ?? [];
+  const comparisonResults = useMemo(
+    () => compareTarget ? compareSupplierQuotes(compareTarget, supplierQuotes) : [],
+    [compareTarget, supplierQuotes],
+  );
 
   const today = new Date().toISOString().split('T')[0];
   const { register, handleSubmit, control, reset, setValue, formState: { errors } } = useForm<RequestForm>({
@@ -361,7 +385,7 @@ export function PurchaseRequestsPage() {
       {/* Compare quotes modal */}
       <Modal
         isOpen={!!compareTarget}
-        onClose={() => { setCompareTarget(null); setSupplierQuotes([{ contactId: '', prices: {} }, { contactId: '', prices: {} }]); }}
+        onClose={() => { setCompareTarget(null); setSupplierQuotes([createEmptySupplierQuote(), createEmptySupplierQuote()]); }}
         title="Tedarikçi Teklif Karşılaştırma"
         description={`"${compareTarget?.number}" talebi için tedarikçilerden gelen birim fiyatları kıyaslayın ve en uygun seçeneği belirleyin.`}
         size="xl"
@@ -412,6 +436,31 @@ export function PurchaseRequestsPage() {
                           value={q.contactId}
                           onChange={(val) => updateSupplierContact(idx, val)}
                         />
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="mb-1 block text-[10px] font-bold text-slate-500">TERMİN (GÜN)</label>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={q.leadTimeDays}
+                              onChange={(event) => updateSupplierLeadTime(idx, event.target.value)}
+                              className="h-8 w-full rounded-lg border border-slate-700 bg-slate-800/50 px-2 text-right text-xs text-white outline-none focus:ring-2 focus:ring-sky-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[10px] font-bold text-slate-500">KALİTE / 100</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="1"
+                              value={q.qualityScore}
+                              onChange={(event) => updateSupplierQualityScore(idx, event.target.value)}
+                              className="h-8 w-full rounded-lg border border-slate-700 bg-slate-800/50 px-2 text-right text-xs text-white outline-none focus:ring-2 focus:ring-sky-500"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </th>
                   ))}
@@ -459,34 +508,29 @@ export function PurchaseRequestsPage() {
 
                 {/* Total row */}
                 {(() => {
-                  // Compute totals
-                  const totals = supplierQuotes.map((q) => {
-                    if (!q.contactId) return 0;
-                    return compareTarget?.items?.reduce((sum, item) => {
-                      const qty = Number(item.quantity);
-                      const price = Number(q.prices[item.productId] || 0);
-                      return sum + qty * price;
-                    }, 0) ?? 0;
-                  });
-
-                  // Identify cheapest
-                  const minTotal = Math.min(...totals.filter((t) => t > 0));
-                  const cheapestIdx = totals.findIndex((t) => t === minTotal && t > 0);
+                  const recommendedIdx = comparisonResults.findIndex((result) => result.isRecommended);
 
                   return (
                     <>
                       <tr className="bg-slate-950/20 font-bold">
-                        <td className="p-4 text-slate-400">GENEL TOPLAM</td>
+                        <td className="p-4 text-slate-400">GENEL TOPLAM / SKOR</td>
                         {supplierQuotes.map((q, idx) => {
-                          const isCheapest = idx === cheapestIdx;
-                          const total = totals[idx];
+                          const result = comparisonResults[idx];
+                          const isRecommended = idx === recommendedIdx;
+                          const total = result?.total ?? 0;
                           return (
-                            <td key={idx} className={cn('p-4 border-l border-slate-800/80', isCheapest && 'bg-emerald-500/[0.03]')}>
+                            <td key={idx} className={cn('p-4 border-l border-slate-800/80', isRecommended && 'bg-emerald-500/[0.03]')}>
                               <div className="flex flex-col items-end gap-1.5">
-                                <span className={cn('text-base tabular-nums', isCheapest ? 'text-emerald-400 text-lg' : 'text-white')}>
+                                <span className={cn('text-base tabular-nums', isRecommended ? 'text-emerald-400 text-lg' : 'text-white')}>
                                   {formatCurrency(total)}
                                 </span>
-                                {isCheapest && (
+                                <span className="text-[10px] font-medium text-slate-500">
+                                  Termin: {result?.leadTimeDays ?? '-'} gun · Kalite: {result?.qualityScore ?? '-'}/100
+                                </span>
+                                <span className={cn('text-[10px] font-bold', result?.isComplete ? 'text-sky-300' : 'text-slate-600')}>
+                                  Agirlikli skor: {result?.isComplete ? result.weightedScore : '-'}
+                                </span>
+                                {isRecommended && (
                                   <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
                                     Önerilen Tedarikçi
                                   </span>
@@ -500,22 +544,21 @@ export function PurchaseRequestsPage() {
                       <tr className="bg-slate-950/30">
                         <td className="p-4" />
                         {supplierQuotes.map((q, idx) => {
-                          const total = totals[idx];
-                          const hasSelectedSupplier = !!q.contactId;
-                          const isCheapest = idx === cheapestIdx;
+                          const result = comparisonResults[idx];
+                          const isRecommended = idx === recommendedIdx;
                           return (
-                            <td key={idx} className={cn('p-4 border-l border-slate-800/80', isCheapest && 'bg-emerald-500/[0.03]')}>
+                            <td key={idx} className={cn('p-4 border-l border-slate-800/80', isRecommended && 'bg-emerald-500/[0.03]')}>
                               <Button
                                 size="sm"
-                                disabled={!hasSelectedSupplier || total === 0}
+                                disabled={!result?.isComplete}
                                 className={cn(
                                   'w-full shadow-md text-xs',
-                                  isCheapest
+                                  isRecommended
                                     ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 shadow-emerald-500/15'
                                     : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
                                 )}
                                 onClick={() => {
-                                  if (compareTarget && q.contactId) {
+                                  if (compareTarget && result?.isComplete) {
                                     convertReq.mutate({
                                       id: compareTarget.id,
                                       contactId: q.contactId,
@@ -526,7 +569,7 @@ export function PurchaseRequestsPage() {
                                     }, {
                                       onSuccess: () => {
                                         setCompareTarget(null);
-                                        setSupplierQuotes([{ contactId: '', prices: {} }, { contactId: '', prices: {} }]);
+                                        setSupplierQuotes([createEmptySupplierQuote(), createEmptySupplierQuote()]);
                                       }
                                     });
                                   }

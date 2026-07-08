@@ -20,7 +20,7 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   getRevenueSummary, getExpenseSummary, getStockSummary, getContactBalance,
   getSavedReports, deleteSavedReport, createSavedReport, getReportingRegistry, previewKpi, recordSavedReportExportAudit,
-  getCollectionList, getTopProducts, updateSavedReport,
+  getCollectionList, getTopProducts, updateSavedReport, runSavedReportSchedule,
   KpiReportConfigSchema,
   type KpiPreview,
   type KpiReportConfig,
@@ -243,6 +243,15 @@ export function ReportsPage() {
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 
+  const runReportSchedule = useMutation({
+    mutationFn: (id: string) => runSavedReportSchedule(id),
+    onSuccess: (result) => {
+      toast.success(`${result.reportName} raporu ${result.mailCount} aliciya gonderildi.`);
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+
   const savedColumns: ColumnDef<SavedReport>[] = [
     {
       key: 'name',
@@ -274,8 +283,11 @@ export function ReportsPage() {
     { key: 'createdAt', header: 'Oluşturulma', width: '120px', render: (r) => <span className="text-slate-400">{formatDate(r.createdAt)}</span> },
     {
       key: 'actions', header: '', width: '88px', align: 'right',
-      render: (r) => (
-        <div className="flex justify-end gap-1">
+      render: (r) => {
+        const config = parseKpiConfig(r.filters);
+        const canRunSchedule = Boolean(config?.scheduleEmail.enabled);
+        return (
+          <div className="flex justify-end gap-1">
           <button
             aria-label="Paylaş ve Zamanla"
             onClick={(e) => {
@@ -290,6 +302,17 @@ export function ReportsPage() {
           >
             <Share2 className="w-3.5 h-3.5" />
           </button>
+          {canRunSchedule && (
+            <button
+              aria-label="Zamanlanmis raporu gonder"
+              disabled={runReportSchedule.isPending}
+              onClick={(e) => { e.stopPropagation(); runReportSchedule.mutate(r.id); }}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+              title="Zamanlanmis raporu simdi gonder"
+            >
+              <Mail className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             aria-label="Export audit"
             onClick={(e) => { e.stopPropagation(); recordExportAudit.mutate(r.id); }}
@@ -302,7 +325,8 @@ export function ReportsPage() {
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
-      ),
+        );
+      },
     },
   ];
 
@@ -713,6 +737,43 @@ export function ReportsPage() {
                     Zamanlanmış e-posta
                   </label>
                 </div>
+                {kpiConfig.scheduleEmail.enabled && (
+                  <div className="grid w-full grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/35 p-3 md:grid-cols-[160px_minmax(0,1fr)]">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium text-slate-300">Periyot</span>
+                      <select
+                        value={kpiConfig.scheduleEmail.frequency}
+                        onChange={(event) => setKpiConfig((current) => ({
+                          ...current,
+                          scheduleEmail: {
+                            ...current.scheduleEmail,
+                            frequency: event.target.value as KpiReportConfig['scheduleEmail']['frequency'],
+                          },
+                        }))}
+                        className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+                      >
+                        <option value="DAILY">Gunluk</option>
+                        <option value="WEEKLY">Haftalik</option>
+                        <option value="MONTHLY">Aylik</option>
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium text-slate-300">Alicilar</span>
+                      <input
+                        value={kpiConfig.scheduleEmail.recipients.join(', ')}
+                        onChange={(event) => setKpiConfig((current) => ({
+                          ...current,
+                          scheduleEmail: {
+                            ...current.scheduleEmail,
+                            recipients: event.target.value.split(',').map((item) => item.trim()).filter(Boolean),
+                          },
+                        }))}
+                        placeholder="finans@firma.com, yonetim@firma.com"
+                        className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
+                      />
+                    </label>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Button variant="secondary" leftIcon={<TrendingUp className="h-4 w-4" />} loading={previewKpiMutation.isPending} disabled={!selectedDataset} onClick={() => previewKpiMutation.mutate(kpiConfig)}>
                     Önizle

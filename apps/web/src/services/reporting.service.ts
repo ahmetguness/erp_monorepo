@@ -102,6 +102,21 @@ const ReportExportAuditResultSchema = z.object({
   auditedAt: z.string(),
 });
 
+const ReportScheduleDispatchResultSchema = z.object({
+  reportId: z.string(),
+  reportName: z.string(),
+  frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']),
+  recipients: z.array(z.string()),
+  notificationCount: z.coerce.number(),
+  mailCount: z.coerce.number(),
+  preview: z.object({
+    datasetLabel: z.string(),
+    metricLabel: z.string(),
+    formattedValue: z.string(),
+    period: z.object({ from: z.string().nullable(), to: z.string().nullable() }),
+  }),
+});
+
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
@@ -115,6 +130,7 @@ export type ReportingDatasetDefinition = z.infer<typeof ReportingDatasetDefiniti
 export type KpiReportConfig = z.infer<typeof KpiReportConfigSchema>;
 export type KpiPreview = z.infer<typeof KpiPreviewSchema>;
 export type ReportExportAuditResult = z.infer<typeof ReportExportAuditResultSchema>;
+export type ReportScheduleDispatchResult = z.infer<typeof ReportScheduleDispatchResultSchema>;
 
 // ─────────────────────────────────────────────
 // Service functions
@@ -187,6 +203,11 @@ export async function recordSavedReportExportAudit(id: string): Promise<ReportEx
   return safeParse(SingleResponseSchema(ReportExportAuditResultSchema), res.data, 'recordSavedReportExportAudit').data;
 }
 
+export async function runSavedReportSchedule(id: string): Promise<ReportScheduleDispatchResult> {
+  const res = await apiClient.post(`/api/reports/saved/${id}/run-schedule`);
+  return safeParse(SingleResponseSchema(ReportScheduleDispatchResultSchema), res.data, 'runSavedReportSchedule').data;
+}
+
 const CollectionListSchema = SingleResponseSchema(z.object({
   payments: z.array(z.object({
     id: z.string(),
@@ -232,9 +253,13 @@ export async function getTopProducts(dateFrom: string, dateTo: string, limit = 1
 
 export const CashflowForecastSchema = z.object({
   startingBalance: z.coerce.number(),
+  projectedEndingBalance: z.coerce.number(),
+  riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']),
   periods: z.array(z.object({
     label: z.string(),
     range: z.string(),
+    startDay: z.coerce.number(),
+    endDay: z.coerce.number(),
     inflow: z.object({
       invoices: z.coerce.number(),
       checks: z.coerce.number(),
@@ -246,6 +271,22 @@ export const CashflowForecastSchema = z.object({
     }),
     netFlow: z.coerce.number(),
     endingBalance: z.coerce.number(),
+  })),
+  dueBuckets: z.array(z.object({
+    label: z.string(),
+    range: z.string(),
+    receivables: z.coerce.number(),
+    payables: z.coerce.number(),
+    checks: z.coerce.number(),
+    total: z.coerce.number(),
+  })),
+  scenarios: z.array(z.object({
+    key: z.enum(['conservative', 'expected', 'optimistic']),
+    label: z.string(),
+    collectionRatePct: z.coerce.number(),
+    paymentRatePct: z.coerce.number(),
+    projectedEndingBalance: z.coerce.number(),
+    netFlow: z.coerce.number(),
   })),
 });
 export type CashflowForecast = z.infer<typeof CashflowForecastSchema>;

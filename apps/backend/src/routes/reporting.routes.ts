@@ -25,6 +25,7 @@ reportingRoutes.post('/kpi/preview', requireFeature(FeatureKey.CUSTOM_REPORTING)
 
 reportingRoutes.get('/saved', requireFeature(FeatureKey.CUSTOM_REPORTING), requirePermission('reporting', 'READ'), SavedReportController.list);
 reportingRoutes.post('/saved/:id/export-audit', requireFeature(FeatureKey.CUSTOM_REPORTING), requirePermission('reporting', 'EXPORT'), SavedReportController.exportAudit);
+reportingRoutes.post('/saved/:id/run-schedule', requireFeature(FeatureKey.CUSTOM_REPORTING), requirePermission('reporting', 'EXPORT'), SavedReportController.runSchedule);
 reportingRoutes.get('/saved/:id', requireFeature(FeatureKey.CUSTOM_REPORTING), requirePermission('reporting', 'READ'), SavedReportController.getById);
 reportingRoutes.post('/saved', requireFeature(FeatureKey.CUSTOM_REPORTING), requirePermission('reporting', 'CREATE'), SavedReportController.create);
 reportingRoutes.patch('/saved/:id', requireFeature(FeatureKey.CUSTOM_REPORTING), requirePermission('reporting', 'UPDATE'), SavedReportController.update);

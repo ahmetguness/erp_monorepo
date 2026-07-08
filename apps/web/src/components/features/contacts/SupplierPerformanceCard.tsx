@@ -1,8 +1,8 @@
 'use client';
 
-import { Activity, Clock, TrendingUp, AlertTriangle, CheckCircle, Shield, Award } from 'lucide-react';
+import { Clock, TrendingUp, AlertTriangle, CheckCircle, Shield, Award } from 'lucide-react';
 import { useSupplierPerformance } from '@/hooks/useContacts';
-import { cn, formatCurrency } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 interface SupplierPerformanceCardProps {
   contactId: string;
@@ -93,6 +93,23 @@ export function SupplierPerformanceCard({ contactId }: SupplierPerformanceCardPr
         {/* Breakdown Metrics */}
         {data.totalOrders > 0 && (
           <div className="space-y-2.5 pt-1">
+            {/* Delivery Delay */}
+            <div className="flex items-start justify-between gap-3 text-xs">
+              <div className="flex items-start gap-2 min-w-0">
+                <div className="p-1 rounded bg-slate-800 text-slate-400 mt-0.5 shrink-0"><Clock className="w-3.5 h-3.5" /></div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-300">Teslimat Gecikmesi</p>
+                  <p className="text-[10px] text-slate-500 truncate">Vade tarihine gore ortalama gecikme.</p>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className={cn('font-bold', data.deliveryDelayDays === 0 ? 'text-emerald-400' : 'text-amber-400')}>
+                  {data.deliveryDelayDays} gun
+                </p>
+                <p className="text-[10px] text-slate-400 font-medium">Puan: {data.deliveryDelayScore}/100</p>
+              </div>
+            </div>
+
             {/* Lead Time */}
             <div className="flex items-start justify-between gap-3 text-xs">
               <div className="flex items-start gap-2 min-w-0">
@@ -137,6 +154,23 @@ export function SupplierPerformanceCard({ contactId }: SupplierPerformanceCardPr
               <div className="text-right shrink-0">
                 <p className="font-bold text-white">%{data.returnRatePct}</p>
                 <p className="text-[10px] text-slate-400 font-medium">Puan: {data.returnRateScore}/100</p>
+              </div>
+            </div>
+
+            {/* Quality */}
+            <div className="flex items-start justify-between gap-3 text-xs">
+              <div className="flex items-start gap-2 min-w-0">
+                <div className="p-1 rounded bg-slate-800 text-slate-400 mt-0.5 shrink-0"><Shield className="w-3.5 h-3.5" /></div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-300">Kalite Skoru</p>
+                  <p className="text-[10px] text-slate-500 truncate">Tam kabul ve iade verisine gore.</p>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className={cn('font-bold', getScoreTextClass(data.qualityScore))}>
+                  %{data.qualityAcceptanceRatePct}
+                </p>
+                <p className="text-[10px] text-slate-400 font-medium">Puan: {data.qualityScore}/100</p>
               </div>
             </div>
 

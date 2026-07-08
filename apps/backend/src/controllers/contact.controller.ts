@@ -6,6 +6,7 @@ import { requireTenantId, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { CustomerTrackingService } from '../services/customer-tracking.service.js';
 import { getContactInsights } from '../services/contact-insights.service.js';
+import { getSupplierPerformanceScore } from '../services/supplier-performance.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -540,110 +541,18 @@ export const ContactController = {
   async getPerformanceScore(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const id = c.req.param('id');
+    if (!id) {
+      return c.json(new ValidationError('contact id zorunludur.').toJSON(), 400);
+    }
 
     const contact = await prisma.contact.findFirst({
       where: { id, tenantId, deletedAt: null },
     });
     if (!contact) return c.json(new NotFoundError('Cari hesap', id).toJSON(), 404);
 
-    const pos = await prisma.purchaseOrder.findMany({
-      where: { contactId: id, tenantId, deletedAt: null },
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
-        },
-        deliveryNotes: {
-          where: { type: 'INBOUND', deletedAt: null },
-          orderBy: { deliveredAt: 'desc' },
-          take: 1,
-        },
-      },
-    });
+    const performanceScore = await getSupplierPerformanceScore(prisma, tenantId, id);
 
-    let totalLeadTimeDays = 0;
-    let leadTimeCount = 0;
-    for (const po of pos) {
-      const delivery = po.deliveryNotes[0];
-      if (delivery && delivery.deliveredAt) {
-        const diffMs = delivery.deliveredAt.getTime() - po.date.getTime();
-        const diffDays = Math.max(0, diffMs / (1000 * 60 * 60 * 24));
-        totalLeadTimeDays += diffDays;
-        leadTimeCount++;
-      }
-    }
-    const avgLeadTimeDays = leadTimeCount > 0 ? Number((totalLeadTimeDays / leadTimeCount).toFixed(1)) : 0;
-    let leadTimeScore = 100;
-    if (leadTimeCount > 0) {
-      if (avgLeadTimeDays <= 3) leadTimeScore = 100;
-      else if (avgLeadTimeDays <= 7) leadTimeScore = 85;
-      else if (avgLeadTimeDays <= 14) leadTimeScore = 60;
-      else leadTimeScore = 30;
-    }
-
-    let totalDeviationPct = 0;
-    let itemPriceCount = 0;
-    for (const po of pos) {
-      for (const item of po.items) {
-        const defaultPrice = Number(item.product.purchasePrice ?? 0);
-        const actualPrice = Number(item.unitPrice);
-        if (defaultPrice > 0) {
-          const dev = (actualPrice - defaultPrice) / defaultPrice;
-          totalDeviationPct += dev;
-          itemPriceCount++;
-        }
-      }
-    }
-    const avgPriceDeviationPct = itemPriceCount > 0 ? Number((totalDeviationPct / itemPriceCount * 100).toFixed(1)) : 0;
-    let priceDeviationScore = 100;
-    if (itemPriceCount > 0) {
-      if (avgPriceDeviationPct <= 0) priceDeviationScore = 100;
-      else if (avgPriceDeviationPct <= 5) priceDeviationScore = 85;
-      else if (avgPriceDeviationPct <= 10) priceDeviationScore = 70;
-      else priceDeviationScore = 40;
-    }
-
-    const allDeliveryNotes = await prisma.deliveryNote.findMany({
-      where: { contactId: id, tenantId, deletedAt: null },
-    });
-    const inboundNotes = allDeliveryNotes.filter(d => d.type === 'INBOUND');
-    const returnNotes = allDeliveryNotes.filter(d => d.type === 'RETURN');
-    const returnRatePct = inboundNotes.length > 0 ? Number((returnNotes.length / inboundNotes.length * 100).toFixed(1)) : 0;
-    let returnRateScore = 100;
-    if (inboundNotes.length > 0) {
-      if (returnRatePct === 0) returnRateScore = 100;
-      else if (returnRatePct <= 2) returnRateScore = 90;
-      else if (returnRatePct <= 5) returnRateScore = 75;
-      else if (returnRatePct <= 10) returnRateScore = 50;
-      else returnRateScore = 20;
-    }
-
-    const openOrders = pos.filter(po => po.status === 'SENT' || po.status === 'PARTIALLY_RECEIVED');
-    const overdueOrders = openOrders.filter(po => po.dueDate && po.dueDate.getTime() < Date.now());
-    const openOrderRatio = pos.length > 0 ? (pos.length - overdueOrders.length) / pos.length : 1;
-    const openOrderScore = Math.round(openOrderRatio * 100);
-
-    let score = 100;
-    if (pos.length > 0 || allDeliveryNotes.length > 0) {
-      score = Math.round((leadTimeScore + priceDeviationScore + returnRateScore + openOrderScore) / 4);
-    }
-
-    return c.json({
-      data: {
-        score,
-        leadTimeDays: avgLeadTimeDays,
-        leadTimeScore,
-        priceDeviationPct: avgPriceDeviationPct,
-        priceDeviationScore,
-        returnRatePct,
-        returnRateScore,
-        openOrderCount: openOrders.length,
-        overdueOrderCount: overdueOrders.length,
-        openOrderScore,
-        totalOrders: pos.length,
-      },
-    });
+    return c.json({ data: performanceScore });
   },
 };
 
