@@ -5,6 +5,7 @@ import { ForbiddenError, ValidationError } from '../errors';
 import { TenantFeatureService } from '../services/tenant-feature.service';
 import { resolveAuditFieldValueLabels } from '../services/audit/field-label-resolver.js';
 import { formatAuditLogBusiness } from '../services/audit/formatter.js';
+import { CRITICAL_AUDIT_ACTIONS, resolveAuditStandardFlags } from '../services/audit/audit-standard.js';
 import { requireTenantId, requireParam, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 
@@ -73,6 +74,7 @@ function buildAuditWhere(params: {
   userId?: string;
   dateFrom?: string;
   dateTo?: string;
+  criticalOnly?: string;
 }): Prisma.AuditLogWhereInput {
   const dateLimit = getAuditDateFilter(params.auditLevel);
   const dateFrom = parseDateQuery(params.dateFrom, 'dateFrom');
@@ -80,6 +82,7 @@ function buildAuditWhere(params: {
   const gte = laterDate(dateLimit, dateFrom);
   const filteredEntityType = params.entityType && isEntityType(params.entityType) ? params.entityType : undefined;
   const filteredAction = params.action && isAuditAction(params.action) ? params.action : undefined;
+  const criticalOnly = params.criticalOnly === 'true';
 
   return {
     tenantId: params.tenantId,
@@ -87,7 +90,7 @@ function buildAuditWhere(params: {
     ...(params.module && { module: params.module }),
     ...(filteredEntityType && { entityType: filteredEntityType }),
     ...(params.entityId && { entityId: params.entityId }),
-    ...(filteredAction && { action: filteredAction }),
+    ...(filteredAction ? { action: filteredAction } : criticalOnly ? { action: { in: [...CRITICAL_AUDIT_ACTIONS] } } : {}),
     ...(params.userId && { userId: params.userId }),
   };
 }
@@ -258,7 +261,7 @@ async function enrichAuditLogs<T extends {
 }>(
   tenantId: string,
   logs: T[],
-): Promise<Array<T & { entityLabel: string | null; userLabel: string | null; business: ReturnType<typeof formatAuditLogBusiness> }>> {
+): Promise<Array<T & { entityLabel: string | null; userLabel: string | null; business: ReturnType<typeof formatAuditLogBusiness>; isCritical: boolean; criticalReason: string | null }>> {
   const [entityLabels, userLabels, fieldValueLabels] = await Promise.all([
     resolveEntityLabels(tenantId, logs),
     resolveUserLabels(logs),
@@ -267,10 +270,18 @@ async function enrichAuditLogs<T extends {
   return logs.map((log) => {
     const entityLabel = entityLabels.get(entityKey(log.entityType, log.entityId)) ?? null;
     const userLabel = log.userId ? userLabels.get(log.userId) ?? null : null;
+    const standardFlags = resolveAuditStandardFlags({
+      action: log.action,
+      module: log.module,
+      entityType: log.entityType,
+      oldValues: log.oldValues,
+      newValues: log.newValues,
+    });
     return {
       ...log,
       entityLabel,
       userLabel,
+      ...standardFlags,
       business: formatAuditLogBusiness({
         action: log.action,
         module: log.module,
@@ -309,6 +320,7 @@ export const AuditLogController = {
       userId,
       dateFrom: c.req.query('dateFrom'),
       dateTo: c.req.query('dateTo'),
+      criticalOnly: c.req.query('criticalOnly'),
     });
 
     const [total, logs] = await prisma.$transaction([
@@ -370,6 +382,7 @@ export const AuditLogController = {
       userId: c.req.query('userId'),
       dateFrom: c.req.query('dateFrom'),
       dateTo: c.req.query('dateTo'),
+      criticalOnly: c.req.query('criticalOnly'),
     });
 
     const logs = await prisma.auditLog.findMany({

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Download, Eye } from 'lucide-react';
+import { AlertTriangle, Download, Eye, Filter, X } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { FeatureGate } from '@/components/shared/FeatureGate';
@@ -56,6 +56,21 @@ const ENTITY_LABELS: Record<string, string> = {
 };
 
 const READABLE_VALUE_KEYS = ['name', 'number', 'title', 'subject', 'code', 'email', 'fileName'] as const;
+
+type AuditFilterPresetKey = 'today' | 'critical' | 'changes' | 'exports';
+
+interface AuditFilterPreset {
+  key: AuditFilterPresetKey;
+  label: string;
+  description: string;
+}
+
+const FILTER_PRESETS: AuditFilterPreset[] = [
+  { key: 'today', label: 'Bugun', description: 'Son gunun kayitlari' },
+  { key: 'critical', label: 'Kritik', description: 'Silme, onay/red ve export' },
+  { key: 'changes', label: 'Degisiklik', description: 'Guncelleme kayitlari' },
+  { key: 'exports', label: 'Export', description: 'Disa aktarma olaylari' },
+];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -132,6 +147,49 @@ function getChangedFields(log: AuditLog): string[] {
   return Array.from(keys).slice(0, 8);
 }
 
+function todayInputValue(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isCriticalLog(log: AuditLog): boolean {
+  return log.isCritical === true;
+}
+
+function changedValue(value: string | null): string {
+  return value ?? 'bos';
+}
+
+function DiffTable({ log }: { log: AuditLog }) {
+  const changes = log.business?.changes ?? [];
+  if (changes.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-950/50">
+      <div className="border-b border-slate-800 px-3 py-2 text-[10px] uppercase tracking-wider text-slate-500">
+        Degisiklik Diff Gorunumu
+      </div>
+      <div className="divide-y divide-slate-800">
+        {changes.map((change) => (
+          <div key={`${change.field}:${change.lineContext ?? 'root'}`} className="grid gap-3 px-3 py-2 text-xs md:grid-cols-[150px_1fr_1fr]">
+            <div>
+              <p className="font-medium text-slate-300">{change.label}</p>
+              {change.lineContext && <p className="mt-0.5 text-[10px] text-slate-500">{change.lineContext}</p>}
+            </div>
+            <div className="rounded-md border border-red-500/15 bg-red-500/5 px-2 py-1.5 text-red-200">
+              <span className="mb-1 block text-[9px] uppercase tracking-wider text-red-300/70">Eski</span>
+              {changedValue(change.oldValue)}
+            </div>
+            <div className="rounded-md border border-emerald-500/15 bg-emerald-500/5 px-2 py-1.5 text-emerald-200">
+              <span className="mb-1 block text-[9px] uppercase tracking-wider text-emerald-300/70">Yeni</span>
+              {changedValue(change.newValue)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function JsonPreview({ title, value }: { title: string; value: unknown }) {
   if (value == null) return null;
 
@@ -151,6 +209,8 @@ export function AuditLogPage() {
   const [actionFilter, setActionFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [criticalOnly, setCriticalOnly] = useState(false);
+  const [activePreset, setActivePreset] = useState<AuditFilterPresetKey | null>(null);
   const [detail, setDetail] = useState<AuditLog | null>(null);
 
   const auditFilters = {
@@ -158,6 +218,7 @@ export function AuditLogPage() {
     action: actionFilter || undefined,
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
+    criticalOnly: criticalOnly ? 'true' : undefined,
   };
   const { data, isLoading } = useAuditLogs({ page, limit: 30, ...auditFilters });
   const exportQuery = useAuditLogExport(auditFilters);
@@ -184,6 +245,35 @@ export function AuditLogPage() {
     URL.revokeObjectURL(url);
   };
 
+  const applyPreset = (preset: AuditFilterPresetKey) => {
+    setPage(1);
+    setActivePreset(preset);
+    setModuleFilter('');
+    setActionFilter('');
+    setDateFrom('');
+    setDateTo('');
+    setCriticalOnly(false);
+
+    if (preset === 'today') {
+      const today = todayInputValue();
+      setDateFrom(today);
+      setDateTo(today);
+    }
+    if (preset === 'critical') setCriticalOnly(true);
+    if (preset === 'changes') setActionFilter('UPDATE');
+    if (preset === 'exports') setActionFilter('EXPORT');
+  };
+
+  const clearFilters = () => {
+    setPage(1);
+    setActivePreset(null);
+    setModuleFilter('');
+    setActionFilter('');
+    setDateFrom('');
+    setDateTo('');
+    setCriticalOnly(false);
+  };
+
   const columns: ColumnDef<AuditLog>[] = [
     {
       key: 'createdAt',
@@ -198,7 +288,15 @@ export function AuditLogPage() {
       render: (row) => {
         const action = ACTION_MAP[row.action];
         return action ? (
-          <Badge variant={action.variant}>{getActionLabel(row)}</Badge>
+          <div className="flex flex-col items-start gap-1">
+            <Badge variant={action.variant}>{getActionLabel(row)}</Badge>
+            {isCriticalLog(row) && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-300">
+                <AlertTriangle className="h-3 w-3" />
+                Kritik
+              </span>
+            )}
+          </div>
         ) : (
           <span className="text-xs text-slate-400">{getActionLabel(row)}</span>
         );
@@ -268,11 +366,44 @@ export function AuditLogPage() {
     <div className="space-y-4">
       <PageHeader title="Denetim Kaydı" subtitle="Paket limitlerine göre erişilebilir işlem geçmişi." />
 
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+        <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-300">
+          <Filter className="h-3.5 w-3.5 text-sky-400" />
+          Filtre presetleri
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {FILTER_PRESETS.map((preset) => (
+            <button
+              key={preset.key}
+              type="button"
+              onClick={() => applyPreset(preset.key)}
+              className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                activePreset === preset.key
+                  ? 'border-sky-500/40 bg-sky-500/10 text-sky-200'
+                  : 'border-slate-800 bg-slate-950/35 text-slate-300 hover:border-slate-700'
+              }`}
+            >
+              <span className="block text-xs font-semibold">{preset.label}</span>
+              <span className="block text-[10px] text-slate-500">{preset.description}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-2 text-xs text-slate-400 transition-colors hover:border-slate-700 hover:text-slate-200"
+          >
+            <X className="h-3.5 w-3.5" />
+            Temizle
+          </button>
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-3">
         <select
           value={moduleFilter}
           onChange={(event) => {
             setModuleFilter(event.target.value);
+            setActivePreset(null);
             setPage(1);
           }}
           className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -288,6 +419,8 @@ export function AuditLogPage() {
           value={actionFilter}
           onChange={(event) => {
             setActionFilter(event.target.value);
+            setActivePreset(null);
+            setCriticalOnly(false);
             setPage(1);
           }}
           className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -304,6 +437,7 @@ export function AuditLogPage() {
           value={dateFrom}
           onChange={(event) => {
             setDateFrom(event.target.value);
+            setActivePreset(null);
             setPage(1);
           }}
           className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -313,6 +447,7 @@ export function AuditLogPage() {
           value={dateTo}
           onChange={(event) => {
             setDateTo(event.target.value);
+            setActivePreset(null);
             setPage(1);
           }}
           className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -382,6 +517,18 @@ export function AuditLogPage() {
                 <p className="mt-1 text-sm text-slate-100">{detail.business.summary}</p>
               </div>
             )}
+
+            {isCriticalLog(detail) && (
+              <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2">
+                <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-red-300">
+                  <AlertTriangle className="h-3 w-3" />
+                  Kritik olay
+                </p>
+                <p className="mt-1 text-sm text-red-100">{detail.criticalReason ?? 'Bu kayit kritik olay olarak isaretlendi.'}</p>
+              </div>
+            )}
+
+            <DiffTable log={detail} />
 
             {detail.business?.changes.length ? (
               <div className="rounded-lg border border-slate-800 bg-slate-950/50">

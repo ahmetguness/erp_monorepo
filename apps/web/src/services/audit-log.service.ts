@@ -27,6 +27,8 @@ export const AuditLogSchema = z.object({
   module: z.string(), entityType: AuditEntityTypeSchema, entityId: z.string(),
   entityLabel: z.string().nullable().optional(),
   userLabel: z.string().nullable().optional(),
+  isCritical: z.boolean().optional(),
+  criticalReason: z.string().nullable().optional(),
   business: z.object({
     actionLabel: z.string(),
     moduleLabel: z.string(),
@@ -37,6 +39,7 @@ export const AuditLogSchema = z.object({
       label: z.string(),
       oldValue: z.string().nullable(),
       newValue: z.string().nullable(),
+      lineContext: z.string().nullable().optional(),
     })),
   }).optional(),
   action: z.string(), oldValues: z.unknown().nullable(), newValues: z.unknown().nullable(),
@@ -65,9 +68,10 @@ export interface AuditLogParams extends PaginationParams {
   userId?: string;
   dateFrom?: string;
   dateTo?: string;
+  criticalOnly?: string;
 }
 
-export type AuditLogExportParams = Pick<AuditLogParams, 'module' | 'entityType' | 'entityId' | 'action' | 'userId' | 'dateFrom' | 'dateTo'>;
+export type AuditLogExportParams = Pick<AuditLogParams, 'module' | 'entityType' | 'entityId' | 'action' | 'userId' | 'dateFrom' | 'dateTo' | 'criticalOnly'>;
 
 export async function getAuditLogs(params: AuditLogParams) {
   const res = await apiClient.get('/api/audit-logs', { params });
