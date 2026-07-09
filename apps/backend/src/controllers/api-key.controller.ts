@@ -1,13 +1,12 @@
 import { Context } from 'hono';
-import crypto from 'crypto';
 import { AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
-import { createApiKeyHash } from '../utils/api-key-hash.js';
 import { getExternalApiManifest } from '../services/external-api-registry.service.js';
 import { ApiKeyUsageService } from '../services/api-key-usage.service.js';
+import { generateApiKeyMaterial, validateIpAllowlist } from '../services/api-key-access.service.js';
 import {
   getIntegrationSandboxOpenApiDocument,
   getIntegrationSandboxPayload,
@@ -22,6 +21,7 @@ interface CreateApiKeyDTO {
   name: string;
   scopes?: string[];
   expiresAt?: string;
+  ipAllowlist?: string[];
 }
 
 interface ApiKeyListQuery {
@@ -60,9 +60,12 @@ function parseCreateApiKeyBody(value: unknown): CreateApiKeyDTO | ValidationErro
     ? value.scopes
     : undefined;
   const expiresAt = typeof value.expiresAt === 'string' && value.expiresAt.trim() ? value.expiresAt : undefined;
+  const ipAllowlist = Array.isArray(value.ipAllowlist) && value.ipAllowlist.every((entry) => typeof entry === 'string')
+    ? value.ipAllowlist
+    : undefined;
 
   if (!name) return new ValidationError('name alanı zorunludur.');
-  return { name, scopes, expiresAt };
+  return { name, scopes, expiresAt, ipAllowlist };
 }
 
 // ─────────────────────────────────────────────
@@ -114,6 +117,7 @@ export const ApiKeyController = {
           name: true,
           keyPrefix: true,
           scopes: true,
+          ipAllowlist: true,
           isActive: true,
           lastUsedAt: true,
           expiresAt: true,
@@ -122,6 +126,8 @@ export const ApiKeyController = {
           createdById: true,
           revokedAt: true,
           revokedById: true,
+          rotatedAt: true,
+          rotatedFromId: true,
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -172,18 +178,21 @@ export const ApiKeyController = {
       return c.json(new ValidationError(`Gecersiz API scope: ${invalidScopes.join(', ')}`).toJSON(), 400);
     }
 
-    // Generate random key
-    const rawKey = crypto.randomBytes(32).toString('hex');
-    const keyHash = createApiKeyHash(rawKey);
-    const keyPrefix = rawKey.substring(0, 8);
+    const ipAllowlist = validateIpAllowlist(body.ipAllowlist);
+    if (ipAllowlist.invalidEntries.length > 0) {
+      return c.json(new ValidationError(`Gecersiz IP allowlist kaydi: ${ipAllowlist.invalidEntries.join(', ')}`).toJSON(), 400);
+    }
+
+    const keyMaterial = generateApiKeyMaterial();
 
     const apiKey = await prisma.apiKey.create({
       data: {
         tenantId,
         name: body.name,
-        keyHash,
-        keyPrefix,
+        keyHash: keyMaterial.keyHash,
+        keyPrefix: keyMaterial.keyPrefix,
         scopes,
+        ipAllowlist: ipAllowlist.values,
         expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
         createdById: userId,
       },
@@ -193,6 +202,7 @@ export const ApiKeyController = {
         name: true,
         keyPrefix: true,
         scopes: true,
+        ipAllowlist: true,
         isActive: true,
         expiresAt: true,
         createdAt: true,
@@ -206,12 +216,75 @@ export const ApiKeyController = {
       entityType: EntityType.OTHER,
       entityId: apiKey.id,
       action: AuditAction.CREATE,
-      newValues: { id: apiKey.id, name: apiKey.name, keyPrefix: apiKey.keyPrefix, scopes: apiKey.scopes, expiresAt: apiKey.expiresAt },
+      newValues: { id: apiKey.id, name: apiKey.name, keyPrefix: apiKey.keyPrefix, scopes: apiKey.scopes, ipAllowlist: apiKey.ipAllowlist, expiresAt: apiKey.expiresAt },
       ...getRequestMeta(c),
     });
 
     // Return raw key ONCE — it cannot be retrieved again
-    return c.json({ data: { ...apiKey, rawKey } }, 201);
+    return c.json({ data: { ...apiKey, rawKey: keyMaterial.rawKey } }, 201);
+  },
+
+  async rotate(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const id = requireParam(c, 'id');
+
+    const existing = await prisma.apiKey.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+    if (!existing) return c.json(new NotFoundError('API Key', id).toJSON(), 404);
+    if (!existing.isActive || existing.revokedAt) {
+      return c.json(new ValidationError('Sadece aktif API anahtarlari rotate edilebilir.').toJSON(), 400);
+    }
+
+    const keyMaterial = generateApiKeyMaterial();
+    const now = new Date();
+
+    const [rotated] = await prisma.$transaction([
+      prisma.apiKey.create({
+        data: {
+          tenantId,
+          name: existing.name,
+          keyHash: keyMaterial.keyHash,
+          keyPrefix: keyMaterial.keyPrefix,
+          scopes: existing.scopes,
+          ipAllowlist: existing.ipAllowlist,
+          expiresAt: existing.expiresAt,
+          createdById: userId,
+          rotatedFromId: existing.id,
+        },
+        select: {
+          id: true,
+          tenantId: true,
+          name: true,
+          keyPrefix: true,
+          scopes: true,
+          ipAllowlist: true,
+          isActive: true,
+          expiresAt: true,
+          createdAt: true,
+          rotatedFromId: true,
+        },
+      }),
+      prisma.apiKey.update({
+        where: { id: existing.id },
+        data: { isActive: false, revokedAt: now, revokedById: userId, rotatedAt: now },
+      }),
+    ]);
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'api_keys',
+      entityType: EntityType.OTHER,
+      entityId: existing.id,
+      action: AuditAction.UPDATE,
+      oldValues: { id: existing.id, name: existing.name, isActive: existing.isActive, keyPrefix: existing.keyPrefix },
+      newValues: { rotatedToId: rotated.id, rotatedToPrefix: rotated.keyPrefix, rotatedAt: now, scopes: rotated.scopes, ipAllowlist: rotated.ipAllowlist },
+      ...getRequestMeta(c),
+    });
+
+    return c.json({ data: { ...rotated, rawKey: keyMaterial.rawKey } }, 201);
   },
 
   async activity(c: Context): Promise<Response> {

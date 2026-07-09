@@ -6,6 +6,8 @@ import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { createApiKeyHash, createLegacyApiKeyHash, isLegacyApiKeyHash } from '../utils/api-key-hash.js';
 import { rateLimiter } from '../lib/rateLimiter.js';
 import { getExternalApiRateLimitPerMinute } from '../services/external-api-registry.service.js';
+import { isIpAllowedByAllowlist } from '../services/api-key-access.service.js';
+import { getTrustedClientIpOrNull } from '../utils/request-ip.js';
 
 /**
  * API Key authentication middleware.
@@ -37,6 +39,7 @@ export function authenticateApiKey() {
         id: true,
         tenantId: true,
         scopes: true,
+        ipAllowlist: true,
         keyHash: true,
         lastUsedAt: true,
       },
@@ -44,6 +47,28 @@ export function authenticateApiKey() {
 
     if (!apiKey) {
       return c.json(new ForbiddenError('Geçersiz veya süresi dolmuş API anahtarı.').toJSON(), 401);
+    }
+
+    const clientIp = getTrustedClientIpOrNull(c);
+    if (!isIpAllowedByAllowlist(clientIp, apiKey.ipAllowlist)) {
+      void createAuditLog(prisma, {
+        tenantId: apiKey.tenantId,
+        userId: null,
+        module: 'api_keys',
+        entityType: EntityType.OTHER,
+        entityId: apiKey.id,
+        action: AuditAction.OTHER,
+        newValues: {
+          method: c.req.method.toUpperCase(),
+          path: c.req.path,
+          status: 403,
+          denied: true,
+          reason: 'ip_allowlist',
+          clientIp,
+        },
+        ...getRequestMeta(c),
+      });
+      return c.json(new ForbiddenError('Bu API anahtari bu IP adresinden kullanilamaz.').toJSON(), 403);
     }
 
     const shouldUpgradeLegacyHash = isLegacyApiKeyHash(rawKey, apiKey.keyHash);

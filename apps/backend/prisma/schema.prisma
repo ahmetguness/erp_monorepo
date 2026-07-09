@@ -925,17 +925,21 @@ model ApiKey {
   expiresAt   DateTime?
   isActive    Boolean   @default(true)
   scopes      String[]  @default([])       // izin verilen scope'lar (örn: ["invoices:read"])
+  ipAllowlist String[]  @default([])       // bos ise tum IP'lere izin verilir
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
   createdById String?
   revokedAt   DateTime?
   revokedById String?
+  rotatedAt   DateTime?
+  rotatedFromId String?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, isActive])
   @@index([tenantId, deletedAt])
+  @@index([tenantId, rotatedFromId])
   @@map("api_keys")
 }
 
@@ -1156,6 +1160,7 @@ model ApprovalFlow {
   tenantId   String
   name       String
   module     ApprovalModule
+  conditions Json?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -1194,6 +1199,7 @@ model ApprovalRequest {
   flowId      String
   entityType  EntityType
   entityId    String
+  context     Json?
   status      ApprovalStatus @default(PENDING)
   currentStep Int            @default(1)
   requestedBy String?

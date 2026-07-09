@@ -15,6 +15,7 @@ apiKeyRoutes.get('/sandbox', requirePermission('api_keys', 'READ'), ApiKeyContro
 apiKeyRoutes.get('/', requirePermission('api_keys', 'READ'), ApiKeyController.list);
 apiKeyRoutes.get('/:id/activity', requirePermission('api_keys', 'READ'), ApiKeyController.activity);
 apiKeyRoutes.post('/', requirePermission('api_keys', 'CREATE'), ApiKeyController.create);
+apiKeyRoutes.post('/:id/rotate', requirePermission('api_keys', 'UPDATE'), ApiKeyController.rotate);
 apiKeyRoutes.post('/:id/revoke', requirePermission('api_keys', 'UPDATE'), ApiKeyController.revoke);
 apiKeyRoutes.delete('/:id', requirePermission('api_keys', 'DELETE'), ApiKeyController.delete);
 

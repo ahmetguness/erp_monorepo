@@ -4,7 +4,7 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getRoles, getRoleById, createRole, updateRole, deleteRole, addPermission, removePermission,
-  getPermissionMatrix, simulatePermission,
+  getPermissionMatrix, previewPermissionScreens, simulatePermission,
   type ListParams, type CreateRoleDTO, type UpdateRoleDTO, type AddPermissionDTO, type PermissionSimulationInput,
 } from '@/services/role.service';
 
@@ -12,6 +12,7 @@ const KEYS = {
   list: (p: ListParams) => ['roles', p] as const,
   detail: (id: string) => ['roles', id] as const,
   permissionMatrix: ['roles', 'permission-matrix'] as const,
+  screenPreview: (userId: string) => ['roles', 'permission-screen-preview', userId] as const,
 };
 
 export function useRoles(params: ListParams, options?: { enabled?: boolean }) {
@@ -26,6 +27,13 @@ export function useRole(id: string) {
 }
 export function usePermissionMatrix() {
   return useQuery({ queryKey: KEYS.permissionMatrix, queryFn: getPermissionMatrix });
+}
+export function usePermissionScreenPreview(userId: string) {
+  return useQuery({
+    queryKey: KEYS.screenPreview(userId),
+    queryFn: () => previewPermissionScreens({ userId }),
+    enabled: !!userId,
+  });
 }
 export function useSimulatePermission() {
   const { toast } = useUIStore();

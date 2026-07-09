@@ -14,6 +14,7 @@ import {
   Activity,
   Globe2,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
@@ -25,6 +26,7 @@ import { DatePicker } from "@/components/ui/DatePicker";
 import {
   useApiKeys,
   useCreateApiKey,
+  useRotateApiKey,
   useRevokeApiKey,
   useDeleteApiKey,
   useApiKeyActivity,
@@ -144,6 +146,7 @@ interface CreateApiKeyFormState {
   name: string;
   expiresAt: string;
   scopes: ApiKeyScope[];
+  ipAllowlistText: string;
 }
 
 const API_KEY_SCOPE_SET = new Set<string>(API_KEY_SCOPE_VALUES);
@@ -185,6 +188,15 @@ function formatMaybeDate(value: string | null | undefined): string {
   return value ? formatDate(value) : "-";
 }
 
+function parseIpAllowlistInput(value: string): string[] | undefined {
+  const entries = value
+    .split(/[\n,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  return entries.length > 0 ? entries : undefined;
+}
+
 export function ApiKeysPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
@@ -195,10 +207,12 @@ export function ApiKeysPage() {
     name: "",
     expiresAt: "",
     scopes: [],
+    ipAllowlistText: "",
   });
 
   const { data, isLoading } = useApiKeys({ page, limit: 20 });
   const createKey = useCreateApiKey();
+  const rotateKey = useRotateApiKey();
   const revokeKey = useRevokeApiKey();
   const deleteKey = useDeleteApiKey();
   const { data: activity = [] } = useApiKeyActivity(detailKey?.id ?? "");
@@ -239,9 +253,21 @@ export function ApiKeysPage() {
   };
 
   const resetForm = () => {
-    setForm({ name: "", expiresAt: "", scopes: [] });
+    setForm({ name: "", expiresAt: "", scopes: [], ipAllowlistText: "" });
     setRawKey("");
     setCopied(false);
+  };
+
+  const showRawKey = (apiKey: ApiKey, nextRawKey: string) => {
+    setForm({
+      name: apiKey.name,
+      expiresAt: apiKey.expiresAt ?? "",
+      scopes: apiKey.scopes.filter(isApiKeyScope),
+      ipAllowlistText: (apiKey.ipAllowlist ?? []).join("\n"),
+    });
+    setRawKey(nextRawKey);
+    setCreateOpen(true);
+    setDetailKey(null);
   };
 
   const columns: ColumnDef<ApiKey>[] = [
@@ -326,6 +352,22 @@ export function ApiKeysPage() {
       ),
     },
     {
+      key: "ipAllowlist",
+      header: "Allowlist",
+      width: "110px",
+      render: (r) => {
+        const count = r.ipAllowlist?.length ?? 0;
+        return count > 0 ? (
+          <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+            <Shield className="h-3 w-3" />
+            {count} IP
+          </span>
+        ) : (
+          <span className="text-xs text-slate-600">Acik</span>
+        );
+      },
+    },
+    {
       key: "errorRate",
       header: "Hata",
       width: "95px",
@@ -396,6 +438,23 @@ export function ApiKeysPage() {
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
+          {r.isActive && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                rotateKey.mutate(r.id, {
+                  onSuccess: (data) => {
+                    if (data.rawKey) showRawKey(data, data.rawKey);
+                  },
+                });
+              }}
+              className="p-1.5 rounded-lg text-slate-600 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
+              aria-label="Rotate et"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          )}
           {r.isActive && (
             <button
               type="button"
@@ -623,6 +682,7 @@ export function ApiKeysPage() {
                       name: form.name,
                       scopes: form.scopes,
                       expiresAt: form.expiresAt || undefined,
+                      ipAllowlist: parseIpAllowlistInput(form.ipAllowlistText),
                     },
                     {
                       onSuccess: (data) => {
@@ -694,6 +754,22 @@ export function ApiKeysPage() {
                 value={form.expiresAt}
                 onValueChange={(value) => setForm((p) => ({ ...p, expiresAt: value ?? "" }))}
               />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-slate-300 block">
+                IP Allowlist
+              </label>
+              <textarea
+                value={form.ipAllowlistText}
+                onChange={(e) => setForm((p) => ({ ...p, ipAllowlistText: e.target.value }))}
+                placeholder="192.168.1.10&#10;10.0.0.0/24"
+                rows={3}
+                className="mt-2 w-full rounded-xl border border-slate-700/50 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              />
+              <p className="mt-1 text-[11px] text-slate-600">
+                Bos birakilirsa anahtar tum IP adreslerinden kullanilabilir.
+              </p>
             </div>
 
             {/* Scope matrix */}
@@ -825,6 +901,23 @@ export function ApiKeysPage() {
               <Button
                 variant="ghost"
                 size="sm"
+                loading={rotateKey.isPending}
+                onClick={() => {
+                  rotateKey.mutate(detailKey.id, {
+                    onSuccess: (data) => {
+                      if (data.rawKey) showRawKey(data, data.rawKey);
+                    },
+                  });
+                }}
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Rotate Et
+              </Button>
+            )}
+            {detailKey?.isActive && (
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   revokeKey.mutate(detailKey.id);
                   setDetailKey(null);
@@ -901,6 +994,29 @@ export function ApiKeysPage() {
                 <div className="text-sm text-white">
                   {detailKey.rateLimitPerMinute ?? manifest?.rateLimit.perMinute ?? 0}/dk
                   <span className="ml-2 text-xs text-amber-400">{detailKey.rateLimitedCount ?? 0} asim</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">
+                <div className="text-[10px] text-slate-500 mb-1">IP Allowlist</div>
+                {(detailKey.ipAllowlist?.length ?? 0) > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {detailKey.ipAllowlist?.map((entry) => (
+                      <code key={entry} className="text-[10px] rounded bg-slate-900 px-1.5 py-0.5 text-emerald-300">
+                        {entry}
+                      </code>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-500">Tum IP adresleri</div>
+                )}
+              </div>
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">
+                <div className="text-[10px] text-slate-500 mb-1">Rotate Durumu</div>
+                <div className="text-sm text-white">
+                  {detailKey.rotatedFromId ? "Yeni nesil anahtar" : detailKey.rotatedAt ? formatDate(detailKey.rotatedAt) : "Rotate edilmedi"}
                 </div>
               </div>
             </div>

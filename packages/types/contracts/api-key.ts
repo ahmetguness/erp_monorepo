@@ -25,6 +25,7 @@ export const CreateApiKeySchema = z.object({
   name: z.string().trim().min(1),
   scopes: z.array(ApiKeyScopeSchema).optional(),
   expiresAt: z.string().trim().min(1).optional(),
+  ipAllowlist: z.array(z.string().trim().min(1)).optional(),
 });
 
 export type CreateApiKeyDTO = z.infer<typeof CreateApiKeySchema>;
@@ -34,6 +35,7 @@ export const ApiKeySchema = z.object({
   name: z.string(),
   keyPrefix: z.string(),
   scopes: z.array(ApiKeyScopeSchema.or(z.string())),
+  ipAllowlist: z.array(z.string()).optional(),
   isActive: z.boolean(),
   lastUsedAt: z.string().nullable().optional(),
   expiresAt: z.string().nullable().optional(),
@@ -42,6 +44,8 @@ export const ApiKeySchema = z.object({
   createdById: z.string().nullable().optional(),
   revokedAt: z.string().nullable().optional(),
   revokedById: z.string().nullable().optional(),
+  rotatedAt: z.string().nullable().optional(),
+  rotatedFromId: z.string().nullable().optional(),
   requestCount: z.coerce.number().optional(),
   successfulRequestCount: z.coerce.number().optional(),
   errorCount: z.coerce.number().optional(),

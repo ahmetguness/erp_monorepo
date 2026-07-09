@@ -4,6 +4,19 @@ import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
 import type { PaginationParams } from '@/types/api.types';
 
+export const ApprovalFlowConditionsSchema = z.object({
+  minAmount: z.coerce.number().nullable(),
+  maxAmount: z.coerce.number().nullable(),
+  departments: z.array(z.string()),
+  documentTypes: z.array(z.string()),
+});
+
+export const ApprovalRequestContextSchema = z.object({
+  amount: z.coerce.number().nullable(),
+  department: z.string().nullable(),
+  documentType: z.string().nullable(),
+});
+
 export const ApprovalStepSchema = z.object({
   id: z.string(), flowId: z.string(), stepOrder: z.coerce.number(),
   name: z.string(), approverRoleId: z.string().nullable(), approverUserId: z.string().nullable(),
@@ -15,6 +28,7 @@ export const ApprovalStepSchema = z.object({
 export const ApprovalFlowSchema = z.object({
   id: z.string(), tenantId: z.string(), name: z.string(),
   module: z.enum(['PURCHASE_REQUEST', 'LEAVE_REQUEST', 'INVOICE', 'SALES_ORDER', 'PURCHASE_ORDER', 'SERVICE_REQUEST', 'OTHER']),
+  conditions: ApprovalFlowConditionsSchema.nullable().optional(),
   isActive: z.boolean(), createdAt: z.string(), updatedAt: z.string(),
   steps: z.array(ApprovalStepSchema).optional(),
   _count: z.object({ requests: z.coerce.number() }).optional(),
@@ -29,6 +43,7 @@ export const ApprovalActionSchema = z.object({
 export const ApprovalRequestSchema = z.object({
   id: z.string(), tenantId: z.string(), flowId: z.string(),
   entityType: z.string(), entityId: z.string(),
+  context: ApprovalRequestContextSchema.nullable().optional(),
   status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'ESCALATED']),
   currentStep: z.coerce.number(), requestedBy: z.string().nullable(),
   notes: z.string().nullable(), createdAt: z.string(), updatedAt: z.string(),
@@ -40,18 +55,22 @@ export const ApprovalRequestSchema = z.object({
 export type ApprovalFlow = z.infer<typeof ApprovalFlowSchema>;
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
 export type ApprovalStep = z.infer<typeof ApprovalStepSchema>;
+export type ApprovalFlowConditions = z.infer<typeof ApprovalFlowConditionsSchema>;
+export type ApprovalRequestContext = z.infer<typeof ApprovalRequestContextSchema>;
 export type ApprovalModule = ApprovalFlow['module'];
 export type ApprovalStatus = ApprovalRequest['status'];
 
 export interface CreateFlowDTO {
   name: string; module: ApprovalModule;
+  conditions?: ApprovalFlowConditions;
   steps: Array<{ stepOrder: number; name: string; approverRoleId?: string; approverUserId?: string; isRequired?: boolean }>;
 }
 export interface UpdateFlowDTO {
   name?: string; isActive?: boolean;
+  conditions?: ApprovalFlowConditions;
   steps?: Array<{ stepOrder: number; name: string; approverRoleId?: string; approverUserId?: string; isRequired?: boolean }>;
 }
-export interface CreateRequestDTO { flowId: string; entityType: string; entityId: string; requestedBy?: string; notes?: string }
+export interface CreateRequestDTO { flowId: string; entityType: string; entityId: string; context?: ApprovalRequestContext; requestedBy?: string; notes?: string }
 export interface ActionDTO { actionType: 'APPROVE' | 'REJECT' | 'ESCALATE' | 'COMMENT'; stepId?: string; actorId?: string; notes?: string }
 export interface FlowListParams extends PaginationParams { module?: string; isActive?: string }
 export interface RequestListParams extends PaginationParams { status?: string; entityType?: string }

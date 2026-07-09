@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Shield, Trash2, Lock, Eye, Pencil, Check, X, UserPlus, UserMinus, PlayCircle } from 'lucide-react';
+import { Plus, Shield, Trash2, Lock, Eye, Pencil, Check, X, UserPlus, UserMinus, PlayCircle, MonitorCheck } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { Badge } from '@/components/ui/Badge';
@@ -10,11 +10,11 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import {
   useRoles, useRole, useCreateRole, useUpdateRole, useDeleteRole,
-  useAddPermission, useRemovePermission, usePermissionMatrix, useSimulatePermission,
+  useAddPermission, useRemovePermission, usePermissionMatrix, usePermissionScreenPreview, useSimulatePermission,
 } from '@/hooks/useRoles';
 import { useTenantUsers, useUpdateUserRole } from '@/hooks/useUsers';
 import { formatDate } from '@/lib/utils';
-import type { Role, Permission, PermissionAction, PermissionMatrixEntry } from '@/services/role.service';
+import type { Role, Permission, PermissionAction, PermissionMatrixEntry, PermissionScreenPreviewItem } from '@/services/role.service';
 
 const MODULES = [
   { key: 'accounting', label: 'Muhasebe' },
@@ -38,6 +38,10 @@ const ACTIONS: { key: PermissionAction; label: string }[] = [
 
 function toPermissionAction(value: string): PermissionAction {
   return ACTIONS.find((action) => action.key === value)?.key ?? 'READ';
+}
+
+function firstBlocker(screen: PermissionScreenPreviewItem): string {
+  return screen.blockers[0] ?? 'Erisim kapali.';
 }
 
 const ROLE_MODULES = [
@@ -169,6 +173,15 @@ export function RolesPage() {
   const activeUsers = useMemo(() => (allUsers ?? []).filter((tenantUser) => tenantUser.isActive && tenantUser.user.isActive), [allUsers]);
   const simulatorUserId = simUserId || activeUsers[0]?.userId || '';
   const selectedSimulatorRoute = permissionMatrix.find((entry) => entry.id === simRouteId);
+  const { data: screenPreview, isLoading: screenPreviewLoading } = usePermissionScreenPreview(simulatorUserId);
+  const visibleScreens = useMemo(
+    () => screenPreview?.screens.filter((screen) => screen.allowed) ?? [],
+    [screenPreview],
+  );
+  const blockedScreens = useMemo(
+    () => screenPreview?.screens.filter((screen) => !screen.allowed) ?? [],
+    [screenPreview],
+  );
   const simulatorModules = useMemo(() => {
     const labels = new Map(ROLE_MODULES.map((module) => [module.key, module.label]));
     permissionMatrix.forEach((entry) => {
@@ -430,6 +443,80 @@ export function RolesPage() {
             </div>
           </div>
         )}
+
+        <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <MonitorCheck className="h-4 w-4 text-emerald-400" />
+              <div>
+                <h4 className="text-xs font-semibold text-white">Ekran gorunurlugu onizlemesi</h4>
+                <p className="text-[11px] text-slate-500">
+                  Secili kullanicinin plan, modul, feature ve rol izinlerine gore gorebilecegi ekranlar.
+                </p>
+              </div>
+            </div>
+            {screenPreview && (
+              <div className="flex flex-wrap gap-1.5">
+                <Badge variant="success" dot>{screenPreview.summary.visibleCount} gorunur</Badge>
+                <Badge variant="neutral" dot>{screenPreview.summary.blockedCount} kilitli</Badge>
+              </div>
+            )}
+          </div>
+
+          {!simulatorUserId ? (
+            <div className="rounded-lg border border-dashed border-slate-800 px-3 py-4 text-xs text-slate-500">
+              Onizleme icin aktif bir kullanici secin.
+            </div>
+          ) : screenPreviewLoading ? (
+            <div className="rounded-lg border border-slate-800 px-3 py-4 text-xs text-slate-500">
+              Ekran onizlemesi yukleniyor...
+            </div>
+          ) : screenPreview ? (
+            <div className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+              <div>
+                <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-slate-500">Gorunen ekranlar</div>
+                {visibleScreens.length > 0 ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {visibleScreens.slice(0, 8).map((screen) => (
+                      <div key={screen.routeId} className="rounded-lg border border-emerald-500/15 bg-emerald-500/5 p-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium text-slate-200">{screen.label}</span>
+                          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                        </div>
+                        <div className="mt-1 truncate text-[11px] text-slate-500">{screen.href}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-800 px-3 py-4 text-xs text-slate-500">
+                    Bu kullanici icin gorunen ekran bulunmuyor.
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-slate-500">Kilitli ekranlar</div>
+                {blockedScreens.length > 0 ? (
+                  <div className="space-y-2">
+                    {blockedScreens.slice(0, 6).map((screen) => (
+                      <div key={screen.routeId} className="rounded-lg border border-slate-800 bg-slate-950/40 p-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium text-slate-300">{screen.label}</span>
+                          <X className="h-3.5 w-3.5 shrink-0 text-red-400" />
+                        </div>
+                        <div className="mt-1 text-[11px] leading-4 text-slate-500">{firstBlocker(screen)}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-800 px-3 py-4 text-xs text-slate-500">
+                    Kilitli ekran yok.
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </section>
 
       <DataTable

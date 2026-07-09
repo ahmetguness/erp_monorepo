@@ -6,6 +6,7 @@ import { generateDocumentNumber } from '../utils/generate-number.js';
 import { requireTenantId, requireParam } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { resolveStockLevelLocationId, recordInventoryCosting } from '../services/inventory-rules.service';
+import { PurchaseTraceService } from '../services/purchase-trace.service.js';
 
 // ---------------------------------------------
 // DTOs
@@ -250,7 +251,8 @@ export const PurchaseOrderController = {
     });
 
     if (!order) return c.json(new NotFoundError('Satin alma siparisi', id).toJSON(), 404);
-    return c.json({ data: order });
+    const trace = await new PurchaseTraceService(prisma).getTrace(tenantId, order);
+    return c.json({ data: { ...order, trace } });
   },
 
   async getOrderHistory(c: Context): Promise<Response> {

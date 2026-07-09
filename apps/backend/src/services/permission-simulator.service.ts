@@ -61,6 +61,35 @@ export interface PermissionSimulationResult {
   matchingRoutes: PermissionMatrixEntry[];
 }
 
+export interface PermissionScreenPreviewInput {
+  userId: string;
+}
+
+export interface PermissionScreenPreviewItem {
+  routeId: string;
+  label: string;
+  href: string;
+  module: string;
+  action: PermissionAction;
+  webAction: string;
+  minPlan: Plan | null;
+  featureKey: FeatureKey | null;
+  allowed: boolean;
+  gates: PermissionSimulationGate[];
+  blockers: string[];
+}
+
+export interface PermissionScreenPreviewResult {
+  user: PermissionSimulationResult['user'];
+  tenant: PermissionSimulationResult['tenant'];
+  summary: {
+    visibleCount: number;
+    blockedCount: number;
+    totalCount: number;
+  };
+  screens: PermissionScreenPreviewItem[];
+}
+
 const permissionMatrix: readonly PermissionMatrixEntry[] = [
   { id: 'contacts:list', label: 'Cari listesi', route: '/api/contacts', method: 'GET', module: 'contacts', action: PermissionAction.READ, moduleGate: 'contacts', webHref: '/dashboard/contacts', webAction: 'Cari menusu gorunur' },
   { id: 'contacts:create', label: 'Cari olustur', route: '/api/contacts', method: 'POST', module: 'contacts', action: PermissionAction.CREATE, moduleGate: 'contacts', webAction: 'Yeni cari butonu' },
@@ -140,6 +169,11 @@ export function parsePermissionSimulationInput(value: unknown): PermissionSimula
   };
 }
 
+export function parsePermissionScreenPreviewInput(value: unknown): PermissionScreenPreviewInput {
+  if (!isRecord(value)) throw new ValidationError('Gecersiz ekran onizleme istegi.');
+  return { userId: readRequiredString(value, 'userId') };
+}
+
 function hasModuleAccess(tenantModules: string[], moduleGate: string | undefined): boolean {
   if (!moduleGate) return true;
   const normalizedGate = moduleGate.toLowerCase();
@@ -151,6 +185,110 @@ function hasModuleAccess(tenantModules: string[], moduleGate: string | undefined
 
 export function listPermissionMatrix(): PermissionMatrixEntry[] {
   return [...permissionMatrix];
+}
+
+interface PermissionSubject {
+  tenant: {
+    plan: Plan;
+    modules: string[];
+  };
+  tenantUser: {
+    userId: string;
+    isOwner: boolean;
+    roleId: string | null;
+    user: {
+      name: string;
+      email: string;
+    };
+    roleRef: {
+      name: string;
+      permissions: Array<{ module: string; action: PermissionAction }>;
+    } | null;
+  };
+}
+
+async function loadPermissionSubject(tenantId: string, userId: string): Promise<PermissionSubject> {
+  const tenant = await prisma.tenant.findFirst({
+    where: { id: tenantId, deletedAt: null },
+    select: { plan: true, modules: true },
+  });
+  if (!tenant) throw new NotFoundError('Tenant', tenantId);
+
+  const tenantUser = await prisma.tenantUser.findFirst({
+    where: { tenantId, userId, isActive: true, user: { isActive: true } },
+    select: {
+      userId: true,
+      isOwner: true,
+      roleId: true,
+      user: { select: { name: true, email: true } },
+      roleRef: { select: { name: true, permissions: { select: { module: true, action: true } } } },
+    },
+  });
+  if (!tenantUser) throw new ForbiddenError('Secilen kullanici bu tenant icinde aktif degil.');
+
+  return { tenant, tenantUser };
+}
+
+function buildUserSummary(subject: PermissionSubject): PermissionSimulationResult['user'] {
+  return {
+    id: subject.tenantUser.userId,
+    name: subject.tenantUser.user.name,
+    email: subject.tenantUser.user.email,
+    isOwner: subject.tenantUser.isOwner,
+    roleId: subject.tenantUser.roleId,
+    roleName: subject.tenantUser.roleRef?.name ?? null,
+  };
+}
+
+function hasRolePermission(subject: PermissionSubject, module: string, action: PermissionAction): boolean {
+  return subject.tenantUser.isOwner ||
+    (subject.tenantUser.roleRef?.permissions.some((permission) => permission.module === module && permission.action === action) ?? false);
+}
+
+async function buildSimulationGates(
+  tenantId: string,
+  subject: PermissionSubject,
+  route: PermissionMatrixEntry | null,
+  module: string,
+  action: PermissionAction,
+): Promise<PermissionSimulationGate[]> {
+  const moduleAllowed = hasModuleAccess(subject.tenant.modules, route?.moduleGate ?? module);
+  const planAllowed = route?.minPlan ? isPlanAtLeast(subject.tenant.plan, route.minPlan) : true;
+  const featureAllowed = route?.featureKey ? await featureService.isFeatureEnabled(tenantId, route.featureKey) : true;
+  const permissionAllowed = hasRolePermission(subject, module, action);
+
+  return [
+    {
+      key: 'tenant',
+      label: 'Tenant uyeligi',
+      allowed: true,
+      reason: 'Kullanici tenant icinde aktif.',
+    },
+    {
+      key: 'module',
+      label: 'Modul erisimi',
+      allowed: moduleAllowed,
+      reason: moduleAllowed ? 'Tenant modulu kullanabilir.' : `Tenant modulu kapali: ${route?.moduleGate ?? module}`,
+    },
+    {
+      key: 'plan',
+      label: 'Plan seviyesi',
+      allowed: planAllowed,
+      reason: route?.minPlan ? `Gerekli plan: ${route.minPlan}, mevcut plan: ${subject.tenant.plan}` : 'Bu aksiyon icin ek plan kosulu yok.',
+    },
+    {
+      key: 'feature',
+      label: 'Feature gate',
+      allowed: featureAllowed,
+      reason: route?.featureKey ? `Feature: ${route.featureKey}` : 'Bu aksiyon icin ek feature kosulu yok.',
+    },
+    {
+      key: 'permission',
+      label: 'Rol izni',
+      allowed: permissionAllowed,
+      reason: subject.tenantUser.isOwner ? 'Owner kullanici tum izinleri gecer.' : `${module}:${action}`,
+    },
+  ];
 }
 
 function buildExplanation(gates: readonly PermissionSimulationGate[], route: PermissionMatrixEntry | null): PermissionSimulationResult['explanation'] {
@@ -185,78 +323,54 @@ export async function simulatePermission(
   const effectiveModule = route?.module ?? input.module;
   const effectiveAction = route?.action ?? input.action;
 
-  const tenant = await prisma.tenant.findFirst({
-    where: { id: tenantId, deletedAt: null },
-    select: { plan: true, modules: true },
-  });
-  if (!tenant) throw new NotFoundError('Tenant', tenantId);
-
-  const tenantUser = await prisma.tenantUser.findFirst({
-    where: { tenantId, userId: input.userId, isActive: true, user: { isActive: true } },
-    select: {
-      userId: true,
-      isOwner: true,
-      roleId: true,
-      user: { select: { name: true, email: true } },
-      roleRef: { select: { name: true, permissions: { select: { module: true, action: true } } } },
-    },
-  });
-  if (!tenantUser) throw new ForbiddenError('Secilen kullanici bu tenant icinde aktif degil.');
-
-  const moduleAllowed = hasModuleAccess(tenant.modules, route?.moduleGate ?? effectiveModule);
-  const planAllowed = route?.minPlan ? isPlanAtLeast(tenant.plan, route.minPlan) : true;
-  const featureAllowed = route?.featureKey ? await featureService.isFeatureEnabled(tenantId, route.featureKey) : true;
-  const permissionAllowed = tenantUser.isOwner ||
-    (tenantUser.roleRef?.permissions.some((permission) => permission.module === effectiveModule && permission.action === effectiveAction) ?? false);
-
-  const gates: PermissionSimulationGate[] = [
-    {
-      key: 'tenant',
-      label: 'Tenant uyeligi',
-      allowed: true,
-      reason: 'Kullanici tenant icinde aktif.',
-    },
-    {
-      key: 'module',
-      label: 'Modul erisimi',
-      allowed: moduleAllowed,
-      reason: moduleAllowed ? 'Tenant modulu kullanabilir.' : `Tenant modulu kapali: ${route?.moduleGate ?? effectiveModule}`,
-    },
-    {
-      key: 'plan',
-      label: 'Plan seviyesi',
-      allowed: planAllowed,
-      reason: route?.minPlan ? `Gerekli plan: ${route.minPlan}, mevcut plan: ${tenant.plan}` : 'Bu aksiyon icin ek plan kosulu yok.',
-    },
-    {
-      key: 'feature',
-      label: 'Feature gate',
-      allowed: featureAllowed,
-      reason: route?.featureKey ? `Feature: ${route.featureKey}` : 'Bu aksiyon icin ek feature kosulu yok.',
-    },
-    {
-      key: 'permission',
-      label: 'Rol izni',
-      allowed: permissionAllowed,
-      reason: tenantUser.isOwner ? 'Owner kullanici tum izinleri gecer.' : `${effectiveModule}:${effectiveAction}`,
-    },
-  ];
+  const subject = await loadPermissionSubject(tenantId, input.userId);
+  const gates = await buildSimulationGates(tenantId, subject, route, effectiveModule, effectiveAction);
   const explanation = buildExplanation(gates, route);
 
   return {
     allowed: gates.every((gate) => gate.allowed),
-    user: {
-      id: tenantUser.userId,
-      name: tenantUser.user.name,
-      email: tenantUser.user.email,
-      isOwner: tenantUser.isOwner,
-      roleId: tenantUser.roleId,
-      roleName: tenantUser.roleRef?.name ?? null,
-    },
-    tenant: { plan: tenant.plan, modules: tenant.modules },
+    user: buildUserSummary(subject),
+    tenant: { plan: subject.tenant.plan, modules: subject.tenant.modules },
     requested: { module: effectiveModule, action: effectiveAction, route },
     explanation,
     gates,
     matchingRoutes: permissionMatrix.filter((entry) => entry.module === effectiveModule && entry.action === effectiveAction),
+  };
+}
+
+export async function previewUserScreens(
+  tenantId: string,
+  input: PermissionScreenPreviewInput,
+): Promise<PermissionScreenPreviewResult> {
+  const subject = await loadPermissionSubject(tenantId, input.userId);
+  const screenRoutes = permissionMatrix.filter((entry) => entry.webHref && entry.action === PermissionAction.READ);
+  const screens = await Promise.all(screenRoutes.map(async (route): Promise<PermissionScreenPreviewItem> => {
+    const gates = await buildSimulationGates(tenantId, subject, route, route.module, route.action);
+    const blockers = gates.filter((gate) => !gate.allowed).map((gate) => `${gate.label}: ${gate.reason}`);
+    return {
+      routeId: route.id,
+      label: route.label,
+      href: route.webHref ?? '',
+      module: route.module,
+      action: route.action,
+      webAction: route.webAction,
+      minPlan: route.minPlan ?? null,
+      featureKey: route.featureKey ?? null,
+      allowed: gates.every((gate) => gate.allowed),
+      gates,
+      blockers,
+    };
+  }));
+  const visibleCount = screens.filter((screen) => screen.allowed).length;
+
+  return {
+    user: buildUserSummary(subject),
+    tenant: { plan: subject.tenant.plan, modules: subject.tenant.modules },
+    summary: {
+      visibleCount,
+      blockedCount: screens.length - visibleCount,
+      totalCount: screens.length,
+    },
+    screens,
   };
 }

@@ -3,6 +3,13 @@ import { ApprovalModule, ApprovalStatus, ApprovalActionType, EntityType } from '
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireParam } from '../utils/context.js';
+import {
+  evaluateApprovalConditions,
+  parseApprovalFlowConditions,
+  parseApprovalRequestContext,
+  toApprovalConditionJson,
+  toApprovalRequestContextJson,
+} from '../services/approval-conditions.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -11,6 +18,7 @@ import { requireTenantId, requireParam } from '../utils/context.js';
 interface CreateApprovalFlowDTO {
   name: string;
   module: ApprovalModule;
+  conditions?: unknown;
   steps: Array<{
     stepOrder: number;
     name: string;
@@ -23,6 +31,7 @@ interface CreateApprovalFlowDTO {
 interface UpdateApprovalFlowDTO {
   name?: string;
   isActive?: boolean;
+  conditions?: unknown;
   steps?: Array<{
     stepOrder: number;
     name: string;
@@ -36,6 +45,7 @@ interface CreateApprovalRequestDTO {
   flowId: string;
   entityType: EntityType;
   entityId: string;
+  context?: unknown;
   requestedBy?: string;
   notes?: string;
 }
@@ -141,6 +151,7 @@ export const ApprovalController = {
         tenantId,
         name: body.name,
         module: body.module,
+        conditions: toApprovalConditionJson(parseApprovalFlowConditions(body.conditions)),
         steps: {
           create: body.steps.map((s) => ({
             stepOrder: s.stepOrder,
@@ -186,6 +197,7 @@ export const ApprovalController = {
         data: {
           ...(body.name !== undefined && { name: body.name }),
           ...(body.isActive !== undefined && { isActive: body.isActive }),
+          ...(body.conditions !== undefined && { conditions: toApprovalConditionJson(parseApprovalFlowConditions(body.conditions)) }),
         },
         include: { steps: { orderBy: { stepOrder: 'asc' } } },
       });
@@ -258,12 +270,22 @@ export const ApprovalController = {
     });
     if (!flow) return c.json(new NotFoundError('Onay akışı', body.flowId).toJSON(), 404);
 
+    const conditionEvaluation = evaluateApprovalConditions(flow.conditions, body.context, body.entityType);
+    if (!conditionEvaluation.matches) {
+      return c.json(
+        new ValidationError(`Onay akisi kosullari eslesmedi: ${conditionEvaluation.reasons.join('; ')}`).toJSON(),
+        400,
+      );
+    }
+    const requestContext = parseApprovalRequestContext(body.context, body.entityType);
+
     const request = await prisma.approvalRequest.create({
       data: {
         tenantId,
         flowId: body.flowId,
         entityType: body.entityType,
         entityId: body.entityId,
+        context: toApprovalRequestContextJson(requestContext),
         requestedBy: body.requestedBy ?? null,
         notes: body.notes ?? null,
       },

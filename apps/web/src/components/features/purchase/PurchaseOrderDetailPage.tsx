@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Send, PackageCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, CircleDashed, FileText, PackageCheck, Send, XCircle } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { PurchaseOrderStatusBadge } from '@/components/shared/StatusBadge';
+import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
@@ -13,7 +14,7 @@ import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 import { usePurchaseOrder, useSendPurchaseOrder, useReceivePurchaseOrder, useCancelPurchaseOrder } from '@/hooks/usePurchase';
 import { useWarehouses } from '@/hooks/useStock';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import type { PurchaseOrderItem } from '@/services/purchase.service';
+import type { PurchaseOrderItem, PurchaseTraceStage } from '@/services/purchase.service';
 import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 
 interface ReceiveLineState {
@@ -30,6 +31,21 @@ function addDays(days: number): string {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return date.toISOString();
+}
+
+function traceStageVariant(status: PurchaseTraceStage['status']): BadgeVariant {
+  if (status === 'complete') return 'success';
+  if (status === 'partial') return 'warning';
+  if (status === 'cancelled') return 'danger';
+  return 'neutral';
+}
+
+function traceStageLabel(status: PurchaseTraceStage['status']): string {
+  if (status === 'complete') return 'Tamam';
+  if (status === 'partial') return 'Kismi';
+  if (status === 'cancelled') return 'Iptal';
+  if (status === 'pending') return 'Bekliyor';
+  return 'Eksik';
 }
 
 export function PurchaseOrderDetailPage({ id }: Props) {
@@ -179,6 +195,93 @@ export function PurchaseOrderDetailPage({ id }: Props) {
         </div>
         {order.notes && <p className="text-sm text-slate-400 pt-3 mt-3 border-t border-slate-800">{order.notes}</p>}
       </div>
+
+      {order.trace && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Uctan uca satin alma izi</h2>
+              <p className="mt-1 text-xs text-slate-500">Talep, siparis, irsaliye ve fatura baglantilari.</p>
+            </div>
+            <Badge variant="info">{order.trace.summary.invoiceCount} fatura</Badge>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-4">
+            {order.trace.stages.map((stage) => (
+              <div key={stage.key} className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-slate-300">{stage.label}</span>
+                  {stage.status === 'complete' ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  ) : (
+                    <CircleDashed className="h-4 w-4 text-slate-500" />
+                  )}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <Badge variant={traceStageVariant(stage.status)}>{traceStageLabel(stage.status)}</Badge>
+                  <span className="text-xs text-slate-500">{stage.count} kayit</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-3">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Talepler</p>
+              <div className="mt-2 space-y-2">
+                {order.trace.requests.length > 0 ? order.trace.requests.map((request) => (
+                  <div key={request.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-300">{request.number}</span>
+                    <Badge variant="neutral">{request.status}</Badge>
+                  </div>
+                )) : <p className="text-xs text-slate-600">Bagli talep yok.</p>}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Irsaliyeler</p>
+              <div className="mt-2 space-y-2">
+                {order.trace.deliveryNotes.length > 0 ? order.trace.deliveryNotes.map((note) => (
+                  <div key={note.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-300">{note.number}</span>
+                    <Badge variant="neutral">{note.status}</Badge>
+                  </div>
+                )) : <p className="text-xs text-slate-600">Bagli irsaliye yok.</p>}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Faturalar</p>
+              <div className="mt-2 space-y-2">
+                {order.trace.invoices.length > 0 ? order.trace.invoices.map((invoice) => (
+                  <div key={invoice.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1.5 text-slate-300">
+                      <FileText className="h-3.5 w-3.5 text-sky-400" />
+                      {invoice.number}
+                    </span>
+                    <span className="text-slate-400">{formatCurrency(invoice.totalGross)}</span>
+                  </div>
+                )) : <p className="text-xs text-slate-600">Bagli fatura yok.</p>}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-xs text-slate-500">Teslim miktari</p>
+              <p className="mt-1 text-sm font-semibold text-slate-200">
+                {order.trace.summary.deliveredQuantity} / {order.trace.summary.orderedQuantity}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-xs text-slate-500">Faturalanan tutar</p>
+              <p className="mt-1 text-sm font-semibold text-slate-200">
+                {formatCurrency(order.trace.summary.invoicedAmount)} / {formatCurrency(order.trace.summary.orderedAmount)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Items Table */}
       <DataTable

@@ -17,6 +17,7 @@ import {
   BadgeDollarSign,
   CreditCard,
   Boxes,
+  Filter,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useUIStore } from "@/store/ui.store";
@@ -39,6 +40,7 @@ import {
 import { formatDate } from "@/lib/utils";
 import type {
   ApprovalFlow,
+  ApprovalFlowConditions,
   ApprovalRequest,
   ApprovalModule,
 } from "@/services/approval.service";
@@ -75,12 +77,43 @@ const ENTITY_TYPES = [
   { value: "OTHER", label: "Diğer" },
 ];
 
+const EMPTY_CONDITIONS: ApprovalFlowConditions = {
+  minAmount: null,
+  maxAmount: null,
+  departments: [],
+  documentTypes: [],
+};
+
+function parseCsv(value: string): string[] {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function conditionsFromForm(form: { minAmount: string; maxAmount: string; departments: string; documentTypes: string }): ApprovalFlowConditions {
+  return {
+    minAmount: form.minAmount.trim() ? Number(form.minAmount) : null,
+    maxAmount: form.maxAmount.trim() ? Number(form.maxAmount) : null,
+    departments: parseCsv(form.departments),
+    documentTypes: parseCsv(form.documentTypes),
+  };
+}
+
+function conditionBadges(conditions?: ApprovalFlowConditions | null): string[] {
+  if (!conditions) return [];
+  const badges: string[] = [];
+  if (conditions.minAmount !== null) badges.push(`Min ${conditions.minAmount}`);
+  if (conditions.maxAmount !== null) badges.push(`Max ${conditions.maxAmount}`);
+  if (conditions.departments.length > 0) badges.push(`${conditions.departments.length} departman`);
+  if (conditions.documentTypes.length > 0) badges.push(`${conditions.documentTypes.length} belge turu`);
+  return badges;
+}
+
 const APPROVAL_TEMPLATES = [
   {
     name: "Satın Alma Onayı",
     module: "PURCHASE_ORDER" as ApprovalModule,
     description: "Satın alma siparişleri için kademeli onay akışı.",
     icon: ShoppingCart,
+    conditions: { ...EMPTY_CONDITIONS, minAmount: 10000, documentTypes: ["PURCHASE_ORDER"] },
     steps: [
       { stepOrder: 1, name: "Departman Müdürü Onayı", isRequired: true },
       { stepOrder: 2, name: "Finans Direktörü Onayı", isRequired: true },
@@ -92,6 +125,7 @@ const APPROVAL_TEMPLATES = [
     module: "SALES_ORDER" as ApprovalModule,
     description: "Büyük iskonto oranlı satış siparişleri için onay akışı.",
     icon: BadgeDollarSign,
+    conditions: { ...EMPTY_CONDITIONS, minAmount: 25000, documentTypes: ["SALES_ORDER"] },
     steps: [
       { stepOrder: 1, name: "Satış Müdürü Onayı", isRequired: true },
       { stepOrder: 2, name: "Finans Müdürü Onayı", isRequired: true },
@@ -102,6 +136,7 @@ const APPROVAL_TEMPLATES = [
     module: "INVOICE" as ApprovalModule,
     description: "Tedarikçi fatura ödemeleri ve banka çıkışları için onay akışı.",
     icon: CreditCard,
+    conditions: { ...EMPTY_CONDITIONS, minAmount: 5000, departments: ["Finans"], documentTypes: ["INVOICE"] },
     steps: [
       { stepOrder: 1, name: "Muhasebe Yetkilisi Onayı", isRequired: true },
       { stepOrder: 2, name: "CFO Onayı", isRequired: true },
@@ -112,6 +147,7 @@ const APPROVAL_TEMPLATES = [
     module: "OTHER" as ApprovalModule,
     description: "Sayım farkları ve stok düzeltme fişleri için onay akışı.",
     icon: Boxes,
+    conditions: { ...EMPTY_CONDITIONS, departments: ["Depo", "Operasyon"], documentTypes: ["OTHER"] },
     steps: [
       { stepOrder: 1, name: "Depo Sorumlusu Onayı", isRequired: true },
       { stepOrder: 2, name: "Operasyon Müdürü Onayı", isRequired: true },
@@ -135,11 +171,18 @@ export function ApprovalsPage() {
     name: "",
     module: "PURCHASE_REQUEST" as ApprovalModule,
     stepName: "",
+    minAmount: "",
+    maxAmount: "",
+    departments: "",
+    documentTypes: "",
   });
   const [reqForm, setReqForm] = useState({
     flowId: "",
     entityType: "PURCHASE_ORDER",
     entityId: "",
+    amount: "",
+    department: "",
+    documentType: "PURCHASE_ORDER",
     notes: "",
   });
 
@@ -205,6 +248,23 @@ export function ApprovalsPage() {
           {r._count?.requests ?? 0}
         </span>
       ),
+    },
+    {
+      key: "conditions",
+      header: "Kosul",
+      width: "190px",
+      render: (r) => {
+        const badges = conditionBadges(r.conditions);
+        return badges.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {badges.slice(0, 3).map((label) => (
+              <Badge key={label} variant="info">{label}</Badge>
+            ))}
+          </div>
+        ) : (
+          <span className="text-xs text-slate-600">Kosulsuz</span>
+        );
+      },
     },
     {
       key: "isActive",
@@ -291,6 +351,18 @@ export function ApprovalsPage() {
         <code className="text-xs text-slate-500 bg-slate-800/60 px-2 py-1 rounded-md">
           {r.entityId.slice(0, 8)}…
         </code>
+      ),
+    },
+    {
+      key: "context",
+      header: "Kosul Baglami",
+      width: "180px",
+      render: (r) => (
+        <div className="space-y-0.5 text-[11px] text-slate-500">
+          {r.context?.amount !== null && r.context?.amount !== undefined && <div>Tutar: {r.context.amount}</div>}
+          {r.context?.department && <div>Departman: {r.context.department}</div>}
+          {r.context?.documentType && <div>Belge: {r.context.documentType}</div>}
+        </div>
       ),
     },
     {
@@ -496,6 +568,7 @@ export function ApprovalsPage() {
                         createFlow.mutate({
                           name: tmpl.name,
                           module: tmpl.module,
+                          conditions: tmpl.conditions,
                           steps: tmpl.steps,
                         }, {
                           onSuccess: () => {
@@ -582,6 +655,7 @@ export function ApprovalsPage() {
                   {
                     name: flowForm.name,
                     module: flowForm.module,
+                    conditions: conditionsFromForm(flowForm),
                     steps: [
                       {
                         stepOrder: 1,
@@ -596,6 +670,10 @@ export function ApprovalsPage() {
                         name: "",
                         module: "PURCHASE_REQUEST",
                         stepName: "",
+                        minAmount: "",
+                        maxAmount: "",
+                        departments: "",
+                        documentTypes: "",
                       });
                     },
                   },
@@ -641,9 +719,46 @@ export function ApprovalsPage() {
               setFlowForm((p) => ({ ...p, stepName: e.target.value }))
             }
           />
+          <div className="rounded-xl border border-slate-800 bg-slate-950/30 p-3">
+            <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-300">
+              <Filter className="h-3.5 w-3.5 text-sky-400" />
+              Onay kosullari
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Min tutar"
+                type="number"
+                step="0.01"
+                value={flowForm.minAmount}
+                onChange={(e) => setFlowForm((p) => ({ ...p, minAmount: e.target.value }))}
+              />
+              <Input
+                label="Max tutar"
+                type="number"
+                step="0.01"
+                value={flowForm.maxAmount}
+                onChange={(e) => setFlowForm((p) => ({ ...p, maxAmount: e.target.value }))}
+              />
+            </div>
+            <div className="mt-3 space-y-3">
+              <Input
+                label="Departmanlar"
+                placeholder="Finans, Operasyon"
+                helperText="Virgul ile birden fazla departman yazabilirsiniz."
+                value={flowForm.departments}
+                onChange={(e) => setFlowForm((p) => ({ ...p, departments: e.target.value }))}
+              />
+              <Input
+                label="Belge turleri"
+                placeholder="INVOICE, PURCHASE_ORDER"
+                helperText="Bos birakilirsa tum belge turleri icin gecerli olur."
+                value={flowForm.documentTypes}
+                onChange={(e) => setFlowForm((p) => ({ ...p, documentTypes: e.target.value }))}
+              />
+            </div>
+          </div>
         </div>
       </Modal>
-
       {/* ── Create Request Modal ── */}
       <Modal
         isOpen={createReqOpen}
@@ -670,6 +785,11 @@ export function ApprovalsPage() {
                     flowId: reqForm.flowId,
                     entityType: reqForm.entityType,
                     entityId: reqForm.entityId,
+                    context: {
+                      amount: reqForm.amount.trim() ? Number(reqForm.amount) : null,
+                      department: reqForm.department.trim() || null,
+                      documentType: reqForm.documentType.trim() || reqForm.entityType,
+                    },
                     notes: reqForm.notes || undefined,
                   },
                   {
@@ -679,6 +799,9 @@ export function ApprovalsPage() {
                         flowId: "",
                         entityType: "PURCHASE_ORDER",
                         entityId: "",
+                        amount: "",
+                        department: "",
+                        documentType: "PURCHASE_ORDER",
                         notes: "",
                       });
                       setTab("requests");
@@ -714,7 +837,7 @@ export function ApprovalsPage() {
             options={ENTITY_TYPES}
             value={reqForm.entityType}
             onChange={(e) =>
-              setReqForm((p) => ({ ...p, entityType: e.target.value }))
+              setReqForm((p) => ({ ...p, entityType: e.target.value, documentType: e.target.value }))
             }
           />
           <Input
@@ -726,6 +849,33 @@ export function ApprovalsPage() {
               setReqForm((p) => ({ ...p, entityId: e.target.value }))
             }
           />
+          <div className="rounded-xl border border-slate-800 bg-slate-950/30 p-3">
+            <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-300">
+              <Filter className="h-3.5 w-3.5 text-emerald-400" />
+              Kosul baglami
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Tutar"
+                type="number"
+                step="0.01"
+                value={reqForm.amount}
+                onChange={(e) => setReqForm((p) => ({ ...p, amount: e.target.value }))}
+              />
+              <Input
+                label="Belge turu"
+                value={reqForm.documentType}
+                onChange={(e) => setReqForm((p) => ({ ...p, documentType: e.target.value }))}
+              />
+            </div>
+            <Input
+              label="Departman"
+              placeholder="Finans"
+              value={reqForm.department}
+              onChange={(e) => setReqForm((p) => ({ ...p, department: e.target.value }))}
+              className="mt-3"
+            />
+          </div>
           <Input
             label="Not"
             placeholder="Opsiyonel açıklama"
@@ -786,6 +936,23 @@ export function ApprovalsPage() {
                   )}
                 </div>
               </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-medium text-slate-400 mb-3">
+                Onay Kosullari
+              </h4>
+              {conditionBadges(detailFlow.conditions).length > 0 ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {conditionBadges(detailFlow.conditions).map((label) => (
+                    <div key={label} className="rounded-xl border border-slate-700/50 bg-slate-800/30 px-3 py-2 text-xs text-slate-300">
+                      {label}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">Bu akis kosulsuz calisir.</p>
+              )}
             </div>
 
             {/* Steps */}

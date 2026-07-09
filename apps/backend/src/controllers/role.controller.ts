@@ -6,7 +6,9 @@ import { requireTenantId, requireUserId, requireParam } from '../utils/context.j
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import {
   listPermissionMatrix,
+  parsePermissionScreenPreviewInput,
   parsePermissionSimulationInput,
+  previewUserScreens,
   simulatePermission as simulatePermissionAccess,
 } from '../services/permission-simulator.service.js';
 
@@ -52,6 +54,14 @@ export const RoleController = {
     const tenantId = requireTenantId(c);
     const body = parsePermissionSimulationInput(await c.req.json());
     const result = await simulatePermissionAccess(tenantId, body);
+
+    return c.json({ data: result });
+  },
+
+  async screenPreview(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body = parsePermissionScreenPreviewInput(await c.req.json());
+    const result = await previewUserScreens(tenantId, body);
 
     return c.json({ data: result });
   },

@@ -75,14 +75,42 @@ export const PermissionSimulationResultSchema = z.object({
   matchingRoutes: z.array(PermissionMatrixEntrySchema),
 });
 
+export const PermissionScreenPreviewItemSchema = z.object({
+  routeId: z.string(),
+  label: z.string(),
+  href: z.string(),
+  module: z.string(),
+  action: PermissionActionSchema,
+  webAction: z.string(),
+  minPlan: z.enum(['STARTER', 'PROFESSIONAL', 'ENTERPRISE']).nullable(),
+  featureKey: z.string().nullable(),
+  allowed: z.boolean(),
+  gates: z.array(PermissionSimulationGateSchema),
+  blockers: z.array(z.string()),
+});
+
+export const PermissionScreenPreviewResultSchema = z.object({
+  user: PermissionSimulationResultSchema.shape.user,
+  tenant: PermissionSimulationResultSchema.shape.tenant,
+  summary: z.object({
+    visibleCount: z.coerce.number(),
+    blockedCount: z.coerce.number(),
+    totalCount: z.coerce.number(),
+  }),
+  screens: z.array(PermissionScreenPreviewItemSchema),
+});
+
 export type PermissionMatrixEntry = z.infer<typeof PermissionMatrixEntrySchema>;
 export type PermissionSimulationGate = z.infer<typeof PermissionSimulationGateSchema>;
 export type PermissionSimulationResult = z.infer<typeof PermissionSimulationResultSchema>;
+export type PermissionScreenPreviewItem = z.infer<typeof PermissionScreenPreviewItemSchema>;
+export type PermissionScreenPreviewResult = z.infer<typeof PermissionScreenPreviewResultSchema>;
 
 export interface CreateRoleDTO { name: string; description?: string; permissions?: Array<{ module: string; action: PermissionAction }> }
 export interface UpdateRoleDTO { name?: string; description?: string }
 export interface AddPermissionDTO { module: string; action: PermissionAction }
 export interface PermissionSimulationInput { userId: string; module: string; action: PermissionAction; routeId?: string }
+export interface PermissionScreenPreviewInput { userId: string }
 export interface ListParams extends PaginationParams {}
 
 export async function getRoles(params: ListParams) {
@@ -116,4 +144,8 @@ export async function getPermissionMatrix(): Promise<PermissionMatrixEntry[]> {
 export async function simulatePermission(data: PermissionSimulationInput): Promise<PermissionSimulationResult> {
   const res = await apiClient.post('/api/roles/permission-simulator/simulate', data);
   return safeParse(SingleResponseSchema(PermissionSimulationResultSchema), res.data, 'simulatePermission').data;
+}
+export async function previewPermissionScreens(data: PermissionScreenPreviewInput): Promise<PermissionScreenPreviewResult> {
+  const res = await apiClient.post('/api/roles/permission-simulator/screen-preview', data);
+  return safeParse(SingleResponseSchema(PermissionScreenPreviewResultSchema), res.data, 'previewPermissionScreens').data;
 }

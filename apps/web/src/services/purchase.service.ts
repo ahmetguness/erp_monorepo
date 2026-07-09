@@ -63,12 +63,69 @@ export const PurchaseOrderHistorySchema = z.object({
   createdById: z.string().nullable(),
 });
 
+export const PurchaseTraceStageSchema = z.object({
+  key: z.enum(['request', 'order', 'delivery', 'invoice']),
+  label: z.string(),
+  status: z.enum(['complete', 'partial', 'pending', 'missing', 'cancelled']),
+  count: z.coerce.number(),
+  href: z.string().nullable(),
+});
+
+export const PurchaseTraceSchema = z.object({
+  order: z.object({
+    id: z.string(),
+    number: z.string(),
+    status: PurchaseOrderSchema.shape.status,
+    date: z.string(),
+    totalGross: z.coerce.number(),
+  }),
+  requests: z.array(z.object({
+    id: z.string(),
+    number: z.string(),
+    status: PurchaseRequestSchema.shape.status,
+    date: z.string(),
+    totalEstimated: z.coerce.number().nullable(),
+  })),
+  deliveryNotes: z.array(z.object({
+    id: z.string(),
+    number: z.string(),
+    status: z.string(),
+    type: z.string(),
+    date: z.string(),
+    deliveredAt: z.string().nullable(),
+  })),
+  invoices: z.array(z.object({
+    id: z.string(),
+    number: z.string(),
+    status: z.string(),
+    type: z.string(),
+    date: z.string(),
+    totalGross: z.coerce.number(),
+  })),
+  stages: z.array(PurchaseTraceStageSchema),
+  summary: z.object({
+    requestCount: z.coerce.number(),
+    deliveryNoteCount: z.coerce.number(),
+    invoiceCount: z.coerce.number(),
+    deliveredQuantity: z.coerce.number(),
+    orderedQuantity: z.coerce.number(),
+    invoicedAmount: z.coerce.number(),
+    orderedAmount: z.coerce.number(),
+  }),
+});
+
+export const PurchaseOrderWithTraceSchema = PurchaseOrderSchema.extend({
+  trace: PurchaseTraceSchema.optional(),
+});
+
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
 
 export type PurchaseRequest = z.infer<typeof PurchaseRequestSchema>;
-export type PurchaseOrder = z.infer<typeof PurchaseOrderSchema>;
+export type PurchaseOrder = z.infer<typeof PurchaseOrderWithTraceSchema>;
+export type PurchaseTrace = z.infer<typeof PurchaseTraceSchema>;
+export type PurchaseTraceStage = z.infer<typeof PurchaseTraceStageSchema>;
 export type PurchaseOrderItem = z.infer<typeof PurchaseOrderItemSchema>;
 export type PurchaseOrderHistory = z.infer<typeof PurchaseOrderHistorySchema>;
 export type PurchaseRequestStatus = PurchaseRequest['status'];
@@ -134,7 +191,7 @@ export async function getPurchaseOrders(params: ListParams) {
 
 export async function getPurchaseOrderById(id: string): Promise<PurchaseOrder> {
   const res = await apiClient.get(`/api/purchase-orders/${id}`);
-  return safeParse(SingleResponseSchema(PurchaseOrderSchema), res.data, 'getPurchaseOrderById').data;
+  return safeParse(SingleResponseSchema(PurchaseOrderWithTraceSchema), res.data, 'getPurchaseOrderById').data;
 }
 
 export async function getPurchaseOrderHistory(id: string): Promise<PurchaseOrderHistory[]> {

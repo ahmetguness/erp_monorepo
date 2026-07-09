@@ -5,6 +5,7 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   getApiKeys,
   createApiKey,
+  rotateApiKey,
   revokeApiKey,
   deleteApiKey,
   getApiKeyActivity,
@@ -46,6 +47,14 @@ export function useRevokeApiKey() {
   return useMutation({
     mutationFn: (id: string) => revokeApiKey(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['api-keys'] }); toast.success('API anahtarı iptal edildi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+export function useRotateApiKey() {
+  const qc = useQueryClient(); const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (id: string) => rotateApiKey(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['api-keys'] }); toast.success('API anahtari rotate edildi.'); },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
