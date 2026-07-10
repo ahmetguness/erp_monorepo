@@ -76,6 +76,49 @@ export const AiGovernancePolicyResponseSchema = z.object({
   redactionRegistry: AiRedactionRegistrySchema,
 });
 
+export const AiGovernanceCostSettingsSchema = z.object({
+  monthlyCostLimitUsd: z.number().nullable(),
+  alertThresholdPercent: z.number(),
+  blockOnLimit: z.boolean(),
+});
+
+export const AiGovernanceInsightsSchema = z.object({
+  costSettings: AiGovernanceCostSettingsSchema,
+  costSummary: z.object({
+    periodStart: z.string(),
+    periodEnd: z.string(),
+    totalRequests: z.number(),
+    totalTokens: z.number(),
+    estimatedCostUsd: z.number(),
+    monthlyCostLimitUsd: z.number().nullable(),
+    alertThresholdPercent: z.number(),
+    blockOnLimit: z.boolean(),
+    usagePercent: z.number().nullable(),
+    status: z.enum(['NO_LIMIT', 'OK', 'NEAR_LIMIT', 'OVER_LIMIT']),
+    remainingUsd: z.number().nullable(),
+  }),
+  modelUsage: z.array(z.object({
+    model: z.string(),
+    requestCount: z.number(),
+    promptTokens: z.number(),
+    completionTokens: z.number(),
+    totalTokens: z.number(),
+    estimatedCostUsd: z.number(),
+  })),
+  maskingReport: z.array(z.object({
+    fieldKey: z.string(),
+    label: z.string(),
+    scope: z.enum(['all', 'public']),
+    occurrences: z.number(),
+    affectedRequests: z.number(),
+    lastSeenAt: z.string().nullable(),
+    topRequestTypes: z.array(z.object({
+      requestType: AiRequestTypeSchema,
+      count: z.number(),
+    })),
+  })),
+});
+
 export const AiRequestLogSchema = z.object({
   id: z.string(),
   userId: z.string().nullable(),
@@ -111,6 +154,8 @@ export type AutomationRuleConfig = z.infer<typeof AutomationRuleConfigSchema>;
 export type SectorTemplate = z.infer<typeof SectorTemplateSchema>;
 export type AiGovernancePolicy = z.infer<typeof AiGovernancePolicySchema>;
 export type AiGovernancePolicyResponse = z.infer<typeof AiGovernancePolicyResponseSchema>;
+export type AiGovernanceCostSettings = z.infer<typeof AiGovernanceCostSettingsSchema>;
+export type AiGovernanceInsights = z.infer<typeof AiGovernanceInsightsSchema>;
 export type AiRequestLog = z.infer<typeof AiRequestLogSchema>;
 export type AiRequestType = z.infer<typeof AiRequestTypeSchema>;
 export type AiRequestStatus = z.infer<typeof AiRequestStatusSchema>;
@@ -165,6 +210,16 @@ export async function getAiGovernancePolicy(): Promise<AiGovernancePolicyRespons
 export async function updateAiGovernancePolicy(policy: AiGovernancePolicy): Promise<AiGovernancePolicyResponse> {
   const res = await apiClient.put('/api/intelligence/ai-governance/policy', policy);
   return safeParse(SingleResponseSchema(AiGovernancePolicyResponseSchema), res.data, 'updateAiGovernancePolicy').data;
+}
+
+export async function getAiGovernanceInsights(): Promise<AiGovernanceInsights> {
+  const res = await apiClient.get('/api/intelligence/ai-governance/insights');
+  return safeParse(SingleResponseSchema(AiGovernanceInsightsSchema), res.data, 'aiGovernanceInsights').data;
+}
+
+export async function updateAiGovernanceInsightsSettings(settings: AiGovernanceCostSettings): Promise<AiGovernanceInsights> {
+  const res = await apiClient.put('/api/intelligence/ai-governance/insights/settings', settings);
+  return safeParse(SingleResponseSchema(AiGovernanceInsightsSchema), res.data, 'updateAiGovernanceInsightsSettings').data;
 }
 
 export async function recordAiActionAudit(payload: AiActionAuditPayload): Promise<{ recorded: boolean }> {

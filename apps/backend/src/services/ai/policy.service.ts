@@ -1,4 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
+import { checkAiGovernanceCostLimit } from '../ai-governance-insights.service.js';
+import { AI_POLICY_KEYS, AI_POLICY_MODULE } from './governance-settings.js';
 
 export type AiDataSharingPolicy = 'BUSINESS_CONTEXT' | 'NO_ENTITY_CONTEXT';
 
@@ -13,13 +15,6 @@ export interface AiPolicyDecision {
   reason: string | null;
   policy: AiGovernancePolicy;
 }
-
-export const AI_POLICY_MODULE = 'ai';
-export const AI_POLICY_KEYS = {
-  enabled: 'enabled',
-  dataSharingPolicy: 'data_sharing_policy',
-  logPrompts: 'log_prompts',
-} as const;
 
 const DEFAULT_AI_POLICY: AiGovernancePolicy = {
   enabled: true,
@@ -83,6 +78,14 @@ export async function assertAiAllowed(db: PrismaClient, tenantId: string): Promi
     return {
       allowed: false,
       reason: 'AI tenant politikasinda kapali.',
+      policy,
+    };
+  }
+  const costGuard = await checkAiGovernanceCostLimit(db, tenantId);
+  if (!costGuard.allowed) {
+    return {
+      allowed: false,
+      reason: costGuard.reason,
       policy,
     };
   }

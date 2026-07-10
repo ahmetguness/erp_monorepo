@@ -5,10 +5,13 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getAiGovernanceLogs,
+  getAiGovernanceInsights,
   getAiGovernancePolicy,
   recordAiActionAudit,
+  updateAiGovernanceInsightsSettings,
   updateAiGovernancePolicy,
   type AiActionAuditPayload,
+  type AiGovernanceCostSettings,
   type AiGovernanceLogParams,
   type AiGovernancePolicy,
 } from '@/services/intelligence.service';
@@ -28,6 +31,14 @@ export function useAiGovernancePolicy() {
   });
 }
 
+export function useAiGovernanceInsights() {
+  return useQuery({
+    queryKey: ['ai-governance', 'insights'],
+    queryFn: getAiGovernanceInsights,
+    staleTime: 60 * 1000,
+  });
+}
+
 export function useUpdateAiGovernancePolicy() {
   const qc = useQueryClient();
   const { toast } = useUIStore();
@@ -37,6 +48,19 @@ export function useUpdateAiGovernancePolicy() {
       qc.invalidateQueries({ queryKey: ['ai-governance'] });
       qc.invalidateQueries({ queryKey: ['settings', 'modules'] });
       toast.success('AI politikasi kaydedildi.');
+    },
+    onError: (error: unknown) => toast.error(getErrorMessage(error)),
+  });
+}
+
+export function useUpdateAiGovernanceInsightsSettings() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (settings: AiGovernanceCostSettings) => updateAiGovernanceInsightsSettings(settings),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ai-governance', 'insights'] });
+      toast.success('AI maliyet limiti kaydedildi.');
     },
     onError: (error: unknown) => toast.error(getErrorMessage(error)),
   });

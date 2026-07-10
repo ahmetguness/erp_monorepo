@@ -10,6 +10,7 @@ apps/backend/ci-artifacts
 .github
 rapor.md
 a.txt
+backend-schema.dbml
 
 # Local environment files
 .env

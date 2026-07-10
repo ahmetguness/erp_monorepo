@@ -7,6 +7,11 @@ import { requireTenantId, requireUserId, requireParam } from '../utils/context.j
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { listAiRequestLogs, recordAiRequestLog } from '../services/ai-governance.service';
 import {
+  getAiGovernanceInsights,
+  updateAiGovernanceCostSettings,
+  type AiGovernanceCostSettingsInput,
+} from '../services/ai-governance-insights.service.js';
+import {
   getAiGovernancePolicy,
   setAiGovernancePolicy,
   type AiDataSharingPolicy,
@@ -79,6 +84,27 @@ function parseString(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed ? trimmed.slice(0, maxLength) : null;
+}
+
+function parseNullableCostLimit(value: unknown): number | null | undefined {
+  if (value === null || value === '') return null;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined;
+  return Number(value.toFixed(2));
+}
+
+function parseThresholdPercent(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const rounded = Math.round(value);
+  return rounded >= 1 && rounded <= 100 ? rounded : null;
+}
+
+function parseAiGovernanceCostSettings(value: unknown): AiGovernanceCostSettingsInput | null {
+  if (!isRecord(value)) return null;
+  const monthlyCostLimitUsd = parseNullableCostLimit(value.monthlyCostLimitUsd);
+  const alertThresholdPercent = parseThresholdPercent(value.alertThresholdPercent);
+  const blockOnLimit = parseBoolean(value.blockOnLimit);
+  if (monthlyCostLimitUsd === undefined || alertThresholdPercent === null || blockOnLimit === null) return null;
+  return { monthlyCostLimitUsd, alertThresholdPercent, blockOnLimit };
 }
 
 function parseEntityType(value: unknown): EntityType {
@@ -216,6 +242,50 @@ export const IntelligenceController = {
 
     const policy = await getAiGovernancePolicy(prisma, context.tenantId);
     return c.json({ data: { policy, redactionRegistry: getAiRedactionRegistry() } });
+  },
+
+  async aiGovernanceInsights(c: Context): Promise<Response> {
+    const context = await requirePermissions(c);
+    if (context instanceof Response) return context;
+    if (!hasPermission(context.permissions, 'ai_governance', PermissionAction.READ)) {
+      return c.json(new ForbiddenError('ai_governance:READ yetkisi gerekli.').toJSON(), 403);
+    }
+
+    const data = await getAiGovernanceInsights(prisma, context.tenantId);
+    return c.json({ data });
+  },
+
+  async updateAiGovernanceInsightsSettings(c: Context): Promise<Response> {
+    const context = await requirePermissions(c);
+    if (context instanceof Response) return context;
+    if (!hasPermission(context.permissions, 'ai_governance', PermissionAction.UPDATE)) {
+      return c.json(new ForbiddenError('ai_governance:UPDATE yetkisi gerekli.').toJSON(), 403);
+    }
+
+    const body: unknown = await c.req.json().catch(() => null);
+    const settings = parseAiGovernanceCostSettings(body);
+    if (!settings) {
+      return c.json(new ValidationError('monthlyCostLimitUsd, alertThresholdPercent ve blockOnLimit alanlari gecerlidir.').toJSON(), 400);
+    }
+
+    const costSettings = await updateAiGovernanceCostSettings(prisma, context.tenantId, settings);
+    await createAuditLog(prisma, {
+      tenantId: context.tenantId,
+      userId: requireUserId(c),
+      module: 'ai_governance',
+      entityType: EntityType.OTHER,
+      entityId: context.tenantId,
+      action: AuditAction.UPDATE,
+      newValues: {
+        monthlyCostLimitUsd: costSettings.monthlyCostLimitUsd,
+        alertThresholdPercent: costSettings.alertThresholdPercent,
+        blockOnLimit: costSettings.blockOnLimit,
+      },
+      ...getRequestMeta(c),
+    });
+
+    const data = await getAiGovernanceInsights(prisma, context.tenantId);
+    return c.json({ data });
   },
 
   async updateAiGovernancePolicy(c: Context): Promise<Response> {

@@ -9,6 +9,8 @@ const intelligenceRoutes = new Hono();
 intelligenceRoutes.get('/recommendations', IntelligenceController.recommendations);
 intelligenceRoutes.get('/ai-governance/logs', requirePlan(Plan.ENTERPRISE), requirePermission('ai_governance', 'READ'), IntelligenceController.aiGovernanceLogs);
 intelligenceRoutes.get('/ai-governance/policy', requirePlan(Plan.ENTERPRISE), requirePermission('ai_governance', 'READ'), IntelligenceController.aiGovernancePolicy);
+intelligenceRoutes.get('/ai-governance/insights', requirePlan(Plan.ENTERPRISE), requirePermission('ai_governance', 'READ'), IntelligenceController.aiGovernanceInsights);
+intelligenceRoutes.put('/ai-governance/insights/settings', requirePlan(Plan.ENTERPRISE), requirePermission('ai_governance', 'UPDATE'), IntelligenceController.updateAiGovernanceInsightsSettings);
 intelligenceRoutes.put('/ai-governance/policy', requirePlan(Plan.ENTERPRISE), requirePermission('ai_governance', 'UPDATE'), IntelligenceController.updateAiGovernancePolicy);
 intelligenceRoutes.post('/ai-governance/action-audit', IntelligenceController.recordAiActionAudit);
 intelligenceRoutes.get('/automation-rules/templates', IntelligenceController.automationTemplates);
