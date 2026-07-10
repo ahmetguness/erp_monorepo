@@ -388,6 +388,10 @@ interface CreateSavedReportDTO {
   filters?: Record<string, unknown>;
   columns?: string[];
   isShared?: boolean;
+  sharedRoleIds?: string[];
+  sharedUserIds?: string[];
+  columnTemplateName?: string | null;
+  pinnedToDashboard?: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -425,8 +429,17 @@ function toSavedReportFilters(input: unknown): Prisma.InputJsonObject {
   };
 }
 
-function isDashboardPinnedReport(report: { filters: Prisma.JsonValue }): boolean {
-  return isKpiConfig(report.filters) && report.filters.pinnedToDashboard === true;
+function sanitizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim())));
+}
+
+function readOptionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function isDashboardPinnedReport(report: { filters: Prisma.JsonValue; pinnedToDashboard?: boolean }): boolean {
+  return report.pinnedToDashboard === true || (isKpiConfig(report.filters) && report.filters.pinnedToDashboard === true);
 }
 
 function isReportAllowedByDataset(report: { filters: Prisma.JsonValue }, allowedDatasetKeys: ReadonlySet<string>): boolean {
@@ -439,7 +452,28 @@ function isReportAllowedByDataset(report: { filters: Prisma.JsonValue }, allowed
   }
 }
 
-async function canAccessSavedReport(tenantId: string, userId: string, report: { filters: Prisma.JsonValue }): Promise<boolean> {
+async function getTenantUserRoleId(tenantId: string, userId: string): Promise<string | null> {
+  const tenantUser = await prisma.tenantUser.findUnique({
+    where: { tenantId_userId: { tenantId, userId } },
+    select: { roleId: true },
+  });
+  return tenantUser?.roleId ?? null;
+}
+
+async function canAccessSavedReport(
+  tenantId: string,
+  userId: string,
+  report: { filters: Prisma.JsonValue; createdBy: string | null; isShared: boolean; sharedUserIds: string[]; sharedRoleIds: string[] },
+): Promise<boolean> {
+  const roleId = await getTenantUserRoleId(tenantId, userId);
+  const hasShareAccess =
+    report.createdBy === null ||
+    report.createdBy === userId ||
+    report.isShared ||
+    report.sharedUserIds.includes(userId) ||
+    (roleId !== null && report.sharedRoleIds.includes(roleId));
+  if (!hasShareAccess) return false;
+
   const registry = await new ReportingBuilderService(prisma).registry(tenantId, userId);
   const allowedDatasetKeys = new Set(registry.datasets.map((dataset) => dataset.key));
   return isReportAllowedByDataset(report, allowedDatasetKeys);
@@ -474,9 +508,17 @@ export const SavedReportController = {
       where: { tenantId },
       orderBy: { updatedAt: 'desc' },
     });
+    const roleId = await getTenantUserRoleId(tenantId, userId);
+    const visibleReports = reports.filter((report) =>
+      report.createdBy === userId ||
+      report.createdBy === null ||
+      report.isShared ||
+      report.sharedUserIds.includes(userId) ||
+      (roleId !== null && report.sharedRoleIds.includes(roleId)),
+    );
     const registry = await new ReportingBuilderService(prisma).registry(tenantId, userId);
     const allowedDatasetKeys = new Set(registry.datasets.map((dataset) => dataset.key));
-    const accessibleReports = reports.filter((report) => isReportAllowedByDataset(report, allowedDatasetKeys));
+    const accessibleReports = visibleReports.filter((report) => isReportAllowedByDataset(report, allowedDatasetKeys));
 
     return c.json({ data: dashboardOnly ? accessibleReports.filter(isDashboardPinnedReport) : accessibleReports });
   },
@@ -516,6 +558,10 @@ export const SavedReportController = {
         filters,
         columns: body.columns ?? [],
         isShared: body.isShared ?? false,
+        sharedRoleIds: sanitizeStringArray(body.sharedRoleIds),
+        sharedUserIds: sanitizeStringArray(body.sharedUserIds),
+        columnTemplateName: readOptionalString(body.columnTemplateName),
+        pinnedToDashboard: body.pinnedToDashboard ?? kpiConfig?.pinnedToDashboard ?? false,
         createdBy: userId,
       },
     });
@@ -545,6 +591,10 @@ export const SavedReportController = {
         ...(filters !== undefined && { filters }),
         ...(body.columns !== undefined && { columns: body.columns }),
         ...(body.isShared !== undefined && { isShared: body.isShared }),
+        ...(body.sharedRoleIds !== undefined && { sharedRoleIds: sanitizeStringArray(body.sharedRoleIds) }),
+        ...(body.sharedUserIds !== undefined && { sharedUserIds: sanitizeStringArray(body.sharedUserIds) }),
+        ...(body.columnTemplateName !== undefined && { columnTemplateName: readOptionalString(body.columnTemplateName) }),
+        ...(body.pinnedToDashboard !== undefined && { pinnedToDashboard: body.pinnedToDashboard }),
       },
     });
 

@@ -29,6 +29,7 @@ import {
   type StockSummary,
   type ContactBalance,
   type TopProducts,
+  type SavedReportMutationInput,
 } from '@/services/reporting.service';
 import { cn, formatCurrency, formatDate, todayInputDate } from '@/lib/utils';
 import { CustomReportingLockedPanel } from './CustomReportingLockedPanel';
@@ -105,6 +106,16 @@ const PREPARED_REPORT_TEMPLATES: Array<{
   { id: 'topProducts', label: 'En cok satan urunler', description: 'Satis miktarina gore ilk urunler.', icon: Trophy },
 ];
 
+const REPORT_COLUMN_TEMPLATES: Array<{ name: string; label: string; columns: string[] }> = [
+  { name: 'executive', label: 'Yonetici ozeti', columns: ['dataset', 'metric', 'value', 'period'] },
+  { name: 'finance', label: 'Finans detay', columns: ['dataset', 'metric', 'value', 'period', 'groupBy'] },
+  { name: 'operations', label: 'Operasyon takibi', columns: ['dataset', 'metric', 'value', 'chartType', 'period'] },
+];
+
+function getColumnTemplateByName(name: string | null | undefined) {
+  return REPORT_COLUMN_TEMPLATES.find((template) => template.name === name) ?? null;
+}
+
 // ─────────────────────────────────────────────
 // Reports Page
 // ─────────────────────────────────────────────
@@ -127,6 +138,9 @@ export function ReportsPage() {
   const [shareRoles, setShareRoles] = useState<string[]>([]);
   const [shareUsers, setShareUsers] = useState<string[]>([]);
   const [sharePublic, setSharePublic] = useState<boolean>(false);
+  const [sharePinned, setSharePinned] = useState<boolean>(false);
+  const [columnTemplateName, setColumnTemplateName] = useState<string>('');
+  const [selectedColumnKeys, setSelectedColumnKeys] = useState<string[]>([]);
 
   // Queries for users and roles to populate selectors
   const { data: usersData } = useTenantUsers();
@@ -135,10 +149,11 @@ export function ReportsPage() {
   const roles = rolesData?.data ?? [];
 
   const updateReport = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { name?: string; filters?: Record<string, unknown>; columns?: string[]; isShared?: boolean } }) =>
+    mutationFn: ({ id, data }: { id: string; data: SavedReportMutationInput }) =>
       updateSavedReport(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['reports', 'saved'] });
+      qc.invalidateQueries({ queryKey: ['reports', 'pinned-kpi'] });
       toast.success('Rapor paylaşım ayarları güncellendi.');
       setShareTarget(null);
     },
@@ -233,7 +248,15 @@ export function ReportsPage() {
   });
 
   const createKpiReport = useMutation({
-    mutationFn: () => createSavedReport({ name: kpiName, module: 'reporting', filters: kpiConfig, columns: [kpiConfig.metric], isShared: kpiConfig.pinnedToDashboard }),
+    mutationFn: () => createSavedReport({
+      name: kpiName,
+      module: 'reporting',
+      filters: kpiConfig,
+      columns: [kpiConfig.metric],
+      isShared: kpiConfig.pinnedToDashboard,
+      pinnedToDashboard: kpiConfig.pinnedToDashboard,
+      columnTemplateName: 'executive',
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['reports', 'saved'] });
       qc.invalidateQueries({ queryKey: ['reports', 'pinned-kpi'] });
@@ -273,12 +296,31 @@ export function ReportsPage() {
     },
     { key: 'module', header: 'Modül', width: '120px', render: (r) => <span className="text-slate-400 text-sm capitalize">{r.module}</span> },
     {
+      key: 'share',
+      header: 'Paylasim',
+      width: '150px',
+      render: (r) => (
+        <span className="text-xs text-slate-400">
+          {r.isShared ? 'Tenant' : r.sharedRoleIds.length > 0 || r.sharedUserIds.length > 0 ? `${r.sharedRoleIds.length} rol / ${r.sharedUserIds.length} kisi` : 'Sadece olusturan'}
+        </span>
+      ),
+    },
+    {
+      key: 'columns',
+      header: 'Kolon sablonu',
+      width: '140px',
+      render: (r) => {
+        const template = getColumnTemplateByName(r.columnTemplateName);
+        return <span className="text-xs text-slate-400">{template?.label ?? `${r.columns.length} kolon`}</span>;
+      },
+    },
+    {
       key: 'pin',
       header: 'Dashboard',
       width: '120px',
       render: (r) => {
         const config = parseKpiConfig(r.filters);
-        return config?.pinnedToDashboard ? (
+        return r.pinnedToDashboard || config?.pinnedToDashboard ? (
           <span className="inline-flex items-center gap-1 rounded-lg border border-sky-500/20 bg-sky-500/10 px-2 py-1 text-xs font-medium text-sky-300">
             <Pin className="h-3 w-3" /> Sabit
           </span>
@@ -299,8 +341,11 @@ export function ReportsPage() {
               e.stopPropagation();
               setShareTarget(r);
               setSharePublic(r.isShared);
-              setShareRoles((r.filters.sharedRoles as string[]) ?? []);
-              setShareUsers((r.filters.sharedUsers as string[]) ?? []);
+              setShareRoles(r.sharedRoleIds);
+              setShareUsers(r.sharedUserIds);
+              setSharePinned(r.pinnedToDashboard || Boolean(config?.pinnedToDashboard));
+              setColumnTemplateName(r.columnTemplateName ?? '');
+              setSelectedColumnKeys(r.columns);
             }}
             className="p-1.5 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
             title="Paylaşım & Zamanlama Ayarları"
@@ -1020,17 +1065,17 @@ export function ReportsPage() {
               loading={updateReport.isPending}
               onClick={() => {
                 if (!shareTarget) return;
-                const originalFilters = shareTarget.filters;
-                const updatedFilters = {
-                  ...originalFilters,
-                  sharedRoles: shareRoles,
-                  sharedUsers: shareUsers,
-                };
+                const currentConfig = parseKpiConfig(shareTarget.filters);
                 updateReport.mutate({
                   id: shareTarget.id,
                   data: {
                     isShared: sharePublic,
-                    filters: updatedFilters,
+                    sharedRoleIds: shareRoles,
+                    sharedUserIds: shareUsers,
+                    columnTemplateName: columnTemplateName || null,
+                    columns: selectedColumnKeys,
+                    pinnedToDashboard: sharePinned,
+                    ...(currentConfig ? { filters: { ...currentConfig, pinnedToDashboard: sharePinned } } : {}),
                   },
                 });
               }}
@@ -1058,6 +1103,61 @@ export function ReportsPage() {
                 />
                 Herkese Açık (Tüm tenant ile paylaş)
               </label>
+
+              <label className="flex items-center gap-2 text-sm text-slate-300 font-medium cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sharePinned}
+                  onChange={(e) => setSharePinned(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-700 bg-slate-900"
+                />
+                Dashboarda sabitle
+              </label>
+
+              <div className="grid gap-3 pt-2 border-t border-slate-800/60 md:grid-cols-[180px_minmax(0,1fr)]">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs text-slate-400 font-medium">Kolon sablonu</span>
+                  <select
+                    value={columnTemplateName}
+                    onChange={(event) => {
+                      const nextName = event.target.value;
+                      setColumnTemplateName(nextName);
+                      const template = getColumnTemplateByName(nextName);
+                      if (template) setSelectedColumnKeys(template.columns);
+                    }}
+                    className="h-9 rounded-lg border border-slate-700 bg-slate-900 px-2.5 text-xs text-slate-200 outline-none focus:border-sky-500/60"
+                  >
+                    <option value="">Ozel kolonlar</option>
+                    {REPORT_COLUMN_TEMPLATES.map((template) => (
+                      <option key={template.name} value={template.name}>{template.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="space-y-1.5">
+                  <span className="text-xs text-slate-400 font-medium">Kolonlar</span>
+                  <div className="flex flex-wrap gap-2 rounded-lg border border-slate-850 bg-slate-900/50 p-2.5">
+                    {['dataset', 'metric', 'value', 'period', 'groupBy', 'chartType'].map((column) => {
+                      const isSelected = selectedColumnKeys.includes(column);
+                      return (
+                        <button
+                          key={column}
+                          type="button"
+                          onClick={() => {
+                            setColumnTemplateName('');
+                            setSelectedColumnKeys((current) => isSelected ? current.filter((item) => item !== column) : [...current, column]);
+                          }}
+                          className={cn(
+                            'rounded border px-2 py-0.5 text-[11px] font-medium transition-colors',
+                            isSelected ? 'border-sky-500/30 bg-sky-500/10 text-sky-300' : 'border-slate-750 bg-slate-800 text-slate-400 hover:border-slate-700',
+                          )}
+                        >
+                          {column}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
 
               <div className="space-y-3 pt-2 border-t border-slate-800/60">
                 <div className="space-y-1.5">

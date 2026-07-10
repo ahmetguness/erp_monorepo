@@ -6,7 +6,12 @@ import { SingleResponseSchema } from '@/types/api.types';
 export const SavedReportSchema = z.object({
   id: z.string(), tenantId: z.string(), name: z.string(), module: z.string(),
   filters: z.unknown(), columns: z.array(z.string()),
-  isShared: z.boolean(), createdBy: z.string().nullable(),
+  isShared: z.boolean(),
+  sharedRoleIds: z.array(z.string()).default([]),
+  sharedUserIds: z.array(z.string()).default([]),
+  columnTemplateName: z.string().nullable().optional(),
+  pinnedToDashboard: z.boolean().default(false),
+  createdBy: z.string().nullable(),
   createdAt: z.string(), updatedAt: z.string(),
 });
 
@@ -15,6 +20,7 @@ export type SavedReport = z.infer<typeof SavedReportSchema>;
 export interface CreateSavedReportDTO {
   name: string; module: string;
   filters?: Record<string, unknown>; columns?: string[]; isShared?: boolean;
+  sharedRoleIds?: string[]; sharedUserIds?: string[]; columnTemplateName?: string | null; pinnedToDashboard?: boolean;
 }
 
 export async function getSavedReports(module?: string): Promise<SavedReport[]> {

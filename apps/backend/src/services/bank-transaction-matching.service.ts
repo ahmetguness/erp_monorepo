@@ -32,9 +32,64 @@ export interface BankTransactionMatchSuggestionsResult {
   suggestions: BankTransactionMatchSuggestion[];
 }
 
+export interface BankTransactionMatchingRule {
+  key: string;
+  label: string;
+  description: string;
+  weight: number;
+  minimumSignal: string;
+}
+
+export interface BankTransactionUnmatchedQueueItem {
+  transactionId: string;
+  date: string;
+  description: string | null;
+  reference: string | null;
+  amount: number;
+  bankAccountName: string | null;
+  bestSuggestion: BankTransactionMatchSuggestion | null;
+  status: 'READY_FOR_APPROVAL' | 'NEEDS_REVIEW' | 'NO_CANDIDATE';
+}
+
+export interface BankTransactionMatchingWorkbench {
+  rules: BankTransactionMatchingRule[];
+  queue: BankTransactionUnmatchedQueueItem[];
+  summary: {
+    unmatched: number;
+    readyForBulkApproval: number;
+    needsReview: number;
+    noCandidate: number;
+  };
+  bulkApprovalPolicy: {
+    minConfidence: number;
+    allowedStrength: BankTransactionMatchStrength;
+  };
+}
+
 export interface ApproveBankTransactionMatchInput {
   refType: BankTransactionMatchTargetType;
   refId: string;
+}
+
+export interface BulkApproveBankTransactionMatchesInput {
+  transactionIds: readonly string[];
+  minConfidence?: number;
+}
+
+export interface BulkApproveBankTransactionMatchesResult {
+  requested: number;
+  approved: number;
+  skipped: number;
+  approvals: Array<{
+    transactionId: string;
+    refType: BankTransactionMatchTargetType;
+    refId: string;
+    confidenceScore: number;
+  }>;
+  skippedItems: Array<{
+    transactionId: string;
+    reason: string;
+  }>;
 }
 
 interface ScoreInput {
@@ -117,6 +172,46 @@ function dateWindow(date: Date, days: number): { gte: Date; lte: Date } {
   lte.setDate(lte.getDate() + days);
   return { gte, lte };
 }
+
+const MATCHING_RULES: BankTransactionMatchingRule[] = [
+  {
+    key: 'amount',
+    label: 'Tutar toleransi',
+    description: 'Aday odeme veya fatura tutari banka hareketine esit ya da yuzde 1 tolerans icindeyse guclu sinyal sayilir.',
+    weight: 42,
+    minimumSignal: '0.01 TRY mutlak fark veya yuzde 1 tolerans',
+  },
+  {
+    key: 'date',
+    label: 'Tarih yakinligi',
+    description: 'Ayni gun veya 2 gun icindeki hareketler yuksek tarih puani alir.',
+    weight: 22,
+    minimumSignal: '10 gunluk arama penceresi',
+  },
+  {
+    key: 'reference',
+    label: 'Referans ve aciklama',
+    description: 'Fatura numarasi, odeme referansi, cari kodu veya vergi no aciklamada yakalanir.',
+    weight: 28,
+    minimumSignal: 'Normalize edilmis metin icerme eslesmesi',
+  },
+  {
+    key: 'contact',
+    label: 'Cari adi sinyali',
+    description: 'Cari adinin banka aciklamasinda gecmesi manuel inceleme ihtiyacini azaltir.',
+    weight: 32,
+    minimumSignal: 'Cari adindan normalize metin eslesmesi',
+  },
+  {
+    key: 'account',
+    label: 'Banka hesabi uyumu',
+    description: 'Odeme kaydindaki banka hesabi ile hareketin hesabi ayniysa ek guven puani verilir.',
+    weight: 6,
+    minimumSignal: 'Ayni bankAccountId',
+  },
+];
+
+const DEFAULT_BULK_APPROVAL_MIN_CONFIDENCE = 75;
 
 export class BankTransactionMatchingService {
   constructor(private readonly db: PrismaClient) {}
@@ -291,6 +386,107 @@ export class BankTransactionMatchingService {
         bankAccount: { select: { id: true, name: true, bankName: true } },
       },
     });
+  }
+
+  async workbench(tenantId: string): Promise<BankTransactionMatchingWorkbench> {
+    const unmatchedTransactions = await this.db.bankTransaction.findMany({
+      where: {
+        tenantId,
+        OR: [{ refType: null }, { refId: null }],
+      },
+      include: {
+        bankAccount: { select: { name: true } },
+      },
+      orderBy: { date: 'desc' },
+      take: 50,
+    });
+
+    const queue: BankTransactionUnmatchedQueueItem[] = [];
+    for (const transaction of unmatchedTransactions) {
+      const suggestions = await this.suggest(tenantId, transaction.id);
+      const bestSuggestion = suggestions.suggestions[0] ?? null;
+      queue.push({
+        transactionId: transaction.id,
+        date: transaction.date.toISOString(),
+        description: transaction.description,
+        reference: transaction.reference,
+        amount: Number(transaction.amount),
+        bankAccountName: transaction.bankAccount?.name ?? null,
+        bestSuggestion,
+        status: bestSuggestion === null
+          ? 'NO_CANDIDATE'
+          : bestSuggestion.confidenceScore >= DEFAULT_BULK_APPROVAL_MIN_CONFIDENCE && bestSuggestion.strength === 'HIGH'
+            ? 'READY_FOR_APPROVAL'
+            : 'NEEDS_REVIEW',
+      });
+    }
+
+    const readyForBulkApproval = queue.filter((item) => item.status === 'READY_FOR_APPROVAL').length;
+    const noCandidate = queue.filter((item) => item.status === 'NO_CANDIDATE').length;
+    return {
+      rules: MATCHING_RULES,
+      queue,
+      summary: {
+        unmatched: queue.length,
+        readyForBulkApproval,
+        needsReview: queue.length - readyForBulkApproval - noCandidate,
+        noCandidate,
+      },
+      bulkApprovalPolicy: {
+        minConfidence: DEFAULT_BULK_APPROVAL_MIN_CONFIDENCE,
+        allowedStrength: 'HIGH',
+      },
+    };
+  }
+
+  async bulkApprove(
+    tenantId: string,
+    input: BulkApproveBankTransactionMatchesInput,
+  ): Promise<BulkApproveBankTransactionMatchesResult> {
+    const transactionIds = [...new Set(input.transactionIds.map((id) => id.trim()).filter(Boolean))];
+    if (transactionIds.length === 0) throw new ValidationError('Toplu onay icin en az bir banka hareketi secilmelidir.');
+    if (transactionIds.length > 50) throw new ValidationError('Tek seferde en fazla 50 banka hareketi onaylanabilir.');
+
+    const minConfidence = input.minConfidence ?? DEFAULT_BULK_APPROVAL_MIN_CONFIDENCE;
+    const approvals: BulkApproveBankTransactionMatchesResult['approvals'] = [];
+    const skippedItems: BulkApproveBankTransactionMatchesResult['skippedItems'] = [];
+
+    for (const transactionId of transactionIds) {
+      const suggestions = await this.suggest(tenantId, transactionId);
+      if (suggestions.isMatched) {
+        skippedItems.push({ transactionId, reason: 'Hareket zaten eslesmis.' });
+        continue;
+      }
+
+      const bestSuggestion = suggestions.suggestions[0] ?? null;
+      if (!bestSuggestion) {
+        skippedItems.push({ transactionId, reason: 'Guvenilir aday bulunamadi.' });
+        continue;
+      }
+      if (bestSuggestion.strength !== 'HIGH' || bestSuggestion.confidenceScore < minConfidence) {
+        skippedItems.push({ transactionId, reason: `Guven skoru toplu onay esiginin altinda: ${bestSuggestion.confidenceScore}.` });
+        continue;
+      }
+
+      await this.approve(tenantId, transactionId, {
+        refType: bestSuggestion.refType,
+        refId: bestSuggestion.refId,
+      });
+      approvals.push({
+        transactionId,
+        refType: bestSuggestion.refType,
+        refId: bestSuggestion.refId,
+        confidenceScore: bestSuggestion.confidenceScore,
+      });
+    }
+
+    return {
+      requested: transactionIds.length,
+      approved: approvals.length,
+      skipped: skippedItems.length,
+      approvals,
+      skippedItems,
+    };
   }
 
   private toStoredRefType(refType: BankTransactionMatchTargetType): BankTransactionRefType {

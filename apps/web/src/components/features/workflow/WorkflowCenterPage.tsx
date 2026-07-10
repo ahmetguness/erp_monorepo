@@ -9,9 +9,11 @@ import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { useWorkflowTasks } from '@/hooks/useWorkflow';
 import type { WorkflowTask } from '@/services/task.service';
+import type { AutomationRule } from '@/services/intelligence.service';
 import {
   useAutomationRules, useAutomationRuleTemplates, useCreateAutomationRule, useUpdateAutomationRule, useDeleteAutomationRule, useRunAutomationRule, useRunActiveAutomationRules
 } from '@/hooks/useAutomation';
+import { AutomationRuleBuilder } from './AutomationRuleBuilder';
 
 const TYPE_LABEL: Record<WorkflowTask['type'], string> = {
   APPROVAL: 'Onay',
@@ -37,6 +39,19 @@ function formatDate(value: string | null): string {
   return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
 }
 
+function formatConfig(value: Record<string, string | number | boolean> | null): string {
+  if (!value || Object.keys(value).length === 0) return 'Ek kosul yok';
+  return Object.entries(value).map(([key, item]) => `${key}: ${String(item)}`).join(' / ');
+}
+
+function formatRunResult(rule: AutomationRule): string {
+  if (!rule.lastRunAt) return 'Henuz calistirilmadi';
+  const result = rule.lastResult;
+  if (!result) return `${formatDate(rule.lastRunAt)} tarihinde calisti`;
+  const actionCount = result.tasksCreated + result.notificationsCreated;
+  return `${formatDate(rule.lastRunAt)} - ${result.matched} eslesme, ${actionCount} aksiyon`;
+}
+
 const TRIGGER_LABELS: Record<string, string> = {
   LOW_STOCK: 'Kritik Stok Seviyesi',
   OVERDUE_INVOICE: 'Geciken Fatura Vadesi',
@@ -55,6 +70,7 @@ const ACTION_LABELS: Record<string, string> = {
 
 export function WorkflowCenterPage() {
   const [activeTab, setActiveTab] = useState<'tasks' | 'rules'>('tasks');
+  const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
   const { data, isLoading, isError } = useWorkflowTasks();
   const tasks = data?.data ?? [];
   const counts = data?.meta.counts;
@@ -173,6 +189,15 @@ export function WorkflowCenterPage() {
 
       {activeTab === 'rules' && (
         <div className="space-y-8">
+          <AutomationRuleBuilder
+            templates={templates ?? []}
+            editingRule={editingRule}
+            isSubmitting={createRule.isPending || updateRule.isPending}
+            onCreate={(payload) => createRule.mutate(payload)}
+            onUpdate={(id, payload) => updateRule.mutate({ id, data: payload }, { onSuccess: () => setEditingRule(null) })}
+            onCancelEdit={() => setEditingRule(null)}
+          />
+
           {/* Rules Templates Section */}
           <div className="space-y-4 bg-slate-950/20 border border-slate-800/80 rounded-2xl p-5">
             <div className="flex items-center gap-2 text-slate-400 border-b border-slate-800/60 pb-3 mb-1">
@@ -278,9 +303,19 @@ export function WorkflowCenterPage() {
                           <span className="text-slate-600">➔</span>
                           <Badge variant="info">{ACTION_LABELS[rule.action] ?? rule.action}</Badge>
                         </div>
+                        <div className="grid gap-1 pt-2 text-[11px] text-slate-500 md:grid-cols-2">
+                          <p className="truncate"><span className="text-slate-400">Kosul:</span> {formatConfig(rule.conditions)}</p>
+                          <p className="truncate"><span className="text-slate-400">Son calisma:</span> {formatRunResult(rule)}</p>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+                        <button
+                          onClick={() => setEditingRule(rule)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-colors"
+                        >
+                          Duzenle
+                        </button>
                         <button
                           onClick={() => {
                             updateRule.mutate({

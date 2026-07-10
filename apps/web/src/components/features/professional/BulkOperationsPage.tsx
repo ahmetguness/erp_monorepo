@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ClipboardList, Loader2, Play, RotateCcw, Search } from "lucide-react";
+import Link from "next/link";
+import { ClipboardList, ExternalLink, Loader2, Play, RotateCcw, Search, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -87,6 +88,57 @@ function ResultSummary({ result }: { result: BulkOperationResult }) {
       <div className="rounded-lg border border-slate-800 bg-slate-900 p-3">
         <p className="text-[10px] font-medium uppercase text-slate-500">Eksik ID</p>
         <p className="mt-1 text-lg font-semibold text-red-400">{result.missingIds.length}</p>
+      </div>
+    </div>
+  );
+}
+
+function OperationDecisionPanel({ result }: { result: BulkOperationResult }) {
+  const actionCount = result.changes.filter((change) => change.changed).length;
+  return (
+    <div className="grid gap-3 lg:grid-cols-3">
+      <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <Search className="h-4 w-4 text-sky-400" />
+          <h4 className="text-sm font-semibold text-slate-100">Islem onizleme</h4>
+        </div>
+        <p className="text-xs leading-relaxed text-slate-500">
+          {result.dryRun
+            ? `${actionCount} kayit degisecek. Uygula butonu calisana kadar veri yazilmaz.`
+            : `${result.changed} kayit uygulandi; sonuc audit izine baglandi.`}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Badge variant={result.dryRun ? "warning" : "success"}>{result.dryRun ? "Dry-run" : "Uygulandi"}</Badge>
+          <Badge variant="neutral">Batch: {result.batchId}</Badge>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <RotateCcw className="h-4 w-4 text-amber-400" />
+          <h4 className="text-sm font-semibold text-slate-100">Geri alma stratejisi</h4>
+        </div>
+        <p className="text-xs font-medium text-slate-300">{result.rollbackStrategy.label}</p>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">{result.rollbackStrategy.description}</p>
+        <Badge variant={result.rollbackStrategy.available ? "info" : "neutral"} className="mt-3">
+          {result.rollbackStrategy.available ? "Snapshot var" : "Rollback yok"}
+        </Badge>
+      </div>
+
+      <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <ShieldCheck className="h-4 w-4 text-emerald-400" />
+          <h4 className="text-sm font-semibold text-slate-100">Audit baglantisi</h4>
+        </div>
+        {result.auditHref && result.auditLogId ? (
+          <Link href={result.auditHref} className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-400 hover:text-sky-300">
+            Audit kaydini ac
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+        ) : (
+          <p className="text-xs leading-relaxed text-slate-500">Audit kaydi uygulama sonrasi olusur.</p>
+        )}
+        {result.auditLogId && <p className="mt-2 break-all text-[11px] text-slate-500">{result.auditLogId}</p>}
       </div>
     </div>
   );
@@ -239,6 +291,7 @@ export function BulkOperationsPage() {
       {result && (
         <section className="space-y-4">
           <ResultSummary result={result} />
+          <OperationDecisionPanel result={result} />
 
           <div className="rounded-xl border border-slate-800 bg-slate-900">
             <div className="flex flex-col gap-2 border-b border-slate-800 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -249,6 +302,7 @@ export function BulkOperationsPage() {
               <div className="flex flex-wrap gap-2">
                 <Badge variant={result.mode === "execute" ? "success" : "warning"}>{result.mode === "execute" ? "Uygulandi" : "Onizleme"}</Badge>
                 {result.rollbackLogId && <Badge variant="info">Rollback log: {result.rollbackLogId}</Badge>}
+                {result.missingIds.length > 0 && <Badge variant="danger">{result.missingIds.length} eksik ID</Badge>}
               </div>
             </div>
 

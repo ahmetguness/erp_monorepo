@@ -38,11 +38,64 @@ export const BankTransactionMatchSuggestionsSchema = z.object({
   suggestions: z.array(BankTransactionMatchSuggestionSchema),
 });
 
+export const BankTransactionMatchingRuleSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  description: z.string(),
+  weight: z.coerce.number(),
+  minimumSignal: z.string(),
+});
+
+export const BankTransactionUnmatchedQueueItemSchema = z.object({
+  transactionId: z.string(),
+  date: z.string(),
+  description: z.string().nullable(),
+  reference: z.string().nullable(),
+  amount: z.coerce.number(),
+  bankAccountName: z.string().nullable(),
+  bestSuggestion: BankTransactionMatchSuggestionSchema.nullable(),
+  status: z.enum(['READY_FOR_APPROVAL', 'NEEDS_REVIEW', 'NO_CANDIDATE']),
+});
+
+export const BankTransactionMatchingWorkbenchSchema = z.object({
+  rules: z.array(BankTransactionMatchingRuleSchema),
+  queue: z.array(BankTransactionUnmatchedQueueItemSchema),
+  summary: z.object({
+    unmatched: z.coerce.number(),
+    readyForBulkApproval: z.coerce.number(),
+    needsReview: z.coerce.number(),
+    noCandidate: z.coerce.number(),
+  }),
+  bulkApprovalPolicy: z.object({
+    minConfidence: z.coerce.number(),
+    allowedStrength: z.enum(['HIGH', 'MEDIUM', 'LOW']),
+  }),
+});
+
+export const BulkApproveBankTransactionMatchesResultSchema = z.object({
+  requested: z.coerce.number(),
+  approved: z.coerce.number(),
+  skipped: z.coerce.number(),
+  approvals: z.array(z.object({
+    transactionId: z.string(),
+    refType: z.enum(['PAYMENT', 'INVOICE', 'CONTACT']),
+    refId: z.string(),
+    confidenceScore: z.coerce.number(),
+  })),
+  skippedItems: z.array(z.object({
+    transactionId: z.string(),
+    reason: z.string(),
+  })),
+});
+
 export type BankTransaction = z.infer<typeof BankTransactionSchema>;
 export type BankTransactionType = BankTransaction['type'];
 export type BankTransactionMatchTargetType = z.infer<typeof BankTransactionMatchSuggestionSchema>['refType'];
 export type BankTransactionMatchSuggestion = z.infer<typeof BankTransactionMatchSuggestionSchema>;
 export type BankTransactionMatchSuggestions = z.infer<typeof BankTransactionMatchSuggestionsSchema>;
+export type BankTransactionMatchingWorkbench = z.infer<typeof BankTransactionMatchingWorkbenchSchema>;
+export type BankTransactionUnmatchedQueueItem = z.infer<typeof BankTransactionUnmatchedQueueItemSchema>;
+export type BulkApproveBankTransactionMatchesResult = z.infer<typeof BulkApproveBankTransactionMatchesResultSchema>;
 
 export interface CreateBankTransactionDTO {
   bankAccountId: string; type: BankTransactionType;
@@ -70,6 +123,19 @@ export async function matchBankTransaction(id: string, refType: string, refId: s
 export async function getBankTransactionMatchSuggestions(id: string): Promise<BankTransactionMatchSuggestions> {
   const res = await apiClient.get(`/api/bank-transactions/${id}/match-suggestions`);
   return safeParse(SingleResponseSchema(BankTransactionMatchSuggestionsSchema), res.data, 'getBankTransactionMatchSuggestions').data;
+}
+
+export async function getBankTransactionMatchingWorkbench(): Promise<BankTransactionMatchingWorkbench> {
+  const res = await apiClient.get('/api/bank-transactions/matching-workbench');
+  return safeParse(SingleResponseSchema(BankTransactionMatchingWorkbenchSchema), res.data, 'getBankTransactionMatchingWorkbench').data;
+}
+
+export async function bulkApproveBankTransactionMatches(
+  transactionIds: readonly string[],
+  minConfidence?: number,
+): Promise<BulkApproveBankTransactionMatchesResult> {
+  const res = await apiClient.post('/api/bank-transactions/bulk-approve-matches', { transactionIds, minConfidence });
+  return safeParse(SingleResponseSchema(BulkApproveBankTransactionMatchesResultSchema), res.data, 'bulkApproveBankTransactionMatches').data;
 }
 
 export async function approveBankTransactionMatch(

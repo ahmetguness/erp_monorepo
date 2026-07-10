@@ -4,12 +4,14 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getBankTransactions, createBankTransaction, matchBankTransaction, getBankTransactionMatchSuggestions, approveBankTransactionMatch,
+  getBankTransactionMatchingWorkbench, bulkApproveBankTransactionMatches,
   type ListParams, type CreateBankTransactionDTO, type BankTransactionMatchTargetType,
 } from '@/services/bank-transaction.service';
 
 const KEYS = {
   list: (p: ListParams) => ['bank-transactions', p] as const,
   suggestions: (id: string) => ['bank-transactions', id, 'match-suggestions'] as const,
+  workbench: ['bank-transactions', 'matching-workbench'] as const,
 };
 
 export function useBankTransactions(params: ListParams) {
@@ -40,6 +42,13 @@ export function useBankTransactionMatchSuggestions(id?: string) {
   });
 }
 
+export function useBankTransactionMatchingWorkbench() {
+  return useQuery({
+    queryKey: KEYS.workbench,
+    queryFn: getBankTransactionMatchingWorkbench,
+  });
+}
+
 export function useApproveBankTransactionMatch() {
   const qc = useQueryClient(); const { toast } = useUIStore();
   return useMutation({
@@ -47,8 +56,23 @@ export function useApproveBankTransactionMatch() {
       approveBankTransactionMatch(id, refType, refId),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['bank-transactions'] });
+      qc.invalidateQueries({ queryKey: KEYS.workbench });
       qc.invalidateQueries({ queryKey: KEYS.suggestions(variables.id) });
       toast.success('Eşleştirme onaylandı.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useBulkApproveBankTransactionMatches() {
+  const qc = useQueryClient(); const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: ({ transactionIds, minConfidence }: { transactionIds: readonly string[]; minConfidence?: number }) =>
+      bulkApproveBankTransactionMatches(transactionIds, minConfidence),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['bank-transactions'] });
+      qc.invalidateQueries({ queryKey: KEYS.workbench });
+      toast.success(`${result.approved} banka hareketi otomatik eslestirildi.`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

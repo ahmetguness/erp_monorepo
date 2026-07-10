@@ -15,10 +15,19 @@ export const BulkOperationChangeSchema = z.object({
   changed: z.boolean(),
 });
 
+export const BulkRollbackStrategySchema = z.object({
+  type: z.enum(['audit_snapshot', 'not_required']),
+  available: z.boolean(),
+  label: z.string(),
+  description: z.string(),
+  auditLogId: z.string().nullable(),
+});
+
 export const BulkOperationResultSchema = z.object({
   batchId: z.string(),
   target: BulkOperationTargetSchema,
   mode: z.enum(['preview', 'execute']),
+  dryRun: z.boolean().default(false),
   field: z.string(),
   totalRequested: z.coerce.number(),
   matched: z.coerce.number(),
@@ -27,11 +36,21 @@ export const BulkOperationResultSchema = z.object({
   missingIds: z.array(z.string()),
   changes: z.array(BulkOperationChangeSchema),
   rollbackLogId: z.string().nullable(),
+  auditLogId: z.string().nullable().default(null),
+  auditHref: z.string().nullable().default(null),
+  rollbackStrategy: BulkRollbackStrategySchema.default({
+    type: 'not_required',
+    available: false,
+    label: 'Geri alma gerekmiyor',
+    description: 'Degisecek kayit yok.',
+    auditLogId: null,
+  }),
 });
 
 export type BulkOperationTarget = z.infer<typeof BulkOperationTargetSchema>;
 export type BulkOperationValue = z.infer<typeof BulkOperationValueSchema>;
 export type BulkOperationChange = z.infer<typeof BulkOperationChangeSchema>;
+export type BulkRollbackStrategy = z.infer<typeof BulkRollbackStrategySchema>;
 export type BulkOperationResult = z.infer<typeof BulkOperationResultSchema>;
 
 export interface BulkOperationPayload {

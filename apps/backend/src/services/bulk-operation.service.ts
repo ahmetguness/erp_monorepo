@@ -34,10 +34,21 @@ export interface BulkOperationChange {
   changed: boolean;
 }
 
+export type BulkRollbackStrategyType = 'audit_snapshot' | 'not_required';
+
+export interface BulkRollbackStrategy {
+  type: BulkRollbackStrategyType;
+  available: boolean;
+  label: string;
+  description: string;
+  auditLogId: string | null;
+}
+
 export interface BulkOperationResult {
   batchId: string;
   target: BulkOperationTarget;
   mode: BulkOperationMode;
+  dryRun: boolean;
   field: BulkOperationField;
   totalRequested: number;
   matched: number;
@@ -46,6 +57,9 @@ export interface BulkOperationResult {
   missingIds: string[];
   changes: BulkOperationChange[];
   rollbackLogId: string | null;
+  auditLogId: string | null;
+  auditHref: string | null;
+  rollbackStrategy: BulkRollbackStrategy;
 }
 
 type ContactRecord = {
@@ -195,6 +209,40 @@ function countChanged(changes: readonly BulkOperationChange[]): number {
   return changes.filter((change) => change.changed).length;
 }
 
+function createAuditHref(auditLogId: string | null): string | null {
+  return auditLogId ? `/dashboard/settings/audit-log?selected=${auditLogId}` : null;
+}
+
+function createRollbackStrategy(mode: BulkOperationMode, changed: number, auditLogId: string | null): BulkRollbackStrategy {
+  if (changed === 0) {
+    return {
+      type: 'not_required',
+      available: false,
+      label: 'Geri alma gerekmiyor',
+      description: 'Degisecek kayit olmadigi icin rollback stratejisi olusturulmadi.',
+      auditLogId: null,
+    };
+  }
+
+  if (mode === 'preview') {
+    return {
+      type: 'audit_snapshot',
+      available: true,
+      label: 'Dry-run snapshot hazir',
+      description: 'Onizleme eski ve yeni degerleri gosterir. Uygulama sonrasi ayni snapshot audit kaydina yazilir.',
+      auditLogId: null,
+    };
+  }
+
+  return {
+    type: 'audit_snapshot',
+    available: auditLogId !== null,
+    label: 'Audit snapshot ile manuel geri alma',
+    description: 'Her degisen kaydin eski degeri audit kaydinda tutulur; gerekirse ayni alan eski degerle tekrar toplu guncellenebilir.',
+    auditLogId,
+  };
+}
+
 function buildResult(params: {
   batchId: string;
   target: BulkOperationTarget;
@@ -205,10 +253,12 @@ function buildResult(params: {
   rollbackLogId: string | null;
 }): BulkOperationResult {
   const changed = countChanged(params.changes);
+  const auditLogId = params.rollbackLogId;
   return {
     batchId: params.batchId,
     target: params.target,
     mode: params.mode,
+    dryRun: params.mode === 'preview',
     field: params.field,
     totalRequested: params.requestedIds.length,
     matched: params.changes.length,
@@ -217,6 +267,9 @@ function buildResult(params: {
     missingIds: missingIds(params.requestedIds, params.changes.map((change) => change.id)),
     changes: [...params.changes],
     rollbackLogId: params.rollbackLogId,
+    auditLogId,
+    auditHref: createAuditHref(auditLogId),
+    rollbackStrategy: createRollbackStrategy(params.mode, changed, auditLogId),
   };
 }
 
@@ -383,7 +436,15 @@ export async function executeBulkOperation(
   const changedIds = preview.changes.filter((change) => change.changed).map((change) => change.id);
 
   if (changedIds.length === 0) {
-    return { ...preview, mode: 'execute', rollbackLogId: null };
+    return {
+      ...preview,
+      mode: 'execute',
+      dryRun: false,
+      rollbackLogId: null,
+      auditLogId: null,
+      auditHref: null,
+      rollbackStrategy: createRollbackStrategy('execute', 0, null),
+    };
   }
 
   return db.$transaction(async (tx) => {
@@ -404,9 +465,23 @@ export async function executeBulkOperation(
       });
     }
 
-    const result: BulkOperationResult = { ...preview, mode: 'execute', rollbackLogId: null };
+    const result: BulkOperationResult = {
+      ...preview,
+      mode: 'execute',
+      dryRun: false,
+      rollbackLogId: null,
+      auditLogId: null,
+      auditHref: null,
+      rollbackStrategy: createRollbackStrategy('execute', preview.changed, null),
+    };
     const rollbackLogId = await createRollbackAudit(tx, context, result);
-    const resultWithRollback = { ...result, rollbackLogId };
+    const resultWithRollback: BulkOperationResult = {
+      ...result,
+      rollbackLogId,
+      auditLogId: rollbackLogId,
+      auditHref: createAuditHref(rollbackLogId),
+      rollbackStrategy: createRollbackStrategy('execute', result.changed, rollbackLogId),
+    };
     await auditEntityChanges(tx, context, resultWithRollback);
     return resultWithRollback;
   });

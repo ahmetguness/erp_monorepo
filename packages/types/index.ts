@@ -627,6 +627,10 @@ export interface SavedReport {
   filters: Record<string, unknown>;
   columns: string[];
   isShared: boolean;
+  sharedRoleIds: string[];
+  sharedUserIds: string[];
+  columnTemplateName?: string | null;
+  pinnedToDashboard: boolean;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;

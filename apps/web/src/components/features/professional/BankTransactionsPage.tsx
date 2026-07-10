@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, Plus, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CheckCircle2, ListChecks, Plus, Sparkles, Wand2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { BankAccountSelect } from "@/components/shared/EntitySelect";
@@ -14,7 +14,9 @@ import { Select } from "@/components/ui/Select";
 import {
   useBankTransactions,
   useApproveBankTransactionMatch,
+  useBankTransactionMatchingWorkbench,
   useBankTransactionMatchSuggestions,
+  useBulkApproveBankTransactionMatches,
   useCreateBankTransaction,
 } from "@/hooks/useBankTransactions";
 import { cn, formatDate, formatCurrency } from "@/lib/utils";
@@ -61,6 +63,7 @@ export function BankTransactionsPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<BankTransaction | null>(null);
+  const [selectedQueueIds, setSelectedQueueIds] = useState<string[]>([]);
   const [form, setForm] = useState({
     bankAccountId: "",
     type: "DEPOSIT" as BankTransactionType,
@@ -77,10 +80,18 @@ export function BankTransactionsPage() {
     type: typeFilter || undefined,
   });
   const createTx = useCreateBankTransaction();
+  const workbenchQuery = useBankTransactionMatchingWorkbench();
+  const bulkApprove = useBulkApproveBankTransactionMatches();
   const suggestionsQuery = useBankTransactionMatchSuggestions(selectedTransaction?.id);
   const approveMatch = useApproveBankTransactionMatch();
   const suggestions = suggestionsQuery.data?.suggestions ?? [];
   const pendingMatchCount = data?.data.filter((transaction) => !transaction.refType || !transaction.refId).length ?? 0;
+  const workbench = workbenchQuery.data;
+  const readyQueueIds = useMemo(
+    () => workbench?.queue.filter((item) => item.status === "READY_FOR_APPROVAL").map((item) => item.transactionId) ?? [],
+    [workbench?.queue],
+  );
+  const selectedReadyCount = selectedQueueIds.filter((id) => readyQueueIds.includes(id)).length;
 
   const columns: ColumnDef<BankTransaction>[] = [
     {
@@ -239,6 +250,133 @@ export function BankTransactionsPage() {
           </p>
         </div>
       </div>
+      {workbench && (
+        <section className="mb-4 space-y-3 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Wand2 className="h-4 w-4 text-sky-400" />
+                <h3 className="text-sm font-semibold text-white">Otomatik eslestirme kurallari</h3>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Tutar, tarih, referans, cari ve banka hesabi sinyalleri birlikte skorlanir; sadece yuksek guvenli adaylar toplu onaya girer.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="neutral">{workbench.summary.unmatched} eslesmeyen</Badge>
+              <Badge variant="success">{workbench.summary.readyForBulkApproval} toplu onaya hazir</Badge>
+              <Badge variant="warning">{workbench.summary.needsReview} inceleme</Badge>
+              <Badge variant="neutral">{workbench.summary.noCandidate} adaysiz</Badge>
+            </div>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/40">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <ListChecks className="h-4 w-4 text-emerald-400" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Eslesmeyen hareket kuyrugu</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={readyQueueIds.length === 0}
+                  onClick={() => setSelectedQueueIds(readyQueueIds)}
+                >
+                  Hazir olanlari sec
+                </Button>
+              </div>
+              <div className="max-h-80 divide-y divide-slate-800 overflow-y-auto">
+                {workbench.queue.length === 0 ? (
+                  <div className="p-4 text-sm text-slate-500">Eslesmeyen banka hareketi bulunmuyor.</div>
+                ) : (
+                  workbench.queue.map((item) => {
+                    const isSelected = selectedQueueIds.includes(item.transactionId);
+                    const isReady = item.status === "READY_FOR_APPROVAL";
+                    return (
+                      <label key={item.transactionId} className="flex cursor-pointer gap-3 p-3 hover:bg-slate-900/50">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={!isReady}
+                          onChange={(event) => {
+                            setSelectedQueueIds((current) =>
+                              event.target.checked
+                                ? [...new Set([...current, item.transactionId])]
+                                : current.filter((id) => id !== item.transactionId),
+                            );
+                          }}
+                          className="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-950"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={isReady ? "success" : item.status === "NEEDS_REVIEW" ? "warning" : "neutral"}>
+                              {isReady ? "Toplu onay" : item.status === "NEEDS_REVIEW" ? "Manuel inceleme" : "Aday yok"}
+                            </Badge>
+                            {item.bestSuggestion && (
+                              <span className="text-xs font-semibold text-slate-300">%{item.bestSuggestion.confidenceScore}</span>
+                            )}
+                            <span className="text-xs text-slate-500">{formatDate(item.date)}</span>
+                          </div>
+                          <p className="mt-1 truncate text-sm font-medium text-slate-200">{item.description ?? "Aciklamasiz hareket"}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {item.bankAccountName ?? "Banka hesabi yok"} · {formatCurrency(item.amount)}
+                          </p>
+                          {item.bestSuggestion && (
+                            <p className="mt-1 truncate text-xs text-sky-300">
+                              {MATCH_LABELS[item.bestSuggestion.refType]}: {item.bestSuggestion.label}
+                            </p>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Toplu onay politikasi</p>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+                <p className="text-sm font-semibold text-white">
+                  %{workbench.bulkApprovalPolicy.minConfidence}+ ve {STRENGTH_MAP[workbench.bulkApprovalPolicy.allowedStrength].label} guven
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Bu esigin altindaki hareketler kuyrukta kalir ve manuel oneriler modalindan onaylanir.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {workbench.rules.map((rule) => (
+                  <div key={rule.key} className="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-slate-200">{rule.label}</p>
+                      <Badge variant="info">{rule.weight} puan</Badge>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{rule.minimumSignal}</p>
+                  </div>
+                ))}
+              </div>
+              <Button
+                className="w-full"
+                leftIcon={<CheckCircle2 className="h-4 w-4" />}
+                loading={bulkApprove.isPending}
+                disabled={selectedReadyCount === 0}
+                onClick={() => {
+                  bulkApprove.mutate(
+                    {
+                      transactionIds: selectedQueueIds,
+                      minConfidence: workbench.bulkApprovalPolicy.minConfidence,
+                    },
+                    { onSuccess: () => setSelectedQueueIds([]) },
+                  );
+                }}
+              >
+                {selectedReadyCount} hareketi toplu onayla
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
       <DataTable
         columns={columns}
         data={data?.data ?? []}

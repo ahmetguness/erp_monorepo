@@ -10,6 +10,8 @@ bankTransactionRoutes.use('*', requireAccess(ACCESS_POLICIES.bankTransactions));
 
 bankTransactionRoutes.get('/', requirePermission('accounting', 'READ'), BankTransactionController.list);
 bankTransactionRoutes.post('/', requirePermission('accounting', 'CREATE'), BankTransactionController.create);
+bankTransactionRoutes.get('/matching-workbench', requirePermission('accounting', 'READ'), BankTransactionController.matchingWorkbench);
+bankTransactionRoutes.post('/bulk-approve-matches', requirePermission('accounting', 'UPDATE'), BankTransactionController.bulkApproveMatches);
 bankTransactionRoutes.get('/:id/match-suggestions', requirePermission('accounting', 'READ'), BankTransactionController.suggestions);
 bankTransactionRoutes.post('/:id/approve-match', requirePermission('accounting', 'UPDATE'), BankTransactionController.approveMatch);
 bankTransactionRoutes.post('/:id/match', requirePermission('accounting', 'UPDATE'), BankTransactionController.matchPayment);

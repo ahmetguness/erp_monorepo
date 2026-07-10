@@ -35,6 +35,11 @@ interface MatchPaymentDTO {
   refId: string;
 }
 
+interface BulkApproveMatchesDTO {
+  transactionIds?: string[];
+  minConfidence?: number;
+}
+
 function readMatchTargetType(value: string): 'PAYMENT' | 'INVOICE' | 'CONTACT' {
   if (value === 'PAYMENT' || value === 'INVOICE' || value === 'CONTACT') return value;
   throw new ValidationError('Gecersiz eslestirme tipi.');
@@ -182,6 +187,29 @@ export const BankTransactionController = {
     const tenantId = requireTenantId(c);
     const id = requireParam(c, 'id');
     const result = await matchingService.suggest(tenantId, id);
+    return c.json({ data: result });
+  },
+
+  async matchingWorkbench(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const result = await matchingService.workbench(tenantId);
+    return c.json({ data: result });
+  },
+
+  async bulkApproveMatches(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body = await c.req.json<BulkApproveMatchesDTO>();
+    if (!Array.isArray(body.transactionIds) || !body.transactionIds.every((id) => typeof id === 'string')) {
+      return c.json(new ValidationError('transactionIds metin listesi olmalidir.').toJSON(), 400);
+    }
+    if (body.minConfidence !== undefined && (typeof body.minConfidence !== 'number' || body.minConfidence < 0 || body.minConfidence > 100)) {
+      return c.json(new ValidationError('minConfidence 0-100 arasinda sayi olmalidir.').toJSON(), 400);
+    }
+
+    const result = await matchingService.bulkApprove(tenantId, {
+      transactionIds: body.transactionIds,
+      minConfidence: body.minConfidence,
+    });
     return c.json({ data: result });
   },
 

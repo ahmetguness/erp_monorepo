@@ -36,6 +36,10 @@ const SavedReportSchema = z.object({
   id: z.string(), tenantId: z.string(), name: z.string(), module: z.string(),
   filters: z.record(z.string(), z.unknown()), columns: z.array(z.string()),
   isShared: z.boolean(), createdBy: z.string().nullable(),
+  sharedRoleIds: z.array(z.string()).default([]),
+  sharedUserIds: z.array(z.string()).default([]),
+  columnTemplateName: z.string().nullable().optional(),
+  pinnedToDashboard: z.boolean().default(false),
   createdAt: z.string(), updatedAt: z.string(),
 });
 
@@ -184,7 +188,19 @@ export async function getPinnedKpiPreviews(): Promise<KpiPreview[]> {
   return Promise.all(configs.map((config) => previewKpi(config)));
 }
 
-export async function createSavedReport(data: { name: string; module: string; filters?: Record<string, unknown>; columns?: string[]; isShared?: boolean }): Promise<SavedReport> {
+export interface SavedReportMutationInput {
+  name?: string;
+  module?: string;
+  filters?: Record<string, unknown>;
+  columns?: string[];
+  isShared?: boolean;
+  sharedRoleIds?: string[];
+  sharedUserIds?: string[];
+  columnTemplateName?: string | null;
+  pinnedToDashboard?: boolean;
+}
+
+export async function createSavedReport(data: Required<Pick<SavedReportMutationInput, 'name' | 'module'>> & Omit<SavedReportMutationInput, 'name' | 'module'>): Promise<SavedReport> {
   const res = await apiClient.post('/api/reports/saved', data);
   return safeParse(SingleResponseSchema(SavedReportSchema), res.data, 'createSavedReport').data;
 }
@@ -193,7 +209,7 @@ export async function deleteSavedReport(id: string): Promise<void> {
   await apiClient.delete(`/api/reports/saved/${id}`);
 }
 
-export async function updateSavedReport(id: string, data: { name?: string; filters?: Record<string, unknown>; columns?: string[]; isShared?: boolean }): Promise<SavedReport> {
+export async function updateSavedReport(id: string, data: SavedReportMutationInput): Promise<SavedReport> {
   const res = await apiClient.patch(`/api/reports/saved/${id}`, data);
   return safeParse(SingleResponseSchema(SavedReportSchema), res.data, 'updateSavedReport').data;
 }

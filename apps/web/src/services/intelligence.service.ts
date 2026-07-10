@@ -16,20 +16,25 @@ export const RecommendationSchema = z.object({
   value: z.coerce.number(),
 });
 
+const AutomationRuleTriggerSchema = z.enum(['LOW_STOCK', 'OVERDUE_INVOICE', 'HIGH_VALUE_INVOICE', 'LOW_MARGIN', 'CHECK_DUE_SOON']);
+const AutomationRuleActionSchema = z.enum(['CREATE_TASK', 'CREATE_NOTIFICATION', 'DRAFT_REMINDER_EMAIL', 'REQUEST_APPROVAL', 'CREATE_PURCHASE_REQUEST_DRAFT']);
+const AutomationRuleConfigValueSchema = z.union([z.string(), z.number(), z.boolean()]);
+const AutomationRuleConfigSchema = z.record(z.string(), AutomationRuleConfigValueSchema).catch({});
+
 export const AutomationRuleTemplateSchema = z.object({
   key: z.string(),
   title: z.string(),
   description: z.string(),
-  trigger: z.enum(['LOW_STOCK', 'OVERDUE_INVOICE', 'HIGH_VALUE_INVOICE', 'LOW_MARGIN', 'CHECK_DUE_SOON']),
-  action: z.enum(['CREATE_TASK', 'CREATE_NOTIFICATION', 'DRAFT_REMINDER_EMAIL', 'REQUEST_APPROVAL', 'CREATE_PURCHASE_REQUEST_DRAFT']),
+  trigger: AutomationRuleTriggerSchema,
+  action: AutomationRuleActionSchema,
   module: z.string(),
   requiredModules: z.array(z.string()),
   requiredPermission: z.string(),
   conditionLabel: z.string(),
   actionLabel: z.string(),
   outcomeLabel: z.string(),
-  conditions: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
-  actionConfig: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+  conditions: AutomationRuleConfigSchema,
+  actionConfig: AutomationRuleConfigSchema,
   steps: z.array(z.object({
     label: z.string(),
     description: z.string(),
@@ -99,6 +104,10 @@ export const AiRequestLogSchema = z.object({
 
 export type Recommendation = z.infer<typeof RecommendationSchema>;
 export type AutomationRuleTemplate = z.infer<typeof AutomationRuleTemplateSchema>;
+export type AutomationRuleTrigger = z.infer<typeof AutomationRuleTriggerSchema>;
+export type AutomationRuleAction = z.infer<typeof AutomationRuleActionSchema>;
+export type AutomationRuleConfigValue = z.infer<typeof AutomationRuleConfigValueSchema>;
+export type AutomationRuleConfig = z.infer<typeof AutomationRuleConfigSchema>;
 export type SectorTemplate = z.infer<typeof SectorTemplateSchema>;
 export type AiGovernancePolicy = z.infer<typeof AiGovernancePolicySchema>;
 export type AiGovernancePolicyResponse = z.infer<typeof AiGovernancePolicyResponseSchema>;
@@ -169,11 +178,18 @@ export const AutomationRuleSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
   module: z.string(),
-  trigger: z.enum(['LOW_STOCK', 'OVERDUE_INVOICE', 'HIGH_VALUE_INVOICE', 'LOW_MARGIN', 'CHECK_DUE_SOON']),
-  action: z.enum(['CREATE_TASK', 'CREATE_NOTIFICATION', 'DRAFT_REMINDER_EMAIL', 'REQUEST_APPROVAL', 'CREATE_PURCHASE_REQUEST_DRAFT']),
-  conditions: z.unknown().nullable(),
-  actionConfig: z.unknown().nullable(),
+  trigger: AutomationRuleTriggerSchema,
+  action: AutomationRuleActionSchema,
+  conditions: AutomationRuleConfigSchema.nullable(),
+  actionConfig: AutomationRuleConfigSchema.nullable(),
   isActive: z.boolean(),
+  lastRunAt: z.string().nullable().optional(),
+  lastResult: z.object({
+    matched: z.coerce.number(),
+    tasksCreated: z.coerce.number(),
+    notificationsCreated: z.coerce.number(),
+    skipped: z.coerce.number(),
+  }).nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -185,8 +201,8 @@ export interface CreateAutomationRuleDTO {
   trigger: AutomationRule['trigger'];
   action: AutomationRule['action'];
   description?: string;
-  conditions?: Record<string, unknown>;
-  actionConfig?: Record<string, unknown>;
+  conditions?: AutomationRuleConfig;
+  actionConfig?: AutomationRuleConfig;
   isActive?: boolean;
 }
 

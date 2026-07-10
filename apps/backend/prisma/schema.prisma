@@ -3081,6 +3081,10 @@ model SavedReport {
   filters   Json     @default("{}")
   columns   String[] @default([])
   isShared  Boolean  @default(false)
+  sharedRoleIds String[] @default([])
+  sharedUserIds String[] @default([])
+  columnTemplateName String?
+  pinnedToDashboard Boolean @default(false)
   createdBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3088,6 +3092,7 @@ model SavedReport {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, module])
+  @@index([tenantId, pinnedToDashboard])
   @@map("saved_reports")
 }
 
