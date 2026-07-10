@@ -28,11 +28,35 @@ import {
   type SiemDestinationType,
   type SiemSeverity,
 } from '../services/siem-export.service.js';
+import {
+  buildDataRetentionPreview,
+  DATA_RETENTION_AUDIT_META,
+  DATA_RETENTION_SETTING_KEYS,
+  dataRetentionAuditValues,
+  getDataRetentionSettings,
+  normalizeRetentionRules,
+  recordDataRetentionDryRun,
+  saveDataRetentionSettings,
+} from '../services/data-retention-policy.service.js';
+import {
+  buildDeploymentOperationsSnapshot,
+  DEPLOYMENT_OPERATIONS_SETTING_KEYS,
+  getDeploymentOperationsSettings,
+  recordBackupSimulation,
+  saveDeploymentOperationsSettings,
+  type BackupFrequency,
+} from '../services/deployment-operations.service.js';
 
 const TENANT_LOGO_SETTING_KEY = 'tenant_logo_storage_path';
 const LEGACY_TENANT_LOGO_SETTING_KEY = 'company_logo';
 const TENANT_LOGO_SETTING_KEYS = [TENANT_LOGO_SETTING_KEY, LEGACY_TENANT_LOGO_SETTING_KEY] as const;
-const INTERNAL_TENANT_SETTING_KEYS = [...TENANT_LOGO_SETTING_KEYS, 'security.sessions', ...Object.values(SIEM_SETTING_KEYS)] as const;
+const INTERNAL_TENANT_SETTING_KEYS = [
+  ...TENANT_LOGO_SETTING_KEYS,
+  'security.sessions',
+  ...Object.values(SIEM_SETTING_KEYS),
+  ...Object.values(DATA_RETENTION_SETTING_KEYS),
+  ...Object.values(DEPLOYMENT_OPERATIONS_SETTING_KEYS),
+] as const;
 const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 const ALLOWED_LOGO_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_LOGO_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
@@ -71,12 +95,21 @@ function readPositiveNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+function readPositiveInteger(value: unknown, fallback: number): number {
+  const numberValue = readPositiveNumber(value, fallback);
+  return Number.isInteger(numberValue) ? numberValue : Math.trunc(numberValue);
+}
+
 function readSiemDestinationType(value: unknown): SiemDestinationType {
   return value === 'webhook' || value === 'syslog' || value === 'generic' ? value : 'webhook';
 }
 
 function readSiemSeverity(value: unknown): SiemSeverity {
   return value === 'info' || value === 'warning' || value === 'critical' ? value : 'warning';
+}
+
+function readBackupFrequency(value: unknown): BackupFrequency {
+  return value === 'hourly' || value === 'daily' || value === 'weekly' ? value : 'daily';
 }
 
 async function assertEnterpriseTenant(tenantId: string, message: string): Promise<void> {
@@ -486,6 +519,156 @@ export const SettingsController = {
     });
 
     return c.json({ data: result });
+  },
+
+  async getDataRetentionSettings(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    await assertEnterpriseTenant(tenantId, 'Veri saklama politikasi sadece Enterprise plan kapsamindadir.');
+    return c.json({ data: await getDataRetentionSettings(prisma, tenantId) });
+  },
+
+  async updateDataRetentionSettings(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    await assertEnterpriseTenant(tenantId, 'Veri saklama politikasi sadece Enterprise plan kapsamindadir.');
+    const body = await readJsonObject(c);
+    const settings = {
+      enabled: readBoolean(body.enabled),
+      legalArchiveEnabled: body.legalArchiveEnabled !== false,
+      kvkkGdprEnabled: body.kvkkGdprEnabled !== false,
+      rules: normalizeRetentionRules(body.rules),
+      lastRunAt: null,
+      lastSummary: null,
+    };
+
+    await saveDataRetentionSettings(prisma, tenantId, settings);
+
+    const { ipAddress, userAgent } = getRequestMeta(c);
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: DATA_RETENTION_AUDIT_META.module,
+      entityType: DATA_RETENTION_AUDIT_META.entityType,
+      entityId: DATA_RETENTION_AUDIT_META.settingsEntityId,
+      action: DATA_RETENTION_AUDIT_META.updateAction,
+      newValues: {
+        enabled: settings.enabled,
+        legalArchiveEnabled: settings.legalArchiveEnabled,
+        kvkkGdprEnabled: settings.kvkkGdprEnabled,
+        ruleCount: settings.rules.length,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return c.json({ data: { success: true } });
+  },
+
+  async previewDataRetention(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    await assertEnterpriseTenant(tenantId, 'Veri saklama politikasi sadece Enterprise plan kapsamindadir.');
+    return c.json({ data: await buildDataRetentionPreview(prisma, tenantId) });
+  },
+
+  async runDataRetentionDryRun(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    await assertEnterpriseTenant(tenantId, 'Veri saklama politikasi sadece Enterprise plan kapsamindadir.');
+
+    const preview = await buildDataRetentionPreview(prisma, tenantId);
+    await recordDataRetentionDryRun(prisma, tenantId, preview);
+
+    const { ipAddress, userAgent } = getRequestMeta(c);
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: DATA_RETENTION_AUDIT_META.module,
+      entityType: DATA_RETENTION_AUDIT_META.entityType,
+      entityId: DATA_RETENTION_AUDIT_META.dryRunEntityId,
+      action: DATA_RETENTION_AUDIT_META.exportAction,
+      newValues: dataRetentionAuditValues(preview),
+      ipAddress,
+      userAgent,
+    });
+
+    return c.json({ data: preview });
+  },
+
+  async getDeploymentOperationsSnapshot(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    await assertEnterpriseTenant(tenantId, 'On-premise/private cloud operasyon paneli sadece Enterprise plan kapsamindadir.');
+    const snapshot = await buildDeploymentOperationsSnapshot(prisma, tenantId);
+    if (!snapshot) return c.json(new NotFoundError('Tenant', tenantId).toJSON(), 404);
+    return c.json({ data: snapshot });
+  },
+
+  async getDeploymentOperationsSettings(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    await assertEnterpriseTenant(tenantId, 'On-premise/private cloud operasyon paneli sadece Enterprise plan kapsamindadir.');
+    return c.json({ data: await getDeploymentOperationsSettings(prisma, tenantId) });
+  },
+
+  async updateDeploymentOperationsSettings(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    await assertEnterpriseTenant(tenantId, 'On-premise/private cloud operasyon paneli sadece Enterprise plan kapsamindadir.');
+    const body = await readJsonObject(c);
+    const settings = {
+      environmentName: readString(body.environmentName, 'production'),
+      releaseChannel: readString(body.releaseChannel, 'stable'),
+      backupEnabled: body.backupEnabled !== false,
+      backupFrequency: readBackupFrequency(body.backupFrequency),
+      backupRetentionDays: readPositiveInteger(body.backupRetentionDays, 30),
+      backupLastRunAt: null,
+      backupLastStatus: null,
+      maintenanceWindow: readString(body.maintenanceWindow, 'Sunday 02:00-04:00'),
+    };
+
+    await saveDeploymentOperationsSettings(prisma, tenantId, settings);
+    const { ipAddress, userAgent } = getRequestMeta(c);
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'deployment_operations',
+      entityType: EntityType.OTHER,
+      entityId: 'deployment_operations_settings',
+      action: AuditAction.UPDATE,
+      newValues: {
+        environmentName: settings.environmentName,
+        releaseChannel: settings.releaseChannel,
+        backupEnabled: settings.backupEnabled,
+        backupFrequency: settings.backupFrequency,
+        backupRetentionDays: settings.backupRetentionDays,
+        maintenanceWindow: settings.maintenanceWindow,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return c.json({ data: { success: true } });
+  },
+
+  async simulateDeploymentBackup(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    await assertEnterpriseTenant(tenantId, 'On-premise/private cloud operasyon paneli sadece Enterprise plan kapsamindadir.');
+
+    const result = await recordBackupSimulation(prisma, tenantId);
+    const snapshot = await buildDeploymentOperationsSnapshot(prisma, tenantId);
+    const { ipAddress, userAgent } = getRequestMeta(c);
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'deployment_operations',
+      entityType: EntityType.OTHER,
+      entityId: 'deployment_backup_simulation',
+      action: AuditAction.UPDATE,
+      newValues: result,
+      ipAddress,
+      userAgent,
+    });
+
+    return c.json({ data: { ...result, snapshot } });
   },
 
   async getBiSettings(c: Context): Promise<Response> {

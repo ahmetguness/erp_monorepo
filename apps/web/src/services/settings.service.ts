@@ -348,6 +348,167 @@ export async function runSiemExportTest(): Promise<SiemExportResult> {
   return safeParse(SingleResponseSchema(SiemExportResultSchema), res.data, 'runSiemExportTest').data;
 }
 
+export const RetentionModuleKeySchema = z.enum([
+  'audit_logs',
+  'contacts',
+  'invoices',
+  'accounting',
+  'inventory',
+  'hr',
+  'mail',
+  'notifications',
+  'marketplace',
+]);
+
+export const RetentionActionSchema = z.enum(['review', 'archive', 'anonymize', 'legal_hold']);
+
+export const RetentionPolicyRuleSchema = z.object({
+  module: RetentionModuleKeySchema,
+  retentionDays: z.coerce.number().int().positive(),
+  action: RetentionActionSchema,
+  legalArchive: z.boolean(),
+  anonymizeFields: z.array(z.string()),
+  gdprBasis: z.string(),
+  enabled: z.boolean(),
+});
+
+export const DataRetentionSettingsSchema = z.object({
+  enabled: z.boolean(),
+  legalArchiveEnabled: z.boolean(),
+  kvkkGdprEnabled: z.boolean(),
+  rules: z.array(RetentionPolicyRuleSchema),
+  lastRunAt: z.string().nullable(),
+  lastSummary: z.string().nullable(),
+});
+
+export const DataRetentionPreviewItemSchema = z.object({
+  module: RetentionModuleKeySchema,
+  cutoffDate: z.string(),
+  candidateCount: z.coerce.number(),
+  action: RetentionActionSchema,
+  legalArchive: z.boolean(),
+  anonymizeFields: z.array(z.string()),
+  gdprBasis: z.string(),
+  enabled: z.boolean(),
+});
+
+export const DataRetentionPreviewSchema = z.object({
+  generatedAt: z.string(),
+  enabled: z.boolean(),
+  legalArchiveEnabled: z.boolean(),
+  kvkkGdprEnabled: z.boolean(),
+  totalCandidates: z.coerce.number(),
+  items: z.array(DataRetentionPreviewItemSchema),
+});
+
+export type RetentionModuleKey = z.infer<typeof RetentionModuleKeySchema>;
+export type RetentionAction = z.infer<typeof RetentionActionSchema>;
+export type RetentionPolicyRule = z.infer<typeof RetentionPolicyRuleSchema>;
+export type DataRetentionSettings = z.infer<typeof DataRetentionSettingsSchema>;
+export type DataRetentionPreview = z.infer<typeof DataRetentionPreviewSchema>;
+
+export async function getDataRetentionSettings(): Promise<DataRetentionSettings> {
+  const res = await apiClient.get('/api/settings/security/data-retention');
+  return safeParse(SingleResponseSchema(DataRetentionSettingsSchema), res.data, 'getDataRetentionSettings').data;
+}
+
+export async function updateDataRetentionSettings(data: DataRetentionSettings): Promise<void> {
+  await apiClient.post('/api/settings/security/data-retention', data);
+}
+
+export async function previewDataRetention(): Promise<DataRetentionPreview> {
+  const res = await apiClient.get('/api/settings/security/data-retention/preview');
+  return safeParse(SingleResponseSchema(DataRetentionPreviewSchema), res.data, 'previewDataRetention').data;
+}
+
+export async function runDataRetentionDryRun(): Promise<DataRetentionPreview> {
+  const res = await apiClient.post('/api/settings/security/data-retention/dry-run');
+  return safeParse(SingleResponseSchema(DataRetentionPreviewSchema), res.data, 'runDataRetentionDryRun').data;
+}
+
+export const DeploymentOperationsSettingsSchema = z.object({
+  environmentName: z.string(),
+  releaseChannel: z.string(),
+  backupEnabled: z.boolean(),
+  backupFrequency: z.enum(['hourly', 'daily', 'weekly']),
+  backupRetentionDays: z.coerce.number(),
+  backupLastRunAt: z.string().nullable(),
+  backupLastStatus: z.string().nullable(),
+  maintenanceWindow: z.string(),
+});
+
+export const DeploymentHealthCheckSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  status: z.enum(['ok', 'warn', 'fail']),
+  message: z.string(),
+});
+
+export const DeploymentOperationsSnapshotSchema = z.object({
+  tenant: z.object({
+    id: z.string(),
+    companyName: z.string(),
+    plan: z.enum(['STARTER', 'PROFESSIONAL', 'ENTERPRISE']),
+    deploymentType: z.enum(['CLOUD', 'ON_PREMISE']),
+  }),
+  environment: z.object({
+    name: z.string(),
+    nodeEnv: z.string(),
+    appRole: z.string(),
+    releaseChannel: z.string(),
+    version: z.string(),
+    maintenanceWindow: z.string(),
+  }),
+  backup: z.object({
+    enabled: z.boolean(),
+    frequency: z.enum(['hourly', 'daily', 'weekly']),
+    retentionDays: z.coerce.number(),
+    lastRunAt: z.string().nullable(),
+    lastStatus: z.string().nullable(),
+  }),
+  health: z.object({
+    status: z.enum(['ok', 'warn', 'fail']),
+    checks: z.array(DeploymentHealthCheckSchema),
+  }),
+  migrations: z.object({
+    totalMigrations: z.coerce.number(),
+    appliedMigrations: z.coerce.number().nullable(),
+    pendingMigrations: z.array(z.string()),
+    latestMigration: z.string().nullable(),
+    checkedAt: z.string(),
+  }),
+  generatedAt: z.string(),
+});
+
+export const DeploymentBackupSimulationSchema = z.object({
+  lastRunAt: z.string(),
+  lastStatus: z.string(),
+  snapshot: DeploymentOperationsSnapshotSchema.nullable(),
+});
+
+export type DeploymentOperationsSettings = z.infer<typeof DeploymentOperationsSettingsSchema>;
+export type DeploymentOperationsSnapshot = z.infer<typeof DeploymentOperationsSnapshotSchema>;
+export type DeploymentBackupSimulation = z.infer<typeof DeploymentBackupSimulationSchema>;
+
+export async function getDeploymentOperationsSnapshot(): Promise<DeploymentOperationsSnapshot> {
+  const res = await apiClient.get('/api/settings/security/deployment-operations');
+  return safeParse(SingleResponseSchema(DeploymentOperationsSnapshotSchema), res.data, 'getDeploymentOperationsSnapshot').data;
+}
+
+export async function getDeploymentOperationsSettings(): Promise<DeploymentOperationsSettings> {
+  const res = await apiClient.get('/api/settings/security/deployment-operations/settings');
+  return safeParse(SingleResponseSchema(DeploymentOperationsSettingsSchema), res.data, 'getDeploymentOperationsSettings').data;
+}
+
+export async function updateDeploymentOperationsSettings(data: DeploymentOperationsSettings): Promise<void> {
+  await apiClient.post('/api/settings/security/deployment-operations/settings', data);
+}
+
+export async function simulateDeploymentBackup(): Promise<DeploymentBackupSimulation> {
+  const res = await apiClient.post('/api/settings/security/deployment-operations/backup-simulation');
+  return safeParse(SingleResponseSchema(DeploymentBackupSimulationSchema), res.data, 'simulateDeploymentBackup').data;
+}
+
 // ── BI & Data Warehouse Settings ────────────────
 
 export const BiSettingsSchema = z.object({

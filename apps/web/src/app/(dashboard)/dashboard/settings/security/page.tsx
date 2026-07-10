@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Shield, Key, Globe, Clock, Copy, Check, RefreshCw, Save, UsersRound, RadioTower, Send } from 'lucide-react';
+import { Shield, Key, Globe, Clock, Copy, Check, RefreshCw, Save, UsersRound, RadioTower, Send, Archive, FileCheck, ServerCog, DatabaseBackup } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -13,9 +13,17 @@ import {
   useSiemSettings,
   useUpdateSiemSettings,
   useRunSiemExportTest,
+  useDataRetentionSettings,
+  useUpdateDataRetentionSettings,
+  useDataRetentionPreview,
+  useRunDataRetentionDryRun,
+  useDeploymentOperationsSnapshot,
+  useDeploymentOperationsSettings,
+  useUpdateDeploymentOperationsSettings,
+  useSimulateDeploymentBackup,
 } from '@/hooks/useSettings';
 import { useRoles } from '@/hooks/useRoles';
-import type { CorporateSecuritySettings, SiemSettings } from '@/services/settings.service';
+import type { CorporateSecuritySettings, DataRetentionSettings, DeploymentOperationsSettings, RetentionPolicyRule, SiemSettings } from '@/services/settings.service';
 
 interface ScimRoleMappingFormRow {
   group: string;
@@ -73,23 +81,84 @@ const DEFAULT_SIEM_FORM: SiemSettings = {
   lastStatus: null,
 };
 
+const RETENTION_MODULE_LABELS: Record<RetentionPolicyRule['module'], string> = {
+  audit_logs: 'Audit log',
+  contacts: 'Cari hesaplar',
+  invoices: 'Faturalar',
+  accounting: 'Muhasebe',
+  inventory: 'Stok',
+  hr: 'IK / Personel',
+  mail: 'Mail merkezi',
+  notifications: 'Bildirimler',
+  marketplace: 'Pazaryeri',
+};
+
+const RETENTION_ACTION_LABELS: Record<RetentionPolicyRule['action'], string> = {
+  review: 'Manuel inceleme',
+  archive: 'Arsivle',
+  anonymize: 'Anonimlestir',
+  legal_hold: 'Yasal arsivde tut',
+};
+
+const DEFAULT_RETENTION_FORM: DataRetentionSettings = {
+  enabled: false,
+  legalArchiveEnabled: true,
+  kvkkGdprEnabled: true,
+  lastRunAt: null,
+  lastSummary: null,
+  rules: [
+    { module: 'audit_logs', retentionDays: 2555, action: 'legal_hold', legalArchive: true, anonymizeFields: ['ipAddress', 'userAgent'], gdprBasis: 'legal_obligation', enabled: true },
+    { module: 'contacts', retentionDays: 1825, action: 'anonymize', legalArchive: true, anonymizeFields: ['taxNumber', 'email', 'phone', 'address'], gdprBasis: 'legitimate_interest', enabled: true },
+    { module: 'invoices', retentionDays: 3650, action: 'legal_hold', legalArchive: true, anonymizeFields: [], gdprBasis: 'legal_obligation', enabled: true },
+    { module: 'accounting', retentionDays: 3650, action: 'legal_hold', legalArchive: true, anonymizeFields: [], gdprBasis: 'legal_obligation', enabled: true },
+    { module: 'inventory', retentionDays: 1825, action: 'archive', legalArchive: false, anonymizeFields: [], gdprBasis: 'legitimate_interest', enabled: true },
+    { module: 'hr', retentionDays: 3650, action: 'anonymize', legalArchive: true, anonymizeFields: ['email', 'phone', 'salary'], gdprBasis: 'legal_obligation', enabled: true },
+    { module: 'mail', retentionDays: 1095, action: 'archive', legalArchive: false, anonymizeFields: ['to', 'cc', 'bcc'], gdprBasis: 'consent', enabled: true },
+    { module: 'notifications', retentionDays: 365, action: 'archive', legalArchive: false, anonymizeFields: ['message'], gdprBasis: 'legitimate_interest', enabled: true },
+    { module: 'marketplace', retentionDays: 1825, action: 'anonymize', legalArchive: true, anonymizeFields: ['customerEmail', 'customerPhone', 'shippingAddress'], gdprBasis: 'contract', enabled: true },
+  ],
+};
+
+const DEFAULT_DEPLOYMENT_OPERATIONS_FORM: DeploymentOperationsSettings = {
+  environmentName: 'production',
+  releaseChannel: 'stable',
+  backupEnabled: true,
+  backupFrequency: 'daily',
+  backupRetentionDays: 30,
+  backupLastRunAt: null,
+  backupLastStatus: null,
+  maintenanceWindow: 'Sunday 02:00-04:00',
+};
+
 export default function CorporateSecurityPage() {
   const { data: settings, isLoading } = useCorporateSecuritySettings();
   const { data: siemSettings } = useSiemSettings();
+  const { data: retentionSettings } = useDataRetentionSettings();
+  const { data: retentionPreview } = useDataRetentionPreview();
+  const { data: deploymentSnapshot } = useDeploymentOperationsSnapshot();
+  const { data: deploymentSettings } = useDeploymentOperationsSettings();
   const updateSettings = useUpdateCorporateSecuritySettings();
   const generateScim = useGenerateScimToken();
   const updateSiemSettings = useUpdateSiemSettings();
   const runSiemExportTest = useRunSiemExportTest();
+  const updateRetentionSettings = useUpdateDataRetentionSettings();
+  const runRetentionDryRun = useRunDataRetentionDryRun();
+  const updateDeploymentSettings = useUpdateDeploymentOperationsSettings();
+  const simulateDeploymentBackup = useSimulateDeploymentBackup();
   const { data: rolesData } = useRoles({ page: 1, limit: 100 });
   const { toast } = useUIStore();
 
   const [draftForm, setDraftForm] = useState<CorporateSecuritySettings | null>(null);
   const [draftSiemForm, setDraftSiemForm] = useState<SiemSettings | null>(null);
+  const [draftRetentionForm, setDraftRetentionForm] = useState<DataRetentionSettings | null>(null);
+  const [draftDeploymentForm, setDraftDeploymentForm] = useState<DeploymentOperationsSettings | null>(null);
   const [copied, setCopied] = useState(false);
   const [draftScimMappings, setDraftScimMappings] = useState<ScimRoleMappingFormRow[] | null>(null);
   const roles = rolesData?.data ?? [];
   const form = draftForm ?? settings ?? DEFAULT_SECURITY_FORM;
   const siemForm = draftSiemForm ?? siemSettings ?? DEFAULT_SIEM_FORM;
+  const retentionForm = draftRetentionForm ?? retentionSettings ?? DEFAULT_RETENTION_FORM;
+  const deploymentForm = draftDeploymentForm ?? deploymentSettings ?? DEFAULT_DEPLOYMENT_OPERATIONS_FORM;
   const scimMappings = draftScimMappings ?? parseScimRoleMappings(form.scimRoleMappings);
 
   const setForm = (updater: (current: CorporateSecuritySettings) => CorporateSecuritySettings) => {
@@ -102,6 +171,21 @@ export default function CorporateSecurityPage() {
 
   const setSiemForm = (updater: (current: SiemSettings) => SiemSettings) => {
     setDraftSiemForm((current) => updater(current ?? siemSettings ?? DEFAULT_SIEM_FORM));
+  };
+
+  const setRetentionForm = (updater: (current: DataRetentionSettings) => DataRetentionSettings) => {
+    setDraftRetentionForm((current) => updater(current ?? retentionSettings ?? DEFAULT_RETENTION_FORM));
+  };
+
+  const updateRetentionRule = (module: RetentionPolicyRule['module'], updater: (rule: RetentionPolicyRule) => RetentionPolicyRule) => {
+    setRetentionForm((current) => ({
+      ...current,
+      rules: current.rules.map((rule) => rule.module === module ? updater(rule) : rule),
+    }));
+  };
+
+  const setDeploymentForm = (updater: (current: DeploymentOperationsSettings) => DeploymentOperationsSettings) => {
+    setDraftDeploymentForm((current) => updater(current ?? deploymentSettings ?? DEFAULT_DEPLOYMENT_OPERATIONS_FORM));
   };
 
   const handleCopyToken = () => {
@@ -130,6 +214,14 @@ export default function CorporateSecurityPage() {
 
   const handleSaveSiemSettings = () => {
     updateSiemSettings.mutate(siemForm);
+  };
+
+  const handleSaveRetentionSettings = () => {
+    updateRetentionSettings.mutate(retentionForm);
+  };
+
+  const handleSaveDeploymentSettings = () => {
+    updateDeploymentSettings.mutate(deploymentForm);
   };
 
   if (isLoading) {
@@ -502,6 +594,314 @@ export default function CorporateSecurityPage() {
               </pre>
             )}
           </div>
+        </div>
+
+        {/* Data Retention Panel */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-lime-500/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+            <div className="w-10 h-10 rounded-xl bg-lime-500/10 flex items-center justify-center shrink-0">
+              <Archive className="w-5 h-5 text-lime-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white">Veri Saklama ve Arsiv Politikasi</h3>
+              <p className="text-xs text-slate-500">Modul bazli saklama suresi, yasal arsiv, anonimlestirme ve KVKK/GDPR dry-run akisini yonetin.</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <input
+                  type="checkbox"
+                  checked={retentionForm.enabled}
+                  onChange={(e) => setRetentionForm((prev) => ({ ...prev, enabled: e.target.checked }))}
+                  className="w-4.5 h-4.5 rounded border-slate-800 bg-slate-950 text-lime-500 focus:ring-lime-500/20"
+                />
+                <span className="text-sm text-slate-200 font-medium">Politika aktif</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <input
+                  type="checkbox"
+                  checked={retentionForm.legalArchiveEnabled}
+                  onChange={(e) => setRetentionForm((prev) => ({ ...prev, legalArchiveEnabled: e.target.checked }))}
+                  className="w-4.5 h-4.5 rounded border-slate-800 bg-slate-950 text-lime-500 focus:ring-lime-500/20"
+                />
+                <span className="text-sm text-slate-200 font-medium">Yasal arsiv</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <input
+                  type="checkbox"
+                  checked={retentionForm.kvkkGdprEnabled}
+                  onChange={(e) => setRetentionForm((prev) => ({ ...prev, kvkkGdprEnabled: e.target.checked }))}
+                  className="w-4.5 h-4.5 rounded border-slate-800 bg-slate-950 text-lime-500 focus:ring-lime-500/20"
+                />
+                <span className="text-sm text-slate-200 font-medium">KVKK/GDPR alanlari</span>
+              </label>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-800">
+              <table className="min-w-[920px] w-full text-left text-xs">
+                <thead className="bg-slate-950/80 text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Modul</th>
+                    <th className="px-3 py-2 font-medium">Sure (gun)</th>
+                    <th className="px-3 py-2 font-medium">Aksiyon</th>
+                    <th className="px-3 py-2 font-medium">Anonim alanlar</th>
+                    <th className="px-3 py-2 font-medium">KVKK/GDPR dayanak</th>
+                    <th className="px-3 py-2 font-medium">Yasal</th>
+                    <th className="px-3 py-2 font-medium">Aktif</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800 bg-slate-900/40">
+                  {retentionForm.rules.map((rule) => (
+                    <tr key={rule.module}>
+                      <td className="px-3 py-2 font-medium text-slate-200">{RETENTION_MODULE_LABELS[rule.module]}</td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          min={30}
+                          value={rule.retentionDays}
+                          onChange={(e) => updateRetentionRule(rule.module, (current) => ({ ...current, retentionDays: Number(e.target.value) }))}
+                          className="h-9 w-24 rounded-lg border border-slate-800 bg-slate-950 px-2 text-slate-200 focus:border-lime-500/50 focus:outline-none"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <select
+                          value={rule.action}
+                          onChange={(e) => updateRetentionRule(rule.module, (current) => ({ ...current, action: e.target.value as RetentionPolicyRule['action'] }))}
+                          className="h-9 w-36 rounded-lg border border-slate-800 bg-slate-950 px-2 text-slate-200 focus:border-lime-500/50 focus:outline-none"
+                        >
+                          {Object.entries(RETENTION_ACTION_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          value={rule.anonymizeFields.join(', ')}
+                          onChange={(e) => updateRetentionRule(rule.module, (current) => ({
+                            ...current,
+                            anonymizeFields: e.target.value.split(',').map((item) => item.trim()).filter(Boolean),
+                          }))}
+                          className="h-9 w-48 rounded-lg border border-slate-800 bg-slate-950 px-2 text-slate-200 focus:border-lime-500/50 focus:outline-none"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          value={rule.gdprBasis}
+                          onChange={(e) => updateRetentionRule(rule.module, (current) => ({ ...current, gdprBasis: e.target.value }))}
+                          className="h-9 w-40 rounded-lg border border-slate-800 bg-slate-950 px-2 text-slate-200 focus:border-lime-500/50 focus:outline-none"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={rule.legalArchive}
+                          onChange={(e) => updateRetentionRule(rule.module, (current) => ({ ...current, legalArchive: e.target.checked }))}
+                          className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-lime-500 focus:ring-lime-500/20"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={rule.enabled}
+                          onChange={(e) => updateRetentionRule(rule.module, (current) => ({ ...current, enabled: e.target.checked }))}
+                          className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-lime-500 focus:ring-lime-500/20"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <p className="text-xs font-semibold text-slate-300">Dry-run ozeti</p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {retentionPreview ? `${retentionPreview.totalCandidates} aday kayit, ${retentionPreview.items.length} modul` : 'Henuz onizleme uretilmedi.'}
+                </p>
+                {retentionForm.lastRunAt && (
+                  <p className="mt-1 font-mono text-[11px] text-slate-600">{retentionForm.lastRunAt}</p>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                loading={runRetentionDryRun.isPending}
+                leftIcon={<FileCheck className="h-4 w-4" />}
+                onClick={() => runRetentionDryRun.mutate()}
+              >
+                Dry-run
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                loading={updateRetentionSettings.isPending}
+                leftIcon={<Save className="h-4 w-4" />}
+                onClick={handleSaveRetentionSettings}
+              >
+                Retention Kaydet
+              </Button>
+            </div>
+
+            {(runRetentionDryRun.data ?? retentionPreview)?.items.length ? (
+              <div className="grid gap-2 md:grid-cols-3">
+                {(runRetentionDryRun.data ?? retentionPreview)?.items.slice(0, 6).map((item) => (
+                  <div key={item.module} className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+                    <p className="text-xs font-semibold text-slate-200">{RETENTION_MODULE_LABELS[item.module]}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">{item.candidateCount} aday kayit</p>
+                    <p className="mt-1 text-[11px] text-lime-300">{RETENTION_ACTION_LABELS[item.action]}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Deployment Operations Panel */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+            <div className="w-10 h-10 rounded-xl bg-teal-500/10 flex items-center justify-center shrink-0">
+              <ServerCog className="w-5 h-5 text-teal-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white">On-premise / Private Cloud Operasyon Paneli</h3>
+              <p className="text-xs text-slate-500">Ortam, versiyon, yedek, health ve migration gorunurlugunu Enterprise icin takip edin.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Deployment</p>
+              <p className="mt-1 text-sm font-semibold text-slate-100">{deploymentSnapshot?.tenant.deploymentType ?? 'CLOUD'}</p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Versiyon</p>
+              <p className="mt-1 text-sm font-semibold text-slate-100">{deploymentSnapshot?.environment.version ?? 'dev'}</p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Health</p>
+              <p className={`mt-1 text-sm font-semibold ${
+                deploymentSnapshot?.health.status === 'fail'
+                  ? 'text-red-300'
+                  : deploymentSnapshot?.health.status === 'warn'
+                    ? 'text-amber-300'
+                    : 'text-emerald-300'
+              }`}>
+                {deploymentSnapshot?.health.status ?? 'ok'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Migration</p>
+              <p className="mt-1 text-sm font-semibold text-slate-100">
+                {deploymentSnapshot ? `${deploymentSnapshot.migrations.pendingMigrations.length} pending` : 'kontrol yok'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Input
+              label="Ortam adi"
+              value={deploymentForm.environmentName}
+              onChange={(e) => setDeploymentForm((prev) => ({ ...prev, environmentName: e.target.value }))}
+            />
+            <Input
+              label="Release kanali"
+              value={deploymentForm.releaseChannel}
+              onChange={(e) => setDeploymentForm((prev) => ({ ...prev, releaseChannel: e.target.value }))}
+            />
+            <label className="space-y-2">
+              <span className="text-xs text-slate-400 font-medium">Yedek frekansi</span>
+              <select
+                value={deploymentForm.backupFrequency}
+                onChange={(e) => setDeploymentForm((prev) => ({ ...prev, backupFrequency: e.target.value as DeploymentOperationsSettings['backupFrequency'] }))}
+                className="w-full h-10 px-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-200 text-sm focus:border-teal-500/50 focus:outline-none"
+              >
+                <option value="hourly">Saatlik</option>
+                <option value="daily">Gunluk</option>
+                <option value="weekly">Haftalik</option>
+              </select>
+            </label>
+            <Input
+              label="Yedek saklama (gun)"
+              type="number"
+              min={1}
+              value={deploymentForm.backupRetentionDays}
+              onChange={(e) => setDeploymentForm((prev) => ({ ...prev, backupRetentionDays: Number(e.target.value) }))}
+            />
+            <Input
+              label="Bakim penceresi"
+              value={deploymentForm.maintenanceWindow}
+              onChange={(e) => setDeploymentForm((prev) => ({ ...prev, maintenanceWindow: e.target.value }))}
+            />
+            <label className="flex items-end gap-3 pb-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={deploymentForm.backupEnabled}
+                onChange={(e) => setDeploymentForm((prev) => ({ ...prev, backupEnabled: e.target.checked }))}
+                className="w-4.5 h-4.5 rounded border-slate-800 bg-slate-950 text-teal-500 focus:ring-teal-500/20"
+              />
+              <span className="text-sm text-slate-200 font-medium">Yedek politikasi aktif</span>
+            </label>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <p className="text-xs font-semibold text-slate-300">Son yedek</p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {deploymentSnapshot?.backup.lastRunAt ?? deploymentForm.backupLastRunAt ?? 'Henuz yedek kosumu yok.'}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-600">
+                {deploymentSnapshot?.backup.lastStatus ?? deploymentForm.backupLastStatus ?? 'status bekleniyor'}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              loading={simulateDeploymentBackup.isPending}
+              leftIcon={<DatabaseBackup className="h-4 w-4" />}
+              onClick={() => simulateDeploymentBackup.mutate()}
+            >
+              Yedek Testi
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              loading={updateDeploymentSettings.isPending}
+              leftIcon={<Save className="h-4 w-4" />}
+              onClick={handleSaveDeploymentSettings}
+            >
+              Operasyon Kaydet
+            </Button>
+          </div>
+
+          <div className="grid gap-2 md:grid-cols-2">
+            {(deploymentSnapshot?.health.checks ?? []).map((check) => (
+              <div key={check.key} className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold text-slate-200">{check.label}</p>
+                  <span className={`text-[10px] font-semibold uppercase ${
+                    check.status === 'fail' ? 'text-red-300' : check.status === 'warn' ? 'text-amber-300' : 'text-emerald-300'
+                  }`}>
+                    {check.status}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">{check.message}</p>
+              </div>
+            ))}
+          </div>
+
+          {deploymentSnapshot?.migrations.pendingMigrations.length ? (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+              <p className="text-xs font-semibold text-amber-200">Bekleyen migration</p>
+              <p className="mt-1 text-[11px] text-amber-100/80">
+                {deploymentSnapshot.migrations.pendingMigrations.slice(0, 3).join(', ')}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         {/* IP Restriction Panel */}

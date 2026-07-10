@@ -27,6 +27,14 @@ settingsRoutes.post('/security/scim/generate-token', requirePermission('settings
 settingsRoutes.get('/security/siem', requirePermission('settings', 'READ'), SettingsController.getSiemSettings);
 settingsRoutes.post('/security/siem', requirePermission('settings', 'UPDATE'), SettingsController.updateSiemSettings);
 settingsRoutes.post('/security/siem/test-export', requirePermission('settings', 'UPDATE'), SettingsController.runSiemExportTest);
+settingsRoutes.get('/security/data-retention', requirePermission('settings', 'READ'), SettingsController.getDataRetentionSettings);
+settingsRoutes.post('/security/data-retention', requirePermission('settings', 'UPDATE'), SettingsController.updateDataRetentionSettings);
+settingsRoutes.get('/security/data-retention/preview', requirePermission('settings', 'READ'), SettingsController.previewDataRetention);
+settingsRoutes.post('/security/data-retention/dry-run', requirePermission('settings', 'UPDATE'), SettingsController.runDataRetentionDryRun);
+settingsRoutes.get('/security/deployment-operations', requirePermission('settings', 'READ'), SettingsController.getDeploymentOperationsSnapshot);
+settingsRoutes.get('/security/deployment-operations/settings', requirePermission('settings', 'READ'), SettingsController.getDeploymentOperationsSettings);
+settingsRoutes.post('/security/deployment-operations/settings', requirePermission('settings', 'UPDATE'), SettingsController.updateDeploymentOperationsSettings);
+settingsRoutes.post('/security/deployment-operations/backup-simulation', requirePermission('settings', 'UPDATE'), SettingsController.simulateDeploymentBackup);
 settingsRoutes.get('/security/portal-tokens/:contactId', requirePermission('settings', 'READ'), SettingsController.getPortalToken);
 settingsRoutes.post('/security/portal-tokens/:contactId/generate', requirePermission('settings', 'UPDATE'), SettingsController.generatePortalToken);
 settingsRoutes.get('/security/bi', requirePermission('settings', 'READ'), SettingsController.getBiSettings);
