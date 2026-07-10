@@ -20,11 +20,19 @@ import {
   listSecuritySessions,
   revokeSecuritySession,
 } from '../services/security-hardening.service.js';
+import {
+  exportRecentAuditLogsToSiem,
+  getSiemSettings,
+  SIEM_SETTING_KEYS,
+  saveSiemSettings,
+  type SiemDestinationType,
+  type SiemSeverity,
+} from '../services/siem-export.service.js';
 
 const TENANT_LOGO_SETTING_KEY = 'tenant_logo_storage_path';
 const LEGACY_TENANT_LOGO_SETTING_KEY = 'company_logo';
 const TENANT_LOGO_SETTING_KEYS = [TENANT_LOGO_SETTING_KEY, LEGACY_TENANT_LOGO_SETTING_KEY] as const;
-const INTERNAL_TENANT_SETTING_KEYS = [...TENANT_LOGO_SETTING_KEYS, 'security.sessions'] as const;
+const INTERNAL_TENANT_SETTING_KEYS = [...TENANT_LOGO_SETTING_KEYS, 'security.sessions', ...Object.values(SIEM_SETTING_KEYS)] as const;
 const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 const ALLOWED_LOGO_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_LOGO_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
@@ -61,6 +69,14 @@ function readString(value: unknown, fallback = ''): string {
 
 function readPositiveNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function readSiemDestinationType(value: unknown): SiemDestinationType {
+  return value === 'webhook' || value === 'syslog' || value === 'generic' ? value : 'webhook';
+}
+
+function readSiemSeverity(value: unknown): SiemSeverity {
+  return value === 'info' || value === 'warning' || value === 'critical' ? value : 'warning';
 }
 
 async function assertEnterpriseTenant(tenantId: string, message: string): Promise<void> {
@@ -322,6 +338,9 @@ export const SettingsController = {
         oidcClientSecret: settingsMap.get('security.sso.oidc_client_secret') || '',
         scimEnabled: settingsMap.get('security.scim.enabled') === 'true',
         scimToken: settingsMap.get('security.scim.token') || '',
+        scimRoleSyncEnabled: settingsMap.get('security.scim.role_sync.enabled') === 'true',
+        scimDefaultRoleId: settingsMap.get('security.scim.default_role_id') || '',
+        scimRoleMappings: settingsMap.get('security.scim.role_mappings') || '[]',
         ipRestrictionEnabled: settingsMap.get('security.ip_restriction.enabled') === 'true',
         ipWhitelist: settingsMap.get('security.ip_whitelist') || '',
         sessionMaxAgeDays: parseInt(settingsMap.get('security.session.max_age_days') || '7', 10),
@@ -352,6 +371,9 @@ export const SettingsController = {
       { key: 'security.sso.oidc_client_id', value: readString(body.oidcClientId) },
       { key: 'security.sso.oidc_client_secret', value: readString(body.oidcClientSecret) },
       { key: 'security.scim.enabled', value: readBoolean(body.scimEnabled) ? 'true' : 'false' },
+      { key: 'security.scim.role_sync.enabled', value: readBoolean(body.scimRoleSyncEnabled) ? 'true' : 'false' },
+      { key: 'security.scim.default_role_id', value: readString(body.scimDefaultRoleId) },
+      { key: 'security.scim.role_mappings', value: readString(body.scimRoleMappings, '[]') },
       { key: 'security.ip_restriction.enabled', value: readBoolean(body.ipRestrictionEnabled) ? 'true' : 'false' },
       { key: 'security.ip_whitelist', value: readString(body.ipWhitelist) },
       { key: 'security.session.max_age_days', value: String(readPositiveNumber(body.sessionMaxAgeDays, 7)) },
@@ -391,6 +413,79 @@ export const SettingsController = {
     });
 
     return c.json({ data: { token } });
+  },
+
+  async getSiemSettings(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    await assertEnterpriseTenant(tenantId, 'SIEM entegrasyonu sadece Enterprise plan kapsamindadir.');
+    return c.json({ data: await getSiemSettings(tenantId) });
+  },
+
+  async updateSiemSettings(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    await assertEnterpriseTenant(tenantId, 'SIEM entegrasyonu sadece Enterprise plan kapsamindadir.');
+    const body = await readJsonObject(c);
+
+    await saveSiemSettings(tenantId, {
+      enabled: readBoolean(body.enabled),
+      destinationType: readSiemDestinationType(body.destinationType),
+      endpointUrl: readString(body.endpointUrl),
+      authHeader: readString(body.authHeader),
+      minSeverity: readSiemSeverity(body.minSeverity),
+      includeDiff: body.includeDiff !== false,
+      lastExportAt: null,
+      lastStatus: null,
+    });
+
+    const { ipAddress, userAgent } = getRequestMeta(c);
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'audit_logs',
+      entityType: EntityType.OTHER,
+      entityId: 'siem_settings',
+      action: AuditAction.UPDATE,
+      newValues: {
+        enabled: readBoolean(body.enabled),
+        destinationType: readSiemDestinationType(body.destinationType),
+        minSeverity: readSiemSeverity(body.minSeverity),
+        includeDiff: body.includeDiff !== false,
+        endpointConfigured: Boolean(readString(body.endpointUrl)),
+        authHeaderConfigured: Boolean(readString(body.authHeader)),
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return c.json({ data: { success: true } });
+  },
+
+  async runSiemExportTest(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    await assertEnterpriseTenant(tenantId, 'SIEM entegrasyonu sadece Enterprise plan kapsamindadir.');
+
+    const result = await exportRecentAuditLogsToSiem(tenantId, 25);
+    const { ipAddress, userAgent } = getRequestMeta(c);
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'audit_logs',
+      entityType: EntityType.OTHER,
+      entityId: `siem_export:${result.exportedAt}`,
+      action: AuditAction.EXPORT,
+      newValues: {
+        status: result.status,
+        destinationType: result.destinationType,
+        eventCount: result.eventCount,
+        message: result.message,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return c.json({ data: result });
   },
 
   async getBiSettings(c: Context): Promise<Response> {

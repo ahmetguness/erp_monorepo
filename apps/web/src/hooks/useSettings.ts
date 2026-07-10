@@ -17,6 +17,9 @@ import {
   getCorporateSecuritySettings,
   updateCorporateSecuritySettings,
   generateScimToken,
+  getSiemSettings,
+  updateSiemSettings,
+  runSiemExportTest,
   getBiSettings,
   updateBiSettings,
   generateBiToken,
@@ -27,6 +30,7 @@ import {
   type BusinessRule,
   type QuickStartDTO,
   type CorporateSecuritySettings,
+  type SiemSettings,
   type BiSettings,
 } from '@/services/settings.service';
 
@@ -216,6 +220,36 @@ export function useGenerateScimToken() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings', 'corporate-security'] });
       toast.success('Yeni SCIM token üretildi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useSiemSettings() {
+  return useQuery({ queryKey: ['settings', 'siem'], queryFn: getSiemSettings, staleTime: 5 * 60 * 1000 });
+}
+
+export function useUpdateSiemSettings() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (data: SiemSettings) => updateSiemSettings(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'siem'] });
+      toast.success('SIEM entegrasyon ayarlari kaydedildi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useRunSiemExportTest() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: runSiemExportTest,
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['settings', 'siem'] });
+      toast.success(`SIEM export testi tamamlandi: ${data.eventCount} olay hazirlandi.`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

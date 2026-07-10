@@ -285,6 +285,9 @@ export const CorporateSecuritySettingsSchema = z.object({
   oidcClientSecret: z.string(),
   scimEnabled: z.boolean(),
   scimToken: z.string(),
+  scimRoleSyncEnabled: z.boolean().default(false),
+  scimDefaultRoleId: z.string().default(''),
+  scimRoleMappings: z.string().default('[]'),
   ipRestrictionEnabled: z.boolean(),
   ipWhitelist: z.string(),
   sessionMaxAgeDays: z.coerce.number(),
@@ -306,6 +309,43 @@ export async function updateCorporateSecuritySettings(data: CorporateSecuritySet
 export async function generateScimToken(): Promise<{ token: string }> {
   const res = await apiClient.post('/api/settings/security/scim/generate-token');
   return safeParse(SingleResponseSchema(z.object({ token: z.string() })), res.data, 'generateScimToken').data;
+}
+
+export const SiemSettingsSchema = z.object({
+  enabled: z.boolean(),
+  destinationType: z.enum(['webhook', 'syslog', 'generic']),
+  endpointUrl: z.string(),
+  authHeader: z.string(),
+  minSeverity: z.enum(['info', 'warning', 'critical']),
+  includeDiff: z.boolean(),
+  lastExportAt: z.string().nullable(),
+  lastStatus: z.string().nullable(),
+});
+
+export const SiemExportResultSchema = z.object({
+  status: z.enum(['skipped', 'delivered', 'prepared', 'failed']),
+  destinationType: z.enum(['webhook', 'syslog', 'generic']),
+  eventCount: z.coerce.number(),
+  exportedAt: z.string(),
+  message: z.string(),
+  sample: z.string(),
+});
+
+export type SiemSettings = z.infer<typeof SiemSettingsSchema>;
+export type SiemExportResult = z.infer<typeof SiemExportResultSchema>;
+
+export async function getSiemSettings(): Promise<SiemSettings> {
+  const res = await apiClient.get('/api/settings/security/siem');
+  return safeParse(SingleResponseSchema(SiemSettingsSchema), res.data, 'getSiemSettings').data;
+}
+
+export async function updateSiemSettings(data: SiemSettings): Promise<void> {
+  await apiClient.post('/api/settings/security/siem', data);
+}
+
+export async function runSiemExportTest(): Promise<SiemExportResult> {
+  const res = await apiClient.post('/api/settings/security/siem/test-export');
+  return safeParse(SingleResponseSchema(SiemExportResultSchema), res.data, 'runSiemExportTest').data;
 }
 
 // ── BI & Data Warehouse Settings ────────────────

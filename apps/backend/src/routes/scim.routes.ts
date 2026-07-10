@@ -1,225 +1,110 @@
-import { Hono } from 'hono';
+import { Context, Hono } from 'hono';
 import bcrypt from 'bcryptjs';
+import { Plan, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 
 const scimRoutes = new Hono<{ Variables: { tenantId: string } }>();
 
-// Multitenant SCIM Bearer token validation middleware
-scimRoutes.use('*', async (c, next) => {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'Yetkisiz erişim. SCIM Bearer token eksik.',
-      status: '401',
-    }, 401);
-  }
+type ScimPatchOperation = { op: string; path?: string; value?: unknown };
+type ScimRoleMapping = { group: string; roleId: string };
+type ScimMember = { value?: string; display?: string; primary?: boolean };
+type ScimUserPayload = {
+  userName?: string;
+  active?: boolean;
+  name?: { formatted?: string; givenName?: string; familyName?: string };
+  emails?: ScimMember[];
+  groups?: ScimMember[];
+  roles?: ScimMember[];
+  Operations?: ScimPatchOperation[];
+};
+type ScimGroupPayload = {
+  displayName?: string;
+  members?: ScimMember[];
+  Operations?: ScimPatchOperation[];
+};
 
-  const token = authHeader.slice(7).trim();
-  if (!token) {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'Geçersiz token.',
-      status: '401',
-    }, 401);
-  }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
-  const setting = await prisma.tenantSetting.findFirst({
-    where: { key: 'security.scim.token', value: token },
-    select: { tenantId: true },
-  });
+async function readJsonRecord(c: Context): Promise<Record<string, unknown> | null> {
+  const body = await c.req.json<unknown>().catch(() => null);
+  return isRecord(body) ? body : null;
+}
 
-  if (!setting) {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'Yetkisiz SCIM token.',
-      status: '401',
-    }, 401);
-  }
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
 
-  // Verify Enterprise Plan status
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: setting.tenantId },
-    select: { plan: true },
-  });
+function readBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
 
-  if (tenant?.plan !== 'ENTERPRISE') {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'SCIM provizyonlama özelliği sadece Enterprise plan müşterileri içindir.',
-      status: '403',
-    }, 403);
-  }
+function readMembers(value: unknown): ScimMember[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter(isRecord).map((item) => ({
+    value: readString(item.value),
+    display: readString(item.display),
+    primary: readBoolean(item.primary),
+  }));
+}
 
-  const enabledSetting = await prisma.tenantSetting.findUnique({
-    where: { tenantId_key: { tenantId: setting.tenantId, key: 'security.scim.enabled' } },
-  });
+function readOperations(value: unknown): ScimPatchOperation[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter(isRecord).map((operation) => ({
+    op: readString(operation.op) ?? '',
+    path: readString(operation.path),
+    value: operation.value,
+  })).filter((operation) => operation.op.length > 0);
+}
 
-  if (enabledSetting?.value !== 'true') {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'SCIM provizyonlama özelliği bu işletme için etkinleştirilmemiş.',
-      status: '403',
-    }, 403);
-  }
-
-  c.set('tenantId', setting.tenantId);
-  await next();
-});
-
-// GET /Users - List Users (SCIM standard)
-scimRoutes.get('/Users', async (c) => {
-  const tenantId = c.get('tenantId') as string;
-
-  const tenantUsers = await prisma.tenantUser.findMany({
-    where: { tenantId },
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          isActive: true,
-        },
-      },
-    },
-  });
-
-  const users = tenantUsers.map((tu) => tu.user);
-
-  return c.json({
-    schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
-    totalResults: users.length,
-    startIndex: 1,
-    itemsPerPage: users.length,
-    Resources: users.map((u) => ({
-      schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
-      id: u.id,
-      userName: u.email,
-      name: {
-        formatted: u.name,
-        familyName: u.name.split(' ').pop() || '',
-        givenName: u.name.split(' ').slice(0, -1).join(' ') || u.name,
-      },
-      emails: [{ value: u.email, primary: true }],
-      active: u.isActive,
-    })),
-  });
-});
-
-// GET /Users/:id - Get User Details
-scimRoutes.get('/Users/:id', async (c) => {
-  const tenantId = c.get('tenantId') as string;
-  const id = c.req.param('id');
-
-  const tenantUser = await prisma.tenantUser.findFirst({
-    where: { tenantId, userId: id },
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          isActive: true,
-        },
-      },
-    },
-  });
-
-  if (!tenantUser) {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'Kullanıcı bulunamadı.',
-      status: '404',
-    }, 404);
-  }
-
-  const u = tenantUser.user;
-  return c.json({
-    schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
-    id: u.id,
-    userName: u.email,
+function readUserPayload(body: Record<string, unknown>): ScimUserPayload {
+  const name = isRecord(body.name) ? body.name : {};
+  return {
+    userName: readString(body.userName),
+    active: readBoolean(body.active),
     name: {
-      formatted: u.name,
-      familyName: u.name.split(' ').pop() || '',
-      givenName: u.name.split(' ').slice(0, -1).join(' ') || u.name,
+      formatted: readString(name.formatted),
+      givenName: readString(name.givenName),
+      familyName: readString(name.familyName),
     },
-    emails: [{ value: u.email, primary: true }],
-    active: u.isActive,
-  });
-});
+    emails: readMembers(body.emails),
+    groups: readMembers(body.groups),
+    roles: readMembers(body.roles),
+    Operations: readOperations(body.Operations),
+  };
+}
 
-// POST /Users - Provision User
-scimRoutes.post('/Users', async (c) => {
-  const tenantId = c.get('tenantId') as string;
+function readGroupPayload(body: Record<string, unknown>): ScimGroupPayload {
+  return {
+    displayName: readString(body.displayName),
+    members: readMembers(body.members),
+    Operations: readOperations(body.Operations),
+  };
+}
 
-  let body: Record<string, any>;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'Geçersiz JSON gövdesi.',
-      status: '400',
-    }, 400);
-  }
-
-  const email = body.userName || body.emails?.[0]?.value;
-  const name = body.name?.formatted || `${body.name?.givenName || ''} ${body.name?.familyName || ''}`.trim() || email;
-  const active = typeof body.active === 'boolean' ? body.active : true;
-
-  if (!email) {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'userName veya email alanı zorunludur.',
-      status: '400',
-    }, 400);
-  }
-
-  // Find or create user
-  let user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase().trim() },
-  });
-
-  if (!user) {
-    const hashedPassword = bcrypt.hashSync('axonDefaultSCIM123!', 10);
-    user = await prisma.user.create({
-      data: {
-        email: email.toLowerCase().trim(),
-        name,
-        password: hashedPassword,
-        isActive: active,
-      },
-    });
-  } else {
-    // If user already exists, update activity flag if needed
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { isActive: active },
-    });
-  }
-
-  // Associate user with tenant
-  let tenantUser = await prisma.tenantUser.findUnique({
-    where: { tenantId_userId: { tenantId, userId: user.id } },
-  });
-
-  if (!tenantUser) {
-    tenantUser = await prisma.tenantUser.create({
-      data: {
-        tenantId,
-        userId: user.id,
-        isActive: active,
-      },
-    });
-  } else {
-    await prisma.tenantUser.update({
-      where: { id: tenantUser.id },
-      data: { isActive: active },
-    });
-  }
-
+function scimError(c: Context, detail: string, status: 400 | 401 | 403 | 404 | 500): Response {
   return c.json({
+    schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
+    detail,
+    status: String(status),
+  }, status);
+}
+
+function userEmail(payload: ScimUserPayload): string | undefined {
+  return payload.userName ?? payload.emails?.find((email) => email.primary)?.value ?? payload.emails?.[0]?.value;
+}
+
+function userDisplayName(payload: ScimUserPayload, fallback: string): string {
+  const combined = `${payload.name?.givenName ?? ''} ${payload.name?.familyName ?? ''}`.trim();
+  return payload.name?.formatted ?? (combined || fallback);
+}
+
+function scimUserResource(
+  user: { id: string; email: string; name: string; isActive: boolean },
+  tenantUser?: { roleRef?: { id: string; name: string } | null },
+) {
+  return {
     schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
     id: user.id,
     userName: user.email,
@@ -230,177 +115,392 @@ scimRoutes.post('/Users', async (c) => {
     },
     emails: [{ value: user.email, primary: true }],
     active: user.isActive,
-  }, 201);
+    groups: tenantUser?.roleRef ? [{ value: tenantUser.roleRef.id, display: tenantUser.roleRef.name }] : [],
+  };
+}
+
+function scimGroupResource(
+  role: { id: string; name: string },
+  users: Array<{ user: { id: string; email: string; name: string } }> = [],
+) {
+  return {
+    schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
+    id: role.id,
+    displayName: role.name,
+    members: users.map((member) => ({
+      value: member.user.id,
+      display: member.user.name,
+      '$ref': `/api/scim/v2/Users/${member.user.id}`,
+    })),
+  };
+}
+
+async function readRoleMappings(tenantId: string): Promise<ScimRoleMapping[]> {
+  const setting = await prisma.tenantSetting.findUnique({
+    where: { tenantId_key: { tenantId, key: 'security.scim.role_mappings' } },
+    select: { value: true },
+  });
+  if (!setting?.value) return [];
+  const parsed = (() => {
+    try {
+      return JSON.parse(setting.value) as unknown;
+    } catch {
+      return [];
+    }
+  })();
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(isRecord).map((item) => ({
+    group: readString(item.group) ?? '',
+    roleId: readString(item.roleId) ?? '',
+  })).filter((item) => item.group.length > 0 && item.roleId.length > 0);
+}
+
+async function defaultRoleId(tenantId: string): Promise<string | null> {
+  const setting = await prisma.tenantSetting.findUnique({
+    where: { tenantId_key: { tenantId, key: 'security.scim.default_role_id' } },
+    select: { value: true },
+  });
+  return setting?.value || null;
+}
+
+async function ensureRoleBelongsToTenant(tenantId: string, roleId: string | null): Promise<string | null> {
+  if (!roleId) return null;
+  const role = await prisma.role.findFirst({ where: { id: roleId, tenantId }, select: { id: true } });
+  return role?.id ?? null;
+}
+
+async function resolveScimRoleId(tenantId: string, payload: ScimUserPayload): Promise<string | null> {
+  const roleSync = await prisma.tenantSetting.findUnique({
+    where: { tenantId_key: { tenantId, key: 'security.scim.role_sync.enabled' } },
+    select: { value: true },
+  });
+
+  if (roleSync?.value !== 'true') {
+    return ensureRoleBelongsToTenant(tenantId, await defaultRoleId(tenantId));
+  }
+
+  const externalGroups = [...(payload.groups ?? []), ...(payload.roles ?? [])]
+    .flatMap((item) => [item.value, item.display])
+    .filter((value): value is string => typeof value === 'string' && value.length > 0);
+  const mappings = await readRoleMappings(tenantId);
+  const matchedMapping = mappings.find((mapping) => externalGroups.some((group) => group.toLocaleLowerCase('tr-TR') === mapping.group.toLocaleLowerCase('tr-TR')));
+  if (matchedMapping) return ensureRoleBelongsToTenant(tenantId, matchedMapping.roleId);
+
+  const directRole = await prisma.role.findFirst({
+    where: { tenantId, name: { in: externalGroups } },
+    select: { id: true },
+  });
+  if (directRole) return directRole.id;
+  return ensureRoleBelongsToTenant(tenantId, await defaultRoleId(tenantId));
+}
+
+function roleSyncPatchPayload(payload: ScimUserPayload): ScimUserPayload {
+  const patched: ScimUserPayload = { ...payload };
+  for (const operation of payload.Operations ?? []) {
+    if (operation.op.toLowerCase() !== 'replace' && operation.op.toLowerCase() !== 'add') continue;
+    if (isRecord(operation.value)) {
+      if (Array.isArray(operation.value.groups)) patched.groups = readMembers(operation.value.groups);
+      if (Array.isArray(operation.value.roles)) patched.roles = readMembers(operation.value.roles);
+      if (typeof operation.value.active === 'boolean') patched.active = operation.value.active;
+    }
+    if ((operation.path === 'groups' || operation.path === 'roles') && Array.isArray(operation.value)) {
+      const members = readMembers(operation.value);
+      if (operation.path === 'groups') patched.groups = members;
+      if (operation.path === 'roles') patched.roles = members;
+    }
+    if (operation.path === 'active' && typeof operation.value === 'boolean') patched.active = operation.value;
+  }
+  return patched;
+}
+
+async function updateGroupMembers(tenantId: string, roleId: string, memberIds: readonly string[]): Promise<void> {
+  const role = await prisma.role.findFirst({ where: { id: roleId, tenantId }, select: { id: true } });
+  if (!role) throw new Error('ROLE_NOT_FOUND');
+  const validMembers = await prisma.tenantUser.findMany({
+    where: { tenantId, userId: { in: [...new Set(memberIds)] } },
+    select: { id: true, userId: true },
+  });
+  const validMemberIds = new Set(validMembers.map((member) => member.userId));
+  await prisma.tenantUser.updateMany({
+    where: { tenantId, roleId },
+    data: { roleId: null },
+  });
+  if (validMemberIds.size > 0) {
+    await prisma.tenantUser.updateMany({
+      where: { tenantId, userId: { in: [...validMemberIds] } },
+      data: { roleId },
+    });
+  }
+}
+
+scimRoutes.use('*', async (c, next) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return scimError(c, 'SCIM Bearer token eksik.', 401);
+
+  const token = authHeader.slice(7).trim();
+  if (!token) return scimError(c, 'Gecersiz token.', 401);
+
+  const setting = await prisma.tenantSetting.findFirst({
+    where: { key: 'security.scim.token', value: token },
+    select: { tenantId: true },
+  });
+  if (!setting) return scimError(c, 'Yetkisiz SCIM token.', 401);
+
+  const tenant = await prisma.tenant.findUnique({ where: { id: setting.tenantId }, select: { plan: true } });
+  if (tenant?.plan !== Plan.ENTERPRISE) return scimError(c, 'SCIM sadece Enterprise plan icindir.', 403);
+
+  const enabled = await prisma.tenantSetting.findUnique({
+    where: { tenantId_key: { tenantId: setting.tenantId, key: 'security.scim.enabled' } },
+    select: { value: true },
+  });
+  if (enabled?.value !== 'true') return scimError(c, 'SCIM provizyonlama etkin degil.', 403);
+
+  c.set('tenantId', setting.tenantId);
+  await next();
 });
 
-// PUT /Users/:id - Replace User fields
-scimRoutes.put('/Users/:id', async (c) => {
-  const tenantId = c.get('tenantId') as string;
-  const id = c.req.param('id');
+scimRoutes.get('/ServiceProviderConfig', (c) => c.json({
+  schemas: ['urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig'],
+  patch: { supported: true },
+  bulk: { supported: false, maxOperations: 0, maxPayloadSize: 0 },
+  filter: { supported: false, maxResults: 0 },
+  changePassword: { supported: false },
+  sort: { supported: false },
+  etag: { supported: false },
+  authenticationSchemes: [{ type: 'oauthbearertoken', name: 'Bearer Token', primary: true }],
+}));
 
-  const tenantUser = await prisma.tenantUser.findFirst({
-    where: { tenantId, userId: id },
-  });
-
-  if (!tenantUser) {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'Kullanıcı bulunamadı.',
-      status: '404',
-    }, 404);
-  }
-
-  let body: Record<string, any>;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'Geçersiz JSON gövdesi.',
-      status: '400',
-    }, 400);
-  }
-
-  const name = body.name?.formatted || `${body.name?.givenName || ''} ${body.name?.familyName || ''}`.trim();
-  const active = typeof body.active === 'boolean' ? body.active : true;
-
-  const updatedUser = await prisma.user.update({
-    where: { id },
-    data: {
-      ...(name && { name }),
-      isActive: active,
+scimRoutes.get('/Users', async (c) => {
+  const tenantId = c.get('tenantId');
+  const tenantUsers = await prisma.tenantUser.findMany({
+    where: { tenantId },
+    include: {
+      user: { select: { id: true, email: true, name: true, isActive: true } },
+      roleRef: { select: { id: true, name: true } },
     },
   });
-
-  await prisma.tenantUser.update({
-    where: { id: tenantUser.id },
-    data: { isActive: active },
-  });
-
   return c.json({
-    schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
-    id: updatedUser.id,
-    userName: updatedUser.email,
-    name: {
-      formatted: updatedUser.name,
-      familyName: updatedUser.name.split(' ').pop() || '',
-      givenName: updatedUser.name.split(' ').slice(0, -1).join(' ') || updatedUser.name,
-    },
-    emails: [{ value: updatedUser.email, primary: true }],
-    active: updatedUser.isActive,
+    schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+    totalResults: tenantUsers.length,
+    startIndex: 1,
+    itemsPerPage: tenantUsers.length,
+    Resources: tenantUsers.map((tenantUser) => scimUserResource(tenantUser.user, tenantUser)),
   });
 });
 
-// PATCH /Users/:id - Patch User fields (commonly active status)
-scimRoutes.patch('/Users/:id', async (c) => {
-  const tenantId = c.get('tenantId') as string;
+scimRoutes.get('/Users/:id', async (c) => {
+  const tenantId = c.get('tenantId');
   const id = c.req.param('id');
-
   const tenantUser = await prisma.tenantUser.findFirst({
     where: { tenantId, userId: id },
+    include: {
+      user: { select: { id: true, email: true, name: true, isActive: true } },
+      roleRef: { select: { id: true, name: true } },
+    },
+  });
+  if (!tenantUser) return scimError(c, 'Kullanici bulunamadi.', 404);
+  return c.json(scimUserResource(tenantUser.user, tenantUser));
+});
+
+scimRoutes.post('/Users', async (c) => {
+  const tenantId = c.get('tenantId');
+  const body = await readJsonRecord(c);
+  if (!body) return scimError(c, 'Gecersiz JSON govdesi.', 400);
+
+  const payload = readUserPayload(body);
+  const email = userEmail(payload);
+  if (!email) return scimError(c, 'userName veya email zorunludur.', 400);
+
+  const active = payload.active ?? true;
+  const normalizedEmail = email.toLowerCase().trim();
+  const name = userDisplayName(payload, normalizedEmail);
+  const roleId = await resolveScimRoleId(tenantId, payload);
+
+  const resource = await prisma.$transaction(async (tx) => {
+    let user = await tx.user.findUnique({ where: { email: normalizedEmail } });
+    if (!user) {
+      user = await tx.user.create({
+        data: {
+          email: normalizedEmail,
+          name,
+          password: bcrypt.hashSync('axonDefaultSCIM123!', 10),
+          isActive: active,
+        },
+      });
+    } else {
+      user = await tx.user.update({ where: { id: user.id }, data: { name, isActive: active } });
+    }
+
+    await tx.tenantUser.upsert({
+      where: { tenantId_userId: { tenantId, userId: user.id } },
+      create: { tenantId, userId: user.id, roleId, isActive: active },
+      update: { isActive: active, ...(roleId !== null && { roleId }) },
+    });
+    return tx.tenantUser.findUnique({
+      where: { tenantId_userId: { tenantId, userId: user.id } },
+      include: {
+        user: { select: { id: true, email: true, name: true, isActive: true } },
+        roleRef: { select: { id: true, name: true } },
+      },
+    });
   });
 
-  if (!tenantUser) {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'Kullanıcı bulunamadı.',
-      status: '404',
-    }, 404);
-  }
+  if (!resource) return scimError(c, 'Kullanici olusturulamadi.', 500);
+  return c.json(scimUserResource(resource.user, resource), 201);
+});
 
-  let body: Record<string, any>;
+scimRoutes.put('/Users/:id', async (c) => {
+  const tenantId = c.get('tenantId');
+  const id = c.req.param('id');
+  const body = await readJsonRecord(c);
+  if (!body) return scimError(c, 'Gecersiz JSON govdesi.', 400);
+
+  const tenantUser = await prisma.tenantUser.findFirst({ where: { tenantId, userId: id } });
+  if (!tenantUser) return scimError(c, 'Kullanici bulunamadi.', 404);
+
+  const payload = readUserPayload(body);
+  const active = payload.active ?? true;
+  const name = userDisplayName(payload, '');
+  const roleId = await resolveScimRoleId(tenantId, payload);
+
+  const resource = await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id }, data: { ...(name && { name }), isActive: active } });
+    await tx.tenantUser.update({ where: { id: tenantUser.id }, data: { isActive: active, ...(roleId !== null && { roleId }) } });
+    return tx.tenantUser.findUnique({
+      where: { tenantId_userId: { tenantId, userId: id } },
+      include: {
+        user: { select: { id: true, email: true, name: true, isActive: true } },
+        roleRef: { select: { id: true, name: true } },
+      },
+    });
+  });
+
+  if (!resource) return scimError(c, 'Kullanici guncellenemedi.', 500);
+  return c.json(scimUserResource(resource.user, resource));
+});
+
+scimRoutes.patch('/Users/:id', async (c) => {
+  const tenantId = c.get('tenantId');
+  const id = c.req.param('id');
+  const body = await readJsonRecord(c);
+  if (!body) return scimError(c, 'Gecersiz JSON govdesi.', 400);
+
+  const tenantUser = await prisma.tenantUser.findFirst({ where: { tenantId, userId: id } });
+  if (!tenantUser) return scimError(c, 'Kullanici bulunamadi.', 404);
+
+  const payload = roleSyncPatchPayload(readUserPayload(body));
+  const data: Prisma.UserUpdateInput = {};
+  if (payload.active !== undefined) data.isActive = payload.active;
+  const roleId = await resolveScimRoleId(tenantId, payload);
+
+  const resource = await prisma.$transaction(async (tx) => {
+    if (Object.keys(data).length > 0) await tx.user.update({ where: { id }, data });
+    await tx.tenantUser.update({
+      where: { id: tenantUser.id },
+      data: {
+        ...(payload.active !== undefined && { isActive: payload.active }),
+        ...(roleId !== null && { roleId }),
+      },
+    });
+    return tx.tenantUser.findUnique({
+      where: { tenantId_userId: { tenantId, userId: id } },
+      include: {
+        user: { select: { id: true, email: true, name: true, isActive: true } },
+        roleRef: { select: { id: true, name: true } },
+      },
+    });
+  });
+
+  if (!resource) return scimError(c, 'Kullanici guncellenemedi.', 500);
+  return c.json(scimUserResource(resource.user, resource));
+});
+
+scimRoutes.delete('/Users/:id', async (c) => {
+  const tenantId = c.get('tenantId');
+  const id = c.req.param('id');
+  const tenantUser = await prisma.tenantUser.findFirst({ where: { tenantId, userId: id } });
+  if (!tenantUser) return scimError(c, 'Kullanici bulunamadi.', 404);
+  await prisma.tenantUser.update({ where: { id: tenantUser.id }, data: { isActive: false } });
+  return c.body(null, 204);
+});
+
+scimRoutes.get('/Groups', async (c) => {
+  const tenantId = c.get('tenantId');
+  const roles = await prisma.role.findMany({
+    where: { tenantId },
+    include: { users: { include: { user: { select: { id: true, email: true, name: true } } } } },
+    orderBy: { name: 'asc' },
+  });
+  return c.json({
+    schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+    totalResults: roles.length,
+    startIndex: 1,
+    itemsPerPage: roles.length,
+    Resources: roles.map((role) => scimGroupResource(role, role.users)),
+  });
+});
+
+scimRoutes.get('/Groups/:id', async (c) => {
+  const tenantId = c.get('tenantId');
+  const id = c.req.param('id');
+  const role = await prisma.role.findFirst({
+    where: { tenantId, id },
+    include: { users: { include: { user: { select: { id: true, email: true, name: true } } } } },
+  });
+  if (!role) return scimError(c, 'SCIM group/rol bulunamadi.', 404);
+  return c.json(scimGroupResource(role, role.users));
+});
+
+scimRoutes.put('/Groups/:id', async (c) => {
+  const tenantId = c.get('tenantId');
+  const id = c.req.param('id');
+  const body = await readJsonRecord(c);
+  if (!body) return scimError(c, 'Gecersiz JSON govdesi.', 400);
+  const payload = readGroupPayload(body);
   try {
-    body = await c.req.json();
+    await updateGroupMembers(tenantId, id, payload.members?.map((member) => member.value).filter((value): value is string => Boolean(value)) ?? []);
   } catch {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'Geçersiz JSON gövdesi.',
-      status: '400',
-    }, 400);
+    return scimError(c, 'SCIM group/rol bulunamadi.', 404);
   }
+  const role = await prisma.role.findFirst({
+    where: { tenantId, id },
+    include: { users: { include: { user: { select: { id: true, email: true, name: true } } } } },
+  });
+  if (!role) return scimError(c, 'SCIM group/rol bulunamadi.', 404);
+  return c.json(scimGroupResource(role, role.users));
+});
 
-  // SCIM patch format often uses operations array: {"Operations": [{"op": "replace", "value": {"active": false}}]}
-  let active = true;
-  let hasActiveChange = false;
+scimRoutes.patch('/Groups/:id', async (c) => {
+  const tenantId = c.get('tenantId');
+  const id = c.req.param('id');
+  const body = await readJsonRecord(c);
+  if (!body) return scimError(c, 'Gecersiz JSON govdesi.', 400);
+  const payload = readGroupPayload(body);
+  const role = await prisma.role.findFirst({ where: { tenantId, id }, select: { id: true } });
+  if (!role) return scimError(c, 'SCIM group/rol bulunamadi.', 404);
 
-  const operations = body.Operations;
-  if (Array.isArray(operations)) {
-    for (const op of operations) {
-      if (op.op?.toLowerCase() === 'replace') {
-        if (typeof op.value?.active === 'boolean') {
-          active = op.value.active;
-          hasActiveChange = true;
-        } else if (typeof op.value === 'object' && typeof op.value.active === 'boolean') {
-          active = op.value.active;
-          hasActiveChange = true;
-        }
-      }
+  for (const operation of payload.Operations ?? []) {
+    const op = operation.op.toLowerCase();
+    const members = isRecord(operation.value) && Array.isArray(operation.value.members)
+      ? readMembers(operation.value.members) ?? []
+      : Array.isArray(operation.value)
+        ? readMembers(operation.value) ?? []
+        : [];
+    const memberIds = members.map((member) => member.value).filter((value): value is string => Boolean(value));
+    if (op === 'add') {
+      await prisma.tenantUser.updateMany({ where: { tenantId, userId: { in: memberIds } }, data: { roleId: id } });
+    }
+    if (op === 'remove') {
+      await prisma.tenantUser.updateMany({ where: { tenantId, userId: { in: memberIds }, roleId: id }, data: { roleId: null } });
     }
   }
 
-  if (hasActiveChange) {
-    await prisma.user.update({
-      where: { id },
-      data: { isActive: active },
-    });
-
-    await prisma.tenantUser.update({
-      where: { id: tenantUser.id },
-      data: { isActive: active },
-    });
-  }
-
-  const u = await prisma.user.findUnique({
-    where: { id },
-    select: { id: true, email: true, name: true, isActive: true },
+  const updatedRole = await prisma.role.findFirst({
+    where: { tenantId, id },
+    include: { users: { include: { user: { select: { id: true, email: true, name: true } } } } },
   });
-
-  if (!u) {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'Kullanıcı güncellenirken hata oluştu.',
-      status: '500',
-    }, 500);
-  }
-
-  return c.json({
-    schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
-    id: u.id,
-    userName: u.email,
-    name: {
-      formatted: u.name,
-      familyName: u.name.split(' ').pop() || '',
-      givenName: u.name.split(' ').slice(0, -1).join(' ') || u.name,
-    },
-    emails: [{ value: u.email, primary: true }],
-    active: u.isActive,
-  });
-});
-
-// DELETE /Users/:id - Deprovision User
-scimRoutes.delete('/Users/:id', async (c) => {
-  const tenantId = c.get('tenantId') as string;
-  const id = c.req.param('id');
-
-  const tenantUser = await prisma.tenantUser.findFirst({
-    where: { tenantId, userId: id },
-  });
-
-  if (!tenantUser) {
-    return c.json({
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-      detail: 'Kullanıcı bulunamadı.',
-      status: '404',
-    }, 404);
-  }
-
-  // SCIM standard often deletes the user or deactivates.
-  // We will deactivate the user's membership and remove the association.
-  await prisma.tenantUser.delete({
-    where: { id: tenantUser.id },
-  });
-
-  return c.body(null, 204);
+  if (!updatedRole) return scimError(c, 'SCIM group/rol bulunamadi.', 404);
+  return c.json(scimGroupResource(updatedRole, updatedRole.users));
 });
 
 export { scimRoutes };

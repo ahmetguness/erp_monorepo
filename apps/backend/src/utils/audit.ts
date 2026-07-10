@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { prisma } from '../lib/prisma.js';
 import { getTrustedClientIpOrNull } from './request-ip.js';
 import { createAuditCriticalActionAlert } from '../services/audit-alert.service.js';
+import { pushSingleAuditLogToSiem } from '../services/siem-export.service.js';
 
 // ─────────────────────────────────────────────
 // Audit Log Helper
@@ -32,7 +33,7 @@ export async function createAuditLog(
   params: AuditLogParams,
 ): Promise<void> {
   try {
-    await db.auditLog.create({
+    const log = await db.auditLog.create({
       data: {
         tenantId: params.tenantId,
         userId: params.userId ?? null,
@@ -54,6 +55,9 @@ export async function createAuditLog(
       entityId: params.entityId,
       action: params.action,
     });
+    if (db === prisma) {
+      void pushSingleAuditLogToSiem(log).catch(() => undefined);
+    }
   } catch {
     // Audit log hatası ana işlemi durdurmamalı
   }

@@ -24,6 +24,9 @@ settingsRoutes.post('/security/sessions/:sessionId/revoke', requirePermission('s
 settingsRoutes.get('/security/corporate', requirePermission('settings', 'READ'), SettingsController.getCorporateSecuritySettings);
 settingsRoutes.post('/security/corporate', requirePermission('settings', 'UPDATE'), SettingsController.updateCorporateSecuritySettings);
 settingsRoutes.post('/security/scim/generate-token', requirePermission('settings', 'UPDATE'), SettingsController.generateScimToken);
+settingsRoutes.get('/security/siem', requirePermission('settings', 'READ'), SettingsController.getSiemSettings);
+settingsRoutes.post('/security/siem', requirePermission('settings', 'UPDATE'), SettingsController.updateSiemSettings);
+settingsRoutes.post('/security/siem/test-export', requirePermission('settings', 'UPDATE'), SettingsController.runSiemExportTest);
 settingsRoutes.get('/security/portal-tokens/:contactId', requirePermission('settings', 'READ'), SettingsController.getPortalToken);
 settingsRoutes.post('/security/portal-tokens/:contactId/generate', requirePermission('settings', 'UPDATE'), SettingsController.generatePortalToken);
 settingsRoutes.get('/security/bi', requirePermission('settings', 'READ'), SettingsController.getBiSettings);
