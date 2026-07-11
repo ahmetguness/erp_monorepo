@@ -513,10 +513,23 @@ export async function simulateDeploymentBackup(): Promise<DeploymentBackupSimula
 
 export const BiSettingsSchema = z.object({
   enabled: z.boolean(),
-  interval: z.string(),
+  interval: z.enum(['daily', 'weekly', 'monthly']),
   entities: z.string(),
   lastRun: z.string().nullable(),
   token: z.string(),
+  connectorType: z.enum(['rest', 'read_replica', 'bigquery', 'snowflake', 'postgresql']),
+  destinationName: z.string(),
+  readReplicaHost: z.string(),
+  warehouseProject: z.string(),
+  scheduledExportTarget: z.enum(['none', 'read_replica', 'bigquery', 'snowflake', 'postgresql', 'sftp']),
+  scheduledExportFormat: z.enum(['json', 'csv', 'parquet']),
+  status: z.object({
+    health: z.enum(['disabled', 'needs_token', 'needs_destination', 'ready']),
+    connectorLabel: z.string(),
+    nextRun: z.string().nullable(),
+    configuredConnectors: z.array(z.enum(['rest', 'read_replica', 'bigquery', 'snowflake', 'postgresql'])),
+    supportedTargets: z.array(z.enum(['none', 'read_replica', 'bigquery', 'snowflake', 'postgresql', 'sftp'])),
+  }),
 });
 
 export type BiSettings = z.infer<typeof BiSettingsSchema>;
@@ -535,9 +548,13 @@ export async function generateBiToken(): Promise<{ token: string }> {
   return safeParse(SingleResponseSchema(z.object({ token: z.string() })), res.data, 'generateBiToken').data;
 }
 
-export async function runBiScheduleSimulation(): Promise<{ lastRun: string }> {
+export async function runBiScheduleSimulation(): Promise<{ lastRun: string | null }> {
   const res = await apiClient.post('/api/settings/security/bi/run-schedule');
-  return safeParse(SingleResponseSchema(z.object({ lastRun: z.string() })), res.data, 'runBiScheduleSimulation').data;
+  return safeParse(
+    SingleResponseSchema(z.object({ lastRun: z.string().nullable() })),
+    res.data,
+    'runBiScheduleSimulation'
+  ).data;
 }
 
 // ── Customer Portal & SLA ──────────────────────

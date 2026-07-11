@@ -13,25 +13,86 @@ import {
 } from '@/hooks/useSettings';
 import type { BiSettings } from '@/services/settings.service';
 
+const DEFAULT_BI_SETTINGS: BiSettings = {
+  enabled: false,
+  interval: 'daily',
+  entities: 'products,contacts,invoices',
+  lastRun: null,
+  token: '',
+  connectorType: 'rest',
+  destinationName: '',
+  readReplicaHost: '',
+  warehouseProject: '',
+  scheduledExportTarget: 'none',
+  scheduledExportFormat: 'json',
+  status: {
+    health: 'disabled',
+    connectorLabel: 'REST/OData endpoint',
+    nextRun: null,
+    configuredConnectors: ['rest'],
+    supportedTargets: ['none', 'read_replica', 'bigquery', 'snowflake', 'postgresql', 'sftp'],
+  },
+};
+
+const CONNECTOR_OPTIONS: Array<{ value: BiSettings['connectorType']; label: string; description: string }> = [
+  { value: 'rest', label: 'REST/OData', description: 'Power BI, Tableau ve Qlik icin mevcut JSON endpoint.' },
+  { value: 'read_replica', label: 'Read replica', description: 'Analitik sorgulari operasyonel veritabanindan ayiran replica.' },
+  { value: 'bigquery', label: 'BigQuery', description: 'Google BigQuery dataset veya scheduled export hedefi.' },
+  { value: 'snowflake', label: 'Snowflake', description: 'Snowflake warehouse/schema aktarim hedefi.' },
+  { value: 'postgresql', label: 'PostgreSQL', description: 'BI icin ayrilmis PostgreSQL warehouse baglantisi.' },
+];
+
+const EXPORT_TARGET_OPTIONS: Array<{ value: BiSettings['scheduledExportTarget']; label: string }> = [
+  { value: 'none', label: 'Sadece API connector' },
+  { value: 'read_replica', label: 'Read replica' },
+  { value: 'bigquery', label: 'BigQuery scheduled export' },
+  { value: 'snowflake', label: 'Snowflake scheduled export' },
+  { value: 'postgresql', label: 'PostgreSQL scheduled export' },
+  { value: 'sftp', label: 'SFTP dosya aktarimi' },
+];
+
+const HEALTH_LABELS: Record<BiSettings['status']['health'], string> = {
+  disabled: 'Kapali',
+  needs_token: 'Token bekliyor',
+  needs_destination: 'Hedef bilgisi eksik',
+  ready: 'Hazir',
+};
+
+const CONNECTOR_LABELS: Record<BiSettings['connectorType'], string> = {
+  rest: 'REST/OData endpoint',
+  read_replica: 'Read replica',
+  bigquery: 'BigQuery',
+  snowflake: 'Snowflake',
+  postgresql: 'PostgreSQL',
+};
+
+function getPreviewHealth(form: BiSettings): BiSettings['status']['health'] {
+  if (!form.enabled) return 'disabled';
+  if (!form.token) return 'needs_token';
+  if ((form.connectorType === 'read_replica' || form.connectorType === 'postgresql') && !form.readReplicaHost.trim()) {
+    return 'needs_destination';
+  }
+  if ((form.connectorType === 'bigquery' || form.connectorType === 'snowflake') && !form.destinationName.trim() && !form.warehouseProject.trim()) {
+    return 'needs_destination';
+  }
+
+  return 'ready';
+}
+
 export default function BiWarehouseSettingsPage() {
   const { data: settings, isLoading } = useBiSettings();
   const generateBiToken = useGenerateBiToken();
   const runSimulation = useRunBiScheduleSimulation();
   const { toast } = useUIStore();
 
-  const [form, setForm] = useState<BiSettings>({
-    enabled: false,
-    interval: 'daily',
-    entities: 'products,contacts,invoices',
-    lastRun: null,
-    token: '',
-  });
+  const [form, setForm] = useState<BiSettings>(DEFAULT_BI_SETTINGS);
 
   const [copied, setCopied] = useState(false);
   const [selectedEntity, setSelectedEntity] = useState('invoices');
 
   useEffect(() => {
     if (settings) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm(settings);
     }
   }, [settings]);
@@ -81,6 +142,13 @@ export default function BiWarehouseSettingsPage() {
   }
 
   const entitiesList = form.entities.split(',').map((e) => e.trim()).filter(Boolean);
+  const previewHealth = getPreviewHealth(form);
+  const configuredConnectors = form.connectorType === 'rest' ? ['rest'] : ['rest', form.connectorType];
+  const healthClassName = previewHealth === 'ready'
+    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+    : previewHealth === 'disabled'
+      ? 'border-slate-700 bg-slate-950 text-slate-300'
+      : 'border-amber-500/30 bg-amber-500/10 text-amber-200';
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -165,6 +233,125 @@ export default function BiWarehouseSettingsPage() {
           </div>
         </div>
 
+        {/* Warehouse Connector Targets */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="flex items-center justify-between gap-4 border-b border-slate-800 pb-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0">
+                <Database className="w-5 h-5 text-violet-300" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-white">Enterprise Veri Ambari Connector</h3>
+                <p className="text-xs text-slate-500">Read replica, BigQuery, Snowflake veya PostgreSQL hedefini ve scheduled export politikasini yonetin.</p>
+              </div>
+            </div>
+            <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${healthClassName}`}>
+              {HEALTH_LABELS[previewHealth]}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 space-y-2">
+              <label className="text-xs text-slate-400 font-medium">Connector Tipi</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {CONNECTOR_OPTIONS.map((option) => {
+                  const active = form.connectorType === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, connectorType: option.value }))}
+                      className={`text-left rounded-xl border p-3 transition-colors ${
+                        active ? 'border-sky-500/60 bg-sky-500/10' : 'border-slate-800 bg-slate-950 hover:border-slate-700'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold text-slate-100">{option.label}</span>
+                      <span className="mt-1 block text-xs leading-normal text-slate-500">{option.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-slate-850 bg-slate-950/60 p-4">
+              <div>
+                <span className="block text-xs font-semibold text-slate-200">Aktif connector</span>
+                <span className="text-xs text-slate-500">{CONNECTOR_LABELS[form.connectorType]}</span>
+              </div>
+              <div>
+                <span className="block text-xs font-semibold text-slate-200">Sonraki planli aktarim</span>
+                <span className="text-xs text-slate-500">
+                  {form.status.nextRun ? new Date(form.status.nextRun).toLocaleString('tr-TR') : 'Planli zaman henuz olusmadi'}
+                </span>
+              </div>
+              <div>
+                <span className="block text-xs font-semibold text-slate-200">Hazir connectorlar</span>
+                <span className="text-xs text-slate-500">{configuredConnectors.join(', ')}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs text-slate-400 font-medium">Destination / Dataset Adi</label>
+              <input
+                type="text"
+                value={form.destinationName}
+                onChange={(e) => setForm((prev) => ({ ...prev, destinationName: e.target.value }))}
+                placeholder="orn. erp_enterprise_dw"
+                className="w-full h-10 px-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-200 text-sm focus:border-sky-500/50 focus:outline-none transition-colors"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs text-slate-400 font-medium">Read Replica / PostgreSQL Host</label>
+              <input
+                type="text"
+                value={form.readReplicaHost}
+                onChange={(e) => setForm((prev) => ({ ...prev, readReplicaHost: e.target.value }))}
+                placeholder="replica.company.internal:5432"
+                className="w-full h-10 px-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-200 text-sm focus:border-sky-500/50 focus:outline-none transition-colors"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs text-slate-400 font-medium">Warehouse Project / Schema</label>
+              <input
+                type="text"
+                value={form.warehouseProject}
+                onChange={(e) => setForm((prev) => ({ ...prev, warehouseProject: e.target.value }))}
+                placeholder="project.dataset veya warehouse.schema"
+                className="w-full h-10 px-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-200 text-sm focus:border-sky-500/50 focus:outline-none transition-colors"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-xs text-slate-400 font-medium">Export Hedefi</label>
+                <select
+                  value={form.scheduledExportTarget}
+                  onChange={(e) => setForm((prev) => ({ ...prev, scheduledExportTarget: e.target.value as BiSettings['scheduledExportTarget'] }))}
+                  className="w-full h-10 px-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-200 text-sm focus:border-sky-500/50 focus:outline-none transition-colors"
+                >
+                  {EXPORT_TARGET_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-slate-400 font-medium">Format</label>
+                <select
+                  value={form.scheduledExportFormat}
+                  onChange={(e) => setForm((prev) => ({ ...prev, scheduledExportFormat: e.target.value as BiSettings['scheduledExportFormat'] }))}
+                  className="w-full h-10 px-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-200 text-sm focus:border-sky-500/50 focus:outline-none transition-colors"
+                >
+                  <option value="json">JSON</option>
+                  <option value="csv">CSV</option>
+                  <option value="parquet">Parquet</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Scheduled Exports Panel */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
@@ -195,7 +382,7 @@ export default function BiWarehouseSettingsPage() {
                   <label className="text-xs text-slate-400 font-medium">Senkronizasyon Sıklığı</label>
                   <select
                     value={form.interval}
-                    onChange={(e) => setForm((prev) => ({ ...prev, interval: e.target.value }))}
+                    onChange={(e) => setForm((prev) => ({ ...prev, interval: e.target.value as BiSettings['interval'] }))}
                     className="w-full h-10 px-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-200 text-sm focus:border-sky-500/50 focus:outline-none transition-colors"
                   >
                     <option value="daily">Her Gün (Gece 02:00)</option>

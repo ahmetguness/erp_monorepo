@@ -3,6 +3,7 @@ import { ACCESS_POLICIES } from '@repo/types/plans';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 import { PayrollController } from '../controllers/payroll.controller';
+import { AdvancedPayrollController } from '../controllers/advanced-payroll.controller';
 
 const payrollRoutes = new Hono();
 
@@ -11,6 +12,7 @@ payrollRoutes.use('*', requireAccess(ACCESS_POLICIES.payroll));
 payrollRoutes.get('/', requirePermission('payroll', 'READ'), PayrollController.list);
 payrollRoutes.post('/', requirePermission('payroll', 'CREATE'), PayrollController.create);
 payrollRoutes.post('/generate-bulk', requirePermission('payroll', 'CREATE'), PayrollController.generateBulk);
+payrollRoutes.get('/advanced', requirePermission('payroll', 'READ'), AdvancedPayrollController.get);
 payrollRoutes.get('/integration/bank-file', requirePermission('payroll', 'READ'), PayrollController.getBankFile);
 payrollRoutes.post('/integration/accounting-voucher', requirePermission('payroll', 'UPDATE'), PayrollController.postAccountingVoucher);
 payrollRoutes.get('/integration/closing-checks', requirePermission('payroll', 'READ'), PayrollController.getClosingChecks);

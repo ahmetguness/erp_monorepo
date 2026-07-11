@@ -59,6 +59,14 @@ export function useBOM(id: string) {
   return useQuery({ queryKey: ['boms', id], queryFn: () => svc.getBOM(id), enabled: !!id });
 }
 
+export function useBOMEngineering(id: string) {
+  return useQuery({
+    queryKey: ['boms', id, 'engineering'],
+    queryFn: () => svc.getBOMEngineering(id),
+    enabled: !!id,
+  });
+}
+
 export function useCreateBOM() {
   const qc = useQueryClient();
   const { toast } = useUIStore();

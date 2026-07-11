@@ -31,6 +31,78 @@ export interface BOM {
   _count?: { items: number; routings: number; workOrders: number };
 }
 
+export interface BomRevisionRow {
+  id: string;
+  version: string;
+  isActive: boolean;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  itemCount: number;
+  routingCount: number;
+  workOrderCount: number;
+  status: 'active' | 'future' | 'expired' | 'draft';
+}
+
+export interface AlternativeMaterialRow {
+  bomItemId: string;
+  primaryProduct: { id: string; code: string; name: string };
+  requiredQty: number;
+  unit: string;
+  primaryUnitCost: number;
+  alternatives: Array<{
+    product: { id: string; code: string; name: string };
+    availableQty: number;
+    unitCost: number;
+    costDeltaPct: number;
+    reason: string;
+  }>;
+}
+
+export interface OperationRouteRow {
+  routingId: string;
+  stepOrder: number;
+  operationName: string;
+  workCenter: { id: string; code: string; name: string };
+  setupMinutes: number;
+  runMinutesPerUnit: number;
+  laborRate: number;
+  overheadRate: number;
+  plannedCostPerUnit: number;
+}
+
+export interface ProductionCostComparisonRow {
+  workOrderId: string;
+  workOrderNumber: string;
+  status: string;
+  plannedQty: number;
+  producedQty: number;
+  plannedCost: number;
+  actualCost: number;
+  variance: number;
+  variancePct: number;
+  materialVariance: number;
+  laborVariance: number;
+  overheadVariance: number;
+}
+
+export interface ProductionEngineeringResult {
+  bomId: string;
+  generatedAt: string;
+  summary: {
+    revisionCount: number;
+    activeRevisionCount: number;
+    alternativeSuggestionCount: number;
+    routeStepCount: number;
+    plannedCostTotal: number;
+    actualCostTotal: number;
+    variancePct: number;
+  };
+  revisions: BomRevisionRow[];
+  alternativeMaterials: AlternativeMaterialRow[];
+  operationRoutes: OperationRouteRow[];
+  costComparison: ProductionCostComparisonRow[];
+}
+
 export interface WorkOrderItem {
   id: string; productId: string; requiredQty: number; consumedQty: number;
   sourceWarehouseId: string | null;
@@ -352,6 +424,9 @@ export const getBOMs = (params?: { page?: number; limit?: number }) =>
 
 export const getBOM = (id: string) =>
   apiClient.get<{ data: BOM }>(`/api/production/boms/${id}`).then((r) => r.data.data);
+
+export const getBOMEngineering = (id: string) =>
+  apiClient.get<{ data: ProductionEngineeringResult }>(`/api/production/boms/${id}/engineering`).then((r) => r.data.data);
 
 export const createBOM = (data: { productId: string; name: string; version?: string; items?: Array<{ productId: string; quantity: number; unit?: string }> }) =>
   apiClient.post<{ data: BOM }>('/api/production/boms', data).then((r) => r.data.data);

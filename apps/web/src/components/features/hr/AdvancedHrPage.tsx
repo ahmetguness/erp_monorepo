@@ -1,6 +1,6 @@
 "use client";
 
-import { Award, BookOpenCheck, Boxes, GitBranch, RefreshCw, Users } from "lucide-react";
+import { Award, BookOpenCheck, Boxes, GitBranch, Receipt, RefreshCw, Users } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
@@ -9,6 +9,9 @@ import { useAdvancedHr } from "@/hooks/useHR";
 import type {
   HrAssetAssignmentRow,
   HrAssetStatus,
+  HrExpenseAdvanceRow,
+  HrExpenseAdvanceStatus,
+  HrExpenseAdvanceType,
   HrReviewStatus,
   HrTrainingStatus,
   OrganizationNode,
@@ -51,6 +54,22 @@ function assetVariant(status: HrAssetStatus): BadgeVariant {
 
 function assetLabel(status: HrAssetStatus): string {
   return status === "assigned" ? "Zimmetli" : "Eksik";
+}
+
+function expenseAdvanceVariant(status: HrExpenseAdvanceStatus): BadgeVariant {
+  if (status === "pending") return "warning";
+  if (status === "documented") return "success";
+  return "neutral";
+}
+
+function expenseAdvanceStatusLabel(status: HrExpenseAdvanceStatus): string {
+  if (status === "pending") return "Aksiyon bekliyor";
+  if (status === "documented") return "Dokumanli";
+  return "Eksik";
+}
+
+function expenseAdvanceTypeLabel(type: HrExpenseAdvanceType): string {
+  return type === "advance" ? "Avans" : "Masraf";
 }
 
 function nodeVariant(type: OrganizationNode["type"]): BadgeVariant {
@@ -207,6 +226,51 @@ export function AdvancedHrPage() {
     },
   ];
 
+  const expenseAdvanceColumns: ColumnDef<HrExpenseAdvanceRow>[] = [
+    {
+      key: "employee",
+      header: "Personel",
+      render: (row) => (
+        <div>
+          <span className="text-sm font-semibold text-white">{row.employee.fullName}</span>
+          <span className="block text-[11px] text-slate-500">{employeeSubtitle(row.employee)}</span>
+        </div>
+      ),
+    },
+    {
+      key: "type",
+      header: "Tur",
+      width: "90px",
+      render: (row) => <Badge variant="info">{expenseAdvanceTypeLabel(row.type)}</Badge>,
+    },
+    {
+      key: "actions",
+      header: "Aksiyon",
+      width: "90px",
+      align: "right",
+      render: (row) => <span className="font-mono text-amber-300">{row.openActionCount}</span>,
+    },
+    {
+      key: "documents",
+      header: "Dokuman",
+      width: "100px",
+      align: "right",
+      render: (row) => <span className="text-slate-300">{row.documentCount}</span>,
+    },
+    {
+      key: "due",
+      header: "Son Tarih",
+      width: "120px",
+      render: (row) => <span className="text-slate-400">{formatDate(row.nextDueAt)}</span>,
+    },
+    {
+      key: "status",
+      header: "Durum",
+      width: "140px",
+      render: (row) => <Badge variant={expenseAdvanceVariant(row.status)}>{expenseAdvanceStatusLabel(row.status)}</Badge>,
+    },
+  ];
+
   const summary = data?.summary;
 
   return (
@@ -222,7 +286,7 @@ export function AdvancedHrPage() {
         }
       />
 
-      <div className="mb-5 grid gap-3 md:grid-cols-5">
+      <div className="mb-5 grid gap-3 md:grid-cols-6">
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
           <Users className="mb-2 h-4 w-4 text-sky-400" />
           <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Personel</span>
@@ -242,6 +306,11 @@ export function AdvancedHrPage() {
           <Boxes className="mb-2 h-4 w-4 text-violet-400" />
           <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Zimmet Eksik</span>
           <span className="mt-1 block text-2xl font-bold text-white">{summary?.assetMissingCount ?? 0}</span>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <Receipt className="mb-2 h-4 w-4 text-rose-400" />
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Masraf/Avans</span>
+          <span className="mt-1 block text-2xl font-bold text-white">{summary?.expenseAdvancePendingCount ?? 0}</span>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
           <GitBranch className="mb-2 h-4 w-4 text-cyan-400" />
@@ -267,6 +336,12 @@ export function AdvancedHrPage() {
           <h2 className="mb-3 text-sm font-semibold text-white">Zimmet Takibi</h2>
           <DataTable columns={assetColumns} data={data?.assetAssignments ?? []} keyExtractor={(row) => row.employee.id} isLoading={isLoading}
             emptyTitle="Zimmet kaydi yok" emptyDescription="Personel dokumanlarina asset-assignment tagli zimmet ekleyin." />
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-sm font-semibold text-white">Masraf ve Avans Takibi</h2>
+          <DataTable columns={expenseAdvanceColumns} data={data?.expenseAdvances ?? []} keyExtractor={(row) => `${row.employee.id}:${row.type}`} isLoading={isLoading}
+            emptyTitle="Masraf/avans aksiyonu yok" emptyDescription="hr:expense veya hr:advance kaynakli gorevler ve ilgili dokumanlar burada izlenir." />
         </section>
 
         <section>

@@ -46,6 +46,13 @@ import {
   saveDeploymentOperationsSettings,
   type BackupFrequency,
 } from '../services/deployment-operations.service.js';
+import {
+  BI_CONNECTOR_SETTING_KEYS,
+  BI_TOKEN_SETTING_KEY,
+  getBiConnectorSettings,
+  recordBiScheduleSimulation,
+  saveBiConnectorSettings,
+} from '../services/bi-connector.service.js';
 
 const TENANT_LOGO_SETTING_KEY = 'tenant_logo_storage_path';
 const LEGACY_TENANT_LOGO_SETTING_KEY = 'company_logo';
@@ -56,6 +63,8 @@ const INTERNAL_TENANT_SETTING_KEYS = [
   ...Object.values(SIEM_SETTING_KEYS),
   ...Object.values(DATA_RETENTION_SETTING_KEYS),
   ...Object.values(DEPLOYMENT_OPERATIONS_SETTING_KEYS),
+  ...Object.values(BI_CONNECTOR_SETTING_KEYS),
+  BI_TOKEN_SETTING_KEY,
 ] as const;
 const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 const ALLOWED_LOGO_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -673,89 +682,42 @@ export const SettingsController = {
 
   async getBiSettings(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { plan: true }
-    });
-
-    if (tenant?.plan !== 'ENTERPRISE') {
-      throw new ValidationError('BI ayarları sadece Enterprise plan müşterileri içindir.');
-    }
-
-    const settings = await prisma.tenantSetting.findMany({
-      where: {
-        tenantId,
-        key: { startsWith: 'bi.' }
-      }
-    });
-
-    const settingsMap = new Map(settings.map(s => [s.key, s.value]));
-
-    const tokenSetting = await prisma.tenantSetting.findUnique({
-      where: { tenantId_key: { tenantId, key: 'security.bi.token' } }
-    });
+    await assertEnterpriseTenant(tenantId, 'BI ayarlari sadece Enterprise plan musterileri icindir.');
 
     return c.json({
-      data: {
-        enabled: settingsMap.get('bi.schedule.enabled') === 'true',
-        interval: settingsMap.get('bi.schedule.interval') || 'daily',
-        entities: settingsMap.get('bi.schedule.entities') || 'products,contacts,invoices',
-        lastRun: settingsMap.get('bi.schedule.last_run') || null,
-        token: tokenSetting?.value || '',
-      }
+      data: await getBiConnectorSettings(prisma, tenantId),
     });
   },
 
   async updateBiSettings(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { plan: true }
-    });
-
-    if (tenant?.plan !== 'ENTERPRISE') {
-      throw new ValidationError('BI ayarları sadece Enterprise plan müşterileri içindir.');
-    }
-
+    await assertEnterpriseTenant(tenantId, 'BI ayarlari sadece Enterprise plan musterileri icindir.');
     const body = await readJsonObject(c);
-
-    const updates = [
-      { key: 'bi.schedule.enabled', value: readBoolean(body.enabled) ? 'true' : 'false' },
-      { key: 'bi.schedule.interval', value: readString(body.interval, 'daily') },
-      { key: 'bi.schedule.entities', value: readString(body.entities, 'products,contacts,invoices') },
-    ];
-
-    for (const update of updates) {
-      await prisma.tenantSetting.upsert({
-        where: { tenantId_key: { tenantId, key: update.key } },
-        create: { tenantId, key: update.key, value: update.value },
-        update: { value: update.value }
-      });
-    }
+    await saveBiConnectorSettings(prisma, tenantId, {
+      enabled: body.enabled,
+      interval: body.interval,
+      entities: body.entities,
+      connectorType: body.connectorType,
+      destinationName: body.destinationName,
+      readReplicaHost: body.readReplicaHost,
+      warehouseProject: body.warehouseProject,
+      scheduledExportTarget: body.scheduledExportTarget,
+      scheduledExportFormat: body.scheduledExportFormat,
+    });
 
     return c.json({ data: { success: true } });
   },
 
   async generateBiToken(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { plan: true }
-    });
-
-    if (tenant?.plan !== 'ENTERPRISE') {
-      throw new ValidationError('BI ayarları sadece Enterprise plan müşterileri içindir.');
-    }
+    await assertEnterpriseTenant(tenantId, 'BI ayarlari sadece Enterprise plan musterileri icindir.');
 
     const token = 'bi_' + randomUUID().replace(/-/g, '');
 
     await prisma.tenantSetting.upsert({
-      where: { tenantId_key: { tenantId, key: 'security.bi.token' } },
-      create: { tenantId, key: 'security.bi.token', value: token },
-      update: { value: token }
+      where: { tenantId_key: { tenantId, key: BI_TOKEN_SETTING_KEY } },
+      create: { tenantId, key: BI_TOKEN_SETTING_KEY, value: token },
+      update: { value: token },
     });
 
     return c.json({ data: { token } });
@@ -764,23 +726,8 @@ export const SettingsController = {
   async runBiScheduleSimulation(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { plan: true }
-    });
-
-    if (tenant?.plan !== 'ENTERPRISE') {
-      throw new ValidationError('BI ayarları sadece Enterprise plan müşterileri içindir.');
-    }
-
-    const now = new Date().toISOString();
-
-    await prisma.tenantSetting.upsert({
-      where: { tenantId_key: { tenantId, key: 'bi.schedule.last_run' } },
-      create: { tenantId, key: 'bi.schedule.last_run', value: now },
-      update: { value: now }
-    });
+    await assertEnterpriseTenant(tenantId, 'BI ayarlari sadece Enterprise plan musterileri icindir.');
+    const settings = await recordBiScheduleSimulation(prisma, tenantId);
 
     const { ipAddress, userAgent } = getRequestMeta(c);
     await createAuditLog(prisma, {
@@ -790,12 +737,18 @@ export const SettingsController = {
       entityType: EntityType.OTHER,
       entityId: 'bi_export_schedule',
       action: AuditAction.UPDATE,
-      newValues: { status: 'success', executedAt: now },
+      newValues: {
+        status: 'success',
+        executedAt: settings.lastRun,
+        connectorType: settings.connectorType,
+        scheduledExportTarget: settings.scheduledExportTarget,
+        scheduledExportFormat: settings.scheduledExportFormat,
+      },
       ipAddress,
       userAgent,
     });
 
-    return c.json({ data: { success: true, lastRun: now } });
+    return c.json({ data: { success: true, lastRun: settings.lastRun, status: settings.status } });
   },
 
   async getPortalToken(c: Context): Promise<Response> {

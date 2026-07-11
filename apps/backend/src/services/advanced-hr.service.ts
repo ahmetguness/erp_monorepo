@@ -8,6 +8,12 @@ const OPEN_TASK_STATUSES: readonly TaskStatus[] = [
   TaskStatus.IN_PROGRESS,
 ];
 
+interface ExpenseAdvanceConfig {
+  type: HrExpenseAdvanceType;
+  taskPrefix: string;
+  documentTag: string;
+}
+
 export interface AdvancedHrInput {
   tenantId: string;
 }
@@ -22,6 +28,8 @@ export interface AdvancedHrEmployeeRef {
 export type HrReviewStatus = 'ready' | 'scheduled' | 'missing';
 export type HrTrainingStatus = 'complete' | 'planned' | 'missing';
 export type HrAssetStatus = 'assigned' | 'missing';
+export type HrExpenseAdvanceStatus = 'pending' | 'documented' | 'missing';
+export type HrExpenseAdvanceType = 'expense' | 'advance';
 export type HrPriority = 'low' | 'medium' | 'high' | 'critical';
 
 export interface PerformanceReviewRow {
@@ -48,6 +56,16 @@ export interface HrAssetAssignmentRow {
   lastAssignedAt: string | null;
 }
 
+export interface HrExpenseAdvanceRow {
+  employee: AdvancedHrEmployeeRef;
+  type: HrExpenseAdvanceType;
+  status: HrExpenseAdvanceStatus;
+  openActionCount: number;
+  documentCount: number;
+  nextDueAt: string | null;
+  lastDocumentAt: string | null;
+}
+
 export interface OrganizationNode {
   id: string;
   parentId: string | null;
@@ -62,6 +80,7 @@ export interface AdvancedHrSummary {
   reviewMissingCount: number;
   trainingMissingCount: number;
   assetMissingCount: number;
+  expenseAdvancePendingCount: number;
   organizationNodeCount: number;
 }
 
@@ -70,6 +89,7 @@ export interface AdvancedHrResult {
   performanceReviews: PerformanceReviewRow[];
   trainingMatrix: TrainingMatrixRow[];
   assetAssignments: HrAssetAssignmentRow[];
+  expenseAdvances: HrExpenseAdvanceRow[];
   organization: OrganizationNode[];
 }
 
@@ -139,6 +159,16 @@ function hasTag(attachment: AttachmentLookup, tag: string): boolean {
 
 function unique<T>(items: readonly T[]): T[] {
   return Array.from(new Set(items));
+}
+
+function earliestDate(dates: readonly Date[]): Date | null {
+  return [...dates].sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
+}
+
+function expenseAdvanceStatus(openActionCount: number, documentCount: number): HrExpenseAdvanceStatus {
+  if (openActionCount > 0) return 'pending';
+  if (documentCount > 0) return 'documented';
+  return 'missing';
 }
 
 export async function getAdvancedHr(
@@ -260,6 +290,36 @@ export async function getAdvancedHr(
     };
   });
 
+  const expenseAdvances = employees.flatMap((employee): HrExpenseAdvanceRow[] => {
+    const employeeTasks = tasksByEmployee.get(employee.id) ?? [];
+    const employeeAttachments = attachmentsByEmployee.get(employee.id) ?? [];
+    const configs: readonly ExpenseAdvanceConfig[] = [
+      {
+        type: 'expense',
+        taskPrefix: 'hr:expense',
+        documentTag: 'expense-receipt',
+      },
+      {
+        type: 'advance',
+        taskPrefix: 'hr:advance',
+        documentTag: 'advance-form',
+      },
+    ];
+    return configs.map((config): HrExpenseAdvanceRow => {
+      const flowTasks = employeeTasks.filter((task) => isSource(task, config.taskPrefix));
+      const flowDocs = employeeAttachments.filter((attachment) => hasTag(attachment, config.documentTag));
+      return {
+        employee: employeeRef(employee),
+        type: config.type,
+        status: expenseAdvanceStatus(flowTasks.length, flowDocs.length),
+        openActionCount: flowTasks.length,
+        documentCount: flowDocs.length,
+        nextDueAt: earliestDate(flowTasks.map((task) => task.dueAt).filter((date): date is Date => date !== null))?.toISOString() ?? null,
+        lastDocumentAt: latestDate(flowDocs.map((attachment) => attachment.createdAt))?.toISOString() ?? null,
+      };
+    });
+  }).filter((row) => row.status !== 'missing').slice(0, 80);
+
   const organization: OrganizationNode[] = [];
   const departmentNames = unique(employees.map((employee) => departmentKey(employee.department)));
   for (const department of departmentNames) {
@@ -303,11 +363,13 @@ export async function getAdvancedHr(
       reviewMissingCount: performanceReviews.filter((row) => row.status === 'missing').length,
       trainingMissingCount: trainingMatrix.filter((row) => row.status === 'missing').length,
       assetMissingCount: assetAssignments.filter((row) => row.status === 'missing').length,
+      expenseAdvancePendingCount: expenseAdvances.filter((row) => row.status === 'pending').length,
       organizationNodeCount: organization.length,
     },
     performanceReviews,
     trainingMatrix,
     assetAssignments,
+    expenseAdvances,
     organization,
   };
 }

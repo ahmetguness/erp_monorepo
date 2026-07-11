@@ -60,6 +60,7 @@ import { serviceRoutes } from './routes/service.routes';
 import { marketplaceRoutes } from './routes/marketplace.routes';
 import { hrRoutes } from './routes/hr.routes';
 import { payrollRoutes } from './routes/payroll.routes';
+import { enterpriseRoutes } from './routes/enterprise.routes';
 import { mailRoutes } from './routes/mail.routes';
 import { scimRoutes } from './routes/scim.routes.js';
 import { biRoutes } from './routes/bi.routes.js';
@@ -290,6 +291,7 @@ tenantApi.route('/service', serviceRoutes);
 tenantApi.route('/marketplace', marketplaceRoutes);
 tenantApi.route('/hr', hrRoutes);
 tenantApi.route('/payroll', payrollRoutes);
+tenantApi.route('/enterprise', enterpriseRoutes);
 tenantApi.route('/mail', mailRoutes);
 tenantApi.route('/chat', chatRoutes);
 

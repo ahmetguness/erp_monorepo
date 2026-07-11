@@ -247,6 +247,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       { label: 'Rol Yönetimi', href: '/dashboard/roles', icon: Shield, plan: PROFESSIONAL_PLAN },
       { label: 'API Anahtarları', href: '/dashboard/api-keys', icon: Key, plan: PROFESSIONAL_PLAN },
+      { label: 'Coklu sirket/sube', href: '/dashboard/enterprise/holding', icon: Building2, plan: ENTERPRISE_PLAN },
     ],
   },
   {

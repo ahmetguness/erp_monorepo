@@ -145,6 +145,14 @@ export function usePayroll(id: string) {
   return useQuery({ queryKey: ['payrolls', id], queryFn: () => svc.getPayroll(id), enabled: !!id });
 }
 
+export function useAdvancedPayroll(period: string) {
+  return useQuery({
+    queryKey: ['payrolls', 'advanced', period],
+    queryFn: () => svc.getAdvancedPayroll(period),
+    enabled: /^\d{4}-\d{2}$/.test(period),
+  });
+}
+
 export function useCreatePayroll() {
   const qc = useQueryClient();
   const { toast } = useUIStore();

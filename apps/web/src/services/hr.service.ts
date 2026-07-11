@@ -43,6 +43,8 @@ export interface Department { name: string | null; count: number; }
 export type HrReviewStatus = 'ready' | 'scheduled' | 'missing';
 export type HrTrainingStatus = 'complete' | 'planned' | 'missing';
 export type HrAssetStatus = 'assigned' | 'missing';
+export type HrExpenseAdvanceStatus = 'pending' | 'documented' | 'missing';
+export type HrExpenseAdvanceType = 'expense' | 'advance';
 
 export interface AdvancedHrEmployeeRef {
   id: string;
@@ -75,6 +77,16 @@ export interface HrAssetAssignmentRow {
   lastAssignedAt: string | null;
 }
 
+export interface HrExpenseAdvanceRow {
+  employee: AdvancedHrEmployeeRef;
+  type: HrExpenseAdvanceType;
+  status: HrExpenseAdvanceStatus;
+  openActionCount: number;
+  documentCount: number;
+  nextDueAt: string | null;
+  lastDocumentAt: string | null;
+}
+
 export interface OrganizationNode {
   id: string;
   parentId: string | null;
@@ -90,11 +102,13 @@ export interface AdvancedHrResult {
     reviewMissingCount: number;
     trainingMissingCount: number;
     assetMissingCount: number;
+    expenseAdvancePendingCount: number;
     organizationNodeCount: number;
   };
   performanceReviews: PerformanceReviewRow[];
   trainingMatrix: TrainingMatrixRow[];
   assetAssignments: HrAssetAssignmentRow[];
+  expenseAdvances: HrExpenseAdvanceRow[];
   organization: OrganizationNode[];
 }
 
@@ -203,8 +217,63 @@ export interface PeriodClosingChecksResult {
   checks: ClosingCheckItem[];
 }
 
+export interface AdvancedPayrollSummary {
+  period: string;
+  payrollCount: number;
+  activeEmployeeCount: number;
+  missingPayrollCount: number;
+  paidCount: number;
+  unpaidCount: number;
+  totalGross: number;
+  totalNet: number;
+  totalDeductions: number;
+  accountingVoucherCreated: boolean;
+  closingReady: boolean;
+  retroCorrectionCount: number;
+  archiveReadyCount: number;
+}
+
+export interface PayrollAccountingIntegration {
+  status: 'created' | 'missing';
+  journalEntryId: string | null;
+  journalEntryNumber: string | null;
+  postedAt: string | null;
+  totalGross: number;
+  totalNet: number;
+  totalDeductions: number;
+}
+
+export interface PayrollRetroCorrectionRow {
+  payrollId: string;
+  employeeName: string;
+  period: string;
+  reason: string | null;
+  correctedAt: string;
+}
+
+export interface PayrollArchiveRow {
+  payrollId: string;
+  employeeName: string;
+  period: string;
+  paidAt: string;
+  netSalary: number;
+  archiveStatus: 'approved_archive' | 'accounting_missing';
+}
+
+export interface AdvancedPayrollResult {
+  generatedAt: string;
+  summary: AdvancedPayrollSummary;
+  closingChecks: ClosingCheckItem[];
+  accounting: PayrollAccountingIntegration;
+  retroCorrections: PayrollRetroCorrectionRow[];
+  archive: PayrollArchiveRow[];
+}
+
 export const getPayrollBankFile = (period: string) =>
   apiClient.get('/api/payroll/integration/bank-file', { params: { period }, responseType: 'blob' }).then((r) => r.data);
+
+export const getAdvancedPayroll = (period: string) =>
+  apiClient.get<{ data: AdvancedPayrollResult }>('/api/payroll/advanced', { params: { period } }).then((r) => r.data.data);
 
 export const createPayrollAccountingVoucher = (period: string) =>
   apiClient.post<{ data: { id: string; number: string; totalGross: number; totalNet: number; totalDeductions: number } }>('/api/payroll/integration/accounting-voucher', { period }).then((r) => r.data.data);

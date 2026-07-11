@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
 import { requireTenantId, requireParam } from '../utils/context.js';
+import { getProductionEngineering } from '../services/production-engineering.service.js';
 
 // ─────────────────────────────────────────────
 // BOM Controller — Ürün ağacı CRUD
@@ -51,6 +52,16 @@ export const BOMController = {
     });
     if (!bom) return c.json(new NotFoundError('BOM', id).toJSON(), 404);
     return c.json({ data: bom });
+  },
+
+  async engineering(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
+
+    const data = await getProductionEngineering(prisma, tenantId, id);
+    if (!data) return c.json(new NotFoundError('BOM', id).toJSON(), 404);
+
+    return c.json({ data });
   },
 
   async create(c: Context): Promise<Response> {

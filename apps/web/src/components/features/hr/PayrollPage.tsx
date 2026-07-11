@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Eye, Trash2, DollarSign, CheckCircle, Zap, CheckCircle2, XCircle, Download, BookOpen } from "lucide-react";
+import { Plus, Eye, Trash2, CheckCircle, Zap, CheckCircle2, XCircle, Download, BookOpen, Archive, RotateCcw } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { EmployeeSelect } from "@/components/shared/EntitySelect";
@@ -18,9 +18,20 @@ import {
   useMarkPayrollPaid,
   useDeletePayroll,
   useCreatePayrollAccountingVoucher,
+  useAdvancedPayroll,
 } from "@/hooks/useHR";
 import { formatCurrency } from "@/lib/utils";
 import { getPayrollBankFile, getPayrollClosingChecks, type Payroll, type PeriodClosingChecksResult } from "@/services/hr.service";
+
+function currentPeriod(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+}
 
 export function PayrollPage() {
   const [page, setPage] = useState(1);
@@ -47,6 +58,8 @@ export function PayrollPage() {
     limit: 20,
     ...(periodFilter && { period: periodFilter }),
   });
+  const advancedPeriod = /^\d{4}-\d{2}$/.test(periodFilter) ? periodFilter : currentPeriod();
+  const { data: advancedPayroll, isLoading: advancedLoading } = useAdvancedPayroll(advancedPeriod);
   const { data: detail } = usePayroll(detailId ?? "");
   const create = useCreatePayroll();
   const generateBulk = useGenerateBulkPayroll();
@@ -266,6 +279,85 @@ export function PayrollPage() {
           </div>
         )}
       </div>
+
+      <section className="mb-5 rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Bordro ileri seviye</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              {advancedPeriod} donem kapama, muhasebe entegrasyonu, geriye donuk duzeltme ve arsiv durumu.
+            </p>
+          </div>
+          <Badge variant={advancedPayroll?.summary.closingReady ? "success" : "warning"}>
+            {advancedPayroll?.summary.closingReady ? "Kapanisa hazir" : "Kontrol gerekli"}
+          </Badge>
+        </div>
+
+        {advancedLoading || !advancedPayroll ? (
+          <div className="grid gap-3 md:grid-cols-4">
+            {[1, 2, 3, 4].map((item) => <div key={item} className="h-20 animate-pulse rounded-lg bg-slate-800/60" />)}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-4">
+              <AdvancedMetric icon={<CheckCircle2 className="h-4 w-4" />} label="Donem kapama" value={`${advancedPayroll.summary.payrollCount}/${advancedPayroll.summary.activeEmployeeCount}`} tone={advancedPayroll.summary.missingPayrollCount > 0 ? "warning" : "success"} />
+              <AdvancedMetric icon={<BookOpen className="h-4 w-4" />} label="Muhasebe fisi" value={advancedPayroll.accounting.journalEntryNumber ?? "Eksik"} tone={advancedPayroll.summary.accountingVoucherCreated ? "success" : "warning"} />
+              <AdvancedMetric icon={<RotateCcw className="h-4 w-4" />} label="Geriye donuk duzeltme" value={advancedPayroll.summary.retroCorrectionCount} tone={advancedPayroll.summary.retroCorrectionCount > 0 ? "warning" : "info"} />
+              <AdvancedMetric icon={<Archive className="h-4 w-4" />} label="Onayli arsiv" value={advancedPayroll.summary.archiveReadyCount} tone={advancedPayroll.summary.archiveReadyCount > 0 ? "success" : "info"} />
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-3">
+              <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                <h3 className="mb-2 text-xs font-semibold text-slate-200">Kapama kontrol listesi</h3>
+                <div className="space-y-2">
+                  {advancedPayroll.closingChecks.map((check) => (
+                    <div key={check.name} className="flex items-start gap-2 text-xs">
+                      {check.passed ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-emerald-400" /> : <XCircle className="mt-0.5 h-3.5 w-3.5 text-rose-400" />}
+                      <div>
+                        <p className="font-medium text-slate-200">{check.name}</p>
+                        <p className="mt-0.5 text-slate-500">{check.message}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                <h3 className="mb-2 text-xs font-semibold text-slate-200">Duzeltme gecmisi</h3>
+                <div className="space-y-2">
+                  {advancedPayroll.retroCorrections.length === 0 ? (
+                    <p className="text-xs text-slate-500">Bu donemde geriye donuk bordro duzeltmesi yok.</p>
+                  ) : advancedPayroll.retroCorrections.slice(0, 4).map((row) => (
+                    <div key={`${row.payrollId}:${row.correctedAt}`} className="rounded-md border border-slate-800 bg-slate-900/60 p-2 text-xs">
+                      <p className="font-medium text-slate-200">{row.employeeName}</p>
+                      <p className="mt-0.5 text-slate-500">{formatDate(row.correctedAt)} / {row.reason ?? "-"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                <h3 className="mb-2 text-xs font-semibold text-slate-200">Onayli bordro arsivi</h3>
+                <div className="space-y-2">
+                  {advancedPayroll.archive.length === 0 ? (
+                    <p className="text-xs text-slate-500">Arsivlenebilir odenmis bordro yok.</p>
+                  ) : advancedPayroll.archive.slice(0, 4).map((row) => (
+                    <div key={row.payrollId} className="flex items-center justify-between gap-3 rounded-md border border-slate-800 bg-slate-900/60 p-2 text-xs">
+                      <div>
+                        <p className="font-medium text-slate-200">{row.employeeName}</p>
+                        <p className="mt-0.5 text-slate-500">{formatDate(row.paidAt)} / {formatCurrency(row.netSalary)}</p>
+                      </div>
+                      <Badge variant={row.archiveStatus === "approved_archive" ? "success" : "warning"}>
+                        {row.archiveStatus === "approved_archive" ? "Arsiv hazir" : "Fis eksik"}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
 
       <DataTable
         columns={columns}
@@ -545,6 +637,17 @@ export function PayrollPage() {
           </div>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+function AdvancedMetric({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone: "success" | "warning" | "info" }) {
+  const toneClass = tone === "success" ? "text-emerald-400" : tone === "warning" ? "text-amber-400" : "text-sky-400";
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+      <div className={toneClass}>{icon}</div>
+      <span className="mt-2 block text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
+      <span className="mt-1 block truncate text-lg font-bold text-white">{value}</span>
     </div>
   );
 }

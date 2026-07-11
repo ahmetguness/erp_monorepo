@@ -28,6 +28,7 @@ productionRoutes.delete('/work-centers/:id', requirePermission('production', 'DE
 
 // BOM
 productionRoutes.get('/boms', requirePermission('production', 'READ'), BOMController.list);
+productionRoutes.get('/boms/:id/engineering', requirePermission('production', 'READ'), BOMController.engineering);
 productionRoutes.get('/boms/:id', requirePermission('production', 'READ'), BOMController.getById);
 productionRoutes.post('/boms', requirePermission('production', 'CREATE'), BOMController.create);
 productionRoutes.patch('/boms/:id', requirePermission('production', 'UPDATE'), BOMController.update);
