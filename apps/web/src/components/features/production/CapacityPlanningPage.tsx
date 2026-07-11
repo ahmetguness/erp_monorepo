@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, CalendarDays, Gauge, ListOrdered, RefreshCw } from "lucide-react";
+import { AlertTriangle, CalendarDays, Gauge, ListOrdered, RefreshCw, ShieldAlert, Wrench } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
@@ -38,12 +38,18 @@ function severityLabel(severity: CapacityBottleneckRow["severity"]): string {
   return "Normal";
 }
 
+function blockageLabel(reasons: string[]): string {
+  return reasons.length > 0 ? reasons.join(" / ") : "Yok";
+}
+
 export function CapacityPlanningPage() {
   const [horizonDays, setHorizonDays] = useState(14);
   const { data, isLoading, isFetching, refetch } = useCapacityPlanning({ horizonDays });
 
   const calendarRows = useMemo(
-    () => (data?.calendar ?? []).filter((row) => row.allocatedHours > 0 || row.utilizationPct >= 70).slice(0, 80),
+    () => (data?.calendar ?? [])
+      .filter((row) => row.allocatedHours > 0 || row.utilizationPct >= 70 || row.blockages.reasons.length > 0)
+      .slice(0, 80),
     [data?.calendar],
   );
 
@@ -70,7 +76,19 @@ export function CapacityPlanningPage() {
       header: "Kapasite",
       width: "130px",
       align: "right",
-      render: (row) => <span className="text-slate-400">{formatHours(row.capacityHours)}</span>,
+      render: (row) => (
+        <div className="text-right">
+          <span className="text-slate-400">{formatHours(row.capacityHours)}</span>
+          {row.blockedHours > 0 && <span className="block text-[11px] text-red-300">-{formatHours(row.blockedHours)}</span>}
+        </div>
+      ),
+    },
+    {
+      key: "maintenance",
+      header: "Bakim",
+      width: "90px",
+      align: "right",
+      render: (row) => <span className={row.maintenanceTaskCount > 0 ? "font-semibold text-amber-300" : "text-slate-500"}>{row.maintenanceTaskCount}</span>,
     },
     {
       key: "utilization",
@@ -123,6 +141,21 @@ export function CapacityPlanningPage() {
       width: "100px",
       align: "right",
       render: (row) => <span className="text-emerald-300">{formatHours(row.availableHours)}</span>,
+    },
+    {
+      key: "blockages",
+      header: "Blokaj",
+      width: "190px",
+      render: (row) => (
+        <div>
+          <span className={row.blockages.reasons.length > 0 ? "text-amber-300" : "text-slate-500"}>{blockageLabel(row.blockages.reasons)}</span>
+          {(row.blockages.downtimeHours > 0 || row.blockages.maintenanceTaskCount > 0) && (
+            <span className="block text-[11px] text-slate-500">
+              {formatHours(row.blockages.downtimeHours)} durus / {row.blockages.maintenanceTaskCount} bakim
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: "utilization",
@@ -206,7 +239,7 @@ export function CapacityPlanningPage() {
         }
       />
 
-      <div className="mb-5 grid gap-3 md:grid-cols-4">
+      <div className="mb-5 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
           <Gauge className="mb-2 h-4 w-4 text-sky-400" />
           <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">İş Merkezi</span>
@@ -226,6 +259,18 @@ export function CapacityPlanningPage() {
           <CalendarDays className="mb-2 h-4 w-4 text-emerald-400" />
           <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Takvim</span>
           <span className="mt-1 block text-2xl font-bold text-white">{summary?.calendarDays ?? horizonDays}</span>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <ShieldAlert className="mb-2 h-4 w-4 text-red-400" />
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Durus Blokaji</span>
+          <span className="mt-1 block text-2xl font-bold text-white">{summary?.downtimeBlockCount ?? 0}</span>
+          <span className="mt-1 block text-xs text-slate-500">{formatHours(summary?.blockedHours ?? 0)}</span>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <Wrench className="mb-2 h-4 w-4 text-amber-400" />
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Bakim / Vardiya</span>
+          <span className="mt-1 block text-2xl font-bold text-white">{summary?.maintenanceBlockCount ?? 0}</span>
+          <span className="mt-1 block text-xs text-slate-500">{summary?.shiftCount ?? 0} vardiya</span>
         </div>
       </div>
 

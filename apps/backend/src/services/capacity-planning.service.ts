@@ -1,4 +1,4 @@
-import { WorkOrderStatus } from '@prisma/client';
+import { TaskStatus, WorkOrderStatus } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
 
 type CapacityPlanningDbClient = PrismaClient;
@@ -13,6 +13,11 @@ const OPEN_OPERATION_STATUSES: readonly WorkOrderStatus[] = [
   WorkOrderStatus.PLANNED,
   WorkOrderStatus.IN_PROGRESS,
   WorkOrderStatus.PAUSED,
+];
+
+const OPEN_TASK_STATUSES: readonly TaskStatus[] = [
+  TaskStatus.TODO,
+  TaskStatus.IN_PROGRESS,
 ];
 
 const STANDARD_SHIFT_HOURS = 8;
@@ -42,6 +47,7 @@ export interface CapacityCalendarRow {
   availableHours: number;
   utilizationPct: number;
   shifts: CapacityShiftSummary;
+  blockages: CapacityBlockageSummary;
 }
 
 export interface CapacityBottleneckRow {
@@ -49,6 +55,8 @@ export interface CapacityBottleneckRow {
   capacityHours: number;
   allocatedHours: number;
   queuedHours: number;
+  blockedHours: number;
+  maintenanceTaskCount: number;
   totalLoadHours: number;
   availableHours: number;
   utilizationPct: number;
@@ -77,6 +85,10 @@ export interface CapacityPlanningSummary {
   horizonDays: number;
   workCenterCount: number;
   calendarDays: number;
+  shiftCount: number;
+  downtimeBlockCount: number;
+  maintenanceBlockCount: number;
+  blockedHours: number;
   bottleneckCount: number;
   criticalBottleneckCount: number;
   queuedOperationCount: number;
@@ -101,6 +113,13 @@ interface CapacityLookup {
   date: Date;
   capacity: unknown;
   allocated: unknown;
+}
+
+export interface CapacityBlockageSummary {
+  downtimeHours: number;
+  maintenanceTaskCount: number;
+  isFullyBlocked: boolean;
+  reasons: string[];
 }
 
 interface OperationLookup {
@@ -182,6 +201,32 @@ function buildShiftSummary(capacityHours: number): CapacityShiftSummary {
   };
 }
 
+function mergeReasons(...reasons: string[]): string[] {
+  return Array.from(new Set(reasons.filter((reason) => reason.trim().length > 0)));
+}
+
+function capacityBlockageSummary(
+  defaultCapacityHours: number,
+  capacityHours: number,
+  allocatedHours: number,
+  maintenanceTaskCount: number,
+): CapacityBlockageSummary {
+  const downtimeHours = Math.max(0, defaultCapacityHours - capacityHours);
+  const isFullyBlocked = defaultCapacityHours > 0 && capacityHours <= 0;
+  const reasons = mergeReasons(
+    downtimeHours > 0 ? 'Duruş / kapasite azaltımı' : '',
+    isFullyBlocked ? 'Tam gün blokaj' : '',
+    maintenanceTaskCount > 0 ? 'Bakım görevi' : '',
+    allocatedHours > capacityHours && capacityHours > 0 ? 'Aşırı yük' : '',
+  );
+  return {
+    downtimeHours: roundHours(downtimeHours),
+    maintenanceTaskCount,
+    isFullyBlocked,
+    reasons,
+  };
+}
+
 function operationEstimatedHours(operation: OperationLookup): number {
   const setupHours = decimalToNumber(operation.plannedSetupTime) / 60;
   const runHours = (decimalToNumber(operation.plannedRunTime) * decimalToNumber(operation.workOrder.plannedQty)) / 60;
@@ -214,7 +259,7 @@ export async function getCapacityPlanning(
   const { tenantId, horizonDays } = input;
   const { start, end, dates } = getPlanningWindow(horizonDays);
 
-  const [workCenters, capacityRows, operations] = await Promise.all([
+  const [workCenters, capacityRows, operations, maintenanceTasks] = await Promise.all([
     db.workCenter.findMany({
       where: { tenantId, isActive: true },
       select: { id: true, code: true, name: true, capacity: true },
@@ -265,6 +310,21 @@ export async function getCapacityPlanning(
       },
       orderBy: [{ workCenterId: 'asc' }, { stepOrder: 'asc' }],
     }),
+    db.task.findMany({
+      where: {
+        tenantId,
+        status: { in: [...OPEN_TASK_STATUSES] },
+        OR: [
+          { module: 'production' },
+          { module: 'service' },
+          { source: { startsWith: 'maintenance:' } },
+        ],
+      },
+      select: {
+        entityId: true,
+        source: true,
+      },
+    }),
   ]);
 
   const capacityByKey = new Map<string, CapacityLookup>();
@@ -272,20 +332,44 @@ export async function getCapacityPlanning(
     capacityByKey.set(capacityKey(row.workCenterId, row.date), row);
   }
 
+  const maintenanceTaskCountByWorkCenter = new Map<string, number>();
+  for (const task of maintenanceTasks) {
+    const workCenterId = task.entityId ?? task.source?.split(':')[1];
+    if (!workCenterId) continue;
+    maintenanceTaskCountByWorkCenter.set(workCenterId, (maintenanceTaskCountByWorkCenter.get(workCenterId) ?? 0) + 1);
+  }
+
   const calendar: CapacityCalendarRow[] = [];
-  const totalsByWorkCenter = new Map<string, { capacityHours: number; allocatedHours: number; queuedHours: number }>();
+  const totalsByWorkCenter = new Map<string, {
+    capacityHours: number;
+    allocatedHours: number;
+    queuedHours: number;
+    blockedHours: number;
+    maintenanceTaskCount: number;
+  }>();
+  let totalShiftCount = 0;
+  let downtimeBlockCount = 0;
+  let totalBlockedHours = 0;
 
   for (const workCenter of workCenters) {
-    const totals = { capacityHours: 0, allocatedHours: 0, queuedHours: 0 };
+    const maintenanceTaskCount = maintenanceTaskCountByWorkCenter.get(workCenter.id) ?? 0;
+    const totals = { capacityHours: 0, allocatedHours: 0, queuedHours: 0, blockedHours: 0, maintenanceTaskCount };
     totalsByWorkCenter.set(workCenter.id, totals);
 
     for (const date of dates) {
       const capacity = capacityByKey.get(capacityKey(workCenter.id, date));
-      const capacityHours = capacity ? decimalToNumber(capacity.capacity) : workCenterDailyCapacity(workCenter.capacity);
+      const defaultCapacityHours = workCenterDailyCapacity(workCenter.capacity);
+      const capacityHours = capacity ? decimalToNumber(capacity.capacity) : defaultCapacityHours;
       const allocatedHours = capacity ? decimalToNumber(capacity.allocated) : 0;
       const availableHours = Math.max(0, capacityHours - allocatedHours);
+      const shifts = buildShiftSummary(capacityHours);
+      const blockages = capacityBlockageSummary(defaultCapacityHours, capacityHours, allocatedHours, maintenanceTaskCount);
       totals.capacityHours += capacityHours;
       totals.allocatedHours += allocatedHours;
+      totals.blockedHours += blockages.downtimeHours;
+      totalShiftCount += shifts.shiftCount;
+      totalBlockedHours += blockages.downtimeHours;
+      if (blockages.downtimeHours > 0 || blockages.isFullyBlocked) downtimeBlockCount += 1;
 
       calendar.push({
         workCenter: workCenterRef(workCenter),
@@ -294,7 +378,8 @@ export async function getCapacityPlanning(
         allocatedHours: roundHours(allocatedHours),
         availableHours: roundHours(availableHours),
         utilizationPct: capacityHours > 0 ? roundPct((allocatedHours / capacityHours) * 100) : 0,
-        shifts: buildShiftSummary(capacityHours),
+        shifts,
+        blockages,
       });
     }
   }
@@ -343,6 +428,8 @@ export async function getCapacityPlanning(
       capacityHours: roundHours(totals.capacityHours),
       allocatedHours: roundHours(totals.allocatedHours),
       queuedHours: roundHours(totals.queuedHours),
+      blockedHours: roundHours(totals.blockedHours),
+      maintenanceTaskCount: totals.maintenanceTaskCount,
       totalLoadHours: roundHours(totalLoadHours),
       availableHours: roundHours(Math.max(0, totals.capacityHours - totals.allocatedHours)),
       utilizationPct: roundPct(utilizationPct),
@@ -355,6 +442,10 @@ export async function getCapacityPlanning(
       horizonDays,
       workCenterCount: workCenters.length,
       calendarDays: dates.length,
+      shiftCount: totalShiftCount,
+      downtimeBlockCount,
+      maintenanceBlockCount: Array.from(maintenanceTaskCountByWorkCenter.values()).reduce((sum, count) => sum + count, 0),
+      blockedHours: roundHours(totalBlockedHours),
       bottleneckCount: bottlenecks.filter((row) => row.severity !== 'normal').length,
       criticalBottleneckCount: bottlenecks.filter((row) => row.severity === 'critical').length,
       queuedOperationCount: sequence.length,

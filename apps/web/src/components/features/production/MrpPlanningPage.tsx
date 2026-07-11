@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Factory, Gauge, RefreshCw, ShoppingCart } from "lucide-react";
+import { CalendarDays, Factory, Gauge, RefreshCw, ShieldCheck, ShoppingCart, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/Badge";
@@ -52,7 +52,14 @@ export function MrpPlanningPage() {
       header: "Talep",
       width: "110px",
       align: "right",
-      render: (row) => <span className="text-slate-300">{formatQty(row.demandQty)}</span>,
+      render: (row) => (
+        <div className="text-right">
+          <span className="text-slate-300">{formatQty(row.demandQty)}</span>
+          <span className="block text-[11px] text-slate-500">
+            SO {formatQty(row.openSalesOrderQty)} / tahmin {formatQty(row.forecastDemandQty)}
+          </span>
+        </div>
+      ),
     },
     {
       key: "stock",
@@ -66,7 +73,12 @@ export function MrpPlanningPage() {
       header: "Öneri",
       width: "110px",
       align: "right",
-      render: (row) => <span className="font-semibold text-sky-300">{formatQty(row.recommendedQty)}</span>,
+      render: (row) => (
+        <div className="text-right">
+          <span className="font-semibold text-sky-300">{formatQty(row.recommendedQty)}</span>
+          <span className="block text-[11px] text-slate-500">min {formatQty(row.minOrderQty)}</span>
+        </div>
+      ),
     },
     {
       key: "capacity",
@@ -76,6 +88,17 @@ export function MrpPlanningPage() {
         row.capacityGapHours > 0
           ? <Badge variant="warning">{formatHours(row.capacityGapHours)} açık</Badge>
           : <Badge variant="success">Yeterli</Badge>
+      ),
+    },
+    {
+      key: "timing",
+      header: "Termin",
+      width: "120px",
+      render: (row) => (
+        <div>
+          <Badge variant={row.leadTimeDays > 14 ? "warning" : "info"}>{row.leadTimeDays} gun</Badge>
+          <span className="mt-1 block text-[11px] text-slate-500">{row.expectedAvailabilityDate}</span>
+        </div>
       ),
     },
   ];
@@ -107,7 +130,12 @@ export function MrpPlanningPage() {
       header: "Brüt İhtiyaç",
       width: "120px",
       align: "right",
-      render: (row) => <span className="text-slate-300">{formatQty(row.grossRequirementQty)}</span>,
+      render: (row) => (
+        <div className="text-right">
+          <span className="text-slate-300">{formatQty(row.grossRequirementQty)}</span>
+          <span className="block text-[11px] text-slate-500">emniyet {formatQty(row.safetyStockQty)}</span>
+        </div>
+      ),
     },
     {
       key: "available",
@@ -121,7 +149,23 @@ export function MrpPlanningPage() {
       header: "Öneri",
       width: "110px",
       align: "right",
-      render: (row) => <span className="font-semibold text-amber-300">{formatQty(row.recommendedQty)}</span>,
+      render: (row) => (
+        <div className="text-right">
+          <span className="font-semibold text-amber-300">{formatQty(row.recommendedQty)}</span>
+          <span className="block text-[11px] text-slate-500">min {formatQty(row.minOrderQty)}</span>
+        </div>
+      ),
+    },
+    {
+      key: "leadTime",
+      header: "Tedarik",
+      width: "120px",
+      render: (row) => (
+        <div>
+          <Badge variant={row.leadTimeDays > 14 ? "warning" : "info"}>{row.leadTimeDays} gun</Badge>
+          <span className="mt-1 block text-[11px] text-slate-500">{row.expectedReceiptDate}</span>
+        </div>
+      ),
     },
   ];
 
@@ -194,7 +238,7 @@ export function MrpPlanningPage() {
         }
       />
 
-      <div className="mb-5 grid gap-3 md:grid-cols-4">
+      <div className="mb-5 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
           <Factory className="mb-2 h-4 w-4 text-sky-400" />
           <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Üretim Önerisi</span>
@@ -211,6 +255,17 @@ export function MrpPlanningPage() {
           <span className="mt-1 block text-2xl font-bold text-white">{summary?.capacityGapCount ?? 0}</span>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <TrendingUp className="mb-2 h-4 w-4 text-emerald-400" />
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Satis Tahmini</span>
+          <span className="mt-1 block text-2xl font-bold text-white">{formatQty(summary?.forecastDemandQty ?? 0)}</span>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <ShieldCheck className="mb-2 h-4 w-4 text-violet-400" />
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Emniyet Stoku</span>
+          <span className="mt-1 block text-2xl font-bold text-white">{formatQty(summary?.safetyStockQty ?? 0)}</span>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <CalendarDays className="mb-2 h-4 w-4 text-slate-400" />
           <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Talep Ürünü</span>
           <span className="mt-1 block text-2xl font-bold text-white">{summary?.demandProducts ?? 0}</span>
           <span className="mt-1 block text-xs text-slate-500">{summary?.horizonDays ?? horizonDays} günlük pencere</span>

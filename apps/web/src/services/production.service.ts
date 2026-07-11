@@ -142,8 +142,15 @@ export interface MrpProductionRecommendation {
   product: MrpProductRef;
   bom: { id: string; name: string; version: string };
   demandQty: number;
+  openSalesOrderQty: number;
+  forecastDemandQty: number;
+  safetyStockQty: number;
   stockQty: number;
   openWorkOrderQty: number;
+  minOrderQty: number;
+  leadTimeDays: number;
+  suggestedOrderDate: string;
+  expectedAvailabilityDate: string;
   recommendedQty: number;
   capacityHours: number;
   capacityAvailableHours: number;
@@ -155,8 +162,13 @@ export interface MrpPurchaseRecommendation {
   source: 'finished_good_without_bom' | 'bom_component';
   parentProduct?: MrpProductRef;
   grossRequirementQty: number;
+  safetyStockQty: number;
   stockQty: number;
   openPurchaseQty: number;
+  minOrderQty: number;
+  leadTimeDays: number;
+  suggestedOrderDate: string;
+  expectedReceiptDate: string;
   recommendedQty: number;
 }
 
@@ -172,6 +184,10 @@ export interface MrpPlanningResult {
   summary: {
     horizonDays: number;
     demandProducts: number;
+    openSalesOrderQty: number;
+    forecastDemandQty: number;
+    safetyStockQty: number;
+    openPurchaseQty: number;
     productionRecommendationCount: number;
     purchaseRecommendationCount: number;
     capacityGapCount: number;
@@ -187,6 +203,13 @@ export interface CapacityShiftSummary {
   totalHours: number;
 }
 
+export interface CapacityBlockageSummary {
+  downtimeHours: number;
+  maintenanceTaskCount: number;
+  isFullyBlocked: boolean;
+  reasons: string[];
+}
+
 export interface CapacityCalendarRow {
   workCenter: MrpProductRef;
   date: string;
@@ -195,6 +218,7 @@ export interface CapacityCalendarRow {
   availableHours: number;
   utilizationPct: number;
   shifts: CapacityShiftSummary;
+  blockages: CapacityBlockageSummary;
 }
 
 export interface CapacityBottleneckRow {
@@ -202,6 +226,8 @@ export interface CapacityBottleneckRow {
   capacityHours: number;
   allocatedHours: number;
   queuedHours: number;
+  blockedHours: number;
+  maintenanceTaskCount: number;
   totalLoadHours: number;
   availableHours: number;
   utilizationPct: number;
@@ -233,6 +259,10 @@ export interface CapacityPlanningResult {
     horizonDays: number;
     workCenterCount: number;
     calendarDays: number;
+    shiftCount: number;
+    downtimeBlockCount: number;
+    maintenanceBlockCount: number;
+    blockedHours: number;
     bottleneckCount: number;
     criticalBottleneckCount: number;
     queuedOperationCount: number;
