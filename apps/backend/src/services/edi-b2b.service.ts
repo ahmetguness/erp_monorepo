@@ -2,12 +2,15 @@ import {
   ContactType,
   DeliveryNoteStatus,
   DeliveryNoteType,
+  EntityType,
   InvoiceStatus,
   InvoiceType,
   OrderStatus,
+  Priority,
   PurchaseOrderStatus,
 } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
+import { createTask } from './task.service.js';
 
 type EdiB2BDbClient = PrismaClient;
 
@@ -15,6 +18,8 @@ type EdiDirection = 'inbound' | 'outbound';
 type EdiDocumentType = 'sales_order' | 'purchase_order' | 'delivery_note' | 'invoice';
 type EdiExchangeStatus = 'ready' | 'draft' | 'in_progress' | 'completed' | 'blocked';
 type EdiPartnerStatus = 'active' | 'needs_mapping';
+type EdiMappingStatus = 'complete' | 'partial' | 'missing';
+type EdiSlaStatus = 'ok' | 'warning' | 'breached';
 
 interface PartnerContact {
   id: string;
@@ -75,14 +80,55 @@ export interface EdiB2BDocumentFlow {
 
 export interface EdiB2BExchangeItem {
   id: string;
+  itemKey: string;
   number: string;
   documentType: EdiDocumentType;
   direction: EdiDirection;
   partnerName: string;
+  partnerCode: string | null;
   status: EdiExchangeStatus;
   amount: number | null;
   documentDate: string;
   href: string;
+  issueKeys: string[];
+  retryEligible: boolean;
+  retryAction: string;
+  slaStatus: EdiSlaStatus;
+  slaDueAt: string;
+  slaRemainingMinutes: number;
+}
+
+export interface EdiB2BPartnerMapping {
+  contactId: string;
+  partnerName: string;
+  partnerCode: string | null;
+  mappingStatus: EdiMappingStatus;
+  mappedFieldCount: number;
+  requiredFieldCount: number;
+  missingFields: string[];
+  supportedDocumentTypes: EdiDocumentType[];
+  lastValidatedAt: string | null;
+}
+
+export interface EdiB2BErrorQueueItem {
+  itemKey: string;
+  documentNumber: string;
+  documentType: EdiDocumentType;
+  partnerName: string;
+  status: EdiExchangeStatus;
+  severity: 'high' | 'medium';
+  issues: string[];
+  retryEligible: boolean;
+  retryAction: string;
+  href: string;
+}
+
+export interface EdiB2BSlaSummary {
+  trackedCount: number;
+  breachedCount: number;
+  warningCount: number;
+  okCount: number;
+  averageAgeHours: number;
 }
 
 export interface EdiB2BEndpointExample {
@@ -96,9 +142,18 @@ export interface EdiB2BHubPayload {
   generatedAt: string;
   summary: EdiB2BSummary;
   partners: EdiB2BPartner[];
+  partnerMappings: EdiB2BPartnerMapping[];
   documentFlows: EdiB2BDocumentFlow[];
   exchangeQueue: EdiB2BExchangeItem[];
+  errorQueue: EdiB2BErrorQueueItem[];
+  sla: EdiB2BSlaSummary;
   endpointExamples: EdiB2BEndpointExample[];
+}
+
+export interface EdiB2BRetryTaskResult {
+  taskId: string;
+  itemKey: string;
+  assignedToId: string | null;
 }
 
 const SALES_READY_STATUSES: readonly OrderStatus[] = [
@@ -126,6 +181,10 @@ const INVOICE_READY_STATUSES: readonly InvoiceStatus[] = [
 
 function toIsoDate(value: Date): string {
   return value.toISOString();
+}
+
+function itemKey(documentType: EdiDocumentType, id: string): string {
+  return `${documentType}:${id}`;
 }
 
 function amountToNumber(value: { toString(): string } | null | undefined): number {
@@ -204,6 +263,143 @@ function partnerStatus(issues: Set<string>): EdiPartnerStatus {
   return issues.size > 0 ? 'needs_mapping' : 'active';
 }
 
+function documentSlaHours(documentType: EdiDocumentType): number {
+  if (documentType === 'delivery_note') return 12;
+  if (documentType === 'invoice') return 48;
+  return 24;
+}
+
+function calculateSla(documentType: EdiDocumentType, documentDate: Date, now: Date): Pick<EdiB2BExchangeItem, 'slaStatus' | 'slaDueAt' | 'slaRemainingMinutes'> {
+  const dueAt = new Date(documentDate.getTime() + documentSlaHours(documentType) * 3_600_000);
+  const remainingMinutes = Math.round((dueAt.getTime() - now.getTime()) / 60_000);
+  const warningWindowMinutes = Math.round(documentSlaHours(documentType) * 60 * 0.2);
+  const slaStatus: EdiSlaStatus = remainingMinutes < 0 ? 'breached' : remainingMinutes <= warningWindowMinutes ? 'warning' : 'ok';
+  return {
+    slaStatus,
+    slaDueAt: toIsoDate(dueAt),
+    slaRemainingMinutes: remainingMinutes,
+  };
+}
+
+function mappingIssues(contact: PartnerContact | null): string[] {
+  if (!contact) return ['partner_missing'];
+  const issues: string[] = [];
+  if (!contact.code) issues.push('partner_code_missing');
+  if (!contact.taxNumber) issues.push('tax_number_missing');
+  if (!contact.email) issues.push('edi_email_missing');
+  return issues;
+}
+
+function documentIssues(status: EdiExchangeStatus, contact: PartnerContact | null): string[] {
+  const issues = mappingIssues(contact);
+  if (status === 'draft') issues.push('document_draft');
+  if (status === 'blocked') issues.push('document_blocked');
+  return [...new Set(issues)];
+}
+
+function retryActionFor(issues: string[]): string {
+  if (issues.some((issue) => issue.endsWith('_missing'))) return 'complete_partner_mapping';
+  if (issues.includes('document_draft')) return 'approve_or_complete_document';
+  if (issues.includes('document_blocked')) return 'review_blocked_document';
+  return 'retry_exchange';
+}
+
+function isRetryEligible(status: EdiExchangeStatus, issues: string[]): boolean {
+  return status === 'blocked' || status === 'draft' || issues.length > 0;
+}
+
+function createExchangeItem(input: {
+  id: string;
+  number: string;
+  documentType: EdiDocumentType;
+  direction: EdiDirection;
+  contact: PartnerContact | null;
+  status: EdiExchangeStatus;
+  amount: number | null;
+  documentDate: Date;
+  href: string;
+  now: Date;
+}): EdiB2BExchangeItem {
+  const issueKeys = documentIssues(input.status, input.contact);
+  const retryEligible = isRetryEligible(input.status, issueKeys);
+  return {
+    id: input.id,
+    itemKey: itemKey(input.documentType, input.id),
+    number: input.number,
+    documentType: input.documentType,
+    direction: input.direction,
+    partnerName: input.contact?.name ?? 'Baglantisiz cari',
+    partnerCode: input.contact?.code ?? null,
+    status: input.status,
+    amount: input.amount,
+    documentDate: toIsoDate(input.documentDate),
+    href: input.href,
+    issueKeys,
+    retryEligible,
+    retryAction: retryActionFor(issueKeys),
+    ...calculateSla(input.documentType, input.documentDate, input.now),
+  };
+}
+
+function mappingStatus(missingFields: string[]): EdiMappingStatus {
+  if (missingFields.length === 0) return 'complete';
+  if (missingFields.length >= 3) return 'missing';
+  return 'partial';
+}
+
+function buildPartnerMappings(partners: EdiB2BPartner[]): EdiB2BPartnerMapping[] {
+  return partners.map((partner) => {
+    const missingFields = partner.issues;
+    const requiredFieldCount = 3;
+    return {
+      contactId: partner.contactId,
+      partnerName: partner.name,
+      partnerCode: partner.code,
+      mappingStatus: mappingStatus(missingFields),
+      mappedFieldCount: Math.max(requiredFieldCount - missingFields.length, 0),
+      requiredFieldCount,
+      missingFields,
+      supportedDocumentTypes: partner.directions.includes('inbound')
+        ? ['sales_order', 'invoice']
+        : ['purchase_order', 'delivery_note', 'invoice'],
+      lastValidatedAt: partner.lastActivityAt,
+    };
+  });
+}
+
+function buildErrorQueue(queue: EdiB2BExchangeItem[]): EdiB2BErrorQueueItem[] {
+  return queue
+    .filter((item) => item.status !== 'completed' && (item.retryEligible || item.slaStatus === 'breached'))
+    .map((item): EdiB2BErrorQueueItem => ({
+      itemKey: item.itemKey,
+      documentNumber: item.number,
+      documentType: item.documentType,
+      partnerName: item.partnerName,
+      status: item.status,
+      severity: item.slaStatus === 'breached' || item.status === 'blocked' ? 'high' : 'medium',
+      issues: item.slaStatus === 'breached' ? [...new Set([...item.issueKeys, 'sla_breached'])] : item.issueKeys,
+      retryEligible: item.retryEligible,
+      retryAction: item.retryAction,
+      href: item.href,
+    }))
+    .slice(0, 20);
+}
+
+function buildSlaSummary(queue: EdiB2BExchangeItem[], now: Date): EdiB2BSlaSummary {
+  const tracked = queue.filter((item) => item.status !== 'completed');
+  const totalAgeHours = tracked.reduce((sum, item) => {
+    const ageMs = now.getTime() - new Date(item.documentDate).getTime();
+    return sum + Math.max(ageMs / 3_600_000, 0);
+  }, 0);
+  return {
+    trackedCount: tracked.length,
+    breachedCount: tracked.filter((item) => item.slaStatus === 'breached').length,
+    warningCount: tracked.filter((item) => item.slaStatus === 'warning').length,
+    okCount: tracked.filter((item) => item.slaStatus === 'ok').length,
+    averageAgeHours: tracked.length === 0 ? 0 : Number((totalAgeHours / tracked.length).toFixed(1)),
+  };
+}
+
 function endpointExamples(): EdiB2BEndpointExample[] {
   return [
     {
@@ -237,6 +433,7 @@ export class EdiB2BService {
   constructor(private readonly db: EdiB2BDbClient) {}
 
   async getHub(tenantId: string): Promise<EdiB2BHubPayload> {
+    const now = new Date();
     const [
       salesOrders,
       purchaseOrders,
@@ -317,64 +514,68 @@ export class EdiB2BService {
 
     for (const order of salesOrders) {
       touchPartner(partners, order.contact, 'inbound', order.date, amountToNumber(order.totalGross), 'salesOrderCount');
-      queue.push({
+      queue.push(createExchangeItem({
         id: order.id,
         number: order.number,
         documentType: 'sales_order',
         direction: 'inbound',
-        partnerName: order.contact.name,
+        contact: order.contact,
         status: salesOrderStatus(order.status),
         amount: amountToNumber(order.totalGross),
-        documentDate: toIsoDate(order.date),
+        documentDate: order.date,
         href: `/dashboard/sales-orders/${order.id}`,
-      });
+        now,
+      }));
     }
 
     for (const order of purchaseOrders) {
       touchPartner(partners, order.contact, 'outbound', order.date, amountToNumber(order.totalGross), 'purchaseOrderCount');
-      queue.push({
+      queue.push(createExchangeItem({
         id: order.id,
         number: order.number,
         documentType: 'purchase_order',
         direction: 'outbound',
-        partnerName: order.contact.name,
+        contact: order.contact,
         status: purchaseOrderStatus(order.status),
         amount: amountToNumber(order.totalGross),
-        documentDate: toIsoDate(order.date),
+        documentDate: order.date,
         href: `/dashboard/purchase-orders/${order.id}`,
-      });
+        now,
+      }));
     }
 
     for (const note of deliveryNotes) {
       const direction: EdiDirection = note.type === DeliveryNoteType.INBOUND ? 'inbound' : 'outbound';
       touchPartner(partners, note.contact, direction, note.date, 0, 'deliveryNoteCount');
-      queue.push({
+      queue.push(createExchangeItem({
         id: note.id,
         number: note.number,
         documentType: 'delivery_note',
         direction,
-        partnerName: note.contact?.name ?? 'Baglantisiz cari',
+        contact: note.contact,
         status: deliveryNoteStatus(note.status),
         amount: null,
-        documentDate: toIsoDate(note.date),
+        documentDate: note.date,
         href: `/dashboard/delivery-notes/${note.id}`,
-      });
+        now,
+      }));
     }
 
     for (const invoice of invoices) {
       const direction: EdiDirection = invoice.type === InvoiceType.PURCHASE || invoice.type === InvoiceType.RETURN_SALES ? 'inbound' : 'outbound';
       touchPartner(partners, invoice.contact, direction, invoice.date, amountToNumber(invoice.totalGross), 'invoiceCount');
-      queue.push({
+      queue.push(createExchangeItem({
         id: invoice.id,
         number: invoice.number,
         documentType: 'invoice',
         direction,
-        partnerName: invoice.contact.name,
+        contact: invoice.contact,
         status: invoiceStatus(invoice.status),
         amount: amountToNumber(invoice.totalGross),
-        documentDate: toIsoDate(invoice.date),
+        documentDate: invoice.date,
         href: `/dashboard/invoices/${invoice.id}`,
-      });
+        now,
+      }));
     }
 
     const allPartnerRows = Array.from(partners.values())
@@ -397,6 +598,8 @@ export class EdiB2BService {
     const sortedQueue = queue
       .sort((a, b) => b.documentDate.localeCompare(a.documentDate))
       .slice(0, 18);
+    const errorQueue = buildErrorQueue(sortedQueue);
+    const sla = buildSlaSummary(sortedQueue, now);
 
     const blockedDocumentCount = blockedSalesOrderCount + blockedPurchaseOrderCount + blockedDeliveryNoteCount;
     const readyDocumentCount = readySalesOrderCount + readyPurchaseOrderCount + readyDeliveryNoteCount + readyInvoiceCount;
@@ -407,13 +610,14 @@ export class EdiB2BService {
       summary: {
         partnerCount: allPartnerRows.length,
         readyDocumentCount,
-        blockedDocumentCount,
+        blockedDocumentCount: errorQueue.length,
         inboundOrderCount: readySalesOrderCount,
         outboundDeliveryCount: readyDeliveryNoteCount,
         outboundInvoiceCount: readyInvoiceCount,
-        issueCount,
+        issueCount: issueCount + sla.breachedCount,
       },
       partners: partnerRows,
+      partnerMappings: buildPartnerMappings(partnerRows),
       documentFlows: [
         {
           key: 'sales_order',
@@ -465,7 +669,43 @@ export class EdiB2BService {
         },
       ],
       exchangeQueue: sortedQueue,
+      errorQueue,
+      sla,
       endpointExamples: endpointExamples(),
+    };
+  }
+
+  async createRetryTask(tenantId: string, userId: string, itemKeyValue: string): Promise<EdiB2BRetryTaskResult | null> {
+    const hub = await this.getHub(tenantId);
+    const item = hub.errorQueue.find((entry) => entry.itemKey === itemKeyValue);
+    if (!item) return null;
+
+    const owner = await this.db.tenantUser.findFirst({
+      where: { tenantId, isOwner: true, isActive: true, user: { isActive: true } },
+      select: { userId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const dueAt = new Date(Date.now() + 24 * 3_600_000);
+    const task = await createTask(tenantId, {
+      title: `B2B retry: ${item.documentNumber}`,
+      detail: `Partner: ${item.partnerName}. Aksiyon: ${item.retryAction}. Sorunlar: ${item.issues.join(', ')}.`,
+      type: 'GENERAL',
+      priority: item.severity === 'high' ? Priority.HIGH : Priority.MEDIUM,
+      module: 'data_exchange',
+      entityType: EntityType.OTHER,
+      entityId: item.itemKey,
+      href: item.href,
+      source: `edi-b2b-retry:${item.itemKey}`,
+      assignedToId: owner?.userId ?? null,
+      createdById: userId,
+      dueAt,
+    });
+
+    return {
+      taskId: task.id,
+      itemKey: item.itemKey,
+      assignedToId: task.assignedToId,
     };
   }
 }

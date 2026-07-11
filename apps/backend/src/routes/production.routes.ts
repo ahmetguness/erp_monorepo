@@ -8,10 +8,12 @@ import { WorkOrderController } from '../controllers/work-order.controller';
 import { MrpPlanningController } from '../controllers/mrp-planning.controller';
 import { CapacityPlanningController } from '../controllers/capacity-planning.controller';
 import { QualityControlController } from '../controllers/quality-control.controller';
+import { AdvancedProductionController } from '../controllers/advanced-production.controller';
 
 const productionRoutes = new Hono();
 
 productionRoutes.use('*', requireAccess(ACCESS_POLICIES.production));
+productionRoutes.get('/advanced', requirePermission('production', 'READ'), AdvancedProductionController.get);
 productionRoutes.get('/capacity-planning', requirePermission('production', 'READ'), CapacityPlanningController.get);
 productionRoutes.get('/mrp', requirePermission('production', 'READ'), MrpPlanningController.get);
 productionRoutes.get('/quality-control', requirePermission('production', 'READ'), QualityControlController.get);

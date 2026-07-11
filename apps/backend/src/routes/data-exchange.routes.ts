@@ -9,6 +9,7 @@ import { requirePermission } from '../middleware/requirePermission';
 const dataExchangeRoutes = new Hono();
 
 dataExchangeRoutes.get('/b2b', requireAccess(ACCESS_POLICIES.b2bIntegrations), requirePermission('marketplace', PermissionAction.READ), EdiB2BController.hub);
+dataExchangeRoutes.post('/b2b/retry', requireAccess(ACCESS_POLICIES.b2bIntegrations), requirePermission('marketplace', PermissionAction.UPDATE), EdiB2BController.retry);
 dataExchangeRoutes.get('/quality', DataExchangeController.quality);
 dataExchangeRoutes.post('/quality/:issueKey/task', DataExchangeController.createQualityTask);
 dataExchangeRoutes.get('/import/batches', DataExchangeController.batches);

@@ -192,6 +192,81 @@ export interface FieldServiceCheckpointInput {
   customerName?: string;
 }
 
+export type AdvancedServicePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type AdvancedSparePartReservationStatus = 'ready' | 'reserve_recommended' | 'shortage' | 'unlinked';
+
+export interface AdvancedServiceSummary {
+  horizonDays: number;
+  activeRequestCount: number;
+  slaBreachedCount: number;
+  routeReadyCount: number;
+  sparePartRiskCount: number;
+  portalTrackedContactCount: number;
+  customerWaitingCount: number;
+}
+
+export interface AdvancedSlaContractRow {
+  key: AdvancedServicePriority;
+  label: string;
+  limitHours: number;
+  activeRequestCount: number;
+  breachedCount: number;
+  avgRemainingMinutes: number;
+}
+
+export interface AdvancedTechnicianRouteStop {
+  serviceRequestId: string;
+  serviceRequestNumber: string;
+  subject: string;
+  city: string | null;
+  address: string | null;
+  priority: AdvancedServicePriority;
+  sequence: number;
+}
+
+export interface AdvancedTechnicianRouteRow {
+  assignedToId: string | null;
+  technicianLabel: string;
+  stopCount: number;
+  cityCount: number;
+  highPriorityCount: number;
+  routeScore: number;
+  nextStops: AdvancedTechnicianRouteStop[];
+}
+
+export interface AdvancedSparePartReservationRow {
+  serviceRequestId: string;
+  serviceRequestNumber: string;
+  productId: string | null;
+  productCode: string | null;
+  productName: string | null;
+  description: string;
+  requiredQty: number;
+  availableQty: number | null;
+  reservedQty: number;
+  shortageQty: number;
+  status: AdvancedSparePartReservationStatus;
+}
+
+export interface AdvancedPortalTrackingRow {
+  contactId: string;
+  contactName: string;
+  portalEnabled: boolean;
+  openRequestCount: number;
+  waitingCustomerCount: number;
+  lastCustomerActivityAt: string | null;
+  latestRequestHref: string | null;
+}
+
+export interface AdvancedServiceResult {
+  generatedAt: string;
+  summary: AdvancedServiceSummary;
+  slaContracts: AdvancedSlaContractRow[];
+  technicianRoutes: AdvancedTechnicianRouteRow[];
+  sparePartReservations: AdvancedSparePartReservationRow[];
+  portalTracking: AdvancedPortalTrackingRow[];
+}
+
 type PaginatedResponse<T> = { data: T[]; meta: { total: number; page: number; pageSize: number; totalPages: number } };
 
 // ─────────────────────────────────────────────
@@ -253,6 +328,9 @@ export const deleteServiceRequest = (id: string) => apiClient.delete(`/api/servi
 
 export const getMaintenanceManagement = (params?: { horizonDays?: number }) =>
   apiClient.get<{ data: MaintenanceManagementResult }>('/api/service/maintenance', { params }).then((r) => r.data.data);
+
+export const getAdvancedService = (params?: { horizonDays?: number }) =>
+  apiClient.get<{ data: AdvancedServiceResult }>('/api/service/advanced', { params }).then((r) => r.data.data);
 
 export const getFieldServiceMobileFlow = (params?: { assignedToId?: string }) =>
   apiClient.get<{ data: FieldServiceMobileFlow }>('/api/service/mobile-flow', { params }).then((r) => r.data.data);

@@ -133,6 +133,10 @@ export function useMaintenanceManagement(params?: { horizonDays?: number }) {
   return useQuery({ queryKey: ['service', 'maintenance', params], queryFn: () => svc.getMaintenanceManagement(params) });
 }
 
+export function useAdvancedService(params?: { horizonDays?: number }) {
+  return useQuery({ queryKey: ['service', 'advanced', params], queryFn: () => svc.getAdvancedService(params) });
+}
+
 export function useFieldServiceMobileFlow(params?: { assignedToId?: string }) {
   return useQuery({ queryKey: ['service', 'mobile-flow', params], queryFn: () => svc.getFieldServiceMobileFlow(params) });
 }

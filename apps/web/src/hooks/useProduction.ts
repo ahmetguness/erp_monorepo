@@ -47,6 +47,10 @@ export function useDeleteWorkCenter() {
 
 // ─── BOMs ─────────────────────────────────────
 
+export function useAdvancedProduction(params?: { horizonDays?: number }) {
+  return useQuery({ queryKey: ['production', 'advanced', params], queryFn: () => svc.getAdvancedProduction(params) });
+}
+
 export function useBOMs(params?: { page?: number; limit?: number }) {
   return useQuery({ queryKey: ['boms', params], queryFn: () => svc.getBOMs(params) });
 }

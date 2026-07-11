@@ -109,6 +109,8 @@ export type DataQualityTaskResult = z.infer<typeof DataQualityTaskResultSchema>;
 export const EdiB2BDirectionSchema = z.enum(['inbound', 'outbound']);
 export const EdiB2BDocumentTypeSchema = z.enum(['sales_order', 'purchase_order', 'delivery_note', 'invoice']);
 export const EdiB2BExchangeStatusSchema = z.enum(['ready', 'draft', 'in_progress', 'completed', 'blocked']);
+export const EdiB2BMappingStatusSchema = z.enum(['complete', 'partial', 'missing']);
+export const EdiB2BSlaStatusSchema = z.enum(['ok', 'warning', 'breached']);
 
 export const EdiB2BSummarySchema = z.object({
   partnerCount: z.coerce.number(),
@@ -148,14 +150,55 @@ export const EdiB2BDocumentFlowSchema = z.object({
 
 export const EdiB2BExchangeItemSchema = z.object({
   id: z.string(),
+  itemKey: z.string(),
   number: z.string(),
   documentType: EdiB2BDocumentTypeSchema,
   direction: EdiB2BDirectionSchema,
   partnerName: z.string(),
+  partnerCode: z.string().nullable(),
   status: EdiB2BExchangeStatusSchema,
   amount: z.coerce.number().nullable(),
   documentDate: z.string(),
   href: z.string(),
+  issueKeys: z.array(z.string()),
+  retryEligible: z.boolean(),
+  retryAction: z.string(),
+  slaStatus: EdiB2BSlaStatusSchema,
+  slaDueAt: z.string(),
+  slaRemainingMinutes: z.coerce.number(),
+});
+
+export const EdiB2BPartnerMappingSchema = z.object({
+  contactId: z.string(),
+  partnerName: z.string(),
+  partnerCode: z.string().nullable(),
+  mappingStatus: EdiB2BMappingStatusSchema,
+  mappedFieldCount: z.coerce.number(),
+  requiredFieldCount: z.coerce.number(),
+  missingFields: z.array(z.string()),
+  supportedDocumentTypes: z.array(EdiB2BDocumentTypeSchema),
+  lastValidatedAt: z.string().nullable(),
+});
+
+export const EdiB2BErrorQueueItemSchema = z.object({
+  itemKey: z.string(),
+  documentNumber: z.string(),
+  documentType: EdiB2BDocumentTypeSchema,
+  partnerName: z.string(),
+  status: EdiB2BExchangeStatusSchema,
+  severity: z.enum(['high', 'medium']),
+  issues: z.array(z.string()),
+  retryEligible: z.boolean(),
+  retryAction: z.string(),
+  href: z.string(),
+});
+
+export const EdiB2BSlaSummarySchema = z.object({
+  trackedCount: z.coerce.number(),
+  breachedCount: z.coerce.number(),
+  warningCount: z.coerce.number(),
+  okCount: z.coerce.number(),
+  averageAgeHours: z.coerce.number(),
 });
 
 export const EdiB2BEndpointExampleSchema = z.object({
@@ -169,13 +212,25 @@ export const EdiB2BHubSchema = z.object({
   generatedAt: z.string(),
   summary: EdiB2BSummarySchema,
   partners: z.array(EdiB2BPartnerSchema),
+  partnerMappings: z.array(EdiB2BPartnerMappingSchema),
   documentFlows: z.array(EdiB2BDocumentFlowSchema),
   exchangeQueue: z.array(EdiB2BExchangeItemSchema),
+  errorQueue: z.array(EdiB2BErrorQueueItemSchema),
+  sla: EdiB2BSlaSummarySchema,
   endpointExamples: z.array(EdiB2BEndpointExampleSchema),
 });
 
 export type EdiB2BHub = z.infer<typeof EdiB2BHubSchema>;
 export type EdiB2BExchangeStatus = z.infer<typeof EdiB2BExchangeStatusSchema>;
+export type EdiB2BSlaStatus = z.infer<typeof EdiB2BSlaStatusSchema>;
+
+export const EdiB2BRetryTaskResultSchema = z.object({
+  taskId: z.string(),
+  itemKey: z.string(),
+  assignedToId: z.string().nullable(),
+});
+
+export type EdiB2BRetryTaskResult = z.infer<typeof EdiB2BRetryTaskResultSchema>;
 
 export interface ImportPreviewInput {
   entity: DataExchangeEntity;
@@ -216,6 +271,11 @@ export async function createDataQualityTask(issueKey: string): Promise<DataQuali
 export async function getEdiB2BHub(): Promise<EdiB2BHub> {
   const res = await apiClient.get('/api/data-exchange/b2b');
   return safeParse(SingleResponseSchema(EdiB2BHubSchema), res.data, 'getEdiB2BHub').data;
+}
+
+export async function createEdiB2BRetryTask(itemKey: string): Promise<EdiB2BRetryTaskResult> {
+  const res = await apiClient.post('/api/data-exchange/b2b/retry', { itemKey });
+  return safeParse(SingleResponseSchema(EdiB2BRetryTaskResultSchema), res.data, 'createEdiB2BRetryTask').data;
 }
 
 export async function downloadTemplate(entity: DataExchangeEntity): Promise<Blob> {

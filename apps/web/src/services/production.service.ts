@@ -238,6 +238,89 @@ export interface QualityControlResult {
   correctiveActions: QualityCorrectiveActionRow[];
 }
 
+export interface AdvancedProductionSummary {
+  horizonDays: number;
+  openWorkOrderCount: number;
+  capacityRiskCount: number;
+  qualityRiskCount: number;
+  maintenanceActionCount: number;
+  scrapRatePct: number;
+  operationCostVariancePct: number;
+}
+
+export interface AdvancedCapacityPlanRow {
+  workCenter: MrpProductRef;
+  capacityHours: number;
+  allocatedHours: number;
+  queuedHours: number;
+  utilizationPct: number;
+  shiftCount: number;
+  recommendation: string;
+}
+
+export interface AdvancedQualitySignalRow {
+  workOrderId: string;
+  workOrderNumber: string;
+  product: MrpProductRef;
+  signal: 'scrap' | 'under_production' | 'material_shortage' | 'paused_order';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  detail: string;
+}
+
+export interface AdvancedMaintenanceRow {
+  workCenter: MrpProductRef;
+  openTaskCount: number;
+  utilizationPct: number;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  recommendation: string;
+}
+
+export interface AdvancedScrapRow {
+  workOrderId: string;
+  workOrderNumber: string;
+  product: MrpProductRef;
+  plannedQty: number;
+  producedQty: number;
+  scrapQty: number;
+  scrapRatePct: number;
+  scrapCost: number;
+  reason: string | null;
+}
+
+export interface AdvancedShiftRow {
+  workCenter: MrpProductRef;
+  date: string;
+  capacityHours: number;
+  shiftCount: number;
+  hoursPerShift: number;
+  utilizationPct: number;
+}
+
+export interface AdvancedOperationCostRow {
+  operationId: string;
+  workOrderId: string;
+  workOrderNumber: string;
+  operationName: string;
+  workCenter: MrpProductRef;
+  plannedHours: number;
+  actualHours: number;
+  laborCost: number;
+  overheadCost: number;
+  totalCost: number;
+  variancePct: number;
+}
+
+export interface AdvancedProductionResult {
+  generatedAt: string;
+  summary: AdvancedProductionSummary;
+  capacityPlan: AdvancedCapacityPlanRow[];
+  qualitySignals: AdvancedQualitySignalRow[];
+  maintenancePlan: AdvancedMaintenanceRow[];
+  scrapAnalysis: AdvancedScrapRow[];
+  shiftPlan: AdvancedShiftRow[];
+  operationCosts: AdvancedOperationCostRow[];
+}
+
 // ─────────────────────────────────────────────
 // Work Centers
 // ─────────────────────────────────────────────
@@ -256,6 +339,9 @@ export const updateWorkCenter = (id: string, data: { name?: string; description?
 
 export const deleteWorkCenter = (id: string) =>
   apiClient.delete(`/api/production/work-centers/${id}`);
+
+export const getAdvancedProduction = (params?: { horizonDays?: number }) =>
+  apiClient.get<{ data: AdvancedProductionResult }>('/api/production/advanced', { params }).then((r) => r.data.data);
 
 // ─────────────────────────────────────────────
 // BOMs

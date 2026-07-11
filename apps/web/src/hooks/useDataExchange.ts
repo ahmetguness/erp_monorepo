@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  createEdiB2BRetryTask,
   createDataQualityTask,
   downloadTemplate,
   exportData,
@@ -43,6 +44,17 @@ export function useEdiB2BHub() {
   return useQuery({
     queryKey: ['data-exchange', 'b2b'],
     queryFn: getEdiB2BHub,
+  });
+}
+
+export function useCreateEdiB2BRetryTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemKey: string) => createEdiB2BRetryTask(itemKey),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['data-exchange', 'b2b'] });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+    },
   });
 }
 
