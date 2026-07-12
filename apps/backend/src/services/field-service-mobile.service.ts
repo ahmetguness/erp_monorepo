@@ -75,6 +75,9 @@ export interface FieldServiceJobRow {
   signatureCount: number;
   serviceFormSubmitted: boolean;
   customerApproved: boolean;
+  offlineReady: boolean;
+  pendingSyncCount: number;
+  lastOfflineSyncAt: string | null;
   steps: FieldServiceStep[];
   href: string;
 }
@@ -87,6 +90,8 @@ export interface FieldServiceMobileSummary {
   signatureReadyCount: number;
   formSubmittedCount: number;
   customerApprovedCount: number;
+  offlineReadyCount: number;
+  pendingSyncCount: number;
 }
 
 export interface FieldServiceMobileResult {
@@ -107,6 +112,7 @@ interface ServiceRequestLookup {
   customerAsset: FieldServiceAssetRef | null;
   activities: Array<{
     notes: string | null;
+    createdAt: Date;
   }>;
 }
 
@@ -118,6 +124,12 @@ interface AttachmentLookup {
 
 function isCheckpoint(activity: ServiceRequestLookup['activities'][number], kind: FieldServiceCheckpointKind): boolean {
   return activity.notes === `FIELD_SERVICE:${kind}` || (activity.notes?.startsWith(`FIELD_SERVICE:${kind}:`) ?? false);
+}
+
+function offlineSyncedAt(activity: ServiceRequestLookup['activities'][number]): Date | null {
+  const notes = activity.notes ?? '';
+  if (!notes.startsWith('FIELD_SERVICE:VISIT_NOTE:') || !notes.includes('offline-sync')) return null;
+  return activity.createdAt;
 }
 
 function photoCount(attachments: readonly AttachmentLookup[]): number {
@@ -143,6 +155,8 @@ function buildStep(input: {
   signatures: number;
   serviceFormSubmitted: boolean;
   customerApproved: boolean;
+  offlineReady: boolean;
+  pendingSyncCount: number;
 }): FieldServiceStep[] {
   return [
     {
@@ -173,7 +187,9 @@ function buildStep(input: {
       key: 'service_form',
       label: 'Servis formu',
       status: input.serviceFormSubmitted ? 'complete' : 'pending',
-      detail: input.serviceFormSubmitted ? 'Form kaydedildi' : 'Form bekleniyor',
+      detail: input.serviceFormSubmitted
+        ? `Form kaydedildi${input.pendingSyncCount > 0 ? ` / ${input.pendingSyncCount} offline kuyruk` : ''}`
+        : input.offlineReady ? 'Offline form hazir' : 'Form bekleniyor',
     },
     {
       key: 'customer_approval',
@@ -215,7 +231,7 @@ export async function getFieldServiceMobileFlow(
       contact: { select: { id: true, code: true, name: true, phone: true, address: true, city: true } },
       customerAsset: { select: { id: true, name: true, brand: true, model: true, serialNo: true } },
       activities: {
-        select: { notes: true },
+        select: { notes: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
         take: 30,
       },
@@ -249,6 +265,13 @@ export async function getFieldServiceMobileFlow(
     const signatures = signatureCount(requestAttachments);
     const serviceFormSubmitted = request.activities.some((activity) => isCheckpoint(activity, 'SERVICE_FORM'));
     const customerApproved = request.activities.some((activity) => isCheckpoint(activity, 'CUSTOMER_APPROVAL'));
+    const offlineReady = Boolean(request.assignedToId && (request.contact?.address || request.contact?.city));
+    const missingMediaCount = (photos > 0 ? 0 : 1) + (signatures > 0 ? 0 : 1) + (serviceFormSubmitted ? 0 : 1);
+    const pendingSyncCount = offlineReady ? missingMediaCount : 0;
+    const lastOfflineSyncAt = request.activities
+      .map(offlineSyncedAt)
+      .filter((value): value is Date => value !== null)
+      .sort((left, right) => right.getTime() - left.getTime())[0]?.toISOString() ?? null;
     const routeStop: FieldServiceRouteStop = {
       serviceRequestId: request.id,
       serviceRequestNumber: request.number,
@@ -274,6 +297,9 @@ export async function getFieldServiceMobileFlow(
       signatureCount: signatures,
       serviceFormSubmitted,
       customerApproved,
+      offlineReady,
+      pendingSyncCount,
+      lastOfflineSyncAt,
       steps: buildStep({
         assignedToId: request.assignedToId,
         contact: request.contact,
@@ -281,6 +307,8 @@ export async function getFieldServiceMobileFlow(
         signatures,
         serviceFormSubmitted,
         customerApproved,
+        offlineReady,
+        pendingSyncCount,
       }),
       href: `/dashboard/service/requests/${request.id}`,
     };
@@ -295,6 +323,8 @@ export async function getFieldServiceMobileFlow(
       signatureReadyCount: jobs.filter((job) => job.signatureCount > 0).length,
       formSubmittedCount: jobs.filter((job) => job.serviceFormSubmitted).length,
       customerApprovedCount: jobs.filter((job) => job.customerApproved).length,
+      offlineReadyCount: jobs.filter((job) => job.offlineReady).length,
+      pendingSyncCount: jobs.reduce((sum, job) => sum + job.pendingSyncCount, 0),
     },
     route: jobs.map((job) => job.routeStop),
     jobs,

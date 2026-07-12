@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { useAdvancedService } from "@/hooks/useService";
 import type {
+  AdvancedAutoAssignmentRow,
   AdvancedServicePriority,
   AdvancedSparePartReservationRow,
   AdvancedSparePartReservationStatus,
@@ -54,6 +55,12 @@ function partTitle(row: AdvancedSparePartReservationRow): string {
   return row.productName ?? row.description;
 }
 
+function assignmentTone(row: AdvancedAutoAssignmentRow): BadgeVariant {
+  if (row.slaRemainingMinutes < 0) return "danger";
+  if (row.slaRemainingMinutes <= 120) return "warning";
+  return row.score >= 70 ? "success" : "info";
+}
+
 export function AdvancedServicePage() {
   const [horizonDays, setHorizonDays] = useState(30);
   const { data, isLoading, isFetching, refetch } = useAdvancedService({ horizonDays });
@@ -93,6 +100,8 @@ export function AdvancedServicePage() {
           <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             <MetricCard icon={<ShieldCheck className="h-4 w-4" />} label="Aktif talep" value={data.summary.activeRequestCount} />
             <MetricCard icon={<AlertTriangle className="h-4 w-4" />} label="SLA ihlali" value={data.summary.slaBreachedCount} tone="danger" />
+            <MetricCard icon={<Gauge className="h-4 w-4" />} label="SLA uyari" value={data.summary.slaWarningCount} tone="warning" />
+            <MetricCard icon={<UserCheck className="h-4 w-4" />} label="Atama onerisi" value={data.summary.autoAssignmentSuggestionCount} />
             <MetricCard icon={<Route className="h-4 w-4" />} label="Rota hazir" value={data.summary.routeReadyCount} />
             <MetricCard icon={<PackageCheck className="h-4 w-4" />} label="Parca riski" value={data.summary.sparePartRiskCount} tone="warning" />
             <MetricCard icon={<UserCheck className="h-4 w-4" />} label="Portal cari" value={data.summary.portalTrackedContactCount} />
@@ -149,6 +158,37 @@ export function AdvancedServicePage() {
                       ))}
                     </div>
                   </div>
+                ))}
+              </div>
+            </Panel>
+          </section>
+
+          <section>
+            <Panel title="Otomatik atama onerileri">
+              <div className="space-y-2">
+                {data.autoAssignments.length === 0 ? (
+                  <EmptyText text="Atama bekleyen servis talebi yok." />
+                ) : data.autoAssignments.map((row) => (
+                  <Link
+                    key={row.serviceRequestId}
+                    href={`/dashboard/service/requests/${row.serviceRequestId}`}
+                    className="grid gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-3 hover:border-sky-500/50 md:grid-cols-[1fr_auto_auto]"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-mono text-[11px] text-sky-300">{row.serviceRequestNumber}</span>
+                      <p className="mt-1 truncate text-sm font-semibold text-slate-100">{row.subject}</p>
+                      <p className="mt-1 text-xs text-slate-500">{row.reason}</p>
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      <span className="block text-slate-500">Onerilen</span>
+                      <span className="font-medium text-slate-200">{row.suggestedAssigneeLabel}</span>
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      <Badge variant={priorityVariant(row.priority)}>{row.priority}</Badge>
+                      <Badge variant={assignmentTone(row)}>{formatMinutes(row.slaRemainingMinutes)}</Badge>
+                      <Badge variant="info">{row.score}</Badge>
+                    </div>
+                  </Link>
                 ))}
               </div>
             </Panel>

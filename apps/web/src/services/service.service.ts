@@ -168,6 +168,9 @@ export interface FieldServiceJobRow {
   signatureCount: number;
   serviceFormSubmitted: boolean;
   customerApproved: boolean;
+  offlineReady: boolean;
+  pendingSyncCount: number;
+  lastOfflineSyncAt: string | null;
   steps: FieldServiceStep[];
   href: string;
 }
@@ -181,6 +184,8 @@ export interface FieldServiceMobileFlow {
     signatureReadyCount: number;
     formSubmittedCount: number;
     customerApprovedCount: number;
+    offlineReadyCount: number;
+    pendingSyncCount: number;
   };
   route: FieldServiceRouteStop[];
   jobs: FieldServiceJobRow[];
@@ -199,6 +204,8 @@ export interface AdvancedServiceSummary {
   horizonDays: number;
   activeRequestCount: number;
   slaBreachedCount: number;
+  slaWarningCount: number;
+  autoAssignmentSuggestionCount: number;
   routeReadyCount: number;
   sparePartRiskCount: number;
   portalTrackedContactCount: number;
@@ -234,6 +241,19 @@ export interface AdvancedTechnicianRouteRow {
   nextStops: AdvancedTechnicianRouteStop[];
 }
 
+export interface AdvancedAutoAssignmentRow {
+  serviceRequestId: string;
+  serviceRequestNumber: string;
+  subject: string;
+  priority: AdvancedServicePriority;
+  city: string | null;
+  suggestedAssigneeId: string | null;
+  suggestedAssigneeLabel: string;
+  reason: string;
+  slaRemainingMinutes: number;
+  score: number;
+}
+
 export interface AdvancedSparePartReservationRow {
   serviceRequestId: string;
   serviceRequestNumber: string;
@@ -263,6 +283,7 @@ export interface AdvancedServiceResult {
   summary: AdvancedServiceSummary;
   slaContracts: AdvancedSlaContractRow[];
   technicianRoutes: AdvancedTechnicianRouteRow[];
+  autoAssignments: AdvancedAutoAssignmentRow[];
   sparePartReservations: AdvancedSparePartReservationRow[];
   portalTracking: AdvancedPortalTrackingRow[];
 }

@@ -27,6 +27,8 @@ settingsRoutes.post('/security/scim/generate-token', requirePermission('settings
 settingsRoutes.get('/security/siem', requirePermission('settings', 'READ'), SettingsController.getSiemSettings);
 settingsRoutes.post('/security/siem', requirePermission('settings', 'UPDATE'), SettingsController.updateSiemSettings);
 settingsRoutes.post('/security/siem/test-export', requirePermission('settings', 'UPDATE'), SettingsController.runSiemExportTest);
+settingsRoutes.get('/security/audit-log-full', requirePermission('settings', 'READ'), SettingsController.getAuditLogFullStatus);
+settingsRoutes.post('/security/audit-log-full', requirePermission('settings', 'UPDATE'), SettingsController.updateAuditLogFullSettings);
 settingsRoutes.get('/security/data-retention', requirePermission('settings', 'READ'), SettingsController.getDataRetentionSettings);
 settingsRoutes.post('/security/data-retention', requirePermission('settings', 'UPDATE'), SettingsController.updateDataRetentionSettings);
 settingsRoutes.get('/security/data-retention/preview', requirePermission('settings', 'READ'), SettingsController.previewDataRetention);

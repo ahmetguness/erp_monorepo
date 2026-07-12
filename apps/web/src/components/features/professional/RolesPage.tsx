@@ -129,7 +129,8 @@ const ROLE_PRESETS: RolePreset[] = [
     label: 'IK',
     description: 'Personel, izin, evrak, bordro okuma ve gorev takip rolu.',
     permissions: [
-      ...permissionsFor(['hr', 'payroll', 'tasks', 'notifications', 'attachments', 'mail'], [READ, CREATE, UPDATE]),
+      ...permissionsFor(['hr', 'tasks', 'notifications', 'attachments', 'mail'], [READ, CREATE, UPDATE]),
+      ...permissionsFor(['payroll'], [READ, CREATE, UPDATE, APPROVE, EXPORT]),
       ...permissionsFor(['reporting'], [READ]),
       { module: 'hr', action: APPROVE },
     ],
@@ -139,7 +140,7 @@ const ROLE_PRESETS: RolePreset[] = [
     label: 'Yonetici',
     description: 'Ciro, karlilik, nakit akisi, raporlar ve onaylar icin yonetici rolu.',
     permissions: [
-      ...permissionsFor(['accounting', 'invoicing', 'inventory', 'contacts', 'purchasing', 'service', 'hr', 'reporting', 'approvals', 'notifications', 'tasks', 'attachments', 'mail'], [READ, EXPORT]),
+      ...permissionsFor(['accounting', 'invoicing', 'inventory', 'contacts', 'purchasing', 'service', 'hr', 'payroll', 'reporting', 'approvals', 'notifications', 'tasks', 'attachments', 'mail'], [READ, EXPORT]),
       { module: 'approvals', action: APPROVE },
     ],
   },

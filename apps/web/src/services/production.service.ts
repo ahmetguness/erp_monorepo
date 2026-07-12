@@ -278,6 +278,9 @@ export type QualityIssueSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type QualityIssueType = 'scrap' | 'under_production' | 'material_shortage' | 'paused_order';
 export type QualityActionStatus = 'open' | 'in_progress' | 'done' | 'suggested';
 export type QualityActionPriority = 'low' | 'medium' | 'high' | 'critical';
+export type QualityAcceptanceStatus = 'passed' | 'watch' | 'failed';
+export type QualityQuarantineStatus = 'pending' | 'blocked' | 'released';
+export type SupplierQualityRisk = 'low' | 'medium' | 'high';
 
 export interface QualityChecklistItem {
   key: string;
@@ -324,6 +327,37 @@ export interface QualityCorrectiveActionRow {
   dueAt: string | null;
 }
 
+export interface QualityAcceptanceCriteriaRow {
+  key: string;
+  label: string;
+  passedCount: number;
+  failedCount: number;
+  totalCount: number;
+  passRatePct: number;
+  status: QualityAcceptanceStatus;
+}
+
+export interface QualityQuarantineStockRow {
+  id: string;
+  product: MrpProductRef;
+  workOrderId: string;
+  workOrderNumber: string;
+  sourceIssueId: string;
+  sourceIssueTitle: string;
+  quantity: number;
+  status: QualityQuarantineStatus;
+  reason: string;
+}
+
+export interface SupplierQualityScoreRow {
+  supplier: MrpProductRef;
+  qualityScore: number;
+  acceptanceRatePct: number;
+  returnRatePct: number;
+  totalOrders: number;
+  risk: SupplierQualityRisk;
+}
+
 export interface QualityControlResult {
   summary: {
     horizonDays: number;
@@ -333,11 +367,17 @@ export interface QualityControlResult {
     nonconformityCount: number;
     criticalIssueCount: number;
     correctiveActionCount: number;
+    failedCriteriaCount: number;
+    quarantineQuantity: number;
+    supplierQualityRiskCount: number;
   };
   inputForms: QualityFormRow[];
   outputForms: QualityFormRow[];
   nonconformities: QualityNonconformityRow[];
   correctiveActions: QualityCorrectiveActionRow[];
+  acceptanceCriteria: QualityAcceptanceCriteriaRow[];
+  quarantineStock: QualityQuarantineStockRow[];
+  supplierQualityScores: SupplierQualityScoreRow[];
 }
 
 export interface AdvancedProductionSummary {

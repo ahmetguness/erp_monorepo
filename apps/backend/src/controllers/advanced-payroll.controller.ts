@@ -14,8 +14,9 @@ function requirePeriod(value: string | undefined): string {
 export const AdvancedPayrollController = {
   async get(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
     const period = requirePeriod(c.req.query('period'));
-    const data = await getAdvancedPayroll(prisma, { tenantId, period });
+    const data = await getAdvancedPayroll(prisma, { tenantId, period, userId });
     return c.json({ data });
   },
 };

@@ -348,6 +348,49 @@ export async function runSiemExportTest(): Promise<SiemExportResult> {
   return safeParse(SingleResponseSchema(SiemExportResultSchema), res.data, 'runSiemExportTest').data;
 }
 
+export const AuditLogFullStatusSchema = z.object({
+  generatedAt: z.string(),
+  auditLevel: z.string(),
+  retention: z.object({
+    enabled: z.boolean(),
+    auditLogRule: z.object({
+      retentionDays: z.coerce.number(),
+      action: z.string(),
+      legalArchive: z.boolean(),
+      enabled: z.boolean(),
+    }).nullable(),
+  }),
+  exportApi: z.object({
+    enabled: z.boolean(),
+    maxRows: z.coerce.number(),
+    href: z.string(),
+  }),
+  siemPush: z.object({
+    enabled: z.boolean(),
+    destinationType: z.string(),
+    minSeverity: z.string(),
+    lastExportAt: z.string().nullable(),
+    lastStatus: z.string().nullable(),
+  }),
+  immutable: z.object({
+    enabled: z.boolean(),
+    lastLogId: z.string().nullable(),
+    lastHash: z.string().nullable(),
+  }),
+});
+
+export type AuditLogFullStatus = z.infer<typeof AuditLogFullStatusSchema>;
+
+export async function getAuditLogFullStatus(): Promise<AuditLogFullStatus> {
+  const res = await apiClient.get('/api/settings/security/audit-log-full');
+  return safeParse(SingleResponseSchema(AuditLogFullStatusSchema), res.data, 'getAuditLogFullStatus').data;
+}
+
+export async function updateAuditLogFullSettings(data: { immutableEnabled: boolean }): Promise<AuditLogFullStatus> {
+  const res = await apiClient.post('/api/settings/security/audit-log-full', data);
+  return safeParse(SingleResponseSchema(AuditLogFullStatusSchema), res.data, 'updateAuditLogFullSettings').data;
+}
+
 export const RetentionModuleKeySchema = z.enum([
   'audit_logs',
   'contacts',

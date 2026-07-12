@@ -53,6 +53,8 @@ export interface AdvancedServiceSummary {
   horizonDays: number;
   activeRequestCount: number;
   slaBreachedCount: number;
+  slaWarningCount: number;
+  autoAssignmentSuggestionCount: number;
   routeReadyCount: number;
   sparePartRiskCount: number;
   portalTrackedContactCount: number;
@@ -86,6 +88,19 @@ export interface AdvancedTechnicianRouteRow {
   }>;
 }
 
+export interface AdvancedAutoAssignmentRow {
+  serviceRequestId: string;
+  serviceRequestNumber: string;
+  subject: string;
+  priority: Priority;
+  city: string | null;
+  suggestedAssigneeId: string | null;
+  suggestedAssigneeLabel: string;
+  reason: string;
+  slaRemainingMinutes: number;
+  score: number;
+}
+
 export interface AdvancedSparePartReservationRow {
   serviceRequestId: string;
   serviceRequestNumber: string;
@@ -115,6 +130,7 @@ export interface AdvancedServiceResult {
   summary: AdvancedServiceSummary;
   slaContracts: AdvancedSlaContractRow[];
   technicianRoutes: AdvancedTechnicianRouteRow[];
+  autoAssignments: AdvancedAutoAssignmentRow[];
   sparePartReservations: AdvancedSparePartReservationRow[];
   portalTracking: AdvancedPortalTrackingRow[];
 }
@@ -244,6 +260,66 @@ function buildTechnicianRoutes(requests: readonly ServiceRequestLookup[]): Advan
     .slice(0, 10);
 }
 
+function technicianLoadMap(routes: readonly AdvancedTechnicianRouteRow[]): Map<string, AdvancedTechnicianRouteRow> {
+  const result = new Map<string, AdvancedTechnicianRouteRow>();
+  for (const route of routes) {
+    if (route.assignedToId) result.set(route.assignedToId, route);
+  }
+  return result;
+}
+
+function routeCityOverlap(route: AdvancedTechnicianRouteRow, city: string | null): number {
+  if (!city) return 0;
+  return route.nextStops.some((stop) => stop.city === city) ? 1 : 0;
+}
+
+function buildAutoAssignments(
+  requests: readonly ServiceRequestLookup[],
+  routes: readonly AdvancedTechnicianRouteRow[],
+): AdvancedAutoAssignmentRow[] {
+  const assignedRoutes = [...technicianLoadMap(routes).values()];
+  const fallbackRoute = assignedRoutes.sort((left, right) => left.stopCount - right.stopCount)[0] ?? null;
+
+  return requests
+    .filter((request) => request.assignedToId === null)
+    .map((request): AdvancedAutoAssignmentRow => {
+      const sla = calculateSla(request.createdAt, request.priority, request.status, request.closedAt);
+      const bestRoute = assignedRoutes
+        .map((route) => {
+          const cityOverlap = routeCityOverlap(route, request.contact?.city ?? null);
+          const loadPenalty = route.stopCount * 6;
+          const priorityBoost = priorityWeight(request.priority) * 8;
+          return { route, score: Math.max(0, 70 + cityOverlap * 20 + priorityBoost - loadPenalty) };
+        })
+        .sort((left, right) => right.score - left.score)[0]?.route ?? fallbackRoute;
+      const score = bestRoute
+        ? Math.max(0, 100 - bestRoute.stopCount * 8 + routeCityOverlap(bestRoute, request.contact?.city ?? null) * 10)
+        : Math.max(30, priorityWeight(request.priority) * 15);
+      const suggestedAssigneeLabel = bestRoute?.technicianLabel ?? 'Yeni teknisyen havuzu';
+      const reason = bestRoute
+        ? `${request.contact?.city ?? 'Sehir yok'} rotasi ve ${bestRoute.stopCount} aktif durak yukune gore`
+        : 'Atanmis teknisyen bulunmadigi icin havuz atamasi onerilir';
+      return {
+        serviceRequestId: request.id,
+        serviceRequestNumber: request.number,
+        subject: request.subject,
+        priority: request.priority,
+        city: request.contact?.city ?? null,
+        suggestedAssigneeId: bestRoute?.assignedToId ?? null,
+        suggestedAssigneeLabel,
+        reason,
+        slaRemainingMinutes: sla.remainingMinutes,
+        score: round(score, 0),
+      };
+    })
+    .sort((left, right) => {
+      const bySla = left.slaRemainingMinutes - right.slaRemainingMinutes;
+      if (bySla !== 0) return bySla;
+      return right.score - left.score;
+    })
+    .slice(0, 12);
+}
+
 function buildSparePartReservations(requests: readonly ServiceRequestLookup[]): AdvancedSparePartReservationRow[] {
   return requests.flatMap((request) => request.items.map((item): AdvancedSparePartReservationRow => {
     const requiredQty = numeric(item.quantity);
@@ -330,6 +406,7 @@ export async function getAdvancedService(
   const activeRequests = requests.filter((request) => ACTIVE_SERVICE_STATUSES.includes(request.status));
   const slaContracts = buildSlaContracts(activeRequests);
   const technicianRoutes = buildTechnicianRoutes(activeRequests);
+  const autoAssignments = buildAutoAssignments(activeRequests, technicianRoutes);
   const sparePartReservations = buildSparePartReservations(activeRequests);
   const portalContactIds = new Set(portalSettings.map((setting) => setting.key.replace('portal.token.', '')));
   const portalTracking = buildPortalTracking(requests, portalContactIds);
@@ -340,6 +417,10 @@ export async function getAdvancedService(
       horizonDays,
       activeRequestCount: activeRequests.length,
       slaBreachedCount: slaContracts.reduce((sum, row) => sum + row.breachedCount, 0),
+      slaWarningCount: activeRequests
+        .map((request) => calculateSla(request.createdAt, request.priority, request.status, request.closedAt))
+        .filter((sla) => !sla.isBreached && sla.remainingMinutes <= 120).length,
+      autoAssignmentSuggestionCount: autoAssignments.length,
       routeReadyCount: technicianRoutes.filter((row) => row.stopCount > 0 && row.cityCount > 0).length,
       sparePartRiskCount: sparePartReservations.filter((row) => row.status === 'shortage' || row.status === 'unlinked').length,
       portalTrackedContactCount: portalTracking.filter((row) => row.portalEnabled).length,
@@ -347,6 +428,7 @@ export async function getAdvancedService(
     },
     slaContracts,
     technicianRoutes,
+    autoAssignments,
     sparePartReservations,
     portalTracking,
   };

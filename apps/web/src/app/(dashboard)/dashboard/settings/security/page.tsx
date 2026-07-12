@@ -13,6 +13,8 @@ import {
   useSiemSettings,
   useUpdateSiemSettings,
   useRunSiemExportTest,
+  useAuditLogFullStatus,
+  useUpdateAuditLogFullSettings,
   useDataRetentionSettings,
   useUpdateDataRetentionSettings,
   useDataRetentionPreview,
@@ -133,6 +135,7 @@ const DEFAULT_DEPLOYMENT_OPERATIONS_FORM: DeploymentOperationsSettings = {
 export default function CorporateSecurityPage() {
   const { data: settings, isLoading } = useCorporateSecuritySettings();
   const { data: siemSettings } = useSiemSettings();
+  const { data: auditLogFullStatus } = useAuditLogFullStatus();
   const { data: retentionSettings } = useDataRetentionSettings();
   const { data: retentionPreview } = useDataRetentionPreview();
   const { data: deploymentSnapshot } = useDeploymentOperationsSnapshot();
@@ -141,6 +144,7 @@ export default function CorporateSecurityPage() {
   const generateScim = useGenerateScimToken();
   const updateSiemSettings = useUpdateSiemSettings();
   const runSiemExportTest = useRunSiemExportTest();
+  const updateAuditLogFullSettings = useUpdateAuditLogFullSettings();
   const updateRetentionSettings = useUpdateDataRetentionSettings();
   const runRetentionDryRun = useRunDataRetentionDryRun();
   const updateDeploymentSettings = useUpdateDeploymentOperationsSettings();
@@ -478,6 +482,74 @@ export default function CorporateSecurityPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Audit Log Full Panel */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+            <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0">
+              <Shield className="w-5 h-5 text-violet-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white">Audit Log Full</h3>
+              <p className="text-xs text-slate-500">Retention, export API, SIEM push ve immutable log zinciri tek kontrolde izlenir.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Audit seviyesi</p>
+              <p className="mt-1 text-sm font-semibold text-slate-100">{auditLogFullStatus?.auditLevel ?? 'full'}</p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Retention</p>
+              <p className="mt-1 text-sm font-semibold text-slate-100">
+                {auditLogFullStatus?.retention.auditLogRule
+                  ? `${auditLogFullStatus.retention.auditLogRule.retentionDays} gun`
+                  : 'kural yok'}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {auditLogFullStatus?.retention.auditLogRule?.legalArchive ? 'Yasal arsiv aktif' : 'Yasal arsiv kapali'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Export API</p>
+              <p className={`mt-1 text-sm font-semibold ${auditLogFullStatus?.exportApi.enabled ? 'text-emerald-300' : 'text-slate-400'}`}>
+                {auditLogFullStatus?.exportApi.enabled ? 'Aktif' : 'Kapali'}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">Limit {auditLogFullStatus?.exportApi.maxRows ?? 10000} satir</p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">SIEM push</p>
+              <p className={`mt-1 text-sm font-semibold ${auditLogFullStatus?.siemPush.enabled ? 'text-emerald-300' : 'text-slate-400'}`}>
+                {auditLogFullStatus?.siemPush.enabled ? auditLogFullStatus.siemPush.destinationType : 'Kapali'}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">{auditLogFullStatus?.siemPush.lastStatus ?? 'Son durum yok'}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+            <div>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={auditLogFullStatus?.immutable.enabled ?? false}
+                  onChange={(e) => updateAuditLogFullSettings.mutate({ immutableEnabled: e.target.checked })}
+                  disabled={updateAuditLogFullSettings.isPending}
+                  className="w-4.5 h-4.5 rounded border-slate-800 bg-slate-950 text-violet-500 focus:ring-violet-500/20"
+                />
+                <span className="text-sm text-slate-200 font-medium">Immutable hash zinciri aktif</span>
+              </label>
+              <p className="mt-2 text-[11px] text-slate-500">
+                Son log: {auditLogFullStatus?.immutable.lastLogId ?? 'yok'} - Son hash: {auditLogFullStatus?.immutable.lastHash?.slice(0, 16) ?? 'yok'}
+              </p>
+            </div>
+            <div className="text-right text-[11px] text-slate-500">
+              <p>Durum zamani</p>
+              <p className="font-mono text-slate-400">{auditLogFullStatus?.generatedAt ?? '-'}</p>
+            </div>
           </div>
         </div>
 

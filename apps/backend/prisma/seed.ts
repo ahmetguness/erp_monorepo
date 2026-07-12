@@ -1317,6 +1317,10 @@ async function seedRoles(tenantId: string, users: { id: string }[]) {
         { module: 'invoicing',  action: 'UPDATE' },
         { module: 'reporting',  action: 'READ'   },
         { module: 'reporting',  action: 'EXPORT' },
+        { module: 'payroll',    action: 'READ'   },
+        { module: 'payroll',    action: 'UPDATE' },
+        { module: 'payroll',    action: 'APPROVE' },
+        { module: 'payroll',    action: 'EXPORT' },
       ]},
     },
   });

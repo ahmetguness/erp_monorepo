@@ -47,6 +47,11 @@ import {
   type BackupFrequency,
 } from '../services/deployment-operations.service.js';
 import {
+  AUDIT_LOG_FULL_SETTING_KEYS,
+  getAuditLogFullStatus as buildAuditLogFullStatus,
+  setAuditImmutableEnabled,
+} from '../services/audit-log-full.service.js';
+import {
   BI_CONNECTOR_SETTING_KEYS,
   BI_TOKEN_SETTING_KEY,
   getBiConnectorSettings,
@@ -62,6 +67,7 @@ const INTERNAL_TENANT_SETTING_KEYS = [
   'security.sessions',
   ...Object.values(SIEM_SETTING_KEYS),
   ...Object.values(DATA_RETENTION_SETTING_KEYS),
+  ...Object.values(AUDIT_LOG_FULL_SETTING_KEYS),
   ...Object.values(DEPLOYMENT_OPERATIONS_SETTING_KEYS),
   ...Object.values(BI_CONNECTOR_SETTING_KEYS),
   BI_TOKEN_SETTING_KEY,
@@ -528,6 +534,39 @@ export const SettingsController = {
     });
 
     return c.json({ data: result });
+  },
+
+  async getAuditLogFullStatus(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    await assertEnterpriseTenant(tenantId, 'Audit log full sadece Enterprise plan kapsamindadir.');
+    return c.json({ data: await buildAuditLogFullStatus(prisma, tenantId) });
+  },
+
+  async updateAuditLogFullSettings(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    await assertEnterpriseTenant(tenantId, 'Audit log full sadece Enterprise plan kapsamindadir.');
+    const body = await readJsonObject(c);
+    const immutable = await setAuditImmutableEnabled(prisma, tenantId, readBoolean(body.immutableEnabled));
+
+    const { ipAddress, userAgent } = getRequestMeta(c);
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'audit_logs',
+      entityType: EntityType.OTHER,
+      entityId: 'audit_log_full_settings',
+      action: AuditAction.UPDATE,
+      newValues: {
+        immutableEnabled: immutable.enabled,
+        lastLogId: immutable.lastLogId,
+        hasLastHash: Boolean(immutable.lastHash),
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return c.json({ data: await buildAuditLogFullStatus(prisma, tenantId) });
   },
 
   async getDataRetentionSettings(c: Context): Promise<Response> {

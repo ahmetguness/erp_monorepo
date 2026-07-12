@@ -1,5 +1,6 @@
-import { EntityType, Priority, TaskStatus, WorkOrderStatus } from '@prisma/client';
+import { ContactType, EntityType, Priority, TaskStatus, WorkOrderStatus } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
+import { getSupplierPerformanceScore } from './supplier-performance.service.js';
 
 type QualityControlDbClient = PrismaClient;
 
@@ -36,6 +37,9 @@ export type QualityFormType = 'INPUT' | 'OUTPUT';
 export type QualityFormStatus = 'ready' | 'needs_review' | 'blocked';
 export type QualityIssueSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type QualityIssueType = 'scrap' | 'under_production' | 'material_shortage' | 'paused_order';
+export type QualityAcceptanceStatus = 'passed' | 'watch' | 'failed';
+export type QualityQuarantineStatus = 'pending' | 'blocked' | 'released';
+export type SupplierQualityRisk = 'low' | 'medium' | 'high';
 
 export interface QualityChecklistItem {
   key: string;
@@ -82,6 +86,37 @@ export interface QualityCorrectiveActionRow {
   dueAt: string | null;
 }
 
+export interface QualityAcceptanceCriteriaRow {
+  key: string;
+  label: string;
+  passedCount: number;
+  failedCount: number;
+  totalCount: number;
+  passRatePct: number;
+  status: QualityAcceptanceStatus;
+}
+
+export interface QualityQuarantineStockRow {
+  id: string;
+  product: QualityEntityRef;
+  workOrderId: string;
+  workOrderNumber: string;
+  sourceIssueId: string;
+  sourceIssueTitle: string;
+  quantity: number;
+  status: QualityQuarantineStatus;
+  reason: string;
+}
+
+export interface SupplierQualityScoreRow {
+  supplier: QualityEntityRef;
+  qualityScore: number;
+  acceptanceRatePct: number;
+  returnRatePct: number;
+  totalOrders: number;
+  risk: SupplierQualityRisk;
+}
+
 export interface QualityControlSummary {
   horizonDays: number;
   inputFormCount: number;
@@ -90,6 +125,9 @@ export interface QualityControlSummary {
   nonconformityCount: number;
   criticalIssueCount: number;
   correctiveActionCount: number;
+  failedCriteriaCount: number;
+  quarantineQuantity: number;
+  supplierQualityRiskCount: number;
 }
 
 export interface QualityControlResult {
@@ -98,6 +136,9 @@ export interface QualityControlResult {
   outputForms: QualityFormRow[];
   nonconformities: QualityNonconformityRow[];
   correctiveActions: QualityCorrectiveActionRow[];
+  acceptanceCriteria: QualityAcceptanceCriteriaRow[];
+  quarantineStock: QualityQuarantineStockRow[];
+  supplierQualityScores: SupplierQualityScoreRow[];
 }
 
 interface QualityWorkOrderLookup {
@@ -374,6 +415,110 @@ function suggestedPriority(severity: QualityIssueSeverity): QualityCorrectiveAct
   return 'medium';
 }
 
+function acceptanceStatus(passRatePct: number): QualityAcceptanceStatus {
+  if (passRatePct >= 95) return 'passed';
+  if (passRatePct >= 80) return 'watch';
+  return 'failed';
+}
+
+function buildAcceptanceCriteria(forms: readonly QualityFormRow[]): QualityAcceptanceCriteriaRow[] {
+  const criteriaByKey = new Map<string, { label: string; passedCount: number; failedCount: number }>();
+  for (const form of forms) {
+    for (const item of form.checklist) {
+      const current = criteriaByKey.get(item.key) ?? { label: item.label, passedCount: 0, failedCount: 0 };
+      if (item.passed) current.passedCount += 1;
+      else current.failedCount += 1;
+      criteriaByKey.set(item.key, current);
+    }
+  }
+
+  return Array.from(criteriaByKey.entries())
+    .map(([key, row]) => {
+      const totalCount = row.passedCount + row.failedCount;
+      const passRatePct = totalCount > 0 ? roundPct((row.passedCount / totalCount) * 100) : 100;
+      return {
+        key,
+        label: row.label,
+        passedCount: row.passedCount,
+        failedCount: row.failedCount,
+        totalCount,
+        passRatePct,
+        status: acceptanceStatus(passRatePct),
+      };
+    })
+    .sort((left, right) => left.passRatePct - right.passRatePct || right.totalCount - left.totalCount);
+}
+
+function buildQuarantineStock(nonconformities: readonly QualityNonconformityRow[]): QualityQuarantineStockRow[] {
+  return nonconformities
+    .filter((issue) => issue.quantityImpact > 0)
+    .map((issue) => ({
+      id: `${issue.id}:quarantine`,
+      product: entityRef(issue.product),
+      workOrderId: issue.workOrderId,
+      workOrderNumber: issue.workOrderNumber,
+      sourceIssueId: issue.id,
+      sourceIssueTitle: issue.title,
+      quantity: roundQty(issue.quantityImpact),
+      status: issue.severity === 'critical' ? 'blocked' : 'pending',
+      reason: issue.detail,
+    }));
+}
+
+function supplierQualityRisk(qualityScore: number): SupplierQualityRisk {
+  if (qualityScore < 60) return 'high';
+  if (qualityScore < 80) return 'medium';
+  return 'low';
+}
+
+async function getSupplierQualityScores(
+  db: QualityControlDbClient,
+  tenantId: string,
+): Promise<SupplierQualityScoreRow[]> {
+  const suppliers = await db.contact.findMany({
+    where: {
+      tenantId,
+      deletedAt: null,
+      isActive: true,
+      type: { in: [ContactType.SUPPLIER, ContactType.BOTH] },
+    },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      purchaseOrders: {
+        where: { tenantId, deletedAt: null },
+        select: { id: true },
+        take: 1,
+      },
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: 12,
+  });
+
+  const scoredSuppliers = await Promise.all(
+    suppliers
+      .filter((supplier) => supplier.purchaseOrders.length > 0)
+      .map(async (supplier): Promise<SupplierQualityScoreRow> => {
+        const score = await getSupplierPerformanceScore(db, tenantId, supplier.id);
+        return {
+          supplier: {
+            id: supplier.id,
+            code: supplier.code ?? '-',
+            name: supplier.name,
+          },
+          qualityScore: score.qualityScore,
+          acceptanceRatePct: score.qualityAcceptanceRatePct,
+          returnRatePct: score.returnRatePct,
+          totalOrders: score.totalOrders,
+          risk: supplierQualityRisk(score.qualityScore),
+        };
+      }),
+  );
+
+  return scoredSuppliers.sort((left, right) => left.qualityScore - right.qualityScore).slice(0, 8);
+}
+
 export async function getQualityControl(
   db: QualityControlDbClient,
   input: QualityControlInput,
@@ -450,28 +595,31 @@ export async function getQualityControl(
   const nonconformities = workOrders.flatMap(buildNonconformities);
 
   const workOrderById = new Map(workOrders.map((workOrder) => [workOrder.id, workOrder]));
-  const tasks = await db.task.findMany({
-    where: {
-      tenantId,
-      module: 'production',
-      status: { in: [...OPEN_TASK_STATUSES] },
-      OR: [
-        { entityType: EntityType.WORK_ORDER, entityId: { in: Array.from(workOrderById.keys()) } },
-        { source: { startsWith: 'quality:' } },
-      ],
-    },
-    select: {
-      id: true,
-      title: true,
-      detail: true,
-      status: true,
-      priority: true,
-      entityId: true,
-      dueAt: true,
-    },
-    orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
-    take: 50,
-  });
+  const [tasks, supplierQualityScores] = await Promise.all([
+    db.task.findMany({
+      where: {
+        tenantId,
+        module: 'production',
+        status: { in: [...OPEN_TASK_STATUSES] },
+        OR: [
+          { entityType: EntityType.WORK_ORDER, entityId: { in: Array.from(workOrderById.keys()) } },
+          { source: { startsWith: 'quality:' } },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        detail: true,
+        status: true,
+        priority: true,
+        entityId: true,
+        dueAt: true,
+      },
+      orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
+      take: 50,
+    }),
+    getSupplierQualityScores(db, tenantId),
+  ]);
 
   const correctiveActions: QualityCorrectiveActionRow[] = tasks
     .map((task: QualityTaskLookup) => {
@@ -508,6 +656,9 @@ export async function getQualityControl(
     actionWorkOrderIds.add(issue.workOrderId);
   }
 
+  const acceptanceCriteria = buildAcceptanceCriteria([...inputForms, ...outputForms]);
+  const quarantineStock = buildQuarantineStock(nonconformities);
+
   return {
     summary: {
       horizonDays,
@@ -517,10 +668,16 @@ export async function getQualityControl(
       nonconformityCount: nonconformities.length,
       criticalIssueCount: nonconformities.filter((issue) => issue.severity === 'critical').length,
       correctiveActionCount: correctiveActions.length,
+      failedCriteriaCount: acceptanceCriteria.filter((criteria) => criteria.status === 'failed').length,
+      quarantineQuantity: roundQty(quarantineStock.reduce((sum, row) => sum + row.quantity, 0)),
+      supplierQualityRiskCount: supplierQualityScores.filter((supplier) => supplier.risk !== 'low').length,
     },
     inputForms,
     outputForms,
     nonconformities,
     correctiveActions,
+    acceptanceCriteria,
+    quarantineStock,
+    supplierQualityScores,
   };
 }

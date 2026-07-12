@@ -1,9 +1,10 @@
 import { Context } from 'hono';
+import { AuditAction, EntityType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
 import { requireTenantId, requireParam } from '../utils/context.js';
-import { getRequestMeta } from '../utils/audit.js';
+import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { reversePayroll, readRequiredReason, generateBankPaymentFile, createPayrollAccountingVoucher, runPeriodClosingChecks } from '../services/financial/index.js';
 
 // ─────────────────────────────────────────────
@@ -252,10 +253,23 @@ export const PayrollController = {
 
   async getBankFile(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
     const period = c.req.query('period');
     if (!period) throw new ValidationError('period parametresi zorunludur.');
 
     const result = await generateBankPaymentFile(prisma, tenantId, period);
+    const { ipAddress, userAgent } = getRequestMeta(c);
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'payroll',
+      entityType: EntityType.OTHER,
+      entityId: period,
+      action: AuditAction.EXPORT,
+      newValues: { period, filename: result.filename, exportType: 'bank_payment_file' },
+      ipAddress,
+      userAgent,
+    });
 
     c.header('Content-Type', result.mimeType);
     c.header('Content-Disposition', `attachment; filename="${result.filename}"`);

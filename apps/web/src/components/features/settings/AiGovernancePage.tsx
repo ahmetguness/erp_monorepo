@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { BarChart3, Bot, DollarSign, Eye, Save, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
+import { Activity, ArrowRight, BarChart3, Bot, DollarSign, Eye, Gauge, Save, ShieldCheck } from 'lucide-react';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
@@ -15,7 +16,7 @@ import {
   useUpdateAiGovernancePolicy,
 } from '@/hooks/useIntelligence';
 import { formatDateTime } from '@/lib/utils';
-import type { AiGovernancePolicy, AiRequestLog, AiRequestStatus, AiRequestType } from '@/services/intelligence.service';
+import type { AiGovernanceInsights, AiGovernancePolicy, AiRequestLog, AiRequestStatus, AiRequestType } from '@/services/intelligence.service';
 
 const STATUS_META: Record<AiRequestStatus, { label: string; variant: BadgeVariant }> = {
   STARTED: { label: 'Basladi', variant: 'info' },
@@ -38,6 +39,12 @@ const COST_STATUS_LABELS: Record<'NO_LIMIT' | 'OK' | 'NEAR_LIMIT' | 'OVER_LIMIT'
   OK: { label: 'Normal', variant: 'success' },
   NEAR_LIMIT: { label: 'Limite yakin', variant: 'warning' },
   OVER_LIMIT: { label: 'Limit asildi', variant: 'danger' },
+};
+
+const CONTROL_TONE_META: Record<AiGovernanceInsights['enterpriseControlCenter']['posture'], { label: string; variant: BadgeVariant; className: string }> = {
+  healthy: { label: 'Saglikli', variant: 'success', className: 'text-emerald-300' },
+  watch: { label: 'Izlemede', variant: 'warning', className: 'text-amber-300' },
+  risk: { label: 'Riskli', variant: 'danger', className: 'text-red-300' },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -190,7 +197,87 @@ export function AiGovernancePage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="AI Governance" subtitle="AI istekleri, izin sonucu, maskeleme ve kullanici aksiyon zinciri." />
+      <PageHeader title="AI Governance" subtitle="Kurumsal kontrol merkezi, AI istekleri, izin sonucu, maskeleme ve kullanici aksiyon zinciri." />
+
+      {insights && (
+        <section className="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="rounded-lg bg-violet-500/10 p-2 text-violet-300"><Gauge className="h-4 w-4" /></span>
+              <div>
+                <h2 className="text-sm font-semibold text-slate-100">Kurumsal kontrol merkezi</h2>
+                <p className="text-xs text-slate-500">AI governance, admin security ve observability sinyalleri tek kurumsal durus skorunda birlesir.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant={CONTROL_TONE_META[insights.enterpriseControlCenter.posture].variant}>
+                {CONTROL_TONE_META[insights.enterpriseControlCenter.posture].label}
+              </Badge>
+              <span className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm font-semibold text-slate-100">
+                {insights.enterpriseControlCenter.readinessScore}/100
+              </span>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {insights.enterpriseControlCenter.metrics.map((metric) => (
+              <ControlCenterMetric key={metric.key} metric={metric} />
+            ))}
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-[1.1fr_1fr]">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+              <div className="mb-3 flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-300" />
+                <h3 className="text-sm font-semibold text-slate-100">Admin security baglantisi</h3>
+              </div>
+              <div className="grid gap-2 text-xs sm:grid-cols-2">
+                <ControlCenterFact label="Aktif oturum" value={insights.enterpriseControlCenter.security.activeSessionCount} />
+                <ControlCenterFact label="Riskli rol" value={insights.enterpriseControlCenter.security.weakPermissionRiskCount} />
+                <ControlCenterFact label="API rotate riski" value={insights.enterpriseControlCenter.security.apiKeyRotationRiskCount} />
+                <ControlCenterFact label="Webhook sorunu" value={insights.enterpriseControlCenter.security.webhookIssueCount} />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+              <div className="mb-3 flex items-center gap-2">
+                <Activity className="h-4 w-4 text-sky-300" />
+                <h3 className="text-sm font-semibold text-slate-100">AI observability</h3>
+              </div>
+              <div className="grid gap-2 text-xs sm:grid-cols-2">
+                <ControlCenterFact label="AI hata" value={insights.enterpriseControlCenter.observability.failedAiRequestCount} />
+                <ControlCenterFact label="Fallback" value={insights.enterpriseControlCenter.observability.fallbackAiRequestCount} />
+                <ControlCenterFact label="Izin reddi" value={insights.enterpriseControlCenter.observability.deniedPermissionCount} />
+                <ControlCenterFact label="Maskeleme olayi" value={insights.enterpriseControlCenter.observability.redactedFieldEventCount} />
+              </div>
+            </div>
+          </div>
+
+          {insights.enterpriseControlCenter.actions.length > 0 && (
+            <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+              <h3 className="mb-3 text-sm font-semibold text-slate-100">Kontrol aksiyonlari</h3>
+              <div className="grid gap-2 md:grid-cols-2">
+                {insights.enterpriseControlCenter.actions.map((action) => (
+                  <Link
+                    key={action.key}
+                    href={action.href}
+                    className="flex items-start justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/70 p-3 transition-colors hover:border-sky-500/30"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={CONTROL_TONE_META[action.severity].variant}>{CONTROL_TONE_META[action.severity].label}</Badge>
+                        <p className="text-sm font-semibold text-slate-100">{action.label}</p>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">{action.detail}</p>
+                    </div>
+                    <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-500" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {policy && (
         <section className="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
@@ -412,6 +499,31 @@ export function AiGovernancePage() {
           </div>
         )}
       </Modal>
+    </div>
+  );
+}
+
+function ControlCenterMetric({ metric }: { metric: AiGovernanceInsights['enterpriseControlCenter']['metrics'][number] }) {
+  const tone = CONTROL_TONE_META[metric.tone];
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs text-slate-500">{metric.label}</p>
+          <p className={`mt-1 text-lg font-semibold ${tone.className}`}>{metric.value}</p>
+        </div>
+        <Badge variant={tone.variant}>{tone.label}</Badge>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">{metric.detail}</p>
+    </div>
+  );
+}
+
+function ControlCenterFact({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2">
+      <span className="text-slate-500">{label}</span>
+      <p className="mt-1 text-base font-semibold text-slate-100">{formatNumber(value)}</p>
     </div>
   );
 }

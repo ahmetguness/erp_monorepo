@@ -20,6 +20,8 @@ import {
   getSiemSettings,
   updateSiemSettings,
   runSiemExportTest,
+  getAuditLogFullStatus,
+  updateAuditLogFullSettings,
   getDataRetentionSettings,
   updateDataRetentionSettings,
   previewDataRetention,
@@ -39,6 +41,7 @@ import {
   type QuickStartDTO,
   type CorporateSecuritySettings,
   type SiemSettings,
+  type AuditLogFullStatus,
   type DataRetentionSettings,
   type DeploymentOperationsSettings,
   type BiSettings,
@@ -260,6 +263,23 @@ export function useRunSiemExportTest() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['settings', 'siem'] });
       toast.success(`SIEM export testi tamamlandi: ${data.eventCount} olay hazirlandi.`);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useAuditLogFullStatus() {
+  return useQuery({ queryKey: ['settings', 'audit-log-full'], queryFn: getAuditLogFullStatus, staleTime: 60 * 1000 });
+}
+
+export function useUpdateAuditLogFullSettings() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (data: { immutableEnabled: AuditLogFullStatus['immutable']['enabled'] }) => updateAuditLogFullSettings(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'audit-log-full'] });
+      toast.success('Audit log full ayarlari kaydedildi.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

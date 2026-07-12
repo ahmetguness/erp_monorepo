@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Camera, ClipboardCheck, MapPinned, RefreshCw, Route, Signature, UserCheck } from "lucide-react";
+import { Camera, ClipboardCheck, CloudOff, MapPinned, RefreshCw, Route, Signature, UserCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
@@ -44,6 +44,11 @@ function priorityVariant(priority: FieldServiceJobRow["priority"]): BadgeVariant
 
 function routeAddress(stop: FieldServiceRouteStop): string {
   return [stop.address, stop.city].filter(Boolean).join(" / ") || "Adres bekleniyor";
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("tr-TR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
 function checkpointTitle(kind: FieldServiceCheckpointKind): string {
@@ -128,6 +133,17 @@ export function FieldServiceMobileFlowPage() {
       render: (row) => <span className="text-slate-300">{row.photoCount} foto / {row.signatureCount} imza</span>,
     },
     {
+      key: "offline",
+      header: "Offline",
+      width: "115px",
+      render: (row) => (
+        <div>
+          <Badge variant={row.offlineReady ? "success" : "warning"}>{row.offlineReady ? "Hazir" : "Eksik"}</Badge>
+          {row.pendingSyncCount > 0 && <span className="mt-1 block text-[11px] text-amber-300">{row.pendingSyncCount} kuyruk</span>}
+        </div>
+      ),
+    },
+    {
       key: "approval",
       header: "Onay",
       width: "105px",
@@ -184,7 +200,7 @@ export function FieldServiceMobileFlowPage() {
         }
       />
 
-      <div className="mb-5 grid gap-3 md:grid-cols-4">
+      <div className="mb-5 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
           <UserCheck className="mb-2 h-4 w-4 text-sky-400" />
           <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Atanan Is</span>
@@ -207,6 +223,12 @@ export function FieldServiceMobileFlowPage() {
           <span className="mt-1 block text-2xl font-bold text-white">{summary?.customerApprovedCount ?? 0}</span>
           <span className="mt-1 block text-xs text-slate-500">{summary?.formSubmittedCount ?? 0} servis formu</span>
         </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <CloudOff className="mb-2 h-4 w-4 text-cyan-400" />
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Offline Hazir</span>
+          <span className="mt-1 block text-2xl font-bold text-white">{summary?.offlineReadyCount ?? 0}</span>
+          <span className="mt-1 block text-xs text-slate-500">{summary?.pendingSyncCount ?? 0} senkron kuyrugu</span>
+        </div>
       </div>
 
       <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -220,6 +242,7 @@ export function FieldServiceMobileFlowPage() {
               <div>
                 <span className="font-mono text-[11px] text-sky-300">{job.number}</span>
                 <h3 className="mt-1 text-sm font-semibold text-white">{job.subject}</h3>
+                <p className="mt-1 text-[11px] text-slate-500">Son offline senkron: {formatDateTime(job.lastOfflineSyncAt)}</p>
               </div>
               <Badge variant={priorityVariant(job.priority)}>{job.priority}</Badge>
             </div>

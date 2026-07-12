@@ -1,6 +1,8 @@
 import type { AiRequestType, Prisma, PrismaClient } from '@prisma/client';
 import { AI_GOVERNANCE_INSIGHT_KEYS, AI_POLICY_MODULE } from './ai/governance-settings.js';
+import { getAiGovernancePolicy, type AiGovernancePolicy } from './ai/policy.service.js';
 import { getAiRedactionRegistry } from './ai/redaction-registry.js';
+import { getSecurityHardeningSnapshot, type SecurityHardeningSnapshot } from './security-hardening.service.js';
 
 export interface AiGovernanceCostSettings {
   monthlyCostLimitUsd: number | null;
@@ -50,11 +52,53 @@ export interface AiGovernanceCostSummary {
   remainingUsd: number | null;
 }
 
+export type EnterpriseControlCenterTone = 'healthy' | 'watch' | 'risk';
+
+export interface EnterpriseControlCenterMetric {
+  key: 'ai_policy' | 'cost_guard' | 'security' | 'observability';
+  label: string;
+  tone: EnterpriseControlCenterTone;
+  value: number | string;
+  detail: string;
+}
+
+export interface EnterpriseControlCenterAction {
+  key: string;
+  label: string;
+  detail: string;
+  href: string;
+  severity: EnterpriseControlCenterTone;
+}
+
+export interface EnterpriseControlCenterSnapshot {
+  generatedAt: Date;
+  readinessScore: number;
+  posture: EnterpriseControlCenterTone;
+  metrics: EnterpriseControlCenterMetric[];
+  actions: EnterpriseControlCenterAction[];
+  security: {
+    activeSessionCount: number;
+    weakPermissionRiskCount: number;
+    apiKeyRotationRiskCount: number;
+    webhookIssueCount: number;
+    publicEndpointAbuseCount: number;
+  };
+  observability: {
+    failedAiRequestCount: number;
+    fallbackAiRequestCount: number;
+    deniedPermissionCount: number;
+    partialPermissionCount: number;
+    redactedFieldEventCount: number;
+    recentFailureAt: Date | null;
+  };
+}
+
 export interface AiGovernanceInsights {
   costSettings: AiGovernanceCostSettings;
   costSummary: AiGovernanceCostSummary;
   modelUsage: AiModelUsage[];
   maskingReport: AiMaskingReportItem[];
+  enterpriseControlCenter: EnterpriseControlCenterSnapshot;
 }
 
 export interface AiGovernanceCostGuard {
@@ -127,6 +171,158 @@ function costStatus(usagePercent: number | null, threshold: number): AiGovernanc
   if (usagePercent >= 100) return 'OVER_LIMIT';
   if (usagePercent >= threshold) return 'NEAR_LIMIT';
   return 'OK';
+}
+
+function controlToneFromRiskCount(count: number): EnterpriseControlCenterTone {
+  if (count >= 5) return 'risk';
+  if (count > 0) return 'watch';
+  return 'healthy';
+}
+
+function readinessPosture(score: number): EnterpriseControlCenterTone {
+  if (score >= 85) return 'healthy';
+  if (score >= 65) return 'watch';
+  return 'risk';
+}
+
+function scorePenalty(tone: EnterpriseControlCenterTone): number {
+  if (tone === 'risk') return 20;
+  if (tone === 'watch') return 10;
+  return 0;
+}
+
+function buildEnterpriseControlCenter(input: {
+  generatedAt: Date;
+  policy: AiGovernancePolicy;
+  costSummary: AiGovernanceCostSummary;
+  securitySnapshot: SecurityHardeningSnapshot;
+  failedAiRequestCount: number;
+  fallbackAiRequestCount: number;
+  deniedPermissionCount: number;
+  partialPermissionCount: number;
+  redactedFieldEventCount: number;
+  recentFailureAt: Date | null;
+}): EnterpriseControlCenterSnapshot {
+  const webhookIssueCount =
+    input.securitySnapshot.webhookAudit.missingSecretCount +
+    input.securitySnapshot.webhookAudit.failedWebhookCount +
+    input.securitySnapshot.webhookAudit.replayableWebhookCount +
+    input.securitySnapshot.webhookAudit.duplicateWindowCount;
+  const securityRiskCount =
+    input.securitySnapshot.weakPermissionRisks.length +
+    input.securitySnapshot.apiKeyRotation.length +
+    webhookIssueCount +
+    input.securitySnapshot.publicEndpointAbuse.length;
+  const observabilityRiskCount =
+    input.failedAiRequestCount +
+    input.fallbackAiRequestCount +
+    input.deniedPermissionCount +
+    input.partialPermissionCount;
+
+  const policyTone: EnterpriseControlCenterTone = input.policy.enabled ? 'healthy' : 'risk';
+  const costTone: EnterpriseControlCenterTone =
+    input.costSummary.status === 'OVER_LIMIT'
+      ? 'risk'
+      : input.costSummary.status === 'NEAR_LIMIT' || input.costSummary.status === 'NO_LIMIT'
+        ? 'watch'
+        : 'healthy';
+  const securityTone = controlToneFromRiskCount(securityRiskCount);
+  const observabilityTone = controlToneFromRiskCount(observabilityRiskCount);
+  const readinessScore = Math.max(
+    0,
+    100 - [policyTone, costTone, securityTone, observabilityTone].reduce((sum, tone) => sum + scorePenalty(tone), 0),
+  );
+
+  const actions: EnterpriseControlCenterAction[] = [
+    ...(!input.policy.enabled
+      ? [{
+          key: 'enable-ai-policy',
+          label: 'AI politikasini etkinlestir',
+          detail: 'Kurumsal kontrol merkezi icin tenant AI politikasi aktif olmali.',
+          href: '/dashboard/settings/ai-governance',
+          severity: 'risk' as const,
+        }]
+      : []),
+    ...(input.costSummary.status === 'NO_LIMIT'
+      ? [{
+          key: 'set-cost-limit',
+          label: 'Maliyet limiti belirle',
+          detail: 'Enterprise AI kullaniminda aylik limit ve uyarilar tanimli olmali.',
+          href: '/dashboard/settings/ai-governance',
+          severity: 'watch' as const,
+        }]
+      : []),
+    ...(input.securitySnapshot.weakPermissionRisks.length > 0
+      ? [{
+          key: 'review-risky-roles',
+          label: 'Riskli rolleri gozden gecir',
+          detail: `${input.securitySnapshot.weakPermissionRisks.length} rolde hassas izin kombinasyonu var.`,
+          href: '/dashboard/settings',
+          severity: securityTone,
+        }]
+      : []),
+    ...(input.deniedPermissionCount > 0
+      ? [{
+          key: 'review-ai-denials',
+          label: 'AI izin retlerini incele',
+          detail: `${input.deniedPermissionCount} AI istegi izin kontrolunde reddedildi.`,
+          href: '/dashboard/settings/ai-governance',
+          severity: 'watch' as const,
+        }]
+      : []),
+  ].slice(0, 6);
+
+  return {
+    generatedAt: input.generatedAt,
+    readinessScore,
+    posture: readinessPosture(readinessScore),
+    metrics: [
+      {
+        key: 'ai_policy',
+        label: 'AI politika',
+        tone: policyTone,
+        value: input.policy.enabled ? 'Acik' : 'Kapali',
+        detail: input.policy.logPrompts ? 'Prompt ozeti kaydediliyor.' : 'Prompt ozeti kapali.',
+      },
+      {
+        key: 'cost_guard',
+        label: 'Maliyet guardrail',
+        tone: costTone,
+        value: input.costSummary.usagePercent === null ? 'Limit yok' : `%${input.costSummary.usagePercent.toFixed(1)}`,
+        detail: `Aylik tahmini maliyet ${formatUsdForReason(input.costSummary.estimatedCostUsd)}.`,
+      },
+      {
+        key: 'security',
+        label: 'Admin security',
+        tone: securityTone,
+        value: securityRiskCount,
+        detail: `${input.securitySnapshot.sessions.active} aktif oturum, ${input.securitySnapshot.weakPermissionRisks.length} rol riski.`,
+      },
+      {
+        key: 'observability',
+        label: 'AI observability',
+        tone: observabilityTone,
+        value: observabilityRiskCount,
+        detail: `${input.failedAiRequestCount} hata, ${input.deniedPermissionCount} izin reddi.`,
+      },
+    ],
+    actions,
+    security: {
+      activeSessionCount: input.securitySnapshot.sessions.active,
+      weakPermissionRiskCount: input.securitySnapshot.weakPermissionRisks.length,
+      apiKeyRotationRiskCount: input.securitySnapshot.apiKeyRotation.length,
+      webhookIssueCount,
+      publicEndpointAbuseCount: input.securitySnapshot.publicEndpointAbuse.length,
+    },
+    observability: {
+      failedAiRequestCount: input.failedAiRequestCount,
+      fallbackAiRequestCount: input.fallbackAiRequestCount,
+      deniedPermissionCount: input.deniedPermissionCount,
+      partialPermissionCount: input.partialPermissionCount,
+      redactedFieldEventCount: input.redactedFieldEventCount,
+      recentFailureAt: input.recentFailureAt,
+    },
+  };
 }
 
 function requestTypeBreakdown(rows: Array<{ requestType: AiRequestType }>): AiMaskingReportItem['topRequestTypes'] {
@@ -233,7 +429,19 @@ export async function getAiGovernanceInsights(db: PrismaClient, tenantId: string
     createdAt: { gte: periodStart, lte: now },
   };
 
-  const [costSettings, modelGroups, maskingRows, totalRequests] = await Promise.all([
+  const [
+    costSettings,
+    modelGroups,
+    maskingRows,
+    totalRequests,
+    policy,
+    securitySnapshot,
+    failedAiRequestCount,
+    fallbackAiRequestCount,
+    deniedPermissionCount,
+    partialPermissionCount,
+    recentFailure,
+  ] = await Promise.all([
     getAiGovernanceCostSettings(db, tenantId),
     db.aiRequestLog.groupBy({
       by: ['model'],
@@ -259,6 +467,17 @@ export async function getAiGovernanceInsights(db: PrismaClient, tenantId: string
       orderBy: { createdAt: 'desc' },
     }),
     db.aiRequestLog.count({ where }),
+    getAiGovernancePolicy(db, tenantId),
+    getSecurityHardeningSnapshot(db, tenantId),
+    db.aiRequestLog.count({ where: { ...where, status: 'FAILED' } }),
+    db.aiRequestLog.count({ where: { ...where, status: 'FALLBACK' } }),
+    db.aiRequestLog.count({ where: { ...where, permissionCheckResult: 'DENIED' } }),
+    db.aiRequestLog.count({ where: { ...where, permissionCheckResult: 'PARTIAL' } }),
+    db.aiRequestLog.findFirst({
+      where: { ...where, status: { in: ['FAILED', 'FALLBACK'] } },
+      select: { createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    }),
   ]);
 
   const modelUsage = modelGroups.map((group): AiModelUsage => {
@@ -281,6 +500,19 @@ export async function getAiGovernanceInsights(db: PrismaClient, tenantId: string
   const remainingUsd = costSettings.monthlyCostLimitUsd === null
     ? null
     : roundUsd(Math.max(costSettings.monthlyCostLimitUsd - estimatedCostUsd, 0));
+  const costSummary: AiGovernanceCostSummary = {
+    periodStart,
+    periodEnd: now,
+    totalRequests,
+    totalTokens,
+    estimatedCostUsd,
+    monthlyCostLimitUsd: costSettings.monthlyCostLimitUsd,
+    alertThresholdPercent: costSettings.alertThresholdPercent,
+    blockOnLimit: costSettings.blockOnLimit,
+    usagePercent,
+    status: costStatus(usagePercent, costSettings.alertThresholdPercent),
+    remainingUsd,
+  };
 
   const registryByKey = new Map(getAiRedactionRegistry().rules.map((rule) => [rule.key, rule]));
   const rowsByField = new Map<string, Array<{ requestType: AiRequestType; createdAt: Date }>>();
@@ -310,21 +542,21 @@ export async function getAiGovernanceInsights(db: PrismaClient, tenantId: string
 
   return {
     costSettings,
-    costSummary: {
-      periodStart,
-      periodEnd: now,
-      totalRequests,
-      totalTokens,
-      estimatedCostUsd,
-      monthlyCostLimitUsd: costSettings.monthlyCostLimitUsd,
-      alertThresholdPercent: costSettings.alertThresholdPercent,
-      blockOnLimit: costSettings.blockOnLimit,
-      usagePercent,
-      status: costStatus(usagePercent, costSettings.alertThresholdPercent),
-      remainingUsd,
-    },
+    costSummary,
     modelUsage,
     maskingReport,
+    enterpriseControlCenter: buildEnterpriseControlCenter({
+      generatedAt: now,
+      policy,
+      costSummary,
+      securitySnapshot,
+      failedAiRequestCount,
+      fallbackAiRequestCount,
+      deniedPermissionCount,
+      partialPermissionCount,
+      redactedFieldEventCount: maskingRows.length,
+      recentFailureAt: recentFailure?.createdAt ?? null,
+    }),
   };
 }
 

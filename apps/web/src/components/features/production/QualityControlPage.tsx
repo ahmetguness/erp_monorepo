@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ClipboardCheck, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardCheck, PackageX, RefreshCw, ShieldCheck, Star } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
@@ -11,12 +11,18 @@ import { useQualityControl } from "@/hooks/useProduction";
 import type {
   QualityActionPriority,
   QualityActionStatus,
+  QualityAcceptanceCriteriaRow,
+  QualityAcceptanceStatus,
   QualityCorrectiveActionRow,
   QualityFormRow,
   QualityFormStatus,
   QualityIssueSeverity,
   QualityIssueType,
   QualityNonconformityRow,
+  QualityQuarantineStockRow,
+  QualityQuarantineStatus,
+  SupplierQualityRisk,
+  SupplierQualityScoreRow,
 } from "@/services/production.service";
 
 function formatQty(value: number): string {
@@ -91,6 +97,42 @@ function priorityLabel(priority: QualityActionPriority): string {
   if (priority === "high") return "Yuksek";
   if (priority === "low") return "Dusuk";
   return "Orta";
+}
+
+function acceptanceVariant(status: QualityAcceptanceStatus): BadgeVariant {
+  if (status === "failed") return "danger";
+  if (status === "watch") return "warning";
+  return "success";
+}
+
+function acceptanceLabel(status: QualityAcceptanceStatus): string {
+  if (status === "failed") return "Basarisiz";
+  if (status === "watch") return "Izle";
+  return "Gecti";
+}
+
+function quarantineVariant(status: QualityQuarantineStatus): BadgeVariant {
+  if (status === "blocked") return "danger";
+  if (status === "released") return "success";
+  return "warning";
+}
+
+function quarantineLabel(status: QualityQuarantineStatus): string {
+  if (status === "blocked") return "Bloke";
+  if (status === "released") return "Serbest";
+  return "Bekliyor";
+}
+
+function supplierRiskVariant(risk: SupplierQualityRisk): BadgeVariant {
+  if (risk === "high") return "danger";
+  if (risk === "medium") return "warning";
+  return "success";
+}
+
+function supplierRiskLabel(risk: SupplierQualityRisk): string {
+  if (risk === "high") return "Riskli";
+  if (risk === "medium") return "Izle";
+  return "Iyi";
 }
 
 function checklistSummary(row: QualityFormRow): string {
@@ -234,6 +276,121 @@ export function QualityControlPage() {
     },
   ];
 
+  const acceptanceColumns: ColumnDef<QualityAcceptanceCriteriaRow>[] = [
+    {
+      key: "criteria",
+      header: "Kabul Kriteri",
+      render: (row) => (
+        <div>
+          <span className="text-sm font-semibold text-white">{row.label}</span>
+          <span className="block font-mono text-[11px] text-slate-500">{row.key}</span>
+        </div>
+      ),
+    },
+    {
+      key: "passRate",
+      header: "Gecis",
+      width: "110px",
+      align: "right",
+      render: (row) => <span className="font-semibold text-white">{formatPct(row.passRatePct)}</span>,
+    },
+    {
+      key: "samples",
+      header: "Ornek",
+      width: "120px",
+      align: "right",
+      render: (row) => <span className="text-slate-300">{row.passedCount}/{row.totalCount}</span>,
+    },
+    {
+      key: "status",
+      header: "Durum",
+      width: "100px",
+      render: (row) => <Badge variant={acceptanceVariant(row.status)}>{acceptanceLabel(row.status)}</Badge>,
+    },
+  ];
+
+  const quarantineColumns: ColumnDef<QualityQuarantineStockRow>[] = [
+    {
+      key: "product",
+      header: "Urun",
+      render: (row) => (
+        <div>
+          <span className="text-sm font-semibold text-white">{row.product.name}</span>
+          <span className="block font-mono text-[11px] text-slate-500">{row.product.code}</span>
+        </div>
+      ),
+    },
+    {
+      key: "source",
+      header: "Kaynak",
+      width: "150px",
+      render: (row) => (
+        <div>
+          <span className="font-mono text-sky-300">{row.workOrderNumber}</span>
+          <span className="block text-[11px] text-slate-500">{row.sourceIssueTitle}</span>
+        </div>
+      ),
+    },
+    {
+      key: "quantity",
+      header: "Miktar",
+      width: "100px",
+      align: "right",
+      render: (row) => <span className="font-semibold text-amber-300">{formatQty(row.quantity)}</span>,
+    },
+    {
+      key: "reason",
+      header: "Gerekce",
+      render: (row) => <span className="text-xs text-slate-400">{row.reason}</span>,
+    },
+    {
+      key: "status",
+      header: "Durum",
+      width: "100px",
+      render: (row) => <Badge variant={quarantineVariant(row.status)}>{quarantineLabel(row.status)}</Badge>,
+    },
+  ];
+
+  const supplierColumns: ColumnDef<SupplierQualityScoreRow>[] = [
+    {
+      key: "supplier",
+      header: "Tedarikci",
+      render: (row) => (
+        <div>
+          <span className="text-sm font-semibold text-white">{row.supplier.name}</span>
+          <span className="block font-mono text-[11px] text-slate-500">{row.supplier.code}</span>
+        </div>
+      ),
+    },
+    {
+      key: "qualityScore",
+      header: "Kalite",
+      width: "100px",
+      align: "right",
+      render: (row) => <span className="font-semibold text-white">{row.qualityScore}/100</span>,
+    },
+    {
+      key: "acceptance",
+      header: "Kabul",
+      width: "110px",
+      align: "right",
+      render: (row) => <span className="text-emerald-300">{formatPct(row.acceptanceRatePct)}</span>,
+    },
+    {
+      key: "return",
+      header: "Iade",
+      width: "100px",
+      align: "right",
+      render: (row) => <span className="text-slate-300">{formatPct(row.returnRatePct)}</span>,
+    },
+    {
+      key: "risk",
+      header: "Risk",
+      width: "95px",
+      render: (row) => <Badge variant={supplierRiskVariant(row.risk)}>{supplierRiskLabel(row.risk)}</Badge>,
+    },
+  ];
+
   const summary = data?.summary;
 
   return (
@@ -262,7 +419,7 @@ export function QualityControlPage() {
         }
       />
 
-      <div className="mb-5 grid gap-3 md:grid-cols-4">
+      <div className="mb-5 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
           <ClipboardCheck className="mb-2 h-4 w-4 text-sky-400" />
           <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Girdi Formu</span>
@@ -284,9 +441,33 @@ export function QualityControlPage() {
           <span className="mt-1 block text-2xl font-bold text-white">{summary?.correctiveActionCount ?? 0}</span>
           <span className="mt-1 block text-xs text-slate-500">{summary?.blockedFormCount ?? blockedForms.length} bloke form</span>
         </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <PackageX className="mb-2 h-4 w-4 text-red-400" />
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Karantina</span>
+          <span className="mt-1 block text-2xl font-bold text-white">{formatQty(summary?.quarantineQuantity ?? 0)}</span>
+          <span className="mt-1 block text-xs text-slate-500">{summary?.failedCriteriaCount ?? 0} kriter riski</span>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <Star className="mb-2 h-4 w-4 text-amber-400" />
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Tedarikci Kalitesi</span>
+          <span className="mt-1 block text-2xl font-bold text-white">{summary?.supplierQualityRiskCount ?? 0}</span>
+          <span className="mt-1 block text-xs text-slate-500">riskli/izlenecek</span>
+        </div>
       </div>
 
       <div className="space-y-6">
+        <section>
+          <h2 className="mb-3 text-sm font-semibold text-white">Kabul Kriterleri</h2>
+          <DataTable
+            columns={acceptanceColumns}
+            data={data?.acceptanceCriteria ?? []}
+            keyExtractor={(row) => row.key}
+            isLoading={isLoading}
+            emptyTitle="Kabul kriteri yok"
+            emptyDescription="Secili pencerede kalite formu olusmadigi icin kriter ozeti bulunmuyor."
+          />
+        </section>
+
         <section>
           <h2 className="mb-3 text-sm font-semibold text-white">Girdi Kalite Formlari</h2>
           <DataTable
@@ -320,6 +501,30 @@ export function QualityControlPage() {
             isLoading={isLoading}
             emptyTitle="Uygunsuzluk yok"
             emptyDescription="Fire, eksik uretim veya durdurma kaynakli acik kalite riski gorunmuyor."
+          />
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-sm font-semibold text-white">Karantina Stogu</h2>
+          <DataTable
+            columns={quarantineColumns}
+            data={data?.quarantineStock ?? []}
+            keyExtractor={(row) => row.id}
+            isLoading={isLoading}
+            emptyTitle="Karantina bekleyen stok yok"
+            emptyDescription="Uygunsuzluklardan karantinaya alinacak miktar gorunmuyor."
+          />
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-sm font-semibold text-white">Tedarikci Kalite Skoru</h2>
+          <DataTable
+            columns={supplierColumns}
+            data={data?.supplierQualityScores ?? []}
+            keyExtractor={(row) => row.supplier.id}
+            isLoading={isLoading}
+            emptyTitle="Tedarikci kalite skoru yok"
+            emptyDescription="Satinalma gecmisi olan tedarikci bulununca kalite skorlari burada listelenir."
           />
         </section>
 

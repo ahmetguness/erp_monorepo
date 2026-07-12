@@ -13,7 +13,7 @@ payrollRoutes.get('/', requirePermission('payroll', 'READ'), PayrollController.l
 payrollRoutes.post('/', requirePermission('payroll', 'CREATE'), PayrollController.create);
 payrollRoutes.post('/generate-bulk', requirePermission('payroll', 'CREATE'), PayrollController.generateBulk);
 payrollRoutes.get('/advanced', requirePermission('payroll', 'READ'), AdvancedPayrollController.get);
-payrollRoutes.get('/integration/bank-file', requirePermission('payroll', 'READ'), PayrollController.getBankFile);
+payrollRoutes.get('/integration/bank-file', requirePermission('payroll', 'EXPORT'), PayrollController.getBankFile);
 payrollRoutes.post('/integration/accounting-voucher', requirePermission('payroll', 'UPDATE'), PayrollController.postAccountingVoucher);
 payrollRoutes.get('/integration/closing-checks', requirePermission('payroll', 'READ'), PayrollController.getClosingChecks);
 payrollRoutes.get('/:id', requirePermission('payroll', 'READ'), PayrollController.getById);

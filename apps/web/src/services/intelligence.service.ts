@@ -117,6 +117,40 @@ export const AiGovernanceInsightsSchema = z.object({
       count: z.number(),
     })),
   })),
+  enterpriseControlCenter: z.object({
+    generatedAt: z.string(),
+    readinessScore: z.number(),
+    posture: z.enum(['healthy', 'watch', 'risk']),
+    metrics: z.array(z.object({
+      key: z.enum(['ai_policy', 'cost_guard', 'security', 'observability']),
+      label: z.string(),
+      tone: z.enum(['healthy', 'watch', 'risk']),
+      value: z.union([z.number(), z.string()]),
+      detail: z.string(),
+    })),
+    actions: z.array(z.object({
+      key: z.string(),
+      label: z.string(),
+      detail: z.string(),
+      href: z.string(),
+      severity: z.enum(['healthy', 'watch', 'risk']),
+    })),
+    security: z.object({
+      activeSessionCount: z.number(),
+      weakPermissionRiskCount: z.number(),
+      apiKeyRotationRiskCount: z.number(),
+      webhookIssueCount: z.number(),
+      publicEndpointAbuseCount: z.number(),
+    }),
+    observability: z.object({
+      failedAiRequestCount: z.number(),
+      fallbackAiRequestCount: z.number(),
+      deniedPermissionCount: z.number(),
+      partialPermissionCount: z.number(),
+      redactedFieldEventCount: z.number(),
+      recentFailureAt: z.string().nullable(),
+    }),
+  }),
 });
 
 export const AiRequestLogSchema = z.object({

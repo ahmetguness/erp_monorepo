@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { getTrustedClientIpOrNull } from './request-ip.js';
 import { createAuditCriticalActionAlert } from '../services/audit-alert.service.js';
 import { pushSingleAuditLogToSiem } from '../services/siem-export.service.js';
+import { recordAuditIntegrityHead, withAuditIntegrityMetadata } from '../services/audit-log-full.service.js';
 
 // ─────────────────────────────────────────────
 // Audit Log Helper
@@ -33,6 +34,18 @@ export async function createAuditLog(
   params: AuditLogParams,
 ): Promise<void> {
   try {
+    const integrityValues = await withAuditIntegrityMetadata(db, {
+      tenantId: params.tenantId,
+      userId: params.userId ?? null,
+      module: params.module,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      action: params.action,
+      oldValues: params.oldValues,
+      newValues: params.newValues,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+    });
     const log = await db.auditLog.create({
       data: {
         tenantId: params.tenantId,
@@ -41,12 +54,13 @@ export async function createAuditLog(
         entityType: params.entityType,
         entityId: params.entityId,
         action: params.action,
-        oldValues: params.oldValues ?? Prisma.JsonNull,
-        newValues: params.newValues ?? Prisma.JsonNull,
+        oldValues: integrityValues.oldValues,
+        newValues: integrityValues.newValues,
         ipAddress: params.ipAddress ?? null,
         userAgent: params.userAgent ?? null,
       },
     });
+    await recordAuditIntegrityHead(db, params.tenantId, log.id, integrityValues.integrity);
     await createAuditCriticalActionAlert(db, {
       tenantId: params.tenantId,
       actorUserId: params.userId ?? null,

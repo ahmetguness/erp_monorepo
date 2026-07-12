@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Eye, Trash2, CheckCircle, Zap, CheckCircle2, XCircle, Download, BookOpen, Archive, RotateCcw } from "lucide-react";
+import { Plus, Eye, Trash2, CheckCircle, Zap, CheckCircle2, XCircle, Download, BookOpen, Archive, RotateCcw, ShieldCheck, ClipboardCheck, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { EmployeeSelect } from "@/components/shared/EntitySelect";
@@ -21,7 +21,7 @@ import {
   useAdvancedPayroll,
 } from "@/hooks/useHR";
 import { formatCurrency } from "@/lib/utils";
-import { getPayrollBankFile, getPayrollClosingChecks, type Payroll, type PeriodClosingChecksResult } from "@/services/hr.service";
+import { getPayrollBankFile, getPayrollClosingChecks, type Payroll, type PayrollApprovalRequestRow, type PeriodClosingChecksResult } from "@/services/hr.service";
 
 function currentPeriod(): string {
   const now = new Date();
@@ -31,6 +31,36 @@ function currentPeriod(): string {
 function formatDate(value: string | null): string {
   if (!value) return "-";
   return new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+}
+
+function approvalRequestLabel(status: PayrollApprovalRequestRow["status"]): string {
+  switch (status) {
+    case "APPROVED":
+      return "Onaylandi";
+    case "REJECTED":
+      return "Reddedildi";
+    case "CANCELLED":
+      return "Iptal";
+    case "ESCALATED":
+      return "Eskale";
+    case "PENDING":
+    default:
+      return "Bekliyor";
+  }
+}
+
+function accountingStatusLabel(status: "posted" | "draft" | "missing" | "unbalanced"): string {
+  switch (status) {
+    case "posted":
+      return "Fislendi";
+    case "draft":
+      return "Taslak";
+    case "unbalanced":
+      return "Dengesiz";
+    case "missing":
+    default:
+      return "Eksik";
+  }
 }
 
 export function PayrollPage() {
@@ -299,14 +329,84 @@ export function PayrollPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
               <AdvancedMetric icon={<CheckCircle2 className="h-4 w-4" />} label="Donem kapama" value={`${advancedPayroll.summary.payrollCount}/${advancedPayroll.summary.activeEmployeeCount}`} tone={advancedPayroll.summary.missingPayrollCount > 0 ? "warning" : "success"} />
               <AdvancedMetric icon={<BookOpen className="h-4 w-4" />} label="Muhasebe fisi" value={advancedPayroll.accounting.journalEntryNumber ?? "Eksik"} tone={advancedPayroll.summary.accountingVoucherCreated ? "success" : "warning"} />
+              <AdvancedMetric icon={<ShieldCheck className="h-4 w-4" />} label="Hassas yetki" value={advancedPayroll.summary.sensitiveAccessIssueCount} tone={advancedPayroll.summary.sensitiveAccessIssueCount > 0 ? "warning" : "success"} />
+              <AdvancedMetric icon={<ClipboardCheck className="h-4 w-4" />} label="Onay bekleyen" value={advancedPayroll.summary.approvalPendingCount} tone={advancedPayroll.summary.approvalPendingCount > 0 ? "warning" : "success"} />
               <AdvancedMetric icon={<RotateCcw className="h-4 w-4" />} label="Geriye donuk duzeltme" value={advancedPayroll.summary.retroCorrectionCount} tone={advancedPayroll.summary.retroCorrectionCount > 0 ? "warning" : "info"} />
               <AdvancedMetric icon={<Archive className="h-4 w-4" />} label="Onayli arsiv" value={advancedPayroll.summary.archiveReadyCount} tone={advancedPayroll.summary.archiveReadyCount > 0 ? "success" : "info"} />
             </div>
 
             <div className="grid gap-4 xl:grid-cols-3">
+              <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                <h3 className="mb-2 text-xs font-semibold text-slate-200">Hassas veri yetkisi</h3>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <AccessPill label="Oku" active={advancedPayroll.sensitiveAccess.currentUser.canRead} />
+                  <AccessPill label="Guncelle" active={advancedPayroll.sensitiveAccess.currentUser.canUpdate} />
+                  <AccessPill label="Onayla" active={advancedPayroll.sensitiveAccess.currentUser.canApprove} />
+                  <AccessPill label="Disa aktar" active={advancedPayroll.sensitiveAccess.currentUser.canExport} />
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
+                  <span>Export rol: {advancedPayroll.sensitiveAccess.roleCoverage.exportRoleCount}</span>
+                  <span>Onay rol: {advancedPayroll.sensitiveAccess.roleCoverage.approveRoleCount}</span>
+                </div>
+                {advancedPayroll.sensitiveAccess.warnings.length > 0 && (
+                  <div className="mt-3 space-y-1">
+                    {advancedPayroll.sensitiveAccess.warnings.slice(0, 2).map((warning) => (
+                      <p key={warning} className="flex items-start gap-1.5 text-xs text-amber-300">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                <h3 className="mb-2 text-xs font-semibold text-slate-200">Bordro onay akisi</h3>
+                <div className="mb-3 flex items-center justify-between gap-3 text-xs">
+                  <span className="text-slate-500">Aktif akis / adim</span>
+                  <span className="font-medium text-slate-200">
+                    {advancedPayroll.approvalWorkflow.activeFlowCount}/{advancedPayroll.approvalWorkflow.approverStepCount}
+                  </span>
+                </div>
+                {advancedPayroll.approvalWorkflow.latestRequests.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    {advancedPayroll.approvalWorkflow.activeFlowCount > 0 ? "Bu donem icin onay talebi yok." : "Bordro icin aktif onay akisi yok."}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {advancedPayroll.approvalWorkflow.latestRequests.slice(0, 4).map((row) => (
+                      <div key={row.requestId} className="rounded-md border border-slate-800 bg-slate-900/60 p-2 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium text-slate-200">{row.flowName}</p>
+                          <Badge variant={row.status === "APPROVED" ? "success" : row.status === "PENDING" ? "warning" : "danger"}>
+                            {approvalRequestLabel(row.status)}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-slate-500">Adim {row.currentStep} / {formatDate(row.createdAt)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                <h3 className="mb-2 text-xs font-semibold text-slate-200">Muhasebe fis baglantisi</h3>
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="text-slate-500">Durum</span>
+                  <Badge variant={advancedPayroll.accounting.integrationStatus === "posted" ? "success" : "warning"}>
+                    {accountingStatusLabel(advancedPayroll.accounting.integrationStatus)}
+                  </Badge>
+                </div>
+                <div className="mt-3 space-y-2 text-xs text-slate-500">
+                  <p>Fis: <span className="font-medium text-slate-200">{advancedPayroll.accounting.journalEntryNumber ?? "-"}</span></p>
+                  <p>Satir: {advancedPayroll.accounting.lineCount} / Denge farki: {formatCurrency(advancedPayroll.accounting.balanceDifference)}</p>
+                  <p>Post tarihi: {formatDate(advancedPayroll.accounting.postedAt)}</p>
+                </div>
+              </div>
+
               <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
                 <h3 className="mb-2 text-xs font-semibold text-slate-200">Kapama kontrol listesi</h3>
                 <div className="space-y-2">
@@ -638,6 +738,14 @@ export function PayrollPage() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+function AccessPill({ label, active }: { label: string; active: boolean }) {
+  return (
+    <span className={`rounded-md border px-2 py-1 ${active ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900/60 text-slate-500"}`}>
+      {label}
+    </span>
   );
 }
 

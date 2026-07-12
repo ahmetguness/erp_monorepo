@@ -231,16 +231,64 @@ export interface AdvancedPayrollSummary {
   closingReady: boolean;
   retroCorrectionCount: number;
   archiveReadyCount: number;
+  sensitiveAccessIssueCount: number;
+  approvalPendingCount: number;
+  accountingIssueCount: number;
 }
 
 export interface PayrollAccountingIntegration {
   status: 'created' | 'missing';
+  integrationStatus: 'posted' | 'draft' | 'missing' | 'unbalanced';
   journalEntryId: string | null;
   journalEntryNumber: string | null;
   postedAt: string | null;
+  journalEntryHref: string | null;
+  lineCount: number;
+  isPosted: boolean;
+  isBalanced: boolean;
+  balanceDifference: number;
   totalGross: number;
   totalNet: number;
   totalDeductions: number;
+}
+
+export interface PayrollSensitiveAccessInsight {
+  status: 'strict' | 'needs_export_permission' | 'needs_approval_permission';
+  currentUser: {
+    isOwner: boolean;
+    canRead: boolean;
+    canUpdate: boolean;
+    canApprove: boolean;
+    canExport: boolean;
+  };
+  roleCoverage: {
+    readRoleCount: number;
+    updateRoleCount: number;
+    approveRoleCount: number;
+    exportRoleCount: number;
+  };
+  warnings: string[];
+}
+
+export interface PayrollApprovalRequestRow {
+  requestId: string;
+  entityId: string;
+  flowName: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'ESCALATED';
+  currentStep: number;
+  createdAt: string;
+  resolvedAt: string | null;
+  notes: string | null;
+}
+
+export interface PayrollApprovalWorkflowInsight {
+  status: 'configured' | 'missing_flow' | 'pending' | 'rejected';
+  activeFlowCount: number;
+  approverStepCount: number;
+  pendingRequestCount: number;
+  approvedRequestCount: number;
+  rejectedRequestCount: number;
+  latestRequests: PayrollApprovalRequestRow[];
 }
 
 export interface PayrollRetroCorrectionRow {
@@ -265,6 +313,8 @@ export interface AdvancedPayrollResult {
   summary: AdvancedPayrollSummary;
   closingChecks: ClosingCheckItem[];
   accounting: PayrollAccountingIntegration;
+  sensitiveAccess: PayrollSensitiveAccessInsight;
+  approvalWorkflow: PayrollApprovalWorkflowInsight;
   retroCorrections: PayrollRetroCorrectionRow[];
   archive: PayrollArchiveRow[];
 }
