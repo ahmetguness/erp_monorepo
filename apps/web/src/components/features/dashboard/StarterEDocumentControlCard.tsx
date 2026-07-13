@@ -26,7 +26,7 @@ function creditLabel(summary: EDocumentSummary | undefined): string {
 }
 
 function statusTone(summary: EDocumentSummary | undefined): { label: string; className: string } {
-  if (!summary) return { label: 'Yukleniyor', className: 'border-slate-700 bg-slate-800 text-slate-300' };
+  if (!summary) return { label: 'Yükleniyor', className: 'border-slate-700 bg-slate-800 text-slate-300' };
   if (summary.sendingErrors > 0) return { label: 'Mudahale gerekli', className: 'border-red-500/30 bg-red-500/10 text-red-300' };
   if (summary.pending > 0) return { label: 'Bekleyen var', className: 'border-amber-500/30 bg-amber-500/10 text-amber-300' };
   return { label: 'Saglikli', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' };

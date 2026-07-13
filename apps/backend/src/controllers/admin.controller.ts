@@ -17,6 +17,7 @@ import { logger } from '../lib/logger';
 import { getTrustedClientIp } from '../utils/request-ip.js';
 import { modulesForPrismaPlan, toAppModule, VALID_MODULE_KEYS } from '../utils/tenant-modules';
 import { PlanFeatureService } from '../services/plan-feature.service';
+import { PlanChangeExperienceService } from '../services/plan-change-experience.service';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
@@ -41,6 +42,7 @@ const VALID_FEATURE_KEYS: readonly string[] = Object.values(FeatureKey);
 const VALID_FEATURE_TYPES: readonly string[] = Object.values(FeatureType);
 const VALID_MODULES = VALID_MODULE_KEYS;
 const planFeatureService = new PlanFeatureService(prisma);
+const planChangeExperienceService = new PlanChangeExperienceService(prisma);
 
 function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
@@ -541,9 +543,12 @@ export const AdminTenantController = {
       ...getRequestMeta(c),
     });
 
-    await notifyTenantOwners(prisma, id, 'Planınız admin tarafından değiştirildi', [
-      `Plan: ${tenant.plan} → ${updated.plan}`,
-    ]);
+    await planChangeExperienceService.handlePlanChanged({
+      tenantId: id,
+      oldPlan: tenant.plan,
+      newPlan: updated.plan,
+      changedByUserId: null,
+    });
 
     return c.json({ data: updated });
   },

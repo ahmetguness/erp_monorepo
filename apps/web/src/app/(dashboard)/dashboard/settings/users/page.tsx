@@ -116,7 +116,7 @@ export default function UsersAndInvitesPage() {
                 {userLimit.isFull ? <AlertTriangle className="h-4 w-4" /> : <Users className="h-4 w-4" />}
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-100">Kullanici limiti</p>
+                <p className="text-sm font-semibold text-slate-100">Kullanıcı limiti</p>
                 <p className="text-xs text-slate-400">
                   {userLimit.activeUsers} aktif kullanici, {userLimit.pendingInvites} bekleyen davet. Limit: {userLimit.maxUsers} kullanici.
                 </p>
@@ -289,7 +289,7 @@ export default function UsersAndInvitesPage() {
               userLimit.isFull ? 'border-amber-500/40 bg-amber-500/10 text-amber-100' : 'border-blue-500/30 bg-blue-500/10 text-blue-100',
             )}>
               {userLimit.isFull
-                ? 'Kullanici limiti dolu. Davet gonderimi yeni bir slot acilana kadar kapali.'
+                ? 'Kullanıcı limiti dolu. Davet gönderimi yeni bir slot açılana kadar kapalı.'
                 : `${userLimit.remainingSlots} kullanici slotu kaldi. Bekleyen davetler limite dahil gosterilir.`}
             </div>
           )}

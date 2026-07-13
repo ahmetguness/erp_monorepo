@@ -9,6 +9,7 @@ import { NAV_GROUPS, type NavItem } from '@/lib/nav-config';
 import { useCurrentUser, useLogout } from '@/hooks/useAuth';
 import { useUIStore } from '@/store/ui.store';
 import { PLAN_RANK, type PlanName } from '@/lib/plans';
+import { getAccessLockReasons, hasRequiredModule, hasRequiredPlan, lockReasonSummary, type AccessLockReason } from '@/lib/access-lock';
 import { TenantLogo } from './TenantLogo';
 
 // ─────────────────────────────────────────────
@@ -30,18 +31,11 @@ function isPlanName(plan: string): plan is PlanName {
 function hasPlanAccess(tenantPlan: string, requiredPlan?: PlanName): boolean {
   if (!requiredPlan) return true;
   const normalizedTenantPlan = isPlanName(tenantPlan) ? tenantPlan : 'STARTER';
-  return PLAN_RANK[normalizedTenantPlan] >= PLAN_RANK[requiredPlan];
+  return hasRequiredPlan(normalizedTenantPlan, requiredPlan);
 }
 
 function hasModuleAccess(tenantModules: string[] | undefined | null, requiredModule?: string): boolean {
-  if (!requiredModule) return true;
-  if (!tenantModules || tenantModules.length === 0) return true;
-  const normalized = tenantModules.map((m) => String(m).toLowerCase());
-  const req = requiredModule.toLowerCase();
-  if (req === 'sales') return normalized.includes('sales') || normalized.includes('invoicing') || normalized.includes('contacts');
-  if (req === 'inventory') return normalized.includes('inventory') || normalized.includes('warehouse');
-  if (req === 'mail') return normalized.includes('mail') || normalized.includes('mailcenter');
-  return normalized.includes(req);
+  return hasRequiredModule(tenantModules, requiredModule);
 }
 
 function hasAccess(tenantPlan: string, tenantModules: string[] | undefined | null, item: { plan?: PlanName; module?: string }): boolean {
@@ -135,16 +129,31 @@ interface NavItemProps {
   depth?: number;
   parentLocked?: boolean;
   parentPlan?: string;
+  parentLockReasons?: readonly AccessLockReason[];
 }
 
-function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked = false, parentPlan }: NavItemProps) {
+function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked = false, parentPlan, parentLockReasons = [] }: NavItemProps) {
   const pathname = usePathname();
 
-  const isLocked = parentLocked || Boolean(item.plan && !hasPlanAccess(tenantPlan, item.plan));
+  const normalizedTenantPlan = isPlanName(tenantPlan) ? tenantPlan : 'STARTER';
+  const lockReasons = getAccessLockReasons({
+    currentPlan: normalizedTenantPlan,
+    requiredPlan: item.plan,
+    requiredModule: item.module,
+    tenantModules,
+  });
+  const isLocked = parentLocked || lockReasons.length > 0;
+  const effectiveLockReasons = lockReasons.length > 0 ? lockReasons : parentLockReasons;
   const effectivePlan = item.plan || parentPlan || 'PROFESSIONAL';
 
   const visibleChildren = item.children?.filter((c) => {
-    const isChildLocked = isLocked || Boolean(c.plan && !hasPlanAccess(tenantPlan, c.plan));
+    const childReasons = getAccessLockReasons({
+      currentPlan: normalizedTenantPlan,
+      requiredPlan: c.plan,
+      requiredModule: c.module,
+      tenantModules,
+    });
+    const isChildLocked = isLocked || childReasons.length > 0;
     return hasAccess(tenantPlan, tenantModules, c) || isChildLocked;
   });
 
@@ -168,8 +177,9 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked =
   const Icon = item.icon;
 
   const href = isLocked
-    ? `/dashboard/upgrade-preview?feature=${encodeURIComponent(item.label)}&plan=${effectivePlan}&module=${item.module || ''}`
+    ? `/dashboard/upgrade-preview?feature=${encodeURIComponent(item.label)}&plan=${effectivePlan}&module=${item.module || ''}&reason=${encodeURIComponent(effectiveLockReasons.map((reason) => reason.code).join(','))}`
     : item.href;
+  const lockTitle = lockReasonSummary(effectiveLockReasons);
 
   // Has children → collapsible
   if (visibleChildren && visibleChildren.length > 0) {
@@ -177,6 +187,7 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked =
       <div>
         <button
           onClick={() => setOpen((o) => !o)}
+          title={isLocked ? lockTitle : undefined}
           className={cn(
             'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
             depth > 0 ? 'pl-8' : '',
@@ -206,6 +217,7 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked =
                 depth={depth + 1}
                 parentLocked={isLocked}
                 parentPlan={effectivePlan}
+                parentLockReasons={effectiveLockReasons}
               />
             ))}
           </div>
@@ -218,6 +230,7 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked =
   return (
     <Link
       href={href}
+      title={isLocked ? lockTitle : undefined}
       className={cn(
         'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
         depth > 0 ? 'pl-8' : '',

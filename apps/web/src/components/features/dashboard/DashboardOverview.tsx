@@ -45,6 +45,7 @@ import { StockAlertDashboardCard } from "@/components/features/stock/StockAlertD
 import { SetupChecklistCard } from "@/components/features/settings/SetupChecklistCard";
 import { StarterHealthScoreCard } from "@/components/features/dashboard/StarterHealthScoreCard";
 import { StarterEDocumentControlCard } from "@/components/features/dashboard/StarterEDocumentControlCard";
+import { PlanUsageLimitsCard } from "@/components/features/dashboard/PlanUsageLimitsCard";
 
 /* ── Types ──────────────────────────────────── */
 
@@ -117,7 +118,7 @@ const DASHBOARD_PRESET_LABEL: Record<DashboardPreset, string> = {
 
 const DASHBOARD_PRESET_DESCRIPTION: Record<DashboardPreset, string> = {
   executive: 'Ciro, karlilik, nakit akisi ve onaylar onceliklendirildi.',
-  sales: 'Acik teklifler, musteri takipleri ve satis aksiyonlari onceliklendirildi.',
+  sales: 'Açık teklifler, müşteri takipleri ve satış aksiyonları önceliklendirildi.',
   accounting: 'Tahsilat, geciken faturalar, kasa/banka ve raporlar onceliklendirildi.',
   warehouse: 'Kritik stok, satin alma ihtiyaci ve sayim isleri onceliklendirildi.',
   hr: 'Izin talepleri, personel evraklari ve IK gorevleri onceliklendirildi.',
@@ -349,6 +350,7 @@ export function DashboardOverview() {
       <SetupChecklistCard enabled={canReadSettings} compact />
       <StarterHealthScoreCard enabled={isStarter} />
       <StarterEDocumentControlCard enabled={isStarter && canReadInvoicing} />
+      <PlanUsageLimitsCard enabled={canReadSettings} />
 
       {pinnedKpis.length > 0 && (
         <Card>

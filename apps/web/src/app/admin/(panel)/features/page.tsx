@@ -25,42 +25,42 @@ const PLAN_LABELS: Record<string, string> = {
 };
 
 const FEATURE_LABELS: Record<string, string> = {
-  max_users: 'Maksimum Kullanici',
-  max_products: 'Maksimum Urun',
-  multi_warehouse: 'Coklu Depo',
-  role_management: 'Rol Yonetimi',
-  approvals: 'Onay Akislari',
+  max_users: 'Maksimum Kullanıcı',
+  max_products: 'Maksimum Ürün',
+  multi_warehouse: 'Çoklu Depo',
+  role_management: 'Rol Yönetimi',
+  approvals: 'Onay Akışları',
   crm: 'CRM',
-  sales: 'Satis',
-  purchasing: 'Satin Alma',
-  production: 'Uretim',
+  sales: 'Satış',
+  purchasing: 'Satın Alma',
+  production: 'Üretim',
   service: 'Servis',
   marketplace: 'Pazaryeri',
   payroll: 'Bordro',
-  hr: 'Insan Kaynaklari',
-  api_access: 'API Erisimi',
-  audit_log: 'Denetim Kaydi',
-  custom_reporting: 'Ozel Raporlama',
-  document_center: 'Dokuman Merkezi',
-  smart_notifications: 'Akilli Bildirimler',
-  workflow_center: 'Is Akisi Merkezi',
+  hr: 'İnsan Kaynakları',
+  api_access: 'API Erişimi',
+  audit_log: 'Denetim Kaydı',
+  custom_reporting: 'Özel Raporlama',
+  document_center: 'Doküman Merkezi',
+  smart_notifications: 'Akıllı Bildirimler',
+  workflow_center: 'İş Akışı Merkezi',
   mail_center: 'Mail Merkezi',
-  bulk_operations: 'Toplu Islemler',
-  cashflow_forecast: 'Nakit Akisi Tahmini',
+  bulk_operations: 'Toplu İşlemler',
+  cashflow_forecast: 'Nakit Akışı Tahmini',
   bank_reconciliation: 'Banka Mutabakati',
   lot_serial_tracking: 'Lot/Seri Takibi',
 };
 
 const TYPE_LABELS: Record<PlanFeatureType, string> = {
-  BOOLEAN: 'Ac/Kapat',
+  BOOLEAN: 'Aç/Kapat',
   LIMIT: 'Limit',
-  ENUM: 'Secenek',
+  ENUM: 'Seçenek',
 };
 
 const VALUE_LABELS: Record<string, string> = {
-  true: 'Acik',
-  false: 'Kapali',
-  unlimited: 'Sinirsiz',
+  true: 'Açık',
+  false: 'Kapalı',
+  unlimited: 'Sınırsız',
   basic: 'Temel',
   standard: 'Standart',
   full: 'Tam',
@@ -142,9 +142,9 @@ export default function AdminFeaturesPage() {
       <div>
         <div className="flex items-center gap-2">
           <Sliders className="h-4 w-4 text-slate-500" />
-          <h1 className="text-lg font-semibold text-white">Plan Ozellikleri</h1>
+          <h1 className="text-lg font-semibold text-white">Plan Özellikleri</h1>
         </div>
-        <p className="mt-1 text-sm text-slate-500">Plan bazli limit ve ozellik tanimlari.</p>
+        <p className="mt-1 text-sm text-slate-500">Plan bazlı limit ve özellik tanımları.</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -160,19 +160,19 @@ export default function AdminFeaturesPage() {
                 : 'border-transparent text-slate-500 hover:text-slate-300',
             )}
           >
-            {plan ? PLAN_LABELS[plan] : 'Tumu'}
+            {plan ? PLAN_LABELS[plan] : 'Tümü'}
           </button>
         ))}
       </div>
 
       {updateMutation.error && (
         <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-          Plan ozelligi guncellenemedi.
+          Plan özelliği güncellenemedi.
         </div>
       )}
 
       {isLoading ? (
-        <div className="text-sm text-slate-600">Yukleniyor...</div>
+        <div className="text-sm text-slate-600">Yükleniyor...</div>
       ) : (
         Object.entries(grouped).map(([plan, items]) => (
           <div key={plan} className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
@@ -180,7 +180,7 @@ export default function AdminFeaturesPage() {
               <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', PLAN_COLORS[plan])}>
                 {PLAN_LABELS[plan] ?? plan}
               </span>
-              <span className="text-[10px] text-slate-600">{items.length} ozellik</span>
+              <span className="text-[10px] text-slate-600">{items.length} özellik</span>
             </div>
             <div className="divide-y divide-slate-800/40">
               {items.map((feature) => {
@@ -205,8 +205,8 @@ export default function AdminFeaturesPage() {
                             onChange={(event) => setDraft({ ...activeDraft, value: event.target.value })}
                             className="h-9 rounded-md border border-slate-700 bg-slate-950 px-2 text-sm text-white"
                           >
-                            <option value="true">Acik</option>
-                            <option value="false">Kapali</option>
+                            <option value="true">Açık</option>
+                            <option value="false">Kapalı</option>
                           </select>
                         ) : (
                           <input
@@ -222,7 +222,7 @@ export default function AdminFeaturesPage() {
                         >
                           <option value="BOOLEAN">Ac/Kapat</option>
                           <option value="LIMIT">Limit</option>
-                          <option value="ENUM">Secenek</option>
+                          <option value="ENUM">Seçenek</option>
                         </select>
                         <div className="flex items-center justify-end gap-1">
                           <button

@@ -242,7 +242,7 @@ export function WorkflowCenterPage() {
                         <span className="font-semibold">{TRIGGER_LABELS[tmpl.trigger] ?? tmpl.trigger}</span>
                       </div>
                       <div className="flex items-center justify-between text-slate-400">
-                        <span className="text-slate-500">KoÅŸul:</span>
+                        <span className="text-slate-500">Koşul:</span>
                         <span className="max-w-40 truncate text-right font-semibold text-slate-300">{tmpl.conditionLabel}</span>
                       </div>
                       <div className="flex items-center justify-between text-slate-400">
@@ -304,7 +304,7 @@ export function WorkflowCenterPage() {
                           <Badge variant="info">{ACTION_LABELS[rule.action] ?? rule.action}</Badge>
                         </div>
                         <div className="grid gap-1 pt-2 text-[11px] text-slate-500 md:grid-cols-2">
-                          <p className="truncate"><span className="text-slate-400">Kosul:</span> {formatConfig(rule.conditions)}</p>
+                          <p className="truncate"><span className="text-slate-400">Koşul:</span> {formatConfig(rule.conditions)}</p>
                           <p className="truncate"><span className="text-slate-400">Son calisma:</span> {formatRunResult(rule)}</p>
                         </div>
                       </div>

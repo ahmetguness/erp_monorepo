@@ -52,7 +52,7 @@ const EXPORT_TARGET_OPTIONS: Array<{ value: BiSettings['scheduledExportTarget'];
 ];
 
 const HEALTH_LABELS: Record<BiSettings['status']['health'], string> = {
-  disabled: 'Kapali',
+  disabled: 'Kapalı',
   needs_token: 'Token bekliyor',
   needs_destination: 'Hedef bilgisi eksik',
   ready: 'Hazir',

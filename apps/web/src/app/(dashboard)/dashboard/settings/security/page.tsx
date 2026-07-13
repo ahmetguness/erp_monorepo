@@ -395,7 +395,7 @@ export default function CorporateSecurityPage() {
                   <div className="flex items-center gap-2">
                     <UsersRound className="h-4 w-4 text-emerald-400" />
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Kullanici / rol senkronizasyonu</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Kullanıcı / rol senkronizasyonu</p>
                       <p className="mt-1 text-xs text-slate-500">SCIM Groups rollere baglanir; /Groups endpointi rollerinizi provider tarafina yayinlar.</p>
                     </div>
                   </div>
@@ -517,14 +517,14 @@ export default function CorporateSecurityPage() {
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
               <p className="text-[10px] uppercase tracking-wide text-slate-500">Export API</p>
               <p className={`mt-1 text-sm font-semibold ${auditLogFullStatus?.exportApi.enabled ? 'text-emerald-300' : 'text-slate-400'}`}>
-                {auditLogFullStatus?.exportApi.enabled ? 'Aktif' : 'Kapali'}
+                {auditLogFullStatus?.exportApi.enabled ? 'Aktif' : 'Kapalı'}
               </p>
               <p className="mt-1 text-[11px] text-slate-500">Limit {auditLogFullStatus?.exportApi.maxRows ?? 10000} satir</p>
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
               <p className="text-[10px] uppercase tracking-wide text-slate-500">SIEM push</p>
               <p className={`mt-1 text-sm font-semibold ${auditLogFullStatus?.siemPush.enabled ? 'text-emerald-300' : 'text-slate-400'}`}>
-                {auditLogFullStatus?.siemPush.enabled ? auditLogFullStatus.siemPush.destinationType : 'Kapali'}
+                {auditLogFullStatus?.siemPush.enabled ? auditLogFullStatus.siemPush.destinationType : 'Kapalı'}
               </p>
               <p className="mt-1 text-[11px] text-slate-500">{auditLogFullStatus?.siemPush.lastStatus ?? 'Son durum yok'}</p>
             </div>
@@ -562,7 +562,7 @@ export default function CorporateSecurityPage() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white">SIEM / Syslog Audit Export</h3>
-              <p className="text-xs text-slate-500">Audit log full seviyesini webhook, syslog uyumlu satir veya generic JSON export ile SIEM tarafina aktarÄ±n.</p>
+              <p className="text-xs text-slate-500">Audit log full seviyesini webhook, syslog uyumlu satır veya generic JSON export ile SIEM tarafına aktarın.</p>
             </div>
           </div>
 
@@ -792,7 +792,7 @@ export default function CorporateSecurityPage() {
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                 <p className="text-xs font-semibold text-slate-300">Dry-run ozeti</p>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  {retentionPreview ? `${retentionPreview.totalCandidates} aday kayit, ${retentionPreview.items.length} modul` : 'Henuz onizleme uretilmedi.'}
+                  {retentionPreview ? `${retentionPreview.totalCandidates} aday kayıt, ${retentionPreview.items.length} modül` : 'Henüz önizleme üretilmedi.'}
                 </p>
                 {retentionForm.lastRunAt && (
                   <p className="mt-1 font-mono text-[11px] text-slate-600">{retentionForm.lastRunAt}</p>
