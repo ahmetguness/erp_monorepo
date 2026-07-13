@@ -53,13 +53,13 @@ import {
   ListChecks,
   type LucideIcon,
 } from 'lucide-react';
-import { ACCESS_POLICIES } from './plans';
+import { ACCESS_POLICIES, type PlanName } from './plans';
 
 export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
-  plan?: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
+  plan?: PlanName;
   module?: string;
   children?: NavItem[];
 }

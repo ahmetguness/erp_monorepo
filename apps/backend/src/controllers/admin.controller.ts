@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { setCookie, deleteCookie } from 'hono/cookie';
-import { AppModule, AuditAction, EntityType, FeatureKey, Plan, Prisma, TenantStatus } from '@prisma/client';
+import { AppModule, AuditAction, EntityType, FeatureKey, FeatureType, Plan, Prisma, TenantStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ValidationError, NotFoundError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
@@ -15,7 +15,8 @@ import { getObservabilitySnapshot } from '../services/observability.service.js';
 import { rateLimiter } from '../lib/rateLimiter';
 import { logger } from '../lib/logger';
 import { getTrustedClientIp } from '../utils/request-ip.js';
-import { modulesForPlan, toAppModule, VALID_MODULE_KEYS } from '../utils/tenant-modules';
+import { modulesForPrismaPlan, toAppModule, VALID_MODULE_KEYS } from '../utils/tenant-modules';
+import { PlanFeatureService } from '../services/plan-feature.service';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
@@ -37,7 +38,9 @@ const ADMIN_LOGIN_LOCKOUT_WINDOW_MS = 60 * 60 * 1000;
 const VALID_PLANS = Object.values(Plan);
 const VALID_STATUSES = Object.values(TenantStatus);
 const VALID_FEATURE_KEYS: readonly string[] = Object.values(FeatureKey);
+const VALID_FEATURE_TYPES: readonly string[] = Object.values(FeatureType);
 const VALID_MODULES = VALID_MODULE_KEYS;
+const planFeatureService = new PlanFeatureService(prisma);
 
 function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
@@ -73,6 +76,14 @@ function isFeatureKey(value: string): value is FeatureKey {
   return VALID_FEATURE_KEYS.includes(value);
 }
 
+function isPlan(value: string): value is Plan {
+  return (VALID_PLANS as readonly string[]).includes(value);
+}
+
+function isFeatureType(value: string): value is FeatureType {
+  return VALID_FEATURE_TYPES.includes(value);
+}
+
 function createSlug(input: string): string {
   const slug = input
     .toLowerCase()
@@ -105,6 +116,46 @@ function validateModules(modules: string[] | undefined): AppModule[] | undefined
     if (!appModule) throw new ValidationError(`Geçersiz modül: ${module}`);
     return appModule;
   });
+}
+
+function normalizePlanFeatureValue(type: FeatureType, value: string): string {
+  const normalized = value.trim();
+  if (!normalized) throw new ValidationError('value bos olamaz.');
+
+  if (type === FeatureType.BOOLEAN) {
+    const lower = normalized.toLowerCase();
+    if (lower !== 'true' && lower !== 'false') {
+      throw new ValidationError('BOOLEAN feature value true veya false olmalidir.');
+    }
+    return lower;
+  }
+
+  if (type === FeatureType.LIMIT) {
+    const lower = normalized.toLowerCase();
+    if (lower === 'unlimited') return lower;
+    const numericValue = Number(normalized);
+    if (!Number.isInteger(numericValue) || numericValue < 0) {
+      throw new ValidationError('LIMIT feature value pozitif tam sayi, 0 veya unlimited olmalidir.');
+    }
+  }
+
+  return normalized;
+}
+
+async function getPlanFeatureAuditTenantIds(plan: Plan): Promise<string[]> {
+  const impactedTenants = await prisma.tenant.findMany({
+    where: { plan, deletedAt: null },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (impactedTenants.length > 0) return impactedTenants.map((tenant) => tenant.id);
+
+  const fallbackTenant = await prisma.tenant.findFirst({
+    where: { deletedAt: null },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  return fallbackTenant ? [fallbackTenant.id] : [];
 }
 
 function formatNotificationValue(value: unknown): string {
@@ -396,7 +447,7 @@ export const AdminTenantController = {
           plan,
           status,
           maxUsers: body.maxUsers ?? null,
-          modules: (modules && modules.length > 0) ? modules : modulesForPlan(plan as any),
+          modules: (modules && modules.length > 0) ? modules : modulesForPrismaPlan(plan),
           notes: body.notes?.trim() || null,
           isCustomPricing: body.isCustomPricing ?? false,
           trialEndsAt,
@@ -476,7 +527,7 @@ export const AdminTenantController = {
 
     const updated = await prisma.tenant.update({
       where: { id },
-      data: { plan: body.plan, modules: modulesForPlan(body.plan as any), planChangedAt: new Date() },
+      data: { plan: body.plan, modules: modulesForPrismaPlan(body.plan), planChangedAt: new Date() },
     });
 
     await createAuditLog(prisma, {
@@ -623,12 +674,101 @@ export const AdminTenantController = {
 export const AdminFeatureController = {
 
   async listPlanFeatures(c: Context): Promise<Response> {
-    const plan = c.req.query('plan') as Plan | undefined;
+    const planQuery = c.req.query('plan');
+    let plan: Plan | undefined;
+    if (planQuery) {
+      if (!isPlan(planQuery)) {
+        return c.json(new ValidationError('Gecerli bir plan seciniz: STARTER, PROFESSIONAL, ENTERPRISE').toJSON(), 400);
+      }
+      plan = planQuery;
+    }
     const features = await prisma.planFeature.findMany({
       where: plan ? { plan } : {},
       orderBy: [{ plan: 'asc' }, { key: 'asc' }],
     });
     return c.json({ data: features });
+  },
+
+  async updatePlanFeature(c: Context): Promise<Response> {
+    const body = await c.req.json<{
+      plan?: string;
+      key?: string;
+      value?: string;
+      type?: string;
+      isEnabled?: boolean;
+      description?: string | null;
+      featureKey?: string | null;
+    }>().catch(() => null);
+
+    if (!body || !body.plan || !isPlan(body.plan)) {
+      return c.json(new ValidationError('Gecerli bir plan seciniz: STARTER, PROFESSIONAL, ENTERPRISE').toJSON(), 400);
+    }
+    if (!body.key?.trim()) {
+      return c.json(new ValidationError('key zorunludur.').toJSON(), 400);
+    }
+    if (typeof body.value !== 'string') {
+      return c.json(new ValidationError('value string olmalidir.').toJSON(), 400);
+    }
+    if (!body.type || !isFeatureType(body.type)) {
+      return c.json(new ValidationError('Gecerli bir feature type seciniz: BOOLEAN, LIMIT, ENUM').toJSON(), 400);
+    }
+    if (typeof body.isEnabled !== 'boolean') {
+      return c.json(new ValidationError('isEnabled boolean olmalidir.').toJSON(), 400);
+    }
+    if (body.featureKey !== undefined && body.featureKey !== null && !isFeatureKey(body.featureKey)) {
+      return c.json(new ValidationError('Gecersiz featureKey.').toJSON(), 400);
+    }
+
+    let normalizedValue: string;
+    try {
+      normalizedValue = normalizePlanFeatureValue(body.type, body.value);
+    } catch (error) {
+      if (error instanceof ValidationError) return c.json(error.toJSON(), 400);
+      throw error;
+    }
+
+    const plan = body.plan;
+    const key = body.key.trim();
+    const existingFeature = await prisma.planFeature.findUnique({ where: { plan_key: { plan, key } } });
+    const updatedFeature = await planFeatureService.updatePlanFeature({
+      plan,
+      key,
+      value: normalizedValue,
+      type: body.type,
+      isEnabled: body.isEnabled,
+      description: body.description,
+      featureKey: body.featureKey ?? null,
+    });
+
+    const auditTenantIds = await getPlanFeatureAuditTenantIds(plan);
+    await Promise.all(auditTenantIds.map((tenantId) => createAuditLog(prisma, {
+      tenantId,
+      module: 'admin',
+      entityType: EntityType.OTHER,
+      entityId: updatedFeature.id,
+      action: existingFeature ? AuditAction.UPDATE : AuditAction.CREATE,
+      oldValues: existingFeature ? {
+        plan: existingFeature.plan,
+        key: existingFeature.key,
+        value: existingFeature.value,
+        type: existingFeature.type,
+        isEnabled: existingFeature.isEnabled,
+        description: existingFeature.description,
+        featureKey: existingFeature.featureKey,
+      } : undefined,
+      newValues: {
+        plan: updatedFeature.plan,
+        key: updatedFeature.key,
+        value: updatedFeature.value,
+        type: updatedFeature.type,
+        isEnabled: updatedFeature.isEnabled,
+        description: updatedFeature.description,
+        featureKey: updatedFeature.featureKey,
+      },
+      ...getRequestMeta(c),
+    })));
+
+    return c.json({ data: updatedFeature });
   },
 
   async listOverrides(c: Context): Promise<Response> {

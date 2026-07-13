@@ -197,6 +197,27 @@ function findBackendRoute(routes: readonly BackendRouteGate[], entry: Permission
   return routes.find((route) => route.method === entry.method && route.path === normalizePath(entry.route));
 }
 
+function routeKey(method: HttpMethod, path: string): string {
+  return `${method} ${normalizePath(path)}`;
+}
+
+function matrixEntryKey(entry: PermissionMatrixEntry): string {
+  return routeKey(entry.method, entry.route);
+}
+
+function backendRouteKey(route: BackendRouteGate): string {
+  return routeKey(route.method, route.path);
+}
+
+function accessPolicySignature(input: Pick<BackendRouteGate, 'moduleGate' | 'minPlan' | 'featureKey'>): string | null {
+  if (!input.moduleGate && !input.minPlan && !input.featureKey) return null;
+  return [
+    `module=${input.moduleGate ?? '-'}`,
+    `plan=${input.minPlan ?? '-'}`,
+    `feature=${input.featureKey ?? '-'}`,
+  ].join('|');
+}
+
 function checkMatrixEntry(entry: PermissionMatrixEntry, backendRoutes: readonly BackendRouteGate[], webNav: ReadonlyMap<string, WebNavGate>): CheckIssue[] {
   const issues: CheckIssue[] = [];
   const route = findBackendRoute(backendRoutes, entry);
@@ -228,7 +249,7 @@ function checkMatrixEntry(entry: PermissionMatrixEntry, backendRoutes: readonly 
       if (expectedModule && nav.module && nav.module !== expectedModule) {
         issues.push({ file: nav.file, message: `${entry.id}: web nav module is ${nav.module}, expected ${expectedModule}` });
       }
-      if (entry.minPlan && nav.plan !== entry.minPlan) {
+      if (entry.minPlan && entry.minPlan !== 'STARTER' && nav.plan !== entry.minPlan) {
         issues.push({ file: nav.file, message: `${entry.id}: web nav plan is ${nav.plan ?? '-'}, expected ${entry.minPlan}` });
       }
     }
@@ -237,10 +258,65 @@ function checkMatrixEntry(entry: PermissionMatrixEntry, backendRoutes: readonly 
   return issues;
 }
 
+function checkMatrixRouteUniqueness(entries: readonly PermissionMatrixEntry[]): CheckIssue[] {
+  const issues: CheckIssue[] = [];
+  const seen = new Map<string, PermissionMatrixEntry>();
+
+  for (const entry of entries) {
+    const key = matrixEntryKey(entry);
+    const existing = seen.get(key);
+    if (existing) {
+      issues.push({
+        file: 'src/services/permission-simulator.service.ts',
+        message: `${entry.id}: duplicates ${key} already covered by ${existing.id}`,
+      });
+      continue;
+    }
+    seen.set(key, entry);
+  }
+
+  return issues;
+}
+
+function checkAccessPolicySignatureCoverage(
+  backendRoutes: readonly BackendRouteGate[],
+  entries: readonly PermissionMatrixEntry[],
+): CheckIssue[] {
+  const coveredSignatures = new Set(
+    entries
+      .map((entry) => accessPolicySignature(entry))
+      .filter((signature): signature is string => Boolean(signature)),
+  );
+  const signatureExamples = new Map<string, BackendRouteGate>();
+  const issues: CheckIssue[] = [];
+
+  for (const route of backendRoutes) {
+    const signature = accessPolicySignature(route);
+    if (!signature || signatureExamples.has(signature)) continue;
+    signatureExamples.set(signature, route);
+  }
+
+  for (const [signature, route] of signatureExamples) {
+    if (coveredSignatures.has(signature)) continue;
+
+    issues.push({
+      file: route.file,
+      message: `${backendRouteKey(route)}: backend access policy signature is not represented in permission matrix (${signature})`,
+    });
+  }
+
+  return issues;
+}
+
 function findIssues(): CheckIssue[] {
   const backendRoutes = extractBackendRouteManifest();
   const webNav = extractWebNavManifest();
-  return listPermissionMatrix().flatMap((entry) => checkMatrixEntry(entry, backendRoutes, webNav));
+  const matrixEntries = listPermissionMatrix();
+  return [
+    ...checkMatrixRouteUniqueness(matrixEntries),
+    ...matrixEntries.flatMap((entry) => checkMatrixEntry(entry, backendRoutes, webNav)),
+    ...checkAccessPolicySignatureCoverage(backendRoutes, matrixEntries),
+  ];
 }
 
 reportIssues('Permission gating consistency', findIssues());

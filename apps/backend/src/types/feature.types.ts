@@ -57,6 +57,12 @@ export const STARTER_FEATURE_DEFAULTS: Record<FeatureKey, string> = {
   [FeatureKey.CUSTOM_REPORTING]: 'false',
   [FeatureKey.DOCUMENT_CENTER]: 'true',
   [FeatureKey.SMART_NOTIFICATIONS]: 'true',
+  [FeatureKey.WORKFLOW_CENTER]: 'false',
+  [FeatureKey.MAIL_CENTER]: 'false',
+  [FeatureKey.BULK_OPERATIONS]: 'false',
+  [FeatureKey.CASHFLOW_FORECAST]: 'false',
+  [FeatureKey.BANK_RECONCILIATION]: 'false',
+  [FeatureKey.LOT_SERIAL_TRACKING]: 'false',
 };
 
 export const UNLIMITED_VALUE = 'unlimited';

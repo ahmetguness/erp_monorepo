@@ -22,7 +22,17 @@ export interface TenantDetail extends TenantListItem {
   featureOverrides: Array<{ id: string; featureKey: string; value: string; isEnabled: boolean; reason: string | null; expiresAt: string | null }>;
 }
 
-export interface PlanFeature { id: string; plan: string; key: string; value: string; type: string; isEnabled: boolean; description: string | null; featureKey: string | null }
+export type PlanFeatureType = 'BOOLEAN' | 'LIMIT' | 'ENUM';
+export interface PlanFeature { id: string; plan: string; key: string; value: string; type: PlanFeatureType; isEnabled: boolean; description: string | null; featureKey: string | null }
+export interface UpdatePlanFeatureInput {
+  plan: string;
+  key: string;
+  value: string;
+  type: PlanFeatureType;
+  isEnabled: boolean;
+  description?: string | null;
+  featureKey?: string | null;
+}
 export interface FeatureOverride { id: string; tenantId: string; featureKey: string; value: string; isEnabled: boolean; reason: string | null; expiresAt: string | null; tenant?: { id: string; companyName: string; slug: string } }
 
 export interface PlatformMetrics {
@@ -271,6 +281,11 @@ export async function updateTenant(id: string, data: Record<string, unknown>) {
 
 export async function getPlanFeatures(plan?: string): Promise<PlanFeature[]> {
   const res = await adminApiClient.get('/api/admin/features', { params: plan ? { plan } : {} });
+  return res.data.data;
+}
+
+export async function updatePlanFeature(data: UpdatePlanFeatureInput): Promise<PlanFeature> {
+  const res = await adminApiClient.put('/api/admin/features', data);
   return res.data.data;
 }
 

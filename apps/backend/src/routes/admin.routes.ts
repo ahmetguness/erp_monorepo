@@ -29,6 +29,7 @@ adminRoutes.post('/tenants/:id/status', requireAdmin, AdminTenantController.upda
 
 // Features
 adminRoutes.get('/features', requireAdmin, AdminFeatureController.listPlanFeatures);
+adminRoutes.put('/features', requireAdmin, AdminFeatureController.updatePlanFeature);
 adminRoutes.get('/overrides', requireAdmin, AdminFeatureController.listOverrides);
 adminRoutes.post('/overrides', requireAdmin, AdminFeatureController.createOverride);
 adminRoutes.delete('/overrides/:id', requireAdmin, AdminFeatureController.deleteOverride);

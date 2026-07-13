@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { NAV_GROUPS, type NavItem } from '@/lib/nav-config';
 import { useCurrentUser, useLogout } from '@/hooks/useAuth';
 import { useUIStore } from '@/store/ui.store';
+import { PLAN_RANK, type PlanName } from '@/lib/plans';
 import { TenantLogo } from './TenantLogo';
 
 // ─────────────────────────────────────────────
@@ -20,12 +21,16 @@ type NavGroup = import('@/lib/nav-config').NavGroup;
 // Plan rank — yüksek rank düşük rank'ı kapsar
 // ─────────────────────────────────────────────
 
-const PLAN_RANK: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
 const EMPTY_MODULES: string[] = [];
 
-function hasPlanAccess(tenantPlan: string, requiredPlan?: string): boolean {
+function isPlanName(plan: string): plan is PlanName {
+  return plan in PLAN_RANK;
+}
+
+function hasPlanAccess(tenantPlan: string, requiredPlan?: PlanName): boolean {
   if (!requiredPlan) return true;
-  return (PLAN_RANK[tenantPlan] ?? 0) >= (PLAN_RANK[requiredPlan] ?? 0);
+  const normalizedTenantPlan = isPlanName(tenantPlan) ? tenantPlan : 'STARTER';
+  return PLAN_RANK[normalizedTenantPlan] >= PLAN_RANK[requiredPlan];
 }
 
 function hasModuleAccess(tenantModules: string[] | undefined | null, requiredModule?: string): boolean {
@@ -39,7 +44,7 @@ function hasModuleAccess(tenantModules: string[] | undefined | null, requiredMod
   return normalized.includes(req);
 }
 
-function hasAccess(tenantPlan: string, tenantModules: string[] | undefined | null, item: { plan?: string; module?: string }): boolean {
+function hasAccess(tenantPlan: string, tenantModules: string[] | undefined | null, item: { plan?: PlanName; module?: string }): boolean {
   const hasRequiredPlan = hasPlanAccess(tenantPlan, item.plan);
   if (!tenantModules || tenantModules.length === 0) return hasRequiredPlan;
 

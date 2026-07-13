@@ -1,5 +1,6 @@
-import { AppModule } from '@prisma/client';
-import { PLAN_MODULES, type ModuleKey, type PlanName } from '@repo/types/plans';
+import { AppModule, Plan } from '@prisma/client';
+import { PLAN, PLAN_MODULES, type ModuleKey, type PlanName } from '@repo/types/plans';
+import { isModuleInList } from './feature-helpers';
 
 export const MODULE_TO_APP_MODULE: Record<ModuleKey, AppModule> = {
   accounting: AppModule.ACCOUNTING,
@@ -36,6 +37,33 @@ export function toAppModules(modules: readonly string[]): AppModule[] {
 
 export function modulesForPlan(plan: PlanName): AppModule[] {
   return PLAN_MODULES[plan].map((module) => MODULE_TO_APP_MODULE[module]);
+}
+
+export function planNameFromPrisma(plan: Plan): PlanName {
+  switch (plan) {
+    case Plan.STARTER:
+      return PLAN.STARTER;
+    case Plan.PROFESSIONAL:
+      return PLAN.PROFESSIONAL;
+    case Plan.ENTERPRISE:
+      return PLAN.ENTERPRISE;
+  }
+}
+
+export function modulesForPrismaPlan(plan: Plan): AppModule[] {
+  return modulesForPlan(planNameFromPrisma(plan));
+}
+
+export function moduleKeysForPrismaPlan(plan: Plan): readonly ModuleKey[] {
+  return PLAN_MODULES[planNameFromPrisma(plan)];
+}
+
+export function hasTenantModuleAccess(
+  tenant: { plan: Plan; modules: readonly string[] },
+  module: string,
+): boolean {
+  const effectiveModules = tenant.modules.length > 0 ? tenant.modules : moduleKeysForPrismaPlan(tenant.plan);
+  return isModuleInList(effectiveModules, module);
 }
 
 export function appModuleToModuleKey(module: AppModule): ModuleKey {

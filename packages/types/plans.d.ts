@@ -24,6 +24,12 @@ export declare const FEATURE_KEY: {
     readonly CUSTOM_REPORTING: "CUSTOM_REPORTING";
     readonly DOCUMENT_CENTER: "DOCUMENT_CENTER";
     readonly SMART_NOTIFICATIONS: "SMART_NOTIFICATIONS";
+    readonly WORKFLOW_CENTER: "WORKFLOW_CENTER";
+    readonly MAIL_CENTER: "MAIL_CENTER";
+    readonly BULK_OPERATIONS: "BULK_OPERATIONS";
+    readonly CASHFLOW_FORECAST: "CASHFLOW_FORECAST";
+    readonly BANK_RECONCILIATION: "BANK_RECONCILIATION";
+    readonly LOT_SERIAL_TRACKING: "LOT_SERIAL_TRACKING";
 };
 export type FeatureKeyName = typeof FEATURE_KEY[keyof typeof FEATURE_KEY];
 export declare const FEATURE_TYPE: {
@@ -73,6 +79,10 @@ export interface PlanFeatureFlags {
     smartNotifications: boolean;
     workflowCenter: boolean;
     mailCenter: boolean;
+    bulkOperations: boolean;
+    cashflowForecast: boolean;
+    bankReconciliation: boolean;
+    lotSerialTracking: boolean;
 }
 export declare const PLAN_FEATURES: Record<PlanName, PlanFeatureFlags>;
 export declare const PLAN_MODULES: Record<PlanName, readonly ModuleKey[]>;
@@ -83,6 +93,14 @@ export interface PlanFeatureRow {
     value: string;
     type: FeatureTypeName;
 }
+export interface PlanFeatureDefinition {
+    flag: keyof PlanFeatureFlags;
+    key: string;
+    featureKey: FeatureKeyName;
+    type: FeatureTypeName;
+    value: (features: PlanFeatureFlags, plan: PlanName) => string;
+}
+export declare const PLAN_FEATURE_DEFINITIONS: readonly PlanFeatureDefinition[];
 export declare const PLAN_FEATURE_ROWS: readonly PlanFeatureRow[];
 export interface AccessPolicy {
     minPlan?: PlanName;

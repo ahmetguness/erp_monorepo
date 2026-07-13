@@ -1,4 +1,4 @@
-import { FeatureKey, FeatureType, Plan, PrismaClient } from '@prisma/client';
+import { FeatureKey, FeatureType, Plan, Prisma, PrismaClient } from '@prisma/client';
 import { ResolvedFeature, STARTER_FEATURE_DEFAULTS } from '../types/feature.types';
 import { parseBooleanValue } from '../utils/feature-parser';
 
@@ -73,5 +73,38 @@ export class PlanFeatureService {
       type: FeatureType.BOOLEAN,
       isOverride: false,
     };
+  }
+
+  async updatePlanFeature(input: {
+    plan: Plan;
+    key: string;
+    value: string;
+    type: FeatureType;
+    isEnabled: boolean;
+    description?: string | null;
+    featureKey?: FeatureKey | null;
+  }): Promise<Prisma.PlanFeatureGetPayload<Record<string, never>>> {
+    const key = input.key.trim();
+    const description = input.description?.trim() || null;
+
+    return this.prisma.planFeature.upsert({
+      where: { plan_key: { plan: input.plan, key } },
+      create: {
+        plan: input.plan,
+        key,
+        value: input.value,
+        type: input.type,
+        isEnabled: input.isEnabled,
+        description,
+        featureKey: input.featureKey ?? null,
+      },
+      update: {
+        value: input.value,
+        type: input.type,
+        isEnabled: input.isEnabled,
+        description,
+        featureKey: input.featureKey ?? null,
+      },
+    });
   }
 }

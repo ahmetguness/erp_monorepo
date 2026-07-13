@@ -1,8 +1,8 @@
 import { FeatureKey, PermissionAction, Plan } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ForbiddenError, NotFoundError, ValidationError } from '../errors';
-import { STARTER_OPEN_MODULES } from '../types/feature.types';
 import { isPlanAtLeast } from '../types/plan.types';
+import { hasTenantModuleAccess } from '../utils/tenant-modules';
 import { TenantFeatureService } from './tenant-feature.service';
 
 export interface PermissionMatrixEntry {
@@ -96,11 +96,24 @@ const permissionMatrix: readonly PermissionMatrixEntry[] = [
   { id: 'invoices:list', label: 'Fatura listesi', route: '/api/invoices', method: 'GET', module: 'invoicing', action: PermissionAction.READ, moduleGate: 'invoicing', webHref: '/dashboard/invoices', webAction: 'Faturalar menusu gorunur' },
   { id: 'invoices:create', label: 'Fatura olustur', route: '/api/invoices', method: 'POST', module: 'invoicing', action: PermissionAction.CREATE, moduleGate: 'invoicing', webAction: 'Yeni fatura butonu' },
   { id: 'payments:create', label: 'Odeme kaydet', route: '/api/payments', method: 'POST', module: 'accounting', action: PermissionAction.CREATE, moduleGate: 'accounting', webAction: 'Odeme ekle aksiyonu' },
+  { id: 'accounting:closing-checklist', label: 'Mali donem kapanis kontrolu', route: '/api/accounting/fiscal-periods/:id/closing-checklist', method: 'GET', module: 'accounting', action: PermissionAction.READ, moduleGate: 'accounting', webAction: 'Kapanis kontrol listesini goruntule', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.BANK_RECONCILIATION },
+  { id: 'bank-transactions:list', label: 'Banka hareketleri', route: '/api/bank-transactions', method: 'GET', module: 'accounting', action: PermissionAction.READ, moduleGate: 'accounting', webHref: '/dashboard/bank-transactions', webAction: 'Banka hareketleri sayfasi', minPlan: Plan.PROFESSIONAL },
   { id: 'stock:movements', label: 'Stok hareketleri', route: '/api/stock/movements', method: 'GET', module: 'inventory', action: PermissionAction.READ, moduleGate: 'inventory', webHref: '/dashboard/stock/movements', webAction: 'Stok hareketleri sayfasi' },
+  { id: 'stock:advanced-suggestions', label: 'Gelismis stok onerileri', route: '/api/stock/advanced-suggestions', method: 'GET', module: 'inventory', action: PermissionAction.READ, moduleGate: 'inventory', webAction: 'Gelismis stok onerilerini goruntule', minPlan: Plan.PROFESSIONAL },
+  { id: 'reports:summary', label: 'Hazir raporlar', route: '/api/reports/revenue-summary', method: 'GET', module: 'reporting', action: PermissionAction.READ, moduleGate: 'reporting', webHref: '/dashboard/reports', webAction: 'Hazir raporlar sayfasi' },
+  { id: 'reports:cashflow-forecast', label: 'Nakit akis tahmini', route: '/api/reports/cashflow-forecast', method: 'GET', module: 'reporting', action: PermissionAction.READ, moduleGate: 'reporting', webAction: 'Nakit akis tahminini goruntule', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.CASHFLOW_FORECAST },
+  { id: 'reports:custom-registry', label: 'Ozel rapor registry', route: '/api/reports/registry', method: 'GET', module: 'reporting', action: PermissionAction.READ, moduleGate: 'reporting', webHref: '/dashboard/reports', webAction: 'Ozel rapor olusturma araclarini goruntule', featureKey: FeatureKey.CUSTOM_REPORTING },
   { id: 'purchase-orders:list', label: 'Satin alma siparisleri', route: '/api/purchase-orders', method: 'GET', module: 'purchasing', action: PermissionAction.READ, moduleGate: 'purchasing', webHref: '/dashboard/purchase-orders', webAction: 'Satin alma menusu', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.PURCHASING },
   { id: 'delivery-notes:create', label: 'Irsaliye olustur', route: '/api/delivery-notes', method: 'POST', module: 'invoicing', action: PermissionAction.CREATE, moduleGate: 'invoicing', webHref: '/dashboard/delivery-notes', webAction: 'Yeni irsaliye butonu', minPlan: Plan.PROFESSIONAL },
+  { id: 'e-documents:summary', label: 'E-belge ozeti', route: '/api/e-documents/summary', method: 'GET', module: 'invoicing', action: PermissionAction.READ, moduleGate: 'invoicing', webHref: '/dashboard/e-documents', webAction: 'E-belge ozetini goruntule', minPlan: Plan.STARTER },
+  { id: 'notifications:smart', label: 'Akilli bildirimler', route: '/api/notifications/smart', method: 'GET', module: 'notifications', action: PermissionAction.READ, webAction: 'Akilli bildirimleri goruntule', minPlan: Plan.STARTER, featureKey: FeatureKey.SMART_NOTIFICATIONS },
   { id: 'roles:list', label: 'Rol yonetimi', route: '/api/roles', method: 'GET', module: 'roles', action: PermissionAction.READ, webHref: '/dashboard/roles', webAction: 'Rol yonetimi sayfasi', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.ROLE_MANAGEMENT },
   { id: 'approvals:list', label: 'Onay akislari', route: '/api/approvals/flows', method: 'GET', module: 'approvals', action: PermissionAction.READ, moduleGate: 'approvals', webHref: '/dashboard/approvals', webAction: 'Onay merkezi', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.APPROVALS },
+  { id: 'workflow:rules', label: 'Is akisi kurallari', route: '/api/automation-rules', method: 'GET', module: 'settings', action: PermissionAction.READ, moduleGate: 'workflow', webHref: '/dashboard/workflow', webAction: 'Is akisi merkezi', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.WORKFLOW_CENTER },
+  { id: 'audit-log:export', label: 'Audit log export', route: '/api/audit-logs/export', method: 'GET', module: 'audit_logs', action: PermissionAction.EXPORT, webAction: 'Audit loglarini disa aktar', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.AUDIT_LOG },
+  { id: 'documents:library', label: 'Dokuman kutuphanesi', route: '/api/attachments/library', method: 'GET', module: 'attachments', action: PermissionAction.READ, moduleGate: 'documents', webHref: '/dashboard/documents', webAction: 'Dokuman merkezini goruntule', minPlan: Plan.STARTER, featureKey: FeatureKey.DOCUMENT_CENTER },
+  { id: 'lot-serials:list', label: 'Lot seri takibi', route: '/api/lot-serials', method: 'GET', module: 'inventory', action: PermissionAction.READ, moduleGate: 'inventory', webHref: '/dashboard/lot-serials', webAction: 'Lot seri takip sayfasi', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.LOT_SERIAL_TRACKING },
+  { id: 'bulk-operations:contacts-preview', label: 'Toplu islem onizleme', route: '/api/bulk-operations/contacts/preview', method: 'POST', module: 'contacts', action: PermissionAction.UPDATE, webHref: '/dashboard/bulk-operations', webAction: 'Toplu islem onizlemesi', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.BULK_OPERATIONS },
   { id: 'hr:employees', label: 'Personel listesi', route: '/api/hr/employees', method: 'GET', module: 'hr', action: PermissionAction.READ, moduleGate: 'hr', webHref: '/dashboard/hr/employees', webAction: 'IK menusu', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.HR },
   { id: 'payroll:list', label: 'Bordro listesi', route: '/api/payroll', method: 'GET', module: 'payroll', action: PermissionAction.READ, moduleGate: 'payroll', webHref: '/dashboard/hr/payroll', webAction: 'Bordro sayfasi', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.PAYROLL },
   { id: 'payroll:bank-file', label: 'Banka odeme dosyasi', route: '/api/payroll/integration/bank-file', method: 'GET', module: 'payroll', action: PermissionAction.EXPORT, moduleGate: 'payroll', webAction: 'Banka odeme listesi indir', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.PAYROLL },
@@ -108,7 +121,7 @@ const permissionMatrix: readonly PermissionMatrixEntry[] = [
   { id: 'payroll:closing-checks', label: 'Donemsel bordro kapanis kontrolleri', route: '/api/payroll/integration/closing-checks', method: 'GET', module: 'payroll', action: PermissionAction.READ, moduleGate: 'payroll', webAction: 'Kapanis kontrollerini calistir', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.PAYROLL },
   { id: 'marketplace:integrations', label: 'Pazaryeri entegrasyonlari', route: '/api/marketplace/integrations', method: 'GET', module: 'marketplace', action: PermissionAction.READ, moduleGate: 'marketplace', webHref: '/dashboard/marketplace/integrations', webAction: 'Pazaryeri menusu', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.MARKETPLACE },
   { id: 'api-keys:list', label: 'API anahtarlari', route: '/api/api-keys', method: 'GET', module: 'api_keys', action: PermissionAction.READ, webHref: '/dashboard/api-keys', webAction: 'API anahtarlari sayfasi', minPlan: Plan.PROFESSIONAL, featureKey: FeatureKey.API_ACCESS },
-  { id: 'mail:center', label: 'Mail merkezi', route: '/api/mail', method: 'GET', module: 'mail', action: PermissionAction.READ, moduleGate: 'mail', webHref: '/dashboard/mail', webAction: 'Mail merkezi', minPlan: Plan.ENTERPRISE },
+  { id: 'mail:center', label: 'Mail merkezi', route: '/api/mail', method: 'GET', module: 'mail', action: PermissionAction.READ, moduleGate: 'mail', webHref: '/dashboard/mail', webAction: 'Mail merkezi', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.MAIL_CENTER },
   { id: 'hr:advanced', label: 'Gelismis IK', route: '/api/hr/advanced', method: 'GET', module: 'hr', action: PermissionAction.READ, moduleGate: 'hr', webHref: '/dashboard/hr/advanced', webAction: 'Gelismis IK sayfasi', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.HR },
   { id: 'production:capacity-planning', label: 'Kapasite planlama', route: '/api/production/capacity-planning', method: 'GET', module: 'production', action: PermissionAction.READ, moduleGate: 'production', webHref: '/dashboard/production/capacity-planning', webAction: 'Kapasite planlama sayfasi', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.PRODUCTION },
   { id: 'production:mrp', label: 'MRP planlama', route: '/api/production/mrp', method: 'GET', module: 'production', action: PermissionAction.READ, moduleGate: 'production', webHref: '/dashboard/production/mrp', webAction: 'MRP planlama sayfasi', minPlan: Plan.ENTERPRISE, featureKey: FeatureKey.PRODUCTION },
@@ -174,13 +187,9 @@ export function parsePermissionScreenPreviewInput(value: unknown): PermissionScr
   return { userId: readRequiredString(value, 'userId') };
 }
 
-function hasModuleAccess(tenantModules: string[], moduleGate: string | undefined): boolean {
+function hasModuleAccess(tenant: { plan: Plan; modules: readonly string[] }, moduleGate: string | undefined): boolean {
   if (!moduleGate) return true;
-  const normalizedGate = moduleGate.toLowerCase();
-  if (tenantModules.length > 0) {
-    return tenantModules.some((m) => m.toLowerCase() === normalizedGate);
-  }
-  return STARTER_OPEN_MODULES.some((module) => module.toLowerCase() === normalizedGate);
+  return hasTenantModuleAccess(tenant, moduleGate);
 }
 
 export function listPermissionMatrix(): PermissionMatrixEntry[] {
@@ -252,7 +261,7 @@ async function buildSimulationGates(
   module: string,
   action: PermissionAction,
 ): Promise<PermissionSimulationGate[]> {
-  const moduleAllowed = hasModuleAccess(subject.tenant.modules, route?.moduleGate ?? module);
+  const moduleAllowed = hasModuleAccess(subject.tenant, route?.moduleGate ?? module);
   const planAllowed = route?.minPlan ? isPlanAtLeast(subject.tenant.plan, route.minPlan) : true;
   const featureAllowed = route?.featureKey ? await featureService.isFeatureEnabled(tenantId, route.featureKey) : true;
   const permissionAllowed = hasRolePermission(subject, module, action);

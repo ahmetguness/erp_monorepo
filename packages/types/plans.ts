@@ -31,6 +31,12 @@ export const FEATURE_KEY = {
   CUSTOM_REPORTING: 'CUSTOM_REPORTING',
   DOCUMENT_CENTER: 'DOCUMENT_CENTER',
   SMART_NOTIFICATIONS: 'SMART_NOTIFICATIONS',
+  WORKFLOW_CENTER: 'WORKFLOW_CENTER',
+  MAIL_CENTER: 'MAIL_CENTER',
+  BULK_OPERATIONS: 'BULK_OPERATIONS',
+  CASHFLOW_FORECAST: 'CASHFLOW_FORECAST',
+  BANK_RECONCILIATION: 'BANK_RECONCILIATION',
+  LOT_SERIAL_TRACKING: 'LOT_SERIAL_TRACKING',
 } as const;
 
 export type FeatureKeyName = typeof FEATURE_KEY[keyof typeof FEATURE_KEY];
@@ -94,6 +100,10 @@ export interface PlanFeatureFlags {
   smartNotifications: boolean;
   workflowCenter: boolean;
   mailCenter: boolean;
+  bulkOperations: boolean;
+  cashflowForecast: boolean;
+  bankReconciliation: boolean;
+  lotSerialTracking: boolean;
 }
 
 export const PLAN_FEATURES: Record<PlanName, PlanFeatureFlags> = {
@@ -118,6 +128,10 @@ export const PLAN_FEATURES: Record<PlanName, PlanFeatureFlags> = {
     smartNotifications: true,
     workflowCenter: false,
     mailCenter: false,
+    bulkOperations: false,
+    cashflowForecast: false,
+    bankReconciliation: false,
+    lotSerialTracking: false,
   },
   [PLAN.PROFESSIONAL]: {
     maxUsers: 25,
@@ -140,6 +154,10 @@ export const PLAN_FEATURES: Record<PlanName, PlanFeatureFlags> = {
     smartNotifications: true,
     workflowCenter: true,
     mailCenter: false,
+    bulkOperations: true,
+    cashflowForecast: true,
+    bankReconciliation: true,
+    lotSerialTracking: true,
   },
   [PLAN.ENTERPRISE]: {
     maxUsers: null,
@@ -162,6 +180,10 @@ export const PLAN_FEATURES: Record<PlanName, PlanFeatureFlags> = {
     smartNotifications: true,
     workflowCenter: true,
     mailCenter: true,
+    bulkOperations: true,
+    cashflowForecast: true,
+    bankReconciliation: true,
+    lotSerialTracking: true,
   },
 };
 
@@ -214,62 +236,103 @@ export interface PlanFeatureRow {
   type: FeatureTypeName;
 }
 
-export const PLAN_FEATURE_ROWS: readonly PlanFeatureRow[] = [
-  { plan: PLAN.STARTER, key: 'max_users', featureKey: FEATURE_KEY.MAX_USERS, value: '5', type: FEATURE_TYPE.LIMIT },
-  { plan: PLAN.STARTER, key: 'max_products', featureKey: FEATURE_KEY.MAX_PRODUCTS, value: '500', type: FEATURE_TYPE.LIMIT },
-  { plan: PLAN.STARTER, key: 'multi_warehouse', featureKey: FEATURE_KEY.MULTI_WAREHOUSE, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'role_management', featureKey: FEATURE_KEY.ROLE_MANAGEMENT, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'approvals', featureKey: FEATURE_KEY.APPROVALS, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'crm', featureKey: FEATURE_KEY.CRM, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'sales', featureKey: FEATURE_KEY.SALES, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'purchasing', featureKey: FEATURE_KEY.PURCHASING, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'production', featureKey: FEATURE_KEY.PRODUCTION, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'service', featureKey: FEATURE_KEY.SERVICE, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'marketplace', featureKey: FEATURE_KEY.MARKETPLACE, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'payroll', featureKey: FEATURE_KEY.PAYROLL, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'hr', featureKey: FEATURE_KEY.HR, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'api_access', featureKey: FEATURE_KEY.API_ACCESS, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'audit_log', featureKey: FEATURE_KEY.AUDIT_LOG, value: 'basic', type: FEATURE_TYPE.ENUM },
-  { plan: PLAN.STARTER, key: 'custom_reporting', featureKey: FEATURE_KEY.CUSTOM_REPORTING, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'document_center', featureKey: FEATURE_KEY.DOCUMENT_CENTER, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.STARTER, key: 'smart_notifications', featureKey: FEATURE_KEY.SMART_NOTIFICATIONS, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'max_users', featureKey: FEATURE_KEY.MAX_USERS, value: '25', type: FEATURE_TYPE.LIMIT },
-  { plan: PLAN.PROFESSIONAL, key: 'max_products', featureKey: FEATURE_KEY.MAX_PRODUCTS, value: '5000', type: FEATURE_TYPE.LIMIT },
-  { plan: PLAN.PROFESSIONAL, key: 'multi_warehouse', featureKey: FEATURE_KEY.MULTI_WAREHOUSE, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'role_management', featureKey: FEATURE_KEY.ROLE_MANAGEMENT, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'approvals', featureKey: FEATURE_KEY.APPROVALS, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'crm', featureKey: FEATURE_KEY.CRM, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'sales', featureKey: FEATURE_KEY.SALES, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'purchasing', featureKey: FEATURE_KEY.PURCHASING, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'production', featureKey: FEATURE_KEY.PRODUCTION, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'service', featureKey: FEATURE_KEY.SERVICE, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'marketplace', featureKey: FEATURE_KEY.MARKETPLACE, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'payroll', featureKey: FEATURE_KEY.PAYROLL, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'hr', featureKey: FEATURE_KEY.HR, value: 'false', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'api_access', featureKey: FEATURE_KEY.API_ACCESS, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'audit_log', featureKey: FEATURE_KEY.AUDIT_LOG, value: 'standard', type: FEATURE_TYPE.ENUM },
-  { plan: PLAN.PROFESSIONAL, key: 'custom_reporting', featureKey: FEATURE_KEY.CUSTOM_REPORTING, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'document_center', featureKey: FEATURE_KEY.DOCUMENT_CENTER, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.PROFESSIONAL, key: 'smart_notifications', featureKey: FEATURE_KEY.SMART_NOTIFICATIONS, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'max_users', featureKey: FEATURE_KEY.MAX_USERS, value: 'unlimited', type: FEATURE_TYPE.LIMIT },
-  { plan: PLAN.ENTERPRISE, key: 'max_products', featureKey: FEATURE_KEY.MAX_PRODUCTS, value: 'unlimited', type: FEATURE_TYPE.LIMIT },
-  { plan: PLAN.ENTERPRISE, key: 'multi_warehouse', featureKey: FEATURE_KEY.MULTI_WAREHOUSE, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'role_management', featureKey: FEATURE_KEY.ROLE_MANAGEMENT, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'approvals', featureKey: FEATURE_KEY.APPROVALS, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'crm', featureKey: FEATURE_KEY.CRM, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'sales', featureKey: FEATURE_KEY.SALES, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'purchasing', featureKey: FEATURE_KEY.PURCHASING, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'production', featureKey: FEATURE_KEY.PRODUCTION, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'service', featureKey: FEATURE_KEY.SERVICE, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'marketplace', featureKey: FEATURE_KEY.MARKETPLACE, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'payroll', featureKey: FEATURE_KEY.PAYROLL, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'hr', featureKey: FEATURE_KEY.HR, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'api_access', featureKey: FEATURE_KEY.API_ACCESS, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'audit_log', featureKey: FEATURE_KEY.AUDIT_LOG, value: 'full', type: FEATURE_TYPE.ENUM },
-  { plan: PLAN.ENTERPRISE, key: 'custom_reporting', featureKey: FEATURE_KEY.CUSTOM_REPORTING, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'document_center', featureKey: FEATURE_KEY.DOCUMENT_CENTER, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-  { plan: PLAN.ENTERPRISE, key: 'smart_notifications', featureKey: FEATURE_KEY.SMART_NOTIFICATIONS, value: 'true', type: FEATURE_TYPE.BOOLEAN },
-];
+type BooleanPlanFeatureFlag = {
+  [Key in keyof PlanFeatureFlags]: PlanFeatureFlags[Key] extends boolean ? Key : never;
+}[keyof PlanFeatureFlags];
+
+type LimitPlanFeatureFlag = {
+  [Key in keyof PlanFeatureFlags]: PlanFeatureFlags[Key] extends number | null ? Key : never;
+}[keyof PlanFeatureFlags];
+
+export interface PlanFeatureDefinition {
+  flag: keyof PlanFeatureFlags;
+  key: string;
+  featureKey: FeatureKeyName;
+  type: FeatureTypeName;
+  value: (features: PlanFeatureFlags, plan: PlanName) => string;
+}
+
+const PLAN_ORDER: readonly PlanName[] = [PLAN.STARTER, PLAN.PROFESSIONAL, PLAN.ENTERPRISE] as const;
+
+function serializeBoolean(value: boolean): string {
+  return value ? 'true' : 'false';
+}
+
+function serializeLimit(value: number | null): string {
+  return value === null ? 'unlimited' : String(value);
+}
+
+function booleanFeature(flag: BooleanPlanFeatureFlag, key: string, featureKey: FeatureKeyName): PlanFeatureDefinition {
+  return {
+    flag,
+    key,
+    featureKey,
+    type: FEATURE_TYPE.BOOLEAN,
+    value: (features) => serializeBoolean(features[flag]),
+  };
+}
+
+function limitFeature(flag: LimitPlanFeatureFlag, key: string, featureKey: FeatureKeyName): PlanFeatureDefinition {
+  return {
+    flag,
+    key,
+    featureKey,
+    type: FEATURE_TYPE.LIMIT,
+    value: (features) => serializeLimit(features[flag]),
+  };
+}
+
+export const PLAN_FEATURE_DEFINITIONS: readonly PlanFeatureDefinition[] = [
+  limitFeature('maxUsers', 'max_users', FEATURE_KEY.MAX_USERS),
+  limitFeature('maxProducts', 'max_products', FEATURE_KEY.MAX_PRODUCTS),
+  booleanFeature('multiWarehouse', 'multi_warehouse', FEATURE_KEY.MULTI_WAREHOUSE),
+  booleanFeature('roleManagement', 'role_management', FEATURE_KEY.ROLE_MANAGEMENT),
+  booleanFeature('approvals', 'approvals', FEATURE_KEY.APPROVALS),
+  booleanFeature('crm', 'crm', FEATURE_KEY.CRM),
+  booleanFeature('sales', 'sales', FEATURE_KEY.SALES),
+  booleanFeature('purchasing', 'purchasing', FEATURE_KEY.PURCHASING),
+  booleanFeature('production', 'production', FEATURE_KEY.PRODUCTION),
+  booleanFeature('service', 'service', FEATURE_KEY.SERVICE),
+  booleanFeature('marketplace', 'marketplace', FEATURE_KEY.MARKETPLACE),
+  booleanFeature('payroll', 'payroll', FEATURE_KEY.PAYROLL),
+  booleanFeature('hr', 'hr', FEATURE_KEY.HR),
+  booleanFeature('apiAccess', 'api_access', FEATURE_KEY.API_ACCESS),
+  {
+    flag: 'advancedAuditLog',
+    key: 'audit_log',
+    featureKey: FEATURE_KEY.AUDIT_LOG,
+    type: FEATURE_TYPE.ENUM,
+    value: (features, plan) => {
+      if (!features.advancedAuditLog) return 'basic';
+      return plan === PLAN.ENTERPRISE ? 'full' : 'standard';
+    },
+  },
+  booleanFeature('customReporting', 'custom_reporting', FEATURE_KEY.CUSTOM_REPORTING),
+  booleanFeature('documentCenter', 'document_center', FEATURE_KEY.DOCUMENT_CENTER),
+  booleanFeature('smartNotifications', 'smart_notifications', FEATURE_KEY.SMART_NOTIFICATIONS),
+  booleanFeature('workflowCenter', 'workflow_center', FEATURE_KEY.WORKFLOW_CENTER),
+  booleanFeature('mailCenter', 'mail_center', FEATURE_KEY.MAIL_CENTER),
+  booleanFeature('bulkOperations', 'bulk_operations', FEATURE_KEY.BULK_OPERATIONS),
+  booleanFeature('cashflowForecast', 'cashflow_forecast', FEATURE_KEY.CASHFLOW_FORECAST),
+  booleanFeature('bankReconciliation', 'bank_reconciliation', FEATURE_KEY.BANK_RECONCILIATION),
+  booleanFeature('lotSerialTracking', 'lot_serial_tracking', FEATURE_KEY.LOT_SERIAL_TRACKING),
+] as const;
+
+type DefinedPlanFeatureFlag = typeof PLAN_FEATURE_DEFINITIONS[number]['flag'];
+type MissingPlanFeatureFlag = Exclude<keyof PlanFeatureFlags, DefinedPlanFeatureFlag>;
+const PLAN_FEATURE_DEFINITION_COVERAGE: Record<MissingPlanFeatureFlag, never> = {};
+void PLAN_FEATURE_DEFINITION_COVERAGE;
+
+export const PLAN_FEATURE_ROWS: readonly PlanFeatureRow[] = PLAN_ORDER.flatMap((plan) => {
+  const features = PLAN_FEATURES[plan];
+  return PLAN_FEATURE_DEFINITIONS.map((definition) => ({
+    plan,
+    key: definition.key,
+    featureKey: definition.featureKey,
+    value: definition.value(features, plan),
+    type: definition.type,
+  }));
+});
 
 export interface AccessPolicy {
   minPlan?: PlanName;
@@ -289,24 +352,24 @@ export const ACCESS_POLICIES: Record<string, AccessPolicy> = {
   eDocuments: { minPlan: PLAN.STARTER, module: MODULE_KEY.INVOICING },
   bankTransactions: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.ACCOUNTING },
   checkPromissory: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.ACCOUNTING },
-  reconciliations: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.ACCOUNTING },
+  reconciliations: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.BANK_RECONCILIATION, module: MODULE_KEY.ACCOUNTING },
   stockValuations: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVENTORY },
   reservations: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVENTORY },
   productBatches: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVENTORY },
-  lotSerials: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVENTORY },
-  bulkOperations: { minPlan: PLAN.PROFESSIONAL },
+  lotSerials: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.LOT_SERIAL_TRACKING, module: MODULE_KEY.INVENTORY },
+  bulkOperations: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.BULK_OPERATIONS },
   advancedStockSuggestions: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVENTORY },
   auditLogExport: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.AUDIT_LOG },
-  cashflowForecast: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.CUSTOM_REPORTING, module: MODULE_KEY.REPORTING },
+  cashflowForecast: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.CASHFLOW_FORECAST, module: MODULE_KEY.REPORTING },
   supplierPerformance: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.PURCHASING, module: MODULE_KEY.PURCHASING },
-  workflowAutomation: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.WORKFLOW },
+  workflowAutomation: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.WORKFLOW_CENTER, module: MODULE_KEY.WORKFLOW },
   production: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.PRODUCTION, module: MODULE_KEY.PRODUCTION },
   service: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.SERVICE, module: MODULE_KEY.SERVICE },
   marketplace: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.MARKETPLACE, module: MODULE_KEY.MARKETPLACE },
   b2bIntegrations: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.MARKETPLACE, module: MODULE_KEY.MARKETPLACE },
   hr: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.HR, module: MODULE_KEY.HR },
   payroll: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.PAYROLL, module: MODULE_KEY.PAYROLL },
-  mail: { minPlan: PLAN.ENTERPRISE, module: MODULE_KEY.MAIL },
+  mail: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.MAIL_CENTER, module: MODULE_KEY.MAIL },
   chat: { minPlan: PLAN.ENTERPRISE },
   aiGovernance: { minPlan: PLAN.ENTERPRISE },
 };

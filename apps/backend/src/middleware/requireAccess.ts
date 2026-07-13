@@ -4,8 +4,8 @@ import type { AccessPolicy, FeatureKeyName, ModuleKey as SharedModuleKey, PlanNa
 import { prisma } from '../lib/prisma';
 import { FeatureDisabledError, ForbiddenError, ModuleDisabledError, NotFoundError } from '../errors';
 import { isPlanAtLeast } from '../types/plan.types';
-import { isModuleInList } from '../utils/feature-helpers';
 import { TenantFeatureService } from '../services/tenant-feature.service';
+import { hasTenantModuleAccess } from '../utils/tenant-modules';
 
 const tenantFeatureService = new TenantFeatureService(prisma);
 
@@ -47,7 +47,7 @@ export function requireAccess(policy: AccessPolicy) {
       }
     }
 
-    if (policy.module && !isModuleInList(tenant.modules, policy.module)) {
+    if (policy.module && !hasTenantModuleAccess(tenant, policy.module)) {
       return c.json(new ModuleDisabledError(policy.module).toJSON(), 403);
     }
 

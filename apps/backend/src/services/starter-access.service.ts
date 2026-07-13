@@ -1,10 +1,9 @@
 import { FeatureKey, PrismaClient } from '@prisma/client';
-import { STARTER_OPEN_MODULES } from '../types/feature.types';
 import { ModuleKey } from '../types/module.types';
 import { LimitExceededError, FeatureDisabledError, ModuleDisabledError } from '../errors';
 import { TenantFeatureService } from './tenant-feature.service';
 import { parseLimitValue, parseBooleanValue } from '../utils/feature-parser';
-import { isModuleInList } from '../utils/feature-helpers';
+import { hasTenantModuleAccess } from '../utils/tenant-modules';
 
 // ─────────────────────────────────────────────
 // Starter Access Service
@@ -116,14 +115,8 @@ export class StarterAccessService {
       select: { plan: true, modules: true },
     });
 
-    if (tenant.modules.length > 0) {
-      if (isModuleInList(tenant.modules, module)) {
-        return;
-      }
-    } else {
-      if (isModuleInList([...STARTER_OPEN_MODULES], module)) {
-        return;
-      }
+    if (hasTenantModuleAccess(tenant, module)) {
+      return;
     }
 
     throw new ModuleDisabledError(module);

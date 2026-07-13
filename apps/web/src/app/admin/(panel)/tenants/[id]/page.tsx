@@ -2,9 +2,9 @@
 
 import { use, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Users, Package, Receipt, ShoppingCart, Truck, CreditCard, Warehouse, Layers, BookOpen, Plus, Minus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CalendarClock, FileWarning, MonitorCheck, Users, Package, Receipt, ShoppingCart, Truck, CreditCard, Warehouse, Layers, BookOpen, Plus, Minus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { getTenantById, getTenantMetrics, updateTenant, updateTenantPlan, updateTenantStatus } from '@/services/admin.service';
+import { getPlanFeatures, getTenantById, getTenantMetrics, updateTenant, updateTenantPlan, updateTenantStatus, type PlanFeature } from '@/services/admin.service';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { cn } from '@/lib/utils';
@@ -75,6 +75,44 @@ const FEATURE_LABELS: Record<string, string> = {
   CUSTOM_REPORTING: 'Özel Raporlama',
 };
 
+Object.assign(FEATURE_LABELS, {
+  DOCUMENT_CENTER: 'Dokuman Merkezi',
+  SMART_NOTIFICATIONS: 'Akilli Bildirimler',
+  WORKFLOW_CENTER: 'Is Akisi Merkezi',
+  MAIL_CENTER: 'Mail Merkezi',
+  BULK_OPERATIONS: 'Toplu Islemler',
+  CASHFLOW_FORECAST: 'Nakit Akisi Tahmini',
+  BANK_RECONCILIATION: 'Banka Mutabakati',
+  LOT_SERIAL_TRACKING: 'Lot/Seri Takibi',
+} satisfies Record<string, string>);
+
+const FEATURE_SCREEN_IMPACTS: Record<string, readonly string[]> = {
+  MAX_USERS: ['Admin kullanici yonetimi', 'Kullanici davetleri'],
+  MAX_PRODUCTS: ['Urunler', 'Urun ice aktarma'],
+  MULTI_WAREHOUSE: ['Depolar', 'Depo transferleri', 'Stok hareketleri'],
+  ROLE_MANAGEMENT: ['Rol yonetimi', 'Kullanici yetkileri'],
+  APPROVALS: ['Onay akislari', 'Satin alma onaylari'],
+  CRM: ['Cari hesaplar', 'Musteri takip paneli'],
+  SALES: ['Teklifler', 'Siparisler', 'Faturalar'],
+  PURCHASING: ['Satin alma talepleri', 'Satin alma siparisleri'],
+  PRODUCTION: ['Uretim', 'MRP', 'Kapasite planlama', 'Kalite kontrol'],
+  SERVICE: ['Teknik servis', 'Bakim yonetimi', 'Saha servis mobil'],
+  MARKETPLACE: ['Pazaryeri', 'EDI / B2B entegrasyonlari'],
+  PAYROLL: ['Bordro', 'Banka odeme dosyasi'],
+  HR: ['Personel', 'Izin talepleri', 'Puantaj'],
+  API_ACCESS: ['API anahtarlari', 'Entegrasyon ayarlari'],
+  AUDIT_LOG: ['Denetim kaydi', 'Audit export', 'Guvenlik ayarlari'],
+  CUSTOM_REPORTING: ['Raporlar', 'Ozel rapor olusturma'],
+  DOCUMENT_CENTER: ['Dokuman merkezi', 'Ek dosya kutuphanesi'],
+  SMART_NOTIFICATIONS: ['Bildirim merkezi', 'Akilli uyari aksiyonlari'],
+  WORKFLOW_CENTER: ['Is akisi merkezi', 'Otomasyon kurallari'],
+  MAIL_CENTER: ['Mail merkezi', 'Mail sablonlari'],
+  BULK_OPERATIONS: ['Toplu islem merkezi', 'CSV onizleme'],
+  CASHFLOW_FORECAST: ['Raporlar', 'Nakit akisi tahmini'],
+  BANK_RECONCILIATION: ['Banka hareketleri', 'Mutabakat', 'Mali kapanis kontrolu'],
+  LOT_SERIAL_TRACKING: ['Lot / seri no', 'Urun partileri', 'Izlenebilirlik raporu'],
+};
+
 const STATUS_VARIANT: Record<string, BadgeVariant> = { TRIAL: 'warning', ACTIVE: 'success', SUSPENDED: 'danger', CANCELLED: 'neutral' };
 const PLAN_COLOR: Record<string, string> = { STARTER: 'text-sky-400 bg-sky-500/10 border-sky-500/30', PROFESSIONAL: 'text-violet-400 bg-violet-500/10 border-violet-500/30', ENTERPRISE: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
 
@@ -114,6 +152,28 @@ function getFeatureLabel(featureKey: string): string {
   return FEATURE_LABELS[featureKey] ?? humanizeKey(featureKey);
 }
 
+function formatDateTime(value: string | null): string {
+  if (!value) return 'Suresiz';
+  return new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium' }).format(new Date(value));
+}
+
+function isExpired(value: string | null): boolean {
+  return value ? new Date(value).getTime() < Date.now() : false;
+}
+
+function findPlanFeature(features: readonly PlanFeature[], featureKey: string): PlanFeature | undefined {
+  return features.find((feature) => feature.featureKey === featureKey);
+}
+
+function hasPlanConflict(override: { value: string; isEnabled: boolean }, planFeature: PlanFeature | undefined): boolean {
+  if (!planFeature) return true;
+  return planFeature.value !== override.value || planFeature.isEnabled !== override.isEnabled;
+}
+
+function getImpactScreens(featureKey: string): readonly string[] {
+  return FEATURE_SCREEN_IMPACTS[featureKey] ?? ['Feature gate ile korunan ekranlar'];
+}
+
 export default function AdminTenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -126,6 +186,11 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
 
   const { data: tenant, isLoading } = useQuery({ queryKey: ['admin', 'tenant', id], queryFn: () => getTenantById(id) });
   const { data: metrics } = useQuery({ queryKey: ['admin', 'tenant-metrics', id], queryFn: () => getTenantMetrics(id) });
+  const { data: planFeatures = [] } = useQuery({
+    queryKey: ['admin', 'features', tenant?.plan],
+    queryFn: () => getPlanFeatures(tenant?.plan),
+    enabled: Boolean(tenant?.plan),
+  });
   const tenantSettings: TenantSettingsForm = tenant
     ? {
         maxUsers: tenant.maxUsers?.toString() ?? '',
@@ -443,15 +508,67 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
       {tenant.featureOverrides.length > 0 && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
           <p className="text-xs font-semibold text-slate-400 mb-3">Feature Override&apos;lar</p>
-          <div className="space-y-2">
-            {tenant.featureOverrides.map((o) => (
-              <div key={o.id} className="flex items-center gap-3 text-sm bg-slate-800/30 rounded-lg px-3 py-2">
-                <span className="text-xs font-medium text-violet-400">{getFeatureLabel(o.featureKey)}</span>
-                <span className="text-slate-300">{o.value}</span>
-                <Badge variant={o.isEnabled ? 'success' : 'neutral'}>{o.isEnabled ? 'Aktif' : 'Pasif'}</Badge>
-                {o.reason && <span className="text-xs text-slate-500 ml-auto">{o.reason}</span>}
-              </div>
-            ))}
+          <div className="space-y-3">
+            {tenant.featureOverrides.map((override) => {
+              const planFeature = findPlanFeature(planFeatures, override.featureKey);
+              const conflictsWithPlan = hasPlanConflict(override, planFeature);
+              const expired = isExpired(override.expiresAt);
+              const impactScreens = getImpactScreens(override.featureKey);
+
+              return (
+                <div key={override.id} className="rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-3">
+                  <div className="flex flex-wrap items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-violet-300">{getFeatureLabel(override.featureKey)}</span>
+                        <Badge variant={override.isEnabled ? 'success' : 'neutral'}>{override.isEnabled ? 'Aktif' : 'Pasif'}</Badge>
+                        {expired && <Badge variant="danger">Suresi doldu</Badge>}
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Override: <span className="font-medium text-slate-300">{override.value}</span>
+                        <span className="mx-2 text-slate-700">/</span>
+                        Plan: <span className="font-medium text-slate-300">{planFeature ? planFeature.value : 'Kayit yok'}</span>
+                      </p>
+                    </div>
+                    <div className={cn(
+                      'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs',
+                      conflictsWithPlan
+                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                        : 'border-slate-700 bg-slate-800/50 text-slate-400',
+                    )}>
+                      {conflictsWithPlan ? <AlertTriangle className="h-3.5 w-3.5" /> : <FileWarning className="h-3.5 w-3.5" />}
+                      {conflictsWithPlan ? 'Plan degerini eziyor' : 'Planla ayni'}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 lg:grid-cols-3">
+                    <div className="rounded-md border border-slate-800 bg-slate-900/60 px-3 py-2">
+                      <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500">
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        Son kullanma
+                      </div>
+                      <p className={cn('mt-1 text-xs font-medium', expired ? 'text-red-300' : 'text-slate-300')}>
+                        {formatDateTime(override.expiresAt)}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-800 bg-slate-900/60 px-3 py-2">
+                      <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500">
+                        <FileWarning className="h-3.5 w-3.5" />
+                        Gerekce
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-xs text-slate-300">{override.reason || 'Gerekce girilmemis'}</p>
+                    </div>
+                    <div className="rounded-md border border-slate-800 bg-slate-900/60 px-3 py-2">
+                      <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500">
+                        <MonitorCheck className="h-3.5 w-3.5" />
+                        Etkileyen ekranlar
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-xs text-slate-300">{impactScreens.join(', ')}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
