@@ -1,8 +1,10 @@
 import { Context, Next } from 'hono';
 import { prisma } from '../lib/prisma';
-import { ModuleDisabledError, ForbiddenError } from '../errors';
+import { ForbiddenError } from '../errors';
 import { ModuleKey } from '../types/module.types';
+import { allowReadOnlyOrRejectDowngradeLock } from '../services/plan-downgrade-access.service';
 import { hasTenantModuleAccess } from '../utils/tenant-modules';
+import { rejectInactiveTenant } from './tenant-status';
 
 export function requireModule(module: ModuleKey) {
   return async (c: Context, next: Next): Promise<Response | void> => {
@@ -14,15 +16,25 @@ export function requireModule(module: ModuleKey) {
 
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { plan: true, modules: true },
+      select: { plan: true, modules: true, status: true },
     });
 
     if (!tenant) {
       return c.json(new ForbiddenError('Tenant bulunamadi.').toJSON(), 403);
     }
 
+    const inactiveTenantResponse = rejectInactiveTenant(c, tenant);
+    if (inactiveTenantResponse) return inactiveTenantResponse;
+
     if (!hasTenantModuleAccess(tenant, module)) {
-      return c.json(new ModuleDisabledError(module).toJSON(), 403);
+      const lockResponse = allowReadOnlyOrRejectDowngradeLock(c, {
+        reason: 'module',
+        currentPlan: tenant.plan,
+        module,
+      });
+      if (lockResponse) return lockResponse;
+      await next();
+      return;
     }
 
     await next();

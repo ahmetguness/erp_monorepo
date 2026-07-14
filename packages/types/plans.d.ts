@@ -98,10 +98,35 @@ export interface PlanFeatureDefinition {
     key: string;
     featureKey: FeatureKeyName;
     type: FeatureTypeName;
+    label: string;
+    pricingVisible: boolean;
     value: (features: PlanFeatureFlags, plan: PlanName) => string;
 }
 export declare const PLAN_FEATURE_DEFINITIONS: readonly PlanFeatureDefinition[];
 export declare const PLAN_FEATURE_ROWS: readonly PlanFeatureRow[];
+export declare const PLAN_LABELS: Record<PlanName, string>;
+export interface PlanPricingMeta {
+    label: string;
+    badge: string | null;
+    price: string | null;
+    priceSub: string | null;
+    description: string;
+    cta: string;
+    ctaStyle: 'primary' | 'secondary' | 'outline';
+    highlight: boolean;
+}
+export declare const PLAN_PRICING_META: Record<PlanName, PlanPricingMeta>;
+export interface PricingFeatureLine {
+    key: string;
+    label: string;
+    value: string;
+}
+export interface PricingPlan {
+    plan: PlanName;
+    meta: PlanPricingMeta;
+    features: readonly PricingFeatureLine[];
+}
+export declare const PLAN_PRICING_MATRIX: readonly PricingPlan[];
 export interface AccessPolicy {
     minPlan?: PlanName;
     featureKey?: FeatureKeyName;

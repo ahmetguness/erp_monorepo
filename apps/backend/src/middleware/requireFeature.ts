@@ -1,8 +1,10 @@
 import { Context, Next } from 'hono';
 import { FeatureKey } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { FeatureDisabledError, ForbiddenError } from '../errors';
+import { ForbiddenError, NotFoundError } from '../errors';
 import { TenantFeatureService } from '../services/tenant-feature.service';
+import { allowReadOnlyOrRejectDowngradeLock } from '../services/plan-downgrade-access.service';
+import { rejectInactiveTenant } from './tenant-status';
 
 // ─────────────────────────────────────────────
 // requireFeature Middleware
@@ -22,10 +24,29 @@ export function requireFeature(featureKey: FeatureKey) {
       return c.json(new ForbiddenError('Tenant kimliği bulunamadı.').toJSON(), 403);
     }
 
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true, status: true },
+    });
+
+    if (!tenant) {
+      return c.json(new NotFoundError('Tenant', tenantId).toJSON(), 404);
+    }
+
+    const inactiveTenantResponse = rejectInactiveTenant(c, tenant);
+    if (inactiveTenantResponse) return inactiveTenantResponse;
+
     const isEnabled = await tenantFeatureService.isFeatureEnabled(tenantId, featureKey);
 
     if (!isEnabled) {
-      return c.json(new FeatureDisabledError(featureKey).toJSON(), 403);
+      const lockResponse = allowReadOnlyOrRejectDowngradeLock(c, {
+        reason: 'feature',
+        currentPlan: tenant.plan,
+        featureKey,
+      });
+      if (lockResponse) return lockResponse;
+      await next();
+      return;
     }
 
     await next();

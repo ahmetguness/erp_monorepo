@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { ValidationError } from '../errors';
 import { requireTenantId } from '../utils/context.js';
 import { SetupChecklistService } from '../services/setup-checklist.service.js';
+import { StarterAccessService } from '../services/starter-access.service.js';
 
 interface QuickStartDTO {
   companyName: string;
@@ -157,6 +158,8 @@ export const QuickStartController = {
           data: { name: body.warehouseName },
         });
       } else {
+        const warehouseCount = await tx.warehouse.count({ where: { tenantId } });
+        await new StarterAccessService(tx).enforceWarehouseCreation(tenantId, 1, warehouseCount);
         warehouse = await tx.warehouse.create({
           data: { tenantId, name: body.warehouseName, code: 'WH-01', isActive: true },
         });
@@ -171,6 +174,15 @@ export const QuickStartController = {
       }
 
       // 5. First Product
+      const existingProduct = await tx.product.findUnique({
+        where: { tenantId_code: { tenantId, code: body.firstProductCode.trim() } },
+        select: { id: true, deletedAt: true },
+      });
+      if (!existingProduct || existingProduct.deletedAt !== null) {
+        const currentProductCount = await tx.product.count({ where: { tenantId, deletedAt: null } });
+        await new StarterAccessService(tx).enforceProductCapacity(tenantId, 1, currentProductCount);
+      }
+
       const product = await tx.product.upsert({
         where: { tenantId_code: { tenantId, code: body.firstProductCode.trim() } },
         create: {

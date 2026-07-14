@@ -1,68 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-
-const tiers = [
-  {
-    name: 'Starter',
-    badge: null,
-    price: '1.990',
-    priceSub: null,
-    desc: 'Temel operasyonel süreçleri dijitalleştirmek isteyen küçük ölçekli işletmeler için.',
-    cta: 'Hemen Başla',
-    ctaStyle: 'secondary',
-    features: [
-      '5 kullanıcı hesabı',
-      'Muhasebe & finans',
-      'Stok takibi',
-      'Cari hesap yönetimi',
-      'E-fatura entegrasyonu',
-      'Temel raporlar',
-    ],
-    highlight: false,
-  },
-  {
-    name: 'Professional',
-    badge: 'Önerilen',
-    price: '3.990',
-    priceSub: '+ kullanıcı başı ₺150/ay',
-    desc: 'Satış, üretim ve finans süreçlerini tek çatı altında yönetmek isteyen büyüyen işletmeler için.',
-    cta: 'Lisans Satın Al',
-    ctaStyle: 'primary',
-    features: [
-      "Starter'daki tüm özellikler",
-      'CRM & teklif yönetimi',
-      'Satış & sipariş yönetimi',
-      'Satın alma yönetimi',
-      'Üretim & MRP',
-      'Rol & yetkilendirme',
-      'Onay mekanizması',
-      'Çoklu depo',
-      '7/24 teknik destek',
-    ],
-    highlight: true,
-  },
-  {
-    name: 'Enterprise',
-    badge: null,
-    price: null,
-    priceSub: null,
-    desc: 'Çok şubeli, yüksek kullanıcılı ve özel entegrasyon gerektiren büyük ölçekli kurumlar için.',
-    cta: 'Satış Ekibiyle Görüş',
-    ctaStyle: 'outline',
-    features: [
-      'Tüm modüller',
-      'Sınırsız kullanıcı',
-      'On-premise / private cloud',
-      'Gelişmiş API & entegrasyon',
-      'Audit log & güvenlik',
-      'SLA garantisi',
-      'Dedicated destek',
-      'Veri migrasyonu desteği',
-    ],
-    highlight: false,
-  },
-];
+import { PLAN_PRICING_MATRIX } from '@/lib/plans';
 
 const CheckIcon = ({ highlighted }: { highlighted: boolean }) => (
   <svg
@@ -79,14 +18,11 @@ const CheckIcon = ({ highlighted }: { highlighted: boolean }) => (
 export default function Pricing() {
   return (
     <section id="pricing" className="relative bg-[#0B1120] py-24 overflow-hidden">
-      {/* Subtle background glow */}
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[400px] bg-blue-700/5 rounded-full blur-[120px]" />
       </div>
 
       <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-
-        {/* Section header */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -94,23 +30,19 @@ export default function Pricing() {
           transition={{ duration: 0.45 }}
           className="text-center max-w-2xl mx-auto mb-16"
         >
-          <p className="text-sm text-blue-400 font-medium mb-4">
-            Lisans & Fiyatlandırma
-          </p>
+          <p className="text-sm text-blue-400 font-medium mb-4">Lisans & Fiyatlandirma</p>
           <h2 className="text-3xl lg:text-4xl font-bold text-white mb-4 leading-tight">
-            İşletmenizin ölçeğine uygun<br className="hidden sm:block" /> ERP lisansı
+            Isletmenizin olcegine uygun<br className="hidden sm:block" /> ERP lisansi
           </h2>
           <p className="text-slate-400 text-sm leading-relaxed">
-            Tüm paketlere kurulum desteği ve kullanıcı eğitimi dahildir.
-            Modüller ihtiyaca göre sonradan eklenebilir.
+            Tum paketlere kurulum destegi ve kullanici egitimi dahildir. Ozellik matrisi plan kaynagindan otomatik uretilir.
           </p>
         </motion.div>
 
-        {/* Pricing grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 rounded-2xl border border-slate-800/80 shadow-2xl overflow-visible">
-          {tiers.map((tier, idx) => (
+          {PLAN_PRICING_MATRIX.map((tier, idx) => (
             <motion.article
-              key={tier.name}
+              key={tier.plan}
               initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -120,7 +52,7 @@ export default function Pricing() {
                 'rounded-none first:rounded-l-2xl last:rounded-r-2xl',
                 'lg:first:rounded-l-2xl lg:first:rounded-r-none',
                 'lg:last:rounded-r-2xl lg:last:rounded-l-none',
-                tier.highlight
+                tier.meta.highlight
                   ? 'bg-[#0F1E3A] border-x border-blue-900/60 hover:bg-[#112040]'
                   : 'bg-[#0D1526] hover:bg-[#0F1A30]',
                 idx === 0 ? 'lg:border-r lg:border-slate-800/60' : '',
@@ -128,86 +60,77 @@ export default function Pricing() {
                 'border-b border-slate-800/60 lg:border-b-0',
               ].join(' ')}
             >
-              {/* Top accent line for highlighted plan */}
-              {tier.highlight && (
+              {tier.meta.highlight && (
                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-blue-500 to-transparent rounded-t-none" />
               )}
 
-              {/* Upper content — grows to fill available space */}
               <div className="flex flex-col flex-1">
-                {/* Plan name + badge */}
                 <div className="flex items-center justify-between mb-5">
                   <span className="text-[11px] font-semibold text-slate-400 tracking-wide">
-                    {tier.name}
+                    {tier.meta.label}
                   </span>
-                  {tier.badge && (
+                  {tier.meta.badge && (
                     <span className="text-[10px] font-medium text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">
-                      {tier.badge}
+                      {tier.meta.badge}
                     </span>
                   )}
                 </div>
 
-                {/* Price */}
                 <div className="mb-6 min-h-[4.5rem]">
-                  {tier.price ? (
+                  {tier.meta.price ? (
                     <>
                       <div className="flex items-baseline gap-1.5">
                         <span className="text-[2.6rem] font-black text-white leading-none tabular-nums tracking-tight">
-                          ₺{tier.price}
+                          TL {tier.meta.price}
                         </span>
                         <span className="text-sm text-slate-500 font-medium">/ay</span>
                       </div>
-                      {tier.priceSub ? (
-                        <p className="text-xs text-slate-500 mt-1.5">{tier.priceSub}</p>
+                      {tier.meta.priceSub ? (
+                        <p className="text-xs text-slate-500 mt-1.5">{tier.meta.priceSub}</p>
                       ) : (
-                        <p className="text-xs text-transparent mt-1.5 select-none">—</p>
+                        <p className="text-xs text-transparent mt-1.5 select-none">-</p>
                       )}
                     </>
                   ) : (
                     <>
-                      <div className="text-2xl font-black text-white leading-none">Özel Fiyat</div>
-                      <p className="text-xs text-slate-500 mt-1.5">Kurumunuza özel teklif hazırlanır</p>
+                      <div className="text-2xl font-black text-white leading-none">Ozel Fiyat</div>
+                      <p className="text-xs text-slate-500 mt-1.5">Kurumunuza ozel teklif hazirlanir</p>
                     </>
                   )}
                 </div>
 
-                {/* Description */}
                 <p className="text-xs text-slate-500 leading-relaxed mb-6 min-h-[3rem]">
-                  {tier.desc}
+                  {tier.meta.description}
                 </p>
 
-                {/* Divider */}
                 <div className="border-t border-slate-800/80 mb-5" />
 
-                {/* Features */}
                 <ul className="space-y-3">
-                  {tier.features.map((feature, i) => (
-                    <li key={i} className="flex items-start gap-3 text-sm text-slate-400">
-                      <CheckIcon highlighted={tier.highlight} />
-                      <span>{feature}</span>
+                  {tier.features.map((feature) => (
+                    <li key={feature.key} className="flex items-start gap-3 text-sm text-slate-400">
+                      <CheckIcon highlighted={tier.meta.highlight} />
+                      <span>{feature.label}</span>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              {/* CTA Button — always pinned to bottom */}
               <button
                 className={[
                   'w-full h-12 mt-8 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer flex-shrink-0',
-                  tier.ctaStyle === 'primary'
+                  tier.meta.ctaStyle === 'primary'
                     ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/30'
-                    : tier.ctaStyle === 'outline'
+                    : tier.meta.ctaStyle === 'outline'
                     ? 'bg-transparent border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white'
                     : 'bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white',
                 ].join(' ')}
               >
-                {tier.cta}
+                {tier.meta.cta}
               </button>
             </motion.article>
           ))}
         </div>
 
-        {/* Footer note */}
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
@@ -216,10 +139,10 @@ export default function Pricing() {
           className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 pt-6 border-t border-slate-800/60"
         >
           <p className="text-xs text-slate-600">
-            Fiyatlara KDV dahil değildir. Yıllık ödemede %15 indirim uygulanır.
+            Fiyatlara KDV dahil degildir. Yillik odemede indirim uygulanir.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-slate-600">
-            {['Kurulum desteği dahil', 'Kullanıcı eğitimi dahil', 'Modüler genişleme'].map((item) => (
+            {['Kurulum destegi dahil', 'Kullanici egitimi dahil', 'Moduler genisleme'].map((item) => (
               <span key={item} className="flex items-center gap-1.5">
                 <svg className="w-3 h-3 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -229,7 +152,6 @@ export default function Pricing() {
             ))}
           </div>
         </motion.div>
-
       </div>
     </section>
   );

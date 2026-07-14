@@ -1,5 +1,6 @@
 import { Context } from 'hono';
 import { AuditAction, EntityType } from '@prisma/client';
+import { API_KEY_SCOPE_VALUES } from '@repo/types/contracts';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../errors';
 import { requireTenantId, requireUserId, requireParam } from '../utils/context.js';
@@ -30,21 +31,7 @@ interface ApiKeyListQuery {
   isActive?: string;
 }
 
-const VALID_API_KEY_SCOPES = new Set([
-  'products:read',
-  'products:write',
-  'products:delete',
-  'contacts:read',
-  'contacts:write',
-  'contacts:delete',
-  'invoices:read',
-  'invoices:write',
-  'invoices:delete',
-  'inventory:read',
-  'inventory:write',
-  'orders:read',
-  'orders:write',
-]);
+const VALID_API_KEY_SCOPES = new Set<string>(API_KEY_SCOPE_VALUES);
 
 const apiKeyUsageService = new ApiKeyUsageService(prisma);
 

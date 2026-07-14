@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { getPlanFeatures, getTenantById, getTenantMetrics, updateTenant, updateTenantPlan, updateTenantStatus, type PlanFeature } from '@/services/admin.service';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { getPlanModules, getTenantModuleAlignment } from '@/lib/admin/tenant-module-alignment';
 import { cn } from '@/lib/utils';
 import { toast } from '@/store/ui.store';
 
@@ -44,13 +45,6 @@ const MODULE_OPTIONS = [
   { key: 'documents', label: 'Dokümanlar' },
   { key: 'mail', label: 'Mail' },
 ] as const;
-
-// Plan bazlı varsayılan modüller
-const PLAN_DEFAULT_MODULES: Record<PlanKey, string[]> = {
-  STARTER: ['accounting', 'inventory', 'sales', 'contacts', 'invoicing', 'reporting', 'documents'],
-  PROFESSIONAL: ['accounting', 'inventory', 'crm', 'sales', 'purchasing', 'warehouse', 'reporting', 'contacts', 'invoicing', 'approvals', 'workflow', 'documents'],
-  ENTERPRISE: MODULE_OPTIONS.map((m) => m.key),
-};
 
 const MODULE_LABELS: Record<string, string> = Object.fromEntries(
   MODULE_OPTIONS.map((module) => [module.key, module.label]),
@@ -219,7 +213,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
         setCurrentPlanOverride(plan);
         setSettings((prev) => ({
           ...prev,
-          modules: PLAN_DEFAULT_MODULES[plan] ?? prev.modules,
+          modules: getPlanModules(plan),
         }));
       }
       qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] });
@@ -269,6 +263,8 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
   if (isLoading || !tenant) return <div className="text-slate-500 text-sm">Yükleniyor…</div>;
 
   const m = metrics?.counts;
+  const moduleAlignment = getTenantModuleAlignment(currentPlan, settings.modules);
+  const expectedModuleSet = new Set<string>(moduleAlignment.expectedModules);
 
   return (
     <div className="space-y-5">
@@ -359,6 +355,25 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
 
         {settingsError && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{settingsError}</div>}
 
+        {!moduleAlignment.isAligned && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-amber-300">Moduller plan matrisiyle uyumlu degil</p>
+                <div className="mt-1 space-y-1 text-[11px] text-amber-100/80">
+                  {moduleAlignment.extraModules.length > 0 && (
+                    <p>Plan disi aktif: {moduleAlignment.extraModules.map(getModuleLabel).join(', ')}</p>
+                  )}
+                  {moduleAlignment.missingModules.length > 0 && (
+                    <p>Plana dahil ama kapali: {moduleAlignment.missingModules.map(getModuleLabel).join(', ')}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {confirmSave && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 space-y-3">
             <div className="flex items-center justify-between gap-3">
@@ -430,7 +445,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
             </p>
             <button
               type="button"
-              onClick={() => setSettings((prev) => ({ ...prev, modules: PLAN_DEFAULT_MODULES[currentPlan] ?? [] }))}
+              onClick={() => setSettings((prev) => ({ ...prev, modules: getPlanModules(currentPlan) }))}
               className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
             >
               Plana göre sıfırla
@@ -439,7 +454,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
           <div className="flex flex-wrap gap-2">
             {MODULE_OPTIONS.map((module) => {
               const isActive = settings.modules.includes(module.key);
-              const isPlanDefault = PLAN_DEFAULT_MODULES[currentPlan]?.includes(module.key) ?? false;
+              const isPlanDefault = expectedModuleSet.has(module.key);
               const isCustomAdded = isActive && !isPlanDefault;
               const isCustomRemoved = !isActive && isPlanDefault;
 

@@ -119,18 +119,20 @@ async function seedPlanFeatures() {
     await prisma.planFeature.upsert({
       where: { plan_key: { plan: f.plan, key: f.key } },
       create: f,
-      update: { value: f.value, type: f.type, featureKey: f.featureKey },
+      update: { value: f.value, type: f.type, isEnabled: f.isEnabled, featureKey: f.featureKey },
     });
   }
 }
 
 function toPrismaPlanFeature(feature: PlanFeatureRow) {
+  const value = feature.value;
   return {
     plan: Plan[feature.plan],
     key: feature.key,
     featureKey: FeatureKey[feature.featureKey],
-    value: feature.value,
+    value,
     type: FeatureType[feature.type],
+    isEnabled: value !== 'false',
   };
 }
 

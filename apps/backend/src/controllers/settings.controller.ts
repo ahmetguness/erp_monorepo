@@ -52,6 +52,11 @@ import {
   setAuditImmutableEnabled,
 } from '../services/audit-log-full.service.js';
 import {
+  canUseAuditLogSiem,
+  resolveAuditLogPolicy,
+  type AuditLogPolicy,
+} from '../services/audit-log-policy.service.js';
+import {
   BI_CONNECTOR_SETTING_KEYS,
   BI_TOKEN_SETTING_KEY,
   getBiConnectorSettings,
@@ -136,6 +141,14 @@ async function assertEnterpriseTenant(tenantId: string, message: string): Promis
   if (tenant?.plan !== Plan.ENTERPRISE) {
     throw new ValidationError(message);
   }
+}
+
+async function assertAuditLogFullPolicy(tenantId: string, message: string): Promise<AuditLogPolicy> {
+  const policy = await resolveAuditLogPolicy(prisma, tenantId);
+  if (policy.level !== 'full') {
+    throw new ValidationError(message);
+  }
+  return policy;
 }
 
 function isInternalTenantSettingKey(key: string | undefined): boolean {
@@ -465,14 +478,16 @@ export const SettingsController = {
 
   async getSiemSettings(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    await assertEnterpriseTenant(tenantId, 'SIEM entegrasyonu sadece Enterprise plan kapsamindadir.');
+    const policy = await assertAuditLogFullPolicy(tenantId, 'SIEM entegrasyonu sadece audit full seviyesi kapsamindadir.');
+    if (!canUseAuditLogSiem(policy)) throw new ValidationError('SIEM entegrasyonu sadece audit full seviyesi kapsamindadir.');
     return c.json({ data: await getSiemSettings(tenantId) });
   },
 
   async updateSiemSettings(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    await assertEnterpriseTenant(tenantId, 'SIEM entegrasyonu sadece Enterprise plan kapsamindadir.');
+    const policy = await assertAuditLogFullPolicy(tenantId, 'SIEM entegrasyonu sadece audit full seviyesi kapsamindadir.');
+    if (!canUseAuditLogSiem(policy)) throw new ValidationError('SIEM entegrasyonu sadece audit full seviyesi kapsamindadir.');
     const body = await readJsonObject(c);
 
     await saveSiemSettings(tenantId, {
@@ -512,7 +527,8 @@ export const SettingsController = {
   async runSiemExportTest(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    await assertEnterpriseTenant(tenantId, 'SIEM entegrasyonu sadece Enterprise plan kapsamindadir.');
+    const policy = await assertAuditLogFullPolicy(tenantId, 'SIEM entegrasyonu sadece audit full seviyesi kapsamindadir.');
+    if (!canUseAuditLogSiem(policy)) throw new ValidationError('SIEM entegrasyonu sadece audit full seviyesi kapsamindadir.');
 
     const result = await exportRecentAuditLogsToSiem(tenantId, 25);
     const { ipAddress, userAgent } = getRequestMeta(c);
@@ -538,14 +554,15 @@ export const SettingsController = {
 
   async getAuditLogFullStatus(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    await assertEnterpriseTenant(tenantId, 'Audit log full sadece Enterprise plan kapsamindadir.');
+    await assertAuditLogFullPolicy(tenantId, 'Audit log full sadece audit full seviyesi kapsamindadir.');
     return c.json({ data: await buildAuditLogFullStatus(prisma, tenantId) });
   },
 
   async updateAuditLogFullSettings(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    await assertEnterpriseTenant(tenantId, 'Audit log full sadece Enterprise plan kapsamindadir.');
+    const policy = await assertAuditLogFullPolicy(tenantId, 'Audit log full sadece audit full seviyesi kapsamindadir.');
+    if (!policy.immutableEnabled) throw new ValidationError('Immutable audit log sadece audit full seviyesi kapsamindadir.');
     const body = await readJsonObject(c);
     const immutable = await setAuditImmutableEnabled(prisma, tenantId, readBoolean(body.immutableEnabled));
 

@@ -192,59 +192,65 @@ function serializeBoolean(value) {
 function serializeLimit(value) {
     return value === null ? 'unlimited' : String(value);
 }
-function booleanFeature(flag, key, featureKey) {
+function booleanFeature(flag, key, featureKey, label, pricingVisible = true) {
     return {
         flag,
         key,
         featureKey,
         type: FEATURE_TYPE.BOOLEAN,
+        label,
+        pricingVisible,
         value: (features) => serializeBoolean(features[flag]),
     };
 }
-function limitFeature(flag, key, featureKey) {
+function limitFeature(flag, key, featureKey, label, pricingVisible = true) {
     return {
         flag,
         key,
         featureKey,
         type: FEATURE_TYPE.LIMIT,
+        label,
+        pricingVisible,
         value: (features) => serializeLimit(features[flag]),
     };
 }
 export const PLAN_FEATURE_DEFINITIONS = [
-    limitFeature('maxUsers', 'max_users', FEATURE_KEY.MAX_USERS),
-    limitFeature('maxProducts', 'max_products', FEATURE_KEY.MAX_PRODUCTS),
-    booleanFeature('multiWarehouse', 'multi_warehouse', FEATURE_KEY.MULTI_WAREHOUSE),
-    booleanFeature('roleManagement', 'role_management', FEATURE_KEY.ROLE_MANAGEMENT),
-    booleanFeature('approvals', 'approvals', FEATURE_KEY.APPROVALS),
-    booleanFeature('crm', 'crm', FEATURE_KEY.CRM),
-    booleanFeature('sales', 'sales', FEATURE_KEY.SALES),
-    booleanFeature('purchasing', 'purchasing', FEATURE_KEY.PURCHASING),
-    booleanFeature('production', 'production', FEATURE_KEY.PRODUCTION),
-    booleanFeature('service', 'service', FEATURE_KEY.SERVICE),
-    booleanFeature('marketplace', 'marketplace', FEATURE_KEY.MARKETPLACE),
-    booleanFeature('payroll', 'payroll', FEATURE_KEY.PAYROLL),
-    booleanFeature('hr', 'hr', FEATURE_KEY.HR),
-    booleanFeature('apiAccess', 'api_access', FEATURE_KEY.API_ACCESS),
+    limitFeature('maxUsers', 'max_users', FEATURE_KEY.MAX_USERS, 'Maksimum kullanici'),
+    limitFeature('maxProducts', 'max_products', FEATURE_KEY.MAX_PRODUCTS, 'Maksimum urun'),
+    booleanFeature('multiWarehouse', 'multi_warehouse', FEATURE_KEY.MULTI_WAREHOUSE, 'Coklu depo'),
+    booleanFeature('roleManagement', 'role_management', FEATURE_KEY.ROLE_MANAGEMENT, 'Rol yonetimi'),
+    booleanFeature('approvals', 'approvals', FEATURE_KEY.APPROVALS, 'Onay akislari'),
+    booleanFeature('crm', 'crm', FEATURE_KEY.CRM, 'CRM'),
+    booleanFeature('sales', 'sales', FEATURE_KEY.SALES, 'Satis'),
+    booleanFeature('purchasing', 'purchasing', FEATURE_KEY.PURCHASING, 'Satin alma'),
+    booleanFeature('production', 'production', FEATURE_KEY.PRODUCTION, 'Uretim'),
+    booleanFeature('service', 'service', FEATURE_KEY.SERVICE, 'Teknik servis'),
+    booleanFeature('marketplace', 'marketplace', FEATURE_KEY.MARKETPLACE, 'Pazaryeri'),
+    booleanFeature('payroll', 'payroll', FEATURE_KEY.PAYROLL, 'Bordro'),
+    booleanFeature('hr', 'hr', FEATURE_KEY.HR, 'Insan kaynaklari'),
+    booleanFeature('apiAccess', 'api_access', FEATURE_KEY.API_ACCESS, 'API erisimi'),
     {
         flag: 'advancedAuditLog',
         key: 'audit_log',
         featureKey: FEATURE_KEY.AUDIT_LOG,
         type: FEATURE_TYPE.ENUM,
+        label: 'Audit log',
+        pricingVisible: true,
         value: (features, plan) => {
             if (!features.advancedAuditLog)
                 return 'basic';
             return plan === PLAN.ENTERPRISE ? 'full' : 'standard';
         },
     },
-    booleanFeature('customReporting', 'custom_reporting', FEATURE_KEY.CUSTOM_REPORTING),
-    booleanFeature('documentCenter', 'document_center', FEATURE_KEY.DOCUMENT_CENTER),
-    booleanFeature('smartNotifications', 'smart_notifications', FEATURE_KEY.SMART_NOTIFICATIONS),
-    booleanFeature('workflowCenter', 'workflow_center', FEATURE_KEY.WORKFLOW_CENTER),
-    booleanFeature('mailCenter', 'mail_center', FEATURE_KEY.MAIL_CENTER),
-    booleanFeature('bulkOperations', 'bulk_operations', FEATURE_KEY.BULK_OPERATIONS),
-    booleanFeature('cashflowForecast', 'cashflow_forecast', FEATURE_KEY.CASHFLOW_FORECAST),
-    booleanFeature('bankReconciliation', 'bank_reconciliation', FEATURE_KEY.BANK_RECONCILIATION),
-    booleanFeature('lotSerialTracking', 'lot_serial_tracking', FEATURE_KEY.LOT_SERIAL_TRACKING),
+    booleanFeature('customReporting', 'custom_reporting', FEATURE_KEY.CUSTOM_REPORTING, 'Ozel raporlama'),
+    booleanFeature('documentCenter', 'document_center', FEATURE_KEY.DOCUMENT_CENTER, 'Dokuman merkezi'),
+    booleanFeature('smartNotifications', 'smart_notifications', FEATURE_KEY.SMART_NOTIFICATIONS, 'Akilli bildirimler'),
+    booleanFeature('workflowCenter', 'workflow_center', FEATURE_KEY.WORKFLOW_CENTER, 'Is akisi merkezi'),
+    booleanFeature('mailCenter', 'mail_center', FEATURE_KEY.MAIL_CENTER, 'Mail merkezi'),
+    booleanFeature('bulkOperations', 'bulk_operations', FEATURE_KEY.BULK_OPERATIONS, 'Toplu islemler'),
+    booleanFeature('cashflowForecast', 'cashflow_forecast', FEATURE_KEY.CASHFLOW_FORECAST, 'Nakit akisi tahmini'),
+    booleanFeature('bankReconciliation', 'bank_reconciliation', FEATURE_KEY.BANK_RECONCILIATION, 'Banka mutabakati'),
+    booleanFeature('lotSerialTracking', 'lot_serial_tracking', FEATURE_KEY.LOT_SERIAL_TRACKING, 'Lot / seri no takibi'),
 ];
 const PLAN_FEATURE_DEFINITION_COVERAGE = {};
 void PLAN_FEATURE_DEFINITION_COVERAGE;
@@ -257,6 +263,64 @@ export const PLAN_FEATURE_ROWS = PLAN_ORDER.flatMap((plan) => {
         value: definition.value(features, plan),
         type: definition.type,
     }));
+});
+export const PLAN_LABELS = {
+    [PLAN.STARTER]: 'Starter',
+    [PLAN.PROFESSIONAL]: 'Professional',
+    [PLAN.ENTERPRISE]: 'Enterprise',
+};
+export const PLAN_PRICING_META = {
+    [PLAN.STARTER]: {
+        label: PLAN_LABELS.STARTER,
+        badge: null,
+        price: '1.990',
+        priceSub: null,
+        description: 'Temel operasyonel surecleri dijitallestirmek isteyen kucuk olcekli isletmeler icin.',
+        cta: 'Hemen Basla',
+        ctaStyle: 'secondary',
+        highlight: false,
+    },
+    [PLAN.PROFESSIONAL]: {
+        label: PLAN_LABELS.PROFESSIONAL,
+        badge: 'Onerilen',
+        price: '3.990',
+        priceSub: '+ kullanici basi 150 TL/ay',
+        description: 'Satis, finans ve operasyon sureclerini tek cati altinda yonetmek isteyen buyuyen isletmeler icin.',
+        cta: 'Lisans Satin Al',
+        ctaStyle: 'primary',
+        highlight: true,
+    },
+    [PLAN.ENTERPRISE]: {
+        label: PLAN_LABELS.ENTERPRISE,
+        badge: null,
+        price: null,
+        priceSub: null,
+        description: 'Cok subeli, yuksek kullanicili ve ozel entegrasyon gerektiren kurumlar icin.',
+        cta: 'Satis Ekibiyle Gorus',
+        ctaStyle: 'outline',
+        highlight: false,
+    },
+};
+function formatPricingFeatureValue(definition, value) {
+    if (definition.type === FEATURE_TYPE.BOOLEAN)
+        return value === 'true' ? definition.label : null;
+    if (value === 'unlimited')
+        return `Sinirsiz ${definition.label.toLocaleLowerCase('tr-TR')}`;
+    return `${value} ${definition.label.toLocaleLowerCase('tr-TR')}`;
+}
+export const PLAN_PRICING_MATRIX = PLAN_ORDER.map((plan) => {
+    const features = PLAN_FEATURE_DEFINITIONS.flatMap((definition) => {
+        if (!definition.pricingVisible)
+            return [];
+        const value = definition.value(PLAN_FEATURES[plan], plan);
+        const label = formatPricingFeatureValue(definition, value);
+        return label ? [{ key: definition.key, label, value }] : [];
+    });
+    return {
+        plan,
+        meta: PLAN_PRICING_META[plan],
+        features,
+    };
 });
 export const ACCESS_POLICIES = {
     purchasing: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.PURCHASING, module: MODULE_KEY.PURCHASING },

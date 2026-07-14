@@ -2,10 +2,12 @@ import { Context, Next } from 'hono';
 import { FeatureKey, Plan } from '@prisma/client';
 import type { AccessPolicy, FeatureKeyName, ModuleKey as SharedModuleKey, PlanName } from '@repo/types/plans';
 import { prisma } from '../lib/prisma';
-import { FeatureDisabledError, ForbiddenError, ModuleDisabledError, NotFoundError } from '../errors';
+import { ForbiddenError, NotFoundError } from '../errors';
 import { isPlanAtLeast } from '../types/plan.types';
 import { TenantFeatureService } from '../services/tenant-feature.service';
+import { allowReadOnlyOrRejectDowngradeLock } from '../services/plan-downgrade-access.service';
 import { hasTenantModuleAccess } from '../utils/tenant-modules';
+import { rejectInactiveTenant } from './tenant-status';
 
 const tenantFeatureService = new TenantFeatureService(prisma);
 
@@ -19,22 +21,30 @@ export function requireAccess(policy: AccessPolicy) {
 
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { plan: true, modules: true },
+      select: { plan: true, modules: true, status: true },
     });
 
     if (!tenant) {
       return c.json(new NotFoundError('Tenant', tenantId).toJSON(), 404);
     }
 
+    const inactiveTenantResponse = rejectInactiveTenant(c, tenant);
+    if (inactiveTenantResponse) return inactiveTenantResponse;
+
     if (policy.minPlan) {
       const requiredPlan = toPrismaPlan(policy.minPlan);
       if (!isPlanAtLeast(tenant.plan, requiredPlan)) {
-        return c.json(
-          new ForbiddenError(
-            `Bu ozellik icin en az ${requiredPlan} plani gereklidir. Mevcut planiniz: ${tenant.plan}.`,
-          ).toJSON(),
-          403,
-        );
+        const lockResponse = allowReadOnlyOrRejectDowngradeLock(c, {
+          reason: 'plan',
+          currentPlan: tenant.plan,
+          requiredPlan,
+          module: policy.module,
+          featureKey: policy.featureKey ? toPrismaFeatureKey(policy.featureKey) : undefined,
+        });
+        if (lockResponse) return lockResponse;
+        c.set('tenantPlan', tenant.plan);
+        await next();
+        return;
       }
       c.set('tenantPlan', tenant.plan);
     }
@@ -43,12 +53,28 @@ export function requireAccess(policy: AccessPolicy) {
       const featureKey = toPrismaFeatureKey(policy.featureKey);
       const isEnabled = await tenantFeatureService.isFeatureEnabled(tenantId, featureKey);
       if (!isEnabled) {
-        return c.json(new FeatureDisabledError(featureKey).toJSON(), 403);
+        const lockResponse = allowReadOnlyOrRejectDowngradeLock(c, {
+          reason: 'feature',
+          currentPlan: tenant.plan,
+          module: policy.module,
+          featureKey,
+        });
+        if (lockResponse) return lockResponse;
+        await next();
+        return;
       }
     }
 
     if (policy.module && !hasTenantModuleAccess(tenant, policy.module)) {
-      return c.json(new ModuleDisabledError(policy.module).toJSON(), 403);
+      const lockResponse = allowReadOnlyOrRejectDowngradeLock(c, {
+        reason: 'module',
+        currentPlan: tenant.plan,
+        module: policy.module,
+        featureKey: policy.featureKey ? toPrismaFeatureKey(policy.featureKey) : undefined,
+      });
+      if (lockResponse) return lockResponse;
+      await next();
+      return;
     }
 
     await next();

@@ -1,137 +1,117 @@
-import { FeatureKey, PrismaClient } from '@prisma/client';
+import { FeatureKey, Prisma, PrismaClient } from '@prisma/client';
 import { ModuleKey } from '../types/module.types';
-import { LimitExceededError, FeatureDisabledError, ModuleDisabledError } from '../errors';
+import { FeatureDisabledError, LimitExceededError, ModuleDisabledError } from '../errors';
 import { TenantFeatureService } from './tenant-feature.service';
-import { parseLimitValue, parseBooleanValue } from '../utils/feature-parser';
+import { parseBooleanValue, parseLimitValue } from '../utils/feature-parser';
 import { hasTenantModuleAccess } from '../utils/tenant-modules';
 
-// ─────────────────────────────────────────────
-// Starter Access Service
-// Sorumluluğu: Starter plan iş kurallarını enforce etmek
-// ─────────────────────────────────────────────
+export interface PlanLimitCapacity {
+  currentCount: number;
+  limit: number | null;
+  remainingSlots: number | null;
+  requestedCount: number;
+  allowed: boolean;
+}
+
+type StarterAccessDbClient = PrismaClient | Prisma.TransactionClient;
 
 export class StarterAccessService {
   private readonly tenantFeatureService: TenantFeatureService;
 
-  constructor(private readonly prisma: PrismaClient) {
+  constructor(private readonly prisma: StarterAccessDbClient) {
     this.tenantFeatureService = new TenantFeatureService(prisma);
   }
 
-  // ─── Kullanıcı Limiti ───────────────────────
-
-  /**
-   * Yeni kullanıcı eklemeden önce MAX_USERS limitini kontrol eder.
-   * Limit aşılmışsa LimitExceededError fırlatır.
-   */
-  async enforceUserLimit(tenantId: string): Promise<void> {
-    const feature = await this.tenantFeatureService.resolveFeature(
-      tenantId,
-      FeatureKey.MAX_USERS,
-    );
-
+  async getUserCapacity(tenantId: string, requestedCount = 1, currentCount?: number): Promise<PlanLimitCapacity> {
+    const feature = await this.tenantFeatureService.resolveFeature(tenantId, FeatureKey.MAX_USERS);
     const limitResult = parseLimitValue(feature.value);
-    if (limitResult.isUnlimited) return;
-
-    const currentCount = await this.prisma.tenantUser.count({
+    const resolvedCurrentCount = currentCount ?? await this.prisma.tenantUser.count({
       where: { tenantId, isActive: true },
     });
 
-    if (limitResult.limit !== null && currentCount >= limitResult.limit) {
-      throw new LimitExceededError('Kullanıcı', limitResult.limit, currentCount);
+    return buildCapacity(resolvedCurrentCount, requestedCount, limitResult.isUnlimited ? null : limitResult.limit);
+  }
+
+  async enforceUserLimit(tenantId: string): Promise<void> {
+    await this.enforceUserCapacity(tenantId, 1);
+  }
+
+  async enforceUserCapacity(tenantId: string, requestedCount: number, currentCount?: number): Promise<void> {
+    const capacity = await this.getUserCapacity(tenantId, requestedCount, currentCount);
+    if (capacity.limit !== null && !capacity.allowed) {
+      throw new LimitExceededError('Kullanici', capacity.limit, capacity.currentCount + requestedCount);
     }
   }
 
-  // ─── Ürün Limiti ────────────────────────────
-
-  /**
-   * Yeni ürün eklemeden önce MAX_PRODUCTS limitini kontrol eder.
-   * Limit aşılmışsa LimitExceededError fırlatır.
-   */
-  async enforceProductLimit(tenantId: string): Promise<void> {
-    const feature = await this.tenantFeatureService.resolveFeature(
-      tenantId,
-      FeatureKey.MAX_PRODUCTS,
-    );
-
+  async getProductCapacity(tenantId: string, requestedCount = 1, currentCount?: number): Promise<PlanLimitCapacity> {
+    const feature = await this.tenantFeatureService.resolveFeature(tenantId, FeatureKey.MAX_PRODUCTS);
     const limitResult = parseLimitValue(feature.value);
-    if (limitResult.isUnlimited) return;
-
-    const currentCount = await this.prisma.product.count({
+    const resolvedCurrentCount = currentCount ?? await this.prisma.product.count({
       where: { tenantId, deletedAt: null },
     });
 
-    if (limitResult.limit !== null && currentCount >= limitResult.limit) {
-      throw new LimitExceededError('Ürün', limitResult.limit, currentCount);
+    return buildCapacity(resolvedCurrentCount, requestedCount, limitResult.isUnlimited ? null : limitResult.limit);
+  }
+
+  async enforceProductLimit(tenantId: string): Promise<void> {
+    await this.enforceProductCapacity(tenantId, 1);
+  }
+
+  async enforceProductCapacity(tenantId: string, requestedCount: number, currentCount?: number): Promise<void> {
+    const capacity = await this.getProductCapacity(tenantId, requestedCount, currentCount);
+    if (capacity.limit !== null && !capacity.allowed) {
+      throw new LimitExceededError('Urun', capacity.limit, capacity.currentCount + requestedCount);
     }
   }
 
-  // ─── Depo Kuralı ────────────────────────────
-
-  /**
-   * MULTI_WAREHOUSE false ise ikinci depo oluşturulmasını engeller.
-   */
-  async enforceWarehouseCreation(tenantId: string): Promise<void> {
-    const feature = await this.tenantFeatureService.resolveFeature(
-      tenantId,
-      FeatureKey.MULTI_WAREHOUSE,
-    );
-
+  async enforceWarehouseCreation(tenantId: string, requestedCount = 1, currentCount?: number): Promise<void> {
+    const feature = await this.tenantFeatureService.resolveFeature(tenantId, FeatureKey.MULTI_WAREHOUSE);
     const isMultiWarehouseEnabled = parseBooleanValue(feature.value) && feature.isEnabled;
     if (isMultiWarehouseEnabled) return;
 
-    const warehouseCount = await this.prisma.warehouse.count({
-      where: { tenantId },
-    });
-
-    if (warehouseCount >= 1) {
+    const warehouseCount = currentCount ?? await this.prisma.warehouse.count({ where: { tenantId } });
+    if (warehouseCount + requestedCount > 1) {
       throw new FeatureDisabledError('MULTI_WAREHOUSE');
     }
   }
 
-  /**
-   * MULTI_WAREHOUSE false ise depo transfer işlemlerini engeller.
-   */
   async enforceWarehouseTransfer(tenantId: string): Promise<void> {
-    const feature = await this.tenantFeatureService.resolveFeature(
-      tenantId,
-      FeatureKey.MULTI_WAREHOUSE,
-    );
-
+    const feature = await this.tenantFeatureService.resolveFeature(tenantId, FeatureKey.MULTI_WAREHOUSE);
     const isMultiWarehouseEnabled = parseBooleanValue(feature.value) && feature.isEnabled;
     if (!isMultiWarehouseEnabled) {
       throw new FeatureDisabledError('MULTI_WAREHOUSE');
     }
   }
 
-  // ─── Modül Erişimi ──────────────────────────
-
-  /**
-   * Tenant'ın belirli bir modüle erişimi olup olmadığını kontrol eder.
-   * Kapalı modüle erişimde ModuleDisabledError fırlatır.
-   */
   async enforceModuleAccess(tenantId: string, module: ModuleKey): Promise<void> {
     const tenant = await this.prisma.tenant.findUniqueOrThrow({
       where: { id: tenantId },
       select: { plan: true, modules: true },
     });
 
-    if (hasTenantModuleAccess(tenant, module)) {
-      return;
-    }
-
+    if (hasTenantModuleAccess(tenant, module)) return;
     throw new ModuleDisabledError(module);
   }
 
-  // ─── Feature Erişimi ────────────────────────
-
-  /**
-   * Belirli bir feature'ın aktif olup olmadığını kontrol eder.
-   * Kapalıysa FeatureDisabledError fırlatır.
-   */
   async enforceFeatureAccess(tenantId: string, featureKey: FeatureKey): Promise<void> {
     const isEnabled = await this.tenantFeatureService.isFeatureEnabled(tenantId, featureKey);
     if (!isEnabled) {
       throw new FeatureDisabledError(featureKey);
     }
   }
+}
+
+function buildCapacity(currentCount: number, requestedCount: number, limit: number | null): PlanLimitCapacity {
+  if (limit === null) {
+    return { currentCount, limit: null, remainingSlots: null, requestedCount, allowed: true };
+  }
+
+  const remainingSlots = Math.max(0, limit - currentCount);
+  return {
+    currentCount,
+    limit,
+    remainingSlots,
+    requestedCount,
+    allowed: requestedCount <= remainingSlots,
+  };
 }

@@ -1,4 +1,7 @@
 // ─────────────────────────────────────────────
+import type { FeatureKey, Plan, TenantStatus } from '@prisma/client';
+import type { PlanDowngradeLockReason } from '../services/plan-downgrade-access.service';
+
 // Custom Error Classes
 // ─────────────────────────────────────────────
 
@@ -34,6 +37,61 @@ export class BaseError extends Error {
 export class ForbiddenError extends BaseError {
   constructor(message = 'Bu işlem için yetkiniz bulunmamaktadır.') {
     super(message, 403, 'FORBIDDEN');
+  }
+}
+
+export class TenantInactiveError extends BaseError {
+  public readonly status: TenantStatus;
+
+  constructor(status: TenantStatus) {
+    super(
+      `Tenant durumu ${status} oldugu icin plan, modul ve feature erisimi sinirlandirilmistir.`,
+      403,
+      'TENANT_INACTIVE',
+    );
+    this.status = status;
+  }
+
+  toJSON() {
+    return {
+      error: {
+        code: this.code,
+        message: this.message,
+        details: { status: this.status },
+      },
+    };
+  }
+}
+
+interface PlanDowngradeLockedDetails {
+  reason: PlanDowngradeLockReason;
+  accessMode: 'read_only';
+  currentPlan?: Plan;
+  requiredPlan?: Plan;
+  module?: string;
+  featureKey?: FeatureKey;
+}
+
+export class PlanDowngradeLockedError extends BaseError {
+  public readonly details: PlanDowngradeLockedDetails;
+
+  constructor(details: PlanDowngradeLockedDetails) {
+    super(
+      'Plan degisikligi nedeniyle bu alan read-only kilitlidir. Mevcut veriler korunur, yeni kayit veya guncelleme icin plan/modul/feature erisimi gerekir.',
+      403,
+      'PLAN_DOWNGRADE_LOCKED',
+    );
+    this.details = details;
+  }
+
+  toJSON() {
+    return {
+      error: {
+        code: this.code,
+        message: this.message,
+        details: this.details,
+      },
+    };
   }
 }
 

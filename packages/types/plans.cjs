@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ACCESS_POLICIES = exports.PLAN_FEATURE_ROWS = exports.PLAN_FEATURE_DEFINITIONS = exports.PLAN_MODULES = exports.PLAN_FEATURES = exports.STARTER_OPEN_MODULES = exports.MODULE_KEY = exports.FEATURE_TYPE = exports.FEATURE_KEY = exports.PLAN_RANK = exports.PLAN = void 0;
+exports.ACCESS_POLICIES = exports.PLAN_PRICING_MATRIX = exports.PLAN_PRICING_META = exports.PLAN_LABELS = exports.PLAN_FEATURE_ROWS = exports.PLAN_FEATURE_DEFINITIONS = exports.PLAN_MODULES = exports.PLAN_FEATURES = exports.STARTER_OPEN_MODULES = exports.MODULE_KEY = exports.FEATURE_TYPE = exports.FEATURE_KEY = exports.PLAN_RANK = exports.PLAN = void 0;
 exports.isPlanAtLeast = isPlanAtLeast;
 exports.normalizeModuleKey = normalizeModuleKey;
 exports.PLAN = {
@@ -197,59 +197,65 @@ function serializeBoolean(value) {
 function serializeLimit(value) {
     return value === null ? 'unlimited' : String(value);
 }
-function booleanFeature(flag, key, featureKey) {
+function booleanFeature(flag, key, featureKey, label, pricingVisible = true) {
     return {
         flag,
         key,
         featureKey,
         type: exports.FEATURE_TYPE.BOOLEAN,
+        label,
+        pricingVisible,
         value: (features) => serializeBoolean(features[flag]),
     };
 }
-function limitFeature(flag, key, featureKey) {
+function limitFeature(flag, key, featureKey, label, pricingVisible = true) {
     return {
         flag,
         key,
         featureKey,
         type: exports.FEATURE_TYPE.LIMIT,
+        label,
+        pricingVisible,
         value: (features) => serializeLimit(features[flag]),
     };
 }
 exports.PLAN_FEATURE_DEFINITIONS = [
-    limitFeature('maxUsers', 'max_users', exports.FEATURE_KEY.MAX_USERS),
-    limitFeature('maxProducts', 'max_products', exports.FEATURE_KEY.MAX_PRODUCTS),
-    booleanFeature('multiWarehouse', 'multi_warehouse', exports.FEATURE_KEY.MULTI_WAREHOUSE),
-    booleanFeature('roleManagement', 'role_management', exports.FEATURE_KEY.ROLE_MANAGEMENT),
-    booleanFeature('approvals', 'approvals', exports.FEATURE_KEY.APPROVALS),
-    booleanFeature('crm', 'crm', exports.FEATURE_KEY.CRM),
-    booleanFeature('sales', 'sales', exports.FEATURE_KEY.SALES),
-    booleanFeature('purchasing', 'purchasing', exports.FEATURE_KEY.PURCHASING),
-    booleanFeature('production', 'production', exports.FEATURE_KEY.PRODUCTION),
-    booleanFeature('service', 'service', exports.FEATURE_KEY.SERVICE),
-    booleanFeature('marketplace', 'marketplace', exports.FEATURE_KEY.MARKETPLACE),
-    booleanFeature('payroll', 'payroll', exports.FEATURE_KEY.PAYROLL),
-    booleanFeature('hr', 'hr', exports.FEATURE_KEY.HR),
-    booleanFeature('apiAccess', 'api_access', exports.FEATURE_KEY.API_ACCESS),
+    limitFeature('maxUsers', 'max_users', exports.FEATURE_KEY.MAX_USERS, 'Maksimum kullanici'),
+    limitFeature('maxProducts', 'max_products', exports.FEATURE_KEY.MAX_PRODUCTS, 'Maksimum urun'),
+    booleanFeature('multiWarehouse', 'multi_warehouse', exports.FEATURE_KEY.MULTI_WAREHOUSE, 'Coklu depo'),
+    booleanFeature('roleManagement', 'role_management', exports.FEATURE_KEY.ROLE_MANAGEMENT, 'Rol yonetimi'),
+    booleanFeature('approvals', 'approvals', exports.FEATURE_KEY.APPROVALS, 'Onay akislari'),
+    booleanFeature('crm', 'crm', exports.FEATURE_KEY.CRM, 'CRM'),
+    booleanFeature('sales', 'sales', exports.FEATURE_KEY.SALES, 'Satis'),
+    booleanFeature('purchasing', 'purchasing', exports.FEATURE_KEY.PURCHASING, 'Satin alma'),
+    booleanFeature('production', 'production', exports.FEATURE_KEY.PRODUCTION, 'Uretim'),
+    booleanFeature('service', 'service', exports.FEATURE_KEY.SERVICE, 'Teknik servis'),
+    booleanFeature('marketplace', 'marketplace', exports.FEATURE_KEY.MARKETPLACE, 'Pazaryeri'),
+    booleanFeature('payroll', 'payroll', exports.FEATURE_KEY.PAYROLL, 'Bordro'),
+    booleanFeature('hr', 'hr', exports.FEATURE_KEY.HR, 'Insan kaynaklari'),
+    booleanFeature('apiAccess', 'api_access', exports.FEATURE_KEY.API_ACCESS, 'API erisimi'),
     {
         flag: 'advancedAuditLog',
         key: 'audit_log',
         featureKey: exports.FEATURE_KEY.AUDIT_LOG,
         type: exports.FEATURE_TYPE.ENUM,
+        label: 'Audit log',
+        pricingVisible: true,
         value: (features, plan) => {
             if (!features.advancedAuditLog)
                 return 'basic';
             return plan === exports.PLAN.ENTERPRISE ? 'full' : 'standard';
         },
     },
-    booleanFeature('customReporting', 'custom_reporting', exports.FEATURE_KEY.CUSTOM_REPORTING),
-    booleanFeature('documentCenter', 'document_center', exports.FEATURE_KEY.DOCUMENT_CENTER),
-    booleanFeature('smartNotifications', 'smart_notifications', exports.FEATURE_KEY.SMART_NOTIFICATIONS),
-    booleanFeature('workflowCenter', 'workflow_center', exports.FEATURE_KEY.WORKFLOW_CENTER),
-    booleanFeature('mailCenter', 'mail_center', exports.FEATURE_KEY.MAIL_CENTER),
-    booleanFeature('bulkOperations', 'bulk_operations', exports.FEATURE_KEY.BULK_OPERATIONS),
-    booleanFeature('cashflowForecast', 'cashflow_forecast', exports.FEATURE_KEY.CASHFLOW_FORECAST),
-    booleanFeature('bankReconciliation', 'bank_reconciliation', exports.FEATURE_KEY.BANK_RECONCILIATION),
-    booleanFeature('lotSerialTracking', 'lot_serial_tracking', exports.FEATURE_KEY.LOT_SERIAL_TRACKING),
+    booleanFeature('customReporting', 'custom_reporting', exports.FEATURE_KEY.CUSTOM_REPORTING, 'Ozel raporlama'),
+    booleanFeature('documentCenter', 'document_center', exports.FEATURE_KEY.DOCUMENT_CENTER, 'Dokuman merkezi'),
+    booleanFeature('smartNotifications', 'smart_notifications', exports.FEATURE_KEY.SMART_NOTIFICATIONS, 'Akilli bildirimler'),
+    booleanFeature('workflowCenter', 'workflow_center', exports.FEATURE_KEY.WORKFLOW_CENTER, 'Is akisi merkezi'),
+    booleanFeature('mailCenter', 'mail_center', exports.FEATURE_KEY.MAIL_CENTER, 'Mail merkezi'),
+    booleanFeature('bulkOperations', 'bulk_operations', exports.FEATURE_KEY.BULK_OPERATIONS, 'Toplu islemler'),
+    booleanFeature('cashflowForecast', 'cashflow_forecast', exports.FEATURE_KEY.CASHFLOW_FORECAST, 'Nakit akisi tahmini'),
+    booleanFeature('bankReconciliation', 'bank_reconciliation', exports.FEATURE_KEY.BANK_RECONCILIATION, 'Banka mutabakati'),
+    booleanFeature('lotSerialTracking', 'lot_serial_tracking', exports.FEATURE_KEY.LOT_SERIAL_TRACKING, 'Lot / seri no takibi'),
 ];
 const PLAN_FEATURE_DEFINITION_COVERAGE = {};
 void PLAN_FEATURE_DEFINITION_COVERAGE;
@@ -262,6 +268,64 @@ exports.PLAN_FEATURE_ROWS = PLAN_ORDER.flatMap((plan) => {
         value: definition.value(features, plan),
         type: definition.type,
     }));
+});
+exports.PLAN_LABELS = {
+    [exports.PLAN.STARTER]: 'Starter',
+    [exports.PLAN.PROFESSIONAL]: 'Professional',
+    [exports.PLAN.ENTERPRISE]: 'Enterprise',
+};
+exports.PLAN_PRICING_META = {
+    [exports.PLAN.STARTER]: {
+        label: exports.PLAN_LABELS.STARTER,
+        badge: null,
+        price: '1.990',
+        priceSub: null,
+        description: 'Temel operasyonel surecleri dijitallestirmek isteyen kucuk olcekli isletmeler icin.',
+        cta: 'Hemen Basla',
+        ctaStyle: 'secondary',
+        highlight: false,
+    },
+    [exports.PLAN.PROFESSIONAL]: {
+        label: exports.PLAN_LABELS.PROFESSIONAL,
+        badge: 'Onerilen',
+        price: '3.990',
+        priceSub: '+ kullanici basi 150 TL/ay',
+        description: 'Satis, finans ve operasyon sureclerini tek cati altinda yonetmek isteyen buyuyen isletmeler icin.',
+        cta: 'Lisans Satin Al',
+        ctaStyle: 'primary',
+        highlight: true,
+    },
+    [exports.PLAN.ENTERPRISE]: {
+        label: exports.PLAN_LABELS.ENTERPRISE,
+        badge: null,
+        price: null,
+        priceSub: null,
+        description: 'Cok subeli, yuksek kullanicili ve ozel entegrasyon gerektiren kurumlar icin.',
+        cta: 'Satis Ekibiyle Gorus',
+        ctaStyle: 'outline',
+        highlight: false,
+    },
+};
+function formatPricingFeatureValue(definition, value) {
+    if (definition.type === exports.FEATURE_TYPE.BOOLEAN)
+        return value === 'true' ? definition.label : null;
+    if (value === 'unlimited')
+        return `Sinirsiz ${definition.label.toLocaleLowerCase('tr-TR')}`;
+    return `${value} ${definition.label.toLocaleLowerCase('tr-TR')}`;
+}
+exports.PLAN_PRICING_MATRIX = PLAN_ORDER.map((plan) => {
+    const features = exports.PLAN_FEATURE_DEFINITIONS.flatMap((definition) => {
+        if (!definition.pricingVisible)
+            return [];
+        const value = definition.value(exports.PLAN_FEATURES[plan], plan);
+        const label = formatPricingFeatureValue(definition, value);
+        return label ? [{ key: definition.key, label, value }] : [];
+    });
+    return {
+        plan,
+        meta: exports.PLAN_PRICING_META[plan],
+        features,
+    };
 });
 exports.ACCESS_POLICIES = {
     purchasing: { minPlan: exports.PLAN.PROFESSIONAL, featureKey: exports.FEATURE_KEY.PURCHASING, module: exports.MODULE_KEY.PURCHASING },

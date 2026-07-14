@@ -46,6 +46,7 @@ import { SetupChecklistCard } from "@/components/features/settings/SetupChecklis
 import { StarterHealthScoreCard } from "@/components/features/dashboard/StarterHealthScoreCard";
 import { StarterEDocumentControlCard } from "@/components/features/dashboard/StarterEDocumentControlCard";
 import { PlanUsageLimitsCard } from "@/components/features/dashboard/PlanUsageLimitsCard";
+import { PlanRecommendedActionsCard } from "@/components/features/dashboard/PlanRecommendedActionsCard";
 
 /* ── Types ──────────────────────────────────── */
 
@@ -157,7 +158,8 @@ function openAssistant(message: string) {
 
 export function DashboardOverview() {
   const { user, tenant } = useCurrentUser();
-  const { isStarter } = usePlanFeatures();
+  const { isStarter, plan } = usePlanFeatures();
+  const currentPlan = plan ?? "STARTER";
   const dashboardPreset = detectDashboardPreset(user);
   const canRead = (module: string) => (user ? !user.tenantMembership || canReadModule(user, module) : false);
   const canReadInvoicing = canRead('invoicing');
@@ -346,6 +348,8 @@ export function DashboardOverview() {
           </div>
         </div>
       </Card>
+
+      <PlanRecommendedActionsCard plan={currentPlan} />
 
       <SetupChecklistCard enabled={canReadSettings} compact />
       <StarterHealthScoreCard enabled={isStarter} />

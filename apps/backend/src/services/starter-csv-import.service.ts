@@ -1,9 +1,8 @@
-import { AuditAction, ContactType, EntityType, FeatureKey, Prisma, PrismaClient } from '@prisma/client';
+import { AuditAction, ContactType, EntityType, Prisma, PrismaClient } from '@prisma/client';
 import { ValidationError } from '../errors/index.js';
 import { buildCsv, parseCsv } from '../utils/csv.js';
 import { createAuditLog } from '../utils/audit.js';
-import { parseLimitValue } from '../utils/feature-parser.js';
-import { TenantFeatureService } from './tenant-feature.service.js';
+import { StarterAccessService } from './starter-access.service.js';
 
 export type StarterCsvImportEntity = 'products' | 'contacts';
 
@@ -229,10 +228,10 @@ function isImportableRow(row: StarterCsvImportPreviewRow): row is StarterCsvImpo
 }
 
 export class StarterCsvImportService {
-  private readonly tenantFeatureService: TenantFeatureService;
+  private readonly starterAccessService: StarterAccessService;
 
   constructor(private readonly prisma: PrismaClient) {
-    this.tenantFeatureService = new TenantFeatureService(prisma);
+    this.starterAccessService = new StarterAccessService(prisma);
   }
 
   getConfig(entity: StarterCsvImportEntity): EntityConfig {
@@ -286,12 +285,11 @@ export class StarterCsvImportService {
       ? await this.previewProducts(tenantId, mappedRows)
       : await this.previewContacts(tenantId, mappedRows);
 
-    const [currentProductCount, maxProducts] = entity === 'products'
-      ? await Promise.all([
-          this.prisma.product.count({ where: { tenantId, deletedAt: null } }),
-          this.getMaxProductLimit(tenantId),
-        ])
-      : [null, null] as const;
+    const productCapacity = entity === 'products'
+      ? await this.starterAccessService.getProductCapacity(tenantId, 0)
+      : null;
+    const currentProductCount = productCapacity?.currentCount ?? null;
+    const maxProducts = productCapacity?.limit ?? null;
 
     if (entity === 'products' && currentProductCount !== null) {
       this.applyProductLimit(rows, currentProductCount, maxProducts);
@@ -394,10 +392,7 @@ export class StarterCsvImportService {
 
     await this.prisma.$transaction(async (tx) => {
       const currentProductCount = await tx.product.count({ where: { tenantId, deletedAt: null } });
-      const maxProducts = await this.getMaxProductLimit(tenantId);
-      if (maxProducts !== null && currentProductCount + data.length > maxProducts) {
-        throw new ValidationError(`Starter urun limiti asiliyor. Kalan hak: ${Math.max(0, maxProducts - currentProductCount)}.`);
-      }
+      await new StarterAccessService(tx).enforceProductCapacity(tenantId, data.length, currentProductCount);
 
       const duplicateCodes = await tx.product.findMany({
         where: { tenantId, deletedAt: null, code: { in: data.map((product) => product.code) } },
@@ -463,12 +458,6 @@ export class StarterCsvImportService {
         userAgent: meta.userAgent,
       });
     });
-  }
-
-  private async getMaxProductLimit(tenantId: string): Promise<number | null> {
-    const feature = await this.tenantFeatureService.resolveFeature(tenantId, FeatureKey.MAX_PRODUCTS);
-    const parsed = parseLimitValue(feature.value);
-    return parsed.isUnlimited ? null : parsed.limit;
   }
 
   private async getProductReferences(tenantId: string): Promise<ProductReferences> {

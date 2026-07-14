@@ -28,10 +28,11 @@ export function FeatureGate({ feature, plan, module, limitReached, limitLabel, c
   const currentPlan = features.plan ?? 'STARTER';
   const flags = feature ? (Array.isArray(feature) ? feature : [feature]) : [];
   const featureAllowed = flags.length > 0 ? flags.some((flag) => Boolean(features[flag])) : undefined;
+  const resolvedFeatureAllowsAccess = features.hasResolvedFeatures && featureAllowed === true;
   const reasons = getAccessLockReasons({
     currentPlan,
-    requiredPlan: plan,
-    requiredModule: module,
+    requiredPlan: resolvedFeatureAllowsAccess ? undefined : plan,
+    requiredModule: resolvedFeatureAllowsAccess ? undefined : module,
     tenantModules: tenant.modules,
     featureAllowed,
     featureLabel: flags.join(', '),

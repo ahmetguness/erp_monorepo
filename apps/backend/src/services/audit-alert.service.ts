@@ -1,5 +1,5 @@
-import { AuditAction, EntityType, FeatureKey, NotificationStatus, Prisma, PrismaClient } from '@prisma/client';
-import { TenantFeatureService } from './tenant-feature.service.js';
+import { AuditAction, EntityType, NotificationStatus, Prisma, PrismaClient } from '@prisma/client';
+import { canUseAuditLogExport, resolveAuditLogPolicy } from './audit-log-policy.service.js';
 
 type AuditAlertDb = PrismaClient | Prisma.TransactionClient;
 
@@ -41,9 +41,8 @@ function actionLabel(action: AuditAction): string {
 }
 
 async function hasStandardAuditLog(db: AuditAlertDb, tenantId: string): Promise<boolean> {
-  const service = new TenantFeatureService(db as PrismaClient);
-  const feature = await service.resolveFeature(tenantId, FeatureKey.AUDIT_LOG);
-  return feature.value === 'standard' || feature.value === 'full';
+  const policy = await resolveAuditLogPolicy(db as PrismaClient, tenantId);
+  return canUseAuditLogExport(policy);
 }
 
 async function resolveAlertRecipients(db: AuditAlertDb, tenantId: string, actorUserId: string | null): Promise<string[]> {

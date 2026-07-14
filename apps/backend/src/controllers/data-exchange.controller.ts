@@ -9,6 +9,7 @@ import { getDataQualitySummary } from '../services/data-quality.service.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { DataExchangeWorkflowService, duplicateSuggestionsFromWarnings, toJsonObject } from '../services/data-exchange-workflow.service.js';
 import { buildCsv, parseCsv, type CsvParseResult } from '../utils/csv.js';
+import { StarterAccessService } from '../services/starter-access.service.js';
 
 type DataExchangeEntity = 'products' | 'contacts' | 'stock' | 'invoices';
 
@@ -245,7 +246,27 @@ async function previewImport(config: EntityConfig, tenantId: string, body: Impor
     };
   });
 
+  if (config.entity === 'products') {
+    await applyProductLimitToPreview(tenantId, rows);
+  }
+
   return { rows, errors: [] };
+}
+
+async function applyProductLimitToPreview(tenantId: string, rows: ImportPreviewRow[]): Promise<void> {
+  const validRows = rows.filter((row) => row.valid).length;
+  const capacity = await new StarterAccessService(prisma).getProductCapacity(tenantId, validRows);
+  if (capacity.allowed || capacity.remainingSlots === null) return;
+
+  let acceptedRows = 0;
+  for (const row of rows) {
+    if (!row.valid) continue;
+    acceptedRows += 1;
+    if (acceptedRows > capacity.remainingSlots) {
+      row.valid = false;
+      row.errors.push(`Plan urun limiti asiliyor. Kalan hak: ${capacity.remainingSlots}.`);
+    }
+  }
 }
 
 function csvResponse(csv: string, filename: string): Response {

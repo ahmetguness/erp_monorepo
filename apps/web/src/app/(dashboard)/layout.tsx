@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
 import { useMe } from '@/hooks/useAuth';
 import { Sidebar } from '@/components/shared/Sidebar';
@@ -14,6 +14,7 @@ import { QuickStartWizard } from '@/components/shared/QuickStartWizard';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   // Sayfa yüklendiğinde /api/auth/me'den güncel plan + modules çek → store'a yaz
@@ -21,9 +22,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (!isAuthenticated && !meQuery.isLoading && !meQuery.isFetching) {
-      router.replace('/login');
+      const currentPath = `${pathname}${window.location.search}`;
+      router.replace(`/login?from=${encodeURIComponent(currentPath)}`);
     }
-  }, [isAuthenticated, meQuery.isFetching, meQuery.isLoading, router]);
+  }, [isAuthenticated, meQuery.isFetching, meQuery.isLoading, pathname, router]);
 
   // Auth yoksa login'e yönlenene kadar spinner göster (beyaz ekranı önler)
   if (!isAuthenticated) {

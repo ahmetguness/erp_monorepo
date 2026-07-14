@@ -354,7 +354,7 @@ export const AuditLogFullStatusSchema = z.object({
   retention: z.object({
     enabled: z.boolean(),
     auditLogRule: z.object({
-      retentionDays: z.coerce.number(),
+      retentionDays: z.coerce.number().nullable(),
       action: z.string(),
       legalArchive: z.boolean(),
       enabled: z.boolean(),

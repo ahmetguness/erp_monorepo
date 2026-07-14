@@ -1,6 +1,7 @@
-import { AuditAction, EntityType, Plan, Prisma } from '@prisma/client';
+import { AuditAction, EntityType, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { resolveAuditStandardFlags } from './audit/audit-standard.js';
+import { canUseAuditLogSiem, resolveAuditLogPolicy } from './audit-log-policy.service.js';
 
 export const SIEM_SETTING_KEYS = {
   enabled: 'security.siem.enabled',
@@ -208,14 +209,14 @@ async function updateLastStatus(tenantId: string, status: string, exportedAt: st
 }
 
 export async function exportRecentAuditLogsToSiem(tenantId: string, limit = 25): Promise<SiemExportResult> {
-  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { plan: true } });
-  if (tenant?.plan !== Plan.ENTERPRISE) {
+  const policy = await resolveAuditLogPolicy(prisma, tenantId);
+  if (!canUseAuditLogSiem(policy)) {
     return {
       status: 'skipped',
       destinationType: 'webhook',
       eventCount: 0,
       exportedAt: new Date().toISOString(),
-      message: 'SIEM export sadece Enterprise plan icindir.',
+      message: 'SIEM export sadece audit full seviyesinde kullanilabilir.',
       sample: '',
     };
   }
@@ -291,8 +292,8 @@ export async function exportRecentAuditLogsToSiem(tenantId: string, limit = 25):
 export async function pushSingleAuditLogToSiem(log: AuditLogLike): Promise<void> {
   const settings = await getSiemSettings(log.tenantId);
   if (!settings.enabled || !settings.endpointUrl) return;
-  const tenant = await prisma.tenant.findUnique({ where: { id: log.tenantId }, select: { plan: true } });
-  if (tenant?.plan !== Plan.ENTERPRISE) return;
+  const policy = await resolveAuditLogPolicy(prisma, log.tenantId);
+  if (!canUseAuditLogSiem(policy)) return;
   const event = toSiemAuditEvent(log, settings.includeDiff);
   if (!shouldExport(event.severity, settings.minSeverity)) return;
   const payload = buildPayload(settings, [event]);

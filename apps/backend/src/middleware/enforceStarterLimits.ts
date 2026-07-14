@@ -1,7 +1,7 @@
 import { Context, Next } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { prisma } from '../lib/prisma';
-import { ForbiddenError, LimitExceededError } from '../errors';
+import { BaseError, ForbiddenError } from '../errors';
 import { StarterAccessService } from '../services/starter-access.service';
 
 // ─────────────────────────────────────────────
@@ -50,10 +50,7 @@ export function enforceStarterLimits(limitType: StarterLimitType) {
         }
       }
     } catch (err) {
-      if (err instanceof LimitExceededError) {
-        return c.json(err.toJSON(), err.statusCode as ContentfulStatusCode);
-      }
-      if (err instanceof ForbiddenError) {
+      if (err instanceof BaseError) {
         return c.json(err.toJSON(), err.statusCode as ContentfulStatusCode);
       }
       throw err;

@@ -507,7 +507,9 @@ export default function CorporateSecurityPage() {
               <p className="text-[10px] uppercase tracking-wide text-slate-500">Retention</p>
               <p className="mt-1 text-sm font-semibold text-slate-100">
                 {auditLogFullStatus?.retention.auditLogRule
-                  ? `${auditLogFullStatus.retention.auditLogRule.retentionDays} gun`
+                  ? auditLogFullStatus.retention.auditLogRule.retentionDays === null
+                    ? 'Limitsiz'
+                    : `${auditLogFullStatus.retention.auditLogRule.retentionDays} gun`
                   : 'kural yok'}
               </p>
               <p className="mt-1 text-[11px] text-slate-500">

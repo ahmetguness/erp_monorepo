@@ -8,7 +8,7 @@ import { parseBooleanValue } from '../utils/feature-parser';
 // ─────────────────────────────────────────────
 
 export class PlanFeatureService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaClient | Prisma.TransactionClient) {}
 
   /**
    * Belirli bir plan için tüm feature'ları DB'den çeker.

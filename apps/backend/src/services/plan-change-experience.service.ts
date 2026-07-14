@@ -3,6 +3,7 @@ import {
   PLAN_FEATURE_DEFINITIONS,
   PLAN_FEATURES,
   PLAN_MODULES,
+  PLAN_RANK,
   type ModuleKey,
   type PlanFeatureFlags,
   type PlanName,
@@ -189,14 +190,22 @@ function diffModules(previousModules: readonly ModuleKey[], nextModules: readonl
 }
 
 function buildNotificationMessage(oldPlan: PlanName, newPlan: PlanName, diff: PlanChangeDiff): string {
-  return [
+  const lines = [
     `Plan: ${oldPlan} -> ${newPlan}`,
     `Acilan ozellikler: ${formatChangeLabels(diff.openedFeatures)}`,
     `Kapanan ozellikler: ${formatChangeLabels(diff.closedFeatures)}`,
     `Acilan moduller: ${formatChangeLabels(diff.openedModules)}`,
     `Kapanan moduller: ${formatChangeLabels(diff.closedModules)}`,
-    'Onboarding checklist dashboard gorevlerinize eklendi.',
-  ].join('\n');
+  ];
+
+  if (isDowngrade(oldPlan, newPlan) && (diff.closedFeatures.length > 0 || diff.closedModules.length > 0)) {
+    lines.push(
+      'Downgrade stratejisi: Kapanan modul ve ozelliklerde mevcut veriler silinmez; okuma erisimi korunur, yeni kayit ve guncelleme islemleri plan yukseltme veya yetki acilana kadar kilitlenir.',
+    );
+  }
+
+  lines.push('Onboarding checklist dashboard gorevlerinize eklendi.');
+  return lines.join('\n');
 }
 
 function formatChangeLabels(items: readonly NamedChange[]): string {
@@ -212,6 +221,10 @@ function toPlanName(plan: Plan): PlanName {
     case Plan.ENTERPRISE:
       return 'ENTERPRISE';
   }
+}
+
+function isDowngrade(oldPlan: PlanName, newPlan: PlanName): boolean {
+  return PLAN_RANK[newPlan] < PLAN_RANK[oldPlan];
 }
 
 function dueInDays(days: number): Date {

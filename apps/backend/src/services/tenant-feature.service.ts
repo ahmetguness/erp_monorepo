@@ -1,4 +1,4 @@
-import { FeatureKey, FeatureType, Plan, PrismaClient } from '@prisma/client';
+import { FeatureKey, FeatureType, Plan, Prisma, PrismaClient } from '@prisma/client';
 import { ResolvedFeature, STARTER_FEATURE_DEFAULTS } from '../types/feature.types';
 import { parseBooleanValue } from '../utils/feature-parser';
 import { PlanFeatureService } from './plan-feature.service';
@@ -12,7 +12,7 @@ import { PlanFeatureService } from './plan-feature.service';
 export class TenantFeatureService {
   private readonly planFeatureService: PlanFeatureService;
 
-  constructor(private readonly prisma: PrismaClient) {
+  constructor(private readonly prisma: PrismaClient | Prisma.TransactionClient) {
     this.planFeatureService = new PlanFeatureService(prisma);
   }
 

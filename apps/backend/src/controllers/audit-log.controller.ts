@@ -1,20 +1,24 @@
 import { Context } from 'hono';
-import { AuditAction, EntityType, FeatureKey, Prisma } from '@prisma/client';
+import { AuditAction, EntityType, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ForbiddenError, ValidationError } from '../errors';
-import { TenantFeatureService } from '../services/tenant-feature.service';
 import { resolveAuditFieldValueLabels } from '../services/audit/field-label-resolver.js';
 import { formatAuditLogBusiness } from '../services/audit/formatter.js';
 import { CRITICAL_AUDIT_ACTIONS, resolveAuditStandardFlags } from '../services/audit/audit-standard.js';
 import { requireTenantId, requireParam, requireUserId } from '../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
+import {
+  canUseAuditLogExport,
+  getAuditLogCutoffDate,
+  resolveAuditLogPolicy,
+  type AuditLogPolicy,
+} from '../services/audit-log-policy.service.js';
 
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 // AuditLog Controller
-// Starter: son 30 gün, Professional: 1 yıl, Enterprise: sınırsız
-// ─────────────────────────────────────────────
+// Starter: 30 days, Professional: 1 year, Enterprise: unlimited.
+// ---------------------------------------------
 
-const tenantFeatureService = new TenantFeatureService(prisma);
 const VALID_AUDIT_ACTIONS: readonly string[] = Object.values(AuditAction);
 const VALID_ENTITY_TYPES: readonly string[] = Object.values(EntityType);
 
@@ -26,35 +30,11 @@ function isEntityType(value: string): value is EntityType {
   return VALID_ENTITY_TYPES.includes(value);
 }
 
-/** AUDIT_LOG feature value'suna göre tarih filtresi döner */
-function getAuditDateFilter(auditLevel: string): Date | null {
-  const now = new Date();
-  switch (auditLevel) {
-    case 'basic': {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 30);
-      return d;
-    }
-    case 'standard': {
-      const d = new Date(now);
-      d.setFullYear(d.getFullYear() - 1);
-      return d;
-    }
-    case 'full':
-      return null; // sınırsız
-    default: {
-      // bilinmeyen değer → restrictive (30 gün)
-      const d = new Date(now);
-      d.setDate(d.getDate() - 30);
-      return d;
-    }
-  }
-}
 
 function parseDateQuery(value: string | undefined, label: string): Date | undefined {
   if (!value) return undefined;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) throw new ValidationError(`${label} geçerli bir tarih olmalıdır.`);
+  if (Number.isNaN(date.getTime())) throw new ValidationError(`${label} gecerli bir tarih olmalidir.`);
   return date;
 }
 
@@ -66,7 +46,7 @@ function laterDate(first: Date | null | undefined, second: Date | undefined): Da
 
 function buildAuditWhere(params: {
   tenantId: string;
-  auditLevel: string;
+  policy: AuditLogPolicy;
   module?: string;
   entityType?: string;
   entityId?: string;
@@ -76,7 +56,7 @@ function buildAuditWhere(params: {
   dateTo?: string;
   criticalOnly?: string;
 }): Prisma.AuditLogWhereInput {
-  const dateLimit = getAuditDateFilter(params.auditLevel);
+  const dateLimit = getAuditLogCutoffDate(params.policy);
   const dateFrom = parseDateQuery(params.dateFrom, 'dateFrom');
   const dateTo = parseDateQuery(params.dateTo, 'dateTo');
   const gte = laterDate(dateLimit, dateFrom);
@@ -308,11 +288,11 @@ export const AuditLogController = {
     const entityId = c.req.query('entityId');
     const action = c.req.query('action');
     const userId = c.req.query('userId');
-    // Plan bazlı tarih kısıtlaması
-    const feature = await tenantFeatureService.resolveFeature(tenantId, FeatureKey.AUDIT_LOG);
+    // Plan-based date restriction is resolved from the central audit policy.
+    const policy = await resolveAuditLogPolicy(prisma, tenantId);
     const where = buildAuditWhere({
       tenantId,
-      auditLevel: feature.value,
+      policy,
       module,
       entityType,
       entityId,
@@ -337,7 +317,7 @@ export const AuditLogController = {
 
     return c.json({
       data: enrichedLogs,
-      meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
+      meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize), auditPolicy: policy },
     });
   },
 
@@ -345,9 +325,9 @@ export const AuditLogController = {
     const tenantId = requireTenantId(c);
     const id = requireParam(c, 'id');
 
-    // Plan bazlı tarih kısıtlaması — eski kayıtlara erişimi engelle
-    const feature = await tenantFeatureService.resolveFeature(tenantId, FeatureKey.AUDIT_LOG);
-    const dateLimit = getAuditDateFilter(feature.value);
+    // Plan-based date restriction prevents access to logs outside the allowed window.
+    const policy = await resolveAuditLogPolicy(prisma, tenantId);
+    const dateLimit = getAuditLogCutoffDate(policy);
 
     const log = await prisma.auditLog.findFirst({
       where: {
@@ -356,7 +336,7 @@ export const AuditLogController = {
         ...(dateLimit && { createdAt: { gte: dateLimit } }),
       },
     });
-    if (!log) return c.json({ error: 'Kayıt bulunamadı.' }, 404);
+    if (!log) return c.json({ error: 'Kayit bulunamadi.' }, 404);
 
     const [enrichedLog] = await enrichAuditLogs(tenantId, [log]);
 
@@ -367,14 +347,14 @@ export const AuditLogController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
 
-    const feature = await tenantFeatureService.resolveFeature(tenantId, FeatureKey.AUDIT_LOG);
-    if (feature.value !== 'standard' && feature.value !== 'full') {
+    const policy = await resolveAuditLogPolicy(prisma, tenantId);
+    if (!canUseAuditLogExport(policy)) {
       return c.json(new ForbiddenError('Audit log export ozelligi Professional ve Enterprise planlarinda kullanilabilir.').toJSON(), 403);
     }
 
     const where = buildAuditWhere({
       tenantId,
-      auditLevel: feature.value,
+      policy,
       module: c.req.query('module'),
       entityType: c.req.query('entityType'),
       entityId: c.req.query('entityId'),
@@ -388,7 +368,7 @@ export const AuditLogController = {
     const logs = await prisma.auditLog.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 10000,
+      take: policy.exportMaxRows,
     });
 
     const enrichedLogs = await enrichAuditLogs(tenantId, logs);
@@ -412,6 +392,7 @@ export const AuditLogController = {
           dateTo: c.req.query('dateTo') ?? null,
         },
         total: logs.length,
+        auditPolicy: policy.level,
       },
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,
@@ -419,7 +400,7 @@ export const AuditLogController = {
 
     return c.json({
       data: enrichedLogs,
-      meta: { total: logs.length, exportedAt: new Date().toISOString(), format: 'json' },
+      meta: { total: logs.length, exportedAt: new Date().toISOString(), format: 'json', auditPolicy: policy },
     });
   },
 };

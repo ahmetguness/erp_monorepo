@@ -1,9 +1,8 @@
-import { AuditAction, EntityType, FeatureKey, Prisma, PrismaClient } from '@prisma/client';
+import { AuditAction, EntityType, Prisma, PrismaClient } from '@prisma/client';
 import { ValidationError } from '../errors/index.js';
-import { TenantFeatureService } from './tenant-feature.service.js';
-import { parseLimitValue } from '../utils/feature-parser.js';
 import { buildCsv, parseCsv } from '../utils/csv.js';
 import { createAuditLog } from '../utils/audit.js';
+import { StarterAccessService } from './starter-access.service.js';
 
 export interface ProductQuickImportInput {
   csv: string;
@@ -208,10 +207,10 @@ function isImportableRow(row: ProductQuickImportPreviewRow): row is ImportablePr
 }
 
 export class ProductQuickImportService {
-  private readonly tenantFeatureService: TenantFeatureService;
+  private readonly starterAccessService: StarterAccessService;
 
   constructor(private readonly prisma: PrismaClient) {
-    this.tenantFeatureService = new TenantFeatureService(prisma);
+    this.starterAccessService = new StarterAccessService(prisma);
   }
 
   buildTemplateCsv(): string {
@@ -233,17 +232,16 @@ export class ProductQuickImportService {
   async preview(tenantId: string, input: ProductQuickImportInput): Promise<ProductQuickImportPreview> {
     const parsed = parseCsv(input.csv);
     const missingHeaders = REQUIRED_HEADERS.filter((header) => !parsed.headers.includes(header));
-    const [references, existingCodes, currentProductCount, maxProducts] = await Promise.all([
+    const [references, existingCodes, capacity] = await Promise.all([
       this.getReferences(tenantId),
       this.getExistingCodes(tenantId, parsed.rows),
-      this.prisma.product.count({ where: { tenantId, deletedAt: null } }),
-      this.getMaxProductLimit(tenantId),
+      this.starterAccessService.getProductCapacity(tenantId, 0),
     ]);
 
     const duplicateCodes = this.findFileDuplicateCodes(parsed.rows);
     const rows = parsed.rows.map((values, index) => this.validateRow(values, index + 2, references, existingCodes, duplicateCodes));
     const validBeforeLimit = rows.filter((row) => row.valid).length;
-    const remainingSlots = maxProducts === null ? null : Math.max(0, maxProducts - currentProductCount);
+    const remainingSlots = capacity.remainingSlots;
     if (remainingSlots !== null && validBeforeLimit > remainingSlots) {
       let acceptedRows = 0;
       for (const row of rows) {
@@ -256,12 +254,12 @@ export class ProductQuickImportService {
       }
     }
 
-    const summary = calculateSummary(rows, currentProductCount, maxProducts);
+    const summary = calculateSummary(rows, capacity.currentCount, capacity.limit);
     return {
       headers: [...PRODUCT_IMPORT_HEADERS],
       rows,
       errors: missingHeaders.map((header) => `${header} kolonu zorunludur.`),
-      checklist: buildChecklist(missingHeaders, rows, currentProductCount, maxProducts),
+      checklist: buildChecklist(missingHeaders, rows, capacity.currentCount, capacity.limit),
       summary,
     };
   }
@@ -307,10 +305,7 @@ export class ProductQuickImportService {
 
     await this.prisma.$transaction(async (tx) => {
       const currentProductCount = await tx.product.count({ where: { tenantId, deletedAt: null } });
-      const maxProducts = await this.getMaxProductLimit(tenantId);
-      if (maxProducts !== null && currentProductCount + data.length > maxProducts) {
-        throw new ValidationError(`Starter urun limiti asiliyor. Kalan hak: ${Math.max(0, maxProducts - currentProductCount)}.`);
-      }
+      await new StarterAccessService(tx).enforceProductCapacity(tenantId, data.length, currentProductCount);
 
       const duplicateCodes = await tx.product.findMany({
         where: { tenantId, deletedAt: null, code: { in: data.map((product) => product.code) } },
@@ -343,12 +338,6 @@ export class ProductQuickImportService {
       skippedCount: preview.summary.totalRows - data.length,
       summary: preview.summary,
     };
-  }
-
-  private async getMaxProductLimit(tenantId: string): Promise<number | null> {
-    const feature = await this.tenantFeatureService.resolveFeature(tenantId, FeatureKey.MAX_PRODUCTS);
-    const parsed = parseLimitValue(feature.value);
-    return parsed.isUnlimited ? null : parsed.limit;
   }
 
   private async getReferences(tenantId: string): Promise<ReferenceMaps> {

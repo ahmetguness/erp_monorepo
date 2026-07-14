@@ -1,9 +1,9 @@
 import { createHash } from 'crypto';
-import { AuditAction, EntityType, FeatureKey, Plan, Prisma } from '@prisma/client';
+import { AuditAction, EntityType, Prisma } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
-import { TenantFeatureService } from './tenant-feature.service.js';
 import { getDataRetentionSettings } from './data-retention-policy.service.js';
 import { getSiemSettings } from './siem-export.service.js';
+import { resolveAuditLogPolicy } from './audit-log-policy.service.js';
 
 export const AUDIT_LOG_FULL_SETTING_KEYS = {
   immutableEnabled: 'security.audit_full.immutable_enabled',
@@ -27,7 +27,7 @@ export interface AuditLogFullStatus {
   retention: {
     enabled: boolean;
     auditLogRule: {
-      retentionDays: number;
+      retentionDays: number | null;
       action: string;
       legalArchive: boolean;
       enabled: boolean;
@@ -186,24 +186,22 @@ export async function recordAuditIntegrityHead(
 }
 
 export async function getAuditLogFullStatus(db: PrismaClient, tenantId: string): Promise<AuditLogFullStatus> {
-  const [tenant, retention, siem, immutable] = await Promise.all([
-    db.tenant.findUnique({ where: { id: tenantId }, select: { plan: true } }),
+  const [policy, retention, siem, immutable] = await Promise.all([
+    resolveAuditLogPolicy(db, tenantId),
     getDataRetentionSettings(db, tenantId),
     getSiemSettings(tenantId),
     getAuditImmutableSettings(db, tenantId),
   ]);
-  const feature = await new TenantFeatureService(db).resolveFeature(tenantId, FeatureKey.AUDIT_LOG);
   const auditLogRule = retention.rules.find((rule) => rule.module === 'audit_logs') ?? null;
-  const exportEnabled = tenant?.plan === Plan.PROFESSIONAL || tenant?.plan === Plan.ENTERPRISE;
 
   return {
     generatedAt: new Date().toISOString(),
-    auditLevel: feature.value,
+    auditLevel: policy.level,
     retention: {
       enabled: retention.enabled,
       auditLogRule: auditLogRule
         ? {
-            retentionDays: auditLogRule.retentionDays,
+            retentionDays: policy.retentionDays,
             action: auditLogRule.action,
             legalArchive: auditLogRule.legalArchive,
             enabled: auditLogRule.enabled,
@@ -211,12 +209,12 @@ export async function getAuditLogFullStatus(db: PrismaClient, tenantId: string):
         : null,
     },
     exportApi: {
-      enabled: exportEnabled,
-      maxRows: 10000,
+      enabled: policy.exportEnabled,
+      maxRows: policy.exportMaxRows,
       href: '/api/audit-logs/export',
     },
     siemPush: {
-      enabled: siem.enabled,
+      enabled: policy.siemEnabled && siem.enabled,
       destinationType: siem.destinationType,
       minSeverity: siem.minSeverity,
       lastExportAt: siem.lastExportAt,
