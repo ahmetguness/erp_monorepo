@@ -11,16 +11,19 @@
     },
     "./contracts": {
       "types": "./contracts/index.ts",
+      "require": "./contracts/index.js",
       "import": "./contracts/index.ts",
       "default": "./contracts/index.ts"
     },
     "./contracts/api-key": {
       "types": "./contracts/api-key.ts",
+      "require": "./contracts/api-key.js",
       "import": "./contracts/api-key.ts",
       "default": "./contracts/api-key.ts"
     },
     "./contracts/common": {
       "types": "./contracts/common.ts",
+      "require": "./contracts/common.js",
       "import": "./contracts/common.ts",
       "default": "./contracts/common.ts"
     },

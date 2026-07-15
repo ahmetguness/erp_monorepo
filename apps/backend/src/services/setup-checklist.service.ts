@@ -199,7 +199,7 @@ export class SetupChecklistService {
         'Veri kalite kontrolu',
         'Eksik vergi no, KDV, minimum stok ve eksi stok kontrollerini temizleyin.',
         counts.dataQuality,
-        '/dashboard',
+        '/dashboard/data-exchange',
         'Kalite skorunu incele',
       ),
     ];

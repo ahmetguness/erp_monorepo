@@ -5,6 +5,8 @@ export interface CsvParseResult {
   rows: Record<string, string>[];
 }
 
+const UTF8_BOM = '\uFEFF';
+
 export function csvEscape(value: CsvCellValue): string {
   const normalized = value === null || value === undefined ? '' : String(value);
   if (!/[",\r\n]/.test(normalized)) return normalized;
@@ -16,7 +18,7 @@ export function buildCsv(headers: string[], rows: Record<string, CsvCellValue>[]
     headers.map(csvEscape).join(','),
     ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(',')),
   ];
-  return `${lines.join('\r\n')}\r\n`;
+  return `${UTF8_BOM}${lines.join('\r\n')}\r\n`;
 }
 
 function countDelimiter(line: string, delimiter: ',' | ';'): number {

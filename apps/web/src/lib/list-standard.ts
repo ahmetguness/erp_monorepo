@@ -16,6 +16,7 @@ export interface ListStandardStateInput {
 }
 
 const CSV_MIME_TYPE = 'text/csv;charset=utf-8';
+const UTF8_BOM = '\uFEFF';
 const LIST_STANDARD_STORAGE_PREFIX = 'axon:list-standard';
 
 type QueryValue = string | number | boolean | null | undefined;
@@ -175,7 +176,8 @@ export function buildCsv<T>(
 }
 
 export function downloadCsv(filename: string, content: string): void {
-  const blob = new Blob([content], { type: CSV_MIME_TYPE });
+  const csvContent = content.startsWith(UTF8_BOM) ? content : `${UTF8_BOM}${content}`;
+  const blob = new Blob([csvContent], { type: CSV_MIME_TYPE });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

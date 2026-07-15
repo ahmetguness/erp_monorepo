@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Activity, ArrowRight, BarChart3, Bot, DollarSign, Eye, Gauge, Save, ShieldCheck } from 'lucide-react';
+import { Activity, ArrowRight, BarChart3, Bot, DollarSign, Eye, Gauge, Save, ShieldCheck, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
@@ -300,15 +300,22 @@ export function AiGovernancePage() {
           <div className="grid gap-3 md:grid-cols-3">
             <button
               type="button"
-              className="rounded-xl border border-slate-800 bg-slate-900 p-3 text-left"
+              className="group rounded-xl border border-slate-800 bg-slate-900 p-3 text-left transition-colors hover:border-sky-500/50 hover:bg-sky-500/10 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              aria-pressed={policy.enabled}
               onClick={() => savePolicy({ ...policy, enabled: !policy.enabled })}
             >
-              <span className="text-xs text-slate-500">AI durumu</span>
+              <span className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                AI durumu
+                {policy.enabled ? <ToggleRight className="h-5 w-5 text-emerald-300" /> : <ToggleLeft className="h-5 w-5 text-slate-500" />}
+              </span>
               <p className="mt-1 text-sm font-semibold text-slate-100">{policy.enabled ? 'Acik' : 'Kapali'}</p>
+              <p className="mt-2 text-xs font-medium text-sky-300 opacity-90 group-hover:text-sky-200">
+                {policy.enabled ? 'Kapatmak icin tikla' : 'Acmak icin tikla'}
+              </p>
             </button>
             <button
               type="button"
-              className="rounded-xl border border-slate-800 bg-slate-900 p-3 text-left"
+              className="group rounded-xl border border-slate-800 bg-slate-900 p-3 text-left transition-colors hover:border-sky-500/50 hover:bg-sky-500/10 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
               onClick={() => savePolicy({
                 ...policy,
                 dataSharingPolicy: policy.dataSharingPolicy === 'BUSINESS_CONTEXT' ? 'NO_ENTITY_CONTEXT' : 'BUSINESS_CONTEXT',
@@ -316,14 +323,22 @@ export function AiGovernancePage() {
             >
               <span className="text-xs text-slate-500">Veri paylasimi</span>
               <p className="mt-1 text-sm font-semibold text-slate-100">{policy.dataSharingPolicy}</p>
+              <p className="mt-2 text-xs font-medium text-sky-300 opacity-90 group-hover:text-sky-200">Degistirmek icin tikla</p>
             </button>
             <button
               type="button"
-              className="rounded-xl border border-slate-800 bg-slate-900 p-3 text-left"
+              className="group rounded-xl border border-slate-800 bg-slate-900 p-3 text-left transition-colors hover:border-sky-500/50 hover:bg-sky-500/10 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              aria-pressed={policy.logPrompts}
               onClick={() => savePolicy({ ...policy, logPrompts: !policy.logPrompts })}
             >
-              <span className="text-xs text-slate-500">Prompt ozeti</span>
+              <span className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                Prompt ozeti
+                {policy.logPrompts ? <ToggleRight className="h-5 w-5 text-emerald-300" /> : <ToggleLeft className="h-5 w-5 text-slate-500" />}
+              </span>
               <p className="mt-1 text-sm font-semibold text-slate-100">{policy.logPrompts ? 'Kaydedilir' : 'Kaydedilmez'}</p>
+              <p className="mt-2 text-xs font-medium text-sky-300 opacity-90 group-hover:text-sky-200">
+                {policy.logPrompts ? 'Kapatmak icin tikla' : 'Acmak icin tikla'}
+              </p>
             </button>
           </div>
         </section>
