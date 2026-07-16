@@ -51,6 +51,7 @@ interface OrderListQuery {
   limit?: string;
   status?: OrderStatus;
   contactId?: string;
+  search?: string;
   dateFrom?: string;
   dateTo?: string;
 }
@@ -124,12 +125,19 @@ export const SalesOrderController = {
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
     const status = parseQuoteStatus(c.req.query('status'));
+    const search = query.search?.trim();
 
     const where = {
       tenantId,
       deletedAt: null,
       ...(status && { status }),
       ...(query.contactId && { contactId: query.contactId }),
+      ...(search && {
+        OR: [
+          { number: { contains: search, mode: 'insensitive' as const } },
+          { contact: { name: { contains: search, mode: 'insensitive' as const } } },
+        ],
+      }),
       ...(query.dateFrom || query.dateTo
         ? { date: { ...(query.dateFrom && { gte: new Date(query.dateFrom) }), ...(query.dateTo && { lte: new Date(query.dateTo) }) } }
         : {}),

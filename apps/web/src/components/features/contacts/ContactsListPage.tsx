@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
@@ -20,6 +20,7 @@ import {
   Users,
   FileText,
   Info,
+  UploadCloud,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
@@ -148,7 +149,7 @@ function SummaryBar({
   const total = Number(summary.totalAccounts) || 0;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
+    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
       <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
         <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
           <Users className="w-4 h-4 text-sky-400" />
@@ -166,7 +167,7 @@ function SummaryBar({
         </div>
         <div>
           <p className="text-[10px] text-slate-500 uppercase tracking-wider">
-            Musteri / Satici
+            Müşteri / Satıcı
           </p>
           <p className="text-base font-semibold text-white">
             {customers} / {suppliers}
@@ -259,6 +260,8 @@ export function ContactsListPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>([...CONTACT_COLUMN_KEYS]);
+  const [tableDensity, setTableDensity] = useState<"comfortable" | "compact">("compact");
+  const importRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useContacts({
     page,
@@ -273,6 +276,12 @@ export function ContactsListPage() {
   const bulkSelection = useBulkSelection(contacts.map((contact) => contact.id));
   const summary = data?.summary;
   const hasActiveFilters = !!type || !!status || !!balanceFilter;
+  const isEmptyFirstUse = !isLoading && !search && !hasActiveFilters && (data?.meta.total ?? 0) === 0;
+  const activeFilterChips = [
+    type ? { key: "type", label: TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type, clear: () => setType("") } : null,
+    status ? { key: "status", label: STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status, clear: () => setStatus("") } : null,
+    balanceFilter ? { key: "balance", label: BALANCE_OPTIONS.find((option) => option.value === balanceFilter)?.label ?? balanceFilter, clear: () => setBalanceFilter("") } : null,
+  ].filter((chip): chip is { key: string; label: string; clear: () => void } => Boolean(chip));
   const viewState = useMemo<SavedViewState>(() => createListSavedViewState({
     filters: { search, type, status, balanceFilter },
     columns: visibleColumnKeys,
@@ -500,6 +509,13 @@ export function ContactsListPage() {
         action={
           <div className="flex gap-2">
             <Button
+              variant="outline"
+              leftIcon={<UploadCloud className="w-4 h-4" />}
+              onClick={() => importRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            >
+              İçe Aktar
+            </Button>
+            <Button
               leftIcon={<Plus className="w-4 h-4" />}
               onClick={() => router.push("/dashboard/contacts/new")}
             >
@@ -509,7 +525,11 @@ export function ContactsListPage() {
         }
       />
 
-      <StarterCsvImportWizard entity="contacts" />
+      {isEmptyFirstUse && (
+        <div ref={importRef}>
+          <StarterCsvImportWizard entity="contacts" />
+        </div>
+      )}
 
       <CustomerTrackingPanel />
 
@@ -566,7 +586,42 @@ export function ContactsListPage() {
           exportRows={contacts}
           exportFilename="cari-hesaplar.csv"
         />
+        <div className="flex rounded-lg border border-slate-800 bg-slate-900/60 p-0.5">
+          <button
+            type="button"
+            onClick={() => setTableDensity("compact")}
+            className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${tableDensity === "compact" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-slate-200"}`}
+          >
+            Kompakt
+          </button>
+          <button
+            type="button"
+            onClick={() => setTableDensity("comfortable")}
+            className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${tableDensity === "comfortable" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-slate-200"}`}
+          >
+            Rahat
+          </button>
+        </div>
       </div>
+
+      {activeFilterChips.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {activeFilterChips.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={() => {
+                chip.clear();
+                setPage(1);
+              }}
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-sky-500/25 bg-sky-500/10 px-2.5 text-xs font-medium text-sky-200 hover:border-sky-400/40 hover:bg-sky-500/15"
+            >
+              {chip.label}
+              <X className="h-3 w-3" />
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Advanced Filters */}
       {showFilters && (
@@ -620,6 +675,7 @@ export function ContactsListPage() {
           onTogglePage: bulkSelection.togglePage,
         }}
         isLoading={isLoading}
+        density={tableDensity}
         onRowClick={(r) => router.push(`/dashboard/contacts/${r.id}`)}
         emptyTitle="Cari hesap bulunamadı"
         emptyDescription="Yeni bir cari hesap ekleyerek başlayın."
@@ -635,6 +691,12 @@ export function ContactsListPage() {
             : undefined
         }
       />
+
+      {!isEmptyFirstUse && (
+        <div ref={importRef} className="mt-4">
+          <StarterCsvImportWizard entity="contacts" />
+        </div>
+      )}
     </div>
   );
 }

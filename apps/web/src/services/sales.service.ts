@@ -190,6 +190,7 @@ export interface ListParams extends PaginationParams, DateRangeParams {
   contactId?: string;
   status?: string;
   type?: string;
+  search?: string;
 }
 
 // ─────────────────────────────────────────────

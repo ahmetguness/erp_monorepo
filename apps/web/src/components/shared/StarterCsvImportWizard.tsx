@@ -25,16 +25,16 @@ interface EntityCopy {
 
 const ENTITY_COPY: Record<StarterCsvImportEntity, EntityCopy> = {
   products: {
-    title: 'Urun CSV ice aktarim',
-    description: 'Starter icin urunleri CSV ile hizlica kontrol edin, basit alan esleme ile gecerli satirlari kaydedin.',
-    rowLabel: 'Urun',
+    title: 'Ürün CSV içe aktarım',
+    description: 'Starter için ürünleri CSV ile hızlıca kontrol edin, basit alan eşleme ile geçerli satırları kaydedin.',
+    rowLabel: 'Ürün',
     primaryField: 'name',
     secondaryField: 'code',
     filename: 'starter-products-import-template.csv',
   },
   contacts: {
-    title: 'Cari CSV ice aktarim',
-    description: 'Musteri ve tedarikci temel kartlarini CSV ile aktarirken alan eslemeyi sade tutun.',
+    title: 'Cari CSV içe aktarım',
+    description: 'Müşteri ve tedarikçi temel kartlarını CSV ile aktarırken alan eşlemeyi sade tutun.',
     rowLabel: 'Cari',
     primaryField: 'name',
     secondaryField: 'code',
@@ -112,7 +112,7 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
   async function handleCommit() {
     try {
       const result = await commit.mutateAsync({ entity, csv, mapping: effectiveMapping, partialImport });
-      toast.success(`${result.createdCount} kayit kaydedildi, ${result.skippedCount} satir atlandi.`);
+      toast.success(`${result.createdCount} kayıt kaydedildi, ${result.skippedCount} satır atlandı.`);
       setCsv('');
       setMapping({});
       preview.reset();
@@ -134,10 +134,10 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} loading={template.isPending} onClick={handleTemplate}>
-            Sablon
+            Şablon
           </Button>
           <Button variant="secondary" size="sm" leftIcon={<UploadCloud className="h-3.5 w-3.5" />} onClick={() => fileInputRef.current?.click()}>
-            Dosya Sec
+            Dosya Seç
           </Button>
           <input
             ref={fileInputRef}
@@ -159,14 +159,14 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
               preview.reset();
             }}
             className="h-40 w-full resize-y rounded-lg border border-slate-800 bg-slate-950/60 p-3 font-mono text-xs text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-sky-500/60"
-            placeholder="CSV icerigini buraya yapistirin veya Dosya Sec ile yukleyin."
+            placeholder="CSV içeriğini buraya yapıştırın veya Dosya Seç ile yükleyin."
           />
 
           {sourceHeaders.length > 0 && (
             <div className="rounded-lg border border-slate-800 bg-slate-950/35 p-3">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="text-xs font-semibold text-slate-300">Basit alan esleme</h3>
-                <span className="text-[11px] text-slate-500">Kolon adlari ayniysa otomatik eslesir.</span>
+                <h3 className="text-xs font-semibold text-slate-300">Basit alan eşleme</h3>
+                <span className="text-[11px] text-slate-500">Kolon adları aynıysa otomatik eşleşir.</span>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {(previewData?.targetFields ?? (entity === 'products'
@@ -184,7 +184,7 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
                       className="h-9 rounded-lg border border-slate-800 bg-slate-950 px-2 text-xs text-slate-200 outline-none focus:border-sky-500/60"
                     >
                       <option value={field}>{field}</option>
-                      <option value="">Esleme yok</option>
+                      <option value="">Eşleme yok</option>
                       {sourceHeaders.map((header) => (
                         <option key={`${field}-${header}`} value={header}>{header}</option>
                       ))}
@@ -203,14 +203,14 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
                 onChange={(event) => setPartialImport(event.target.checked)}
                 className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-sky-500"
               />
-              Hatali satirlari atla, gecerli satirlari aktar
+              Hatalı satırları atla, geçerli satırları aktar
             </label>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" disabled={!hasCsv} loading={preview.isPending} onClick={handlePreview}>
                 Kontrol Et
               </Button>
               <Button size="sm" disabled={!canCommit} loading={commit.isPending} onClick={handleCommit}>
-                Ice Aktar
+                İçe Aktar
               </Button>
             </div>
           </div>
@@ -233,7 +233,7 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
                       {row.errors.length === 0 && row.warnings.length > 0 && <p className="mt-1 text-amber-300">{row.warnings.join(' ')}</p>}
                     </div>
                     <div className="text-right">
-                      <Badge variant={row.valid ? 'success' : 'danger'}>{row.valid ? 'Hazir' : 'Hata'}</Badge>
+                      <Badge variant={row.valid ? 'success' : 'danger'}>{row.valid ? 'Hazır' : 'Hata'}</Badge>
                     </div>
                   </div>
                 ))}
@@ -249,7 +249,7 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
               <p className="mt-1 text-lg font-semibold text-slate-100">{previewData?.summary.totalRows ?? '-'}</p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
-              <p className="text-[11px] text-slate-500">Hazir</p>
+              <p className="text-[11px] text-slate-500">Hazır</p>
               <p className="mt-1 text-lg font-semibold text-emerald-300">{previewData?.summary.importableRows ?? '-'}</p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
@@ -270,7 +270,7 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
                   </div>
                 </div>
               )) : (
-                <p className="text-xs leading-5 text-slate-500">CSV yukleyince kolon esleme, zorunlu alan, tekrar ve Starter limit kontrolleri burada gorunur.</p>
+                <p className="text-xs leading-5 text-slate-500">CSV yükleyince kolon eşleme, zorunlu alan, tekrar ve Starter limit kontrolleri burada görünür.</p>
               )}
             </div>
           </div>

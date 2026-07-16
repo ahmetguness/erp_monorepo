@@ -2,17 +2,13 @@ import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import type { InvoiceStatus, OrderStatus, QuoteStatus, PaymentStatus, FiscalPeriodStatus } from '@repo/types';
 import type { PurchaseOrderStatus } from '@/services/purchase.service';
 
-// ─────────────────────────────────────────────
-// Invoice Status
-// ─────────────────────────────────────────────
-
 const INVOICE_STATUS_CONFIG: Record<string, { label: string; variant: BadgeVariant }> = {
-  DRAFT:         { label: 'Taslak',    variant: 'neutral' },
-  SENT:          { label: 'Gönderildi', variant: 'info' },
-  PAID:          { label: 'Ödendi',    variant: 'success' },
-  PARTIALLY_PAID:{ label: 'Kısmi',     variant: 'warning' },
-  OVERDUE:       { label: 'Gecikmiş',  variant: 'danger' },
-  CANCELLED:     { label: 'İptal',     variant: 'neutral' },
+  DRAFT: { label: 'Taslak', variant: 'neutral' },
+  SENT: { label: 'Gönderildi', variant: 'info' },
+  PAID: { label: 'Ödendi', variant: 'success' },
+  PARTIALLY_PAID: { label: 'Kısmi', variant: 'warning' },
+  OVERDUE: { label: 'Gecikmiş', variant: 'danger' },
+  CANCELLED: { label: 'İptal', variant: 'neutral' },
 };
 
 export function InvoiceStatusBadge({ status }: { status: InvoiceStatus | string }) {
@@ -20,16 +16,12 @@ export function InvoiceStatusBadge({ status }: { status: InvoiceStatus | string 
   return <Badge variant={config.variant}>{config.label}</Badge>;
 }
 
-// ─────────────────────────────────────────────
-// Order Status
-// ─────────────────────────────────────────────
-
 const ORDER_STATUS_CONFIG: Record<string, { label: string; variant: BadgeVariant }> = {
-  DRAFT:               { label: 'Taslak',       variant: 'neutral' },
-  CONFIRMED:           { label: 'Onaylandı',    variant: 'info' },
+  DRAFT: { label: 'Taslak', variant: 'neutral' },
+  CONFIRMED: { label: 'Onaylandı', variant: 'info' },
   PARTIALLY_DELIVERED: { label: 'Kısmi Teslimat', variant: 'warning' },
-  DELIVERED:           { label: 'Teslim Edildi', variant: 'success' },
-  CANCELLED:           { label: 'İptal',        variant: 'neutral' },
+  DELIVERED: { label: 'Teslim Edildi', variant: 'success' },
+  CANCELLED: { label: 'İptal', variant: 'neutral' },
 };
 
 export function OrderStatusBadge({ status }: { status: OrderStatus | string }) {
@@ -37,17 +29,13 @@ export function OrderStatusBadge({ status }: { status: OrderStatus | string }) {
   return <Badge variant={config.variant}>{config.label}</Badge>;
 }
 
-// ─────────────────────────────────────────────
-// Quote Status
-// ─────────────────────────────────────────────
-
 const QUOTE_STATUS_CONFIG: Record<string, { label: string; variant: BadgeVariant }> = {
-  DRAFT:     { label: 'Taslak',    variant: 'neutral' },
-  SENT:      { label: 'Gönderildi', variant: 'info' },
-  ACCEPTED:  { label: 'Kabul',      variant: 'success' },
-  REJECTED:  { label: 'Reddedildi', variant: 'danger' },
-  EXPIRED:   { label: 'Süresi Doldu', variant: 'warning' },
-  CANCELLED: { label: 'İptal',      variant: 'neutral' },
+  DRAFT: { label: 'Taslak', variant: 'neutral' },
+  SENT: { label: 'Gönderildi', variant: 'info' },
+  ACCEPTED: { label: 'Kabul', variant: 'success' },
+  REJECTED: { label: 'Reddedildi', variant: 'danger' },
+  EXPIRED: { label: 'Süresi Doldu', variant: 'warning' },
+  CANCELLED: { label: 'İptal', variant: 'neutral' },
 };
 
 export function QuoteStatusBadge({ status }: { status: QuoteStatus | string }) {
@@ -55,16 +43,12 @@ export function QuoteStatusBadge({ status }: { status: QuoteStatus | string }) {
   return <Badge variant={config.variant}>{config.label}</Badge>;
 }
 
-// ─────────────────────────────────────────────
-// Purchase Order Status
-// ─────────────────────────────────────────────
-
 const PO_STATUS_CONFIG: Record<string, { label: string; variant: BadgeVariant }> = {
-  DRAFT:                { label: 'Taslak',           variant: 'neutral' },
-  SENT:                 { label: 'Gönderildi',       variant: 'info' },
-  PARTIALLY_RECEIVED:   { label: 'Kısmi Teslim',     variant: 'warning' },
-  RECEIVED:             { label: 'Teslim Alındı',    variant: 'success' },
-  CANCELLED:            { label: 'İptal',            variant: 'neutral' },
+  DRAFT: { label: 'Taslak', variant: 'neutral' },
+  SENT: { label: 'Gönderildi', variant: 'info' },
+  PARTIALLY_RECEIVED: { label: 'Kısmi Teslim', variant: 'warning' },
+  RECEIVED: { label: 'Teslim Alındı', variant: 'success' },
+  CANCELLED: { label: 'İptal', variant: 'neutral' },
 };
 
 export function PurchaseOrderStatusBadge({ status }: { status: PurchaseOrderStatus | string }) {
@@ -72,16 +56,12 @@ export function PurchaseOrderStatusBadge({ status }: { status: PurchaseOrderStat
   return <Badge variant={config.variant}>{config.label}</Badge>;
 }
 
-// ─────────────────────────────────────────────
-// Payment Status
-// ─────────────────────────────────────────────
-
 const PAYMENT_STATUS_CONFIG: Record<string, { label: string; variant: BadgeVariant }> = {
-  PENDING:   { label: 'Bekliyor',   variant: 'warning' },
+  PENDING: { label: 'Bekliyor', variant: 'warning' },
   COMPLETED: { label: 'Tamamlandı', variant: 'success' },
-  FAILED:    { label: 'Başarısız',  variant: 'danger' },
-  CANCELLED: { label: 'İptal',      variant: 'neutral' },
-  REFUNDED:  { label: 'İade',       variant: 'purple' },
+  FAILED: { label: 'Başarısız', variant: 'danger' },
+  CANCELLED: { label: 'İptal', variant: 'neutral' },
+  REFUNDED: { label: 'İade', variant: 'purple' },
 };
 
 export function PaymentStatusBadge({ status }: { status: PaymentStatus | string }) {
@@ -89,12 +69,8 @@ export function PaymentStatusBadge({ status }: { status: PaymentStatus | string 
   return <Badge variant={config.variant}>{config.label}</Badge>;
 }
 
-// ─────────────────────────────────────────────
-// Fiscal Period Status
-// ─────────────────────────────────────────────
-
 const FISCAL_STATUS_CONFIG: Record<string, { label: string; variant: BadgeVariant }> = {
-  OPEN:   { label: 'Açık',   variant: 'success' },
+  OPEN: { label: 'Açık', variant: 'success' },
   CLOSED: { label: 'Kapalı', variant: 'neutral' },
   LOCKED: { label: 'Kilitli', variant: 'danger' },
 };
@@ -103,10 +79,6 @@ export function FiscalPeriodStatusBadge({ status }: { status: FiscalPeriodStatus
   const config = FISCAL_STATUS_CONFIG[status] ?? { label: status, variant: 'neutral' as BadgeVariant };
   return <Badge variant={config.variant}>{config.label}</Badge>;
 }
-
-// ─────────────────────────────────────────────
-// Active / Passive
-// ─────────────────────────────────────────────
 
 export function ActiveBadge({ isActive }: { isActive: boolean }) {
   return (

@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { CalendarClock, FileSignature, Receipt, TrendingUp, Users } from 'lucide-react';
+import { CalendarClock, ChevronDown, ChevronUp, FileSignature, Receipt, TrendingUp, Users } from 'lucide-react';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { useCustomerTrackingDashboard } from '@/hooks/useContacts';
 import type { CustomerTrackingRow } from '@/services/contact.service';
@@ -97,7 +98,12 @@ function CustomerRow({ row }: { row: CustomerTrackingRow }) {
   );
 }
 
-export function CustomerTrackingPanel() {
+interface CustomerTrackingPanelProps {
+  defaultExpanded?: boolean;
+}
+
+export function CustomerTrackingPanel({ defaultExpanded = true }: CustomerTrackingPanelProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const { data, isLoading } = useCustomerTrackingDashboard(8);
   const rows = data?.rows ?? [];
   const summary = data?.summary;
@@ -105,7 +111,7 @@ export function CustomerTrackingPanel() {
   const openBalanceTone = openBalanceTotal >= 0 ? 'text-emerald-400' : 'text-red-400';
 
   return (
-    <section className="mb-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg ring-1 ring-white/[0.03]">
+    <section className="mb-4 overflow-hidden rounded-lg border border-slate-800 bg-slate-900 shadow-lg ring-1 ring-white/[0.03]">
       <div className="flex flex-col gap-3 border-b border-slate-800/80 p-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -114,36 +120,47 @@ export function CustomerTrackingPanel() {
           </div>
           <p className="mt-1 text-xs text-slate-500">Son teklif, son fatura, açık bakiye ve yaklaşan tahsilatları tek ekranda izleyin.</p>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div className="rounded-xl border border-slate-800 bg-slate-950/35 px-3 py-2">
-            <p className="text-[10px] text-slate-500">Müşteri</p>
-            <p className="text-sm font-bold text-white">{summary?.customerCount ?? 0}</p>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-2">
+              <p className="text-[10px] text-slate-500">Müşteri</p>
+              <p className="text-sm font-bold text-white">{summary?.customerCount ?? 0}</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-2">
+              <p className="text-[10px] text-slate-500">Açık bakiye</p>
+              <p className="text-sm font-bold text-slate-200">{summary?.contactsWithOpenBalance ?? 0}</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-2">
+              <p className="text-[10px] text-slate-500">Net bakiye</p>
+              <p className={cn('text-sm font-bold', openBalanceTone)}>{formatCurrency(Math.abs(openBalanceTotal))}</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-2">
+              <p className="text-[10px] text-slate-500">Yaklaşan</p>
+              <p className="text-sm font-bold text-amber-400">{formatCurrency(summary?.upcomingCollectionTotal ?? 0)}</p>
+            </div>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/35 px-3 py-2">
-            <p className="text-[10px] text-slate-500">Açık bakiye</p>
-            <p className="text-sm font-bold text-slate-200">{summary?.contactsWithOpenBalance ?? 0}</p>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/35 px-3 py-2">
-            <p className="text-[10px] text-slate-500">Net bakiye</p>
-            <p className={cn('text-sm font-bold', openBalanceTone)}>{formatCurrency(Math.abs(openBalanceTotal))}</p>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/35 px-3 py-2">
-            <p className="text-[10px] text-slate-500">Yaklaşan</p>
-            <p className="text-sm font-bold text-amber-400">{formatCurrency(summary?.upcomingCollectionTotal ?? 0)}</p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setExpanded((current) => !current)}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950/40 px-3 text-xs font-medium text-slate-300 transition-colors hover:border-slate-700 hover:text-white"
+          >
+            {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {expanded ? 'Daralt' : 'Detay'}
+          </button>
         </div>
       </div>
 
-      {rows.length > 0 ? (
+      {expanded && rows.length > 0 ? (
         <div>
           {rows.map((row) => <CustomerRow key={row.contact.id} row={row} />)}
         </div>
-      ) : (
+      ) : expanded ? (
         <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-slate-500">
           <TrendingUp className="h-4 w-4" />
           {isLoading ? 'Müşteri özeti yükleniyor' : 'Takip edilecek müşteri hareketi yok'}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

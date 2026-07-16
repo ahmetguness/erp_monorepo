@@ -36,6 +36,7 @@ export interface DataTableProps<T> {
   emptyTitle?: string;
   emptyDescription?: string;
   className?: string;
+  density?: 'comfortable' | 'compact';
 }
 
 // ─────────────────────────────────────────────
@@ -110,6 +111,7 @@ export function DataTable<T>({
   emptyTitle = 'Kayıt bulunamadı',
   emptyDescription,
   className,
+  density = 'comfortable',
 }: DataTableProps<T>) {
   const columnCount = columns.length + (selection ? 1 : 0);
 
@@ -124,7 +126,7 @@ export function DataTable<T>({
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-slate-800/80 bg-slate-900/95">
               {selection && (
-                <th className="w-10 px-4 py-3.5 text-center">
+                <th className={cn('w-10 px-4 text-center', density === 'compact' ? 'py-2.5' : 'py-3.5')}>
                   <SelectionCheckbox
                     label="Sayfadaki kayitlari sec"
                     checked={selection.isPageSelected}
@@ -140,6 +142,7 @@ export function DataTable<T>({
                   style={col.width ? { width: col.width } : undefined}
                   className={cn(
                     'px-5 py-3.5 text-[11px] font-semibold uppercase text-slate-400 whitespace-nowrap',
+                    density === 'compact' && 'py-2.5',
                     col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left',
                   )}
                 >
@@ -171,7 +174,7 @@ export function DataTable<T>({
                   )}
                 >
                   {selection && (
-                    <td className="px-4 py-4 text-center align-middle">
+                    <td className={cn('px-4 text-center align-middle', density === 'compact' ? 'py-2.5' : 'py-4')}>
                       <SelectionCheckbox
                         label="Satiri sec"
                         checked={selection.selectedIds.has(keyExtractor(row))}
@@ -184,6 +187,7 @@ export function DataTable<T>({
                       key={col.key}
                       className={cn(
                         'px-5 py-4 text-slate-300 align-middle',
+                        density === 'compact' && 'py-2.5',
                         col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left',
                       )}
                     >
