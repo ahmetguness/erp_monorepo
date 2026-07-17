@@ -51,11 +51,38 @@ interface InvoiceListQuery {
   type?: InvoiceType;
   status?: InvoiceStatus;
   contactId?: string;
+  search?: string;
   dateFrom?: string;
   dateTo?: string;
 }
 
 const businessRulesService = new BusinessRulesService(prisma);
+
+function parseInvoiceType(value: string | undefined): InvoiceType | undefined {
+  switch (value) {
+    case InvoiceType.SALES:
+    case InvoiceType.PURCHASE:
+    case InvoiceType.RETURN_SALES:
+    case InvoiceType.RETURN_PURCHASE:
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function parseInvoiceStatus(value: string | undefined): InvoiceStatus | undefined {
+  switch (value) {
+    case InvoiceStatus.DRAFT:
+    case InvoiceStatus.SENT:
+    case InvoiceStatus.PAID:
+    case InvoiceStatus.PARTIALLY_PAID:
+    case InvoiceStatus.OVERDUE:
+    case InvoiceStatus.CANCELLED:
+      return value;
+    default:
+      return undefined;
+  }
+}
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -159,12 +186,23 @@ export const InvoiceController = {
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
     const skip = (page - 1) * pageSize;
+    const type = parseInvoiceType(c.req.query('type'));
+    const status = parseInvoiceStatus(c.req.query('status'));
+    const search = query.search?.trim();
 
     const where = {
       tenantId,
-      ...(query.type && { type: query.type }),
-      ...(query.status && { status: query.status }),
+      ...(type && { type }),
+      ...(status && { status }),
       ...(query.contactId && { contactId: query.contactId }),
+      ...(search && {
+        OR: [
+          { number: { contains: search, mode: 'insensitive' as const } },
+          { contact: { name: { contains: search, mode: 'insensitive' as const } } },
+          { contact: { code: { contains: search, mode: 'insensitive' as const } } },
+          { contact: { taxNumber: { contains: search, mode: 'insensitive' as const } } },
+        ],
+      }),
       ...(query.dateFrom || query.dateTo
         ? {
             date: {

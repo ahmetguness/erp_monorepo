@@ -72,6 +72,19 @@ function parseQuoteStatus(value: string | undefined): QuoteStatus | undefined {
   }
 }
 
+function parseOrderStatus(value: string | undefined): OrderStatus | undefined {
+  switch (value) {
+    case OrderStatus.DRAFT:
+    case OrderStatus.CONFIRMED:
+    case OrderStatus.PARTIALLY_DELIVERED:
+    case OrderStatus.DELIVERED:
+    case OrderStatus.CANCELLED:
+      return value;
+    default:
+      return undefined;
+  }
+}
+
 // ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
@@ -293,12 +306,20 @@ export const SalesOrderController = {
     const query = c.req.query() as OrderListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
+    const search = query.search?.trim();
+    const status = parseOrderStatus(c.req.query('status'));
 
     const where = {
       tenantId,
       deletedAt: null,
-      ...(query.status && { status: query.status }),
+      ...(status && { status }),
       ...(query.contactId && { contactId: query.contactId }),
+      ...(search && {
+        OR: [
+          { number: { contains: search, mode: 'insensitive' as const } },
+          { contact: { name: { contains: search, mode: 'insensitive' as const } } },
+        ],
+      }),
       ...(query.dateFrom || query.dateTo
         ? { date: { ...(query.dateFrom && { gte: new Date(query.dateFrom) }), ...(query.dateTo && { lte: new Date(query.dateTo) }) } }
         : {}),

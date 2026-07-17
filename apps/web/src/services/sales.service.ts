@@ -97,6 +97,29 @@ export const InvoiceSchema = z.object({
     product: z.object({ id: z.string(), code: z.string(), name: z.string() }).optional(),
     taxRate: z.object({ id: z.string(), name: z.string(), rate: z.coerce.number() }).optional(),
   })).optional(),
+  payments: z.array(z.object({
+    id: z.string(),
+    date: z.string(),
+    amount: z.coerce.number(),
+    method: z.string(),
+    direction: z.string(),
+    reference: z.string().nullable(),
+    status: z.string(),
+    notes: z.string().nullable(),
+  })).optional(),
+  eDocuments: z.array(z.object({
+    id: z.string(),
+    type: z.string(),
+    status: z.string(),
+    uuid: z.string().nullable(),
+    providerCode: z.string().nullable(),
+    providerMessage: z.string().nullable(),
+    sentAt: z.string().nullable(),
+    acceptedAt: z.string().nullable(),
+    rejectedAt: z.string().nullable(),
+    cancelledAt: z.string().nullable(),
+    createdAt: z.string(),
+  })).optional(),
 });
 
 export const SalesOrderHistorySchema = z.object({

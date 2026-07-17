@@ -29,7 +29,7 @@ interface PrintableLine {
 }
 
 interface DocumentPdfThemePanelProps {
-  kind: 'invoice' | 'quote';
+  kind: 'invoice' | 'quote' | 'order';
   number: string;
   contactName: string | undefined;
   contactTaxNumber?: string | null;
@@ -54,7 +54,9 @@ function normalizeQuantity(value: number): string {
 }
 
 function titleForKind(kind: DocumentPdfThemePanelProps['kind']): string {
-  return kind === 'invoice' ? 'Fatura' : 'Teklif';
+  if (kind === 'invoice') return 'Fatura';
+  if (kind === 'order') return 'Sipariş';
+  return 'Teklif';
 }
 
 function resolveTemplate(value: string | undefined): DocumentPdfTemplate {
@@ -112,8 +114,8 @@ export function DocumentPdfThemePanel({
         <div className="flex items-center gap-2">
           <Palette className={cn('h-4 w-4', accentClass.text)} />
           <div>
-            <h2 className="text-sm font-semibold text-slate-100">PDF tema onizleme</h2>
-            <p className="text-xs text-slate-500">Ayarlar sayfasindaki sablon, logo ve renk ile yazdirilir.</p>
+            <h2 className="text-sm font-semibold text-slate-100">PDF tema önizleme</h2>
+            <p className="text-xs text-slate-500">Ayarlar sayfasındaki şablon, logo ve renk ile yazdırılır.</p>
           </div>
         </div>
         <Button size="sm" variant="secondary" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => window.print()}>
@@ -145,7 +147,7 @@ export function DocumentPdfThemePanel({
 
         <section className={cn('grid gap-3 border-y border-slate-200', compact ? 'my-4 py-3 text-xs sm:grid-cols-3' : 'my-6 py-4 text-sm sm:grid-cols-3')}>
           <div>
-            <p className="text-xs text-slate-500">Musteri</p>
+            <p className="text-xs text-slate-500">Müşteri</p>
             <p className="font-semibold text-slate-950">{contactName ?? '-'}</p>
             {contactTaxNumber && <p className="text-xs text-slate-500">VKN/TCKN {contactTaxNumber}</p>}
           </div>
@@ -162,10 +164,10 @@ export function DocumentPdfThemePanel({
         <table className="w-full border-collapse text-left text-xs">
           <thead>
             <tr className={modern ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600'}>
-              <th className="px-3 py-2 font-semibold">Aciklama</th>
+              <th className="px-3 py-2 font-semibold">Açıklama</th>
               <th className="px-3 py-2 text-right font-semibold">Miktar</th>
               <th className="px-3 py-2 text-right font-semibold">Birim</th>
-              <th className="px-3 py-2 text-right font-semibold">Isk.</th>
+              <th className="px-3 py-2 text-right font-semibold">İsk.</th>
               <th className="px-3 py-2 text-right font-semibold">Toplam</th>
             </tr>
           </thead>
@@ -187,7 +189,7 @@ export function DocumentPdfThemePanel({
 
         <footer className={cn('mt-5 flex flex-col gap-4', compact ? 'sm:flex-row sm:items-start sm:justify-between' : 'sm:flex-row sm:items-end sm:justify-between')}>
           <div className="max-w-md text-xs text-slate-500">
-            {notes ? <p>{notes}</p> : <p>Bu belge elektronik ortamda hazirlanmistir.</p>}
+            {notes ? <p>{notes}</p> : <p>Bu belge elektronik ortamda hazırlanmıştır.</p>}
           </div>
           <div className="min-w-56 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
             <div className="flex justify-between gap-4"><span>Net</span><strong>{formatCurrency(totalNet)}</strong></div>

@@ -9,7 +9,7 @@ export interface ConfirmDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   title?: string;
-  message: string;
+  message: React.ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   isLoading?: boolean;
@@ -33,7 +33,7 @@ export function ConfirmDialog({
       onClose={onClose}
       title={title}
       size="sm"
-      footer={
+      footer={(
         <>
           <Button variant="ghost" onClick={onClose} disabled={isLoading}>
             {cancelLabel}
@@ -42,13 +42,13 @@ export function ConfirmDialog({
             {confirmLabel}
           </Button>
         </>
-      }
+      )}
     >
       <div className="flex gap-4">
-        <div className={`p-2.5 rounded-full shrink-0 ${variant === 'danger' ? 'bg-red-500/10' : 'bg-amber-500/10'}`}>
-          <AlertTriangle className={`w-5 h-5 ${variant === 'danger' ? 'text-red-400' : 'text-amber-400'}`} />
+        <div className={`shrink-0 rounded-full p-2.5 ${variant === 'danger' ? 'bg-red-500/10' : 'bg-amber-500/10'}`}>
+          <AlertTriangle className={`h-5 w-5 ${variant === 'danger' ? 'text-red-400' : 'text-amber-400'}`} />
         </div>
-        <p className="text-sm text-slate-300 leading-relaxed pt-1">{message}</p>
+        <div className="pt-1 text-sm leading-relaxed text-slate-300">{message}</div>
       </div>
     </Modal>
   );

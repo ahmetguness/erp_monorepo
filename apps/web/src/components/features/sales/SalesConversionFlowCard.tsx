@@ -14,7 +14,7 @@ interface SalesConversionFlowCardProps {
 
 const FLOW_STEPS: Array<{ key: SalesFlowStage; label: string; icon: typeof FileSignature }> = [
   { key: 'quote', label: 'Teklif', icon: FileSignature },
-  { key: 'order', label: 'Siparis', icon: ShoppingCart },
+  { key: 'order', label: 'Sipariş', icon: ShoppingCart },
   { key: 'invoice', label: 'Fatura', icon: Receipt },
 ];
 
@@ -28,9 +28,9 @@ export function SalesConversionFlowCard({ stage, invoiceHref = '/dashboard/invoi
     )}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-slate-100">Satis akisi</h2>
+          <h2 className="text-sm font-semibold text-slate-100">Satış akışı</h2>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            Tekliften siparise, siparisten faturaya tek akis uzerinden ilerleyin.
+            Tekliften siparişe, siparişten faturaya tek akış üzerinden ilerleyin.
           </p>
         </div>
         <Link
@@ -38,7 +38,7 @@ export function SalesConversionFlowCard({ stage, invoiceHref = '/dashboard/invoi
           className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-emerald-500 px-3 text-xs font-medium text-white transition-colors hover:bg-emerald-400"
         >
           <Receipt className="h-3.5 w-3.5" />
-          Hizli Fatura
+          Hızlı Fatura
         </Link>
       </div>
 
