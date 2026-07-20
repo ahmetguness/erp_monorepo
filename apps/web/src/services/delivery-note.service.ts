@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { apiClient } from '@/lib/api-client';
 import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
-import type { PaginationParams } from '@/types/api.types';
+import type { PaginationParams, DateRangeParams } from '@/types/api.types';
 
 const ContactRef = z.object({ id: z.string(), name: z.string() });
 const WarehouseRef = z.object({ id: z.string(), name: z.string(), code: z.string().optional() });
@@ -49,7 +49,16 @@ export interface CreateDeliveryNoteDTO {
   items: Array<{ productId: string; description?: string; orderedQty: number; deliveredQty: number; sortOrder?: number }>;
 }
 
-export interface ListParams extends PaginationParams { type?: string; status?: string; contactId?: string }
+export interface ListParams extends PaginationParams, DateRangeParams {
+  search?: string;
+  type?: string;
+  status?: string;
+  contactId?: string;
+  warehouseId?: string;
+  carrier?: string;
+  salesOrderId?: string;
+  purchaseOrderId?: string;
+}
 
 export async function getDeliveryNotes(params: ListParams) {
   const res = await apiClient.get('/api/delivery-notes', { params });
@@ -66,7 +75,11 @@ export async function createDeliveryNote(data: CreateDeliveryNoteDTO): Promise<D
   return safeParse(SingleResponseSchema(DeliveryNoteSchema), res.data, 'createDeliveryNote').data;
 }
 
-export async function updateDeliveryNoteStatus(id: string, status: DeliveryNoteStatus): Promise<DeliveryNote> {
-  const res = await apiClient.patch(`/api/delivery-notes/${id}/status`, { status });
+export async function updateDeliveryNoteStatus(
+  id: string,
+  status: DeliveryNoteStatus,
+  dates?: { shippedAt?: string; deliveredAt?: string },
+): Promise<DeliveryNote> {
+  const res = await apiClient.patch(`/api/delivery-notes/${id}/status`, { status, ...dates });
   return safeParse(SingleResponseSchema(DeliveryNoteSchema), res.data, 'updateDeliveryNoteStatus').data;
 }

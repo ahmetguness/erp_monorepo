@@ -11,10 +11,15 @@ import { requireTenantId, requireParam } from '../utils/context.js';
 interface EDocumentListQuery {
   page?: string;
   limit?: string;
+  search?: string;
   type?: EDocumentType;
   status?: EDocumentStatus;
   invoiceId?: string;
   deliveryNoteId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  source?: 'invoice' | 'delivery-note';
+  onlyErrors?: string;
 }
 
 interface CreateEDocumentDTO {
@@ -165,13 +170,35 @@ export const EDocumentController = {
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
     const skip = (page - 1) * pageSize;
+    const search = query.search?.trim();
+    const dateWhere = query.dateFrom || query.dateTo
+      ? {
+          ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
+          ...(query.dateTo && { lte: new Date(query.dateTo) }),
+        }
+      : undefined;
 
     const where = {
       tenantId,
+      ...(search && {
+        OR: [
+          { id: { contains: search, mode: 'insensitive' as const } },
+          { uuid: { contains: search, mode: 'insensitive' as const } },
+          { providerCode: { contains: search, mode: 'insensitive' as const } },
+          { providerMessage: { contains: search, mode: 'insensitive' as const } },
+          { invoice: { number: { contains: search, mode: 'insensitive' as const } } },
+          { deliveryNote: { number: { contains: search, mode: 'insensitive' as const } } },
+        ],
+      }),
       ...(query.type && { type: query.type }),
-      ...(query.status && { status: query.status }),
+      ...(query.onlyErrors === 'true'
+        ? { status: { in: [EDocumentStatus.ERROR, EDocumentStatus.REJECTED] } }
+        : query.status && { status: query.status }),
       ...(query.invoiceId && { invoiceId: query.invoiceId }),
       ...(query.deliveryNoteId && { deliveryNoteId: query.deliveryNoteId }),
+      ...(query.source === 'invoice' && { invoiceId: { not: null } }),
+      ...(query.source === 'delivery-note' && { deliveryNoteId: { not: null } }),
+      ...(dateWhere && { createdAt: dateWhere }),
     };
 
     const [total, docs] = await prisma.$transaction([

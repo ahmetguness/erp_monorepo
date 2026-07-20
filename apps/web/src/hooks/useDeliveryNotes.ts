@@ -29,7 +29,8 @@ export function useCreateDeliveryNote() {
 export function useUpdateDeliveryNoteStatus() {
   const qc = useQueryClient(); const { toast } = useUIStore();
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: DeliveryNoteStatus }) => updateDeliveryNoteStatus(id, status),
+    mutationFn: ({ id, status, shippedAt, deliveredAt }: { id: string; status: DeliveryNoteStatus; shippedAt?: string; deliveredAt?: string }) =>
+      updateDeliveryNoteStatus(id, status, { shippedAt, deliveredAt }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['delivery-notes'] }); toast.success('İrsaliye durumu güncellendi.'); },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

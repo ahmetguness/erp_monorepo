@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { apiClient } from '@/lib/api-client';
 import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
-import type { PaginationParams } from '@/types/api.types';
+import type { PaginationParams, DateRangeParams } from '@/types/api.types';
 
 const InvoiceRef = z.object({ id: z.string(), number: z.string(), type: z.string().optional(), status: z.string().optional() });
 const DNRef = z.object({ id: z.string(), number: z.string(), type: z.string().optional(), status: z.string().optional() });
@@ -54,7 +54,15 @@ export interface CreateEDocumentDTO {
   type: EDocumentType; uuid?: string; providerCode?: string;
 }
 
-export interface ListParams extends PaginationParams { type?: string; status?: string; invoiceId?: string }
+export interface ListParams extends PaginationParams, DateRangeParams {
+  search?: string;
+  type?: string;
+  status?: string;
+  invoiceId?: string;
+  deliveryNoteId?: string;
+  source?: 'invoice' | 'delivery-note';
+  onlyErrors?: string;
+}
 
 export async function getEDocuments(params: ListParams) {
   const res = await apiClient.get('/api/e-documents', { params });

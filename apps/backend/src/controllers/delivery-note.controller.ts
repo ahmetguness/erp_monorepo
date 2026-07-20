@@ -14,11 +14,16 @@ import { processDeliveryNoteStock } from '../services/inventory-rules.service';
 interface DeliveryNoteListQuery {
   page?: string;
   limit?: string;
+  search?: string;
   type?: DeliveryNoteType;
   status?: DeliveryNoteStatus;
   salesOrderId?: string;
   purchaseOrderId?: string;
   contactId?: string;
+  warehouseId?: string;
+  carrier?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 interface CreateDeliveryNoteDTO {
@@ -63,15 +68,36 @@ export const DeliveryNoteController = {
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
     const skip = (page - 1) * pageSize;
+    const search = query.search?.trim();
+    const dateWhere = query.dateFrom || query.dateTo
+      ? {
+          ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
+          ...(query.dateTo && { lte: new Date(query.dateTo) }),
+        }
+      : undefined;
 
     const where = {
       tenantId,
       deletedAt: null,
+      ...(search && {
+        OR: [
+          { number: { contains: search, mode: 'insensitive' as const } },
+          { trackingNumber: { contains: search, mode: 'insensitive' as const } },
+          { carrier: { contains: search, mode: 'insensitive' as const } },
+          { contact: { name: { contains: search, mode: 'insensitive' as const } } },
+          { warehouse: { name: { contains: search, mode: 'insensitive' as const } } },
+          { salesOrder: { number: { contains: search, mode: 'insensitive' as const } } },
+          { purchaseOrder: { number: { contains: search, mode: 'insensitive' as const } } },
+        ],
+      }),
       ...(query.type && { type: query.type }),
       ...(query.status && { status: query.status }),
       ...(query.salesOrderId && { salesOrderId: query.salesOrderId }),
       ...(query.purchaseOrderId && { purchaseOrderId: query.purchaseOrderId }),
       ...(query.contactId && { contactId: query.contactId }),
+      ...(query.warehouseId && { warehouseId: query.warehouseId }),
+      ...(query.carrier && { carrier: { contains: query.carrier, mode: 'insensitive' as const } }),
+      ...(dateWhere && { date: dateWhere }),
     };
 
     const [total, notes] = await prisma.$transaction([
@@ -80,7 +106,7 @@ export const DeliveryNoteController = {
         where,
         include: {
           contact: { select: { id: true, name: true } },
-          warehouse: { select: { id: true, name: true } },
+          warehouse: { select: { id: true, name: true, code: true } },
           salesOrder: { select: { id: true, number: true } },
           purchaseOrder: { select: { id: true, number: true } },
           _count: { select: { items: true } },
