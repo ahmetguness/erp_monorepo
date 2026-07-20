@@ -38,8 +38,15 @@ interface CreatePurchaseRequestDTO {
 interface ListQuery {
   page?: string;
   limit?: string;
+  search?: string;
   status?: string;
   contactId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  minTotal?: string;
+  maxTotal?: string;
+  dueFrom?: string;
+  dueTo?: string;
 }
 
 // ---------------------------------------------
@@ -80,17 +87,45 @@ export const PurchaseOrderController = {
     const query = c.req.query() as ListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
+    const search = query.search?.trim();
+    const minTotal = query.minTotal ? Number(query.minTotal) : undefined;
+    const maxTotal = query.maxTotal ? Number(query.maxTotal) : undefined;
+    const dateWhere = query.dateFrom || query.dateTo
+      ? {
+          ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
+          ...(query.dateTo && { lte: new Date(query.dateTo) }),
+        }
+      : undefined;
+    const totalWhere = Number.isFinite(minTotal) || Number.isFinite(maxTotal)
+      ? {
+          ...(Number.isFinite(minTotal) && { gte: minTotal }),
+          ...(Number.isFinite(maxTotal) && { lte: maxTotal }),
+        }
+      : undefined;
 
     const where = {
       tenantId, deletedAt: null,
+      ...(search && {
+        OR: [
+          { number: { contains: search, mode: 'insensitive' as const } },
+          { notes: { contains: search, mode: 'insensitive' as const } },
+          { items: { some: { product: { name: { contains: search, mode: 'insensitive' as const } } } } },
+          { items: { some: { product: { code: { contains: search, mode: 'insensitive' as const } } } } },
+        ],
+      }),
       ...(query.status && { status: query.status as PurchaseRequestStatus }),
+      ...(dateWhere && { date: dateWhere }),
+      ...(totalWhere && { totalEstimated: totalWhere }),
     };
 
     const [total, requests] = await prisma.$transaction([
       prisma.purchaseRequest.count({ where }),
       prisma.purchaseRequest.findMany({
         where, skip: (page - 1) * pageSize, take: pageSize,
-        include: { items: { include: { product: { select: { id: true, code: true, name: true } } } } },
+        include: {
+          items: { include: { product: { select: { id: true, code: true, name: true } } } },
+          purchaseOrder: { select: { id: true, number: true, status: true } },
+        },
         orderBy: { date: 'desc' },
       }),
     ]);
@@ -212,11 +247,45 @@ export const PurchaseOrderController = {
     const query = c.req.query() as ListQuery;
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
+    const search = query.search?.trim();
+    const minTotal = query.minTotal ? Number(query.minTotal) : undefined;
+    const maxTotal = query.maxTotal ? Number(query.maxTotal) : undefined;
+    const dateWhere = query.dateFrom || query.dateTo
+      ? {
+          ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
+          ...(query.dateTo && { lte: new Date(query.dateTo) }),
+        }
+      : undefined;
+    const dueWhere = query.dueFrom || query.dueTo
+      ? {
+          ...(query.dueFrom && { gte: new Date(query.dueFrom) }),
+          ...(query.dueTo && { lte: new Date(query.dueTo) }),
+        }
+      : undefined;
+    const totalWhere = Number.isFinite(minTotal) || Number.isFinite(maxTotal)
+      ? {
+          ...(Number.isFinite(minTotal) && { gte: minTotal }),
+          ...(Number.isFinite(maxTotal) && { lte: maxTotal }),
+        }
+      : undefined;
 
     const where = {
       tenantId, deletedAt: null,
+      ...(search && {
+        OR: [
+          { number: { contains: search, mode: 'insensitive' as const } },
+          { notes: { contains: search, mode: 'insensitive' as const } },
+          { contact: { name: { contains: search, mode: 'insensitive' as const } } },
+          { contact: { code: { contains: search, mode: 'insensitive' as const } } },
+          { items: { some: { product: { name: { contains: search, mode: 'insensitive' as const } } } } },
+          { items: { some: { product: { code: { contains: search, mode: 'insensitive' as const } } } } },
+        ],
+      }),
       ...(query.status && { status: query.status as PurchaseOrderStatus }),
       ...(query.contactId && { contactId: query.contactId }),
+      ...(dateWhere && { date: dateWhere }),
+      ...(dueWhere && { dueDate: dueWhere }),
+      ...(totalWhere && { totalGross: totalWhere }),
     };
 
     const [total, orders] = await prisma.$transaction([
@@ -225,6 +294,10 @@ export const PurchaseOrderController = {
         where, skip: (page - 1) * pageSize, take: pageSize,
         include: {
           contact: { select: { id: true, name: true, code: true } },
+          items: {
+            include: { product: { select: { id: true, code: true, name: true } } },
+            orderBy: { sortOrder: 'asc' },
+          },
           _count: { select: { items: true } },
         },
         orderBy: { date: 'desc' },

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { apiClient } from '@/lib/api-client';
 import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
-import type { PaginationParams } from '@/types/api.types';
+import type { PaginationParams, DateRangeParams } from '@/types/api.types';
 
 // ─────────────────────────────────────────────
 // Schemas
@@ -27,6 +27,7 @@ export const PurchaseRequestSchema = z.object({
   purchaseOrderId: z.string().nullable(),
   createdAt: z.string(), updatedAt: z.string(),
   items: z.array(PurchaseRequestItemSchema).optional(),
+  purchaseOrder: z.object({ id: z.string(), number: z.string(), status: z.string() }).optional().nullable(),
 });
 
 export const PurchaseOrderItemSchema = z.object({
@@ -150,7 +151,15 @@ export interface ReceiveOrderDTO {
   items: Array<{ itemId: string; receivedQty: number }>;
 }
 
-export interface ListParams extends PaginationParams { status?: string; contactId?: string; }
+export interface ListParams extends PaginationParams, DateRangeParams {
+  search?: string;
+  status?: string;
+  contactId?: string;
+  minTotal?: string;
+  maxTotal?: string;
+  dueFrom?: string;
+  dueTo?: string;
+}
 
 // ─────────────────────────────────────────────
 // Purchase Requests API
