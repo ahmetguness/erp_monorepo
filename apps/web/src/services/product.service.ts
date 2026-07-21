@@ -117,6 +117,11 @@ export interface ProductListParams extends PaginationParams {
   search?: string;
   categoryId?: string;
   isActive?: boolean;
+  noCategory?: string;
+  missingPrice?: string;
+  missingMinStock?: string;
+  minMargin?: string;
+  maxMargin?: string;
 }
 
 export interface CreateProductDTO {

@@ -42,6 +42,11 @@ interface ProductListQuery {
   search?: string;
   categoryId?: string;
   isActive?: string;
+  noCategory?: string;
+  missingPrice?: string;
+  missingMinStock?: string;
+  minMargin?: string;
+  maxMargin?: string;
 }
 
 // ─────────────────────────────────────────────
@@ -61,6 +66,9 @@ export const ProductController = {
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
     const skip = (page - 1) * pageSize;
+    const minMargin = query.minMargin ? Number(query.minMargin) : undefined;
+    const maxMargin = query.maxMargin ? Number(query.maxMargin) : undefined;
+    const marginFilterEnabled = Number.isFinite(minMargin) || Number.isFinite(maxMargin);
 
     const where = {
       tenantId,
@@ -74,9 +82,17 @@ export const ProductController = {
       }),
       ...(query.categoryId && { categoryId: query.categoryId }),
       ...(query.isActive !== undefined && { isActive: query.isActive === 'true' }),
+      ...(query.noCategory === 'true' && { categoryId: null }),
+      ...(query.missingPrice === 'true' && {
+        OR: [
+          { salesPrice: { lte: 0 } },
+          { purchasePrice: { lte: 0 } },
+        ],
+      }),
+      ...(query.missingMinStock === 'true' && { minStockLevel: { lte: 0 } }),
     };
 
-    const [total, products] = await prisma.$transaction([
+    const [rawTotal, rawProducts] = await prisma.$transaction([
       prisma.product.count({ where }),
       prisma.product.findMany({
         where,
@@ -86,10 +102,23 @@ export const ProductController = {
           taxRate: { select: { id: true, name: true, rate: true } },
         },
         orderBy: { createdAt: 'desc' },
-        skip,
-        take: pageSize,
+        skip: marginFilterEnabled ? undefined : skip,
+        take: marginFilterEnabled ? undefined : pageSize,
       }),
     ]);
+    const marginFilteredProducts = marginFilterEnabled
+      ? rawProducts.filter((product) => {
+          const salesPrice = Number(product.salesPrice);
+          const purchasePrice = Number(product.purchasePrice);
+          const margin = salesPrice > 0 ? ((salesPrice - purchasePrice) / salesPrice) * 100 : -100;
+          return (
+            (!Number.isFinite(minMargin) || margin >= minMargin!)
+            && (!Number.isFinite(maxMargin) || margin <= maxMargin!)
+          );
+        })
+      : rawProducts;
+    const products = marginFilterEnabled ? marginFilteredProducts.slice(skip, skip + pageSize) : marginFilteredProducts;
+    const total = marginFilterEnabled ? marginFilteredProducts.length : rawTotal;
 
     return c.json({
       data: products,
