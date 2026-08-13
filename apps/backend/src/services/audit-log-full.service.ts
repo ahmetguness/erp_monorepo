@@ -158,7 +158,15 @@ export async function withAuditIntegrityMetadata(
     oldValues,
     newValues: {
       ...toJsonObject(newValues),
-      __auditIntegrity: integrity as unknown as Prisma.InputJsonObject,
+      __auditIntegrity: {
+        immutable: integrity.immutable,
+        algorithm: integrity.algorithm,
+        chainVersion: integrity.chainVersion,
+        previousLogId: integrity.previousLogId,
+        previousHash: integrity.previousHash,
+        hash: integrity.hash,
+        generatedAt: integrity.generatedAt,
+      },
     },
     integrity,
   };

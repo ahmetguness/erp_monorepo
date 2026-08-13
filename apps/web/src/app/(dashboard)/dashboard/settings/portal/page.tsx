@@ -24,6 +24,16 @@ import {
 } from '@/hooks/useSettings';
 import { formatDateTime } from '@/lib/utils';
 import { useUIStore } from '@/store/ui.store';
+import type { Contact } from '@/services/contact.service';
+import type { ServiceRequest } from '@/services/service.service';
+
+type PortalServiceRequest = ServiceRequest & {
+  sla?: {
+    isBreached: boolean;
+    remainingMinutes: number;
+    targetDate: string;
+  } | null;
+};
 
 // Helper component to manage portal token generation per contact
 function ContactTokenActions({ contactId }: { contactId: string }) {
@@ -111,7 +121,7 @@ export default function PortalSettingsPage() {
   };
 
   // Contacts columns
-  const contactColumns = useMemo<ColumnDef<any>[]>(() => [
+  const contactColumns = useMemo<ColumnDef<Contact>[]>(() => [
     {
       key: 'code',
       header: 'Cari Kod',
@@ -144,7 +154,7 @@ export default function PortalSettingsPage() {
   ], []);
 
   // Requests / SLA columns
-  const requestColumns = useMemo<ColumnDef<any>[]>(() => [
+  const requestColumns = useMemo<ColumnDef<PortalServiceRequest>[]>(() => [
     {
       key: 'number',
       header: 'Talep No',

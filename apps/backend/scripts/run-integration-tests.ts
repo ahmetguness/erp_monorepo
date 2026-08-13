@@ -207,6 +207,7 @@ async function seedTenant(runId: string, suffix: 'a' | 'b') {
         AppModule.REPORTING,
         AppModule.PURCHASING,
         AppModule.APPROVALS,
+        AppModule.DOCUMENTS,
       ],
     },
   });

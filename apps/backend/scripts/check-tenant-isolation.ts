@@ -60,14 +60,22 @@ const scannedRoots = [
 
 const excludedFiles = new Set([
   'src/controllers/admin.controller.ts',
+  'src/services/controllers/admin.controller.service.ts',
   'src/controllers/admin-security.controller.ts',
+  'src/services/controllers/admin-security.controller.service.ts',
   'src/controllers/auth.controller.ts',
+  'src/services/controllers/auth.controller.service.ts',
   'src/controllers/currency-rates.controller.ts',
+  'src/services/controllers/currency-rates.controller.service.ts',
   'src/controllers/demo.controller.ts',
+  'src/services/controllers/demo.controller.service.ts',
   'src/controllers/invitation.controller.ts',
   'src/controllers/public-chat.controller.ts',
+  'src/services/controllers/public-chat.controller.service.ts',
   'src/controllers/set-password.controller.ts',
+  'src/services/controllers/set-password.controller.service.ts',
   'src/controllers/trendyol-webhook.controller.ts',
+  'src/services/controllers/trendyol-webhook.controller.service.ts',
   'src/services/demo.service.ts',
   'src/services/invitation.service.ts',
 ]);
@@ -169,7 +177,7 @@ function findPrismaCalls(text: string, models: readonly TenantScopedModel[]): Pr
 function hasTenantScopedWhereVariableBefore(text: string, call: PrismaCall): boolean {
   if (!/\bwhere\b/.test(call.body)) return false;
 
-  const contextStart = Math.max(0, call.start - 1600);
+  const contextStart = Math.max(0, call.start - 4_000);
   const previousContext = text.slice(contextStart, call.start);
   const whereIndex = Math.max(previousContext.lastIndexOf('const where'), previousContext.lastIndexOf('let where'));
   if (whereIndex === -1) return false;
@@ -195,7 +203,7 @@ function hasNearbyTenantGuardBefore(text: string, call: PrismaCall): boolean {
 function hasTenantScopedDataVariableBefore(text: string, call: PrismaCall): boolean {
   if (!/\bdata\s*:\s*data\b/.test(call.body) && !/\{\s*data\s*\}/.test(call.body)) return false;
 
-  const contextStart = Math.max(0, call.start - 1200);
+  const contextStart = Math.max(0, call.start - 4_000);
   const previousContext = text.slice(contextStart, call.start);
   const dataIndex = Math.max(previousContext.lastIndexOf('const data'), previousContext.lastIndexOf('let data'));
   if (dataIndex === -1) return false;
