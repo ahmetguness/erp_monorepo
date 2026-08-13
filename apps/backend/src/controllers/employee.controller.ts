@@ -4,9 +4,9 @@ import { NotFoundError, ValidationError } from '../errors';
 import { getPaginationParams } from '../utils/pagination.js';
 import { requireTenantId, requireParam } from '../utils/context.js';
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Employee Controller â€” Personel CRUD
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────
+// Employee Controller — Personel CRUD
+// ─────────────────────────────────────────────
 
 export const EmployeeController = {
   async list(c: Context): Promise<Response> {

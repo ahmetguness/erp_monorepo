@@ -63,8 +63,9 @@ export default function UsersAndInvitesPage() {
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 
-  const pendingInvites = invitations.filter((i) => i.status === 'PENDING');
-  const pastInvites = invitations.filter((i) => i.status !== 'PENDING');
+  const pendingInvites = useMemo(() => invitations.filter((i) => i.status === 'PENDING'), [invitations]);
+  const pastInvites = useMemo(() => invitations.filter((i) => i.status !== 'PENDING'), [invitations]);
+  const pendingInviteCount = pendingInvites.length;
   const activeUserCount = useMemo(
     () => users.filter((tenantUser) => tenantUser.isActive && tenantUser.user.isActive).length,
     [users],
@@ -73,9 +74,9 @@ export default function UsersAndInvitesPage() {
     () => getUserLimitState({
       maxUsers: planFeatures.maxUsers,
       activeUsers: activeUserCount,
-      pendingInvites: pendingInvites.length,
+      pendingInvites: pendingInviteCount,
     }),
-    [activeUserCount, pendingInvites.length, planFeatures.maxUsers],
+    [activeUserCount, pendingInviteCount, planFeatures.maxUsers],
   );
   const inviteLimitMessage = userLimit.isFull && userLimit.maxUsers !== null
     ? `${userLimit.maxUsers} kullanici limitine ulasildi. Yeni davet icin bir daveti iptal edin, pasif kullanicilari kontrol edin veya plani yukseltin.`

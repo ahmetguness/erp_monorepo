@@ -260,7 +260,7 @@ export function DocumentCenterPage() {
   const bulkUpdateMetadata = useBulkUpdateAttachmentMetadata();
   const { data: accessLogs = [], isLoading: accessLogsLoading } = useAttachmentAccessLog(accessLogId);
   const { data: entityOptions = [] } = useAttachmentEntityOptions(uploadForm.entityType, uploadForm.entitySearch.trim() || undefined);
-  const documentItems = data?.data ?? [];
+  const documentItems = useMemo(() => data?.data ?? [], [data?.data]);
   const selectableAttachmentIds = useMemo(
     () => documentItems.filter((item) => item.source === 'ATTACHMENT').map((item) => item.id),
     [documentItems],

@@ -106,7 +106,7 @@ export function PurchaseOrdersPage() {
     minTotal: minTotal || undefined,
     maxTotal: maxTotal || undefined,
   });
-  const orders = data?.data ?? [];
+  const orders = useMemo(() => data?.data ?? [], [data?.data]);
 
   const kpis = useMemo(() => ({
     total: data?.meta.total ?? 0,

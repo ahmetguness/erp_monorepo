@@ -201,7 +201,7 @@ export function DeliveryNotesPage() {
     dateTo: dateTo || undefined,
   });
   const updateStatus = useUpdateDeliveryNoteStatus();
-  const notes = data?.data ?? [];
+  const notes = useMemo(() => data?.data ?? [], [data?.data]);
   const selectedTransition = transitionNote ? nextTransition(transitionNote) : null;
 
   const kpis = useMemo(() => {

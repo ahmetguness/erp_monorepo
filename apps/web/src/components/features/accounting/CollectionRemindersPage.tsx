@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Bell, RefreshCw, Trash2, Mail, Phone, CalendarDays } from 'lucide-react';
@@ -50,7 +50,7 @@ export function CollectionRemindersPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<ReminderForm>({
+  const { register, handleSubmit, reset, setValue, control, formState: { errors } } = useForm<ReminderForm>({
     resolver: zodResolver(reminderFormSchema),
     defaultValues: {
       invoiceId: '',
@@ -62,7 +62,11 @@ export function CollectionRemindersPage() {
     },
   });
 
-  const watchInvoiceId = watch('invoiceId');
+  const watchInvoiceId = useWatch({ control, name: 'invoiceId' });
+  const watchContactId = useWatch({ control, name: 'contactId' });
+  const watchDueDate = useWatch({ control, name: 'dueDate' });
+  const watchAmount = useWatch({ control, name: 'amount' });
+  const watchRemindAt = useWatch({ control, name: 'remindAt' });
   const selectedInvoice = invoices.find((inv) => inv.id === watchInvoiceId);
 
   // Automatically fill fields when invoice changes
@@ -215,7 +219,7 @@ export function CollectionRemindersPage() {
             <ContactSelect
               label="Cari"
               required
-              value={watch('contactId')}
+              value={watchContactId}
               onChange={(val) => setValue('contactId', val, { shouldValidate: true })}
               error={errors.contactId?.message}
             />
@@ -224,7 +228,7 @@ export function CollectionRemindersPage() {
             <DatePicker
               label="Vade Tarihi"
               required
-              value={watch('dueDate')}
+              value={watchDueDate}
               onValueChange={(val) => setValue('dueDate', val ?? '')}
               error={errors.dueDate?.message}
               disabled
@@ -233,7 +237,7 @@ export function CollectionRemindersPage() {
               label="Fatura Tutarı"
               required
               type="number"
-              value={watch('amount')}
+              value={watchAmount}
               {...register('amount')}
               error={errors.amount?.message}
               disabled
@@ -242,7 +246,7 @@ export function CollectionRemindersPage() {
           <DatePicker
             label="Hatırlatma Gönderim Tarihi"
             required
-            value={watch('remindAt')}
+            value={watchRemindAt}
             onValueChange={(val) => setValue('remindAt', val ?? '')}
             error={errors.remindAt?.message}
           />

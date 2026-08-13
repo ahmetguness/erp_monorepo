@@ -221,7 +221,7 @@ export function PurchaseRequestsPage() {
   const convertReq = useConvertRequestToOrder();
   const { data: productsData } = useProducts({ page: 1, limit: 200 });
   const products = productsData?.data ?? [];
-  const requests = data?.data ?? [];
+  const requests = useMemo(() => data?.data ?? [], [data?.data]);
 
   const today = new Date().toISOString().split('T')[0];
   const { register, handleSubmit, control, reset, setValue, formState: { errors } } = useForm<RequestForm>({

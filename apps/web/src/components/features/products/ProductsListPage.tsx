@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Copy, Edit, Eye, FilterX, PackageCheck, Plus, Search, TrendingUp, Warehouse, XCircle } from "lucide-react";
@@ -115,14 +115,14 @@ export function ProductsListPage() {
   const { data: categories = [] } = useCategories();
   const categoryOptions = [{ value: "", label: "Tüm Kategoriler" }, ...categories.map((category) => ({ value: category.id, label: category.name }))];
 
-  const getRowActions = (product: Product): RowAction[] => [
+  const getRowActions = useCallback((product: Product): RowAction[] => [
     { label: "Görüntüle", icon: <Eye className="h-4 w-4" />, onClick: () => router.push(`/dashboard/products/${product.id}`) },
     { label: "Düzenle", icon: <Edit className="h-4 w-4" />, onClick: () => router.push(`/dashboard/products/${product.id}/edit`) },
     { label: "Stok seviyeleri", icon: <Warehouse className="h-4 w-4" />, onClick: () => router.push(`/dashboard/stock/levels?productId=${product.id}`), separator: true },
     { label: "Stok hareketleri", icon: <PackageCheck className="h-4 w-4" />, onClick: () => router.push(`/dashboard/stock/movements?productId=${product.id}`) },
     { label: "Kodu kopyala", icon: <Copy className="h-4 w-4" />, onClick: () => navigator.clipboard.writeText(product.code), separator: true },
     { label: product.isActive ? "Pasifleştir" : "Aktifleştir", icon: <XCircle className="h-4 w-4" />, onClick: () => router.push(`/dashboard/products/${product.id}/edit`) },
-  ];
+  ], [router]);
 
   const columns = useMemo<ColumnDef<Product>[]>(() => [
     {
@@ -150,7 +150,7 @@ export function ProductsListPage() {
     { key: "taxRate", header: "KDV", width: "90px", align: "right", exportValue: (product) => product.taxRate?.rate, render: (product) => <span className="text-slate-400">{product.taxRate ? `%${product.taxRate.rate}` : "-"}</span> },
     { key: "isActive", header: "Durum", width: "90px", align: "center", exportValue: (product) => product.isActive ? "Aktif" : "Pasif", render: (product) => <ActiveBadge isActive={product.isActive} /> },
     { key: "actions", header: "", width: "72px", align: "right", hideable: false, render: (product) => <RowActions actions={getRowActions(product)} /> },
-  ], [router]);
+  ], [getRowActions, router]);
 
   const listState = useListStandardState<Product, ProductListFilters>({
     listKey: "products.list",
