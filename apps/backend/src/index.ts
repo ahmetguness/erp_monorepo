@@ -83,6 +83,7 @@ import { registerDomainEventListeners } from './domain-events';
 import { recordHttpRequest, recordUnhandledError, runWithObservabilityContext } from './services/observability.service';
 import { globalRateLimit } from './middleware/globalRateLimit';
 import { assertValidStartupEnv } from './config/env';
+import { tenantIsolationBypass } from './lib/tenant-isolation-context';
 
 // ── Startup env var kontrolü ─────────────────
 assertValidStartupEnv();
@@ -205,6 +206,13 @@ app.get('/', (c) => c.json({ status: 'ok', service: 'Axon ERP API' }));
 app.get('/health', (c) => c.json({ status: 'ok' }));
 
 // ── Public webhooks (CSRF'den önce — harici çağrıcılar Origin göndermez) ──
+app.use('/api/public/*', tenantIsolationBypass('public-api'));
+app.use('/api/scim/v2/*', tenantIsolationBypass('scim-provisioning'));
+app.use('/api/bi/v1/*', tenantIsolationBypass('bi-connector'));
+app.use('/api/portal/v1/*', tenantIsolationBypass('customer-portal'));
+app.use('/api/auth/*', tenantIsolationBypass('auth-bootstrap'));
+app.use('/api/admin/*', tenantIsolationBypass('admin-console'));
+
 app.post('/api/public/trendyol/webhook/:integrationId', TrendyolWebhookController.handle);
 app.post('/api/public/marketplace/webhook/:integrationId', TrendyolWebhookController.handle);
 

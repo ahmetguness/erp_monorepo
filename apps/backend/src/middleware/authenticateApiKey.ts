@@ -5,6 +5,7 @@ import { ForbiddenError } from '../errors';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { createApiKeyHash, createLegacyApiKeyHash, isLegacyApiKeyHash } from '../utils/api-key-hash.js';
 import { rateLimiter } from '../lib/rateLimiter.js';
+import { runWithTenantIsolationBypass } from '../lib/tenant-isolation-context.js';
 import { getExternalApiRateLimitPerMinute } from '../services/external-api-registry.service.js';
 import { isIpAllowedByAllowlist } from '../services/api-key-access.service.js';
 import { getTrustedClientIpOrNull } from '../utils/request-ip.js';
@@ -102,21 +103,23 @@ export function authenticateApiKey() {
     const keyHash = createApiKeyHash(rawKey);
     const legacyKeyHash = createLegacyApiKeyHash(rawKey);
 
-    const apiKey = await prisma.apiKey.findFirst({
-      where: {
-        keyHash: { in: [keyHash, legacyKeyHash] },
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-        tenantId: true,
-        scopes: true,
-        ipAllowlist: true,
-        keyHash: true,
-        isActive: true,
-        expiresAt: true,
-      },
-    });
+    const apiKey = await runWithTenantIsolationBypass('api-key-bootstrap', async () =>
+      prisma.apiKey.findFirst({
+        where: {
+          keyHash: { in: [keyHash, legacyKeyHash] },
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          tenantId: true,
+          scopes: true,
+          ipAllowlist: true,
+          keyHash: true,
+          isActive: true,
+          expiresAt: true,
+        },
+      }),
+    );
 
     if (!apiKey) {
       if (await isAuthFailureRateLimited(clientIp)) {
