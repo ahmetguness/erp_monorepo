@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, LogOut, Search, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -102,15 +102,26 @@ const ALL_HREFS = collectAllHrefs(NAV_GROUPS);
  * Pathname'in belirli bir href ile eşleşip eşleşmediğini kontrol eder.
  * Exact match önceliklidir. startsWith sadece daha spesifik bir sibling yoksa kullanılır.
  */
-function isPathMatch(pathname: string, href: string): boolean {
-  if (pathname === href) return true;
-  if (href === '/dashboard') return false; // Dashboard sadece exact match
+function isPathMatch(pathname: string, search: string, href: string): boolean {
+  const [hrefPath, hrefQuery = ''] = href.split('?');
+  const currentQuery = search.replace(/^\?/, '');
+  const currentFullPath = currentQuery ? `${pathname}?${currentQuery}` : pathname;
+
+  if (hrefQuery) return currentFullPath === href;
+  if (pathname === hrefPath) {
+    const querySpecificSibling = ALL_HREFS.some((other) => other !== href && other.startsWith(`${hrefPath}?`) && currentFullPath === other);
+    return !querySpecificSibling;
+  }
+  if (hrefPath === '/dashboard') return false; // Dashboard sadece exact match
 
   // pathname bu href ile başlıyorsa VE daha spesifik bir href eşleşmiyorsa aktif
-  if (pathname.startsWith(href + '/')) {
+  if (pathname.startsWith(hrefPath + '/')) {
     // Daha spesifik bir href var mı kontrol et
     const hasMoreSpecific = ALL_HREFS.some(
-      (other) => other !== href && other.startsWith(href + '/') && (pathname === other || pathname.startsWith(other + '/')),
+      (other) => {
+        const [otherPath] = other.split('?');
+        return other !== href && otherPath.startsWith(hrefPath + '/') && (pathname === otherPath || pathname.startsWith(otherPath + '/'));
+      },
     );
     return !hasMoreSpecific;
   }
@@ -134,6 +145,8 @@ interface NavItemProps {
 
 function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked = false, parentPlan, parentLockReasons = [] }: NavItemProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
 
   const normalizedTenantPlan = isPlanName(tenantPlan) ? tenantPlan : 'STARTER';
   const lockReasons = getAccessLockReasons({
@@ -157,7 +170,7 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked =
     return hasAccess(tenantPlan, tenantModules, c) || isChildLocked;
   });
 
-  const hasActiveChild = visibleChildren?.some((c) => isPathMatch(pathname, c.href)) ?? false;
+  const hasActiveChild = visibleChildren?.some((c) => isPathMatch(pathname, search, c.href)) ?? false;
 
   const [open, setOpen] = useState(() => {
     if (!visibleChildren) return false;
@@ -172,7 +185,7 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked =
 
   if (!hasAccess(tenantPlan, tenantModules, item) && !isLocked) return null;
 
-  const isActive = visibleChildren ? hasActiveChild : isPathMatch(pathname, item.href);
+  const isActive = visibleChildren ? hasActiveChild : isPathMatch(pathname, search, item.href);
 
   const Icon = item.icon;
 

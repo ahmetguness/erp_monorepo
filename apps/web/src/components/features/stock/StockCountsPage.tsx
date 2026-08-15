@@ -1,17 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
-  Plus, ClipboardCheck, Warehouse as WarehouseIcon,
-  Package, Save, X, ArrowRight, Hash,
+  ArrowRight, CheckCircle2, ChevronRight, ClipboardCheck, FilterX, Hash,
+  Package, Plus, Save, Search, Warehouse as WarehouseIcon, X,
 } from 'lucide-react';
-import Link from 'next/link';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { WarehouseSelect } from '@/components/shared/EntitySelect';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -22,9 +20,8 @@ import { useStockCounts, useCreateStockCount, useStockLevels } from '@/hooks/use
 import { cn, formatDate } from '@/lib/utils';
 import type { StockCount } from '@/services/stock.service';
 
-// ─────────────────────────────────────────────
-// New count form schema
-// ─────────────────────────────────────────────
+type StatusFilter = 'all' | 'active' | 'finalized';
+type DatePreset = 'all' | '30d' | 'month';
 
 const countItemSchema = z.object({
   productId: z.string(),
@@ -43,17 +40,73 @@ const newCountSchema = z.object({
 
 type NewCountForm = z.infer<typeof newCountSchema>;
 
-// ─────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────
+function numberFormat(value: number): string {
+  return new Intl.NumberFormat('tr-TR').format(value);
+}
+
+function formatQty(value: number): string {
+  return new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 3 }).format(value);
+}
+
+function isThisMonth(value: string): boolean {
+  const date = new Date(value);
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
+function matchesDatePreset(count: StockCount, preset: DatePreset): boolean {
+  if (preset === 'all') return true;
+  if (preset === 'month') return isThisMonth(count.date);
+  const date = new Date(count.date);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  return date >= cutoff;
+}
+
+function StatusBadge({ finalized }: { finalized: boolean }) {
+  return finalized
+    ? <Badge variant="success">Tamamlandı</Badge>
+    : <Badge variant="warning">Devam Ediyor</Badge>;
+}
+
+function SummarySkeleton() {
+  return (
+    <div className="grid rounded-xl border border-slate-800/80 bg-slate-950/35 sm:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className="border-b border-slate-800/70 px-4 py-3 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
+          <div className="h-5 w-12 animate-pulse rounded bg-slate-800/80" />
+          <div className="mt-2 h-3 w-24 animate-pulse rounded bg-slate-800/60" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TableSkeleton() {
+  return (
+    <>
+      {Array.from({ length: 5 }).map((_, row) => (
+        <tr key={row} className="border-b border-slate-800/45 last:border-0">
+          {Array.from({ length: 7 }).map((__, col) => (
+            <td key={col} className="px-4 py-3.5">
+              <div className="h-3.5 animate-pulse rounded bg-slate-800/75" style={{ width: `${42 + ((row + col) % 3) * 18}%` }} />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
 
 export function StockCountsPage() {
   const router = useRouter();
   const { data: counts = [], isLoading } = useStockCounts();
   const createCount = useCreateStockCount();
-
   const [createOpen, setCreateOpen] = useState(false);
-
+  const [search, setSearch] = useState('');
+  const [warehouseId, setWarehouseId] = useState('');
+  const [status, setStatus] = useState<StatusFilter>('all');
+  const [datePreset, setDatePreset] = useState<DatePreset>('all');
   const today = new Date().toISOString().split('T')[0];
 
   const { register, handleSubmit, control, reset, setValue, formState: { errors } } = useForm<NewCountForm>({
@@ -66,21 +119,48 @@ export function StockCountsPage() {
   const watchDate = useWatch({ control, name: 'date' });
   const watchedItems = useWatch({ control, name: 'items' }) ?? [];
   const selectedWarehouse = watchWarehouse ?? '';
-
   const { data: levels = [] } = useStockLevels({ warehouseId: selectedWarehouse || undefined });
 
   useEffect(() => {
     if (levels.length > 0 && selectedWarehouse) {
-      const items = levels.map((sl) => ({
+      setValue('items', levels.map((sl) => ({
         productId: sl.productId,
-        productName: sl.product?.name ?? '—',
+        productName: sl.product?.name ?? '-',
         productCode: sl.product?.code ?? '',
         expectedQty: Number(sl.quantity),
         countedQty: '0',
-      }));
-      setValue('items', items);
+      })));
+      return;
     }
+    if (selectedWarehouse) setValue('items', []);
   }, [levels, selectedWarehouse, setValue]);
+
+  const activeCounts = useMemo(() => counts.filter((count) => !count.isFinalized), [counts]);
+  const historyCounts = useMemo(() => counts.filter((count) => count.isFinalized), [counts]);
+  const summary = useMemo(() => ({
+    active: activeCounts.length,
+    finalized: historyCounts.length,
+    totalItems: counts.reduce((sum, count) => sum + (count._count?.items ?? 0), 0),
+    thisMonth: counts.filter((count) => isThisMonth(count.date)).length,
+  }), [activeCounts.length, counts, historyCounts.length]);
+
+  const filteredCounts = useMemo(() => {
+    const q = search.trim().toLocaleLowerCase('tr-TR');
+    return counts.filter((count) => {
+      const matchesSearch = !q || count.number.toLocaleLowerCase('tr-TR').includes(q);
+      const matchesWarehouse = !warehouseId || count.warehouseId === warehouseId;
+      const matchesStatus = status === 'all' || (status === 'finalized' ? count.isFinalized : !count.isFinalized);
+      return matchesSearch && matchesWarehouse && matchesStatus && matchesDatePreset(count, datePreset);
+    });
+  }, [counts, datePreset, search, status, warehouseId]);
+
+  const hasFilters = Boolean(search || warehouseId || status !== 'all' || datePreset !== 'all');
+  const clearFilters = () => {
+    setSearch('');
+    setWarehouseId('');
+    setStatus('all');
+    setDatePreset('all');
+  };
 
   const closeModal = () => {
     setCreateOpen(false);
@@ -88,188 +168,244 @@ export function StockCountsPage() {
   };
 
   const onSubmit = (data: NewCountForm) => {
-    createCount.mutate(
-      {
-        warehouseId: data.warehouseId,
-        date: data.date,
-        notes: data.notes || undefined,
-        items: data.items.map((item) => ({
-          productId: item.productId,
-          expectedQty: item.expectedQty,
-          countedQty: Number(item.countedQty),
-        })),
-      },
-      {
-        onSuccess: () => {
-          closeModal();
-        },
-      },
-    );
+    createCount.mutate({
+      warehouseId: data.warehouseId,
+      date: data.date,
+      notes: data.notes || undefined,
+      items: data.items.map((item) => ({
+        productId: item.productId,
+        expectedQty: item.expectedQty,
+        countedQty: Number(item.countedQty),
+      })),
+    }, { onSuccess: closeModal });
   };
 
-  const columns: ColumnDef<StockCount>[] = [
-    { key: 'number', header: 'No', width: '120px', render: (r) => <span className="font-mono text-sky-400">{r.number}</span> },
-    { key: 'warehouse', header: 'Depo', render: (r) => <span className="text-slate-200">{r.warehouse?.name ?? '—'}</span> },
-    { key: 'date', header: 'Tarih', width: '110px', render: (r) => <span className="text-slate-400">{formatDate(r.date)}</span> },
-    { key: 'items', header: 'Kalem', width: '80px', align: 'right', render: (r) => <span className="text-slate-300">{r._count?.items ?? 0}</span> },
-    {
-      key: 'isFinalized', header: 'Durum', width: '100px', align: 'center',
-      render: (r) => <Badge variant={r.isFinalized ? 'success' : 'warning'}>{r.isFinalized ? 'Tamamlandı' : 'Devam Ediyor'}</Badge>,
-    },
-  ];
-
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         title="Stok Sayımları"
-        subtitle="Fiziksel stok sayımlarını yönetin."
-        action={
-          <Link
-            href="#"
-            onClick={(e) => { e.preventDefault(); setCreateOpen(true); }}
-            className="group relative inline-flex items-center gap-2.5 h-10 px-5 rounded-xl font-medium text-sm text-white
-                       bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500
-                       shadow-lg shadow-sky-500/20 hover:shadow-sky-500/30
-                       transition-all duration-200 active:scale-[0.97]"
-          >
-            <span className="flex items-center justify-center w-5 h-5 rounded-md bg-white/15 group-hover:bg-white/20 transition-colors">
-              <Plus className="w-3.5 h-3.5" />
-            </span>
-            Yeni Sayım
-          </Link>
-        }
+        subtitle="Fiziksel stok sayımlarını planlayın, takip edin ve stok farklarını yönetin."
+        className="mb-0"
+        action={<Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Yeni Sayım</Button>}
       />
 
-      <DataTable
-        columns={columns}
-        data={counts}
-        keyExtractor={(r) => r.id}
-        isLoading={isLoading}
-        onRowClick={(r) => router.push(`/dashboard/stock/counts/${r.id}`)}
-        emptyTitle="Henüz sayım yapılmamış"
-        emptyDescription="Yeni bir sayım başlatarak stok kontrolü yapın."
-      />
+      {isLoading ? <SummarySkeleton /> : (
+        <div className="grid rounded-xl border border-slate-800/80 bg-slate-950/35 sm:grid-cols-4">
+          {[
+            { label: 'Devam Eden', value: summary.active, className: summary.active > 0 ? 'text-amber-300' : 'text-slate-100' },
+            { label: 'Tamamlanan', value: summary.finalized, className: 'text-emerald-300' },
+            { label: 'Toplam Kalem', value: summary.totalItems, className: 'text-slate-100' },
+            { label: 'Bu Ay', value: summary.thisMonth, className: 'text-sky-300' },
+          ].map((metric) => (
+            <div key={metric.label} className="border-b border-slate-800/70 px-4 py-3 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
+              <p className={cn('text-base font-semibold tabular-nums', metric.className)}>{numberFormat(metric.value)}</p>
+              <p className="mt-0.5 text-[11px] font-medium uppercase text-slate-500">{metric.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* ── New count modal ─────────────────────── */}
-      <Modal isOpen={createOpen} onClose={closeModal} title="Yeni Stok Sayımı"
-        description="Depo seçin, sistem mevcut stok miktarlarını otomatik yükleyecek." size="lg"
-        footer={
-          <>
-            <Button variant="ghost" size="sm" leftIcon={<X className="w-3.5 h-3.5" />} onClick={closeModal}>İptal</Button>
-            <Button size="sm" loading={createCount.isPending} leftIcon={<Save className="w-3.5 h-3.5" />}
-              onClick={handleSubmit(onSubmit)} disabled={fields.length === 0}
-              className="bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 shadow-lg shadow-sky-500/20">
-              Sayımı Başlat
-            </Button>
-          </>
-        }
+      <section>
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Aktif Sayımlar</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Tamamlanmamış fiziksel sayım çalışmaları.</p>
+          </div>
+        </div>
+        {isLoading ? (
+          <div className="rounded-xl border border-slate-800/80 bg-slate-950/35 p-4">
+            <div className="h-5 w-32 animate-pulse rounded bg-slate-800/80" />
+            <div className="mt-3 h-3 w-64 animate-pulse rounded bg-slate-800/60" />
+          </div>
+        ) : activeCounts.length === 0 ? (
+          <div className="rounded-xl border border-slate-800/80 bg-slate-950/35 px-4 py-5">
+            <p className="text-sm font-semibold text-slate-200">Devam eden sayım yok</p>
+            <p className="mt-1 text-sm text-slate-500">Yeni bir fiziksel stok sayımı başlatabilirsiniz.</p>
+            <Button className="mt-4" size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setCreateOpen(true)}>Yeni Sayım</Button>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {activeCounts.map((count) => {
+              const itemCount = count._count?.items ?? 0;
+              return (
+                <button
+                  key={count.id}
+                  type="button"
+                  onClick={() => router.push(`/dashboard/stock/counts/${count.id}`)}
+                  className="rounded-xl border border-slate-800/80 bg-slate-950/35 p-4 text-left transition-colors duration-150 hover:bg-sky-500/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <p className="font-mono text-sm font-semibold text-sky-300">{count.number}</p>
+                      <p className="mt-1 text-base font-semibold text-slate-100">{count.warehouse?.name ?? 'Depo bilgisi yok'}</p>
+                      <p className="mt-1 text-sm text-slate-500">{formatDate(count.date)} · {numberFormat(itemCount)} kalem</p>
+                      <div className="mt-3 flex items-center gap-3">
+                        <span className="text-xs font-medium text-amber-300">Sayım devam ediyor</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <StatusBadge finalized={count.isFinalized} />
+                      <span className="inline-flex items-center gap-1 text-sm font-medium text-sky-300">
+                        Sayıma Devam Et <ArrowRight className="h-4 w-4" />
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {counts.length === 0 && !isLoading ? (
+        <div className="rounded-xl border border-slate-800/80 bg-slate-950/35 px-4 py-10 text-center">
+          <ClipboardCheck className="mx-auto h-8 w-8 text-slate-600" />
+          <p className="mt-3 text-sm font-semibold text-slate-200">Henüz stok sayımı yapılmamış</p>
+          <p className="mt-1 text-sm text-slate-500">Fiziksel stok ile sistem stoklarını karşılaştırmak için ilk sayımınızı oluşturun.</p>
+          <Button className="mt-4" size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setCreateOpen(true)}>İlk Sayımı Başlat</Button>
+        </div>
+      ) : (
+        <section>
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold text-white">Sayım Kayıtları</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Devam eden ve tamamlanan fiziksel stok sayımları.</p>
+          </div>
+
+          <div className="mb-3 rounded-xl border border-slate-800/80 bg-slate-950/35 p-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="min-w-[220px] flex-1">
+                <Input aria-label="Sayım no ara" placeholder="Sayım no ara..." value={search} onChange={(event) => setSearch(event.target.value)} prefixIcon={<Search className="h-4 w-4" />} />
+              </div>
+              <WarehouseSelect value={warehouseId} onChange={setWarehouseId} className="w-full lg:w-52" placeholder="Tüm Depolar" />
+              <select value={status} onChange={(event) => setStatus(event.target.value as StatusFilter)} aria-label="Sayım durumu" className="h-10 w-full rounded-xl border border-slate-700/75 bg-slate-950/35 px-3.5 text-sm text-slate-200 outline-none transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:border-sky-500/60 focus:ring-2 focus:ring-sky-500/35 lg:w-44">
+                <option value="all">Tüm Durumlar</option>
+                <option value="active">Devam Ediyor</option>
+                <option value="finalized">Tamamlandı</option>
+              </select>
+              <select value={datePreset} onChange={(event) => setDatePreset(event.target.value as DatePreset)} aria-label="Tarih filtresi" className="h-10 w-full rounded-xl border border-slate-700/75 bg-slate-950/35 px-3.5 text-sm text-slate-200 outline-none transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:border-sky-500/60 focus:ring-2 focus:ring-sky-500/35 lg:w-40">
+                <option value="all">Tüm Zamanlar</option>
+                <option value="30d">Son 30 Gün</option>
+                <option value="month">Bu Ay</option>
+              </select>
+              {hasFilters && <Button variant="ghost" size="sm" leftIcon={<FilterX className="h-3.5 w-3.5" />} onClick={clearFilters}>Temizle</Button>}
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] text-sm">
+                <thead className="sticky top-0 z-10 bg-slate-900/95">
+                  <tr className="border-b border-slate-800/80">
+                    {['Sayım No', 'Depo', 'Tarih', 'Kalem', 'Fark', 'Durum', ''].map((header, index) => (
+                      <th key={header || index} className={cn('px-4 py-3 text-left text-[11px] font-semibold uppercase text-slate-500', [3, 4].includes(index) && 'text-right', index === 5 && 'text-center')}>{header}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoading ? <TableSkeleton /> : filteredCounts.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center">
+                        <p className="text-sm font-semibold text-slate-200">Sayım kaydı bulunamadı</p>
+                        <p className="mt-1 text-sm text-slate-500">Arama veya filtre kriterlerini değiştirin.</p>
+                        {hasFilters && <Button className="mt-4" size="sm" variant="secondary" leftIcon={<FilterX className="h-3.5 w-3.5" />} onClick={clearFilters}>Filtreleri Temizle</Button>}
+                      </td>
+                    </tr>
+                  ) : filteredCounts.map((count) => (
+                    <tr
+                      key={count.id}
+                      tabIndex={0}
+                      onClick={() => router.push(`/dashboard/stock/counts/${count.id}`)}
+                      onKeyDown={(event) => { if (event.key === 'Enter') router.push(`/dashboard/stock/counts/${count.id}`); }}
+                      className="group cursor-pointer border-b border-slate-800/45 transition-colors duration-150 last:border-b-0 hover:bg-sky-500/[0.04] focus-visible:bg-sky-500/[0.06] focus-visible:outline-none"
+                    >
+                      <td className="px-4 py-3.5 font-mono font-semibold text-sky-300">{count.number}</td>
+                      <td className="px-4 py-3.5 text-slate-200">{count.warehouse?.name ?? '-'}</td>
+                      <td className="px-4 py-3.5 text-slate-400">{formatDate(count.date)}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-slate-300">{numberFormat(count._count?.items ?? 0)}</td>
+                      <td className="px-4 py-3.5 text-right text-slate-500">Detayda</td>
+                      <td className="px-4 py-3.5 text-center"><StatusBadge finalized={count.isFinalized} /></td>
+                      <td className="w-10 px-4 py-3.5 text-right"><ChevronRight className="h-4 w-4 text-slate-600 opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <Modal
+        isOpen={createOpen}
+        onClose={closeModal}
+        title="Yeni Stok Sayımı"
+        description="Depo seçin, sistem mevcut stok miktarlarını otomatik yükleyecek."
+        size="lg"
+        footer={<><Button variant="ghost" size="sm" leftIcon={<X className="h-3.5 w-3.5" />} onClick={closeModal}>İptal</Button><Button size="sm" loading={createCount.isPending} leftIcon={<Save className="h-3.5 w-3.5" />} onClick={handleSubmit(onSubmit)} disabled={fields.length === 0}>Sayımı Başlat</Button></>}
       >
         <form className="space-y-5">
-          {/* ── Step 1: Warehouse & date ────────────── */}
-          <div className="bg-slate-800/30 border border-slate-800 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="p-1.5 rounded-lg bg-sky-500/10">
-                <WarehouseIcon className="w-3.5 h-3.5 text-sky-400" />
-              </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-950/35 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <WarehouseIcon className="h-4 w-4 text-sky-400" />
               <span className="text-xs font-semibold text-white">Sayım Bilgileri</span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <WarehouseSelect label="Depo" required value={watchWarehouse ?? ''} onChange={(value) => setValue('warehouseId', value, { shouldDirty: true, shouldValidate: true })} error={errors.warehouseId?.message} />
               <DatePicker label="Tarih" required value={watchDate} onValueChange={(value) => setValue('date', value ?? '', { shouldDirty: true, shouldValidate: true })} error={errors.date?.message} clearable={false} />
             </div>
-            <Input label="Notlar" placeholder="Sayım açıklaması (opsiyonel)…" {...register('notes')} />
+            <Input className="mt-3" label="Notlar" placeholder="Sayım açıklaması (opsiyonel)..." {...register('notes')} />
           </div>
 
-          {/* ── Step 2: Items ──────────────────────── */}
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-violet-500/10">
-                  <Package className="w-3.5 h-3.5 text-violet-400" />
-                </div>
+                <Package className="h-4 w-4 text-violet-300" />
                 <span className="text-xs font-semibold text-white">Sayım Kalemleri</span>
               </div>
-              {fields.length > 0 && (
-                <span className="text-[10px] font-medium text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-full">
-                  {fields.length} ürün
-                </span>
-              )}
+              {fields.length > 0 && <span className="text-xs font-medium text-slate-500">{fields.length} ürün</span>}
             </div>
 
             {fields.length === 0 ? (
-              <div className="py-10 text-center border border-dashed border-slate-700/50 rounded-xl bg-slate-800/20">
-                <ClipboardCheck className="w-10 h-10 text-slate-700 mx-auto mb-3" />
-                <p className="text-sm font-medium text-slate-500">
-                  {watchWarehouse ? 'Bu depoda stok kaydı bulunamadı.' : 'Depo seçerek başlayın'}
-                </p>
-                <p className="text-xs text-slate-600 mt-1">
-                  {watchWarehouse ? '' : 'Depo seçildiğinde ürünler otomatik yüklenecek.'}
-                </p>
+              <div className="rounded-xl border border-dashed border-slate-700/50 bg-slate-950/35 py-10 text-center">
+                <ClipboardCheck className="mx-auto mb-3 h-8 w-8 text-slate-700" />
+                <p className="text-sm font-medium text-slate-500">{watchWarehouse ? 'Bu depoda stok kaydı bulunamadı.' : 'Depo seçerek başlayın'}</p>
+                {!watchWarehouse && <p className="mt-1 text-xs text-slate-600">Depo seçildiğinde ürünler otomatik yüklenecek.</p>}
               </div>
             ) : (
-              <div className="border border-slate-800 rounded-xl overflow-hidden">
-                {/* Header */}
-                <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-slate-800/50 text-[10px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-800/60">
+              <div className="overflow-hidden rounded-xl border border-slate-800">
+                <div className="grid grid-cols-12 gap-2 border-b border-slate-800/60 bg-slate-900/70 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                   <div className="col-span-1 text-center">#</div>
                   <div className="col-span-4">Ürün</div>
                   <div className="col-span-2 text-right">Sistem</div>
                   <div className="col-span-3 text-center">Sayılan</div>
                   <div className="col-span-2 text-right">Fark</div>
                 </div>
-
-                {/* Rows */}
-                <div className="divide-y divide-slate-800/40 max-h-80 overflow-y-auto">
+                <div className="max-h-80 divide-y divide-slate-800/40 overflow-y-auto">
                   {fields.map((field, idx) => {
                     const counted = Number(watchedItems[idx]?.countedQty || 0);
                     const expected = field.expectedQty;
                     const diff = counted - expected;
-                    const hasCounted = true;
-                    const hasDiff = hasCounted && diff !== 0;
-
                     return (
-                      <div key={field.id} className={cn(
-                        'grid grid-cols-12 gap-2 px-4 py-3 items-center transition-colors',
-                        hasDiff ? (diff > 0 ? 'bg-emerald-500/[0.03]' : 'bg-red-500/[0.03]') : 'hover:bg-slate-800/20',
-                      )}>
-                        <div className="col-span-1 text-center">
-                          <span className="text-[10px] font-mono text-slate-600">{idx + 1}</span>
-                        </div>
+                      <div key={field.id} className="grid grid-cols-12 items-center gap-2 px-4 py-3 transition-colors hover:bg-slate-800/20">
+                        <div className="col-span-1 text-center"><span className="font-mono text-[10px] text-slate-600">{idx + 1}</span></div>
                         <div className="col-span-4 min-w-0">
-                          <p className="text-sm text-slate-200 truncate">{field.productName}</p>
-                          <p className="text-[10px] text-slate-500 font-mono">{field.productCode}</p>
+                          <p className="truncate text-sm text-slate-200">{field.productName}</p>
+                          <p className="font-mono text-[10px] text-slate-500">{field.productCode}</p>
                         </div>
-                        <div className="col-span-2 text-right">
-                          <span className="text-sm font-medium text-slate-400 tabular-nums">{expected}</span>
-                        </div>
+                        <div className="col-span-2 text-right"><span className="text-sm tabular-nums text-slate-400">{formatQty(expected)}</span></div>
                         <div className="col-span-3 flex justify-center">
                           <input
                             type="number"
                             step="1"
                             min="0"
                             placeholder={String(expected)}
-                            className={cn(
-                              'w-full max-w-[90px] bg-slate-800 border rounded-lg text-sm text-center text-white px-2 py-1.5 tabular-nums',
-                              'focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-colors',
-                              errors.items?.[idx]?.countedQty ? 'border-red-500' : 'border-slate-700',
-                            )}
+                            className={cn('w-full max-w-[90px] rounded-lg border bg-slate-800 px-2 py-1.5 text-center text-sm tabular-nums text-white transition-colors focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-500', errors.items?.[idx]?.countedQty ? 'border-red-500' : 'border-slate-700')}
                             {...register(`items.${idx}.countedQty`)}
                           />
                         </div>
                         <div className="col-span-2 text-right">
-                          {hasCounted ? (
-                            <span className={cn(
-                              'inline-flex items-center justify-center min-w-[36px] text-xs font-bold px-1.5 py-0.5 rounded-md tabular-nums',
-                              diff === 0
-                                ? 'bg-slate-800 text-slate-500'
-                                : diff > 0
-                                  ? 'bg-emerald-500/15 text-emerald-400'
-                                  : 'bg-red-500/15 text-red-400',
-                            )}>
-                              {diff === 0 ? '0' : diff > 0 ? `+${diff}` : diff}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-slate-700">—</span>
-                          )}
+                          <span className={cn('inline-flex min-w-[40px] justify-center rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums', diff === 0 ? 'bg-slate-800 text-slate-500' : diff > 0 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300')}>
+                            {diff === 0 ? '0' : diff > 0 ? `+${formatQty(diff)}` : formatQty(diff)}
+                          </span>
                         </div>
                       </div>
                     );
@@ -279,39 +415,17 @@ export function StockCountsPage() {
             )}
           </div>
 
-          {/* ── Summary bar ────────────────────────── */}
           {fields.length > 0 && (() => {
-            const filledCount = fields.length;
-            const totalDiffPlus = fields.reduce((sum, f, i) => {
-              const c = Number(watchedItems[i]?.countedQty || 0);
-              const d = c - f.expectedQty;
-              return d > 0 ? sum + d : sum;
+            const diffCount = fields.reduce((sum, field, index) => {
+              const counted = Number(watchedItems[index]?.countedQty || 0);
+              return counted - field.expectedQty !== 0 ? sum + 1 : sum;
             }, 0);
-            const totalDiffMinus = fields.reduce((sum, f, i) => {
-              const c = Number(watchedItems[i]?.countedQty || 0);
-              const d = c - f.expectedQty;
-              return d < 0 ? sum + d : sum;
-            }, 0);
-
             return (
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/40 border border-slate-800">
-                <ClipboardCheck className="w-4 h-4 text-sky-400 shrink-0" />
-                <div className="flex-1 flex items-center gap-4 text-xs">
-                  <span className="text-slate-400">
-                    <span className="font-semibold text-white">{filledCount}</span>/{fields.length} sayıldı
-                  </span>
-                  {totalDiffPlus > 0 && (
-                    <span className="text-emerald-400 font-medium">+{totalDiffPlus} fazla</span>
-                  )}
-                  {totalDiffMinus < 0 && (
-                    <span className="text-red-400 font-medium">{totalDiffMinus} eksik</span>
-                  )}
-                </div>
-                <div className="w-20 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-sky-400 rounded-full transition-all duration-300"
-                    style={{ width: `${fields.length > 0 ? (filledCount / fields.length) * 100 : 0}%` }}
-                  />
+              <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/35 p-3">
+                <ClipboardCheck className="h-4 w-4 shrink-0 text-sky-400" />
+                <div className="flex-1 text-xs text-slate-400">
+                  <span className="font-semibold text-white">{fields.length}</span> kalem yüklendi
+                  {diffCount > 0 && <span className="ml-3 font-medium text-amber-300">{diffCount} kalemde fark var</span>}
                 </div>
               </div>
             );

@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { CalendarClock, PackageCheck, Plus, ShoppingCart, Unlock } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  AlertTriangle, BriefcaseBusiness, CalendarClock, FilterX, PackageCheck,
+  Plus, Search, ShoppingCart, Unlock,
+} from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { ProductSelect, WarehouseSelect } from '@/components/shared/EntitySelect';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -18,8 +20,13 @@ import {
   useReservationReport,
   useReservations,
 } from '@/hooks/useReservations';
-import { formatDate } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import type { Reservation, ReservationRefType } from '@/services/inventory-reservation.service';
+
+type StatusFilter = 'all' | 'active' | 'expired' | 'released';
+
+const PAGE_SIZE = 20;
+const EMPTY_RESERVATIONS: Reservation[] = [];
 
 const REF_MAP: Record<ReservationRefType, string> = {
   SALES_ORDER: 'Satış Siparişi',
@@ -42,11 +49,66 @@ function todayInputDate(): string {
   return new Date().toISOString().split('T')[0] ?? '';
 }
 
+function reservationStatus(reservation: Reservation): StatusFilter {
+  if (reservation.releasedAt) return 'released';
+  if (reservation.expiresAt && new Date(reservation.expiresAt) < new Date()) return 'expired';
+  return 'active';
+}
+
+function statusLabel(status: StatusFilter): string {
+  if (status === 'active') return 'Aktif';
+  if (status === 'expired') return 'Süresi Aşan';
+  if (status === 'released') return 'Serbest';
+  return 'Tümü';
+}
+
+function ReservationStatusBadge({ reservation }: { reservation: Reservation }) {
+  const status = reservationStatus(reservation);
+  if (status === 'released') return <Badge variant="neutral">Serbest</Badge>;
+  if (status === 'expired') return <Badge variant="warning">Süresi Aşan</Badge>;
+  return <Badge variant="info">Aktif</Badge>;
+}
+
+function ExpiryText({ reservation }: { reservation: Reservation }) {
+  if (!reservation.expiresAt) return <span className="text-slate-500">Süresiz</span>;
+  const expired = reservationStatus(reservation) === 'expired';
+  return <span className={cn('text-xs', expired ? 'font-medium text-amber-300' : 'text-slate-400')}>{formatDate(reservation.expiresAt)}</span>;
+}
+
+function SummarySkeleton() {
+  return (
+    <div className="rounded-xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
+      <div className="h-5 w-2/3 animate-pulse rounded bg-slate-800/80" />
+    </div>
+  );
+}
+
+function TableSkeleton({ rows = 5, cols = 8 }: { rows?: number; cols?: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }).map((_, row) => (
+        <tr key={row} className="border-b border-slate-800/45 last:border-0">
+          {Array.from({ length: cols }).map((__, col) => (
+            <td key={col} className="px-4 py-3.5">
+              <div className="h-3.5 animate-pulse rounded bg-slate-800/75" style={{ width: `${40 + ((row + col) % 3) * 18}%` }} />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
 export function ReservationsPage() {
   const [page, setPage] = useState(1);
-  const [activeFilter, setActiveFilter] = useState('true');
+  const [status, setStatus] = useState<StatusFilter>('active');
+  const [productId, setProductId] = useState('');
+  const [warehouseId, setWarehouseId] = useState('');
+  const [refType, setRefType] = useState('');
+  const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
+  const [releaseTarget, setReleaseTarget] = useState<Reservation | null>(null);
   const [form, setForm] = useState({
     productId: '',
     warehouseId: '',
@@ -64,133 +126,284 @@ export function ReservationsPage() {
     allowPartial: true,
   });
 
-  const { data, isLoading } = useReservations({ page, limit: 20, active: activeFilter || undefined });
-  const { data: report } = useReservationReport();
+  const activeParam = status === 'released' ? 'false' : status === 'all' ? undefined : 'true';
+  const { data, isLoading } = useReservations({
+    page,
+    limit: PAGE_SIZE,
+    active: activeParam,
+    productId: productId || undefined,
+    warehouseId: warehouseId || undefined,
+    refType: refType || undefined,
+  });
+  const { data: report, isLoading: isReportLoading } = useReservationReport();
   const createRes = useCreateReservation();
   const releaseRes = useReleaseReservation();
   const releaseExpired = useReleaseExpiredReservations();
   const createFromOrder = useCreateReservationsFromSalesOrder();
   const orderResult = createFromOrder.data;
+  const rows = data?.data ?? EMPTY_RESERVATIONS;
 
-  const columns: ColumnDef<Reservation>[] = [
-    { key: 'product', header: 'Ürün', render: (r) => <span className="text-white text-sm">{r.product?.name ?? '-'}</span> },
-    { key: 'warehouse', header: 'Depo', width: '120px', render: (r) => <span className="text-slate-400 text-xs">{r.warehouse?.name ?? '-'}</span> },
-    { key: 'quantity', header: 'Miktar', width: '90px', align: 'right', render: (r) => <span className="text-white tabular-nums font-medium">{formatQty(r.quantity)}</span> },
-    { key: 'refType', header: 'Kaynak', width: '140px', render: (r) => <span className="text-slate-300 text-xs">{REF_MAP[r.refType] ?? r.refType}</span> },
-    { key: 'expiresAt', header: 'Bitiş', width: '110px', render: (r) => <span className="text-slate-400 text-xs">{r.expiresAt ? formatDate(r.expiresAt) : '-'}</span> },
-    { key: 'reservedAt', header: 'Tarih', width: '100px', render: (r) => <span className="text-slate-400 text-xs">{formatDate(r.reservedAt)}</span> },
-    {
-      key: 'status',
-      header: 'Durum',
-      width: '120px',
-      render: (r) => {
-        if (r.releasedAt) return <Badge variant="neutral">Serbest</Badge>;
-        if (r.expiresAt && new Date(r.expiresAt) < new Date()) return <Badge variant="danger">Süresi aşmış</Badge>;
-        return <Badge variant="warning">Aktif</Badge>;
-      },
-    },
-    {
-      key: 'actions',
-      header: '',
-      width: '100px',
-      align: 'right',
-      render: (r) => !r.releasedAt ? (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); releaseRes.mutate(r.id); }}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
-        >
-          <Unlock className="w-3 h-3" />Serbest
-        </button>
-      ) : null,
-    },
-  ];
+  const visibleRows = useMemo(() => {
+    const q = search.trim().toLocaleLowerCase('tr-TR');
+    return rows
+      .filter((reservation) => status !== 'expired' || reservationStatus(reservation) === 'expired')
+      .filter((reservation) => {
+        if (!q) return true;
+        const haystack = [
+          reservation.product?.name,
+          reservation.product?.code,
+          reservation.warehouse?.name,
+          reservation.refId,
+          REF_MAP[reservation.refType],
+          reservation.notes,
+        ].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR');
+        return haystack.includes(q);
+      });
+  }, [rows, search, status]);
 
-  const reportColumns: ColumnDef<NonNullable<typeof report>['rows'][number]>[] = [
-    { key: 'productName', header: 'Ürün', render: (r) => <span className="text-white text-sm">{r.productCode} - {r.productName}</span> },
-    { key: 'warehouseName', header: 'Depo', width: '130px', render: (r) => <span className="text-slate-400 text-xs">{r.warehouseName}</span> },
-    { key: 'activeQuantity', header: 'Aktif', width: '90px', align: 'right', render: (r) => <span className="text-amber-300 tabular-nums">{formatQty(r.activeQuantity)}</span> },
-    { key: 'expiredQuantity', header: 'Süresi Aşan', width: '120px', align: 'right', render: (r) => <span className="text-red-300 tabular-nums">{formatQty(r.expiredQuantity)}</span> },
-    { key: 'releasedQuantity', header: 'Serbest', width: '90px', align: 'right', render: (r) => <span className="text-slate-400 tabular-nums">{formatQty(r.releasedQuantity)}</span> },
-    { key: 'earliestExpiry', header: 'İlk Bitiş', width: '110px', render: (r) => <span className="text-slate-400 text-xs">{r.earliestExpiry ? formatDate(r.earliestExpiry) : '-'}</span> },
-  ];
+  const reportRows = report?.rows ?? [];
+  const productCount = reportRows.filter((row) => row.activeQuantity > 0 || row.expiredQuantity > 0).length;
+  const expiredCount = report?.summary.expiredCount ?? 0;
+  const hasFilters = Boolean(status !== 'active' || productId || warehouseId || refType || search);
+
+  const clearFilters = () => {
+    setStatus('active');
+    setProductId('');
+    setWarehouseId('');
+    setRefType('');
+    setSearch('');
+    setPage(1);
+  };
+
+  const closeCreate = () => {
+    setCreateOpen(false);
+    setForm({ productId: '', warehouseId: '', quantity: '', refType: 'SALES_ORDER', refId: '', notes: '', expiresAt: '', allowPartial: true });
+  };
+
+  const releaseSelected = () => {
+    if (!releaseTarget) return;
+    releaseRes.mutate(releaseTarget.id, { onSuccess: () => setReleaseTarget(null) });
+  };
 
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         title="Stok Rezervasyonları"
-        subtitle="Ürün rezervasyonlarını yönetin."
-        action={
-          <div className="flex items-center gap-2">
+        subtitle="Ayrılmış stokları, rezervasyon kaynaklarını ve sürelerini yönetin."
+        className="mb-0"
+        action={(
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="secondary" leftIcon={<ShoppingCart className="h-4 w-4" />} onClick={() => setOrderOpen(true)}>
-              Siparişten rezerve et
+              Siparişten Rezerve Et
             </Button>
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="group relative inline-flex items-center gap-2.5 h-10 px-5 rounded-xl font-medium text-sm text-white bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 shadow-lg shadow-sky-500/20 transition-all duration-200 active:scale-[0.97]"
-            >
-              <span className="flex items-center justify-center w-5 h-5 rounded-md bg-white/15"><Plus className="w-3.5 h-3.5" /></span>
+            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
               Yeni Rezervasyon
-            </button>
+            </Button>
           </div>
-        }
+        )}
       />
 
-      <div className="mb-4 grid gap-3 md:grid-cols-4">
-        <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-          <PackageCheck className="h-4 w-4 text-amber-400" />
-          <p className="mt-2 text-xs text-slate-500">Aktif Rezerve</p>
-          <p className="text-xl font-bold text-white tabular-nums">{formatQty(report?.summary.activeQuantity ?? 0)}</p>
+      {isReportLoading ? <SummarySkeleton /> : (
+        <div className="rounded-xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            <span className="font-semibold tabular-nums text-slate-50">{formatQty(report?.summary.activeQuantity ?? 0)} AD <span className="text-[11px] font-medium uppercase text-slate-500">Aktif Rezerve</span></span>
+            <span className="h-4 w-px bg-slate-800" />
+            <span className={cn('font-semibold tabular-nums', expiredCount > 0 ? 'text-amber-300' : 'text-slate-200')}>{formatQty(report?.summary.expiredQuantity ?? 0)} AD <span className="text-[11px] font-medium uppercase text-slate-500">Süresi Aşan</span></span>
+            <span className="h-4 w-px bg-slate-800" />
+            <span className="tabular-nums text-slate-200">{formatQty(report?.summary.releasedQuantity ?? 0)} AD <span className="text-[11px] font-medium uppercase text-slate-500">Serbest</span></span>
+            <span className="h-4 w-px bg-slate-800" />
+            <span className="tabular-nums text-slate-200">{productCount} <span className="text-[11px] font-medium uppercase text-slate-500">Ürün</span></span>
+          </div>
         </div>
-        <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-          <CalendarClock className="h-4 w-4 text-red-400" />
-          <p className="mt-2 text-xs text-slate-500">Süresi Aşan</p>
-          <p className="text-xl font-bold text-white tabular-nums">{formatQty(report?.summary.expiredQuantity ?? 0)}</p>
-        </div>
-        <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-          <Unlock className="h-4 w-4 text-slate-400" />
-          <p className="mt-2 text-xs text-slate-500">Serbest Bırakılan</p>
-          <p className="text-xl font-bold text-white tabular-nums">{formatQty(report?.summary.releasedQuantity ?? 0)}</p>
-        </div>
-        <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-          <Button
-            variant="outline"
-            className="w-full"
-            leftIcon={<CalendarClock className="h-4 w-4" />}
-            loading={releaseExpired.isPending}
-            onClick={() => releaseExpired.mutate()}
-          >
-            Süresi aşanları bırak
+      )}
+
+      {expiredCount > 0 && (
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-amber-100">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />
+            <span><strong className="font-semibold">{expiredCount}</strong> rezervasyonun süresi dolmuş.</span>
+          </div>
+          <Button variant="secondary" size="sm" loading={releaseExpired.isPending} leftIcon={<Unlock className="h-3.5 w-3.5" />} onClick={() => releaseExpired.mutate()}>
+            Süresi Aşanları Serbest Bırak
           </Button>
         </div>
-      </div>
+      )}
 
-      <div className="flex items-center gap-2 mb-4">
-        <button onClick={() => setActiveFilter('true')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeFilter === 'true' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-white'}`}>Aktif</button>
-        <button onClick={() => setActiveFilter('false')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeFilter === 'false' ? 'bg-slate-500/20 text-slate-300 border border-slate-500/30' : 'text-slate-400 hover:text-white'}`}>Serbest</button>
-        <button onClick={() => setActiveFilter('')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${!activeFilter ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' : 'text-slate-400 hover:text-white'}`}>Tümü</button>
-      </div>
+      <section>
+        <div className="mb-3 rounded-xl border border-slate-800/80 bg-slate-950/35 p-3">
+          <div className="grid gap-3 xl:grid-cols-[minmax(240px,1fr)_auto_210px_180px_170px_auto] xl:items-center">
+            <Input aria-label="Ürün, kod veya kaynak ara" placeholder="Ürün, kod veya kaynak ara..." value={search} onChange={(event) => setSearch(event.target.value)} prefixIcon={<Search className="h-4 w-4" />} />
+            <div className="inline-flex h-10 overflow-hidden rounded-xl border border-slate-700/75 bg-slate-950/35 p-1">
+              {(['all', 'active', 'expired', 'released'] as StatusFilter[]).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => { setStatus(item); setPage(1); }}
+                  className={cn(
+                    'rounded-lg px-3 text-xs font-medium transition-colors',
+                    status === item ? 'bg-sky-500/15 text-sky-300' : 'text-slate-500 hover:text-slate-200',
+                  )}
+                >
+                  {statusLabel(item)}
+                </button>
+              ))}
+            </div>
+            <ProductSelect value={productId} onChange={(value) => { setProductId(value); setPage(1); }} placeholder="Tüm Ürünler" />
+            <WarehouseSelect value={warehouseId} onChange={(value) => { setWarehouseId(value); setPage(1); }} placeholder="Tüm Depolar" />
+            <select value={refType} onChange={(event) => { setRefType(event.target.value); setPage(1); }} aria-label="Kaynak filtresi" className="h-10 rounded-xl border border-slate-700/75 bg-slate-950/35 px-3.5 text-sm text-slate-200 outline-none transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:border-sky-500/60 focus:ring-2 focus:ring-sky-500/35">
+              <option value="">Tüm Kaynaklar</option>
+              {Object.entries(REF_MAP).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            {hasFilters && <Button variant="ghost" size="sm" leftIcon={<FilterX className="h-3.5 w-3.5" />} onClick={clearFilters}>Temizle</Button>}
+          </div>
+        </div>
 
-      <DataTable
-        columns={columns}
-        data={data?.data ?? []}
-        keyExtractor={(r) => r.id}
-        isLoading={isLoading}
-        emptyTitle="Rezervasyon bulunamadı"
-        emptyDescription="Yeni bir rezervasyon oluşturarak başlayın."
-        pagination={data ? { page, pageSize: 20, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
-      />
+        <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40">
+          <div className="border-b border-slate-800/70 bg-slate-900/45 px-4 py-3">
+            <h2 className="text-sm font-semibold text-white">Rezervasyonlar</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Aktif rezervasyonlar kullanılabilir stok miktarını etkiler.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-900/95">
+                <tr className="border-b border-slate-800/80">
+                  {['Ürün', 'Depo', 'Rezerve', 'Kaynak', 'Oluşturma', 'Bitiş', 'Durum', ''].map((header, index) => (
+                    <th key={header || index} className={cn('px-4 py-3 text-left text-[11px] font-semibold uppercase text-slate-500', index === 2 && 'text-right', index === 6 && 'text-center')}>{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? <TableSkeleton cols={8} /> : visibleRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-10 text-center">
+                      <p className="text-sm font-semibold text-slate-200">{hasFilters ? 'Filtrelerle eşleşen rezervasyon bulunamadı' : 'Aktif rezervasyon bulunmuyor'}</p>
+                      <p className="mt-1 text-sm text-slate-500">{hasFilters ? 'Filtreleri temizleyerek tüm rezervasyonları görüntüleyin.' : 'Şu anda stok kullanılabilirliğini etkileyen aktif rezervasyon yok.'}</p>
+                      {hasFilters ? (
+                        <Button className="mt-4" size="sm" variant="secondary" leftIcon={<FilterX className="h-3.5 w-3.5" />} onClick={clearFilters}>Filtreleri Temizle</Button>
+                      ) : (
+                        <Button className="mt-4" size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setCreateOpen(true)}>Yeni Rezervasyon</Button>
+                      )}
+                    </td>
+                  </tr>
+                ) : visibleRows.map((reservation) => (
+                  <tr key={reservation.id} className="group border-b border-slate-800/45 transition-colors duration-150 last:border-b-0 hover:bg-sky-500/[0.04]">
+                    <td className="px-4 py-3.5">
+                      <p className="font-medium text-slate-100">{reservation.product?.name ?? 'Ürün bilgisi yok'}</p>
+                      <p className="mt-0.5 font-mono text-xs text-slate-500">{reservation.product?.code ?? '-'}</p>
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-300">{reservation.warehouse?.name ?? '-'}</td>
+                    <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-slate-50">{formatQty(reservation.quantity)} AD</td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-start gap-2">
+                        <BriefcaseBusiness className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
+                        <div>
+                          <p className="text-slate-200">{REF_MAP[reservation.refType] ?? reservation.refType}</p>
+                          <p className="mt-0.5 font-mono text-xs text-sky-300">{reservation.refId}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-xs text-slate-400">{formatDate(reservation.reservedAt)}</td>
+                    <td className="px-4 py-3.5"><ExpiryText reservation={reservation} /></td>
+                    <td className="px-4 py-3.5 text-center"><ReservationStatusBadge reservation={reservation} /></td>
+                    <td className="px-4 py-3.5 text-right">
+                      {!reservation.releasedAt && (
+                        <Button variant="ghost" size="sm" leftIcon={<Unlock className="h-3.5 w-3.5" />} onClick={() => setReleaseTarget(reservation)}>
+                          Serbest Bırak
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {data && data.meta.totalPages > 1 && (
+            <div className="flex flex-col gap-3 border-t border-slate-800/70 bg-slate-900/45 px-4 py-3 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+              <span>{(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, data.meta.total)} / {data.meta.total} rezervasyon</span>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>Önceki</Button>
+                <span className="min-w-16 text-center tabular-nums text-slate-300">{page} / {data.meta.totalPages}</span>
+                <Button size="sm" variant="secondary" disabled={page >= data.meta.totalPages} onClick={() => setPage((prev) => Math.min(data.meta.totalPages, prev + 1))}>Sonraki</Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
 
-      <div className="mt-6">
-        <h2 className="mb-3 text-sm font-semibold text-white">Rezerve Stok Raporu</h2>
-        <DataTable
-          columns={reportColumns}
-          data={report?.rows ?? []}
-          keyExtractor={(row) => `${row.productId}:${row.warehouseId}`}
-          emptyTitle="Rezerve stok bulunamadı"
-          emptyDescription="Aktif veya geçmiş rezervasyon olduğunda rapor görünür."
-        />
-      </div>
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Ürün Bazlı Rezervasyon Özeti</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Ürün ve depo bazında toplam rezervasyon durumu.</p>
+          </div>
+          <span className="text-xs text-slate-500">{reportRows.length} satır</span>
+        </div>
+        <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead className="bg-slate-900/95">
+                <tr className="border-b border-slate-800/80">
+                  {['Ürün', 'Depo', 'Rezerve', 'Süresi Aşan', 'Serbest', 'En Yakın Bitiş'].map((header, index) => (
+                    <th key={header} className={cn('px-4 py-3 text-left text-[11px] font-semibold uppercase text-slate-500', [2, 3, 4].includes(index) && 'text-right')}>{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {isReportLoading ? <TableSkeleton rows={4} cols={6} /> : reportRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center">
+                      <p className="text-sm font-semibold text-slate-200">Rezerve stok bulunamadı</p>
+                      <p className="mt-1 text-sm text-slate-500">Aktif veya geçmiş rezervasyon olduğunda özet görünür.</p>
+                    </td>
+                  </tr>
+                ) : reportRows.map((row) => (
+                  <tr key={`${row.productId}:${row.warehouseId}`} className="border-b border-slate-800/45 last:border-b-0">
+                    <td className="px-4 py-3.5">
+                      <p className="font-medium text-slate-100">{row.productName}</p>
+                      <p className="mt-0.5 font-mono text-xs text-slate-500">{row.productCode}</p>
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-300">{row.warehouseName}</td>
+                    <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-slate-50">{formatQty(row.activeQuantity + row.expiredQuantity)} AD</td>
+                    <td className={cn('px-4 py-3.5 text-right tabular-nums', row.expiredQuantity > 0 ? 'font-semibold text-amber-300' : 'text-slate-500')}>{formatQty(row.expiredQuantity)}</td>
+                    <td className="px-4 py-3.5 text-right tabular-nums text-slate-500">{formatQty(row.releasedQuantity)}</td>
+                    <td className="px-4 py-3.5 text-xs text-slate-400">{row.earliestExpiry ? formatDate(row.earliestExpiry) : 'Süresiz'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <Modal
+        isOpen={Boolean(releaseTarget)}
+        onClose={() => setReleaseTarget(null)}
+        title="Rezervasyon serbest bırakılsın mı?"
+        description={releaseTarget ? `${releaseTarget.product?.name ?? 'Seçili ürün'} için ayrılan ${formatQty(releaseTarget.quantity)} AD stok tekrar kullanılabilir hale gelecek.` : undefined}
+        footer={(
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setReleaseTarget(null)}>Vazgeç</Button>
+            <Button variant="danger" size="sm" loading={releaseRes.isPending} leftIcon={<Unlock className="h-3.5 w-3.5" />} onClick={releaseSelected}>
+              {releaseTarget ? `${formatQty(releaseTarget.quantity)} AD Serbest Bırak` : 'Serbest Bırak'}
+            </Button>
+          </>
+        )}
+      >
+        {releaseTarget && (
+          <div className="rounded-xl border border-slate-800 bg-slate-950/35 p-4 text-sm">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="text-xs text-slate-500">Ürün</p>
+                <p className="mt-1 font-medium text-slate-100">{releaseTarget.product?.name ?? '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Kaynak</p>
+                <p className="mt-1 text-slate-100">{REF_MAP[releaseTarget.refType]} · <span className="font-mono text-sky-300">{releaseTarget.refId}</span></p>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         isOpen={orderOpen}
@@ -205,14 +418,12 @@ export function ReservationsPage() {
               loading={createFromOrder.isPending}
               disabled={!orderForm.orderId || !orderForm.warehouseId}
               onClick={() => {
-                createFromOrder.mutate(
-                  {
-                    orderId: orderForm.orderId,
-                    warehouseId: orderForm.warehouseId,
-                    allowPartial: orderForm.allowPartial,
-                    expiresAt: orderForm.expiresAt || undefined,
-                  },
-                );
+                createFromOrder.mutate({
+                  orderId: orderForm.orderId,
+                  warehouseId: orderForm.warehouseId,
+                  allowPartial: orderForm.allowPartial,
+                  expiresAt: orderForm.expiresAt || undefined,
+                });
               }}
             >
               Rezerve Et
@@ -239,14 +450,14 @@ export function ReservationsPage() {
               <p className="mt-1 text-xs text-slate-400">{formatQty(orderResult.totalReservedQuantity)} miktar rezerve edildi.</p>
               <div className="mt-3 space-y-2">
                 {orderResult.lines.map((line) => {
-                  const status = STATUS_MAP[line.status];
+                  const lineStatus = STATUS_MAP[line.status];
                   return (
                     <div key={line.productId} className="flex items-center justify-between gap-3 rounded-md bg-slate-950 px-3 py-2">
                       <div className="min-w-0">
                         <p className="truncate text-xs font-medium text-white">{line.productCode} - {line.productName}</p>
                         <p className="text-[11px] text-slate-500">İstenen {formatQty(line.requestedQuantity)} · Rezerve {formatQty(line.reservedQuantity)}</p>
                       </div>
-                      <Badge variant={status.variant}>{status.label}</Badge>
+                      <Badge variant={lineStatus.variant}>{lineStatus.label}</Badge>
                     </div>
                   );
                 })}
@@ -258,12 +469,12 @@ export function ReservationsPage() {
 
       <Modal
         isOpen={createOpen}
-        onClose={() => setCreateOpen(false)}
+        onClose={closeCreate}
         title="Yeni Rezervasyon"
         size="md"
         footer={(
           <>
-            <Button variant="ghost" size="sm" onClick={() => setCreateOpen(false)}>İptal</Button>
+            <Button variant="ghost" size="sm" onClick={closeCreate}>İptal</Button>
             <Button
               size="sm"
               loading={createRes.isPending}
@@ -278,7 +489,7 @@ export function ReservationsPage() {
                   notes: form.notes || undefined,
                   expiresAt: form.expiresAt || undefined,
                   allowPartial: form.allowPartial,
-                }, { onSuccess: () => setCreateOpen(false) });
+                }, { onSuccess: closeCreate });
               }}
             >
               Oluştur
@@ -293,7 +504,7 @@ export function ReservationsPage() {
           <Select
             label="Kaynak Tipi"
             required
-            options={Object.entries(REF_MAP).map(([k, v]) => ({ value: k, label: v }))}
+            options={Object.entries(REF_MAP).map(([value, label]) => ({ value, label }))}
             value={form.refType}
             onChange={(e) => setForm((p) => ({ ...p, refType: e.target.value as ReservationRefType }))}
           />

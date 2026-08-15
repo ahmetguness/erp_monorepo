@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
-  ArrowLeft,
+  ArrowRight,
   Barcode,
   Boxes,
   ClipboardList,
@@ -19,10 +20,8 @@ import {
   TrendingUp,
   Warehouse,
 } from "lucide-react";
-import { PageHeader } from "@/components/shared/PageHeader";
 import { EntityImage } from "@/components/shared/EntityImage";
 import { EntityImageManager } from "@/components/shared/EntityImageManager";
-import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { EntityActionPanel } from "@/components/shared/EntityActionPanel";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
@@ -41,26 +40,14 @@ interface Props {
   id: string;
 }
 
-interface SummaryMetricProps {
-  label: string;
-  value: string;
-  hint?: string;
-  icon: React.ReactNode;
-  tone?: "default" | "success" | "warning" | "danger" | "info";
-}
+type Tone = "default" | "success" | "warning" | "danger" | "info";
 
-interface InfoRowProps {
-  label: string;
-  value: React.ReactNode;
-  highlight?: boolean;
-}
-
-const TONE_CLASSES: Record<NonNullable<SummaryMetricProps["tone"]>, string> = {
-  default: "border-slate-800 bg-slate-900 text-slate-300",
-  success: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-  warning: "border-amber-500/20 bg-amber-500/10 text-amber-300",
-  danger: "border-red-500/20 bg-red-500/10 text-red-300",
-  info: "border-sky-500/20 bg-sky-500/10 text-sky-300",
+const TONE_TEXT: Record<Tone, string> = {
+  default: "text-slate-100",
+  success: "text-emerald-300",
+  warning: "text-amber-300",
+  danger: "text-red-300",
+  info: "text-sky-300",
 };
 
 function addDays(days: number): string {
@@ -86,51 +73,82 @@ function getMarginVariant(margin: number | null): BadgeVariant {
   return "success";
 }
 
-function getStockTone(totalStock: number, minStock: number): {
+function getStockState(totalStock: number, minStock: number): {
   label: string;
   variant: BadgeVariant;
-  tone: SummaryMetricProps["tone"];
+  tone: Tone;
 } {
   if (minStock <= 0) return { label: "Minimum tanımsız", variant: "neutral", tone: "default" };
-  if (totalStock <= 0) return { label: "Stok yok", variant: "danger", tone: "danger" };
-  if (totalStock < minStock) return { label: "Minimum altında", variant: "warning", tone: "warning" };
+  if (totalStock <= 0) return { label: "Stokta yok", variant: "danger", tone: "danger" };
+  if (totalStock < minStock) return { label: "Kritik stok", variant: "danger", tone: "danger" };
+  if (totalStock <= minStock * 1.2) return { label: "Düşük stok", variant: "warning", tone: "warning" };
   return { label: "Sağlıklı", variant: "success", tone: "success" };
 }
 
-function InfoRow({ label, value, highlight = false }: InfoRowProps) {
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   const empty = value === null || value === undefined || value === "";
   return (
-    <div className={cn("rounded-lg border px-3 py-2.5", highlight ? "border-sky-500/20 bg-sky-500/10" : "border-slate-800 bg-slate-950/35")}>
-      <p className="text-[11px] font-medium text-slate-500">{label}</p>
-      <div className="mt-1 text-sm font-medium text-slate-200">{empty ? <span className="text-slate-600">Eksik</span> : value}</div>
+    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 border-b border-slate-800/65 py-2.5 last:border-b-0">
+      <p className="text-xs text-slate-500">{label}</p>
+      <div className="min-w-0 text-sm font-medium text-slate-200">{empty ? <span className="text-slate-600">Eksik</span> : value}</div>
     </div>
   );
 }
 
-function SummaryMetric({ label, value, hint, icon, tone = "default" }: SummaryMetricProps) {
+function Section({ title, description, icon, action, children }: { title: string; description?: string; icon: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className={cn("rounded-xl border p-4", TONE_CLASSES[tone])}>
-      <div className="flex items-start gap-3">
-        <div className="rounded-lg bg-slate-950/50 p-2">{icon}</div>
-        <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase text-slate-500">{label}</p>
-          <p className="mt-1 truncate text-lg font-semibold text-slate-100">{value}</p>
-          {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+    <section className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/35">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-800/70 px-4 py-3">
+        <div className="flex items-start gap-2">
+          <span className="mt-0.5 text-slate-500">{icon}</span>
+          <div>
+            <h2 className="text-sm font-semibold text-white">{title}</h2>
+            {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
+          </div>
         </div>
+        {action}
       </div>
-    </div>
+      <div className="p-4">{children}</div>
+    </section>
   );
 }
 
-function Card({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+function StockRow({ row, min, unitCode, onOpen }: { row: StockLevel; min: number; unitCode?: string; onOpen: () => void }) {
+  const quantity = Number(row.quantity);
+  const diff = quantity - min;
+  const ratio = min > 0 ? Math.min(1, Math.max(0, quantity / min)) : 1;
+  const isOut = quantity <= 0;
+  const isCritical = min > 0 && quantity < min;
+  const isLow = min > 0 && quantity >= min && quantity <= min * 1.2;
+  const tone = isOut || isCritical ? "danger" : isLow ? "warning" : "success";
+
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <span className="rounded-lg bg-slate-950/70 p-2 text-slate-400">{icon}</span>
-        <h2 className="text-sm font-semibold text-white">{title}</h2>
-      </div>
-      {children}
-    </section>
+    <tr
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => { if (event.key === "Enter") onOpen(); }}
+      className="group cursor-pointer border-b border-slate-800/45 transition-colors duration-150 last:border-b-0 hover:bg-sky-500/[0.04] focus-visible:bg-sky-500/[0.06] focus-visible:outline-none"
+    >
+      <td className="px-4 py-3.5">
+        <p className="font-medium text-slate-100">{row.warehouse?.name ?? "Depo bilgisi yok"}</p>
+        <p className="font-mono text-xs text-slate-500">{row.warehouse?.code ?? row.warehouseId}</p>
+      </td>
+      <td className="px-4 py-3.5 text-right">
+        <p className={cn("font-semibold tabular-nums", TONE_TEXT[tone])}>{formatQuantity(quantity, unitCode)}</p>
+        <div className="ml-auto mt-1 h-1 w-14 overflow-hidden rounded-full bg-slate-800">
+          <div className={cn("h-full rounded-full", tone === "danger" ? "bg-red-400" : tone === "warning" ? "bg-amber-400" : "bg-emerald-400")} style={{ width: `${ratio * 100}%` }} />
+        </div>
+      </td>
+      <td className="px-4 py-3.5 text-right tabular-nums text-slate-500">{formatQuantity(min, unitCode)}</td>
+      <td className={cn("px-4 py-3.5 text-right font-semibold tabular-nums", diff < 0 ? "text-red-300" : "text-emerald-300")}>
+        {diff > 0 ? "+" : ""}{formatQuantity(diff, unitCode)}
+      </td>
+      <td className="px-4 py-3.5 text-slate-400">{formatDateTime(row.updatedAt)}</td>
+      <td className="px-4 py-3.5 text-center">
+        <Badge variant={isOut || isCritical ? "danger" : isLow ? "warning" : "success"}>{isOut ? "Stokta yok" : isCritical ? "Kritik" : isLow ? "Düşük" : "Normal"}</Badge>
+      </td>
+      <td className="w-10 px-4 py-3.5 text-right"><ArrowRight className="h-4 w-4 text-slate-600 opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100" /></td>
+    </tr>
   );
 }
 
@@ -140,9 +158,7 @@ export function ProductDetailPage({ id }: Props) {
   const deleteProduct = useDeleteProduct();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const { data: stockLevels = [], isLoading: loadingStock } = useStockLevels({
-    productId: id,
-  });
+  const { data: stockLevels = [], isLoading: loadingStock } = useStockLevels({ productId: id });
 
   const stockSummary = useMemo(() => {
     if (!product) return null;
@@ -150,8 +166,7 @@ export function ProductDetailPage({ id }: Props) {
     const min = Number(product.minStockLevel);
     const gap = Math.max(0, min - total);
     const coverage = min > 0 ? Math.min(100, (total / min) * 100) : 0;
-    const stockTone = getStockTone(total, min);
-    return { total, min, gap, coverage, ...stockTone };
+    return { total, min, gap, coverage, ...getStockState(total, min) };
   }, [product, stockLevels]);
 
   const margin = product ? getMargin(product) : null;
@@ -176,57 +191,7 @@ export function ProductDetailPage({ id }: Props) {
   if (!product || !stockSummary) return <div className="text-sm text-slate-400">Ürün bulunamadı.</div>;
 
   const unitCode = product.unit?.code;
-  const stockColumns: ColumnDef<StockLevel>[] = [
-    {
-      key: "warehouse",
-      header: "Depo",
-      render: (row) => (
-        <div>
-          <p className="font-medium text-slate-200">{row.warehouse?.name ?? "Depo bilgisi yok"}</p>
-          <p className="text-xs text-slate-500">{row.warehouse?.code ?? row.warehouseId}</p>
-        </div>
-      ),
-    },
-    {
-      key: "quantity",
-      header: "Miktar",
-      width: "140px",
-      align: "right",
-      render: (row) => {
-        const quantity = Number(row.quantity);
-        return <span className={cn("font-semibold tabular-nums", quantity < stockSummary.min ? "text-amber-300" : "text-slate-100")}>{formatQuantity(quantity, unitCode)}</span>;
-      },
-    },
-    {
-      key: "gap",
-      header: "Min. farka göre",
-      width: "150px",
-      align: "right",
-      render: (row) => {
-        const diff = Number(row.quantity) - stockSummary.min;
-        const isLow = stockSummary.min > 0 && diff < 0;
-        return <span className={cn("text-xs font-medium tabular-nums", isLow ? "text-amber-300" : "text-emerald-300")}>{isLow ? "-" : "+"}{formatQuantity(Math.abs(diff), unitCode)}</span>;
-      },
-    },
-    {
-      key: "updatedAt",
-      header: "Son güncelleme",
-      width: "155px",
-      render: (row) => <span className="text-xs text-slate-400">{formatDateTime(row.updatedAt)}</span>,
-    },
-    {
-      key: "status",
-      header: "Durum",
-      width: "130px",
-      render: (row) => {
-        const quantity = Number(row.quantity);
-        const low = stockSummary.min > 0 && quantity < stockSummary.min;
-        return <Badge variant={low ? "warning" : "success"}>{low ? "Takip gerekli" : "Yeterli"}</Badge>;
-      },
-    },
-  ];
-
-  const recommendedActions: RecommendedEntityAction[] = stockSummary.gap > 0
+  const purchaseDraft: RecommendedEntityAction[] = stockSummary.gap > 0
     ? [{
         id: `product-${id}-purchase-followup`,
         kind: "task",
@@ -254,159 +219,162 @@ export function ProductDetailPage({ id }: Props) {
     : [];
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={product.name}
-        subtitle={`${product.code} - ${product.category?.name ?? "Kategorisiz ürün"}`}
-        action={
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" leftIcon={<ArrowLeft className="h-4 w-4" />} onClick={() => router.push("/dashboard/products")}>Listeye dön</Button>
-            <Button variant="secondary" leftIcon={<FileClock className="h-4 w-4" />} onClick={() => router.push(`/dashboard/stock/movements?productId=${id}`)}>Hareketler</Button>
-            <Button variant="secondary" leftIcon={<Warehouse className="h-4 w-4" />} onClick={() => router.push(`/dashboard/stock/levels?productId=${id}`)}>Stok seviyeleri</Button>
-            <Button variant="secondary" leftIcon={<ShoppingCart className="h-4 w-4" />} onClick={() => router.push(`/dashboard/purchase-orders/requests?productId=${id}`)}>Talep oluştur</Button>
-            <Button variant="secondary" leftIcon={<Pencil className="h-4 w-4" />} onClick={() => router.push(`/dashboard/products/${id}/edit`)}>Düzenle</Button>
-            <Button variant="danger" leftIcon={<Trash2 className="h-4 w-4" />} onClick={() => setDeleteOpen(true)}>Sil</Button>
-          </div>
-        }
-      />
+    <div className="space-y-5">
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        <Link href="/dashboard/products" className="transition-colors duration-150 hover:text-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40">Ürünler</Link>
+        <span>/</span>
+        <span className="truncate text-slate-300">{product.name}</span>
+      </div>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
-          <EntityImage entityType="PRODUCT" entityId={id} fallback="package" className="h-28 w-28 shrink-0 rounded-xl" />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-4 border-b border-slate-800/80 pb-5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex min-w-0 gap-4">
+          <EntityImage entityType="PRODUCT" entityId={id} fallback="package" className="h-20 w-20 shrink-0 rounded-xl border border-slate-800" />
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
               <ActiveBadge isActive={product.isActive} />
               <Badge variant={stockSummary.variant}>{stockSummary.label}</Badge>
               <Badge variant={marginVariant}>{margin === null ? "Marj yok" : `%${formatNumber(margin, 1)} marj`}</Badge>
               <Badge variant={product.category ? "info" : "warning"}>{product.category?.name ?? "Kategori eksik"}</Badge>
             </div>
-            <h1 className="mt-3 text-2xl font-semibold text-white">{product.name}</h1>
-            <p className="mt-1 text-sm text-slate-400">{product.description || "Ürün açıklaması henüz girilmemiş."}</p>
-          </div>
-          <div className="grid min-w-[260px] grid-cols-2 gap-2 text-sm">
-            <InfoRow label="Birim" value={product.unit ? `${product.unit.name} (${product.unit.code})` : null} />
-            <InfoRow label="KDV" value={product.taxRate ? `${product.taxRate.name} (%${formatNumber(product.taxRate.rate, 0)})` : null} />
-            <InfoRow label="Barkod" value={product.barcode} />
-            <InfoRow label="Ort. maliyet" value={formatCurrency(product.averageCost)} />
+            <h1 className="truncate text-xl font-semibold tracking-tight text-white">{product.name}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
+              <span className="font-mono">{product.code}</span>
+              {product.barcode && <span className="flex items-center gap-1.5"><Barcode className="h-3.5 w-3.5" />{product.barcode}</span>}
+              <span>{product.unit ? `${product.unit.name} (${product.unit.code})` : "Birim eksik"}</span>
+            </div>
+            {product.description && <p className="mt-2 max-w-3xl text-sm text-slate-400">{product.description}</p>}
           </div>
         </div>
-      </section>
+        <div className="flex flex-wrap gap-2 xl:justify-end">
+          <Button variant="secondary" leftIcon={<FileClock className="h-4 w-4" />} onClick={() => router.push(`/dashboard/stock/movements?productId=${id}`)}>Hareketler</Button>
+          <Button variant="secondary" leftIcon={<Warehouse className="h-4 w-4" />} onClick={() => router.push(`/dashboard/stock/levels?productId=${id}`)}>Stok</Button>
+          <Button variant="secondary" leftIcon={<ShoppingCart className="h-4 w-4" />} onClick={() => router.push(`/dashboard/purchase-orders/requests?productId=${id}`)}>Talep</Button>
+          <Button variant="secondary" leftIcon={<Pencil className="h-4 w-4" />} onClick={() => router.push(`/dashboard/products/${id}/edit`)}>Düzenle</Button>
+          <Button variant="danger" leftIcon={<Trash2 className="h-4 w-4" />} onClick={() => setDeleteOpen(true)}>Sil</Button>
+        </div>
+      </div>
+
+      <div className="grid rounded-xl border border-slate-800/80 bg-slate-950/35 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: "Toplam Stok", value: formatQuantity(stockSummary.total, unitCode), hint: `Min. ${formatQuantity(stockSummary.min, unitCode)}`, tone: stockSummary.tone },
+          { label: "Eksik Miktar", value: formatQuantity(stockSummary.gap, unitCode), hint: stockSummary.gap > 0 ? "Tamamlama gerekli" : "Tamamlama gerekmiyor", tone: stockSummary.gap > 0 ? "warning" : "success" },
+          { label: "Birim Kar", value: formatCurrency(profitPerUnit), hint: margin === null ? "Satış fiyatı yok" : `%${formatNumber(margin, 1)} brüt marj`, tone: profitPerUnit < 0 ? "danger" : profitPerUnit === 0 ? "warning" : "success" },
+          { label: "Satış Fiyatı", value: formatCurrency(product.salesPrice), hint: `Alış ${formatCurrency(product.purchasePrice)}`, tone: "info" },
+        ].map((metric) => (
+          <div key={metric.label} className="border-b border-slate-800/70 px-4 py-3 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
+            <p className={cn("text-base font-semibold tabular-nums", TONE_TEXT[metric.tone as Tone])}>{metric.value}</p>
+            <p className="mt-0.5 text-[11px] font-medium uppercase text-slate-500">{metric.label}</p>
+            <p className="mt-1 text-xs text-slate-500">{metric.hint}</p>
+          </div>
+        ))}
+      </div>
 
       {qualityFlags.length > 0 && (
-        <section className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+        <div className="rounded-xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
               <div>
-                <p className="text-sm font-semibold text-amber-100">Kontrol gerektiren alanlar</p>
-                <p className="mt-1 text-xs text-amber-100/70">Ürün kartını tamamlamak liste, stok ve satın alma akışlarında daha net karar aldırır.</p>
+                <p className="text-sm font-semibold text-white">Kontrol gerektiren alanlar</p>
+                <p className="mt-0.5 text-xs text-slate-500">Ürün kartındaki eksikler stok, satış ve satın alma kararlarını etkileyebilir.</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
               {qualityFlags.map((flag) => <Badge key={flag.label} variant={flag.variant}>{flag.label}</Badge>)}
             </div>
           </div>
-        </section>
+        </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryMetric label="Toplam stok" value={formatQuantity(stockSummary.total, unitCode)} hint={`Minimum: ${formatQuantity(stockSummary.min, unitCode)}`} icon={<Boxes className="h-4 w-4" />} tone={stockSummary.tone} />
-        <SummaryMetric label="Eksik miktar" value={formatQuantity(stockSummary.gap, unitCode)} hint={stockSummary.gap > 0 ? "Satın alma önerisi hazır" : "Tamamlama gerekmiyor"} icon={<PackageCheck className="h-4 w-4" />} tone={stockSummary.gap > 0 ? "warning" : "success"} />
-        <SummaryMetric label="Birim kar" value={formatCurrency(profitPerUnit)} hint={margin === null ? "Satış fiyatı yok" : `%${formatNumber(margin, 1)} brüt marj`} icon={<TrendingUp className="h-4 w-4" />} tone={profitPerUnit < 0 ? "danger" : profitPerUnit === 0 ? "warning" : "success"} />
-        <SummaryMetric label="Satış fiyatı" value={formatCurrency(product.salesPrice)} hint={`Alış: ${formatCurrency(product.purchasePrice)}`} icon={<ReceiptText className="h-4 w-4" />} tone="info" />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <main className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card title="Katalog Bilgisi" icon={<Tags className="h-4 w-4" />}>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <InfoRow label="Ürün kodu" value={product.code} highlight />
-                <InfoRow label="Kategori" value={product.category?.name} />
-                <InfoRow label="Birim" value={product.unit ? `${product.unit.name} (${product.unit.code})` : null} />
-                <InfoRow label="KDV oranı" value={product.taxRate ? `%${formatNumber(product.taxRate.rate, 0)}` : null} />
-                <InfoRow label="Barkod" value={product.barcode} />
-                <InfoRow label="Durum" value={<ActiveBadge isActive={product.isActive} />} />
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="space-y-5">
+          <Section title="Stok Seviyeleri" description="Depo bazında güncel miktar ve minimum stok karşılaştırması." icon={<Warehouse className="h-4 w-4" />} action={<Button size="sm" variant="outline" onClick={() => router.push(`/dashboard/stock/levels?productId=${id}`)}>Tümünü Aç</Button>}>
+            <div className="mb-4">
+              <div className="h-2 overflow-hidden rounded-full bg-slate-900">
+                <div className={cn("h-full rounded-full", stockSummary.gap > 0 ? "bg-amber-400" : "bg-emerald-400")} style={{ width: `${stockSummary.coverage}%` }} />
               </div>
-            </Card>
-
-            <Card title="Fiyat ve Maliyet" icon={<ReceiptText className="h-4 w-4" />}>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <InfoRow label="Alış fiyatı" value={formatCurrency(product.purchasePrice)} />
-                <InfoRow label="Satış fiyatı" value={formatCurrency(product.salesPrice)} highlight />
-                <InfoRow label="Ortalama maliyet" value={formatCurrency(product.averageCost)} />
-                <InfoRow label="Birim kar" value={formatCurrency(profitPerUnit)} />
+              <div className="mt-1 flex justify-between text-xs text-slate-500">
+                <span>{formatQuantity(stockSummary.total, unitCode)}</span>
+                <span>Min. {formatQuantity(stockSummary.min, unitCode)}</span>
               </div>
-            </Card>
+            </div>
+            <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[820px] text-sm">
+                  <thead className="bg-slate-900/95">
+                    <tr className="border-b border-slate-800/80">
+                      {["Depo", "Mevcut", "Min. Stok", "Fark", "Son Güncelleme", "Durum", ""].map((header, index) => (
+                        <th key={header || index} className={cn("px-4 py-3 text-left text-[11px] font-semibold uppercase text-slate-500", [1, 2, 3].includes(index) && "text-right", index === 5 && "text-center")}>{header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadingStock ? (
+                      Array.from({ length: 4 }).map((_, row) => (
+                        <tr key={row} className="border-b border-slate-800/45 last:border-0">
+                          {Array.from({ length: 7 }).map((__, col) => <td key={col} className="px-4 py-3.5"><div className="h-3.5 w-2/3 animate-pulse rounded bg-slate-800/75" /></td>)}
+                        </tr>
+                      ))
+                    ) : stockLevels.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-10 text-center">
+                          <p className="text-sm font-semibold text-slate-200">Stok kaydı yok</p>
+                          <p className="mt-1 text-sm text-slate-500">Bu ürün için depo bazlı stok seviyesi henüz oluşmamış.</p>
+                        </td>
+                      </tr>
+                    ) : stockLevels.map((row) => (
+                      <StockRow key={row.id} row={row} min={stockSummary.min} unitCode={unitCode} onOpen={() => router.push(`/dashboard/stock/levels?productId=${id}`)} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </Section>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            <Section title="Katalog Bilgisi" icon={<Tags className="h-4 w-4" />}>
+              <InfoRow label="Ürün kodu" value={<span className="font-mono text-sky-300">{product.code}</span>} />
+              <InfoRow label="Kategori" value={product.category?.name} />
+              <InfoRow label="Birim" value={product.unit ? `${product.unit.name} (${product.unit.code})` : null} />
+              <InfoRow label="KDV oranı" value={product.taxRate ? `%${formatNumber(product.taxRate.rate, 0)}` : null} />
+              <InfoRow label="Barkod" value={product.barcode} />
+              <InfoRow label="Durum" value={<ActiveBadge isActive={product.isActive} />} />
+            </Section>
+
+            <Section title="Fiyat ve Maliyet" icon={<ReceiptText className="h-4 w-4" />}>
+              <InfoRow label="Alış fiyatı" value={formatCurrency(product.purchasePrice)} />
+              <InfoRow label="Satış fiyatı" value={<span className="text-slate-100">{formatCurrency(product.salesPrice)}</span>} />
+              <InfoRow label="Ortalama maliyet" value={formatCurrency(product.averageCost)} />
+              <InfoRow label="Birim kar" value={<span className={cn(profitPerUnit < 0 ? "text-red-300" : "text-emerald-300")}>{formatCurrency(profitPerUnit)}</span>} />
+            </Section>
           </div>
 
-          <Card title="Stok Seviyeleri" icon={<Warehouse className="h-4 w-4" />}>
-            <div className="mb-4 grid gap-3 sm:grid-cols-3">
-              <InfoRow label="Toplam stok" value={formatQuantity(stockSummary.total, unitCode)} highlight />
-              <InfoRow label="Minimum stok" value={formatQuantity(stockSummary.min, unitCode)} />
-              <InfoRow label="Eksik miktar" value={formatQuantity(stockSummary.gap, unitCode)} />
-            </div>
-            <DataTable
-              columns={stockColumns}
-              data={stockLevels}
-              keyExtractor={(row) => row.id}
-              isLoading={loadingStock}
-              emptyTitle="Stok kaydı yok"
-              emptyDescription="Bu ürün için depo bazlı stok seviyesi henüz oluşmamış."
-              density="compact"
-            />
-          </Card>
-
-          <Card title="Ürün Görseli" icon={<ImageIcon className="h-4 w-4" />}>
-            <EntityImageManager
-              entityType="PRODUCT"
-              entityId={id}
-              label="Ürün görseli"
-              description="Katalog, satış ve stok ekranlarında kullanılacak ürün görselini yükleyin."
-            />
-          </Card>
+          <Section title="Ürün Görseli" description="Katalog, satış ve stok ekranlarında kullanılacak ürün görselini yönetin." icon={<ImageIcon className="h-4 w-4" />}>
+            <EntityImageManager entityType="PRODUCT" entityId={id} label="Ürün görseli" description="Katalog, satış ve stok ekranlarında kullanılacak ürün görselini yükleyin." />
+          </Section>
 
           <AttachmentPanel entityType="PRODUCT" entityId={id} />
         </main>
 
-        <aside className="space-y-6">
-          <Card title="Stok Sağlığı" icon={<PackageCheck className="h-4 w-4" />}>
-            <div className="space-y-3">
-              <div className="h-2 overflow-hidden rounded-full bg-slate-950">
-                <div className={cn("h-full rounded-full", stockSummary.gap > 0 ? "bg-amber-400" : "bg-emerald-400")} style={{ width: `${stockSummary.coverage}%` }} />
-              </div>
-              <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>{formatQuantity(stockSummary.total, unitCode)}</span>
-                <span>{formatQuantity(stockSummary.min, unitCode)}</span>
-              </div>
-              <Badge variant={stockSummary.variant}>{stockSummary.label}</Badge>
-            </div>
-          </Card>
+        <aside className="space-y-5">
+          <Section title="Operasyon Özeti" icon={<ClipboardList className="h-4 w-4" />}>
+            <InfoRow label="Stok durumu" value={<Badge variant={stockSummary.variant}>{stockSummary.label}</Badge>} />
+            <InfoRow label="Brüt marj" value={<Badge variant={marginVariant}>{margin === null ? "Hesaplanamadı" : `%${formatNumber(margin, 1)}`}</Badge>} />
+            <InfoRow label="Kart kalitesi" value={qualityFlags.length === 0 ? <Badge variant="success">Kart tamam</Badge> : `${qualityFlags.length} kontrol`} />
+          </Section>
 
-          <Card title="Marj Kontrolü" icon={<TrendingUp className="h-4 w-4" />}>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500">Brüt marj</span>
-                <Badge variant={marginVariant}>{margin === null ? "Hesaplanamadı" : `%${formatNumber(margin, 1)}`}</Badge>
-              </div>
-              <InfoRow label="Satış - alış farkı" value={formatCurrency(profitPerUnit)} highlight={profitPerUnit > 0} />
-              <InfoRow label="Ortalama maliyet farkı" value={formatCurrency(product.salesPrice - product.averageCost)} />
-            </div>
-          </Card>
-
-          <Card title="Kart Kalitesi" icon={<ClipboardList className="h-4 w-4" />}>
-            <div className="flex flex-wrap gap-2">
-              {qualityFlags.length === 0 ? <Badge variant="success">Kart tamam</Badge> : qualityFlags.map((flag) => <Badge key={flag.label} variant={flag.variant}>{flag.label}</Badge>)}
-            </div>
-          </Card>
-
-          <Card title="Hızlı Geçişler" icon={<Barcode className="h-4 w-4" />}>
+          <Section title="Hızlı Geçişler" icon={<Boxes className="h-4 w-4" />}>
             <div className="grid gap-2">
               <Button variant="outline" leftIcon={<Warehouse className="h-4 w-4" />} onClick={() => router.push(`/dashboard/stock/levels?productId=${id}`)}>Depo stoklarını aç</Button>
               <Button variant="outline" leftIcon={<FileClock className="h-4 w-4" />} onClick={() => router.push(`/dashboard/stock/movements?productId=${id}`)}>Stok hareketlerini aç</Button>
               <Button variant="outline" leftIcon={<ShoppingCart className="h-4 w-4" />} onClick={() => router.push(`/dashboard/purchase-orders/requests?productId=${id}`)}>Satın alma talebi aç</Button>
             </div>
-          </Card>
+          </Section>
+
+          <Section title="Marj Kontrolü" icon={<TrendingUp className="h-4 w-4" />}>
+            <InfoRow label="Satış - alış" value={formatCurrency(profitPerUnit)} />
+            <InfoRow label="Satış - ort. maliyet" value={formatCurrency(product.salesPrice - product.averageCost)} />
+          </Section>
 
           <EntityActionPanel
             entityType="PRODUCT"
@@ -414,7 +382,7 @@ export function ProductDetailPage({ id }: Props) {
             displayName={product.name}
             module="inventory"
             availableActions={["task", "note", "activity"]}
-            recommendedActions={recommendedActions}
+            recommendedActions={purchaseDraft}
           />
         </aside>
       </div>
@@ -422,11 +390,7 @@ export function ProductDetailPage({ id }: Props) {
       <ConfirmDialog
         isOpen={deleteOpen}
         onClose={() => setDeleteOpen(false)}
-        onConfirm={() =>
-          deleteProduct.mutate(id, {
-            onSuccess: () => router.push("/dashboard/products"),
-          })
-        }
+        onConfirm={() => deleteProduct.mutate(id, { onSuccess: () => router.push("/dashboard/products") })}
         title="Ürünü sil"
         confirmLabel="Sil"
         message={

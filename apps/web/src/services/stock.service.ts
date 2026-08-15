@@ -76,8 +76,8 @@ export const StockMovementSchema = z.object({
   notes: z.string().nullable(),
   createdAt: z.string(),
   product: z.object({ id: z.string(), code: z.string(), name: z.string() }).optional(),
-  fromWarehouse: z.object({ id: z.string(), name: z.string() }).optional(),
-  toWarehouse: z.object({ id: z.string(), name: z.string() }).optional(),
+  fromWarehouse: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+  toWarehouse: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
 });
 
 export const StockCountSchema = z.object({
