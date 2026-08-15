@@ -210,7 +210,7 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked =
           <div className="mt-0.5 space-y-0.5">
             {visibleChildren.map((child) => (
               <NavItemRow
-                key={child.href}
+                key={`${child.href}-${child.label}`}
                 item={child}
                 tenantPlan={tenantPlan}
                 tenantModules={tenantModules}
@@ -329,7 +329,7 @@ export function Sidebar() {
             )}
             <div className="space-y-0.5">
               {group.items.map((item) => (
-                <NavItemRow key={item.href} item={item} tenantPlan={tenantPlan} tenantModules={tenantModules} />
+                <NavItemRow key={`${item.href}-${item.label}`} item={item} tenantPlan={tenantPlan} tenantModules={tenantModules} />
               ))}
             </div>
           </div>
