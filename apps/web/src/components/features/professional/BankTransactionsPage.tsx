@@ -17,6 +17,7 @@ import {
   useBankTransactionMatchingWorkbench,
   useBankTransactionMatchSuggestions,
   useBulkApproveBankTransactionMatches,
+  useAutoProcessBankTransactionMatches,
   useCreateBankTransaction,
 } from "@/hooks/useBankTransactions";
 import { cn, formatDate, formatCurrency } from "@/lib/utils";
@@ -82,6 +83,7 @@ export function BankTransactionsPage() {
   const createTx = useCreateBankTransaction();
   const workbenchQuery = useBankTransactionMatchingWorkbench();
   const bulkApprove = useBulkApproveBankTransactionMatches();
+  const autoProcess = useAutoProcessBankTransactionMatches();
   const suggestionsQuery = useBankTransactionMatchSuggestions(selectedTransaction?.id);
   const approveMatch = useApproveBankTransactionMatch();
   const suggestions = suggestionsQuery.data?.suggestions ?? [];
@@ -372,6 +374,21 @@ export function BankTransactionsPage() {
                 }}
               >
                 {selectedReadyCount} hareketi toplu onayla
+              </Button>
+              <Button
+                className="w-full"
+                variant="outline"
+                leftIcon={<Sparkles className="h-4 w-4" />}
+                loading={autoProcess.isPending}
+                disabled={workbench.summary.readyForBulkApproval === 0}
+                onClick={() => {
+                  autoProcess.mutate({
+                    minConfidence: 95,
+                    limit: 50,
+                  }, { onSuccess: () => setSelectedQueueIds([]) });
+                }}
+              >
+                %95+ otomatik işle
               </Button>
             </div>
           </div>

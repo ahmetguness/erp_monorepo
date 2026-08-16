@@ -40,6 +40,11 @@ interface BulkApproveMatchesDTO {
   minConfidence?: number;
 }
 
+interface AutoProcessMatchesDTO {
+  minConfidence?: number;
+  limit?: number;
+}
+
 function readMatchTargetType(value: string): 'PAYMENT' | 'INVOICE' | 'CONTACT' {
   if (value === 'PAYMENT' || value === 'INVOICE' || value === 'CONTACT') return value;
   throw new ValidationError('Gecersiz eslestirme tipi.');
@@ -209,6 +214,23 @@ export const BankTransactionController = {
     const result = await matchingService.bulkApprove(tenantId, {
       transactionIds: body.transactionIds,
       minConfidence: body.minConfidence,
+    });
+    return c.json({ data: result });
+  },
+
+  async autoProcessMatches(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body: AutoProcessMatchesDTO = await c.req.json<AutoProcessMatchesDTO>().catch((): AutoProcessMatchesDTO => ({}));
+    if (body.minConfidence !== undefined && (typeof body.minConfidence !== 'number' || body.minConfidence < 0 || body.minConfidence > 100)) {
+      return c.json(new ValidationError('minConfidence 0-100 arasinda sayi olmalidir.').toJSON(), 400);
+    }
+    if (body.limit !== undefined && (typeof body.limit !== 'number' || body.limit < 1 || body.limit > 100)) {
+      return c.json(new ValidationError('limit 1-100 arasinda sayi olmalidir.').toJSON(), 400);
+    }
+
+    const result = await matchingService.autoProcess(tenantId, {
+      minConfidence: body.minConfidence,
+      limit: body.limit,
     });
     return c.json({ data: result });
   },

@@ -133,6 +133,41 @@ export const SalesOrderHistorySchema = z.object({
   createdById: z.string().nullable(),
 });
 
+export const SalesFulfillmentResultSchema = z.object({
+  orderId: z.string(),
+  orderNumber: z.string(),
+  orderStatus: z.enum(['DRAFT', 'CONFIRMED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED']),
+  warehouseId: z.string(),
+  reservation: z.object({
+    orderId: z.string(),
+    orderNumber: z.string(),
+    warehouseId: z.string(),
+    warehouseName: z.string(),
+    allowPartial: z.boolean(),
+    createdCount: z.coerce.number(),
+    totalReservedQuantity: z.coerce.number(),
+    lines: z.array(z.object({
+      productId: z.string(),
+      productCode: z.string(),
+      productName: z.string(),
+      requestedQuantity: z.coerce.number(),
+      alreadyReservedQuantity: z.coerce.number(),
+      reservedQuantity: z.coerce.number(),
+      availableBeforeReservation: z.coerce.number(),
+      status: z.enum(['FULL', 'PARTIAL', 'SKIPPED']),
+    })),
+  }).nullable(),
+  deliveryNoteId: z.string().nullable(),
+  deliveryNoteNumber: z.string().nullable(),
+  invoiceId: z.string().nullable(),
+  invoiceNumber: z.string().nullable(),
+  skipped: z.object({
+    reservation: z.string().nullable(),
+    deliveryDraft: z.string().nullable(),
+    invoiceDraft: z.string().nullable(),
+  }),
+});
+
 export const InvoiceHistorySchema = z.object({
   id: z.string(),
   tenantId: z.string(),
@@ -152,6 +187,7 @@ export type SalesQuote = z.infer<typeof SalesQuoteSchema>;
 export type SalesOrder = z.infer<typeof SalesOrderSchema>;
 export type Invoice = z.infer<typeof InvoiceSchema>;
 export type SalesOrderHistory = z.infer<typeof SalesOrderHistorySchema>;
+export type SalesFulfillmentResult = z.infer<typeof SalesFulfillmentResultSchema>;
 export type InvoiceHistory = z.infer<typeof InvoiceHistorySchema>;
 export type InvoiceType = Invoice['type'];
 export type InvoiceStatus = Invoice['status'];
@@ -186,6 +222,14 @@ export interface CreateSalesOrderDTO {
   dueDate?: string;
   notes?: string;
   items: OrderItemDTO[];
+}
+
+export interface FulfillSalesOrderDTO {
+  warehouseId?: string;
+  allowPartialReservation?: boolean;
+  createDeliveryDraft?: boolean;
+  createInvoiceDraft?: boolean;
+  reservationExpiresAt?: string;
 }
 
 export interface InvoiceLineDTO {
@@ -276,6 +320,11 @@ export async function updateSalesOrder(id: string, data: { dueDate?: string; not
 export async function cancelSalesOrder(id: string): Promise<SalesOrder> {
   const res = await apiClient.post(`/api/sales-orders/${id}/cancel`);
   return safeParse(SingleResponseSchema(SalesOrderSchema), res.data, 'cancelSalesOrder').data;
+}
+
+export async function fulfillSalesOrder(id: string, data: FulfillSalesOrderDTO = {}): Promise<SalesFulfillmentResult> {
+  const res = await apiClient.post(`/api/sales-orders/${id}/fulfill`, data);
+  return safeParse(SingleResponseSchema(SalesFulfillmentResultSchema), res.data, 'fulfillSalesOrder').data;
 }
 
 // ─────────────────────────────────────────────

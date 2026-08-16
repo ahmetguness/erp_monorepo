@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { SalesOrderController } from '../controllers/sales-order.controller';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
+import { validateBody } from '../middleware/validateBody';
+import { fulfillSalesOrderBodySchema } from '../schemas/request-body.schemas';
 import { MODULE_KEYS } from '../types/module.types';
 
 const salesOrderRoutes = new Hono();
@@ -18,6 +20,7 @@ salesOrderRoutes.get('/:id', requirePermission('invoicing', 'READ'), SalesOrderC
 salesOrderRoutes.get('/:id/history', requirePermission('invoicing', 'READ'), SalesOrderController.getOrderHistory);
 salesOrderRoutes.post('/', requirePermission('invoicing', 'CREATE'), SalesOrderController.createOrder);
 salesOrderRoutes.patch('/:id', requirePermission('invoicing', 'UPDATE'), SalesOrderController.updateOrder);
+salesOrderRoutes.post('/:id/fulfill', requirePermission('invoicing', 'UPDATE'), validateBody(fulfillSalesOrderBodySchema), SalesOrderController.fulfillOrder);
 salesOrderRoutes.post('/:id/cancel', requirePermission('invoicing', 'UPDATE'), SalesOrderController.cancelOrder);
 
 export { salesOrderRoutes };

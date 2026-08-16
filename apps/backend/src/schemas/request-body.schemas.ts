@@ -50,6 +50,14 @@ export const updateInvoiceBodySchema = z.object({
   status: z.nativeEnum(InvoiceStatus).optional(),
 }).strict();
 
+export const fulfillSalesOrderBodySchema = z.object({
+  warehouseId: optionalString,
+  allowPartialReservation: z.boolean().optional(),
+  createDeliveryDraft: z.boolean().optional(),
+  createInvoiceDraft: z.boolean().optional(),
+  reservationExpiresAt: optionalString,
+}).strict();
+
 export const createPaymentBodySchema = z.object({
   contactId: optionalString,
   bankAccountId: optionalString,
@@ -142,6 +150,7 @@ export const productQuickImportBodySchema = z.object({
 
 export type CreateInvoiceBody = z.infer<typeof createInvoiceBodySchema>;
 export type UpdateInvoiceBody = z.infer<typeof updateInvoiceBodySchema>;
+export type FulfillSalesOrderBody = z.infer<typeof fulfillSalesOrderBodySchema>;
 export type CreatePaymentBody = z.infer<typeof createPaymentBodySchema>;
 export type CreateStockMovementBody = z.infer<typeof createStockMovementBodySchema>;
 export type CreateStockCountBody = z.infer<typeof createStockCountBodySchema>;

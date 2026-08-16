@@ -8,6 +8,8 @@ const purchaseOrderRoutes = new Hono();
 
 purchaseOrderRoutes.use('*', requireAccess(ACCESS_POLICIES.purchasing));
 
+purchaseOrderRoutes.post('/automation/reorder', requirePermission('purchasing', 'CREATE'), PurchaseOrderController.runReorderAutomation);
+
 purchaseOrderRoutes.get('/requests', requirePermission('purchasing', 'READ'), PurchaseOrderController.listRequests);
 purchaseOrderRoutes.post('/requests', requirePermission('purchasing', 'CREATE'), PurchaseOrderController.createRequest);
 purchaseOrderRoutes.post('/requests/:id/approve', requirePermission('purchasing', 'UPDATE'), PurchaseOrderController.approveRequest);

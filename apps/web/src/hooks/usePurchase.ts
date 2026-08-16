@@ -6,7 +6,7 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   getPurchaseRequests, createPurchaseRequest, approvePurchaseRequest, convertRequestToOrder,
   getPurchaseOrders, getPurchaseOrderById, getPurchaseOrderHistory, createPurchaseOrder,
-  sendPurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder,
+  sendPurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder, runPurchaseReorderAutomation,
   type ListParams, type CreatePurchaseRequestDTO, type CreatePurchaseOrderDTO, type ReceiveOrderDTO,
 } from '@/services/purchase.service';
 
@@ -58,6 +58,31 @@ export function useConvertRequestToOrder() {
 }
 
 // ── Purchase Orders ──────────────────────────
+
+export function useRunPurchaseReorderAutomation() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: runPurchaseReorderAutomation,
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['purchase', 'requests'] });
+      qc.invalidateQueries({ queryKey: ['stock'] });
+
+      if (result.createdRequest) {
+        toast.success(`${result.createdRequest.number} otomatik oluşturuldu.`);
+        return;
+      }
+
+      if (result.existingRequest) {
+        toast.info(`${result.existingRequest.number} zaten açık. Yeni talep oluşturulmadı.`);
+        return;
+      }
+
+      toast.info(result.skippedReason ?? 'Satın alma otomasyonu tamamlandı.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
 
 export function usePurchaseOrders(params: ListParams) {
   return useQuery({ queryKey: KEYS.orders(params), queryFn: () => getPurchaseOrders(params) });

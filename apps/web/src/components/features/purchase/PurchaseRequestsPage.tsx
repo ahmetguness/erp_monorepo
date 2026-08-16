@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   AlertTriangle, ArrowRight, CheckCircle, ClipboardCheck, ClipboardList, Eye, FileDown,
-  FilterX, Package, Plus, Save, Search, ShoppingCart, Trash2, TrendingDown, X,
+  FilterX, Package, Plus, RefreshCw, Save, Search, ShoppingCart, Trash2, TrendingDown, X,
 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { compareSupplierQuotes, type QuoteComparisonResult, type SupplierQuoteDraft } from '@/components/features/purchase/purchase-quote-comparison';
-import { useApprovePurchaseRequest, useConvertRequestToOrder, useCreatePurchaseRequest, usePurchaseRequests } from '@/hooks/usePurchase';
+import { useApprovePurchaseRequest, useConvertRequestToOrder, useCreatePurchaseRequest, usePurchaseRequests, useRunPurchaseReorderAutomation } from '@/hooks/usePurchase';
 import { useProducts } from '@/hooks/useProducts';
 import { cn, formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import type { PurchaseRequest, PurchaseRequestStatus } from '@/services/purchase.service';
@@ -219,6 +219,7 @@ export function PurchaseRequestsPage() {
   const createReq = useCreatePurchaseRequest();
   const approveReq = useApprovePurchaseRequest();
   const convertReq = useConvertRequestToOrder();
+  const reorderAutomation = useRunPurchaseReorderAutomation();
   const { data: productsData } = useProducts({ page: 1, limit: 200 });
   const products = productsData?.data ?? [];
   const requests = useMemo(() => data?.data ?? [], [data?.data]);
@@ -314,7 +315,14 @@ export function PurchaseRequestsPage() {
       <PageHeader
         title="Satın Alma Talepleri"
         subtitle="Talep, onay, teklif karşılaştırma ve siparişe dönüşüm akışını yönetin."
-        action={<Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Yeni talep</Button>}
+        action={(
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" leftIcon={<RefreshCw className="h-4 w-4" />} loading={reorderAutomation.isPending} onClick={() => reorderAutomation.mutate()}>
+              Stoktan talep oluştur
+            </Button>
+            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Yeni talep</Button>
+          </div>
+        )}
       />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">

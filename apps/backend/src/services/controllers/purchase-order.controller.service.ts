@@ -6,6 +6,7 @@ import { generateDocumentNumber } from '../../utils/generate-number.js';
 import { requireTenantId, requireParam } from '../../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../../utils/audit.js';
 import { resolveStockLevelLocationId, recordInventoryCosting } from '../inventory-rules.service';
+import { PurchaseAutomationService } from '../purchase-automation.service.js';
 import { PurchaseTraceService } from '../purchase-trace.service.js';
 
 // ---------------------------------------------
@@ -237,6 +238,18 @@ export const PurchaseOrderController = {
     });
 
     return c.json({ data: order }, 201);
+  },
+
+  async runReorderAutomation(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = c.get('user')?.id ?? 'system';
+
+    const result = await prisma.$transaction(async (tx) => {
+      const automation = new PurchaseAutomationService(tx);
+      return automation.runReorderAutomation(tenantId, userId);
+    });
+
+    return c.json({ data: result }, result.createdRequest ? 201 : 200);
   },
 
   // -- Purchase Orders --------------------------

@@ -88,6 +88,22 @@ export const BulkApproveBankTransactionMatchesResultSchema = z.object({
   })),
 });
 
+export const AutoProcessBankTransactionMatchesResultSchema = z.object({
+  scanned: z.coerce.number(),
+  processed: z.coerce.number(),
+  paymentsCreated: z.coerce.number(),
+  approvedExistingPayments: z.coerce.number(),
+  skipped: z.coerce.number(),
+  items: z.array(z.object({
+    transactionId: z.string(),
+    action: z.enum(['PAYMENT_CREATED', 'PAYMENT_APPROVED', 'SKIPPED']),
+    refType: z.enum(['PAYMENT', 'INVOICE', 'CONTACT']).nullable(),
+    refId: z.string().nullable(),
+    confidenceScore: z.coerce.number().nullable(),
+    reason: z.string().nullable(),
+  })),
+});
+
 export type BankTransaction = z.infer<typeof BankTransactionSchema>;
 export type BankTransactionType = BankTransaction['type'];
 export type BankTransactionMatchTargetType = z.infer<typeof BankTransactionMatchSuggestionSchema>['refType'];
@@ -96,6 +112,7 @@ export type BankTransactionMatchSuggestions = z.infer<typeof BankTransactionMatc
 export type BankTransactionMatchingWorkbench = z.infer<typeof BankTransactionMatchingWorkbenchSchema>;
 export type BankTransactionUnmatchedQueueItem = z.infer<typeof BankTransactionUnmatchedQueueItemSchema>;
 export type BulkApproveBankTransactionMatchesResult = z.infer<typeof BulkApproveBankTransactionMatchesResultSchema>;
+export type AutoProcessBankTransactionMatchesResult = z.infer<typeof AutoProcessBankTransactionMatchesResultSchema>;
 
 export interface CreateBankTransactionDTO {
   bankAccountId: string; type: BankTransactionType;
@@ -136,6 +153,14 @@ export async function bulkApproveBankTransactionMatches(
 ): Promise<BulkApproveBankTransactionMatchesResult> {
   const res = await apiClient.post('/api/bank-transactions/bulk-approve-matches', { transactionIds, minConfidence });
   return safeParse(SingleResponseSchema(BulkApproveBankTransactionMatchesResultSchema), res.data, 'bulkApproveBankTransactionMatches').data;
+}
+
+export async function autoProcessBankTransactionMatches(
+  minConfidence = 95,
+  limit = 50,
+): Promise<AutoProcessBankTransactionMatchesResult> {
+  const res = await apiClient.post('/api/bank-transactions/auto-process-matches', { minConfidence, limit });
+  return safeParse(SingleResponseSchema(AutoProcessBankTransactionMatchesResultSchema), res.data, 'autoProcessBankTransactionMatches').data;
 }
 
 export async function approveBankTransactionMatch(

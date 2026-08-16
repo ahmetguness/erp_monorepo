@@ -6,9 +6,12 @@ import { generateDocumentNumber } from '../../utils/generate-number.js';
 import { requireTenantId, requireParam } from '../../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../../utils/audit.js';
 import { createEventContext, domainEvents } from '../../domain-events';
+import { getValidatedBody } from '../../middleware/validateBody.js';
+import { fulfillSalesOrderBodySchema } from '../../schemas/request-body.schemas.js';
 import { BusinessRulesService } from '../business-rules.service.js';
 import { releaseInventoryReservations } from '../inventory-rules.service.js';
 import { assertSalesOrderStatusTransition } from '../financial/status-transition.service.js';
+import { SalesFulfillmentService } from '../sales-fulfillment.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -59,6 +62,7 @@ interface OrderListQuery {
 }
 
 const businessRulesService = new BusinessRulesService(prisma);
+const salesFulfillmentService = new SalesFulfillmentService(prisma);
 
 function parseQuoteStatus(value: string | undefined): QuoteStatus | undefined {
   switch (value) {
@@ -455,6 +459,29 @@ export const SalesOrderController = {
     }
 
     return c.json({ data: updated });
+  },
+
+  async fulfillOrder(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const orderId = requireParam(c, 'id');
+    const body = getValidatedBody(c, fulfillSalesOrderBodySchema);
+
+    if (!userId) {
+      return c.json(new ValidationError('Kullanici kimligi bulunamadi.').toJSON(), 403);
+    }
+
+    const result = await salesFulfillmentService.fulfill(tenantId, {
+      orderId,
+      userId,
+      warehouseId: body.warehouseId,
+      allowPartialReservation: body.allowPartialReservation,
+      createDeliveryDraft: body.createDeliveryDraft,
+      createInvoiceDraft: body.createInvoiceDraft,
+      reservationExpiresAt: body.reservationExpiresAt,
+    });
+
+    return c.json({ data: result });
   },
 
   async cancelOrder(c: Context): Promise<Response> {

@@ -5,10 +5,10 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getSalesQuotes, getSalesQuoteById, createSalesQuote, convertQuoteToOrder,
-  getSalesOrders, getSalesOrderById, getSalesOrderHistory, createSalesOrder, updateSalesOrder, cancelSalesOrder,
+  getSalesOrders, getSalesOrderById, getSalesOrderHistory, createSalesOrder, updateSalesOrder, cancelSalesOrder, fulfillSalesOrder,
   getInvoices, getInvoiceById, getInvoiceHistory, createInvoice, updateInvoice, cancelInvoice, recomputeInvoiceStatuses,
   type ListParams, type CreateSalesQuoteDTO, type CreateSalesOrderDTO,
-  type CreateInvoiceDTO, type OrderStatus, type InvoiceStatus,
+  type CreateInvoiceDTO, type FulfillSalesOrderDTO, type OrderStatus, type InvoiceStatus,
 } from '@/services/sales.service';
 
 const QUOTE_KEYS = {
@@ -126,6 +126,26 @@ export function useCancelSalesOrder(id: string) {
 }
 
 // ── Invoices ─────────────────────────────────
+
+export function useFulfillSalesOrder(id: string) {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (data: FulfillSalesOrderDTO = {}) => fulfillSalesOrder(id, data),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ORDER_KEYS.all });
+      qc.invalidateQueries({ queryKey: ORDER_KEYS.detail(id) });
+      qc.invalidateQueries({ queryKey: INVOICE_KEYS.all });
+      const createdParts = [
+        result.reservation ? `${result.reservation.createdCount} rezervasyon` : null,
+        result.deliveryNoteNumber ? `irsaliye ${result.deliveryNoteNumber}` : null,
+        result.invoiceNumber ? `fatura ${result.invoiceNumber}` : null,
+      ].filter((part): part is string => Boolean(part));
+      toast.success(createdParts.length > 0 ? `Satış akışı hazırlandı: ${createdParts.join(', ')}.` : 'Satış akışı zaten hazır.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
 
 export function useInvoices(params: ListParams) {
   return useQuery({ queryKey: INVOICE_KEYS.list(params), queryFn: () => getInvoices(params) });

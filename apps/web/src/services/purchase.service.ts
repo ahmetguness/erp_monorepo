@@ -119,6 +119,35 @@ export const PurchaseOrderWithTraceSchema = PurchaseOrderSchema.extend({
   trace: PurchaseTraceSchema.optional(),
 });
 
+export const PurchaseReorderAutomationResultSchema = z.object({
+  generatedAt: z.string(),
+  suggestionCount: z.coerce.number(),
+  suggestions: z.array(z.object({
+    productId: z.string(),
+    productCode: z.string(),
+    productName: z.string(),
+    warehouseId: z.string(),
+    warehouseName: z.string(),
+    available: z.coerce.number(),
+    minStockLevel: z.coerce.number(),
+    suggestedQuantity: z.coerce.number(),
+    estimatedCost: z.coerce.number(),
+  })),
+  createdRequest: z.object({
+    id: z.string(),
+    number: z.string(),
+    status: PurchaseRequestSchema.shape.status,
+    itemCount: z.coerce.number(),
+  }).nullable(),
+  existingRequest: z.object({
+    id: z.string(),
+    number: z.string(),
+    status: PurchaseRequestSchema.shape.status,
+    itemCount: z.coerce.number(),
+  }).nullable(),
+  skippedReason: z.string().nullable(),
+});
+
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
@@ -129,6 +158,7 @@ export type PurchaseTrace = z.infer<typeof PurchaseTraceSchema>;
 export type PurchaseTraceStage = z.infer<typeof PurchaseTraceStageSchema>;
 export type PurchaseOrderItem = z.infer<typeof PurchaseOrderItemSchema>;
 export type PurchaseOrderHistory = z.infer<typeof PurchaseOrderHistorySchema>;
+export type PurchaseReorderAutomationResult = z.infer<typeof PurchaseReorderAutomationResultSchema>;
 export type PurchaseRequestStatus = PurchaseRequest['status'];
 export type PurchaseOrderStatus = PurchaseOrder['status'];
 
@@ -187,6 +217,11 @@ export async function convertRequestToOrder(
 ): Promise<PurchaseOrder> {
   const res = await apiClient.post(`/api/purchase-orders/requests/${id}/convert`, { contactId, items });
   return safeParse(SingleResponseSchema(PurchaseOrderSchema), res.data, 'convertRequestToOrder').data;
+}
+
+export async function runPurchaseReorderAutomation(): Promise<PurchaseReorderAutomationResult> {
+  const res = await apiClient.post('/api/purchase-orders/automation/reorder');
+  return safeParse(SingleResponseSchema(PurchaseReorderAutomationResultSchema), res.data, 'runPurchaseReorderAutomation').data;
 }
 
 // ─────────────────────────────────────────────

@@ -1,11 +1,16 @@
 import {
   BankTransactionRefType,
+  BankTransactionType,
   InvoiceStatus,
+  InvoiceType,
+  PaymentMethod,
   PaymentStatus,
+  type BankTransaction,
   type Prisma,
   type PrismaClient,
 } from '@prisma/client';
 import { NotFoundError, ValidationError } from '../errors';
+import { createPayment } from './payment.service.js';
 
 export type BankTransactionMatchTargetType = 'PAYMENT' | 'INVOICE' | 'CONTACT';
 export type BankTransactionMatchStrength = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -92,6 +97,27 @@ export interface BulkApproveBankTransactionMatchesResult {
   }>;
 }
 
+export interface AutoProcessBankTransactionMatchesInput {
+  minConfidence?: number;
+  limit?: number;
+}
+
+export interface AutoProcessBankTransactionMatchesResult {
+  scanned: number;
+  processed: number;
+  paymentsCreated: number;
+  approvedExistingPayments: number;
+  skipped: number;
+  items: Array<{
+    transactionId: string;
+    action: 'PAYMENT_CREATED' | 'PAYMENT_APPROVED' | 'SKIPPED';
+    refType: BankTransactionMatchTargetType | null;
+    refId: string | null;
+    confidenceScore: number | null;
+    reason: string | null;
+  }>;
+}
+
 interface ScoreInput {
   amountScore: number;
   dateScore: number;
@@ -123,10 +149,11 @@ function numberAmount(value: Prisma.Decimal | number | null | undefined): number
 
 function amountScore(transactionAmount: number, candidateAmount: number | null): number {
   if (candidateAmount === null) return 0;
-  const diff = Math.abs(transactionAmount - candidateAmount);
+  const normalizedTransactionAmount = Math.abs(transactionAmount);
+  const diff = Math.abs(normalizedTransactionAmount - candidateAmount);
   if (diff <= 0.01) return 42;
-  if (diff <= Math.max(1, transactionAmount * 0.01)) return 30;
-  if (diff <= Math.max(5, transactionAmount * 0.05)) return 16;
+  if (diff <= Math.max(1, normalizedTransactionAmount * 0.01)) return 30;
+  if (diff <= Math.max(5, normalizedTransactionAmount * 0.05)) return 16;
   return 0;
 }
 
@@ -212,6 +239,7 @@ const MATCHING_RULES: BankTransactionMatchingRule[] = [
 ];
 
 const DEFAULT_BULK_APPROVAL_MIN_CONFIDENCE = 75;
+const DEFAULT_AUTO_PROCESS_MIN_CONFIDENCE = 95;
 
 export class BankTransactionMatchingService {
   constructor(private readonly db: PrismaClient) {}
@@ -222,7 +250,7 @@ export class BankTransactionMatchingService {
     });
     if (!transaction) throw new NotFoundError('Banka hareketi', transactionId);
 
-    const amount = Number(transaction.amount);
+    const amount = Math.abs(Number(transaction.amount));
     const description = `${transaction.description ?? ''} ${transaction.reference ?? ''}`;
     const dateRange = dateWindow(transaction.date, 10);
     const alreadyMatched = await this.db.bankTransaction.findMany({
@@ -489,6 +517,126 @@ export class BankTransactionMatchingService {
     };
   }
 
+  async autoProcess(
+    tenantId: string,
+    input: AutoProcessBankTransactionMatchesInput = {},
+  ): Promise<AutoProcessBankTransactionMatchesResult> {
+    const minConfidence = input.minConfidence ?? DEFAULT_AUTO_PROCESS_MIN_CONFIDENCE;
+    if (minConfidence < 0 || minConfidence > 100) throw new ValidationError('minConfidence 0-100 arasinda olmalidir.');
+
+    const limit = Math.min(100, Math.max(1, input.limit ?? 50));
+    const transactions = await this.db.bankTransaction.findMany({
+      where: {
+        tenantId,
+        OR: [{ refType: null }, { refId: null }],
+      },
+      orderBy: { date: 'desc' },
+      take: limit,
+    });
+
+    const items: AutoProcessBankTransactionMatchesResult['items'] = [];
+    let paymentsCreated = 0;
+    let approvedExistingPayments = 0;
+
+    for (const transaction of transactions) {
+      const suggestions = await this.suggest(tenantId, transaction.id);
+      const bestSuggestion = suggestions.suggestions[0] ?? null;
+      if (!bestSuggestion) {
+        items.push({
+          transactionId: transaction.id,
+          action: 'SKIPPED',
+          refType: null,
+          refId: null,
+          confidenceScore: null,
+          reason: 'Guvenilir aday bulunamadi.',
+        });
+        continue;
+      }
+
+      if (bestSuggestion.strength !== 'HIGH' || bestSuggestion.confidenceScore < minConfidence) {
+        items.push({
+          transactionId: transaction.id,
+          action: 'SKIPPED',
+          refType: bestSuggestion.refType,
+          refId: bestSuggestion.refId,
+          confidenceScore: bestSuggestion.confidenceScore,
+          reason: 'Guven skoru otomatik isleme esiginin altinda.',
+        });
+        continue;
+      }
+
+      if (bestSuggestion.refType === 'PAYMENT') {
+        try {
+          await this.approve(tenantId, transaction.id, { refType: 'PAYMENT', refId: bestSuggestion.refId });
+          approvedExistingPayments += 1;
+          items.push({
+            transactionId: transaction.id,
+            action: 'PAYMENT_APPROVED',
+            refType: 'PAYMENT',
+            refId: bestSuggestion.refId,
+            confidenceScore: bestSuggestion.confidenceScore,
+            reason: null,
+          });
+        } catch (error) {
+          items.push({
+            transactionId: transaction.id,
+            action: 'SKIPPED',
+            refType: 'PAYMENT',
+            refId: bestSuggestion.refId,
+            confidenceScore: bestSuggestion.confidenceScore,
+            reason: error instanceof Error ? error.message : 'Odeme eslestirme onayi basarisiz oldu.',
+          });
+        }
+        continue;
+      }
+
+      if (bestSuggestion.refType === 'INVOICE') {
+        try {
+          const paymentId = await this.createPaymentFromInvoiceMatch(tenantId, transaction, bestSuggestion.refId);
+          await this.approve(tenantId, transaction.id, { refType: 'PAYMENT', refId: paymentId });
+          paymentsCreated += 1;
+          items.push({
+            transactionId: transaction.id,
+            action: 'PAYMENT_CREATED',
+            refType: 'PAYMENT',
+            refId: paymentId,
+            confidenceScore: bestSuggestion.confidenceScore,
+            reason: null,
+          });
+        } catch (error) {
+          items.push({
+            transactionId: transaction.id,
+            action: 'SKIPPED',
+            refType: 'INVOICE',
+            refId: bestSuggestion.refId,
+            confidenceScore: bestSuggestion.confidenceScore,
+            reason: error instanceof Error ? error.message : 'Faturadan otomatik odeme olusturulamadi.',
+          });
+        }
+        continue;
+      }
+
+      items.push({
+        transactionId: transaction.id,
+        action: 'SKIPPED',
+        refType: bestSuggestion.refType,
+        refId: bestSuggestion.refId,
+        confidenceScore: bestSuggestion.confidenceScore,
+        reason: 'Cari eslesmesi otomatik odeme olusturmak icin yeterli degil.',
+      });
+    }
+
+    const processed = paymentsCreated + approvedExistingPayments;
+    return {
+      scanned: transactions.length,
+      processed,
+      paymentsCreated,
+      approvedExistingPayments,
+      skipped: items.length - processed,
+      items,
+    };
+  }
+
   private toStoredRefType(refType: BankTransactionMatchTargetType): BankTransactionRefType {
     switch (refType) {
       case 'PAYMENT':
@@ -526,5 +674,44 @@ export class BankTransactionMatchingService {
       select: { id: true },
     });
     if (!contact) throw new NotFoundError('Cari', input.refId);
+  }
+
+  private async createPaymentFromInvoiceMatch(
+    tenantId: string,
+    transaction: BankTransaction,
+    invoiceId: string,
+  ): Promise<string> {
+    const invoice = await this.db.invoice.findFirst({
+      where: { id: invoiceId, tenantId, deletedAt: null },
+      select: { id: true, number: true, contactId: true, type: true, totalGross: true },
+    });
+    if (!invoice) throw new NotFoundError('Fatura', invoiceId);
+
+    const direction = invoice.type === InvoiceType.SALES || invoice.type === InvoiceType.RETURN_PURCHASE ? 'RECEIVE' : 'SEND';
+    if (direction === 'RECEIVE' && transaction.type !== BankTransactionType.DEPOSIT) {
+      throw new ValidationError('Tahsilat faturasi sadece banka girisi ile otomatik odemeye donusturulur.');
+    }
+    if (direction === 'SEND' && transaction.type !== BankTransactionType.WITHDRAWAL) {
+      throw new ValidationError('Tediye faturasi sadece banka cikisi ile otomatik odemeye donusturulur.');
+    }
+
+    const amount = Math.min(Math.abs(Number(transaction.amount)), Number(invoice.totalGross));
+    const payment = await createPayment({
+      tenantId,
+      input: {
+        contactId: invoice.contactId,
+        bankAccountId: transaction.bankAccountId,
+        date: transaction.date.toISOString(),
+        amount,
+        method: PaymentMethod.BANK_TRANSFER,
+        direction,
+        reference: transaction.reference ?? invoice.number,
+        idempotencyKey: `bank:${transaction.id}:invoice:${invoice.id}`,
+        notes: `Banka hareketinden otomatik olusturuldu: ${transaction.description ?? transaction.reference ?? transaction.id}`,
+        allocations: [{ invoiceId: invoice.id, amount }],
+      },
+    });
+
+    return payment.id;
   }
 }

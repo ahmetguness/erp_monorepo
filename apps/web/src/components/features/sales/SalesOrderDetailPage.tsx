@@ -11,6 +11,7 @@ import {
   PackageCheck,
   Percent,
   Receipt,
+  Truck,
   XCircle,
 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -23,7 +24,7 @@ import { FullPageSpinner } from '@/components/ui/Spinner';
 import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 import { SalesConversionFlowCard } from '@/components/features/sales/SalesConversionFlowCard';
 import { DocumentPdfThemePanel } from '@/components/features/sales/DocumentPdfThemePanel';
-import { useSalesOrder, useCancelSalesOrder, useUpdateSalesOrder } from '@/hooks/useSales';
+import { useSalesOrder, useCancelSalesOrder, useFulfillSalesOrder, useUpdateSalesOrder } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 import type { SalesOrder } from '@/services/sales.service';
@@ -297,13 +298,30 @@ function CancelOrderMessage({ order, lineCount }: { order: SalesOrder; lineCount
   );
 }
 
+function FulfillOrderMessage({ order, lineCount }: { order: SalesOrder; lineCount: number }) {
+  return (
+    <div className="space-y-3">
+      <p>
+        <span className="font-semibold text-slate-100">{order.number}</span> için satış akışını otomatik hazırlayacaksınız.
+      </p>
+      <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-300">
+        <p>Varsayılan depo ile stok rezervasyonu yapılır.</p>
+        <p className="mt-1">İrsaliye ve fatura taslakları duplicate üretilmeden oluşturulur.</p>
+        <p className="mt-1">Kalem sayısı: {lineCount}</p>
+      </div>
+    </div>
+  );
+}
+
 export function SalesOrderDetailPage({ id }: Props) {
   const router = useRouter();
   const { data: order, isLoading } = useSalesOrder(id);
   const cancelOrder = useCancelSalesOrder(id);
   const updateOrder = useUpdateSalesOrder(id);
+  const fulfillOrder = useFulfillSalesOrder(id);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [fulfillOpen, setFulfillOpen] = useState(false);
   const actionPanelRef = useRef<HTMLDivElement>(null);
 
   if (isLoading) return <FullPageSpinner />;
@@ -328,6 +346,7 @@ export function SalesOrderDetailPage({ id }: Props) {
   }));
   const progress = invoiceProgress(order);
   const canCreateInvoice = order.status !== 'CANCELLED' && progress.remaining > 0;
+  const canFulfillOrder = order.status !== 'CANCELLED' && order.status !== 'DELIVERED';
   const invoiceHref = `/dashboard/invoices/new?salesOrderId=${order.id}`;
   const highDiscountLines = lineRows.filter((line) => line.discount >= 15);
   const recommendedActions: RecommendedEntityAction[] = order.status !== 'CANCELLED' && order.status !== 'DELIVERED' && progress.remaining > 0
@@ -424,6 +443,11 @@ export function SalesOrderDetailPage({ id }: Props) {
             {canCreateInvoice && (
               <Button variant="secondary" leftIcon={<Receipt className="h-4 w-4" />} onClick={() => router.push(invoiceHref)}>
                 Fatura Oluştur
+              </Button>
+            )}
+            {canFulfillOrder && (
+              <Button variant="secondary" leftIcon={<Truck className="h-4 w-4" />} onClick={() => setFulfillOpen(true)}>
+                Satış Akışını Başlat
               </Button>
             )}
             <Button variant="outline" leftIcon={<Mail className="h-4 w-4" />} onClick={() => actionPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
@@ -530,6 +554,21 @@ export function SalesOrderDetailPage({ id }: Props) {
         message={<CancelOrderMessage order={order} lineCount={lineRows.length} />}
         confirmLabel="İptal Et"
         isLoading={cancelOrder.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={fulfillOpen}
+        onClose={() => setFulfillOpen(false)}
+        onConfirm={() => fulfillOrder.mutate({
+          allowPartialReservation: false,
+          createDeliveryDraft: true,
+          createInvoiceDraft: true,
+        }, { onSuccess: () => setFulfillOpen(false) })}
+        title="Satış Akışını Başlat"
+        message={<FulfillOrderMessage order={order} lineCount={lineRows.length} />}
+        confirmLabel="Başlat"
+        isLoading={fulfillOrder.isPending}
+        variant="warning"
       />
     </div>
   );

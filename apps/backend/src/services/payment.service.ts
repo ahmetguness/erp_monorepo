@@ -369,10 +369,23 @@ export async function createPayment(options: {
         })),
       });
 
+      const fullyPaidInvoiceIds: string[] = [];
       for (const allocation of options.input.allocations) {
-        await recomputeInvoiceStatus(tx, options.tenantId, allocation.invoiceId, {
+        const invoice = await recomputeInvoiceStatus(tx, options.tenantId, allocation.invoiceId, {
           userId: options.userId,
           note: `Odeme tahsisati sonrasi otomatik durum hesaplandi: ${newPayment.id}`,
+        });
+        if (invoice?.status === 'PAID') fullyPaidInvoiceIds.push(allocation.invoiceId);
+      }
+
+      if (fullyPaidInvoiceIds.length > 0) {
+        await tx.collectionReminder.updateMany({
+          where: {
+            tenantId: options.tenantId,
+            invoiceId: { in: fullyPaidInvoiceIds },
+            status: { in: ['PENDING', 'SENT'] },
+          },
+          data: { status: 'CANCELLED' },
         });
       }
     }
