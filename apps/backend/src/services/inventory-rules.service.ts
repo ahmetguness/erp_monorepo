@@ -1,4 +1,4 @@
-import { CostingMethod, MovementType, Prisma, DeliveryNoteStatus } from '@prisma/client';
+import { CostingMethod, MovementType, Prisma, DeliveryNoteStatus, ReservationRefType } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
 import { ValidationError } from '../errors';
 import { generateDocumentNumber } from '../utils/generate-number.js';
@@ -306,6 +306,28 @@ export async function assertCanReserveStock(
     );
   }
   return position;
+}
+
+export async function releaseInventoryReservations(
+  db: InventoryDbClient,
+  tenantId: string,
+  input: {
+    refType: ReservationRefType;
+    refId: string;
+    releasedAt?: Date;
+  },
+): Promise<number> {
+  const result = await db.inventoryReservation.updateMany({
+    where: {
+      tenantId,
+      refType: input.refType,
+      refId: input.refId,
+      releasedAt: null,
+    },
+    data: { releasedAt: input.releasedAt ?? new Date() },
+  });
+
+  return result.count;
 }
 
 export function assertStockCountApproval(input: {
@@ -856,6 +878,13 @@ export async function processDeliveryNoteStock(
       quantityChange: qtyChange,
       resultingQuantity: previousQuantity + qtyChange,
       date: movement.createdAt,
+    });
+  }
+
+  if (note.salesOrderId && isOutbound) {
+    await releaseInventoryReservations(db, tenantId, {
+      refType: ReservationRefType.SALES_ORDER,
+      refId: note.salesOrderId,
     });
   }
 }

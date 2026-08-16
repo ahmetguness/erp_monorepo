@@ -37,6 +37,7 @@ import {
 } from "@/hooks/useAccounting";
 import { useContacts } from "@/hooks/useContacts";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { createClientIdempotencyKey } from "@/lib/idempotency";
 import type { Payment } from "@/services/accounting.service";
 
 const METHOD_LABELS: Record<string, string> = {
@@ -139,6 +140,7 @@ type PaymentForm = z.infer<typeof paymentSchema>;
 export function PaymentsListPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => createClientIdempotencyKey("web-payment-quick"));
   const { data, isLoading } = usePayments({ page, limit: 20 });
   const createPayment = useCreatePayment();
 
@@ -172,19 +174,22 @@ export function PaymentsListPage() {
 
   const closeModal = () => {
     setCreateOpen(false);
+    setIdempotencyKey(createClientIdempotencyKey("web-payment-quick"));
     reset({ method: "CASH", date: today, amount: "" });
   };
 
   const onSubmit = (formData: PaymentForm) => {
+    const amount = Number(formData.amount);
     createPayment.mutate(
       {
         contactId: formData.contactId || undefined,
         method: formData.method,
         date: formData.date,
-        amount: Number(formData.amount),
+        amount,
         bankAccountId: formData.bankAccountId || undefined,
         cashAccountId: formData.cashAccountId || undefined,
         reference: formData.reference || undefined,
+        idempotencyKey,
         notes: formData.notes || undefined,
       },
       { onSuccess: closeModal },

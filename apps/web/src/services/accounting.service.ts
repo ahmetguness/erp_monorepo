@@ -87,7 +87,8 @@ export const PaymentSchema = z.object({
   contactId: z.string().nullable(), bankAccountId: z.string().nullable(), cashAccountId: z.string().nullable(),
   date: z.string(), amount: z.coerce.number(),
   method: z.enum(['CASH', 'BANK_TRANSFER', 'CREDIT_CARD', 'CHECK', 'PROMISSORY_NOTE', 'OTHER']),
-  reference: z.string().nullable(), status: z.enum(['PENDING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED']),
+  reference: z.string().nullable(), idempotencyKey: z.string().nullable().optional(),
+  status: z.enum(['PENDING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED']),
   notes: z.string().nullable(), createdAt: z.string(), updatedAt: z.string(),
   contact: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
   bankAccount: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
@@ -131,6 +132,7 @@ export type UpdateCashAccountDTO = Partial<CreateCashAccountDTO> & { isActive?: 
 export interface CreatePaymentDTO {
   contactId?: string; bankAccountId?: string; cashAccountId?: string;
   date: string; amount: number; method: PaymentMethod; reference?: string; notes?: string;
+  idempotencyKey?: string;
   direction?: PaymentDirection;
   allocations?: Array<{ invoiceId: string; amount: number }>;
 }

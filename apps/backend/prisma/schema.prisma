@@ -2281,6 +2281,7 @@ model Payment {
   method        PaymentMethod @default(CASH)
   direction     String        @default("RECEIVE")
   reference     String?
+  idempotencyKey String?
   status        PaymentStatus @default(PENDING)
   notes         String?
   createdAt     DateTime      @default(now())
@@ -2298,6 +2299,7 @@ model Payment {
   @@index([tenantId, status])
   @@index([tenantId, date])
   @@index([tenantId, contactId])
+  @@unique([tenantId, idempotencyKey])
   @@map("payments")
 }
 

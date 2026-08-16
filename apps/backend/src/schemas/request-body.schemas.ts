@@ -59,6 +59,7 @@ export const createPaymentBodySchema = z.object({
   method: z.nativeEnum(PaymentMethod),
   direction: z.enum(['RECEIVE', 'SEND']).optional(),
   reference: optionalString,
+  idempotencyKey: optionalString,
   notes: optionalString,
   allocations: z.array(z.object({
     invoiceId: nonEmptyString,

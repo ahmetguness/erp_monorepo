@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { useCreatePayment } from "@/hooks/useAccounting";
 import { useInvoices } from "@/hooks/useSales";
+import { createClientIdempotencyKey } from "@/lib/idempotency";
 import {
   applyServerFieldErrors,
   isSubmitLocked,
@@ -142,6 +143,7 @@ const paymentFormSchema = z
   });
 
 type PaymentFormValues = z.infer<typeof paymentFormSchema>;
+
 const PAYMENT_FORM_SERVER_FIELDS = [
   "direction",
   "contactId",
@@ -179,6 +181,7 @@ export function PaymentFormPage() {
   const searchParams = useSearchParams();
   const createPayment = useCreatePayment();
   const didMount = useRef(false);
+  const [idempotencyKey] = useState(() => createClientIdempotencyKey("web-payment"));
 
   const initialDirection = getInitialDirection(searchParams.get("type"));
   const initialContactId = searchParams.get("contactId") ?? "";
@@ -298,6 +301,7 @@ export function PaymentFormPage() {
       amount: paymentAmount,
       method: values.method,
       reference: optionalText(values.reference),
+      idempotencyKey,
       notes: optionalText(values.notes),
       bankAccountId:
         values.accountType === "BANK" ? values.bankAccountId : undefined,

@@ -8,6 +8,7 @@ import {
   assertAccountingPeriodOpen,
   assertPaymentAllocationsWithinInvoiceBalance,
 } from './financial-integrity.service';
+import { recomputeInvoiceStatus } from './financial/invoice-status.service.js';
 
 export type PaymentDirection = 'RECEIVE' | 'SEND';
 
@@ -25,6 +26,7 @@ export interface CreatePaymentInput {
   method: PaymentMethod;
   direction?: PaymentDirection;
   reference?: string;
+  idempotencyKey?: string;
   notes?: string;
   allocations?: PaymentAllocationInput[];
 }
@@ -156,6 +158,7 @@ export function parseCreatePaymentInput(value: unknown): CreatePaymentInput {
     method: parsePaymentMethod(value.method),
     direction: parsePaymentDirection(value.direction),
     reference: readOptionalString(value, 'reference'),
+    idempotencyKey: readOptionalString(value, 'idempotencyKey'),
     notes: readOptionalString(value, 'notes'),
     allocations: parseAllocations(value.allocations),
   };
@@ -311,6 +314,27 @@ export async function createPayment(options: {
 
   const direction = options.input.direction ?? 'RECEIVE';
   const paymentDate = parsePaymentDate(options.input.date);
+  const idempotencyKey = options.input.idempotencyKey?.trim() || undefined;
+
+  if (idempotencyKey) {
+    const existing = await prisma.payment.findUnique({
+      where: {
+        tenantId_idempotencyKey: {
+          tenantId: options.tenantId,
+          idempotencyKey,
+        },
+      },
+      include: {
+        contact: { select: { id: true, name: true } },
+        bankAccount: { select: { id: true, name: true } },
+        cashAccount: { select: { id: true, name: true } },
+        allocations: {
+          include: { invoice: { select: { id: true, number: true, totalGross: true } } },
+        },
+      },
+    });
+    if (existing) return existing;
+  }
 
   await validatePaymentRelations(options.tenantId, options.input);
   await validatePaymentAllocations(options.tenantId, options.input, amount, direction);
@@ -329,6 +353,7 @@ export async function createPayment(options: {
         amount,
         method: options.input.method,
         reference: options.input.reference ?? null,
+        idempotencyKey: idempotencyKey ?? null,
         notes: options.input.notes ?? null,
         status: PaymentStatus.COMPLETED,
       },
@@ -343,6 +368,13 @@ export async function createPayment(options: {
           amount: allocation.amount,
         })),
       });
+
+      for (const allocation of options.input.allocations) {
+        await recomputeInvoiceStatus(tx, options.tenantId, allocation.invoiceId, {
+          userId: options.userId,
+          note: `Odeme tahsisati sonrasi otomatik durum hesaplandi: ${newPayment.id}`,
+        });
+      }
     }
 
     if (options.input.contactId) {

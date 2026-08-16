@@ -20,6 +20,7 @@ import {
   assertAccountingPeriodOpen,
   readRequiredReason,
 } from '../financial/index.js';
+import { assertInvoiceStatusTransition, isComputedInvoiceStatus } from '../financial/status-transition.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -413,6 +414,15 @@ export const InvoiceController = {
     }
 
     const body = getValidatedBody(c, updateInvoiceBodySchema);
+    if (body.status !== undefined) {
+      if (isComputedInvoiceStatus(body.status)) {
+        return c.json(
+          new ValidationError('PAID, PARTIALLY_PAID ve OVERDUE durumlari odeme/vade verisinden otomatik hesaplanir.').toJSON(),
+          400,
+        );
+      }
+      assertInvoiceStatusTransition(invoice.status, body.status);
+    }
 
     const updated = await prisma.invoice.update({
       where: { id: invoiceId },

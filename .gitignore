@@ -9,6 +9,7 @@ ci-artifacts
 apps/backend/ci-artifacts
 .github
 rapor.md
+rapor2.md
 a.txt
 backend-schema.dbml
 

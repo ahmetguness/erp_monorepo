@@ -347,7 +347,7 @@ export function InvoicesListPage() {
     module: 'invoicing',
     entityName: 'fatura',
     notify: toast.info,
-    include: ['export', 'mail', 'tag', 'status', 'task', 'archive'],
+    include: ['export', 'mail', 'tag', 'task', 'archive'],
   });
 
   return (

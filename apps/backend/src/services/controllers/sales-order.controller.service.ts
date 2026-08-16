@@ -1,12 +1,14 @@
 import { Context } from 'hono';
-import { OrderStatus, QuoteStatus, AuditAction, EntityType } from '@prisma/client';
+import { OrderStatus, QuoteStatus, AuditAction, EntityType, ReservationRefType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../errors';
 import { generateDocumentNumber } from '../../utils/generate-number.js';
-import { requireTenantId } from '../../utils/context.js';
+import { requireTenantId, requireParam } from '../../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../../utils/audit.js';
 import { createEventContext, domainEvents } from '../../domain-events';
 import { BusinessRulesService } from '../business-rules.service.js';
+import { releaseInventoryReservations } from '../inventory-rules.service.js';
+import { assertSalesOrderStatusTransition } from '../financial/status-transition.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -341,7 +343,7 @@ export const SalesOrderController = {
 
   async getOrderById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const orderId = c.req.param('id');
+    const orderId = requireParam(c, 'id');
 
     const order = await prisma.salesOrder.findFirst({
       where: { id: orderId, tenantId, deletedAt: null },
@@ -433,6 +435,9 @@ export const SalesOrderController = {
     }
 
     const body = await c.req.json<UpdateOrderDTO>();
+    if (body.status !== undefined) {
+      assertSalesOrderStatusTransition(order.status, body.status);
+    }
 
     const updated = await prisma.salesOrder.update({
       where: { id: orderId },
@@ -456,7 +461,7 @@ export const SalesOrderController = {
     const tenantId = requireTenantId(c);
     const userId = c.get('userId') as string | undefined;
     const { ipAddress, userAgent } = getRequestMeta(c);
-    const orderId = c.req.param('id');
+    const orderId = requireParam(c, 'id');
 
     const order = await prisma.salesOrder.findFirst({ where: { id: orderId, tenantId, deletedAt: null } });
     if (!order) return c.json(new NotFoundError('Sipariş', orderId).toJSON(), 404);
@@ -470,6 +475,11 @@ export const SalesOrderController = {
       data: { status: OrderStatus.CANCELLED },
     });
 
+    const releasedReservationCount = await releaseInventoryReservations(prisma, tenantId, {
+      refType: ReservationRefType.SALES_ORDER,
+      refId: orderId,
+    });
+
     await prisma.salesOrderHistory.create({
       data: { tenantId, orderId: orderId!, fromStatus: order.status, toStatus: OrderStatus.CANCELLED, notes: 'Sipariş iptal edildi' },
     });
@@ -479,7 +489,7 @@ export const SalesOrderController = {
       entityType: EntityType.SALES_ORDER, entityId: orderId!,
       action: AuditAction.UPDATE,
       oldValues: { status: order.status },
-      newValues: { status: OrderStatus.CANCELLED },
+      newValues: { status: OrderStatus.CANCELLED, releasedReservationCount },
       ipAddress, userAgent,
     });
 
