@@ -321,3 +321,13 @@ export async function finalizeStockCount(id: string, applyAdjustments: boolean) 
   const res = await apiClient.post(`/api/stock/counts/${id}/finalize`, { applyAdjustments });
   return res.data;
 }
+
+export const ReservationCleanupResultSchema = z.object({
+  releasedCount: z.coerce.number(),
+});
+export type ReservationCleanupResult = z.infer<typeof ReservationCleanupResultSchema>;
+
+export async function cleanupExpiredReservations(): Promise<ReservationCleanupResult> {
+  const res = await apiClient.post('/api/stock/reservations/cleanup-expired');
+  return safeParse(SingleResponseSchema(ReservationCleanupResultSchema), res.data, 'cleanupExpiredReservations').data;
+}

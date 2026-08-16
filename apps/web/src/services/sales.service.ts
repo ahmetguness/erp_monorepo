@@ -313,3 +313,14 @@ export async function cancelInvoice(id: string): Promise<Invoice> {
   const res = await apiClient.post(`/api/invoices/${id}/cancel`);
   return safeParse(SingleResponseSchema(InvoiceSchema), res.data, 'cancelInvoice').data;
 }
+
+export const InvoiceStatusRecomputeResultSchema = z.object({
+  scanned: z.coerce.number(),
+  changed: z.coerce.number(),
+});
+export type InvoiceStatusRecomputeResult = z.infer<typeof InvoiceStatusRecomputeResultSchema>;
+
+export async function recomputeInvoiceStatuses(): Promise<InvoiceStatusRecomputeResult> {
+  const res = await apiClient.post('/api/invoices/recompute-statuses');
+  return safeParse(SingleResponseSchema(InvoiceStatusRecomputeResultSchema), res.data, 'recomputeInvoiceStatuses').data;
+}

@@ -21,6 +21,7 @@ import {
   readRequiredReason,
 } from '../financial/index.js';
 import { assertInvoiceStatusTransition, isComputedInvoiceStatus } from '../financial/status-transition.service.js';
+import { scanAndRecomputeInvoiceStatuses } from '../financial/invoice-status.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -180,6 +181,13 @@ function addDays(baseDate: Date, days: number): Date {
 // ─────────────────────────────────────────────
 
 export const InvoiceController = {
+  async recomputeStatuses(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const result = await scanAndRecomputeInvoiceStatuses(prisma, tenantId, { userId });
+    return c.json({ data: result });
+  },
+
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 

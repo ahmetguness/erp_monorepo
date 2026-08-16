@@ -330,6 +330,23 @@ export async function releaseInventoryReservations(
   return result.count;
 }
 
+export async function releaseExpiredInventoryReservations(
+  db: InventoryDbClient,
+  tenantId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const result = await db.inventoryReservation.updateMany({
+    where: {
+      tenantId,
+      releasedAt: null,
+      expiresAt: { lt: now },
+    },
+    data: { releasedAt: now },
+  });
+
+  return result.count;
+}
+
 export function assertStockCountApproval(input: {
   rules: InventoryRules;
   hasDifference: boolean;

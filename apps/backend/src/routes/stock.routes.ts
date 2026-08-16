@@ -20,6 +20,7 @@ stockRoutes.get('/alerts', requirePermission('inventory', 'READ'), StockControll
 stockRoutes.get('/levels', requirePermission('inventory', 'READ'), StockController.listStockLevels);
 stockRoutes.get('/reorder-suggestions', requirePermission('inventory', 'READ'), StockController.listReorderSuggestions);
 stockRoutes.get('/advanced-suggestions', requireAccess(ACCESS_POLICIES.advancedStockSuggestions), requirePermission('inventory', 'READ'), StockController.listAdvancedSuggestions);
+stockRoutes.post('/reservations/cleanup-expired', requirePermission('inventory', 'UPDATE'), StockController.cleanupExpiredReservations);
 stockRoutes.get('/movements', requirePermission('inventory', 'READ'), StockController.listMovements);
 stockRoutes.post('/movements', requirePermission('inventory', 'CREATE'), validateBody(createStockMovementBodySchema), StockController.createManualMovement);
 stockRoutes.get('/counts', requirePermission('inventory', 'READ'), StockController.listStockCounts);

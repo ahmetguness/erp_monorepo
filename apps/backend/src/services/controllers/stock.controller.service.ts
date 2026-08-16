@@ -22,6 +22,7 @@ import {
   recordInventoryCosting,
   resolveStockLevelLocationId,
   convertReorderSuggestionsToPurchaseRequest,
+  releaseExpiredInventoryReservations,
 } from '../inventory-rules.service';
 import { StockAlertService } from '../stock-alert.service';
 
@@ -111,6 +112,12 @@ export const StockController = {
     const tenantId = requireTenantId(c);
     const suggestions = await getAdvancedStockSuggestions(prisma, tenantId);
     return c.json({ data: suggestions });
+  },
+
+  async cleanupExpiredReservations(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const releasedCount = await releaseExpiredInventoryReservations(prisma, tenantId);
+    return c.json({ data: { releasedCount } });
   },
 
   // ── Stock Movements ──────────────────────────

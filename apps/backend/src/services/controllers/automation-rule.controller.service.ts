@@ -35,6 +35,19 @@ async function readBody(c: Context): Promise<Record<string, unknown>> {
 }
 
 export const AutomationRuleController = {
+  async listExecutions(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const executions = await prisma.automationExecution.findMany({
+      where: { tenantId },
+      include: {
+        rule: { select: { id: true, name: true } },
+      },
+      orderBy: { startedAt: 'desc' },
+      take: 50,
+    });
+    return c.json({ data: executions });
+  },
+
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const rules = await prisma.automationRule.findMany({

@@ -9,9 +9,9 @@ import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { useWorkflowTasks } from '@/hooks/useWorkflow';
 import type { WorkflowTask } from '@/services/task.service';
-import type { AutomationRule } from '@/services/intelligence.service';
+import type { AutomationExecution, AutomationRule } from '@/services/intelligence.service';
 import {
-  useAutomationRules, useAutomationRuleTemplates, useCreateAutomationRule, useUpdateAutomationRule, useDeleteAutomationRule, useRunAutomationRule, useRunActiveAutomationRules
+  useAutomationExecutions, useAutomationRules, useAutomationRuleTemplates, useCreateAutomationRule, useUpdateAutomationRule, useDeleteAutomationRule, useRunAutomationRule, useRunActiveAutomationRules
 } from '@/hooks/useAutomation';
 import { AutomationRuleBuilder } from './AutomationRuleBuilder';
 
@@ -34,9 +34,26 @@ const PRIORITY_BADGE: Record<WorkflowTask['priority'], BadgeVariant> = {
   CRITICAL: 'danger',
 };
 
+const EXECUTION_BADGE: Record<AutomationExecution['status'], BadgeVariant> = {
+  RUNNING: 'info',
+  SUCCEEDED: 'success',
+  FAILED: 'danger',
+};
+
 function formatDate(value: string | null): string {
   if (!value) return '-';
   return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat('tr-TR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
 }
 
 function formatConfig(value: Record<string, string | number | boolean> | null): string {
@@ -83,6 +100,7 @@ export function WorkflowCenterPage() {
   const deleteRule = useDeleteAutomationRule();
   const runRule = useRunAutomationRule();
   const runAllActive = useRunActiveAutomationRules();
+  const { data: executions = [], isLoading: loadingExecutions } = useAutomationExecutions();
 
   return (
     <div className="space-y-6">
@@ -349,6 +367,41 @@ export function WorkflowCenterPage() {
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-slate-200">Son Otomasyon Çalışmaları</h3>
+            <div className="rounded-lg border border-slate-800 bg-slate-900/40 overflow-hidden">
+              {loadingExecutions ? (
+                <div className="p-6 text-sm text-slate-500">Çalışma geçmişi yükleniyor...</div>
+              ) : executions.length === 0 ? (
+                <div className="p-6 text-sm text-slate-500">Henüz otomasyon çalışması bulunmuyor.</div>
+              ) : (
+                <div className="divide-y divide-slate-800">
+                  {executions.map((execution) => (
+                    <div key={execution.id} className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[minmax(0,1fr)_130px_160px] md:items-center">
+                      <div className="min-w-0">
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                          <Badge variant={EXECUTION_BADGE[execution.status]}>{execution.status}</Badge>
+                          <Badge variant="neutral">{TRIGGER_LABELS[execution.trigger ?? ''] ?? execution.trigger ?? '-'}</Badge>
+                          <Badge variant="info">{ACTION_LABELS[execution.action ?? ''] ?? execution.action ?? '-'}</Badge>
+                        </div>
+                        <p className="truncate font-medium text-slate-200">{execution.rule?.name ?? 'Manuel / sistem çalışması'}</p>
+                        {execution.error && <p className="mt-1 truncate text-xs text-red-300">{execution.error}</p>}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        <p>Deneme: {execution.attempt}</p>
+                        <p>{execution.entityType ?? '-'}{execution.entityId ? ` / ${execution.entityId}` : ''}</p>
+                      </div>
+                      <div className="text-xs text-slate-500 md:text-right">
+                        <p>Başlangıç: {formatDateTime(execution.startedAt)}</p>
+                        <p>Bitiş: {formatDateTime(execution.completedAt)}</p>
                       </div>
                     </div>
                   ))}

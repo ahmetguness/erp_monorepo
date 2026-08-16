@@ -8,6 +8,7 @@ import {
   getLocations, createLocation, deleteLocation,
   getStockLevels, getStockReorderSuggestions, getAdvancedStockSuggestions, getStockAlerts, getStockMovements, createManualMovement,
   getStockCounts, getStockCountById, createStockCount, finalizeStockCount,
+  cleanupExpiredReservations,
   type StockLevelParams, type StockMovementParams, type CreateManualMovementDTO,
   type CreateStockCountDTO, type CreateWarehouseDTO, type CreateLocationDTO, type TransferStockDTO,
 } from '@/services/stock.service';
@@ -192,6 +193,19 @@ export function useFinalizeStockCount(id: string) {
       qc.invalidateQueries({ queryKey: STOCK_KEYS.count(id) });
       qc.invalidateQueries({ queryKey: ['stock'] });
       toast.success('Sayım tamamlandı.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useCleanupExpiredReservations() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: cleanupExpiredReservations,
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['stock'] });
+      toast.success(`${result.releasedCount} suresi dolmus rezervasyon birakildi.`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

@@ -301,6 +301,12 @@ enum AutomationAction {
   CREATE_PURCHASE_REQUEST_DRAFT
 }
 
+enum AutomationExecutionStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
 enum AccountType {
   ASSET
   LIABILITY
@@ -616,6 +622,7 @@ model Tenant {
   mailMessages           MailMessage[]
   tasks                  Task[]
   automationRules        AutomationRule[]
+  automationExecutions   AutomationExecution[]
   domainEventOutbox      DomainEventOutbox[]
   tenantSettings         TenantSetting[]
   moduleSettings         ModuleSetting[]
@@ -1149,12 +1156,39 @@ model AutomationRule {
   deletedAt    DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  executions AutomationExecution[]
 
   @@unique([tenantId, name])
   @@index([tenantId, isActive])
   @@index([tenantId, trigger])
   @@index([deletedAt])
   @@map("automation_rules")
+}
+
+model AutomationExecution {
+  id             String                    @id @default(cuid())
+  tenantId       String
+  ruleId         String?
+  trigger        AutomationTrigger?
+  action         AutomationAction?
+  entityType     EntityType?
+  entityId       String?
+  status         AutomationExecutionStatus @default(RUNNING)
+  input          Json?
+  output         Json?
+  error          String?
+  attempt        Int                       @default(1)
+  startedAt      DateTime                  @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime                  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rule   AutomationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status, startedAt])
+  @@index([tenantId, ruleId, startedAt])
+  @@index([tenantId, entityType, entityId])
+  @@map("automation_executions")
 }
 
 // ═════════════════════════════════════════════

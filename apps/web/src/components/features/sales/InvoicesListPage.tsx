@@ -10,6 +10,7 @@ import {
   Mail,
   Plus,
   Printer,
+  RefreshCw,
   Search,
   ShoppingCart,
   X,
@@ -28,7 +29,7 @@ import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { SalesConversionFlowCard } from '@/components/features/sales/SalesConversionFlowCard';
 import { useCurrentUser } from '@/hooks/useAuth';
 import { useBulkSelection } from '@/hooks/useBulkSelection';
-import { useInvoices } from '@/hooks/useSales';
+import { useInvoices, useRecomputeInvoiceStatuses } from '@/hooks/useSales';
 import { useUIStore } from '@/store/ui.store';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { createListSavedViewState, getSavedViewPageSize, getVisibleColumns, normalizeColumnKeys } from '@/lib/list-standard';
@@ -199,6 +200,7 @@ export function InvoicesListPage() {
   const router = useRouter();
   const { user } = useCurrentUser();
   const { toast } = useUIStore();
+  const recomputeStatuses = useRecomputeInvoiceStatuses();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [type, setType] = useState<InvoiceType | ''>('');
@@ -361,6 +363,14 @@ export function InvoicesListPage() {
               <ShoppingCart className="h-4 w-4" />
               Satış Siparişleri
             </Link>
+            <Button
+              variant="secondary"
+              leftIcon={<RefreshCw className="h-4 w-4" />}
+              loading={recomputeStatuses.isPending}
+              onClick={() => recomputeStatuses.mutate()}
+            >
+              Durumları Hesapla
+            </Button>
             <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => router.push('/dashboard/invoices/new')}>
               Hızlı Fatura
             </Button>

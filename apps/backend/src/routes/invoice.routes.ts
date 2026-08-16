@@ -11,6 +11,7 @@ const invoiceRoutes = new Hono();
 invoiceRoutes.use('*', requireModule(MODULE_KEYS.INVOICING));
 
 invoiceRoutes.get('/', requirePermission('invoicing', 'READ'), InvoiceController.list);
+invoiceRoutes.post('/recompute-statuses', requirePermission('invoicing', 'UPDATE'), InvoiceController.recomputeStatuses);
 invoiceRoutes.get('/:id', requirePermission('invoicing', 'READ'), InvoiceController.getById);
 invoiceRoutes.get('/:id/history', requirePermission('invoicing', 'READ'), InvoiceController.getHistory);
 invoiceRoutes.post('/', requirePermission('invoicing', 'CREATE'), validateBody(createInvoiceBodySchema), InvoiceController.create);

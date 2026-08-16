@@ -13,6 +13,7 @@ import {
 import { prisma } from '../lib/prisma';
 import { createTask } from './task.service.js';
 import { getStringField } from '../utils/json.js';
+import { AutomationExecutionService } from './automation-execution.service.js';
 
 interface AutomationRunResult {
   matched: number;
@@ -200,100 +201,134 @@ async function findMatches(rule: AutomationRule): Promise<AutomationMatch[]> {
 
 export const AutomationRuleService = {
   async runRule(rule: AutomationRule): Promise<AutomationRunResult> {
-    const matches = await findMatches(rule);
-    const assignedToId = getAssignedToId(rule);
-    const notificationUserIds = rule.action === AutomationAction.CREATE_NOTIFICATION
-      ? await getNotificationUserIds(rule.tenantId, assignedToId)
-      : [];
-    let tasksCreated = 0;
-    let notificationsCreated = 0;
-    let handledMatches = 0;
+    const executionService = new AutomationExecutionService(prisma);
+    const execution = await executionService.start({
+      tenantId: rule.tenantId,
+      ruleId: rule.id,
+      trigger: rule.trigger,
+      action: rule.action,
+      input: {
+        ruleId: rule.id,
+        trigger: rule.trigger,
+        action: rule.action,
+      },
+    });
 
-    for (const match of matches) {
-      if (
-        rule.action === AutomationAction.CREATE_TASK ||
-        rule.action === AutomationAction.DRAFT_REMINDER_EMAIL ||
-        rule.action === AutomationAction.REQUEST_APPROVAL ||
-        rule.action === AutomationAction.CREATE_PURCHASE_REQUEST_DRAFT
-      ) {
-        const source = `automation:${rule.id}:${match.sourceKey}`;
-        const existingTask = await prisma.task.findUnique({
-          where: { tenantId_source: { tenantId: rule.tenantId, source } },
-          select: { id: true },
-        });
-        await createTask(rule.tenantId, {
-          title: match.title,
-          detail: match.detail,
-          type: TaskType.AUTOMATION,
-          priority: match.priority,
-          module: match.module,
-          entityType: match.entityType,
-          entityId: match.entityId,
-          href: match.href,
-          source,
-          assignedToId,
-          dueAt: match.dueAt,
-        });
-        if (!existingTask) tasksCreated += 1;
-        handledMatches += 1;
-      } else if (rule.action === AutomationAction.CREATE_NOTIFICATION && notificationUserIds.length > 0) {
-        const existingNotifications = await prisma.notification.findMany({
-          where: {
-            tenantId: rule.tenantId,
-            userId: { in: notificationUserIds },
+    try {
+      const matches = await findMatches(rule);
+      const assignedToId = getAssignedToId(rule);
+      const notificationUserIds = rule.action === AutomationAction.CREATE_NOTIFICATION
+        ? await getNotificationUserIds(rule.tenantId, assignedToId)
+        : [];
+      let tasksCreated = 0;
+      let notificationsCreated = 0;
+      let handledMatches = 0;
+
+      for (const match of matches) {
+        if (
+          rule.action === AutomationAction.CREATE_TASK ||
+          rule.action === AutomationAction.DRAFT_REMINDER_EMAIL ||
+          rule.action === AutomationAction.REQUEST_APPROVAL ||
+          rule.action === AutomationAction.CREATE_PURCHASE_REQUEST_DRAFT
+        ) {
+          const source = `automation:${rule.id}:${match.sourceKey}`;
+          const existingTask = await prisma.task.findUnique({
+            where: { tenantId_source: { tenantId: rule.tenantId, source } },
+            select: { id: true },
+          });
+          await createTask(rule.tenantId, {
             title: match.title,
-            entityType: match.entityType,
-            entityId: match.entityId,
-            status: NotificationStatus.UNREAD,
-          },
-          select: { userId: true },
-        });
-        const existingUserIds = new Set(existingNotifications.map((notification) => notification.userId));
-        const newNotificationUserIds = notificationUserIds.filter((userId) => !existingUserIds.has(userId));
-
-        if (newNotificationUserIds.length === 0) {
-          handledMatches += 1;
-          continue;
-        }
-
-        await prisma.notification.createMany({
-          data: newNotificationUserIds.map((userId) => ({
-            tenantId: rule.tenantId,
-            userId,
-            title: match.title,
-            message: match.detail,
+            detail: match.detail,
+            type: TaskType.AUTOMATION,
+            priority: match.priority,
             module: match.module,
             entityType: match.entityType,
             entityId: match.entityId,
-            status: NotificationStatus.UNREAD,
-          })),
-        });
-        notificationsCreated += newNotificationUserIds.length;
-        handledMatches += 1;
+            href: match.href,
+            source,
+            assignedToId,
+            dueAt: match.dueAt,
+          });
+          if (!existingTask) tasksCreated += 1;
+          handledMatches += 1;
+        } else if (rule.action === AutomationAction.CREATE_NOTIFICATION && notificationUserIds.length > 0) {
+          const existingNotifications = await prisma.notification.findMany({
+            where: {
+              tenantId: rule.tenantId,
+              userId: { in: notificationUserIds },
+              title: match.title,
+              entityType: match.entityType,
+              entityId: match.entityId,
+              status: NotificationStatus.UNREAD,
+            },
+            select: { userId: true },
+          });
+          const existingUserIds = new Set(existingNotifications.map((notification) => notification.userId));
+          const newNotificationUserIds = notificationUserIds.filter((userId) => !existingUserIds.has(userId));
+
+          if (newNotificationUserIds.length === 0) {
+            handledMatches += 1;
+            continue;
+          }
+
+          await prisma.notification.createMany({
+            data: newNotificationUserIds.map((userId) => ({
+              tenantId: rule.tenantId,
+              userId,
+              title: match.title,
+              message: match.detail,
+              module: match.module,
+              entityType: match.entityType,
+              entityId: match.entityId,
+              status: NotificationStatus.UNREAD,
+            })),
+          });
+          notificationsCreated += newNotificationUserIds.length;
+          handledMatches += 1;
+        }
       }
-    }
 
-    const result: AutomationRunResult = {
-      matched: matches.length,
-      tasksCreated,
-      notificationsCreated,
-      skipped: matches.length - handledMatches,
-    };
+      const result: AutomationRunResult = {
+        matched: matches.length,
+        tasksCreated,
+        notificationsCreated,
+        skipped: matches.length - handledMatches,
+      };
 
-    await prisma.automationRule.updateMany({
-      where: { id: rule.id, tenantId: rule.tenantId },
-      data: {
-        lastRunAt: new Date(),
-        lastResult: {
+      await prisma.automationRule.updateMany({
+        where: { id: rule.id, tenantId: rule.tenantId },
+        data: {
+          lastRunAt: new Date(),
+          lastResult: {
+            matched: result.matched,
+            tasksCreated: result.tasksCreated,
+            notificationsCreated: result.notificationsCreated,
+            skipped: result.skipped,
+          },
+        },
+      });
+
+      await executionService.succeed({
+        tenantId: rule.tenantId,
+        executionId: execution.id,
+        output: {
           matched: result.matched,
           tasksCreated: result.tasksCreated,
           notificationsCreated: result.notificationsCreated,
           skipped: result.skipped,
         },
-      },
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Bilinmeyen otomasyon hatasi';
+      await executionService.fail({
+        tenantId: rule.tenantId,
+        executionId: execution.id,
+        error: message,
+      });
+      throw error;
+    }
   },
 
   async runActiveRules(tenantId: string): Promise<AutomationRunResult> {

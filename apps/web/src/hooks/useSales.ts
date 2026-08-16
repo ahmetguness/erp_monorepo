@@ -6,7 +6,7 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   getSalesQuotes, getSalesQuoteById, createSalesQuote, convertQuoteToOrder,
   getSalesOrders, getSalesOrderById, getSalesOrderHistory, createSalesOrder, updateSalesOrder, cancelSalesOrder,
-  getInvoices, getInvoiceById, getInvoiceHistory, createInvoice, updateInvoice, cancelInvoice,
+  getInvoices, getInvoiceById, getInvoiceHistory, createInvoice, updateInvoice, cancelInvoice, recomputeInvoiceStatuses,
   type ListParams, type CreateSalesQuoteDTO, type CreateSalesOrderDTO,
   type CreateInvoiceDTO, type OrderStatus, type InvoiceStatus,
 } from '@/services/sales.service';
@@ -158,6 +158,19 @@ export function useCancelInvoice(id: string) {
       qc.invalidateQueries({ queryKey: INVOICE_KEYS.all });
       qc.invalidateQueries({ queryKey: INVOICE_KEYS.detail(id) });
       toast.success('Fatura iptal edildi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useRecomputeInvoiceStatuses() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: recomputeInvoiceStatuses,
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: INVOICE_KEYS.all });
+      toast.success(`${result.scanned} fatura tarandi, ${result.changed} durum guncellendi.`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

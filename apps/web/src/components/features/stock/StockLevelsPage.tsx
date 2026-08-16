@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ChevronDown, ChevronRight, FilterX, Info, PackageCheck, Search } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, FilterX, Info, PackageCheck, RefreshCw, Search } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { WarehouseSelect } from '@/components/shared/EntitySelect';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { useAdvancedStockSuggestions, useStockAlerts, useStockLevels } from '@/hooks/useStock';
+import { useAdvancedStockSuggestions, useCleanupExpiredReservations, useStockAlerts, useStockLevels } from '@/hooks/useStock';
 import { cn, formatCurrency } from '@/lib/utils';
 import type { AdvancedStockSuggestion, StockLevel } from '@/services/stock.service';
 
@@ -120,6 +120,7 @@ export function StockLevelsPage() {
   const { data: levels = [], isLoading } = useStockLevels({ warehouseId: warehouseId || undefined });
   const { data: advancedSuggestions = [], isLoading: loadingSuggestions } = useAdvancedStockSuggestions();
   const { data: stockAlerts } = useStockAlerts(5);
+  const cleanupExpiredReservations = useCleanupExpiredReservations();
 
   const visibleSuggestions = useMemo(() => (
     warehouseId ? advancedSuggestions.filter((suggestion) => suggestion.warehouseId === warehouseId) : advancedSuggestions
@@ -162,6 +163,16 @@ export function StockLevelsPage() {
         title="Stok Seviyeleri"
         subtitle="Ürünlerin depo bazlı stok durumunu izleyin ve kritik seviyeleri yönetin."
         className="mb-0"
+        action={(
+          <Button
+            variant="secondary"
+            leftIcon={<RefreshCw className="h-4 w-4" />}
+            loading={cleanupExpiredReservations.isPending}
+            onClick={() => cleanupExpiredReservations.mutate()}
+          >
+            Rezervasyonları Temizle
+          </Button>
+        )}
       />
 
       {isLoading && levels.length === 0 ? <SummarySkeleton /> : (

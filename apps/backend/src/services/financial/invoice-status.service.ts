@@ -77,6 +77,44 @@ export async function recomputeInvoiceStatus(
   return updated;
 }
 
+export interface InvoiceStatusScanResult {
+  scanned: number;
+  changed: number;
+}
+
+export async function scanAndRecomputeInvoiceStatuses(
+  db: FinancialDbClient,
+  tenantId: string,
+  options: { userId?: string | null; asOf?: Date; limit?: number } = {},
+): Promise<InvoiceStatusScanResult> {
+  const invoices = await db.invoice.findMany({
+    where: {
+      tenantId,
+      deletedAt: null,
+      status: { in: [InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.OVERDUE] },
+    },
+    select: { id: true },
+    take: Math.min(Math.max(options.limit ?? 500, 1), 1000),
+    orderBy: { dueDate: 'asc' },
+  });
+
+  let changed = 0;
+  for (const invoice of invoices) {
+    const before = await db.invoice.findFirst({
+      where: { id: invoice.id, tenantId },
+      select: { status: true },
+    });
+    const after = await recomputeInvoiceStatus(db, tenantId, invoice.id, {
+      userId: options.userId,
+      asOf: options.asOf,
+      note: 'Planli fatura durum taramasi ile otomatik hesaplandi.',
+    });
+    if (before && after && before.status !== after.status) changed += 1;
+  }
+
+  return { scanned: invoices.length, changed };
+}
+
 function startOfDay(value: Date): Date {
   const date = new Date(value);
   date.setHours(0, 0, 0, 0);

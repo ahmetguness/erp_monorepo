@@ -322,6 +322,31 @@ export const AutomationRunResultSchema = z.object({
 });
 export type AutomationRunResult = z.infer<typeof AutomationRunResultSchema>;
 
+export const AutomationExecutionSchema = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  ruleId: z.string().nullable(),
+  trigger: AutomationRuleTriggerSchema.nullable(),
+  action: AutomationRuleActionSchema.nullable(),
+  entityType: z.string().nullable(),
+  entityId: z.string().nullable(),
+  status: z.enum(['RUNNING', 'SUCCEEDED', 'FAILED']),
+  input: z.unknown().nullable().optional(),
+  output: z.unknown().nullable().optional(),
+  error: z.string().nullable(),
+  attempt: z.coerce.number(),
+  startedAt: z.string(),
+  completedAt: z.string().nullable(),
+  createdAt: z.string(),
+  rule: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+});
+export type AutomationExecution = z.infer<typeof AutomationExecutionSchema>;
+
+export async function getAutomationExecutions(): Promise<AutomationExecution[]> {
+  const res = await apiClient.get('/api/automation-rules/executions');
+  return safeParse(SingleResponseSchema(z.array(AutomationExecutionSchema)), res.data, 'getAutomationExecutions').data;
+}
+
 export async function runAutomationRule(id: string): Promise<AutomationRunResult> {
   const res = await apiClient.post(`/api/automation-rules/${id}/run`);
   return safeParse(SingleResponseSchema(AutomationRunResultSchema), res.data, 'runAutomationRule').data;

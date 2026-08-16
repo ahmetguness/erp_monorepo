@@ -10,6 +10,7 @@ import {
   deleteAutomationRule,
   runAutomationRule,
   runActiveAutomationRules,
+  getAutomationExecutions,
   getAutomationRuleTemplates,
   type CreateAutomationRuleDTO,
 } from '@/services/intelligence.service';
@@ -17,6 +18,7 @@ import {
 export const AUTOMATION_KEYS = {
   all: ['automation-rules'] as const,
   templates: ['automation-rules', 'templates'] as const,
+  executions: ['automation-rules', 'executions'] as const,
 };
 
 export function useAutomationRules() {
@@ -30,6 +32,13 @@ export function useAutomationRuleTemplates() {
   return useQuery({
     queryKey: AUTOMATION_KEYS.templates,
     queryFn: getAutomationRuleTemplates,
+  });
+}
+
+export function useAutomationExecutions() {
+  return useQuery({
+    queryKey: AUTOMATION_KEYS.executions,
+    queryFn: getAutomationExecutions,
   });
 }
 
@@ -74,10 +83,12 @@ export function useDeleteAutomationRule() {
 }
 
 export function useRunAutomationRule() {
+  const qc = useQueryClient();
   const { toast } = useUIStore();
   return useMutation({
     mutationFn: (id: string) => runAutomationRule(id),
     onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.executions });
       const actionCount = result.tasksCreated + result.notificationsCreated;
       if (actionCount > 0) {
         toast.success(`Kural calistirildi. ${result.matched} eslesmeden ${actionCount} aksiyon olusturuldu.`);
@@ -90,10 +101,12 @@ export function useRunAutomationRule() {
 }
 
 export function useRunActiveAutomationRules() {
+  const qc = useQueryClient();
   const { toast } = useUIStore();
   return useMutation({
     mutationFn: () => runActiveAutomationRules(),
     onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.executions });
       const actionCount = result.tasksCreated + result.notificationsCreated;
       toast.success(`Aktif kurallar tetiklendi. ${result.matched} eslesmeden ${actionCount} aksiyon olusturuldu.`);
     },

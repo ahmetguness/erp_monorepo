@@ -9,6 +9,7 @@ const automationRuleRoutes = new Hono();
 automationRuleRoutes.use('*', requireAccess(ACCESS_POLICIES.workflowAutomation));
 
 automationRuleRoutes.get('/', requirePermission('settings', 'READ'), AutomationRuleController.list);
+automationRuleRoutes.get('/executions', requirePermission('settings', 'READ'), AutomationRuleController.listExecutions);
 automationRuleRoutes.post('/', requirePermission('settings', 'CREATE'), AutomationRuleController.create);
 automationRuleRoutes.post('/run-active', requirePermission('settings', 'UPDATE'), AutomationRuleController.runActive);
 automationRuleRoutes.patch('/:id', requirePermission('settings', 'UPDATE'), AutomationRuleController.update);
