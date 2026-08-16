@@ -1,4 +1,4 @@
-import { CheckCircle, ExternalLink, Pencil, RotateCcw } from "lucide-react";
+﻿import { CheckCircle, ExternalLink, Pencil, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/Badge";
@@ -52,7 +52,7 @@ export function createJournalEntryColumns(actions: JournalEntryColumnActions): C
       header: "Açıklama",
       render: (row) => (
         <span className="block max-w-[200px] truncate text-sm text-slate-300">
-          {row.description ?? "—"}
+          {row.description ?? "-"}
         </span>
       ),
     },
@@ -62,7 +62,7 @@ export function createJournalEntryColumns(actions: JournalEntryColumnActions): C
       width: "150px",
       render: (row) => {
         const source = getJournalEntrySourceInfo(row);
-        if (!source) return <span className="text-xs text-slate-600">Manuel fis</span>;
+        if (!source) return <span className="text-xs text-slate-600">Manuel fiş</span>;
         if (!source.href) return <span className="text-xs font-medium text-slate-400">{source.label}</span>;
 
         return (
@@ -86,7 +86,7 @@ export function createJournalEntryColumns(actions: JournalEntryColumnActions): C
         const total = row.lines?.reduce((sum, line) => sum + Number(line.debit), 0) ?? 0;
         return (
           <span className="text-sm font-medium tabular-nums text-emerald-400">
-            {total > 0 ? formatCurrency(total) : "—"}
+            {total > 0 ? formatCurrency(total) : "-"}
           </span>
         );
       },
@@ -100,7 +100,7 @@ export function createJournalEntryColumns(actions: JournalEntryColumnActions): C
         const total = row.lines?.reduce((sum, line) => sum + Number(line.credit), 0) ?? 0;
         return (
           <span className="text-sm font-medium tabular-nums text-red-400">
-            {total > 0 ? formatCurrency(total) : "—"}
+            {total > 0 ? formatCurrency(total) : "-"}
           </span>
         );
       },
@@ -162,7 +162,7 @@ export function createJournalEntryColumns(actions: JournalEntryColumnActions): C
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                const reason = window.prompt(`${row.number} ters kayit nedeni`);
+                const reason = window.prompt(`${row.number} ters kayıt nedeni`);
                 if (!reason?.trim()) {
                   actions.onReverseReasonMissing();
                   return;
@@ -172,7 +172,7 @@ export function createJournalEntryColumns(actions: JournalEntryColumnActions): C
               className="inline-flex items-center gap-1 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
             >
               <RotateCcw className="h-3 w-3" />
-              Ters Kayit
+              Ters kayıt
             </button>
           )}
         </div>
@@ -217,3 +217,4 @@ export function JournalEntryTable({
     />
   );
 }
+

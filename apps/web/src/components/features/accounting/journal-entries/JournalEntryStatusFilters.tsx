@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+﻿import { cn } from "@/lib/utils";
 import type { JournalEntry } from "@/services/accounting.service";
 import type { JournalEntryStatusFilter } from "./schema";
 
@@ -73,3 +73,4 @@ export function JournalEntryStatusFilters({
     </div>
   );
 }
+

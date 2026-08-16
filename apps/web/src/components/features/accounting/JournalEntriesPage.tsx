@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 "use no memo";
 
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -64,9 +64,9 @@ import {
   type JournalEntryStatusFilter,
 } from "./journal-entries/schema";
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Component
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function JournalEntriesPage() {
   const router = useRouter();
@@ -131,8 +131,8 @@ export function JournalEntriesPage() {
   const [editEntry, setEditEntry] = useState<JournalEntry | null>(null);
 
   const accountOptions = [
-    { value: "", label: "— Hesap seçin —" },
-    ...accounts.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` })),
+    { value: "", label: "- Hesap seçin -" },
+    ...accounts.map((a) => ({ value: a.id, label: `${a.code} - ${a.name}` })),
   ];
 
   const {
@@ -183,18 +183,31 @@ export function JournalEntriesPage() {
   };
 
   const [statusFilter, setStatusFilter] = useState<JournalEntryStatusFilter>("all");
-  const allEntries = data?.data ?? [];
+  const allEntries = useMemo(() => data?.data ?? [], [data?.data]);
   const filteredEntries = filterJournalEntries(allEntries, statusFilter);
+  const summary = useMemo(() => {
+    const debit = allEntries.reduce((sum, entry) => sum + (entry.lines?.reduce((lineSum, line) => lineSum + Number(line.debit), 0) ?? 0), 0);
+    const credit = allEntries.reduce((sum, entry) => sum + (entry.lines?.reduce((lineSum, line) => lineSum + Number(line.credit), 0) ?? 0), 0);
+
+    return {
+      total: data?.meta.total ?? allEntries.length,
+      visible: filteredEntries.length,
+      draft: allEntries.filter((entry) => !entry.isPosted).length,
+      posted: allEntries.filter((entry) => entry.isPosted).length,
+      debit,
+      credit,
+    };
+  }, [allEntries, data?.meta.total, filteredEntries.length]);
   const columns = createJournalEntryColumns({
     onEdit: setEditEntry,
     onPost: (id) => postEntry.mutate(id),
     onReverse: (id, reason) => reverseEntry.mutate({ id, reason }),
-    onReverseReasonMissing: () => toast.error("Ters kayit nedeni zorunludur."),
+    onReverseReasonMissing: () => toast.error("Ters kayıt nedeni zorunludur."),
   });
   return (
     <FeaturePageShell
-        title="Yevmiye Fişleri"
-        subtitle="Manuel muhasebe kayıtlarını yönetin."
+        title="Yevmiye fişleri"
+        subtitle="Manuel ve otomatik muhasebe kayıtlarını onay, ters kayıt ve kaynak belge durumuyla yönetin."
         action={
           <Link
             href="#"
@@ -210,39 +223,57 @@ export function JournalEntriesPage() {
             <span className="flex items-center justify-center w-5 h-5 rounded-md bg-white/15 group-hover:bg-white/20 transition-colors">
               <Plus className="w-3.5 h-3.5" />
             </span>
-            Yeni Fiş
+            Yeni fiş
           </Link>
         }
     >
 
-      <JournalEntryStatusFilters
-        entries={allEntries}
-        value={statusFilter}
-        onChange={setStatusFilter}
+      <SummaryStrip
+        metrics={[
+          { label: "Toplam Fiş", value: summary.total, tone: "text-slate-50" },
+          { label: "Gösterilen", value: summary.visible, tone: "text-sky-200" },
+          { label: "Taslak", value: summary.draft, tone: summary.draft > 0 ? "text-amber-300" : "text-slate-200" },
+          { label: "Onaylı", value: summary.posted, tone: "text-emerald-300" },
+          { label: "Borç", value: formatCurrency(summary.debit), tone: "text-emerald-300" },
+          { label: "Alacak", value: formatCurrency(summary.credit), tone: "text-red-300" },
+        ]}
       />
 
-      <div className="mb-4 rounded-xl border border-sky-500/15 bg-sky-500/[0.04] p-4">
+      <section className="rounded-xl border border-slate-800/80 bg-slate-950/40">
+        <div className="border-b border-slate-800/70 bg-slate-900/45 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Fiş listesi</h2>
+              <p className="mt-0.5 text-xs text-slate-500">Taslak, onaylı ve ters kayıt akışlarını tek tabloda takip edin.</p>
+            </div>
+            <JournalEntryStatusFilters entries={allEntries} value={statusFilter} onChange={setStatusFilter} />
+          </div>
+        </div>
+        <div className="p-4">
+          <JournalEntryTable
+            columns={columns}
+            entries={filteredEntries}
+            isLoading={isLoading}
+            page={page}
+            total={data?.meta.total ?? 0}
+            totalPages={data?.meta.totalPages ?? 1}
+            onPageChange={setPage}
+          />
+        </div>
+      </section>
+
+      <div className="rounded-xl border border-sky-500/15 bg-sky-500/[0.04] p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-slate-100">Kaynak belge ve ters kayit takibi</h2>
+            <h2 className="text-sm font-semibold text-slate-100">Kaynak belge ve ters kayıt takibi</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              Otomatik yevmiye fislerinde kaynak belge linki tabloda gorunur. Onayli fisler icin Ters Kayit aksiyonu ile storno olusturabilirsiniz.
+              Otomatik yevmiye fişlerinde kaynak belge linki tabloda görünür. Onaylı fişler için ters kayıt aksiyonu ile storno oluşturabilirsiniz.
             </p>
           </div>
           <Badge variant="info">Starter</Badge>
         </div>
       </div>
-
-      <JournalEntryTable
-        columns={columns}
-        entries={filteredEntries}
-        isLoading={isLoading}
-        page={page}
-        total={data?.meta.total ?? 0}
-        totalPages={data?.meta.totalPages ?? 1}
-        onPageChange={setPage}
-      />
-      {/* ── New journal entry modal ─────────────── */}
+      {/* â”€â”€ New journal entry modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Modal
         isOpen={createOpen}
         onClose={closeModal}
@@ -285,7 +316,7 @@ export function JournalEntriesPage() {
         }
       >
         <form className="space-y-5">
-          {/* ── Entry info ─────────────────────── */}
+          {/* â”€â”€ Entry info â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div className="bg-slate-800/30 border border-slate-800 rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2 mb-1">
               <div className="p-1.5 rounded-lg bg-sky-500/10">
@@ -306,14 +337,14 @@ export function JournalEntriesPage() {
               />
               <Input
                 label="Açıklama"
-                placeholder="Fiş açıklaması…"
+                placeholder="Fiş açıklaması..."
                 prefixIcon={<StickyNote className="w-3.5 h-3.5" />}
                 {...register("description")}
               />
             </div>
           </div>
 
-          {/* ── Lines ──────────────────────────── */}
+          {/* â”€â”€ Lines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -427,7 +458,7 @@ export function JournalEntriesPage() {
                           Açıklama
                         </label>
                         <input
-                          placeholder="Satır notu…"
+                          placeholder="Satır notu..."
                           className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
                           {...register(`lines.${idx}.description`)}
                         />
@@ -462,7 +493,7 @@ export function JournalEntriesPage() {
             </div>
           </div>
 
-          {/* ── Balance summary ────────────────── */}
+          {/* â”€â”€ Balance summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div
             className={cn(
               "flex items-center gap-4 p-3.5 rounded-xl border transition-colors",
@@ -510,7 +541,7 @@ export function JournalEntriesPage() {
                     isBalanced ? "text-emerald-400" : "text-red-400",
                   )}
                 >
-                  {isBalanced ? "✓ Dengeli" : formatCurrency(diff)}
+                  {isBalanced ? "Dengeli" : formatCurrency(diff)}
                 </p>
               </div>
             </div>
@@ -518,7 +549,7 @@ export function JournalEntriesPage() {
         </form>
       </Modal>
 
-      {/* ── Edit draft modal ────────────────────── */}
+      {/* â”€â”€ Edit draft modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {editEntry && (
         <EditJournalEntryModal
           entry={editEntry}
@@ -532,9 +563,9 @@ export function JournalEntriesPage() {
   );
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Edit modal sub-component
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function EditJournalEntryModal({
   entry,
@@ -559,8 +590,8 @@ function EditJournalEntryModal({
   isPending: boolean;
 }) {
   const accountOptions = [
-    { value: "", label: "— Hesap seçin —" },
-    ...accounts.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` })),
+    { value: "", label: "- Hesap seçin -" },
+    ...accounts.map((a) => ({ value: a.id, label: `${a.code} - ${a.name}` })),
   ];
 
   const {
@@ -597,7 +628,7 @@ function EditJournalEntryModal({
     <Modal
       isOpen
       onClose={onClose}
-      title={`Fiş Düzenle — ${entry.number}`}
+      title={`Fiş Düzenle - ${entry.number}`}
       description="Taslak fişi düzenleyin."
       size="lg"
       footer={
@@ -634,7 +665,7 @@ function EditJournalEntryModal({
       }
     >
       <form className="space-y-5">
-        {/* ── Entry info card ──────────────────── */}
+        {/* â”€â”€ Entry info card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="bg-slate-800/30 border border-slate-800 rounded-xl p-4 space-y-3">
           <div className="flex items-center gap-2 mb-1">
             <div className="p-1.5 rounded-lg bg-sky-500/10">
@@ -658,14 +689,14 @@ function EditJournalEntryModal({
             />
             <Input
               label="Açıklama"
-              placeholder="Fiş açıklaması…"
+              placeholder="Fiş açıklaması..."
               prefixIcon={<StickyNote className="w-3.5 h-3.5" />}
               {...register("description")}
             />
           </div>
         </div>
 
-        {/* ── Lines section ────────────────────── */}
+        {/* â”€â”€ Lines section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -700,7 +731,7 @@ function EditJournalEntryModal({
                         : "border-slate-800",
                   )}
                 >
-                  {/* Row number + type indicator */}
+                  {/* Row number + type indiçator */}
                   <div className="absolute -left-0 top-4 w-6 h-6 rounded-r-lg bg-slate-800 flex items-center justify-center">
                     <span className="text-[9px] font-bold text-slate-500">
                       {idx + 1}
@@ -795,7 +826,7 @@ function EditJournalEntryModal({
                           Açıklama
                         </label>
                         <input
-                          placeholder="Satır notu…"
+                          placeholder="Satır notu..."
                           className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
                           {...register(`lines.${idx}.description`)}
                         />
@@ -816,7 +847,7 @@ function EditJournalEntryModal({
           </div>
         </div>
 
-        {/* ── Balance summary ──────────────────── */}
+        {/* â”€â”€ Balance summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div
           className={cn(
             "flex items-center gap-4 p-4 rounded-xl border transition-colors",
@@ -864,7 +895,7 @@ function EditJournalEntryModal({
                   isBalanced ? "text-emerald-400" : "text-red-400",
                 )}
               >
-                {isBalanced ? "✓ Dengeli" : formatCurrency(diff)}
+                {isBalanced ? "Dengeli" : formatCurrency(diff)}
               </p>
             </div>
           </div>
@@ -873,3 +904,23 @@ function EditJournalEntryModal({
     </Modal>
   );
 }
+
+function SummaryStrip({ metrics }: { metrics: Array<{ label: string; value: ReactNode; tone: string }> }) {
+  return (
+    <div className="rounded-xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        {metrics.map((metric, index) => (
+          <div key={metric.label} className="flex items-center gap-x-4">
+            {index > 0 && <span className="h-4 w-px bg-slate-800" />}
+            <span className={cn("font-semibold tabular-nums", metric.tone)}>
+              {metric.value} <span className="text-[11px] font-medium uppercase text-slate-500">{metric.label}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+

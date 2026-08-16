@@ -133,7 +133,7 @@ export const NAV_GROUPS: NavGroup[] = [
         plan: ENTERPRISE_PLAN,
         module: 'production',
         children: [
-          { label: 'Ileri uretim', href: '/dashboard/production/advanced', icon: Activity, plan: ENTERPRISE_PLAN, module: 'production' },
+          { label: 'İleri üretim', href: '/dashboard/production/advanced', icon: Activity, plan: ENTERPRISE_PLAN, module: 'production' },
           { label: 'MRP Planlama', href: '/dashboard/production/mrp', icon: GitBranch, plan: ENTERPRISE_PLAN, module: 'production' },
           { label: 'Kapasite Planlama', href: '/dashboard/production/capacity-planning', icon: CalendarRange, plan: ENTERPRISE_PLAN, module: 'production' },
           { label: 'Kalite Kontrol', href: '/dashboard/production/quality-control', icon: ClipboardCheck, plan: ENTERPRISE_PLAN, module: 'production' },

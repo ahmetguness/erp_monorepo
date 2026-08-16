@@ -101,6 +101,12 @@ function getChannelInfo(channel: string) {
   return CHANNELS.find((candidate) => candidate.value === channel) ?? CHANNELS[5];
 }
 
+function channelLabel(channel: string): string {
+  if (channel === "CICEKSEPETI") return "Çiçeksepeti";
+  if (channel === "OTHER") return "Diğer";
+  return getChannelInfo(channel).label;
+}
+
 function toOptional(value: string): string | undefined {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
@@ -401,11 +407,11 @@ function IntegrationHealthCenter() {
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4">
+    <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
-          <h2 className="text-sm font-semibold text-white">Integration Health Center</h2>
-          <p className="text-xs text-slate-500 mt-1">Sync job, webhook replay ve API limit durumunu tek yerden izleyin.</p>
+          <h2 className="text-sm font-semibold text-white">Entegrasyon sağlık merkezi</h2>
+          <p className="text-xs text-slate-500 mt-1">Senkronizasyon işleri, webhook tekrarları ve API limit durumunu tek yerden izleyin.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isLoading}>
@@ -435,7 +441,7 @@ function IntegrationHealthCenter() {
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
-          Sync İşleri ({totals?.pendingJobs ?? 0} Bekleyen / {totals?.failedJobs ?? 0} Hatalı)
+          Senkronizasyon işleri ({totals?.pendingJobs ?? 0} bekleyen / {totals?.failedJobs ?? 0} hatalı)
         </button>
         <button
           onClick={() => setActiveTab('webhooks')}
@@ -455,7 +461,7 @@ function IntegrationHealthCenter() {
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
-          Uyumsuzluk (Drift) Raporu {driftData && driftData.length > 0 ? `(${driftData.length})` : ''}
+          Uyumsuzluk raporu {driftData && driftData.length > 0 ? `(${driftData.length})` : ''}
         </button>
       </div>
 
@@ -464,11 +470,11 @@ function IntegrationHealthCenter() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-6 gap-2">
             <HealthMetric label="Entegrasyon" value={totals?.integrations ?? 0} />
-            <HealthMetric label="Bekleyen Job" value={totals?.pendingJobs ?? 0} tone={(totals?.pendingJobs ?? 0) > 0 ? "warning" : "neutral"} />
-            <HealthMetric label="Calisan Job" value={totals?.runningJobs ?? 0} tone={(totals?.runningJobs ?? 0) > 0 ? "success" : "neutral"} />
-            <HealthMetric label="Failed Job" value={totals?.failedJobs ?? 0} tone={(totals?.failedJobs ?? 0) > 0 ? "danger" : "neutral"} />
-            <HealthMetric label="Retry" value={totals?.retryAvailable ?? 0} tone={(totals?.retryAvailable ?? 0) > 0 ? "warning" : "neutral"} />
-            <HealthMetric label="Webhook Replay" value={totals?.webhookReplayAvailable ?? 0} tone={(totals?.webhookReplayAvailable ?? 0) > 0 ? "danger" : "neutral"} />
+            <HealthMetric label="Bekleyen iş" value={totals?.pendingJobs ?? 0} tone={(totals?.pendingJobs ?? 0) > 0 ? "warning" : "neutral"} />
+            <HealthMetric label="Çalışan iş" value={totals?.runningJobs ?? 0} tone={(totals?.runningJobs ?? 0) > 0 ? "success" : "neutral"} />
+            <HealthMetric label="Hatalı iş" value={totals?.failedJobs ?? 0} tone={(totals?.failedJobs ?? 0) > 0 ? "danger" : "neutral"} />
+            <HealthMetric label="Tekrar denenecek" value={totals?.retryAvailable ?? 0} tone={(totals?.retryAvailable ?? 0) > 0 ? "warning" : "neutral"} />
+            <HealthMetric label="Webhook tekrarı" value={totals?.webhookReplayAvailable ?? 0} tone={(totals?.webhookReplayAvailable ?? 0) > 0 ? "danger" : "neutral"} />
           </div>
 
           {/* Credential alerts */}
@@ -497,8 +503,8 @@ function IntegrationHealthCenter() {
                     </Badge>
                   </div>
                   <div className="mt-2 grid grid-cols-3 gap-1 text-[10px] text-slate-500 border-t border-slate-800/60 pt-1.5">
-                    <span>Job: {item.pendingJobCount + item.runningJobCount}</span>
-                    <span>Fail: {item.failedJobCount}</span>
+                    <span>İş: {item.pendingJobCount + item.runningJobCount}</span>
+                    <span>Hata: {item.failedJobCount}</span>
                     <span>Replay: {item.webhookReplayCount}</span>
                   </div>
                   <div className="mt-2 text-[10px] text-slate-400 truncate font-mono bg-slate-900/60 px-1 py-0.5 rounded border border-slate-800/40">
@@ -523,8 +529,8 @@ function IntegrationHealthCenter() {
                         />
                       </div>
                       <div className="flex justify-between text-[9px] text-slate-600">
-                        <span>{item.apiLimit.remaining} requests left</span>
-                        {item.apiLimit.resetAt && <span>Reset: {formatDate(item.apiLimit.resetAt)}</span>}
+                        <span>{item.apiLimit.remaining} istek kaldı</span>
+                        {item.apiLimit.resetAt && <span>Sıfırlanma: {formatDate(item.apiLimit.resetAt)}</span>}
                       </div>
                     </div>
                   )}
@@ -541,7 +547,7 @@ function IntegrationHealthCenter() {
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-slate-800 text-slate-500">
-                  <th className="py-2 px-3">Job ID</th>
+                  <th className="py-2 px-3">İş ID</th>
                   <th className="py-2 px-3">Tip</th>
                   <th className="py-2 px-3">Durum</th>
                   <th className="py-2 px-3">Başlangıç / Bitiş</th>
@@ -919,32 +925,32 @@ export function IntegrationsPage() {
   }, [channelFilter, healthFilter, integrations, search, statusFilter]);
 
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         title="Pazaryeri Entegrasyonları"
         subtitle="E-ticaret kanallarını bağlayın, izleyin ve senkronize edin."
+        className="mb-0"
         action={
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="w-4 h-4" />
-            Yeni Entegrasyon
+          <Button size="sm" onClick={() => setCreateOpen(true)} leftIcon={<Plus className="h-4 w-4" />}>
+            Yeni entegrasyon
           </Button>
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 mb-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryTile icon={<Link2 className="w-4 h-4" />} label="Toplam" value={String(integrations.length)} detail={`${summary.active} aktif entegrasyon`} />
-        <SummaryTile icon={<ShieldCheck className="w-4 h-4" />} label="Saglikli" value={String(summary.healthy)} detail="Eksiksiz ve hatasiz kanal" tone="success" />
-        <SummaryTile icon={<AlertCircle className="w-4 h-4" />} label="Sync Hatasi" value={String(summary.syncErrors)} detail="Mudahale bekleyen hata" tone={summary.syncErrors > 0 ? "danger" : "neutral"} />
-        <SummaryTile icon={<Package className="w-4 h-4" />} label="Listeleme" value={String(summary.listings)} detail="Pazaryerine bagli urun" tone="warning" />
-        <SummaryTile icon={<ShoppingCart className="w-4 h-4" />} label="Siparis" value={String(summary.orders)} detail="Senkronize edilen siparis" />
+        <SummaryTile icon={<ShieldCheck className="w-4 h-4" />} label="Sağlıklı" value={String(summary.healthy)} detail="Eksiksiz ve hatasız kanal" tone="success" />
+        <SummaryTile icon={<AlertCircle className="w-4 h-4" />} label="Senkron hatası" value={String(summary.syncErrors)} detail="Müdahale bekleyen hata" tone={summary.syncErrors > 0 ? "danger" : "neutral"} />
+        <SummaryTile icon={<Package className="w-4 h-4" />} label="Listeleme" value={String(summary.listings)} detail="Pazaryerine bağlı ürün" tone="warning" />
+        <SummaryTile icon={<ShoppingCart className="w-4 h-4" />} label="Sipariş" value={String(summary.orders)} detail="Senkronize edilen sipariş" />
       </div>
 
       <IntegrationHealthCenter />
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 mb-4">
+      <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3">
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_180px_150px_150px] gap-3">
           <Input
-            placeholder="Entegrasyon, kanal veya magaza ID ara"
+            placeholder="Entegrasyon, kanal veya mağaza ID ara"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             prefixIcon={<Search className="w-4 h-4" />}
@@ -952,7 +958,7 @@ export function IntegrationsPage() {
           <Select
             options={[
               { value: "ALL", label: "Tüm Kanallar" },
-              ...CHANNELS.map((channel) => ({ value: channel.value, label: channel.label })),
+              ...CHANNELS.map((channel) => ({ value: channel.value, label: channelLabel(channel.value) })),
             ]}
             value={channelFilter}
             onChange={(event) => setChannelFilter(event.target.value)}
@@ -992,7 +998,7 @@ export function IntegrationsPage() {
       ) : filteredIntegrations.length === 0 ? (
         <div className="text-center py-16 bg-slate-900 border border-slate-800 rounded-xl">
           <Search className="w-9 h-9 text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-300 text-sm font-medium">Filtrelerle eslesen entegrasyon yok.</p>
+          <p className="text-slate-300 text-sm font-medium">Filtrelerle eşleşen entegrasyon yok.</p>
           <p className="text-slate-600 text-xs mt-1">Arama veya filtreleri temizleyip tekrar deneyin.</p>
           <Button
             variant="outline"
@@ -1005,17 +1011,25 @@ export function IntegrationsPage() {
               setHealthFilter("ALL");
             }}
           >
-            Filtreleri Temizle
+            Filtreleri temizle
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredIntegrations.map((integration) => {
-            const channel = getChannelInfo(integration.channel);
-            const health = getIntegrationHealth(integration);
+        <section className="rounded-xl border border-slate-800/80 bg-slate-950/40">
+          <div className="border-b border-slate-800/70 bg-slate-900/45 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-sky-300" />
+              <h2 className="text-sm font-semibold text-white">Bağlı kanallar</h2>
+            </div>
+            <p className="mt-0.5 text-xs text-slate-500">Kimlik durumu, son senkronizasyon ve kanal aksiyonlarını kart bazında yönetin.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
+            {filteredIntegrations.map((integration) => {
+              const channel = getChannelInfo(integration.channel);
+              const health = getIntegrationHealth(integration);
 
-            return (
-              <div key={integration.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition-colors">
+              return (
+              <div key={integration.id} className="rounded-lg border border-slate-800 bg-slate-950/35 p-4 transition-colors hover:border-sky-500/40">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${channel.color}`}>
@@ -1023,7 +1037,7 @@ export function IntegrationsPage() {
                     </div>
                     <div className="min-w-0">
                       <h3 className="text-white font-medium text-sm truncate">{integration.name}</h3>
-                      <span className="text-xs text-slate-500">{channel.label}</span>
+                      <span className="text-xs text-slate-500">{channelLabel(integration.channel)}</span>
                     </div>
                   </div>
                   <Badge variant={integration.isActive ? "success" : "neutral"}>{integration.isActive ? "Aktif" : "Pasif"}</Badge>
@@ -1041,13 +1055,13 @@ export function IntegrationsPage() {
                     <KeyRound className={`w-3.5 h-3.5 ${isCredentialComplete(integration) ? "text-emerald-400" : "text-amber-400"}`} />
                     <div className="min-w-0">
                       <div className="text-[10px] text-slate-500">Kimlik</div>
-                      <div className="text-xs text-slate-200 truncate">{isCredentialComplete(integration) ? "Hazir" : "Eksik"}</div>
+                      <div className="text-xs text-slate-200 truncate">{isCredentialComplete(integration) ? "Hazır" : "Eksik"}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 rounded-lg bg-slate-800/30 border border-slate-700/40 px-3 py-2">
                     <Clock3 className="w-3.5 h-3.5 text-sky-400" />
                     <div className="min-w-0">
-                      <div className="text-[10px] text-slate-500">Son Sync</div>
+                      <div className="text-[10px] text-slate-500">Son senkron</div>
                       <div className="text-xs text-slate-200 truncate">{integration.lastSyncAt ? formatDate(integration.lastSyncAt) : "Yok"}</div>
                     </div>
                   </div>
@@ -1080,9 +1094,10 @@ export function IntegrationsPage() {
                 {integration.channel === "TRENDYOL" && <TrendyolActions integrationId={integration.id} />}
                 <OperationsPanel integrationId={integration.id} />
               </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       <Modal

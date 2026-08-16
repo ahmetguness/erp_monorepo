@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -48,9 +48,9 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Period summary sub-component
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function PeriodSummary({
   period,
@@ -81,7 +81,7 @@ function PeriodSummary({
           <div>
             <h3 className="text-sm font-semibold text-white">{period.name}</h3>
             <p className="text-xs text-slate-500">
-              {formatDate(period.startDate)} — {formatDate(period.endDate)}
+              {formatDate(period.startDate)} - {formatDate(period.endDate)}
             </p>
           </div>
         </div>
@@ -145,7 +145,7 @@ function PeriodSummary({
               {formatCurrency(profit)}
             </p>
             <p className="text-[10px] text-slate-500 mt-1">
-              {profit >= 0 ? "Kârlı" : "Zararlı"}
+              {profit >= 0 ? "Karlı" : "Zararlı"}
             </p>
           </div>
 
@@ -217,9 +217,9 @@ function PeriodSummary({
   );
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Main component
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function FiscalPeriodsPage() {
   const { data: periods = [], isLoading } = useFiscalPeriods();
@@ -230,6 +230,14 @@ export function FiscalPeriodsPage() {
     null,
   );
   const closePeriod = useCloseFiscalPeriod(closeTarget?.id ?? "");
+
+  const periodSummary = useMemo(() => ({
+    total: periods.length,
+    open: periods.filter((period) => period.status === "OPEN").length,
+    closed: periods.filter((period) => period.status === "CLOSED").length,
+    locked: periods.filter((period) => period.status === "LOCKED").length,
+    selected: selectedPeriod?.name ?? "-",
+  }), [periods, selectedPeriod?.name]);
 
   const {
     register,
@@ -335,8 +343,9 @@ export function FiscalPeriodsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Mali Dönemler"
-        subtitle="Muhasebe dönemlerini yönetin ve dönem bazlı gelir/gider özetini görüntüleyin."
+        title="Mali dönemler"
+        subtitle="Muhasebe dönemlerini yönetin, kapanış kontrollerini ve dönem bazlı finansal özeti izleyin."
+        className="mb-0"
         action={
           <Link
             href="#"
@@ -352,9 +361,19 @@ export function FiscalPeriodsPage() {
             <span className="flex items-center justify-center w-5 h-5 rounded-md bg-white/15 group-hover:bg-white/20 transition-colors">
               <Plus className="w-3.5 h-3.5" />
             </span>
-            Yeni Dönem
+            Yeni dönem
           </Link>
         }
+      />
+
+      <SummaryStrip
+        metrics={[
+          { label: "Toplam Dönem", value: periodSummary.total, tone: "text-slate-50" },
+          { label: "Açık", value: periodSummary.open, tone: "text-emerald-300" },
+          { label: "Kapalı", value: periodSummary.closed, tone: "text-slate-200" },
+          { label: "Kilitli", value: periodSummary.locked, tone: periodSummary.locked > 0 ? "text-amber-300" : "text-slate-200" },
+          { label: "Seçili", value: periodSummary.selected, tone: selectedPeriod ? "text-sky-200" : "text-slate-500" },
+        ]}
       />
 
       {/* Period summary panel */}
@@ -370,15 +389,27 @@ export function FiscalPeriodsPage() {
         </div>
       )}
 
-      <DataTable
-        columns={columns}
-        data={periods}
-        keyExtractor={(r) => r.id}
-        isLoading={isLoading}
-        onRowClick={(r) => setSelectedPeriod(r)}
-        emptyTitle="Mali dönem bulunamadı"
-        emptyDescription="Yeni bir mali dönem oluşturarak başlayın."
-      />
+      <section className="rounded-xl border border-slate-800/80 bg-slate-950/40">
+        <div className="border-b border-slate-800/70 bg-slate-900/45 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <CalendarRange className="h-4 w-4 text-sky-300" />
+            <h2 className="text-sm font-semibold text-white">Dönem listesi</h2>
+          </div>
+          <p className="mt-0.5 text-xs text-slate-500">Dönem satırına tıklayarak finansal özet ve kapanış kontrol listesini görüntüleyin.</p>
+        </div>
+        <div className="p-4">
+          <DataTable
+            columns={columns}
+            data={periods}
+            keyExtractor={(r) => r.id}
+            isLoading={isLoading}
+            density="compact"
+            onRowClick={(r) => setSelectedPeriod(r)}
+            emptyTitle="Mali dönem bulunamadı"
+            emptyDescription="Yeni bir mali dönem oluşturarak başlayın."
+          />
+        </div>
+      </section>
 
       {/* Create modal */}
       <Modal
@@ -387,7 +418,7 @@ export function FiscalPeriodsPage() {
           setCreateOpen(false);
           reset();
         }}
-        title="Yeni Mali Dönem"
+        title="Yeni mali dönem"
         description="Tarih aralığı mevcut dönemlerle çakışmamalıdır."
         size="md"
         footer={
@@ -415,7 +446,7 @@ export function FiscalPeriodsPage() {
                   : ""
               }
             >
-              {hasOverlap ? "Çakışma Var" : "Dönemi Oluştur"}
+              {hasOverlap ? "Çakışma var" : "Dönemi oluştur"}
             </Button>
           </>
         }
@@ -424,7 +455,7 @@ export function FiscalPeriodsPage() {
           {/* Quick presets */}
           <div>
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5 block">
-              Hızlı Seçim
+              Hızlı seçim
             </label>
             <div className="grid grid-cols-4 gap-2">
               {(() => {
@@ -510,11 +541,11 @@ export function FiscalPeriodsPage() {
           {/* Form fields */}
           <div>
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <CalendarRange className="w-3 h-3" /> Dönem Bilgileri
+              <CalendarRange className="w-3 h-3" /> Dönem bilgileri
             </label>
             <div className="space-y-3">
               <Input
-                label="Dönem Adı"
+                label="Dönem adı"
                 required
                 placeholder="2026 Q1"
                 error={errors.name?.message}
@@ -586,7 +617,7 @@ export function FiscalPeriodsPage() {
           {periods.length > 0 && (
             <div>
               <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2 block">
-                Mevcut Dönemler
+                Mevcut dönemler
               </label>
               <div className="space-y-1">
                 {periods.map((p) => (
@@ -602,7 +633,7 @@ export function FiscalPeriodsPage() {
                     />
                     <span className="text-slate-400 flex-1">{p.name}</span>
                     <span className="text-slate-600 font-mono text-[10px]">
-                      {formatDate(p.startDate)} — {formatDate(p.endDate)}
+                      {formatDate(p.startDate)} - {formatDate(p.endDate)}
                     </span>
                   </div>
                 ))}
@@ -620,7 +651,7 @@ export function FiscalPeriodsPage() {
             onSuccess: () => setCloseTarget(null),
           })
         }
-        title="Dönemi Kapat"
+        title="Dönemi kapat"
         message={`"${closeTarget?.name}" dönemini kapatmak istediğinize emin misiniz? Bu işlem geri alınamaz.`}
         confirmLabel="Kapat"
         isLoading={closePeriod.isPending}
@@ -629,3 +660,21 @@ export function FiscalPeriodsPage() {
     </div>
   );
 }
+
+function SummaryStrip({ metrics }: { metrics: Array<{ label: string; value: ReactNode; tone: string }> }) {
+  return (
+    <div className="rounded-xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        {metrics.map((metric, index) => (
+          <div key={metric.label} className="flex items-center gap-x-4">
+            {index > 0 && <span className="h-4 w-px bg-slate-800" />}
+            <span className={cn("font-semibold tabular-nums", metric.tone)}>
+              {metric.value} <span className="text-[11px] font-medium uppercase text-slate-500">{metric.label}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+

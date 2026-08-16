@@ -19,7 +19,7 @@ import type {
 } from "@/services/accounting.service";
 
 const STATUS_BADGE: Record<AccountingClosingChecklistItem["status"], { label: string; variant: BadgeVariant }> = {
-  PASS: { label: "Hazir", variant: "success" },
+  PASS: { label: "Hazır", variant: "success" },
   WARN: { label: "Kontrol", variant: "warning" },
   FAIL: { label: "Engel", variant: "danger" },
 };
@@ -50,7 +50,7 @@ function ChecklistItemRow({ item }: { item: AccountingClosingChecklistItem }) {
         <div className="flex flex-wrap items-center gap-2">
           <h4 className="text-sm font-semibold text-slate-100">{item.label}</h4>
           <Badge variant={status.variant}>{status.label}</Badge>
-          {item.blocking && <Badge variant="danger">Kapanisi engeller</Badge>}
+          {item.blocking && <Badge variant="danger">Kapanışı engeller</Badge>}
         </div>
         <p className="mt-1 text-xs text-slate-400">{item.description}</p>
       </div>
@@ -76,15 +76,15 @@ export function ClosingChecklistPanel({ period }: { period: FiscalPeriod }) {
             <ClipboardCheck className="h-4 w-4" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">Muhasebe kapanis kontrol listesi</h3>
+            <h3 className="text-sm font-semibold text-white">Muhasebe kapanış kontrol listesi</h3>
             <p className="mt-1 text-xs text-slate-400">
-              {formatDate(period.startDate)} - {formatDate(period.endDate)} donemi icin fis, mutabakat, odeme ve stok kontrolleri.
+              {formatDate(period.startDate)} - {formatDate(period.endDate)} dönemi için fiş, mutabakat, ödeme ve stok kontrolleri.
             </p>
           </div>
         </div>
         {checklist && (
           <Badge variant={checklist.summary.canClose ? "success" : "danger"} dot>
-            {checklist.summary.canClose ? "Kapanisa hazir" : `${checklist.summary.blockers} engel var`}
+            {checklist.summary.canClose ? "Kapanışa hazır" : `${checklist.summary.blockers} engel var`}
           </Badge>
         )}
       </div>
@@ -93,13 +93,13 @@ export function ClosingChecklistPanel({ period }: { period: FiscalPeriod }) {
         {isLoading && (
           <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/30 px-3 py-3 text-sm text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Kontrol listesi hazirlaniyor...
+            Kontrol listesi hazırlanıyor...
           </div>
         )}
 
         {isError && (
           <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-3 text-sm text-red-300">
-            Kontrol listesi alinamadi. Yetki veya plan erisimini kontrol edin.
+            Kontrol listesi alınamadı. Yetki veya plan erişimini kontrol edin.
           </div>
         )}
 

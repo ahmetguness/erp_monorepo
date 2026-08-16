@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Eye, ShoppingCart } from "lucide-react";
+import type { ReactNode } from "react";
+import { useMemo, useState } from "react";
+import { AlertTriangle, Eye, RefreshCw, ShoppingCart } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
@@ -13,23 +14,17 @@ import {
   useMarketplaceOrder,
   useChangeOrderStatus,
 } from "@/hooks/useMarketplace";
-import { formatDate, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { MarketplaceOrder } from "@/services/marketplace.service";
 
-const STATUS_MAP: Record<
-  string,
-  {
-    label: string;
-    variant: "neutral" | "success" | "warning" | "danger" | "info";
-  }
-> = {
+const STATUS_MAP: Record<string, { label: string; variant: BadgeVariant }> = {
   PENDING: { label: "Bekliyor", variant: "warning" },
   PROCESSING: { label: "İşleniyor", variant: "info" },
   SHIPPED: { label: "Kargoda", variant: "info" },
-  DELIVERED: { label: "Teslim Edildi", variant: "success" },
+  DELIVERED: { label: "Teslim edildi", variant: "success" },
   CANCELLED: { label: "İptal", variant: "danger" },
   RETURNED: { label: "İade", variant: "neutral" },
-  REFUNDED: { label: "İade Edildi", variant: "neutral" },
+  REFUNDED: { label: "İade edildi", variant: "neutral" },
 };
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -41,6 +36,16 @@ const CHANNEL_LABELS: Record<string, string> = {
   OTHER: "Diğer",
 };
 
+const STATUS_FILTERS = ["", "PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "RETURNED", "REFUNDED"];
+
+function statusLabel(status: string): string {
+  return STATUS_MAP[status]?.label ?? status;
+}
+
+function channelLabel(channel: string): string {
+  return CHANNEL_LABELS[channel] ?? channel;
+}
+
 export function MarketplaceOrdersPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
@@ -48,7 +53,7 @@ export function MarketplaceOrdersPage() {
   const [statusModal, setStatusModal] = useState<MarketplaceOrder | null>(null);
   const [newStatus, setNewStatus] = useState("");
 
-  const { data, isLoading } = useMarketplaceOrders({
+  const { data, isLoading, isFetching, refetch } = useMarketplaceOrders({
     page,
     limit: 20,
     ...(statusFilter && { status: statusFilter }),
@@ -56,266 +61,176 @@ export function MarketplaceOrdersPage() {
   const { data: detail } = useMarketplaceOrder(detailId ?? "");
   const changeStatus = useChangeOrderStatus();
 
+  const rows = useMemo(() => data?.data ?? [], [data?.data]);
+  const summary = useMemo(() => ({
+    total: data?.meta.total ?? rows.length,
+    pending: rows.filter((order) => order.status === "PENDING").length,
+    processing: rows.filter((order) => order.status === "PROCESSING").length,
+    shipped: rows.filter((order) => order.status === "SHIPPED").length,
+    exceptions: rows.filter((order) => ["CANCELLED", "RETURNED", "REFUNDED"].includes(order.status)).length,
+    amount: rows.reduce((total, order) => total + Number(order.totalAmount), 0),
+  }), [data?.meta.total, rows]);
+
   const columns: ColumnDef<MarketplaceOrder>[] = [
     {
       key: "externalId",
-      header: "Sipariş No",
-      width: "140px",
-      render: (r) => (
-        <code className="text-xs text-sky-400 font-mono">{r.externalId}</code>
+      header: "Sipariş",
+      width: "145px",
+      render: (order) => (
+        <div>
+          <code className="font-mono text-xs text-sky-300">{order.externalId}</code>
+          <span className="mt-1 block text-[11px] text-slate-500">{formatDate(order.orderDate)}</span>
+        </div>
       ),
     },
     {
       key: "channel",
       header: "Kanal",
-      width: "120px",
-      render: (r) => (
-        <Badge variant="info">{CHANNEL_LABELS[r.channel] ?? r.channel}</Badge>
+      width: "145px",
+      render: (order) => (
+        <div>
+          <Badge variant="info">{channelLabel(order.channel)}</Badge>
+          <span className="mt-1 block truncate text-[11px] text-slate-500">{order.integration?.name ?? "-"}</span>
+        </div>
       ),
     },
     {
       key: "customer",
       header: "Müşteri",
-      render: (r) => (
-        <div>
-          <span className="text-white text-sm">{r.customerName ?? "—"}</span>
-          {r.customerPhone && (
-            <span className="block text-xs text-slate-500">
-              {r.customerPhone}
-            </span>
-          )}
+      render: (order) => (
+        <div className="min-w-0">
+          <span className="block truncate text-sm font-semibold text-white">{order.customerName ?? "-"}</span>
+          <span className="mt-1 block truncate text-xs text-slate-500">{order.customerPhone ?? order.customerEmail ?? "-"}</span>
         </div>
       ),
     },
     {
+      key: "items",
+      header: "Kalem",
+      width: "85px",
+      align: "right",
+      render: (order) => <span className="tabular-nums text-slate-300">{order._count?.items ?? order.items?.length ?? 0}</span>,
+    },
+    {
       key: "totalAmount",
       header: "Tutar",
-      width: "120px",
+      width: "125px",
       align: "right",
-      render: (r) => (
-        <span className="text-white font-medium tabular-nums">
-          {formatCurrency(r.totalAmount)}
-        </span>
-      ),
+      render: (order) => <span className="font-medium tabular-nums text-white">{formatCurrency(order.totalAmount)}</span>,
     },
     {
       key: "status",
       header: "Durum",
-      width: "130px",
-      render: (r) => {
-        const s = STATUS_MAP[r.status];
-        return s ? (
-          <Badge variant={s.variant}>{s.label}</Badge>
-        ) : (
-          <span>{r.status}</span>
-        );
+      width: "135px",
+      render: (order) => {
+        const status = STATUS_MAP[order.status];
+        return status ? <Badge variant={status.variant}>{status.label}</Badge> : <span className="text-slate-400">{order.status}</span>;
       },
-    },
-    {
-      key: "orderDate",
-      header: "Tarih",
-      width: "100px",
-      render: (r) => (
-        <span className="text-slate-400 text-xs">
-          {formatDate(r.orderDate)}
-        </span>
-      ),
     },
     {
       key: "actions",
       header: "",
-      width: "50px",
+      width: "52px",
       align: "right",
-      render: (r) => (
+      render: (order) => (
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setDetailId(r.id);
+          onClick={(event) => {
+            event.stopPropagation();
+            setDetailId(order.id);
           }}
-          className="p-1.5 rounded-lg text-slate-600 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
+          className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-sky-500/10 hover:text-sky-300"
+          aria-label="Detay"
         >
-          <Eye className="w-3.5 h-3.5" />
+          <Eye className="h-3.5 w-3.5" />
         </button>
       ),
     },
   ];
 
-  const statuses = [
-    "",
-    "PENDING",
-    "PROCESSING",
-    "SHIPPED",
-    "DELIVERED",
-    "CANCELLED",
-    "RETURNED",
-    "REFUNDED",
-  ];
-
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
-        title="Pazaryeri Siparişleri"
-        subtitle="E-ticaret kanallarından gelen siparişleri takip edin."
-      />
-
-      <div className="flex items-center gap-1 mb-5 bg-slate-900/50 border border-slate-800/60 rounded-xl p-1 w-fit flex-wrap">
-        {statuses.map((s) => (
-          <button
-            key={s}
-            onClick={() => {
-              setStatusFilter(s);
-              setPage(1);
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${statusFilter === s ? "bg-slate-800 text-white shadow-sm" : "text-slate-500 hover:text-slate-300"}`}
-          >
-            {s ? (STATUS_MAP[s]?.label ?? s) : "Tümü"}
-          </button>
-        ))}
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={data?.data ?? []}
-        keyExtractor={(r) => r.id}
-        isLoading={isLoading}
-        onRowClick={(r) => setDetailId(r.id)}
-        emptyTitle="Pazaryeri siparişi bulunamadı"
-        emptyDescription="Entegrasyonlar aktif olduğunda siparişler burada görünecek."
-        pagination={
-          data
-            ? {
-                page,
-                pageSize: 20,
-                total: data.meta.total,
-                totalPages: data.meta.totalPages,
-                onChange: setPage,
-              }
-            : undefined
+        title="Pazaryeri siparişleri"
+        subtitle="E-ticaret kanallarından gelen siparişleri durum, kanal ve tutar bazında takip edin."
+        className="mb-0"
+        action={
+          <Button variant="secondary" size="sm" onClick={() => void refetch()} loading={isFetching} leftIcon={<RefreshCw className="h-3.5 w-3.5" />}>
+            Yenile
+          </Button>
         }
       />
 
-      {/* Detail Modal */}
-      <Modal
-        isOpen={!!detailId}
+      <SummaryStrip
+        metrics={[
+          { label: "Toplam Sipariş", value: summary.total, tone: "text-slate-50" },
+          { label: "Bekleyen", value: summary.pending, tone: summary.pending > 0 ? "text-amber-300" : "text-slate-200" },
+          { label: "İşleniyor", value: summary.processing, tone: "text-sky-200" },
+          { label: "Kargoda", value: summary.shipped, tone: "text-violet-300" },
+          { label: "İstisna", value: summary.exceptions, tone: summary.exceptions > 0 ? "text-red-300" : "text-slate-200" },
+          { label: "Sayfa Tutarı", value: formatCurrency(summary.amount), tone: "text-emerald-300" },
+        ]}
+      />
+
+      {summary.exceptions > 0 && <AttentionBar count={summary.exceptions} />}
+
+      <section className="rounded-xl border border-slate-800/80 bg-slate-950/40">
+        <div className="border-b border-slate-800/70 bg-slate-900/45 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="h-4 w-4 text-sky-300" />
+            <h2 className="text-sm font-semibold text-white">Sipariş listesi</h2>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1 rounded-lg border border-slate-800 bg-slate-950/45 p-1">
+            {STATUS_FILTERS.map((status) => (
+              <button
+                key={status || "all"}
+                onClick={() => {
+                  setStatusFilter(status);
+                  setPage(1);
+                }}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  statusFilter === status ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-300",
+                )}
+              >
+                {status ? statusLabel(status) : "Tümü"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="p-4">
+          <DataTable
+            columns={columns}
+            data={rows}
+            keyExtractor={(order) => order.id}
+            isLoading={isLoading}
+            density="compact"
+            onRowClick={(order) => setDetailId(order.id)}
+            emptyTitle="Pazaryeri siparişi bulunamadı"
+            emptyDescription="Entegrasyonlar aktif olduğunda siparişler burada görünecek."
+            pagination={data ? { page, pageSize: 20, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
+          />
+        </div>
+      </section>
+
+      <OrderDetailModal
+        detailId={detailId}
+        detail={detail}
         onClose={() => setDetailId(null)}
-        title={detail ? `Sipariş ${detail.externalId}` : "Sipariş Detayı"}
-        size="md"
-        footer={
-          <div className="flex items-center gap-2 w-full">
-            {detail &&
-              !["DELIVERED", "CANCELLED", "REFUNDED"].includes(
-                detail.status,
-              ) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setStatusModal(detail);
-                    setNewStatus("");
-                    setDetailId(null);
-                  }}
-                >
-                  Durum Değiştir
-                </Button>
-              )}
-            <div className="flex-1" />
-            <Button variant="ghost" size="sm" onClick={() => setDetailId(null)}>
-              Kapat
-            </Button>
-          </div>
-        }
-      >
-        {detail ? (
-          <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                {
-                  label: "Kanal",
-                  value: CHANNEL_LABELS[detail.channel] ?? detail.channel,
-                },
-                {
-                  label: "Durum",
-                  value: STATUS_MAP[detail.status]?.label ?? detail.status,
-                },
-                { label: "Müşteri", value: detail.customerName ?? "—" },
-                { label: "Tutar", value: formatCurrency(detail.totalAmount) },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3"
-                >
-                  <div className="text-[10px] text-slate-500 mb-1">
-                    {item.label}
-                  </div>
-                  <div className="text-sm text-white">{item.value}</div>
-                </div>
-              ))}
-            </div>
-            {detail.shippingAddress && (
-              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">
-                <div className="text-[10px] text-slate-500 mb-1">
-                  Teslimat Adresi
-                </div>
-                <div className="text-sm text-slate-300">
-                  {detail.shippingAddress}
-                </div>
-              </div>
-            )}
-            {detail.items && detail.items.length > 0 && (
-              <div>
-                <h4 className="text-xs font-medium text-slate-400 mb-3">
-                  Kalemler
-                </h4>
-                <div className="space-y-2">
-                  {detail.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between bg-slate-800/30 border border-slate-700/40 rounded-xl px-4 py-3"
-                    >
-                      <div>
-                        <span className="text-sm text-white">{item.name}</span>
-                        {item.product && (
-                          <span className="block text-xs text-slate-500 font-mono">
-                            {item.product.code}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <span className="text-sm text-white">
-                          {item.quantity} × {formatCurrency(item.unitPrice)}
-                        </span>
-                        <span className="block text-xs text-slate-400">
-                          {formatCurrency(item.lineTotal)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-center py-8">
-            <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
-      </Modal>
+        onChangeStatus={(order) => {
+          setStatusModal(order);
+          setNewStatus("");
+          setDetailId(null);
+        }}
+      />
 
-      {/* Status Change Modal */}
       <Modal
         isOpen={!!statusModal}
         onClose={() => setStatusModal(null)}
-        title="Sipariş Durumu Değiştir"
+        title="Sipariş durumu değiştir"
         size="sm"
         footer={
           <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setStatusModal(null)}
-            >
-              İptal
-            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setStatusModal(null)}>İptal</Button>
             <Button
               size="sm"
               loading={changeStatus.isPending}
@@ -334,16 +249,122 @@ export function MarketplaceOrdersPage() {
         }
       >
         <Select
-          label="Yeni Durum"
+          label="Yeni durum"
           required
-          options={Object.entries(STATUS_MAP).map(([k, v]) => ({
-            value: k,
-            label: v.label,
-          }))}
+          options={Object.entries(STATUS_MAP).map(([key, value]) => ({ value: key, label: value.label }))}
           value={newStatus}
-          onChange={(e) => setNewStatus(e.target.value)}
+          onChange={(event) => setNewStatus(event.target.value)}
         />
       </Modal>
+    </div>
+  );
+}
+
+function OrderDetailModal({
+  detailId,
+  detail,
+  onClose,
+  onChangeStatus,
+}: {
+  detailId: string | null;
+  detail?: MarketplaceOrder;
+  onClose: () => void;
+  onChangeStatus: (order: MarketplaceOrder) => void;
+}) {
+  return (
+    <Modal
+      isOpen={!!detailId}
+      onClose={onClose}
+      title={detail ? `Sipariş ${detail.externalId}` : "Sipariş detayı"}
+      size="md"
+      footer={
+        <div className="flex w-full items-center gap-2">
+          {detail && !["DELIVERED", "CANCELLED", "REFUNDED"].includes(detail.status) && (
+            <Button variant="ghost" size="sm" onClick={() => onChangeStatus(detail)}>
+              Durum değiştir
+            </Button>
+          )}
+          <div className="flex-1" />
+          <Button variant="ghost" size="sm" onClick={onClose}>Kapat</Button>
+        </div>
+      }
+    >
+      {detail ? (
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: "Kanal", value: channelLabel(detail.channel) },
+              { label: "Durum", value: statusLabel(detail.status) },
+              { label: "Müşteri", value: detail.customerName ?? "-" },
+              { label: "Tutar", value: formatCurrency(detail.totalAmount) },
+            ].map((item) => (
+              <div key={item.label} className="rounded-lg border border-slate-800 bg-slate-950/35 px-4 py-3">
+                <div className="mb-1 text-[10px] uppercase text-slate-500">{item.label}</div>
+                <div className="text-sm text-white">{item.value}</div>
+              </div>
+            ))}
+          </div>
+          {detail.shippingAddress && (
+            <div className="rounded-lg border border-slate-800 bg-slate-950/35 px-4 py-3">
+              <div className="mb-1 text-[10px] uppercase text-slate-500">Teslimat adresi</div>
+              <div className="text-sm text-slate-300">{detail.shippingAddress}</div>
+            </div>
+          )}
+          {detail.items && detail.items.length > 0 && (
+            <div>
+              <h4 className="mb-3 text-xs font-medium text-slate-400">Kalemler</h4>
+              <div className="space-y-2">
+                {detail.items.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/35 px-4 py-3">
+                    <div className="min-w-0">
+                      <span className="block truncate text-sm text-white">{item.name}</span>
+                      {item.product && <span className="block font-mono text-xs text-slate-500">{item.product.code}</span>}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm text-white">{item.quantity} x {formatCurrency(item.unitPrice)}</span>
+                      <span className="block text-xs text-slate-400">{formatCurrency(item.lineTotal)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center py-8">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-sky-500 border-t-transparent" />
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function SummaryStrip({ metrics }: { metrics: Array<{ label: string; value: ReactNode; tone: string }> }) {
+  return (
+    <div className="rounded-xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        {metrics.map((metric, index) => (
+          <div key={metric.label} className="flex items-center gap-x-4">
+            {index > 0 && <span className="h-4 w-px bg-slate-800" />}
+            <span className={cn("font-semibold tabular-nums", metric.tone)}>
+              {metric.value} <span className="text-[11px] font-medium uppercase text-slate-500">{metric.label}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AttentionBar({ count }: { count: number }) {
+  return (
+    <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3">
+      <div className="flex items-center gap-2 text-sm text-amber-100">
+        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />
+        <span>
+          Siparişlerde takip isteyen <strong className="font-semibold">{count} iptal/iade kaydı</strong> var.
+        </span>
+      </div>
     </div>
   );
 }

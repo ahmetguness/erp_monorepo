@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { PackagePlus, Pencil, Plus, Send, Trash2, UploadCloud, XCircle } from "lucide-react";
+import { AlertTriangle, PackagePlus, Pencil, Plus, RefreshCw, Send, Trash2, UploadCloud, XCircle } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { ProductSelect } from "@/components/shared/EntitySelect";
@@ -28,7 +29,7 @@ import {
   useTrendyolCategories,
 } from "@/hooks/useMarketplace";
 import { useProducts } from "@/hooks/useProducts";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { getFieldErrors, type FieldErrors } from "@/lib/form-errors";
 import type { MarketplaceListing, TrendyolListingProductDTO } from "@/services/marketplace.service";
 import type { Product } from "@/services/product.service";
@@ -182,7 +183,7 @@ export function ListingsPage() {
   const [brandQuery, setBrandQuery] = useState("");
   const [categoryQuery, setCategoryQuery] = useState("");
 
-  const { data, isLoading } = useListings({ page, limit: 20 });
+  const { data, isLoading, isFetching, refetch } = useListings({ page, limit: 20 });
   const { data: integrations = [] } = useIntegrations();
   const { data: productsData } = useProducts({ page: 1, limit: 200, isActive: true });
   const create = useCreateListing();
@@ -192,6 +193,7 @@ export function ListingsPage() {
   const updateMarketplace = useUpdateMarketplaceProduct();
   const deleteMarketplace = useDeleteMarketplaceProduct();
 
+  const rows = useMemo(() => data?.data ?? [], [data?.data]);
   const products = productsData?.data ?? emptyProducts;
   const selectedProduct = products.find((product) => product.id === form.productId);
   const trendPayload = buildTrendyolPayload(trendyolForm);
@@ -201,6 +203,15 @@ export function ListingsPage() {
   const { data: categoryOptionsData = [], isLoading: categoriesLoading } = useTrendyolCategories(selectedMarketplaceIntegrationId, categoryQuery);
   const { data: cargoProviders = [], isLoading: cargoLoading } = useTrendyolCargoProviders(selectedMarketplaceIntegrationId);
   const { data: categoryAttributes = [] } = useTrendyolAttributes(selectedMarketplaceIntegrationId, selectedCategoryId);
+
+  const summary = useMemo(() => ({
+    total: data?.meta.total ?? rows.length,
+    active: rows.filter((listing) => listing.isActive).length,
+    passive: rows.filter((listing) => !listing.isActive).length,
+    outOfStock: rows.filter((listing) => Number(listing.stock) <= 0).length,
+    syncErrors: rows.filter((listing) => Boolean(listing.syncError)).length,
+    marketplaceLinked: rows.filter((listing) => Boolean(listing.integrationId)).length,
+  }), [data?.meta.total, rows]);
 
   const integrationOptions = useMemo(
     () => integrations.map((integration) => ({
@@ -250,107 +261,76 @@ export function ListingsPage() {
     {
       key: "product",
       header: "Ürün",
-      render: (r) => (
-        <div>
-          <span className="text-white text-sm font-medium">{r.product?.name ?? "-"}</span>
-          <span className="block text-xs text-slate-500 font-mono">{r.product?.code}</span>
-          {r.syncError && <span className="block text-xs text-red-400 mt-1">{r.syncError}</span>}
+      render: (listing) => (
+        <div className="min-w-0">
+          <span className="block truncate text-sm font-semibold text-white">{listing.product?.name ?? "-"}</span>
+          <span className="block font-mono text-xs text-slate-500">{listing.product?.code ?? listing.externalSku ?? "-"}</span>
+          {listing.syncError && <span className="mt-1 block truncate text-xs text-red-400">{listing.syncError}</span>}
         </div>
       ),
     },
     {
       key: "channel",
       header: "Kanal",
-      width: "140px",
-      render: (r) => <Badge variant="info">{r.integration?.name ?? r.integration?.channel ?? "-"}</Badge>,
+      width: "160px",
+      render: (listing) => (
+        <div>
+          <Badge variant="info">{listing.integration?.name ?? listing.integration?.channel ?? "-"}</Badge>
+          <span className="mt-1 block text-[11px] text-slate-500">{listing.integration?.channel ?? "-"}</span>
+        </div>
+      ),
     },
     {
       key: "externalId",
       header: "Barkod",
-      width: "150px",
-      render: (r) => (
-        <code className="text-xs text-slate-400 bg-slate-800/60 px-2 py-0.5 rounded">{r.externalId}</code>
+      width: "155px",
+      render: (listing) => (
+        <code className="rounded bg-slate-800/60 px-2 py-0.5 text-xs text-slate-300">{listing.externalId}</code>
       ),
     },
     {
       key: "price",
       header: "Fiyat",
-      width: "110px",
+      width: "115px",
       align: "right",
-      render: (r) => <span className="text-white font-medium tabular-nums">{formatCurrency(r.price)}</span>,
+      render: (listing) => <span className="font-medium tabular-nums text-white">{formatCurrency(listing.price)}</span>,
     },
     {
       key: "stock",
       header: "Stok",
-      width: "80px",
-      align: "center",
-      render: (r) => (
-        <span className={`font-medium ${Number(r.stock) <= 0 ? "text-red-400" : "text-slate-300"}`}>{r.stock}</span>
+      width: "85px",
+      align: "right",
+      render: (listing) => (
+        <span className={cn("font-medium tabular-nums", Number(listing.stock) <= 0 ? "text-red-400" : "text-slate-300")}>{listing.stock}</span>
       ),
     },
     {
       key: "isActive",
       header: "Durum",
-      width: "90px",
-      render: (r) => r.isActive ? <Badge variant="success">Aktif</Badge> : <Badge variant="neutral">Pasif</Badge>,
+      width: "95px",
+      render: (listing) => listing.isActive ? <Badge variant="success">Aktif</Badge> : <Badge variant="neutral">Pasif</Badge>,
     },
     {
       key: "actions",
       header: "",
       width: "170px",
       align: "right",
-      render: (r) => (
+      render: (listing) => (
         <div className="flex items-center justify-end gap-1">
-          <button
-            title="Pazaryerine gönder"
-            onClick={(e) => {
-              e.stopPropagation();
-              openMarketplaceAction(r, "publish");
-            }}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
-          >
-            <Send className="w-3.5 h-3.5" />
+          <button title="Pazaryerine gönder" onClick={(event) => { event.stopPropagation(); openMarketplaceAction(listing, "publish"); }} className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-sky-500/10 hover:text-sky-300">
+            <Send className="h-3.5 w-3.5" />
           </button>
-          <button
-            title="Pazaryerinde güncelle"
-            onClick={(e) => {
-              e.stopPropagation();
-              openMarketplaceAction(r, "update");
-            }}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
-          >
-            <UploadCloud className="w-3.5 h-3.5" />
+          <button title="Pazaryerinde güncelle" onClick={(event) => { event.stopPropagation(); openMarketplaceAction(listing, "update"); }} className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-emerald-500/10 hover:text-emerald-300">
+            <UploadCloud className="h-3.5 w-3.5" />
           </button>
-          <button
-            title="Pazaryerinden sil"
-            onClick={(e) => {
-              e.stopPropagation();
-              deleteMarketplace.mutate({ id: r.id, data: { barcode: r.externalId } });
-            }}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-          >
-            <XCircle className="w-3.5 h-3.5" />
+          <button title="Pazaryerinden sil" onClick={(event) => { event.stopPropagation(); deleteMarketplace.mutate({ id: listing.id, data: { barcode: listing.externalId } }); }} className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-300">
+            <XCircle className="h-3.5 w-3.5" />
           </button>
-          <button
-            title="ERP kaydını düzenle"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditTarget(r);
-              setEditForm({ price: String(r.price), stock: String(r.stock) });
-            }}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
-          >
-            <Pencil className="w-3.5 h-3.5" />
+          <button title="ERP kaydını düzenle" onClick={(event) => { event.stopPropagation(); setEditTarget(listing); setEditForm({ price: String(listing.price), stock: String(listing.stock) }); }} className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-500/10 hover:text-amber-300">
+            <Pencil className="h-3.5 w-3.5" />
           </button>
-          <button
-            title="ERP kaydını sil"
-            onClick={(e) => {
-              e.stopPropagation();
-              remove.mutate(r.id);
-            }}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
+          <button title="ERP kaydını sil" onClick={(event) => { event.stopPropagation(); remove.mutate(listing.id); }} className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-300">
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
       ),
@@ -358,36 +338,62 @@ export function ListingsPage() {
   ];
 
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
-        title="Ürün Listelemeleri"
-        subtitle="Pazaryeri ürünlerini ERP üzerinden yayınlayın, güncelleyin ve pasife alın."
+        title="Ürün listelemeleri"
+        subtitle="Pazaryeri ürünlerini ERP üzerinden yayınlayın, güncelleyin ve stok/fiyat durumunu takip edin."
+        className="mb-0"
         action={
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="w-4 h-4" />
-            Yeni Listeleme
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => void refetch()} loading={isFetching} leftIcon={<RefreshCw className="h-3.5 w-3.5" />}>
+              Yenile
+            </Button>
+            <Button size="sm" onClick={() => setCreateOpen(true)} leftIcon={<Plus className="h-4 w-4" />}>
+              Yeni listeleme
+            </Button>
+          </div>
         }
       />
 
-      <DataTable
-        columns={columns}
-        data={data?.data ?? []}
-        keyExtractor={(r) => r.id}
-        isLoading={isLoading}
-        emptyTitle="Listeleme bulunamadı"
-        emptyDescription="Bir ürünü pazaryerine listeleyerek başlayın."
-        pagination={
-          data
-            ? { page, pageSize: 20, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage }
-            : undefined
-        }
+      <SummaryStrip
+        metrics={[
+          { label: "Toplam Listeleme", value: summary.total, tone: "text-slate-50" },
+          { label: "Aktif", value: summary.active, tone: "text-emerald-300" },
+          { label: "Pasif", value: summary.passive, tone: "text-slate-200" },
+          { label: "Stoksuz", value: summary.outOfStock, tone: summary.outOfStock > 0 ? "text-amber-300" : "text-slate-200" },
+          { label: "Senkron Hatası", value: summary.syncErrors, tone: summary.syncErrors > 0 ? "text-red-300" : "text-slate-200" },
+          { label: "Kanala Bağlı", value: summary.marketplaceLinked, tone: "text-sky-200" },
+        ]}
       />
+
+      {(summary.syncErrors > 0 || summary.outOfStock > 0) && <AttentionBar errors={summary.syncErrors} outOfStock={summary.outOfStock} />}
+
+      <section className="rounded-xl border border-slate-800/80 bg-slate-950/40">
+        <div className="border-b border-slate-800/70 bg-slate-900/45 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <PackagePlus className="h-4 w-4 text-sky-300" />
+            <h2 className="text-sm font-semibold text-white">Listeleme envanteri</h2>
+          </div>
+          <p className="mt-0.5 text-xs text-slate-500">Ürün, kanal, barkod, fiyat, stok ve pazaryeri aksiyonlarını tek tabloda yönetin.</p>
+        </div>
+        <div className="p-4">
+          <DataTable
+            columns={columns}
+            data={rows}
+            keyExtractor={(listing) => listing.id}
+            isLoading={isLoading}
+            density="compact"
+            emptyTitle="Listeleme bulunamadı"
+            emptyDescription="Bir ürünü pazaryerine listeleyerek başlayın."
+            pagination={data ? { page, pageSize: 20, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
+          />
+        </div>
+      </section>
 
       <Modal
         isOpen={createOpen}
         onClose={() => setCreateOpen(false)}
-        title="Yeni Listeleme"
+        title="Yeni listeleme"
         size="md"
         footer={
           <>
@@ -484,7 +490,7 @@ export function ListingsPage() {
       <Modal
         isOpen={!!marketplaceTarget}
         onClose={() => setMarketplaceTarget(null)}
-        title={marketplaceAction === "publish" ? "Trendyol'a Ürün Gönder" : "Trendyol Ürününü Güncelle"}
+        title={marketplaceAction === "publish" ? "Trendyol'a ürün gönder" : "Trendyol ürününü güncelle"}
         size="lg"
         footer={
           <>
@@ -651,3 +657,36 @@ export function ListingsPage() {
     </div>
   );
 }
+
+function SummaryStrip({ metrics }: { metrics: Array<{ label: string; value: ReactNode; tone: string }> }) {
+  return (
+    <div className="rounded-xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        {metrics.map((metric, index) => (
+          <div key={metric.label} className="flex items-center gap-x-4">
+            {index > 0 && <span className="h-4 w-px bg-slate-800" />}
+            <span className={cn("font-semibold tabular-nums", metric.tone)}>
+              {metric.value} <span className="text-[11px] font-medium uppercase text-slate-500">{metric.label}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AttentionBar({ errors, outOfStock }: { errors: number; outOfStock: number }) {
+  return (
+    <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3">
+      <div className="flex items-center gap-2 text-sm text-amber-100">
+        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />
+        <span>
+          Listelemelerde dikkat isteyen alanlar var:
+          {errors > 0 && <strong className="ml-1 font-semibold">{errors} senkron hatası</strong>}
+          {outOfStock > 0 && <strong className="ml-1 font-semibold">{outOfStock} stoksuz ürün</strong>}.
+        </span>
+      </div>
+    </div>
+  );
+}
+
