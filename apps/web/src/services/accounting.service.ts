@@ -99,6 +99,40 @@ export const PaymentSchema = z.object({
   })).optional(),
 });
 
+export const PostingEngineRunResultSchema = z.object({
+  generatedAt: z.string(),
+  source: z.enum(['ALL', 'INVOICE', 'PAYMENT', 'STOCK']),
+  scanned: z.coerce.number(),
+  posted: z.coerce.number(),
+  skipped: z.coerce.number(),
+  failed: z.coerce.number(),
+  mappings: z.array(z.object({
+    role: z.enum([
+      'CUSTOMER_RECEIVABLE',
+      'SUPPLIER_PAYABLE',
+      'SALES_REVENUE',
+      'VAT_PAYABLE',
+      'PURCHASE_INVENTORY',
+      'VAT_RECEIVABLE',
+      'BANK',
+      'CASH',
+    ]),
+    code: z.string(),
+    accountId: z.string().nullable(),
+    accountName: z.string().nullable(),
+    available: z.boolean(),
+  })),
+  items: z.array(z.object({
+    source: z.enum(['INVOICE', 'PAYMENT', 'STOCK']),
+    refType: z.string(),
+    refId: z.string(),
+    refNumber: z.string(),
+    status: z.enum(['POSTED', 'SKIPPED', 'FAILED']),
+    journalEntryId: z.string().nullable(),
+    message: z.string(),
+  })),
+});
+
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
@@ -111,6 +145,7 @@ export type JournalEntry = z.infer<typeof JournalEntrySchema>;
 export type BankAccount = z.infer<typeof BankAccountSchema>;
 export type CashAccount = z.infer<typeof CashAccountSchema>;
 export type Payment = z.infer<typeof PaymentSchema>;
+export type PostingEngineRunResult = z.infer<typeof PostingEngineRunResultSchema>;
 export type AccountType = LedgerAccount['accountType'];
 export type PaymentMethod = Payment['method'];
 export type PaymentDirection = 'RECEIVE' | 'SEND';
@@ -138,6 +173,7 @@ export interface CreatePaymentDTO {
 }
 export interface PaymentListParams extends PaginationParams, DateRangeParams { contactId?: string; status?: string; }
 export interface JournalEntryListParams extends PaginationParams, DateRangeParams { isPosted?: boolean; }
+export interface RunPostingEngineDTO { source?: PostingEngineRunResult['source']; limit?: number; postImmediately?: boolean; }
 
 // ─────────────────────────────────────────────
 // Service functions
@@ -219,6 +255,11 @@ export async function updateJournalEntry(id: string, data: CreateJournalEntryDTO
 export async function reverseJournalEntry(id: string, data: ReverseJournalEntryDTO): Promise<JournalEntry> {
   const res = await apiClient.post(`/api/accounting/journal-entries/${id}/reverse`, data);
   return safeParse(SingleResponseSchema(JournalEntrySchema), res.data, 'reverseJournalEntry').data;
+}
+
+export async function runPostingEngine(data: RunPostingEngineDTO): Promise<PostingEngineRunResult> {
+  const res = await apiClient.post('/api/accounting/posting-engine/run', data);
+  return safeParse(SingleResponseSchema(PostingEngineRunResultSchema), res.data, 'runPostingEngine').data;
 }
 
 export async function getBankAccounts(): Promise<BankAccount[]> {

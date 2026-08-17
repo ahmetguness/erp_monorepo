@@ -16,6 +16,7 @@ purchaseOrderRoutes.post('/requests/:id/approve', requirePermission('purchasing'
 purchaseOrderRoutes.post('/requests/:id/convert', requirePermission('purchasing', 'CREATE'), PurchaseOrderController.convertRequestToOrder);
 
 purchaseOrderRoutes.get('/', requirePermission('purchasing', 'READ'), PurchaseOrderController.listOrders);
+purchaseOrderRoutes.get('/:id/three-way-match', requirePermission('purchasing', 'READ'), PurchaseOrderController.getThreeWayMatch);
 purchaseOrderRoutes.get('/:id', requirePermission('purchasing', 'READ'), PurchaseOrderController.getOrderById);
 purchaseOrderRoutes.get('/:id/history', requirePermission('purchasing', 'READ'), PurchaseOrderController.getOrderHistory);
 purchaseOrderRoutes.post('/', requirePermission('purchasing', 'CREATE'), PurchaseOrderController.createOrder);

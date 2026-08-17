@@ -6,7 +6,7 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   getPurchaseRequests, createPurchaseRequest, approvePurchaseRequest, convertRequestToOrder,
   getPurchaseOrders, getPurchaseOrderById, getPurchaseOrderHistory, createPurchaseOrder,
-  sendPurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder, runPurchaseReorderAutomation,
+  sendPurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder, runPurchaseReorderAutomation, getPurchaseOrderThreeWayMatch,
   type ListParams, type CreatePurchaseRequestDTO, type CreatePurchaseOrderDTO, type ReceiveOrderDTO,
 } from '@/services/purchase.service';
 
@@ -15,6 +15,7 @@ const KEYS = {
   orders: (p: ListParams) => ['purchase', 'orders', p] as const,
   order: (id: string) => ['purchase', 'orders', id] as const,
   orderHistory: (id: string) => ['purchase', 'orders', id, 'history'] as const,
+  threeWayMatch: (id: string) => ['purchase', 'orders', id, 'three-way-match'] as const,
 };
 
 // ── Purchase Requests ────────────────────────
@@ -94,6 +95,10 @@ export function usePurchaseOrder(id: string) {
 
 export function usePurchaseOrderHistory(id: string) {
   return useQuery({ queryKey: KEYS.orderHistory(id), queryFn: () => getPurchaseOrderHistory(id), enabled: !!id });
+}
+
+export function usePurchaseOrderThreeWayMatch(id: string) {
+  return useQuery({ queryKey: KEYS.threeWayMatch(id), queryFn: () => getPurchaseOrderThreeWayMatch(id), enabled: !!id });
 }
 
 export function useCreatePurchaseOrder() {

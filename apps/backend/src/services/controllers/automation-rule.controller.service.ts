@@ -3,6 +3,7 @@ import { AuditAction, AutomationAction, AutomationTrigger, EntityType } from '@p
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../errors';
 import { AutomationRuleService } from '../automation-rule.service.js';
+import { SchedulerJobEngineService, parseSchedulerJobKey, schedulerJobDefinitions } from '../scheduler-job-engine.service.js';
 import { requireTenantId, requireUserId, requireParam } from '../../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../../utils/audit.js';
 import { toInputJson } from '../../utils/json.js';
@@ -35,6 +36,29 @@ async function readBody(c: Context): Promise<Record<string, unknown>> {
 }
 
 export const AutomationRuleController = {
+  async listSchedulerJobs(c: Context): Promise<Response> {
+    return c.json({ data: schedulerJobDefinitions() });
+  },
+
+  async listSchedulerRuns(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const limit = Number(c.req.query('limit') ?? 30);
+    const runs = await new SchedulerJobEngineService(prisma).recentRuns(tenantId, Number.isFinite(limit) ? limit : 30);
+    return c.json({ data: runs });
+  },
+
+  async runScheduler(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const body = await readBody(c);
+    const jobKey = parseSchedulerJobKey(readString(body, 'jobKey'));
+    if (!jobKey) {
+      return c.json(new ValidationError('Gecersiz scheduler job anahtari.').toJSON(), 400);
+    }
+    const result = await new SchedulerJobEngineService(prisma).run(tenantId, jobKey, userId);
+    return c.json({ data: result });
+  },
+
   async listExecutions(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const executions = await prisma.automationExecution.findMany({

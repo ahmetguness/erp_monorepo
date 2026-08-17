@@ -7,6 +7,7 @@ import { requireTenantId, requireParam } from '../../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../../utils/audit.js';
 import { resolveStockLevelLocationId, recordInventoryCosting } from '../inventory-rules.service';
 import { PurchaseAutomationService } from '../purchase-automation.service.js';
+import { PurchaseThreeWayMatchService } from '../purchase-three-way-match.service.js';
 import { PurchaseTraceService } from '../purchase-trace.service.js';
 
 // ---------------------------------------------
@@ -354,6 +355,19 @@ export const PurchaseOrderController = {
     });
 
     return c.json({ data: history });
+  },
+
+  async getThreeWayMatch(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
+
+    try {
+      const result = await new PurchaseThreeWayMatchService(prisma).evaluate(tenantId, id);
+      return c.json({ data: result });
+    } catch (error) {
+      if (error instanceof NotFoundError) return c.json(error.toJSON(), 404);
+      throw error;
+    }
   },
 
   async createOrder(c: Context): Promise<Response> {

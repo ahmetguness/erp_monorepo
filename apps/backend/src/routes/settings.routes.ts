@@ -17,6 +17,8 @@ settingsRoutes.get('/', requirePermission('settings', 'READ'), SettingsControlle
 settingsRoutes.put('/', requirePermission('settings', 'UPDATE'), validateBody(tenantSettingBodySchema), SettingsController.upsertTenantSetting);
 settingsRoutes.get('/business-rules', requirePermission('settings', 'READ'), SettingsController.listBusinessRules);
 settingsRoutes.put('/business-rules', requirePermission('settings', 'UPDATE'), validateBody(businessRuleBodySchema), SettingsController.upsertBusinessRule);
+settingsRoutes.get('/defaults-policies', requirePermission('settings', 'READ'), SettingsController.defaultPolicySnapshot);
+settingsRoutes.put('/defaults-policies', requirePermission('settings', 'UPDATE'), SettingsController.updateDefaultPolicies);
 settingsRoutes.get('/security-score', requirePermission('settings', 'READ'), SettingsController.securityScore);
 settingsRoutes.get('/security/dashboard', requirePermission('settings', 'READ'), SettingsController.securityDashboard);
 settingsRoutes.get('/security/sessions', requirePermission('settings', 'READ'), SettingsController.listSecuritySessions);

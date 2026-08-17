@@ -165,6 +165,7 @@ export const createCollectionReminderBodySchema = z.object({
   invoiceId: optionalString,
   amount: positiveNumber,
   dueDate: nonEmptyString,
+  remindAt: optionalString,
   notes: optionalString,
 }).strict();
 

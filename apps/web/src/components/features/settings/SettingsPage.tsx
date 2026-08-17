@@ -37,9 +37,11 @@ import {
   useSecurityHardeningSnapshot,
   useRevokeSecuritySession,
   useCleanDemoData,
+  useDefaultPolicySnapshot,
+  useUpdateDefaultPolicies,
 } from '@/hooks/useSettings';
 import { cn } from '@/lib/utils';
-import type { TenantSetting, ModuleSetting, BusinessRule } from '@/services/settings.service';
+import type { TenantSetting, ModuleSetting, BusinessRule, DefaultPolicyScope, DefaultPolicyValue } from '@/services/settings.service';
 
 // ─────────────────────────────────────────────
 // Turkish label maps
@@ -120,6 +122,17 @@ const SESSION_STATUS_CLASSES = {
   REVOKED: 'border-red-500/30 bg-red-500/10 text-red-300',
   EXPIRED: 'border-slate-600 bg-slate-800 text-slate-300',
 } as const;
+
+const DEFAULT_POLICY_SCOPE_LABELS: Record<DefaultPolicyScope, string> = {
+  tenant: 'Tenant Defaults',
+  contact: 'Contact Defaults',
+  product: 'Product Defaults',
+  automation: 'Automation Policies',
+};
+
+function defaultPolicyInputType(item: DefaultPolicyValue): 'text' | 'number' {
+  return item.valueType === 'number' ? 'number' : 'text';
+}
 
 const SESSION_STATUS_LABELS = {
   ACTIVE: 'Aktif',
@@ -354,6 +367,7 @@ export function SettingsPage() {
   const { data: tenantSettings = [], isLoading: loadingTenant } = useTenantSettings();
   const { data: moduleSettings = [], isLoading: loadingModule } = useModuleSettings();
   const { data: businessRules = [], isLoading: loadingBusinessRules } = useBusinessRules();
+  const { data: defaultPolicySnapshot, isLoading: loadingDefaultPolicies } = useDefaultPolicySnapshot();
   const { data: securityScore, isLoading: loadingSecurityScore } = useTenantSecurityScore();
   const { data: securityHardening, isLoading: loadingSecurityHardening } = useSecurityHardeningSnapshot();
   const { data: logoBlob } = useTenantLogo();
@@ -363,6 +377,7 @@ export function SettingsPage() {
   const uploadLogo = useUploadTenantLogo();
   const deleteLogo = useDeleteTenantLogo();
   const upsertBusinessRule = useUpsertBusinessRule();
+  const updateDefaultPolicies = useUpdateDefaultPolicies();
   const revokeSession = useRevokeSecuritySession();
   const cleanDemo = useCleanDemoData();
 
@@ -380,6 +395,7 @@ export function SettingsPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [defaultPolicyDraft, setDefaultPolicyDraft] = useState<Record<string, string>>({});
 
   const handleSaveTenant = (key: string, value: string) => {
     upsertTenant.mutate({ key, value }, { onSuccess: () => setEditingId(null) });
@@ -394,6 +410,14 @@ export function SettingsPage() {
       { key: rule.key, value: parseBusinessRuleEditValue(rule, value) },
       { onSuccess: () => setEditingId(null) },
     );
+  };
+
+  const handleSaveDefaultPolicies = () => {
+    const values = defaultPolicySnapshot?.values ?? [];
+    const updates = values
+      .map((item) => ({ storageKey: item.storageKey, value: defaultPolicyDraft[item.storageKey] ?? item.effectiveValue }))
+      .filter((item, index) => item.value !== values[index].effectiveValue);
+    if (updates.length > 0) updateDefaultPolicies.mutate(updates);
   };
 
   const handleAdd = () => {
@@ -415,6 +439,13 @@ export function SettingsPage() {
     setLogoPreviewUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [logoBlob, logoFile]);
+
+  useEffect(() => {
+    if (!defaultPolicySnapshot) return;
+    setDefaultPolicyDraft(Object.fromEntries(
+      defaultPolicySnapshot.values.map((item) => [item.storageKey, item.effectiveValue]),
+    ));
+  }, [defaultPolicySnapshot]);
 
   const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -454,6 +485,16 @@ export function SettingsPage() {
   const negativeStockPolicy = moduleSettings.find(
     (setting) => setting.module === 'inventory' && setting.key === NEGATIVE_STOCK_POLICY_KEY,
   )?.value ?? 'ALLOW';
+  const defaultPolicyGroups = (defaultPolicySnapshot?.values ?? []).reduce<Record<DefaultPolicyScope, DefaultPolicyValue[]>>(
+    (acc, item) => {
+      acc[item.scope].push(item);
+      return acc;
+    },
+    { tenant: [], contact: [], product: [], automation: [] },
+  );
+  const hasDefaultPolicyChanges = (defaultPolicySnapshot?.values ?? []).some(
+    (item) => (defaultPolicyDraft[item.storageKey] ?? item.effectiveValue) !== item.effectiveValue,
+  );
 
   return (
     <FeaturePageShell title="Genel Ayarlar" subtitle="Sistem ve modül yapılandırmasını yönetin."
@@ -489,6 +530,77 @@ export function SettingsPage() {
       </div>
 
       <DocumentPdfThemeSettingsCard />
+
+      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div className="flex flex-col gap-3 px-5 py-3.5 border-b border-slate-800/60 md:flex-row md:items-center">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-sky-500/10"><Layers className="w-4 h-4 text-sky-400" /></div>
+            <div>
+              <h2 className="text-sm font-semibold text-white">Default & Policy Engine</h2>
+              <p className="text-xs text-slate-500">Tenant, cari, urun ve otomasyon varsayilanlari</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            leftIcon={<Save className="w-3.5 h-3.5" />}
+            disabled={!hasDefaultPolicyChanges || updateDefaultPolicies.isPending}
+            loading={updateDefaultPolicies.isPending}
+            onClick={handleSaveDefaultPolicies}
+            className="ml-0 md:ml-auto"
+          >
+            Degisiklikleri Kaydet
+          </Button>
+        </div>
+        {loadingDefaultPolicies ? (
+          <div className="grid gap-3 p-5 md:grid-cols-2">
+            {[1, 2, 3, 4].map((item) => <div key={item} className="h-28 animate-pulse rounded-xl bg-slate-800/60" />)}
+          </div>
+        ) : (
+          <div className="grid gap-4 p-5 xl:grid-cols-2">
+            {(Object.keys(DEFAULT_POLICY_SCOPE_LABELS) as DefaultPolicyScope[]).map((scope) => (
+              <section key={scope} className="rounded-xl border border-slate-800 bg-slate-950/35 p-4">
+                <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">{DEFAULT_POLICY_SCOPE_LABELS[scope]}</h3>
+                <div className="space-y-3">
+                  {defaultPolicyGroups[scope].map((item) => {
+                    const value = defaultPolicyDraft[item.storageKey] ?? item.effectiveValue;
+                    return (
+                      <div key={item.storageKey} className="grid gap-2 rounded-lg border border-slate-800 bg-slate-900/50 p-3 md:grid-cols-[minmax(0,1fr)_180px] md:items-center">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-sm font-semibold text-slate-200">{item.label}</p>
+                            {item.isDefault && <span className="rounded-md border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-400">default</span>}
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-xs text-slate-500">{item.description}</p>
+                        </div>
+                        {item.valueType === 'boolean' ? (
+                          <button
+                            type="button"
+                            onClick={() => setDefaultPolicyDraft((current) => ({ ...current, [item.storageKey]: value === 'true' ? 'false' : 'true' }))}
+                            className={cn(
+                              'inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition-colors',
+                              value === 'true'
+                                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                                : 'border-slate-700 bg-slate-800 text-slate-400',
+                            )}
+                          >
+                            {value === 'true' ? 'Aktif' : 'Kapali'}
+                          </button>
+                        ) : (
+                          <Input
+                            type={defaultPolicyInputType(item)}
+                            value={value}
+                            onChange={(event) => setDefaultPolicyDraft((current) => ({ ...current, [item.storageKey]: event.target.value }))}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-800/60">

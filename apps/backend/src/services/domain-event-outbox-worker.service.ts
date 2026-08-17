@@ -153,6 +153,28 @@ function restoreDomainEvent(name: DomainEventName, context: DomainEventContext, 
           daysLate: readNumber(payload, 'daysLate'),
         },
       };
+    case 'invoice.sent':
+      return {
+        name,
+        context,
+        payload: {
+          invoiceId: readString(payload, 'invoiceId'),
+          number: readString(payload, 'number'),
+          contactId: readString(payload, 'contactId'),
+          totalGross: readNumber(payload, 'totalGross'),
+        },
+      };
+    case 'invoice.paid':
+      return {
+        name,
+        context,
+        payload: {
+          invoiceId: readString(payload, 'invoiceId'),
+          number: readString(payload, 'number'),
+          contactId: readString(payload, 'contactId'),
+          paidAmount: readNumber(payload, 'paidAmount'),
+        },
+      };
     case 'payment.received':
       return {
         name,
@@ -163,6 +185,16 @@ function restoreDomainEvent(name: DomainEventName, context: DomainEventContext, 
           amount: readNumber(payload, 'amount'),
           method: readString(payload, 'method'),
           reference: readOptionalString(payload, 'reference'),
+        },
+      };
+    case 'payment.allocated':
+      return {
+        name,
+        context,
+        payload: {
+          paymentId: readString(payload, 'paymentId'),
+          invoiceId: readString(payload, 'invoiceId'),
+          amount: readNumber(payload, 'amount'),
         },
       };
     case 'stock.low':
@@ -178,6 +210,42 @@ function restoreDomainEvent(name: DomainEventName, context: DomainEventContext, 
           warehouseId: readOptionalString(payload, 'warehouseId'),
         },
       };
+    case 'stock.reserved':
+    case 'stock.reservation.released':
+      return {
+        name,
+        context,
+        payload: {
+          reservationId: readString(payload, 'reservationId'),
+          productId: readString(payload, 'productId'),
+          quantity: readNumber(payload, 'quantity'),
+          warehouseId: readString(payload, 'warehouseId'),
+        },
+      };
+    case 'delivery.created':
+    case 'delivery.completed':
+      return {
+        name,
+        context,
+        payload: {
+          deliveryNoteId: readString(payload, 'deliveryNoteId'),
+          number: readString(payload, 'number'),
+          type: readString(payload, 'type'),
+          contactId: readOptionalString(payload, 'contactId'),
+        },
+      };
+    case 'sales.order.confirmed':
+    case 'sales.order.cancelled':
+      return {
+        name,
+        context,
+        payload: {
+          orderId: readString(payload, 'orderId'),
+          number: readString(payload, 'number'),
+          contactId: readString(payload, 'contactId'),
+          totalGross: readNumber(payload, 'totalGross'),
+        },
+      };
     case 'salesQuote.accepted':
       return {
         name,
@@ -188,6 +256,91 @@ function restoreDomainEvent(name: DomainEventName, context: DomainEventContext, 
           quoteNumber: readString(payload, 'quoteNumber'),
           orderNumber: readString(payload, 'orderNumber'),
           contactId: readString(payload, 'contactId'),
+          totalGross: readNumber(payload, 'totalGross'),
+        },
+      };
+    case 'purchase.request.created':
+      return {
+        name,
+        context,
+        payload: {
+          requestId: readString(payload, 'requestId'),
+          number: readString(payload, 'number'),
+          totalEstimated: payload.totalEstimated === null || payload.totalEstimated === undefined ? null : readNumber(payload, 'totalEstimated'),
+        },
+      };
+    case 'purchase.order.approved':
+      return {
+        name,
+        context,
+        payload: {
+          orderId: readString(payload, 'orderId'),
+          number: readString(payload, 'number'),
+          contactId: readString(payload, 'contactId'),
+          totalGross: readNumber(payload, 'totalGross'),
+        },
+      };
+    case 'purchase.order.received':
+      return {
+        name,
+        context,
+        payload: {
+          orderId: readString(payload, 'orderId'),
+          number: readString(payload, 'number'),
+          receivedQuantity: readNumber(payload, 'receivedQuantity'),
+        },
+      };
+    case 'supplier.invoice.created':
+      return {
+        name,
+        context,
+        payload: {
+          invoiceId: readString(payload, 'invoiceId'),
+          number: readString(payload, 'number'),
+          purchaseOrderId: readOptionalString(payload, 'purchaseOrderId'),
+          totalGross: readNumber(payload, 'totalGross'),
+        },
+      };
+    case 'threeway.match.failed':
+      return {
+        name,
+        context,
+        payload: {
+          purchaseOrderId: readString(payload, 'purchaseOrderId'),
+          purchaseOrderNumber: readString(payload, 'purchaseOrderNumber'),
+          issueCount: readNumber(payload, 'issueCount'),
+        },
+      };
+    case 'accounting.entry.created':
+      return {
+        name,
+        context,
+        payload: {
+          journalEntryId: readString(payload, 'journalEntryId'),
+          number: readString(payload, 'number'),
+          refType: readOptionalString(payload, 'refType'),
+          refId: readOptionalString(payload, 'refId'),
+          totalDebit: readNumber(payload, 'totalDebit'),
+          totalCredit: readNumber(payload, 'totalCredit'),
+        },
+      };
+    case 'accounting.entry.failed':
+      return {
+        name,
+        context,
+        payload: {
+          refType: readString(payload, 'refType'),
+          refId: readString(payload, 'refId'),
+          reason: readString(payload, 'reason'),
+        },
+      };
+    case 'marketplace.order.received':
+      return {
+        name,
+        context,
+        payload: {
+          marketplaceOrderId: readString(payload, 'marketplaceOrderId'),
+          channel: readString(payload, 'channel'),
           totalGross: readNumber(payload, 'totalGross'),
         },
       };

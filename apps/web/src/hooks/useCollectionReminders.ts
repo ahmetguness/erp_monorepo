@@ -4,6 +4,7 @@ import {
   createCollectionReminder,
   updateCollectionReminderStatus,
   deleteCollectionReminder,
+  runCollectionAutomation,
   type CreateCollectionReminderDTO,
 } from '@/services/collection-reminder.service';
 
@@ -37,6 +38,15 @@ export function useCollectionReminders() {
     },
   });
 
+  const automationMutation = useMutation({
+    mutationFn: runCollectionAutomation,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['collection-reminders'] });
+      queryClient.invalidateQueries({ queryKey: ['workflow-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['exception-center'] });
+    },
+  });
+
   return {
     reminders: query.data ?? [],
     isLoading: query.isLoading,
@@ -44,5 +54,6 @@ export function useCollectionReminders() {
     createReminder: createMutation,
     updateReminderStatus: updateStatusMutation,
     deleteReminder: deleteMutation,
+    runAutomation: automationMutation,
   };
 }

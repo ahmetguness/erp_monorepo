@@ -52,9 +52,26 @@ export const DomainEventReplayResultSchema = z.object({
   message: z.string(),
 });
 
+export const DomainEventCoverageSchema = z.object({
+  schemaVersion: z.coerce.number(),
+  publishCoverage: z.array(z.object({
+    workflow: z.string(),
+    eventName: z.string(),
+    producer: z.string(),
+    status: z.enum(['covered', 'planned']),
+    notes: z.string(),
+  })),
+  listenerIdempotency: z.array(z.object({
+    listener: z.string(),
+    strategy: z.enum(['source-upsert', 'append-only', 'no-op-for-event', 'natural-idempotency']),
+    notes: z.string(),
+  })),
+});
+
 export type DomainEventStatus = z.infer<typeof DomainEventStatusSchema>;
 export type DomainEventOutbox = z.infer<typeof DomainEventOutboxSchema>;
 export type DomainEventReplayResult = z.infer<typeof DomainEventReplayResultSchema>;
+export type DomainEventCoverage = z.infer<typeof DomainEventCoverageSchema>;
 
 export interface DomainEventParams extends PaginationParams {
   status?: DomainEventStatus;
@@ -70,4 +87,9 @@ export async function getDomainEventFailures(params: Omit<DomainEventParams, 'st
 export async function replayDomainEvent(id: string): Promise<DomainEventReplayResult> {
   const res = await apiClient.post(`/api/domain-events/${id}/replay`);
   return safeParse(SingleResponseSchema(DomainEventReplayResultSchema), res.data, 'replayDomainEvent').data;
+}
+
+export async function getDomainEventCoverage(): Promise<DomainEventCoverage> {
+  const res = await apiClient.get('/api/domain-events/coverage');
+  return safeParse(SingleResponseSchema(DomainEventCoverageSchema), res.data, 'getDomainEventCoverage').data;
 }

@@ -8,6 +8,9 @@ const automationRuleRoutes = new Hono();
 
 automationRuleRoutes.use('*', requireAccess(ACCESS_POLICIES.workflowAutomation));
 
+automationRuleRoutes.get('/scheduler/jobs', requirePermission('settings', 'READ'), AutomationRuleController.listSchedulerJobs);
+automationRuleRoutes.get('/scheduler/runs', requirePermission('settings', 'READ'), AutomationRuleController.listSchedulerRuns);
+automationRuleRoutes.post('/scheduler/run', requirePermission('settings', 'UPDATE'), AutomationRuleController.runScheduler);
 automationRuleRoutes.get('/', requirePermission('settings', 'READ'), AutomationRuleController.list);
 automationRuleRoutes.get('/executions', requirePermission('settings', 'READ'), AutomationRuleController.listExecutions);
 automationRuleRoutes.post('/', requirePermission('settings', 'CREATE'), AutomationRuleController.create);

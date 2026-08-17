@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Textarea } from '@/components/ui/Textarea';
 import { InvoiceSelect, ContactSelect } from '@/components/shared/EntitySelect';
 import { useCollectionReminders } from '@/hooks/useCollectionReminders';
-import type { CollectionReminder } from '@/services/collection-reminder.service';
+import type { CollectionAutomationSnapshot, CollectionReminder } from '@/services/collection-reminder.service';
 import { useInvoices } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useUIStore } from '@/store/ui.store';
@@ -36,19 +36,21 @@ const reminderFormSchema = z.object({
 
 type ReminderForm = z.infer<typeof reminderFormSchema>;
 
-const STATUS_MAP: Record<string, { label: string; variant: 'warning' | 'success' | 'danger' }> = {
+const STATUS_MAP: Record<string, { label: string; variant: 'warning' | 'success' | 'danger' | 'neutral' }> = {
   PENDING: { label: 'Bekliyor', variant: 'warning' },
   SENT: { label: 'Gönderildi', variant: 'success' },
   FAILED: { label: 'Hata', variant: 'danger' },
+  CANCELLED: { label: 'Kapandi', variant: 'neutral' },
 };
 
 export function CollectionRemindersPage() {
   const { toast } = useUIStore();
-  const { reminders, isLoading, createReminder, updateReminderStatus, deleteReminder } = useCollectionReminders();
+  const { reminders, isLoading, createReminder, updateReminderStatus, deleteReminder, runAutomation } = useCollectionReminders();
   const { data: invoicesData } = useInvoices({ page: 1, limit: 100 });
   const invoices = invoicesData?.data ?? [];
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [automationResult, setAutomationResult] = useState<CollectionAutomationSnapshot | null>(null);
 
   const { register, handleSubmit, reset, setValue, control, formState: { errors } } = useForm<ReminderForm>({
     resolver: zodResolver(reminderFormSchema),
@@ -130,10 +132,10 @@ export function CollectionRemindersPage() {
       width: '120px',
       render: (r) => (
         <div className="flex gap-2">
-          <Badge variant={r.emailSent ? 'success' : 'neutral'} className="gap-1 text-[10px]">
+          <Badge variant={r.emailSent === true ? 'success' : 'neutral'} className="gap-1 text-[10px]">
             <Mail className="w-3 h-3" /> E-Posta
           </Badge>
-          <Badge variant={r.smsSent ? 'success' : 'neutral'} className="gap-1 text-[10px]">
+          <Badge variant={r.smsSent === true ? 'success' : 'neutral'} className="gap-1 text-[10px]">
             <Phone className="w-3 h-3" /> SMS
           </Badge>
         </div>
@@ -178,6 +180,48 @@ export function CollectionRemindersPage() {
           </Button>
         }
       />
+
+      <section className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-100">Collection Automation</h2>
+            <p className="mt-1 text-xs text-slate-500">Vade -3, vade gunu, mail taslagi, takip gorevi ve eskalasyon akisini calistirir.</p>
+          </div>
+          <Button
+            leftIcon={<RefreshCw className="w-4 h-4" />}
+            loading={runAutomation.isPending}
+            onClick={() => runAutomation.mutate(undefined, {
+              onSuccess: (result) => {
+                setAutomationResult(result);
+                toast.success(`Tahsilat otomasyonu calisti. ${result.createdReminders} reminder, ${result.createdTasks} gorev.`);
+              },
+              onError: (err) => toast.error(getErrorMessage(err)),
+            })}
+          >
+            Otomasyonu Calistir
+          </Button>
+        </div>
+        {automationResult && (
+          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-xs text-slate-500">Taranan</p>
+              <p className="mt-1 text-lg font-semibold text-slate-100">{automationResult.scanned}</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-xs text-slate-500">Reminder</p>
+              <p className="mt-1 text-lg font-semibold text-slate-100">{automationResult.createdReminders}</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-xs text-slate-500">Gorev</p>
+              <p className="mt-1 text-lg font-semibold text-slate-100">{automationResult.createdTasks}</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+              <p className="text-xs text-slate-500">Kapanan</p>
+              <p className="mt-1 text-lg font-semibold text-slate-100">{automationResult.closedReminders}</p>
+            </div>
+          </div>
+        )}
+      </section>
 
       <DataTable
         columns={columns}

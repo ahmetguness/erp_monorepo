@@ -12,6 +12,7 @@ import {
 import { computeTrialBalance, assertTrialBalanceBalanced } from '../financial/trial-balance.js';
 import { getContactStatement, verifyContactAccountBalance } from '../financial/account-entry-reconciliation.js';
 import { getAccountingClosingChecklist } from '../accounting-closing-checklist.service.js';
+import { AccountingPostingEngineService, parsePostingEngineOptions } from '../accounting-posting-engine.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -138,6 +139,15 @@ export const AccountingController = {
   },
 
   // ── Journal Entries ──────────────────────────
+
+  async runPostingEngine(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const body = await readOptionalJsonObject(c);
+    const options = parsePostingEngineOptions(body, userId);
+    const result = await new AccountingPostingEngineService(prisma).run(tenantId, options);
+    return c.json({ data: result });
+  },
 
   async listJournalEntries(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);

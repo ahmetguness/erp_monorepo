@@ -2,16 +2,16 @@
 
 import { useState } from 'react';
 import {
-  AlertTriangle, Bell, CheckCircle2, Clock, ExternalLink, Sparkles, Play, Trash2, ToggleLeft, ToggleRight, Settings, Plus, PlaySquare
+  AlertOctagon, AlertTriangle, Bell, CalendarClock, CheckCircle2, Clock, ExternalLink, Sparkles, Play, Trash2, ToggleLeft, ToggleRight, Settings
 } from 'lucide-react';
 import Link from 'next/link';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { useWorkflowTasks } from '@/hooks/useWorkflow';
-import type { WorkflowTask } from '@/services/task.service';
-import type { AutomationExecution, AutomationRule } from '@/services/intelligence.service';
+import { useExceptionCenter, useWorkflowTasks } from '@/hooks/useWorkflow';
+import type { ExceptionCenterItem, WorkflowTask } from '@/services/task.service';
+import type { AutomationExecution, AutomationRule, SchedulerJobDefinition } from '@/services/intelligence.service';
 import {
-  useAutomationExecutions, useAutomationRules, useAutomationRuleTemplates, useCreateAutomationRule, useUpdateAutomationRule, useDeleteAutomationRule, useRunAutomationRule, useRunActiveAutomationRules
+  useAutomationExecutions, useAutomationRules, useAutomationRuleTemplates, useCreateAutomationRule, useUpdateAutomationRule, useDeleteAutomationRule, useRunAutomationRule, useRunActiveAutomationRules, useSchedulerJobs, useSchedulerRuns, useRunSchedulerJob
 } from '@/hooks/useAutomation';
 import { AutomationRuleBuilder } from './AutomationRuleBuilder';
 
@@ -38,6 +38,25 @@ const EXECUTION_BADGE: Record<AutomationExecution['status'], BadgeVariant> = {
   RUNNING: 'info',
   SUCCEEDED: 'success',
   FAILED: 'danger',
+};
+
+const SCHEDULER_STATUS_BADGE: Record<SchedulerJobDefinition['status'], BadgeVariant> = {
+  ACTIVE: 'success',
+  PLANNED: 'neutral',
+};
+
+const EXCEPTION_SEVERITY_BADGE: Record<ExceptionCenterItem['severity'], BadgeVariant> = {
+  LOW: 'neutral',
+  MEDIUM: 'info',
+  HIGH: 'warning',
+  CRITICAL: 'danger',
+};
+
+const EXCEPTION_STATUS_BADGE: Record<ExceptionCenterItem['status'], BadgeVariant> = {
+  OPEN: 'warning',
+  IN_PROGRESS: 'info',
+  FAILED: 'danger',
+  BLOCKED: 'danger',
 };
 
 function formatDate(value: string | null): string {
@@ -86,12 +105,14 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 export function WorkflowCenterPage() {
-  const [activeTab, setActiveTab] = useState<'tasks' | 'rules'>('tasks');
+  const [activeTab, setActiveTab] = useState<'exceptions' | 'tasks' | 'rules' | 'scheduler'>('exceptions');
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
   const { data, isLoading, isError } = useWorkflowTasks();
   const tasks = data?.data ?? [];
   const counts = data?.meta.counts;
   const criticalCount = tasks.filter((task) => task.priority === 'CRITICAL').length;
+  const { data: exceptions, isLoading: loadingExceptions, isError: exceptionError } = useExceptionCenter();
+  const exceptionItems = exceptions?.items ?? [];
 
   const { data: rules, isLoading: loadingRules } = useAutomationRules();
   const { data: templates } = useAutomationRuleTemplates();
@@ -101,6 +122,11 @@ export function WorkflowCenterPage() {
   const runRule = useRunAutomationRule();
   const runAllActive = useRunActiveAutomationRules();
   const { data: executions = [], isLoading: loadingExecutions } = useAutomationExecutions();
+  const { data: schedulerJobs = [], isLoading: loadingSchedulerJobs } = useSchedulerJobs();
+  const { data: schedulerRuns = [], isLoading: loadingSchedulerRuns } = useSchedulerRuns();
+  const runScheduler = useRunSchedulerJob();
+  const activeSchedulerCount = schedulerJobs.filter((job) => job.status === 'ACTIVE').length;
+  const plannedSchedulerCount = schedulerJobs.filter((job) => job.status === 'PLANNED').length;
 
   return (
     <div className="space-y-6">
@@ -108,7 +134,7 @@ export function WorkflowCenterPage() {
         title="İş Akışı & Otomasyon Merkezi"
         subtitle="İş akışlarını, otomatik kuralları ve bekleyen görevleri tek bir merkezden yönetin."
         action={
-          activeTab === 'rules' && (
+          activeTab === 'rules' ? (
             <button
               onClick={() => runAllActive.mutate()}
               disabled={runAllActive.isPending}
@@ -117,12 +143,32 @@ export function WorkflowCenterPage() {
               <Play className="w-4 h-4" />
               Tüm Aktif Kuralları Tetikle
             </button>
-          )
+          ) : activeTab === 'scheduler' ? (
+            <button
+              onClick={() => runScheduler.mutate('all')}
+              disabled={runScheduler.isPending || activeSchedulerCount === 0}
+              className="inline-flex items-center gap-2.5 h-10 px-5 rounded-xl font-medium text-sm text-white bg-gradient-to-r from-emerald-500 to-sky-600 hover:from-emerald-400 hover:to-sky-500 shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition-all duration-200 active:scale-[0.97]"
+            >
+              <Play className="w-4 h-4" />
+              Tum Aktif Joblari Calistir
+            </button>
+          ) : null
         }
       />
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-slate-800 pb-px">
+        <button
+          onClick={() => setActiveTab('exceptions')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all outline-none ${
+            activeTab === 'exceptions'
+              ? 'border-sky-500 text-sky-400 font-semibold bg-sky-500/5 rounded-t-lg'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <AlertOctagon className="w-4 h-4" />
+          Exceptions ({exceptions?.total ?? 0})
+        </button>
         <button
           onClick={() => setActiveTab('tasks')}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all outline-none ${
@@ -145,7 +191,87 @@ export function WorkflowCenterPage() {
           <Settings className="w-4 h-4" />
           Otomasyon Kuralları ({rules?.length ?? 0})
         </button>
+        <button
+          onClick={() => setActiveTab('scheduler')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all outline-none ${
+            activeTab === 'scheduler'
+              ? 'border-sky-500 text-sky-400 font-semibold bg-sky-500/5 rounded-t-lg'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <CalendarClock className="w-4 h-4" />
+          Scheduler ({activeSchedulerCount})
+        </button>
       </div>
+
+      {activeTab === 'exceptions' && (
+        <div className="space-y-6">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+              <AlertOctagon className="mb-3 h-5 w-5 text-red-400" />
+              <p className="text-2xl font-semibold text-slate-100">{exceptions?.total ?? 0}</p>
+              <p className="text-xs text-slate-500">Acil islem bekleyen</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+              <AlertTriangle className="mb-3 h-5 w-5 text-amber-400" />
+              <p className="text-2xl font-semibold text-slate-100">{exceptions?.critical ?? 0}</p>
+              <p className="text-xs text-slate-500">Kritik istisna</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+              <Clock className="mb-3 h-5 w-5 text-sky-400" />
+              <p className="text-2xl font-semibold text-slate-100">{exceptions?.high ?? 0}</p>
+              <p className="text-xs text-slate-500">Yuksek oncelik</p>
+            </div>
+          </div>
+
+          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {(exceptions?.byCategory ?? []).filter((item) => item.count > 0).map((item) => (
+              <div key={item.category} className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-semibold text-slate-200">{item.label}</p>
+                  {item.highestSeverity && <Badge variant={EXCEPTION_SEVERITY_BADGE[item.highestSeverity]}>{item.highestSeverity}</Badge>}
+                </div>
+                <p className="text-2xl font-semibold text-slate-100">{item.count}</p>
+              </div>
+            ))}
+          </section>
+
+          <section className="rounded-lg border border-slate-800 bg-slate-900/40">
+            {loadingExceptions ? (
+              <div className="p-6 text-sm text-slate-500">Exception Center yukleniyor...</div>
+            ) : exceptionError ? (
+              <div className="p-6 text-sm text-red-400">Exception Center verisi alinamadi.</div>
+            ) : exceptionItems.length === 0 ? (
+              <div className="p-6 text-sm text-slate-500">Mudahale gerektiren istisna bulunmuyor.</div>
+            ) : (
+              <div className="divide-y divide-slate-800">
+                {exceptionItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className="grid gap-3 px-4 py-3 text-sm transition-colors hover:bg-slate-900 md:grid-cols-[minmax(0,1fr)_150px_150px] md:items-center"
+                  >
+                    <div className="min-w-0">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <Badge variant={EXCEPTION_SEVERITY_BADGE[item.severity]}>{item.severity}</Badge>
+                        <Badge variant={EXCEPTION_STATUS_BADGE[item.status]}>{item.status}</Badge>
+                        <Badge variant="neutral">{item.module}</Badge>
+                      </div>
+                      <p className="truncate font-medium text-slate-200">{item.title}</p>
+                      {item.detail && <p className="mt-1 truncate text-xs text-slate-500">{item.detail}</p>}
+                    </div>
+                    <p className="truncate text-xs text-slate-500">{item.category}</p>
+                    <div className="flex items-center justify-between gap-2 text-xs text-slate-500 md:justify-end">
+                      <span>{formatDateTime(item.occurredAt)}</span>
+                      <ExternalLink className="h-4 w-4 shrink-0" />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       {activeTab === 'tasks' && (
         <div className="space-y-6">
@@ -409,6 +535,92 @@ export function WorkflowCenterPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'scheduler' && (
+        <div className="space-y-6">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+              <CalendarClock className="mb-3 h-5 w-5 text-emerald-400" />
+              <p className="text-2xl font-semibold text-slate-100">{activeSchedulerCount}</p>
+              <p className="text-xs text-slate-500">Aktif job</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+              <Clock className="mb-3 h-5 w-5 text-slate-400" />
+              <p className="text-2xl font-semibold text-slate-100">{plannedSchedulerCount}</p>
+              <p className="text-xs text-slate-500">Planli job</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+              <CheckCircle2 className="mb-3 h-5 w-5 text-sky-400" />
+              <p className="text-2xl font-semibold text-slate-100">{schedulerRuns.length}</p>
+              <p className="text-xs text-slate-500">Kayitli calisma</p>
+            </div>
+          </div>
+
+          <section className="rounded-lg border border-slate-800 bg-slate-900/40">
+            {loadingSchedulerJobs ? (
+              <div className="p-6 text-sm text-slate-500">Scheduler joblari yukleniyor...</div>
+            ) : schedulerJobs.length === 0 ? (
+              <div className="p-6 text-sm text-slate-500">Tanimli scheduler job bulunmuyor.</div>
+            ) : (
+              <div className="divide-y divide-slate-800">
+                {schedulerJobs.map((job) => (
+                  <div key={job.key} className="grid gap-4 px-4 py-3 md:grid-cols-[minmax(0,1fr)_160px_120px] md:items-center">
+                    <div className="min-w-0">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <Badge variant={SCHEDULER_STATUS_BADGE[job.status]}>{job.status}</Badge>
+                        <Badge variant="info">{job.module}</Badge>
+                        <span className="text-xs text-slate-500">{job.cadence}</span>
+                      </div>
+                      <p className="truncate text-sm font-medium text-slate-200">{job.title}</p>
+                      <p className="mt-1 line-clamp-2 text-xs text-slate-500">{job.description}</p>
+                    </div>
+                    <p className="truncate text-xs text-slate-500">{job.key}</p>
+                    <button
+                      onClick={() => runScheduler.mutate(job.key)}
+                      disabled={runScheduler.isPending || job.status !== 'ACTIVE'}
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 text-xs font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                      Calistir
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-lg border border-slate-800 bg-slate-900/40">
+            {loadingSchedulerRuns ? (
+              <div className="p-6 text-sm text-slate-500">Scheduler gecmisi yukleniyor...</div>
+            ) : schedulerRuns.length === 0 ? (
+              <div className="p-6 text-sm text-slate-500">Henuz scheduler calismasi bulunmuyor.</div>
+            ) : (
+              <div className="divide-y divide-slate-800">
+                {schedulerRuns.map((execution) => (
+                  <div key={execution.id} className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[minmax(0,1fr)_130px_160px] md:items-center">
+                    <div className="min-w-0">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <Badge variant={EXECUTION_BADGE[execution.status]}>{execution.status}</Badge>
+                        <Badge variant="neutral">{execution.entityId ?? '-'}</Badge>
+                      </div>
+                      <p className="truncate font-medium text-slate-200">Scheduler job calismasi</p>
+                      {execution.error && <p className="mt-1 truncate text-xs text-red-300">{execution.error}</p>}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      <p>Deneme: {execution.attempt}</p>
+                      <p>{execution.entityType ?? '-'}</p>
+                    </div>
+                    <div className="text-xs text-slate-500 md:text-right">
+                      <p>Baslangic: {formatDateTime(execution.startedAt)}</p>
+                      <p>Bitis: {formatDateTime(execution.completedAt)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       )}
     </div>

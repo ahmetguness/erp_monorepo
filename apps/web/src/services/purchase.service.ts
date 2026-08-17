@@ -148,6 +148,63 @@ export const PurchaseReorderAutomationResultSchema = z.object({
   skippedReason: z.string().nullable(),
 });
 
+export const ThreeWayMatchStatusSchema = z.enum(['AUTO_APPROVED', 'EXCEPTION', 'PENDING']);
+
+export const ThreeWayMatchIssueSchema = z.object({
+  code: z.string(),
+  severity: z.enum(['INFO', 'WARNING', 'ERROR']),
+  message: z.string(),
+});
+
+export const ThreeWayMatchLineSchema = z.object({
+  productId: z.string(),
+  productCode: z.string().nullable(),
+  productName: z.string(),
+  orderedQuantity: z.coerce.number(),
+  receivedQuantity: z.coerce.number(),
+  invoicedQuantity: z.coerce.number(),
+  orderedUnitPrice: z.coerce.number(),
+  invoicedUnitPrice: z.coerce.number().nullable(),
+  orderedDiscount: z.coerce.number(),
+  invoicedDiscount: z.coerce.number().nullable(),
+  orderedTaxRate: z.coerce.number(),
+  invoicedTaxRate: z.coerce.number().nullable(),
+  orderedTotal: z.coerce.number(),
+  invoicedTotal: z.coerce.number(),
+  quantityDifference: z.coerce.number(),
+  priceDifferencePercent: z.coerce.number().nullable(),
+  totalDifference: z.coerce.number(),
+  status: ThreeWayMatchStatusSchema,
+  issues: z.array(ThreeWayMatchIssueSchema),
+});
+
+export const ThreeWayMatchResultSchema = z.object({
+  purchaseOrderId: z.string(),
+  purchaseOrderNumber: z.string(),
+  supplierId: z.string(),
+  supplierName: z.string().nullable(),
+  currencyCode: z.string(),
+  generatedAt: z.string(),
+  summary: z.object({
+    status: ThreeWayMatchStatusSchema,
+    orderedTotal: z.coerce.number(),
+    invoicedTotal: z.coerce.number(),
+    totalDifference: z.coerce.number(),
+    orderedQuantity: z.coerce.number(),
+    receivedQuantity: z.coerce.number(),
+    invoicedQuantity: z.coerce.number(),
+    deliveryNoteCount: z.coerce.number(),
+    invoiceCount: z.coerce.number(),
+    issueCount: z.coerce.number(),
+    errorCount: z.coerce.number(),
+    warningCount: z.coerce.number(),
+    priceTolerancePercent: z.coerce.number(),
+    quantityTolerancePercent: z.coerce.number(),
+  }),
+  lines: z.array(ThreeWayMatchLineSchema),
+  issues: z.array(ThreeWayMatchIssueSchema),
+});
+
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
@@ -159,6 +216,9 @@ export type PurchaseTraceStage = z.infer<typeof PurchaseTraceStageSchema>;
 export type PurchaseOrderItem = z.infer<typeof PurchaseOrderItemSchema>;
 export type PurchaseOrderHistory = z.infer<typeof PurchaseOrderHistorySchema>;
 export type PurchaseReorderAutomationResult = z.infer<typeof PurchaseReorderAutomationResultSchema>;
+export type ThreeWayMatchResult = z.infer<typeof ThreeWayMatchResultSchema>;
+export type ThreeWayMatchLine = z.infer<typeof ThreeWayMatchLineSchema>;
+export type ThreeWayMatchStatus = z.infer<typeof ThreeWayMatchStatusSchema>;
 export type PurchaseRequestStatus = PurchaseRequest['status'];
 export type PurchaseOrderStatus = PurchaseOrder['status'];
 
@@ -241,6 +301,11 @@ export async function getPurchaseOrderById(id: string): Promise<PurchaseOrder> {
 export async function getPurchaseOrderHistory(id: string): Promise<PurchaseOrderHistory[]> {
   const res = await apiClient.get(`/api/purchase-orders/${id}/history`);
   return safeParse(SingleResponseSchema(z.array(PurchaseOrderHistorySchema)), res.data, 'getPurchaseOrderHistory').data;
+}
+
+export async function getPurchaseOrderThreeWayMatch(id: string): Promise<ThreeWayMatchResult> {
+  const res = await apiClient.get(`/api/purchase-orders/${id}/three-way-match`);
+  return safeParse(SingleResponseSchema(ThreeWayMatchResultSchema), res.data, 'getPurchaseOrderThreeWayMatch').data;
 }
 
 export async function createPurchaseOrder(data: CreatePurchaseOrderDTO): Promise<PurchaseOrder> {

@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { getTenantPermissionContext } from '../../lib/tenant-permissions';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../errors';
 import { createTask } from '../task.service.js';
+import { ExceptionCenterService } from '../exception-center.service.js';
 import { requireTenantId, requireUserId, requireParam } from '../../utils/context.js';
 import { createAuditLog, getRequestMeta } from '../../utils/audit.js';
 
@@ -99,6 +100,12 @@ function invoicePriority(daysLate: number): TaskPriority {
 }
 
 export const TaskController = {
+  async exceptionCenter(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const snapshot = await new ExceptionCenterService(prisma).snapshot(tenantId);
+    return c.json({ data: snapshot });
+  },
+
   async listMyTasks(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);

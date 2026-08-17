@@ -63,6 +63,11 @@ import {
   recordBiScheduleSimulation,
   saveBiConnectorSettings,
 } from '../bi-connector.service.js';
+import {
+  DefaultPolicyEngineService,
+  defaultPolicyDefinitions,
+  type DefaultPolicyUpdateInput,
+} from '../default-policy-engine.service.js';
 
 const TENANT_LOGO_SETTING_KEY = 'tenant_logo_storage_path';
 const LEGACY_TENANT_LOGO_SETTING_KEY = 'company_logo';
@@ -76,6 +81,7 @@ const INTERNAL_TENANT_SETTING_KEYS = [
   ...Object.values(DEPLOYMENT_OPERATIONS_SETTING_KEYS),
   ...Object.values(BI_CONNECTOR_SETTING_KEYS),
   BI_TOKEN_SETTING_KEY,
+  ...defaultPolicyDefinitions().map((definition) => definition.storageKey),
 ] as const;
 const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 const ALLOWED_LOGO_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -132,6 +138,23 @@ function readBackupFrequency(value: unknown): BackupFrequency {
   return value === 'hourly' || value === 'daily' || value === 'weekly' ? value : 'daily';
 }
 
+function isDefaultPolicyStorageKey(value: unknown): value is string {
+  return typeof value === 'string' && defaultPolicyDefinitions().some((definition) => definition.storageKey === value);
+}
+
+function readDefaultPolicyUpdates(body: JsonObject): DefaultPolicyUpdateInput[] {
+  const updates = body.updates;
+  if (!Array.isArray(updates)) {
+    throw new ValidationError('updates dizisi zorunludur.');
+  }
+  return updates.map((item) => {
+    if (!isJsonObject(item) || !isDefaultPolicyStorageKey(item.storageKey) || typeof item.value !== 'string') {
+      throw new ValidationError('Her policy guncellemesi storageKey ve string value icermelidir.');
+    }
+    return { storageKey: item.storageKey, value: item.value };
+  });
+}
+
 async function assertEnterpriseTenant(tenantId: string, message: string): Promise<void> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -179,6 +202,33 @@ function validateLogoFile(file: File): { extension: string; mimeType: string } {
 // ─────────────────────────────────────────────
 
 export const SettingsController = {
+
+  async defaultPolicySnapshot(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const snapshot = await new DefaultPolicyEngineService(prisma).snapshot(tenantId);
+    return c.json({ data: snapshot });
+  },
+
+  async updateDefaultPolicies(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const body = await readJsonObject(c);
+    const updates = readDefaultPolicyUpdates(body);
+    const snapshot = await new DefaultPolicyEngineService(prisma).updateMany(tenantId, updates);
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'settings',
+      entityType: EntityType.OTHER,
+      entityId: 'default_policy_engine',
+      action: AuditAction.UPDATE,
+      newValues: { updatedKeys: updates.map((update) => update.storageKey) },
+      ...getRequestMeta(c),
+    });
+
+    return c.json({ data: snapshot });
+  },
 
   // ── Tenant Settings ──────────────────────────
 

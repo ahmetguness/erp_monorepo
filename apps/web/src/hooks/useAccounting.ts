@@ -6,12 +6,12 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   getLedgerAccounts, createLedgerAccount, getLedgerAccountById, updateLedgerAccount,
   getFiscalPeriods, createFiscalPeriod, closeFiscalPeriod, deleteFiscalPeriod, getFiscalPeriodClosingChecklist,
-  getJournalEntries, getJournalEntryById, createJournalEntry, postJournalEntry,
+  getJournalEntries, getJournalEntryById, createJournalEntry, postJournalEntry, runPostingEngine,
   getBankAccounts, createBankAccount, updateBankAccount, deleteBankAccount,
   getCashAccounts, createCashAccount, updateCashAccount, deleteCashAccount,
   getPayments, getPaymentById, createPayment,
   type CreateLedgerAccountDTO, type UpdateLedgerAccountDTO, type CreateFiscalPeriodDTO,
-  type CreateJournalEntryDTO, type JournalEntryListParams,
+  type CreateJournalEntryDTO, type JournalEntryListParams, type RunPostingEngineDTO,
   type CreateBankAccountDTO, type UpdateBankAccountDTO, type CreateCashAccountDTO, type UpdateCashAccountDTO,
   type CreatePaymentDTO, type PaymentListParams, type AccountType,
 } from '@/services/accounting.service';
@@ -145,6 +145,19 @@ export function usePostJournalEntry(id: string) {
 }
 
 // ── Bank / Cash Accounts ─────────────────────
+
+export function useRunPostingEngine() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (data: RunPostingEngineDTO) => runPostingEngine(data),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
+      toast.success(`Posting tamamlandı: ${result.posted} fiş, ${result.skipped} atlandı, ${result.failed} hata.`);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
 
 export function useBankAccounts() {
   return useQuery({ queryKey: KEYS.bankAccounts, queryFn: getBankAccounts, staleTime: 5 * 60 * 1000 });

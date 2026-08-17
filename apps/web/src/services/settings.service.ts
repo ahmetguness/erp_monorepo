@@ -43,6 +43,55 @@ export const BusinessRuleSchema = z.object({
   tenantPlan: z.enum(['STARTER', 'PROFESSIONAL', 'ENTERPRISE']),
 });
 
+export const DefaultPolicyScopeSchema = z.enum(['tenant', 'contact', 'product', 'automation']);
+export const DefaultPolicyValueTypeSchema = z.enum(['string', 'boolean', 'number']);
+export const DefaultPolicySettingKeySchema = z.enum([
+  'defaultCurrency',
+  'defaultWarehouse',
+  'defaultBankAccount',
+  'defaultCashAccount',
+  'defaultTaxRate',
+  'defaultPaymentTerm',
+  'defaultPriceList',
+  'defaultSalesRep',
+  'defaultDeliveryMethod',
+  'defaultLocation',
+  'preferredSupplier',
+  'costingMethod',
+  'autoInvoice',
+  'autoReserve',
+  'autoPurchaseRequest',
+  'autoBankReconcile',
+  'autoAccountingPost',
+  'autoSendReminder',
+  'autoSendCollectionEmail',
+  'collectionEscalationDays',
+]);
+
+export const DefaultPolicyValueSchema = z.object({
+  scope: DefaultPolicyScopeSchema,
+  key: DefaultPolicySettingKeySchema,
+  storageKey: z.string(),
+  label: z.string(),
+  description: z.string(),
+  valueType: DefaultPolicyValueTypeSchema,
+  defaultValue: z.string(),
+  value: z.string(),
+  effectiveValue: z.string(),
+  isDefault: z.boolean(),
+  updatedAt: z.string().nullable(),
+});
+
+export const DefaultPolicySnapshotSchema = z.object({
+  generatedAt: z.string(),
+  values: z.array(DefaultPolicyValueSchema),
+});
+
+export const DefaultPolicyUpdateSchema = z.object({
+  storageKey: z.string(),
+  value: z.string(),
+});
+
 export const TenantSecurityFindingSchema = z.object({
   key: z.string(),
   severity: z.enum(['critical', 'high', 'medium', 'low']),
@@ -162,6 +211,11 @@ export const SetupChecklistStatusSchema = z.object({
 export type TenantSetting = z.infer<typeof TenantSettingSchema>;
 export type ModuleSetting = z.infer<typeof ModuleSettingSchema>;
 export type BusinessRule = z.infer<typeof BusinessRuleSchema>;
+export type DefaultPolicyScope = z.infer<typeof DefaultPolicyScopeSchema>;
+export type DefaultPolicySettingKey = z.infer<typeof DefaultPolicySettingKeySchema>;
+export type DefaultPolicyValue = z.infer<typeof DefaultPolicyValueSchema>;
+export type DefaultPolicySnapshot = z.infer<typeof DefaultPolicySnapshotSchema>;
+export type DefaultPolicyUpdate = z.infer<typeof DefaultPolicyUpdateSchema>;
 export type TenantSecurityScore = z.infer<typeof TenantSecurityScoreSchema>;
 export type SecuritySession = z.infer<typeof SecuritySessionSchema>;
 export type SecurityHardeningSnapshot = z.infer<typeof SecurityHardeningSnapshotSchema>;
@@ -185,6 +239,16 @@ export async function deleteTenantSetting(key: string): Promise<void> {
 export async function getBusinessRules(): Promise<BusinessRule[]> {
   const res = await apiClient.get('/api/settings/business-rules');
   return safeParse(SingleResponseSchema(z.array(BusinessRuleSchema)), res.data, 'getBusinessRules').data;
+}
+
+export async function getDefaultPolicySnapshot(): Promise<DefaultPolicySnapshot> {
+  const res = await apiClient.get('/api/settings/defaults-policies');
+  return safeParse(SingleResponseSchema(DefaultPolicySnapshotSchema), res.data, 'getDefaultPolicySnapshot').data;
+}
+
+export async function updateDefaultPolicies(updates: DefaultPolicyUpdate[]): Promise<DefaultPolicySnapshot> {
+  const res = await apiClient.put('/api/settings/defaults-policies', { updates });
+  return safeParse(SingleResponseSchema(DefaultPolicySnapshotSchema), res.data, 'updateDefaultPolicies').data;
 }
 
 export async function getTenantSecurityScore(): Promise<TenantSecurityScore> {

@@ -1,15 +1,15 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { RefreshCw, RotateCcw } from 'lucide-react';
+import { GitBranch, RefreshCw, RotateCcw } from 'lucide-react';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { useDomainEventFailures, useReplayDomainEvent } from '@/hooks/useDomainEvents';
+import { useDomainEventCoverage, useDomainEventFailures, useReplayDomainEvent } from '@/hooks/useDomainEvents';
 import { formatDateTime } from '@/lib/utils';
-import type { DomainEventOutbox, DomainEventStatus } from '@/services/domain-event.service';
+import type { DomainEventCoverage, DomainEventOutbox, DomainEventStatus } from '@/services/domain-event.service';
 
 const STATUS_META: Record<DomainEventStatus, { label: string; variant: BadgeVariant }> = {
   PENDING: { label: 'Bekliyor', variant: 'neutral' },
@@ -44,6 +44,7 @@ export function DomainEventFailuresPage() {
   const [selectedEvent, setSelectedEvent] = useState<DomainEventOutbox | null>(null);
   const [lastReplayMessage, setLastReplayMessage] = useState<string | null>(null);
   const params = useMemo(() => ({ page, limit: 30, name: nameFilter || undefined }), [page, nameFilter]);
+  const { data: coverage } = useDomainEventCoverage();
   const { data, isLoading, refetch, isFetching } = useDomainEventFailures(params);
   const replay = useReplayDomainEvent();
 
@@ -132,6 +133,8 @@ export function DomainEventFailuresPage() {
     <div className="space-y-4">
       <PageHeader title="Domain Event Hatalari" subtitle="Failed ve dead-letter outbox kayitlarini izleyin ve tekrar isleyin." />
 
+      <DomainEventCoveragePanel coverage={coverage} />
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <input
           value={nameFilter}
@@ -209,6 +212,51 @@ export function DomainEventFailuresPage() {
           </div>
         )}
       </Modal>
+    </div>
+  );
+}
+
+function DomainEventCoveragePanel({ coverage }: { coverage: DomainEventCoverage | undefined }) {
+  const covered = coverage?.publishCoverage.filter((item) => item.status === 'covered').length ?? 0;
+  const planned = coverage?.publishCoverage.filter((item) => item.status === 'planned').length ?? 0;
+  const visibleItems = coverage?.publishCoverage.slice(0, 8) ?? [];
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <GitBranch className="h-4 w-4 text-sky-300" />
+            <h2 className="text-sm font-semibold text-slate-100">Event-driven core coverage</h2>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">Command, outbox, worker ve listener zincirindeki event catalog görünümü.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="success">{covered} covered</Badge>
+          <Badge variant="warning">{planned} planned</Badge>
+          <Badge variant="info">v{coverage?.schemaVersion ?? '-'}</Badge>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {visibleItems.map((item) => (
+          <div key={item.eventName} className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate font-mono text-xs text-slate-200">{item.eventName}</span>
+              <Badge variant={item.status === 'covered' ? 'success' : 'warning'}>{item.status}</Badge>
+            </div>
+            <p className="mt-1 truncate text-xs text-slate-500">{item.workflow}</p>
+          </div>
+        ))}
+      </div>
+
+      {coverage && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {coverage.listenerIdempotency.map((item) => (
+            <Badge key={item.listener} variant="neutral">{item.listener}: {item.strategy}</Badge>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

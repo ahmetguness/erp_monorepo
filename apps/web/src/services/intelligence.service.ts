@@ -342,9 +342,70 @@ export const AutomationExecutionSchema = z.object({
 });
 export type AutomationExecution = z.infer<typeof AutomationExecutionSchema>;
 
+const SchedulerJobKeySchema = z.enum([
+  'invoice_status_recalculation',
+  'invoice_overdue_scan',
+  'reservation_cleanup',
+  'low_stock_reorder',
+  'collection_reminders',
+  'batch_expiration',
+  'lot_expiration',
+  'bank_auto_match',
+  'accounting_integrity_check',
+  'marketplace_sync',
+  'automation_runner',
+]);
+const SchedulerJobRunStatusSchema = z.enum(['SUCCEEDED', 'FAILED', 'SKIPPED']);
+
+export const SchedulerJobDefinitionSchema = z.object({
+  key: SchedulerJobKeySchema,
+  title: z.string(),
+  description: z.string(),
+  cadence: z.string(),
+  module: z.string(),
+  status: z.enum(['ACTIVE', 'PLANNED']),
+});
+export type SchedulerJobDefinition = z.infer<typeof SchedulerJobDefinitionSchema>;
+export type SchedulerJobKey = z.infer<typeof SchedulerJobKeySchema>;
+
+export const SchedulerJobRunItemSchema = z.object({
+  jobKey: SchedulerJobKeySchema,
+  status: SchedulerJobRunStatusSchema,
+  executionId: z.string().nullable(),
+  matched: z.coerce.number(),
+  changed: z.coerce.number(),
+  message: z.string(),
+});
+
+export const SchedulerJobEngineResultSchema = z.object({
+  generatedAt: z.string(),
+  requestedJobKey: z.union([SchedulerJobKeySchema, z.literal('all')]),
+  total: z.coerce.number(),
+  succeeded: z.coerce.number(),
+  failed: z.coerce.number(),
+  skipped: z.coerce.number(),
+  items: z.array(SchedulerJobRunItemSchema),
+});
+export type SchedulerJobEngineResult = z.infer<typeof SchedulerJobEngineResultSchema>;
+
 export async function getAutomationExecutions(): Promise<AutomationExecution[]> {
   const res = await apiClient.get('/api/automation-rules/executions');
   return safeParse(SingleResponseSchema(z.array(AutomationExecutionSchema)), res.data, 'getAutomationExecutions').data;
+}
+
+export async function getSchedulerJobs(): Promise<SchedulerJobDefinition[]> {
+  const res = await apiClient.get('/api/automation-rules/scheduler/jobs');
+  return safeParse(SingleResponseSchema(z.array(SchedulerJobDefinitionSchema)), res.data, 'getSchedulerJobs').data;
+}
+
+export async function getSchedulerRuns(): Promise<AutomationExecution[]> {
+  const res = await apiClient.get('/api/automation-rules/scheduler/runs');
+  return safeParse(SingleResponseSchema(z.array(AutomationExecutionSchema)), res.data, 'getSchedulerRuns').data;
+}
+
+export async function runSchedulerJob(jobKey: SchedulerJobKey | 'all' = 'all'): Promise<SchedulerJobEngineResult> {
+  const res = await apiClient.post('/api/automation-rules/scheduler/run', { jobKey });
+  return safeParse(SingleResponseSchema(SchedulerJobEngineResultSchema), res.data, 'runSchedulerJob').data;
 }
 
 export async function runAutomationRule(id: string): Promise<AutomationRunResult> {

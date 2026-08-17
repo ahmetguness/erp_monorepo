@@ -37,7 +37,10 @@ import {
   getPortalToken,
   generatePortalToken,
   runSlaSweep,
+  getDefaultPolicySnapshot,
+  updateDefaultPolicies,
   type BusinessRule,
+  type DefaultPolicyUpdate,
   type QuickStartDTO,
   type CorporateSecuritySettings,
   type SiemSettings,
@@ -57,6 +60,24 @@ function invalidateSetupData(qc: ReturnType<typeof useQueryClient>) {
 
 export function useTenantSettings() {
   return useQuery({ queryKey: ['settings', 'tenant'], queryFn: getTenantSettings, staleTime: 5 * 60 * 1000 });
+}
+
+export function useDefaultPolicySnapshot() {
+  return useQuery({ queryKey: ['settings', 'defaults-policies'], queryFn: getDefaultPolicySnapshot, staleTime: 5 * 60 * 1000 });
+}
+
+export function useUpdateDefaultPolicies() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (updates: DefaultPolicyUpdate[]) => updateDefaultPolicies(updates),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'defaults-policies'] });
+      qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
+      toast.success('Default ve policy ayarlari kaydedildi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
 }
 
 export function useUpsertTenantSetting() {

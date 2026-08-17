@@ -71,6 +71,53 @@ export const WorkflowCountsSchema = z.object({
   GENERAL: z.coerce.number(),
 });
 
+export const ExceptionCategorySchema = z.enum([
+  'stock_unavailable',
+  'payment_unmatched',
+  'invoice_overdue',
+  'approval_required',
+  'marketplace_sku_missing',
+  'accounting_failed',
+  'edocument_rejected',
+  'automation_failed',
+  'domain_event_dead_letter',
+  'purchase_three_way_mismatch',
+  'workflow_task',
+]);
+export const ExceptionSeveritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+export const ExceptionStatusSchema = z.enum(['OPEN', 'IN_PROGRESS', 'FAILED', 'BLOCKED']);
+
+export const ExceptionCenterItemSchema = z.object({
+  id: z.string(),
+  category: ExceptionCategorySchema,
+  title: z.string(),
+  detail: z.string().nullable(),
+  severity: ExceptionSeveritySchema,
+  status: ExceptionStatusSchema,
+  module: z.string(),
+  entityType: z.string().nullable(),
+  entityId: z.string().nullable(),
+  href: z.string(),
+  source: z.string(),
+  occurredAt: z.string(),
+});
+
+export const ExceptionCenterSummaryItemSchema = z.object({
+  category: ExceptionCategorySchema,
+  label: z.string(),
+  count: z.coerce.number(),
+  highestSeverity: ExceptionSeveritySchema.nullable(),
+});
+
+export const ExceptionCenterSnapshotSchema = z.object({
+  generatedAt: z.string(),
+  total: z.coerce.number(),
+  critical: z.coerce.number(),
+  high: z.coerce.number(),
+  byCategory: z.array(ExceptionCenterSummaryItemSchema),
+  items: z.array(ExceptionCenterItemSchema),
+});
+
 const WorkflowResponseSchema = z.object({
   data: z.array(WorkflowTaskSchema),
   meta: z.object({
@@ -81,10 +128,19 @@ const WorkflowResponseSchema = z.object({
 
 export type WorkflowTask = z.infer<typeof WorkflowTaskSchema>;
 export type WorkflowCounts = z.infer<typeof WorkflowCountsSchema>;
+export type ExceptionCategory = z.infer<typeof ExceptionCategorySchema>;
+export type ExceptionSeverity = z.infer<typeof ExceptionSeveritySchema>;
+export type ExceptionCenterItem = z.infer<typeof ExceptionCenterItemSchema>;
+export type ExceptionCenterSnapshot = z.infer<typeof ExceptionCenterSnapshotSchema>;
 
 export async function getWorkflowTasks(): Promise<{ data: WorkflowTask[]; meta: { total: number; counts: WorkflowCounts } }> {
   const res = await apiClient.get('/api/tasks');
   return safeParse(WorkflowResponseSchema, res.data, 'getWorkflowTasks');
+}
+
+export async function getExceptionCenter(): Promise<ExceptionCenterSnapshot> {
+  const res = await apiClient.get('/api/tasks/exceptions');
+  return safeParse(SingleResponseSchema(ExceptionCenterSnapshotSchema), res.data, 'getExceptionCenter').data;
 }
 
 export async function updateTaskStatus(id: string, status: TaskStatus): Promise<Task> {

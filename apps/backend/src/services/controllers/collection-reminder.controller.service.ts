@@ -1,11 +1,19 @@
 import { Context } from 'hono';
 import { prisma } from '../../lib/prisma';
 import { NotFoundError } from '../../errors';
-import { requireTenantId, requireParam } from '../../utils/context.js';
+import { requireTenantId, requireUserId, requireParam } from '../../utils/context.js';
 import { getValidatedBody } from '../../middleware/validateBody';
 import { createCollectionReminderBodySchema } from '../../schemas/request-body.schemas';
+import { CollectionAutomationService } from '../collection-automation.service.js';
 
 export const CollectionReminderController = {
+  async runAutomation(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const result = await new CollectionAutomationService(prisma).run(tenantId, userId);
+    return c.json({ data: result });
+  },
+
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const reminders = await prisma.collectionReminder.findMany({
@@ -29,7 +37,7 @@ export const CollectionReminderController = {
         contactId: body.contactId,
         invoiceId: body.invoiceId || null,
         amount: body.amount,
-        dueDate: new Date(body.dueDate),
+        dueDate: new Date(body.remindAt ?? body.dueDate),
         notes: body.notes || null,
         status: 'PENDING',
       },

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import {
   AlertTriangle, ArrowLeft, Ban, CheckCircle2, CircleDashed, ExternalLink, FileText,
-  Mail, PackageCheck, Printer, ReceiptText, Send, Truck, XCircle,
+  Mail, PackageCheck, Printer, ReceiptText, Scale, Send, Truck, XCircle,
 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
@@ -17,9 +17,9 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { FullPageSpinner } from '@/components/ui/Spinner';
-import { usePurchaseOrder, useSendPurchaseOrder, useReceivePurchaseOrder, useCancelPurchaseOrder } from '@/hooks/usePurchase';
+import { usePurchaseOrder, useSendPurchaseOrder, useReceivePurchaseOrder, useCancelPurchaseOrder, usePurchaseOrderThreeWayMatch } from '@/hooks/usePurchase';
 import { cn, formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
-import type { PurchaseOrder, PurchaseOrderItem, PurchaseTraceStage } from '@/services/purchase.service';
+import type { PurchaseOrder, PurchaseOrderItem, PurchaseTraceStage, ThreeWayMatchLine, ThreeWayMatchResult, ThreeWayMatchStatus } from '@/services/purchase.service';
 import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 
 interface Props { id: string }
@@ -52,6 +52,18 @@ function traceStageLabel(status: PurchaseTraceStage['status']): string {
   if (status === 'cancelled') return 'İptal';
   if (status === 'pending') return 'Bekliyor';
   return 'Eksik';
+}
+
+function matchStatusVariant(status: ThreeWayMatchStatus): BadgeVariant {
+  if (status === 'AUTO_APPROVED') return 'success';
+  if (status === 'EXCEPTION') return 'danger';
+  return 'warning';
+}
+
+function matchStatusLabel(status: ThreeWayMatchStatus): string {
+  if (status === 'AUTO_APPROVED') return 'Otomatik onay';
+  if (status === 'EXCEPTION') return 'İstisna';
+  return 'Beklemede';
 }
 
 function deliveryProgress(order: PurchaseOrder): { ordered: number; received: number; remaining: number; percent: number } {
@@ -251,8 +263,84 @@ function TraceList({ title, empty, items }: { title: string; empty: string; item
   );
 }
 
+function ThreeWayMatchCard({ match, isLoading }: { match: ThreeWayMatchResult | undefined; isLoading: boolean }) {
+  const columns: ColumnDef<ThreeWayMatchLine>[] = [
+    {
+      key: 'product',
+      header: 'Ürün',
+      render: (line) => (
+        <div>
+          <p className="text-sm font-medium text-slate-200">{line.productName}</p>
+          <p className="mt-1 text-xs text-slate-500">{line.productCode ?? line.productId}</p>
+        </div>
+      ),
+    },
+    { key: 'quantity', header: 'Miktar', width: '170px', align: 'right', render: (line) => <span className="text-slate-300">{line.orderedQuantity} / {line.receivedQuantity} / {line.invoicedQuantity}</span> },
+    { key: 'price', header: 'Fiyat farkı', width: '120px', align: 'right', render: (line) => <span className={line.priceDifferencePercent && line.priceDifferencePercent > 2 ? 'font-medium text-red-300' : 'text-slate-300'}>{line.priceDifferencePercent === null ? '-' : `%${line.priceDifferencePercent}`}</span> },
+    { key: 'total', header: 'Tutar farkı', width: '130px', align: 'right', render: (line) => <span className={Math.abs(line.totalDifference) > 0.01 ? 'font-medium text-amber-300' : 'text-slate-300'}>{formatCurrency(line.totalDifference)}</span> },
+    { key: 'status', header: 'Durum', width: '130px', render: (line) => <Badge variant={matchStatusVariant(line.status)}>{matchStatusLabel(line.status)}</Badge> },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+        <div className="flex items-center gap-2 text-slate-300">
+          <Scale className="h-4 w-4 text-sky-300" />
+          <h2 className="text-sm font-semibold">Three-way match</h2>
+        </div>
+        <p className="mt-3 text-sm text-slate-500">Karşılaştırma hesaplanıyor...</p>
+      </div>
+    );
+  }
+
+  if (!match) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-slate-200">
+            <Scale className="h-4 w-4 text-sky-300" />
+            <h2 className="text-sm font-semibold">Three-way match</h2>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">Sipariş / teslim / tedarikçi faturası karşılaştırması.</p>
+        </div>
+        <Badge variant={matchStatusVariant(match.summary.status)}>{matchStatusLabel(match.summary.status)}</Badge>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <div><p className="text-xs text-slate-500">Sipariş / Fatura</p><p className="text-sm font-medium text-slate-100">{formatCurrency(match.summary.orderedTotal, match.currencyCode)} / {formatCurrency(match.summary.invoicedTotal, match.currencyCode)}</p></div>
+        <div><p className="text-xs text-slate-500">Miktar</p><p className="text-sm font-medium text-slate-100">{match.summary.orderedQuantity} / {match.summary.receivedQuantity} / {match.summary.invoicedQuantity}</p></div>
+        <div><p className="text-xs text-slate-500">Belgeler</p><p className="text-sm font-medium text-slate-100">{match.summary.deliveryNoteCount} irsaliye · {match.summary.invoiceCount} fatura</p></div>
+        <div><p className="text-xs text-slate-500">Tolerans</p><p className="text-sm font-medium text-slate-100">%{match.summary.priceTolerancePercent} fiyat · %{match.summary.quantityTolerancePercent} miktar</p></div>
+      </div>
+
+      {match.summary.issueCount > 0 && (
+        <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="danger">{match.summary.errorCount} hata</Badge>
+            <Badge variant="warning">{match.summary.warningCount} uyarı</Badge>
+            {match.issues.slice(0, 3).map((issue) => <Badge key={`${issue.code}-${issue.message}`} variant={issue.severity === 'ERROR' ? 'danger' : 'warning'}>{issue.message}</Badge>)}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4">
+        <DataTable
+          columns={columns}
+          data={match.lines}
+          keyExtractor={(line) => line.productId}
+          emptyTitle="Karşılaştırılacak kalem yok"
+          density="compact"
+        />
+      </div>
+    </div>
+  );
+}
+
 export function PurchaseOrderDetailPage({ id }: Props) {
   const { data: order, isLoading } = usePurchaseOrder(id);
+  const { data: threeWayMatch, isLoading: isThreeWayMatchLoading } = usePurchaseOrderThreeWayMatch(id);
   const sendOrder = useSendPurchaseOrder();
   const receiveOrder = useReceivePurchaseOrder();
   const cancelOrder = useCancelPurchaseOrder();
@@ -403,6 +491,7 @@ export function PurchaseOrderDetailPage({ id }: Props) {
           </div>
 
           <TraceCard order={order} />
+          <ThreeWayMatchCard match={threeWayMatch} isLoading={isThreeWayMatchLoading} />
 
           <section className="space-y-3">
             <div>

@@ -3,13 +3,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
-import { createTask, getWorkflowTasks, type CreateTaskDTO } from '@/services/task.service';
+import { createTask, getExceptionCenter, getWorkflowTasks, type CreateTaskDTO } from '@/services/task.service';
 import { QUERY_INVALIDATION_KEYS } from '@/lib/query-invalidation';
 
 export function useWorkflowTasks() {
   return useQuery({
     queryKey: QUERY_INVALIDATION_KEYS.workflowTasks,
     queryFn: getWorkflowTasks,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useExceptionCenter() {
+  return useQuery({
+    queryKey: ['exception-center'],
+    queryFn: getExceptionCenter,
     refetchInterval: 60_000,
   });
 }

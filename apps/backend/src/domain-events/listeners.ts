@@ -47,13 +47,33 @@ function moduleForEvent(event: DomainEvent): string {
   switch (event.name) {
     case 'invoice.created':
     case 'invoice.overdue':
+    case 'invoice.sent':
+    case 'invoice.paid':
+    case 'supplier.invoice.created':
       return 'invoicing';
     case 'payment.received':
+    case 'payment.allocated':
+    case 'accounting.entry.created':
+    case 'accounting.entry.failed':
       return 'accounting';
     case 'stock.low':
+    case 'stock.reserved':
+    case 'stock.reservation.released':
       return 'inventory';
+    case 'delivery.created':
+    case 'delivery.completed':
+      return 'warehouse';
     case 'salesQuote.accepted':
+    case 'sales.order.confirmed':
+    case 'sales.order.cancelled':
       return 'sales';
+    case 'purchase.request.created':
+    case 'purchase.order.approved':
+    case 'purchase.order.received':
+    case 'threeway.match.failed':
+      return 'purchasing';
+    case 'marketplace.order.received':
+      return 'marketplace';
     case 'mail.failed':
       return 'mail';
     case 'employee.documentMissing':
@@ -152,6 +172,12 @@ function auditPayload(event: DomainEvent): Prisma.InputJsonObject {
         producedQty: event.payload.producedQty,
         scrapQty: event.payload.scrapQty,
       };
+    default:
+      return {
+        event: event.name,
+        entityId: entityIdForEvent(event),
+        payload: event.payload as Prisma.InputJsonObject,
+      };
   }
 }
 
@@ -228,6 +254,14 @@ async function notificationListener(event: DomainEvent): Promise<void> {
         'accounting',
       );
       return;
+    case 'accounting.entry.failed':
+      await notifyUsers(
+        event,
+        'Muhasebe posting hatası',
+        `${event.payload.refType}/${event.payload.refId}: ${event.payload.reason}`,
+        'accounting',
+      );
+      return;
     case 'salesQuote.accepted':
       await notifyUsers(
         event,
@@ -237,6 +271,22 @@ async function notificationListener(event: DomainEvent): Promise<void> {
       );
       return;
     case 'invoice.created':
+    case 'invoice.sent':
+    case 'invoice.paid':
+    case 'payment.allocated':
+    case 'stock.reserved':
+    case 'stock.reservation.released':
+    case 'delivery.created':
+    case 'delivery.completed':
+    case 'sales.order.confirmed':
+    case 'sales.order.cancelled':
+    case 'purchase.request.created':
+    case 'purchase.order.approved':
+    case 'purchase.order.received':
+    case 'supplier.invoice.created':
+    case 'threeway.match.failed':
+    case 'accounting.entry.created':
+    case 'marketplace.order.received':
       return;
   }
 }
@@ -314,8 +364,38 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         createdById: event.context.userId ?? null,
       });
       return;
+    case 'accounting.entry.failed':
+      await createTask(event.context.tenantId, {
+        title: 'Muhasebe posting hatası',
+        detail: `${event.payload.refType}/${event.payload.refId}: ${event.payload.reason}`,
+        type: TaskType.CHECK,
+        priority: Priority.HIGH,
+        module: 'accounting',
+        entityType: EntityType.OTHER,
+        entityId: event.payload.refId,
+        href: '/dashboard/accounting/journal-entries',
+        source: sourceForEvent(event),
+        createdById: event.context.userId ?? null,
+      });
+      return;
     case 'invoice.created':
     case 'payment.received':
+    case 'invoice.sent':
+    case 'invoice.paid':
+    case 'payment.allocated':
+    case 'stock.reserved':
+    case 'stock.reservation.released':
+    case 'delivery.created':
+    case 'delivery.completed':
+    case 'sales.order.confirmed':
+    case 'sales.order.cancelled':
+    case 'purchase.request.created':
+    case 'purchase.order.approved':
+    case 'purchase.order.received':
+    case 'supplier.invoice.created':
+    case 'threeway.match.failed':
+    case 'accounting.entry.created':
+    case 'marketplace.order.received':
     case 'mail.failed':
     case 'production.materialReserved':
       return;

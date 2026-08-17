@@ -17,6 +17,7 @@ accountingRoutes.get('/accounts/:id', requirePermission('accounting', 'READ'), A
 accountingRoutes.patch('/accounts/:id', requirePermission('accounting', 'UPDATE'), AccountingExtController.updateAccount);
 
 // Yevmiye fişleri
+accountingRoutes.post('/posting-engine/run', requirePermission('accounting', 'CREATE'), AccountingController.runPostingEngine);
 accountingRoutes.get('/journal-entries', requirePermission('accounting', 'READ'), AccountingController.listJournalEntries);
 accountingRoutes.post('/journal-entries', requirePermission('accounting', 'CREATE'), AccountingController.createJournalEntry);
 accountingRoutes.get('/journal-entries/:id', requirePermission('accounting', 'READ'), AccountingExtController.getJournalEntryById);
