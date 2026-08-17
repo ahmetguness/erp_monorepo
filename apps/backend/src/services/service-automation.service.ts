@@ -151,6 +151,13 @@ export class ServiceAutomationService {
     let eDocumentCreated = false;
 
     await this.db.$transaction(async (tx) => {
+      const targetSr = await tx.serviceRequest.findFirst({
+        where: { id: serviceRequestId, tenantId },
+      });
+      if (!targetSr) {
+        throw new Error(`Servis Talebi bulunamadı: ${serviceRequestId}`);
+      }
+
       // 1. Update Service Request Status to COMPLETED
       await tx.serviceRequest.update({
         where: { id: serviceRequestId },

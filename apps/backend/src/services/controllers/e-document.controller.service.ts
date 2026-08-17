@@ -349,7 +349,7 @@ export const EDocumentController = {
   },
 
   async processCallback(c: Context): Promise<Response> {
-    const tenantId = c.req.param('tenantId') || requireTenantId(c);
+    const tenantId = requireTenantId(c);
     const body = await c.req.json<{
       edocumentId: string;
       status: EDocumentStatus;

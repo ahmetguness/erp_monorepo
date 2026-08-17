@@ -636,4 +636,120 @@ export interface SavedReport {
   updatedAt: string;
 }
 
+// ─────────────────────────────────────────────
+// AUTONOMY & INTELLIGENCE TYPES (PHASE 18 - 22)
+// ─────────────────────────────────────────────
+
+export interface StockProjectionItem {
+  productId: string;
+  productCode: string;
+  productName: string;
+  onHandStock: number;
+  reservedStock: number;
+  incomingStock: number;
+  projectedStock: number;
+  minStockLevel: number;
+  dailyConsumptionRate: number;
+  daysOfSupply: number;
+  recommendedOrderQty: number;
+  bestSupplierId?: string | null;
+  bestSupplierName?: string | null;
+  estimatedCost: number;
+  isCritical: boolean;
+}
+
+export interface SupplierReliabilityItem {
+  supplierId: string;
+  supplierName: string;
+  totalOrdersCount: number;
+  completedOrdersCount: number;
+  delayedOrdersCount: number;
+  onTimeDeliveryRate: number;
+  averageLeadTimeDays: number;
+  threeWayMatchPassRate: number;
+  reliabilityScore: number;
+  riskCategory: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+export interface CashFlowForecastPeriod {
+  periodDays: number;
+  label: string;
+  totalReceivableExpected: number;
+  totalPayableExpected: number;
+  projectedNetCashFlow: number;
+  riskOfDeficit: boolean;
+}
+
+export interface CashFlowForecastSummary {
+  periods: CashFlowForecastPeriod[];
+  totalExpectedInflow90Days: number;
+  totalExpectedOutflow90Days: number;
+  netLiquidityPosition: number;
+  generatedAt: string;
+}
+
+export interface WorkCenterLoadItem {
+  workCenterId: string;
+  workCenterName: string;
+  workCenterCode: string;
+  capacityHoursPerWeek: number;
+  allocatedHours: number;
+  utilizationRatePct: number;
+  isBottleneck: boolean;
+  activeWorkOrdersCount: number;
+}
+
+export interface RepricingAnalysisItem {
+  listingId: string;
+  integrationId: string;
+  integrationName: string;
+  channel: string;
+  productId: string;
+  productName: string;
+  externalSku: string;
+  currentPrice: number;
+  averageCost: number;
+  currentMarginPct: number;
+  recommendedPrice: number;
+  targetMarginPct: number;
+  status: 'OPTIMAL' | 'REPRICE_NEEDED' | 'MARGIN_RISK';
+}
+
+export interface ParsedCommandStep {
+  stepIndex: number;
+  intent: string;
+  actionDescription: string;
+  targetEntity: string;
+  status: 'PENDING' | 'EXECUTED' | 'FAILED';
+}
+
+export interface ParsedCommandPlan {
+  planId: string;
+  prompt: string;
+  intentCategory: string;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  steps: ParsedCommandStep[];
+  requiresApproval: boolean;
+  createdAt: string;
+}
+
+export interface SelfCorrectingSuggestion {
+  suggestionId: string;
+  triggerCondition: string;
+  actionToAutomate: string;
+  confidencePct: number;
+  recommendedRuleName: string;
+  isAdopted: boolean;
+}
+
+export interface IntegrityCheckRuleItem {
+  ruleCode: string;
+  ruleTitle: string;
+  category: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  mismatchCount: number;
+  canAutoHeal: boolean;
+  status: 'CLEAN' | 'MISMATCH_DETECTED';
+}
+
 export * from './plans';

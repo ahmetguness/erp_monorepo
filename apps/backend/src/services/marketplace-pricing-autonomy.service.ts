@@ -17,11 +17,18 @@ export interface RepricingAnalysisItem {
   productName: string;
   externalSku: string;
   currentPrice: number;
+  /** Average cost expressed in the LISTING currency (after conversion). */
   averageCost: number;
   currentMarginPct: number;
   recommendedPrice: number;
   targetMarginPct: number;
-  status: 'OPTIMAL' | 'REPRICE_NEEDED' | 'MARGIN_RISK';
+  status: 'OPTIMAL' | 'REPRICE_NEEDED' | 'MARGIN_RISK' | 'CURRENCY_DATA_MISSING';
+  /** Currency of the listing price, e.g. "TRY" */
+  pricingCurrencyCode: string;
+  /** Currency the product cost is originally stored in (always "TRY" per schema) */
+  costCurrencyCode: string;
+  /** VAT rate applied to determine net price, e.g. 20 */
+  vatRatePct: number;
 }
 
 export interface ChannelStockAllocationItem {
@@ -50,43 +57,137 @@ export interface BatchRepricingResult {
   }>;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: resolve latest exchange rate for a currency pair
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns rate to convert 1 unit of `fromCurrency` to `toCurrency`,
+ * using CurrencyRate rows where `currencyCode` is relative to TRY base.
+ * If from === to returns 1. Returns null when no rate row is found.
+ */
+async function resolveExchangeRate(
+  db: PrismaClient,
+  tenantId: string,
+  fromCurrencyCode: string,
+  toCurrencyCode: string,
+): Promise<number | null> {
+  if (fromCurrencyCode === toCurrencyCode) return 1;
+
+  const [fromRow, toRow] = await Promise.all([
+    fromCurrencyCode === 'TRY'
+      ? null
+      : db.currencyRate.findFirst({
+          where: { tenantId, currencyCode: fromCurrencyCode },
+          orderBy: { date: 'desc' },
+          select: { rate: true },
+        }),
+    toCurrencyCode === 'TRY'
+      ? null
+      : db.currencyRate.findFirst({
+          where: { tenantId, currencyCode: toCurrencyCode },
+          orderBy: { date: 'desc' },
+          select: { rate: true },
+        }),
+  ]);
+
+  const fromRateTRY = fromCurrencyCode === 'TRY' ? 1 : (fromRow ? Number(fromRow.rate) : null);
+  const toRateTRY = toCurrencyCode === 'TRY' ? 1 : (toRow ? Number(toRow.rate) : null);
+
+  if (fromRateTRY === null || toRateTRY === null) return null;
+
+  // cross-rate: (fromCurrency → TRY) / (toCurrency → TRY)
+  return fromRateTRY / toRateTRY;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Service
+// ─────────────────────────────────────────────────────────────────────────────
+
 export class MarketplacePricingAutonomyService {
   constructor(private readonly db: PrismaClient) {}
 
   /**
    * 1. Dynamic Repricing Analysis (Margin Guard & Competitor Price Optimization)
+   *
+   * - Converts product `averageCost` (stored in TRY) to the listing's currency
+   *   using the latest `CurrencyRate` row for that tenant.
+   * - Applies VAT awareness: margin is computed on the net-of-VAT listing price
+   *   so that KDV-inclusive prices do not inflate perceived margins.
+   * - Reports `status: 'CURRENCY_DATA_MISSING'` when no exchange rate can be
+   *   found instead of silently proposing a wrong price.
    */
   async getRepricingAnalysis(tenantId: string): Promise<RepricingAnalysisItem[]> {
     const listings = await this.db.marketplaceListing.findMany({
       where: { tenantId, isActive: true },
       include: {
-        product: true,
+        product: { include: { taxRate: { select: { rate: true } } } },
         integration: true,
       },
       take: 100,
     });
 
     const items: RepricingAnalysisItem[] = [];
-    const targetMarginPct = 25; // Target 25% profit margin policy
+    const targetMarginPct = 25;
+    // Product averageCost is always stored in TRY per schema
+    const COST_CURRENCY = 'TRY';
+    // Listing price currency — TRY by default (no per-listing currency field yet)
+    const PRICING_CURRENCY = 'TRY';
 
     for (const listing of listings) {
       const rawAvgCost = Number(listing.product.averageCost);
       const rawBuyPrice = Number(listing.product.purchasePrice);
-      const avgCost = rawAvgCost > 0 ? rawAvgCost : rawBuyPrice;
+      const baseCostTRY = rawAvgCost > 0 ? rawAvgCost : rawBuyPrice;
+      const vatRatePct = listing.product.taxRate ? Number(listing.product.taxRate.rate) : 0;
+      const grossPrice = Number(listing.price);
 
-      const currentPrice = Number(listing.price);
+      const exchangeRate = await resolveExchangeRate(
+        this.db,
+        tenantId,
+        COST_CURRENCY,
+        PRICING_CURRENCY,
+      );
 
-      let currentMarginPct = 0;
-      if (currentPrice > 0 && avgCost > 0) {
-        currentMarginPct = Math.round(((currentPrice - avgCost) / currentPrice) * 100);
+      if (exchangeRate === null) {
+        items.push({
+          listingId: listing.id,
+          integrationId: listing.integrationId,
+          integrationName: listing.integration.name,
+          channel: listing.integration.channel,
+          productId: listing.productId,
+          productName: listing.product.name,
+          externalSku: listing.externalSku ?? listing.product.code,
+          currentPrice: grossPrice,
+          averageCost: baseCostTRY,
+          currentMarginPct: 0,
+          recommendedPrice: grossPrice,
+          targetMarginPct,
+          status: 'CURRENCY_DATA_MISSING',
+          pricingCurrencyCode: PRICING_CURRENCY,
+          costCurrencyCode: COST_CURRENCY,
+          vatRatePct,
+        });
+        continue;
       }
 
-      // Recommended price to maintain 25% margin
-      const recommendedPrice = avgCost > 0 ? Math.round((avgCost / (1 - targetMarginPct / 100)) * 100) / 100 : currentPrice;
+      const avgCostConverted = baseCostTRY * exchangeRate;
+      // Net-of-VAT price for margin calculation
+      const netPrice = vatRatePct > 0 ? grossPrice / (1 + vatRatePct / 100) : grossPrice;
+
+      let currentMarginPct = 0;
+      if (netPrice > 0 && avgCostConverted > 0) {
+        currentMarginPct = Math.round(((netPrice - avgCostConverted) / netPrice) * 100);
+      }
+
+      // Recommended price: hit target margin on net basis, then add VAT back
+      const recommendedNet =
+        avgCostConverted > 0 ? avgCostConverted / (1 - targetMarginPct / 100) : netPrice;
+      const recommendedGross = vatRatePct > 0 ? recommendedNet * (1 + vatRatePct / 100) : recommendedNet;
+      const recommendedPrice = Math.round(recommendedGross * 100) / 100;
 
       let status: RepricingAnalysisItem['status'] = 'OPTIMAL';
       if (currentMarginPct < 15) status = 'MARGIN_RISK';
-      else if (Math.abs(recommendedPrice - currentPrice) > 5) status = 'REPRICE_NEEDED';
+      else if (Math.abs(recommendedPrice - grossPrice) > 5) status = 'REPRICE_NEEDED';
 
       items.push({
         listingId: listing.id,
@@ -96,12 +197,15 @@ export class MarketplacePricingAutonomyService {
         productId: listing.productId,
         productName: listing.product.name,
         externalSku: listing.externalSku ?? listing.product.code,
-        currentPrice,
-        averageCost: avgCost,
+        currentPrice: grossPrice,
+        averageCost: Math.round(avgCostConverted * 100) / 100,
         currentMarginPct,
         recommendedPrice,
         targetMarginPct,
         status,
+        pricingCurrencyCode: PRICING_CURRENCY,
+        costCurrencyCode: COST_CURRENCY,
+        vatRatePct,
       });
     }
 

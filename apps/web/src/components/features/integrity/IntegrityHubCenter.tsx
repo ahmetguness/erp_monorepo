@@ -170,7 +170,7 @@ export function IntegrityHubCenter() {
         ) : (
           <div className="p-8 text-center rounded-xl bg-slate-950/40 border border-slate-800 text-slate-400 text-xs space-y-2">
             <p>Sistem bütünlük taraması başlatılmadı veya hiç uyumsuzluk tespit edilmedi.</p>
-            <p className="text-[11px] text-slate-500">Yukarıdaki <strong className="text-teal-400">"Sistem Bütünlüğünü Tara"</strong> butonuna tıklayarak tarama yapabilirsiniz.</p>
+            <p className="text-[11px] text-slate-500">Yukarıdaki <strong className="text-teal-400">&quot;Sistem Bütünlüğünü Tara&quot;</strong> butonuna tıklayarak tarama yapabilirsiniz.</p>
           </div>
         )}
       </div>

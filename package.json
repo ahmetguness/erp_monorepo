@@ -1,0 +1,25 @@
+{
+  "name": "erp-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/backend",
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:backend": "npm --workspace=@repo/backend run dev",
+    "dev:web": "npm --workspace=web run dev",
+    "build:backend": "npm --workspace=@repo/backend run build",
+    "build:web": "npm --workspace=web run build",
+    "typecheck:backend": "npm --workspace=@repo/backend run typecheck",
+    "typecheck:web": "npm --workspace=web run typecheck",
+    "typecheck": "npm run typecheck:backend && npm run typecheck:web",
+    "lint:backend": "npm --workspace=@repo/backend run lint",
+    "lint:web": "npm --workspace=web run lint",
+    "lint": "npm run lint:backend && npm run lint:web",
+    "test:backend": "npm --workspace=@repo/backend run test",
+    "test:quality": "npm --workspace=@repo/backend run test:quality",
+    "test": "npm run test:backend && npm run test:quality"
+  }
+}

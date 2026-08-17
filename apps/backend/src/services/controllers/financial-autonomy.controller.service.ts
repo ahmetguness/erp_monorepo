@@ -1,4 +1,5 @@
 import { Context } from 'hono';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { requireTenantId, requireUserId, requireParam } from '../../utils/context.js';
 import { FinancialAutonomyService } from '../financial-autonomy.service.js';
@@ -41,7 +42,7 @@ export const FinancialAutonomyController = {
   async executeAction(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const body = await c.req.json<{ actionType: string; payload?: Record<string, unknown> }>();
+    const body = await c.req.json<{ actionType: string; payload?: Prisma.JsonObject }>();
 
     const result = await autonomyService.executeFinancialAutonomyAction(
       tenantId,

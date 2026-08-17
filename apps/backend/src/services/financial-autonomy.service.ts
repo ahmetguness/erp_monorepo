@@ -18,6 +18,18 @@ export interface CashFlowDailySnapshot {
   status: 'HEALTHY' | 'WARNING' | 'DEFICIT';
 }
 
+export interface FixedCostEntry {
+  /** Human-readable label, e.g. "Kira" or "Maaş Bordrosu" */
+  label: string;
+  /** Monthly amount in tenant's base currency (TRY) */
+  amount: number;
+  /**
+   * Day of month this cost is expected to be paid (1-28).
+   * If the forecast month is shorter, falls on the last day of that month.
+   */
+  dayOfMonth: number;
+}
+
 export interface CashFlowForecastResult {
   generatedAt: string;
   forecastDays: number;
@@ -26,6 +38,10 @@ export interface CashFlowForecastResult {
   totalExpectedOutflow: number;
   projectedEndBalance: number;
   deficitDaysCount: number;
+  /** Whether tenant-configured fixed costs were included in the simulation. */
+  fixedCostsIncluded: boolean;
+  /** Total fixed cost outflow over the forecast window. */
+  totalFixedCostOutflow: number;
   dailySnapshots: CashFlowDailySnapshot[];
 }
 
@@ -125,6 +141,54 @@ export class FinancialAutonomyService {
       outflowsByDay.set(dateKey, (outflowsByDay.get(dateKey) ?? 0) + Number(p.totalGross));
     }
 
+    // ── Fixed costs from tenant settings ──────────────────────────────────
+    // Key: 'cash_flow.fixed_costs', Value: JSON array of FixedCostEntry
+    const fixedCostSetting = await this.db.tenantSetting.findFirst({
+      where: { tenantId, key: 'cash_flow.fixed_costs' },
+      select: { value: true },
+    });
+
+    let fixedCosts: FixedCostEntry[] = [];
+    if (fixedCostSetting) {
+      try {
+        const parsed: unknown = JSON.parse(fixedCostSetting.value);
+        if (Array.isArray(parsed)) {
+          fixedCosts = parsed.filter(
+            (entry): entry is FixedCostEntry =>
+              entry !== null &&
+              typeof entry === 'object' &&
+              typeof (entry as Record<string, unknown>).label === 'string' &&
+              typeof (entry as Record<string, unknown>).amount === 'number' &&
+              typeof (entry as Record<string, unknown>).dayOfMonth === 'number',
+          );
+        }
+      } catch {
+        logger.warn(`[FinancialAutonomy] Invalid cash_flow.fixed_costs JSON for tenant ${tenantId}`);
+      }
+    }
+
+    // Apply fixed costs to the outflows map
+    let totalFixedCostOutflow = 0;
+    for (let i = 0; i < days; i++) {
+      const dateObj = new Date(now.getTime() + i * 86_400_000);
+      const dayOfMonth = dateObj.getUTCDate();
+
+      for (const fc of fixedCosts) {
+        // Clamp to last day of month if shorter (e.g. dayOfMonth=31 in Feb)
+        const lastDay = new Date(
+          Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth() + 1, 0),
+        ).getUTCDate();
+        const targetDay = Math.min(fc.dayOfMonth, lastDay);
+
+        if (dayOfMonth === targetDay) {
+          const dateKey = dateObj.toISOString().slice(0, 10);
+          outflowsByDay.set(dateKey, (outflowsByDay.get(dateKey) ?? 0) + fc.amount);
+          totalFixedCostOutflow += fc.amount;
+        }
+      }
+    }
+
+    // ── Daily snapshot loop ────────────────────────────────────────────────
     const dailySnapshots: CashFlowDailySnapshot[] = [];
     let runningBalance = initialBalance;
     let totalIn = 0;
@@ -169,6 +233,8 @@ export class FinancialAutonomyService {
       totalExpectedOutflow: totalOut,
       projectedEndBalance: Math.round(runningBalance * 100) / 100,
       deficitDaysCount: deficitDays,
+      fixedCostsIncluded: fixedCosts.length > 0,
+      totalFixedCostOutflow,
       dailySnapshots,
     };
   }
@@ -319,18 +385,20 @@ export class FinancialAutonomyService {
     tenantId: string,
     userId: string,
     actionType: string,
-    payload: Record<string, unknown>,
+    payload: Prisma.JsonObject = {},
   ): Promise<{ success: boolean; message: string }> {
     logger.info(`[FinancialAutonomy] User ${userId} executing financial action ${actionType}`);
+
+    const invoiceId = typeof payload.invoiceId === 'string' ? payload.invoiceId : tenantId;
 
     await createAuditLog(this.db, {
       tenantId,
       userId,
       module: 'accounting',
       entityType: EntityType.INVOICE,
-      entityId: (payload.invoiceId as string) ?? tenantId,
+      entityId: invoiceId,
       action: AuditAction.UPDATE,
-      newValues: { actionType, payload: payload as unknown as Prisma.InputJsonValue, executedAt: new Date().toISOString() },
+      newValues: { actionType, payload, executedAt: new Date().toISOString() },
     });
 
     return {

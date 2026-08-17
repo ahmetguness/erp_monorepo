@@ -84,9 +84,9 @@ export default function NotificationsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const notifications = notificationsData?.data ?? [];
+  const notifications = useMemo(() => notificationsData?.data ?? [], [notificationsData?.data]);
   const unreadCount = notificationsData?.meta.unreadCount ?? 0;
-  const smartItems = smartSummary?.items ?? [];
+  const smartItems = useMemo(() => smartSummary?.items ?? [], [smartSummary?.items]);
 
   // Metrics
   const criticalCount = smartSummary?.criticalCount ?? 0;

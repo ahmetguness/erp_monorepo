@@ -114,7 +114,7 @@ export function MarketplaceAutomationTab() {
         {/* Unmatched SKUs */}
         <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 shadow-md">
           <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">Eşleşmeyen SKU'lar</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">Eşleşmeyen SKU&apos;lar</span>
             <AlertCircle className="w-4 h-4 text-rose-400" />
           </div>
           <div className="text-xl sm:text-2xl font-black text-rose-400">{summary?.unmatchedSkuCount ?? 0}</div>

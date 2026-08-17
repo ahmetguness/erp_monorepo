@@ -28,6 +28,20 @@ import {
 import type { AiSuggestion } from '@/services/ai.automation.service';
 import { cn } from '@/lib/utils';
 
+interface AnomalyItem {
+  type?: string;
+  title?: string;
+  riskLevel?: string;
+  detail?: string;
+}
+
+function parseAnomalies(draftData: unknown): AnomalyItem[] {
+  if (!Array.isArray(draftData)) return [];
+  return draftData.filter((item): item is AnomalyItem => 
+    typeof item === 'object' && item !== null && 'title' in item
+  );
+}
+
 export function AiHubCenter() {
   const [nlPrompt, setNlPrompt] = useState('');
   const [nlResult, setNlResult] = useState<{ query: string; answerSummary: string; data: unknown } | null>(null);
@@ -262,7 +276,7 @@ export function AiHubCenter() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {((anomaliesSuggestion.draftData as any) ?? []).map((anomaly: any, idx: number) => (
+            {parseAnomalies(anomaliesSuggestion.draftData).map((anomaly: AnomalyItem, idx: number) => (
               <div key={idx} className="p-3.5 rounded-xl bg-rose-950/20 border border-rose-900/30 text-xs space-y-1">
                 <div className="font-bold text-rose-300 flex items-center justify-between">
                   <span>{anomaly.title}</span>

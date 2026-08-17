@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import { logger } from '../lib/logger.js';
 import { postProductionAccountingEntry } from './production-rules.service.js';
+import { assertCanReserveStock } from './inventory-rules.service.js';
 
 export interface ProductionDerivationResult {
   workOrderId: string;
@@ -18,21 +19,37 @@ export interface ProductionDerivationResult {
   autoCompleted: boolean;
 }
 
+export interface AutoReserveResult {
+  workOrderId: string;
+  /** Number of items successfully reserved or updated. */
+  reservedCount: number;
+  /** Number of items skipped because available stock was insufficient. */
+  skippedCount: number;
+  /** Product IDs where stock was insufficient. */
+  insufficientProductIds: string[];
+}
+
 export class ProductionAutomationService {
   constructor(private readonly db: PrismaClient) {}
 
   /**
-   * Automatically reserves all required raw materials for a Work Order
+   * Automatically reserves all required raw materials for a Work Order.
+   *
+   * Performs an available-stock check (onHand − existing reservations) before
+   * creating or updating each reservation so that race conditions or insufficient
+   * inventory no longer silently produce over-reservations.
+   *
+   * Items where available stock < required quantity are skipped and reported in
+   * the returned `insufficientProductIds` list — a partial reservation is
+   * returned rather than throwing so callers can handle shortage gracefully.
    */
   async autoReserveWorkOrderMaterials(
     tenantId: string,
     workOrderId: string,
-  ): Promise<{ workOrderId: string; reservedCount: number }> {
+  ): Promise<AutoReserveResult> {
     const wo = await this.db.workOrder.findFirst({
       where: { id: workOrderId, tenantId, deletedAt: null },
-      include: {
-        items: true,
-      },
+      include: { items: true },
     });
 
     if (!wo) {
@@ -40,6 +57,8 @@ export class ProductionAutomationService {
     }
 
     let reservedCount = 0;
+    let skippedCount = 0;
+    const insufficientProductIds: string[] = [];
 
     for (const item of wo.items) {
       const warehouseId = item.sourceWarehouseId ?? wo.inputWarehouseId;
@@ -51,7 +70,30 @@ export class ProductionAutomationService {
       );
       if (remainingToReserve <= 0) continue;
 
-      // Check existing active reservation
+      // ── Stock availability check ────────────────────────────────────────
+      // assertCanReserveStock computes (onHand − reserved) excluding the
+      // existing reservation for this work order, so re-runs are idempotent.
+      try {
+        await assertCanReserveStock(this.db, tenantId, {
+          productId: item.productId,
+          warehouseId,
+          quantity: remainingToReserve,
+          refType: ReservationRefType.WORK_ORDER,
+          refId: wo.id,
+        });
+      } catch {
+        // Insufficient available stock — log and continue with next item
+        logger.warn(
+          `[ProductionAutomation] Insufficient stock for product ${item.productId} ` +
+            `in warehouse ${warehouseId} for WorkOrder ${workOrderId}. ` +
+            `Required: ${remainingToReserve}. Skipping.`,
+        );
+        insufficientProductIds.push(item.productId);
+        skippedCount++;
+        continue;
+      }
+
+      // ── Upsert reservation ──────────────────────────────────────────────
       const existingRes = await this.db.inventoryReservation.findFirst({
         where: {
           tenantId,
@@ -66,9 +108,7 @@ export class ProductionAutomationService {
       if (existingRes) {
         await this.db.inventoryReservation.update({
           where: { id: existingRes.id },
-          data: {
-            quantity: new Prisma.Decimal(remainingToReserve),
-          },
+          data: { quantity: new Prisma.Decimal(remainingToReserve) },
         });
       } else {
         await this.db.inventoryReservation.create({
@@ -85,8 +125,12 @@ export class ProductionAutomationService {
       reservedCount++;
     }
 
-    logger.info(`[ProductionAutomation] Auto-reserved ${reservedCount} material items for WorkOrder ${workOrderId}`);
-    return { workOrderId, reservedCount };
+    logger.info(
+      `[ProductionAutomation] AutoReserve WorkOrder ${workOrderId}: ` +
+        `reserved=${reservedCount}, skipped=${skippedCount}`,
+    );
+
+    return { workOrderId, reservedCount, skippedCount, insufficientProductIds };
   }
 
   /**
@@ -186,6 +230,13 @@ export class ProductionAutomationService {
     const outputQty = finalOutputQty !== undefined && Number.isFinite(finalOutputQty) ? finalOutputQty : Number(wo.plannedQty);
 
     await this.db.$transaction(async (tx) => {
+      const targetWo = await tx.workOrder.findFirst({
+        where: { id: workOrderId, tenantId },
+      });
+      if (!targetWo) {
+        throw new Error(`İş Emri bulunamadı: ${workOrderId}`);
+      }
+
       // 1. Update WorkOrder status & producedQty
       await tx.workOrder.update({
         where: { id: workOrderId },

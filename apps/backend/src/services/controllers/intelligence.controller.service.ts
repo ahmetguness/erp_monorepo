@@ -4,7 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../errors';
 import { IntelligenceService, type PermissionView } from '../intelligence.service.js';
 import { requireTenantId, requireUserId, requireParam } from '../../utils/context.js';
-import { AiAutomationService } from '../ai-automation.service.js';
+import { AiAutomationService, type AiUseCase } from '../ai-automation.service.js';
 
 const aiAutomation = new AiAutomationService(prisma);
 import { createAuditLog, getRequestMeta } from '../../utils/audit.js';
@@ -451,7 +451,7 @@ export const IntelligenceController = {
   async executeAiSuggestion(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const body = await c.req.json<{ useCase: any; draftData: Record<string, unknown> }>();
+    const body = await c.req.json<{ useCase: AiUseCase; draftData: Record<string, unknown> }>();
 
     const result = await aiAutomation.executeAiSuggestion(tenantId, userId, body.useCase, body.draftData ?? {});
     return c.json({ data: result });

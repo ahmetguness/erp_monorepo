@@ -113,14 +113,14 @@ export function AgentCommandCenter() {
             onClick={() => setPromptInput('Önümüzdeki hafta vadesi gelen 50.000 TL üzeri alacaklar için hatırlatma maili taslağı hazırla')}
             className="px-2.5 py-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 transition-colors"
           >
-            "Vadesi gelen alacaklar için hatırlatma maili hazırla"
+            &quot;Vadesi gelen alacaklar için hatırlatma maili hazırla&quot;
           </button>
           <button
             type="button"
             onClick={() => setPromptInput('Kritik stok seviyesindeki ürünler için otonom satın alma siparişi üret')}
             className="px-2.5 py-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 transition-colors"
           >
-            "Kritik stoklar için otonom PO üret"
+            &quot;Kritik stoklar için otonom PO üret&quot;
           </button>
         </div>
       </div>
