@@ -12,6 +12,7 @@ import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
 import { mapTrendyolOrderStatus } from '../trendyol.service';
 import { decrypt } from '../../utils/encryption.js';
+import { MarketplaceAutomationService } from '../marketplace-automation.service.js';
 
 const WEBHOOK_API_KEY_HEADER = 'x-api-key';
 const LEGACY_WEBHOOK_SECRET_HEADER = 'x-webhook-secret';
@@ -165,7 +166,11 @@ export async function processTrendyolWebhookPayload({
 
     let errorMessage: string | null = null;
     try {
-      await upsertMarketplaceOrder(tenantId, integrationId, orderPackage);
+      const orderRecord = await upsertMarketplaceOrder(tenantId, integrationId, orderPackage);
+      const automationService = new MarketplaceAutomationService(prisma);
+      await automationService.processOrderAutomation(tenantId, orderRecord.id).catch((autoErr) => {
+        logger.error(`[MarketplaceAutomation] Auto pipeline failed for order ${orderPackage.packageId}: ${autoErr}`);
+      });
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : String(err);
       logger.error(`[TrendyolWebhook] Processing error for event ${eventId}: ${errorMessage}`);
@@ -367,14 +372,14 @@ async function upsertMarketplaceOrder(
   tenantId: string,
   integrationId: string,
   orderPackage: WebhookOrderPackage,
-): Promise<void> {
+): Promise<{ id: string }> {
   const existing = await prisma.marketplaceOrder.findFirst({
     where: { tenantId, integrationId, externalId: orderPackage.packageId },
     select: { id: true, status: true },
   });
 
   if (existing) {
-    await prisma.marketplaceOrder.update({
+    const updated = await prisma.marketplaceOrder.update({
       where: { id: existing.id },
       data: {
         status: orderPackage.status,
@@ -387,11 +392,12 @@ async function upsertMarketplaceOrder(
         syncedAt: new Date(),
         updatedAt: new Date(),
       },
+      select: { id: true },
     });
-    return;
+    return updated;
   }
 
-  await prisma.marketplaceOrder.create({
+  const created = await prisma.marketplaceOrder.create({
     data: {
       tenantId,
       integrationId,
@@ -416,5 +422,8 @@ async function upsertMarketplaceOrder(
         })),
       },
     },
+    select: { id: true },
   });
+
+  return created;
 }

@@ -35,6 +35,10 @@ productionRoutes.patch('/boms/:id', requirePermission('production', 'UPDATE'), B
 productionRoutes.post('/boms/:id/items', requirePermission('production', 'UPDATE'), BOMController.addItem);
 productionRoutes.delete('/boms/:id/items/:itemId', requirePermission('production', 'UPDATE'), BOMController.removeItem);
 productionRoutes.post('/boms/:id/routings', requirePermission('production', 'UPDATE'), BOMController.addRouting);
+productionRoutes.patch('/boms/:id', requirePermission('production', 'UPDATE'), BOMController.update);
+productionRoutes.post('/boms/:id/items', requirePermission('production', 'UPDATE'), BOMController.addItem);
+productionRoutes.delete('/boms/:id/items/:itemId', requirePermission('production', 'UPDATE'), BOMController.removeItem);
+productionRoutes.post('/boms/:id/routings', requirePermission('production', 'UPDATE'), BOMController.addRouting);
 productionRoutes.delete('/boms/:id/routings/:routingId', requirePermission('production', 'UPDATE'), BOMController.removeRouting);
 
 // İş Emirleri
@@ -42,6 +46,8 @@ productionRoutes.get('/work-orders', requirePermission('production', 'READ'), Wo
 productionRoutes.get('/work-orders/:id', requirePermission('production', 'READ'), WorkOrderController.getById);
 productionRoutes.post('/work-orders', requirePermission('production', 'CREATE'), WorkOrderController.create);
 productionRoutes.post('/work-orders/:id/status', requirePermission('production', 'UPDATE'), WorkOrderController.changeStatus);
+productionRoutes.post('/work-orders/:id/automation/derive-status', requirePermission('production', 'UPDATE'), WorkOrderController.deriveStatus);
+productionRoutes.post('/work-orders/:id/automation/auto-complete', requirePermission('production', 'UPDATE'), WorkOrderController.autoComplete);
 productionRoutes.post('/work-orders/:id/report', requirePermission('production', 'UPDATE'), WorkOrderController.reportProduction);
 productionRoutes.patch('/work-orders/:id/operations/:operationId', requirePermission('production', 'UPDATE'), WorkOrderController.updateOperation);
 productionRoutes.delete('/work-orders/:id', requirePermission('production', 'DELETE'), WorkOrderController.remove);

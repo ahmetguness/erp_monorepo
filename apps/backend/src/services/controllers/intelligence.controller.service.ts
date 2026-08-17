@@ -4,6 +4,9 @@ import { prisma } from '../../lib/prisma';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../errors';
 import { IntelligenceService, type PermissionView } from '../intelligence.service.js';
 import { requireTenantId, requireUserId, requireParam } from '../../utils/context.js';
+import { AiAutomationService } from '../ai-automation.service.js';
+
+const aiAutomation = new AiAutomationService(prisma);
 import { createAuditLog, getRequestMeta } from '../../utils/audit.js';
 import { listAiRequestLogs, recordAiRequestLog } from '../ai-governance.service';
 import {
@@ -395,5 +398,62 @@ export const IntelligenceController = {
     });
 
     return c.json({ data: { recorded: true } }, 201);
+  },
+
+  // ── Phase 15 AI Pipeline Uç Noktaları ──
+
+  async processOcr(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body = await c.req.json<{ text: string }>();
+
+    if (!body.text) {
+      return c.json(new ValidationError('text alanı zorunludur.').toJSON(), 400);
+    }
+
+    const suggestion = await aiAutomation.processInvoiceOcr(tenantId, body.text);
+    return c.json({ data: suggestion });
+  },
+
+  async extractOrderFromEmail(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body = await c.req.json<{ subject: string; body: string }>();
+
+    const suggestion = await aiAutomation.extractOrderFromEmail(tenantId, body.subject ?? '', body.body ?? '');
+    return c.json({ data: suggestion });
+  },
+
+  async matchPayment(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body = await c.req.json<{ description: string; amount: number }>();
+
+    const suggestion = await aiAutomation.matchPaymentDescription(tenantId, body.description ?? '', body.amount ?? 0);
+    return c.json({ data: suggestion });
+  },
+
+  async detectAnomalies(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const suggestion = await aiAutomation.detectAnomalies(tenantId);
+    return c.json({ data: suggestion });
+  },
+
+  async nlQuery(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body = await c.req.json<{ prompt: string }>();
+
+    if (!body.prompt) {
+      return c.json(new ValidationError('prompt alanı zorunludur.').toJSON(), 400);
+    }
+
+    const result = await aiAutomation.processNaturalLanguageErpQuery(tenantId, body.prompt);
+    return c.json({ data: result });
+  },
+
+  async executeAiSuggestion(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const body = await c.req.json<{ useCase: any; draftData: Record<string, unknown> }>();
+
+    const result = await aiAutomation.executeAiSuggestion(tenantId, userId, body.useCase, body.draftData ?? {});
+    return c.json({ data: result });
   },
 };

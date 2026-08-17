@@ -18,4 +18,12 @@ intelligenceRoutes.get('/automation-rules/preview', IntelligenceController.autom
 intelligenceRoutes.get('/sector-templates', IntelligenceController.sectorTemplates);
 intelligenceRoutes.get('/ocr/attachments/:id/draft', IntelligenceController.documentDraft);
 
+// Phase 15 AI Pipeline Routes
+intelligenceRoutes.post('/ai/ocr', IntelligenceController.processOcr);
+intelligenceRoutes.post('/ai/email-to-order', IntelligenceController.extractOrderFromEmail);
+intelligenceRoutes.post('/ai/match-payment', IntelligenceController.matchPayment);
+intelligenceRoutes.get('/ai/anomalies', IntelligenceController.detectAnomalies);
+intelligenceRoutes.post('/ai/nl-query', IntelligenceController.nlQuery);
+intelligenceRoutes.post('/ai/execute-suggestion', IntelligenceController.executeAiSuggestion);
+
 export { intelligenceRoutes };

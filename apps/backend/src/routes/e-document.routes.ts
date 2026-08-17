@@ -9,6 +9,9 @@ const eDocumentRoutes = new Hono();
 eDocumentRoutes.use('*', requireAccess(ACCESS_POLICIES.eDocuments));
 
 eDocumentRoutes.get('/summary', requirePermission('invoicing', 'READ'), EDocumentController.summary);
+eDocumentRoutes.get('/exceptions', requirePermission('invoicing', 'READ'), EDocumentController.getExceptions);
+eDocumentRoutes.post('/exceptions/:id/retry', requirePermission('invoicing', 'UPDATE'), EDocumentController.retry);
+eDocumentRoutes.post('/webhook/callback', EDocumentController.processCallback);
 eDocumentRoutes.get('/', requirePermission('invoicing', 'READ'), EDocumentController.list);
 eDocumentRoutes.get('/:id', requirePermission('invoicing', 'READ'), EDocumentController.getById);
 eDocumentRoutes.post('/', requirePermission('invoicing', 'CREATE'), EDocumentController.create);

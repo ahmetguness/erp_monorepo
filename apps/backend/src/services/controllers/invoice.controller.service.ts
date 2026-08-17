@@ -22,6 +22,7 @@ import {
 } from '../financial/index.js';
 import { assertInvoiceStatusTransition, isComputedInvoiceStatus } from '../financial/status-transition.service.js';
 import { scanAndRecomputeInvoiceStatuses } from '../financial/invoice-status.service.js';
+import { EDocumentAutomationService } from '../edocument-automation.service.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -397,6 +398,9 @@ export const InvoiceController = {
         dueDate: invoice.dueDate,
       },
     });
+
+    const eDocAutomation = new EDocumentAutomationService(prisma);
+    eDocAutomation.autoCreateAndSendEDocument(tenantId, invoice.id).catch(() => {});
 
     return c.json({ data: invoice }, 201);
   },

@@ -13,9 +13,12 @@ notificationRoutes.get('/smart', requirePermission('notifications', 'READ'), Not
 notificationRoutes.post('/smart/:id/action', requirePermission('notifications', 'UPDATE'), NotificationController.smartAction);
 notificationRoutes.get('/', requirePermission('notifications', 'READ'), NotificationController.list);
 notificationRoutes.post('/read-all', requirePermission('notifications', 'UPDATE'), NotificationController.markAllAsRead);
+notificationRoutes.post('/bulk-read', requirePermission('notifications', 'UPDATE'), NotificationController.bulkMarkAsRead);
+notificationRoutes.post('/bulk-archive', requirePermission('notifications', 'UPDATE'), NotificationController.bulkArchive);
 notificationRoutes.post('/:id/read', requirePermission('notifications', 'UPDATE'), NotificationController.markAsRead);
 notificationRoutes.post('/:id/archive', requirePermission('notifications', 'UPDATE'), NotificationController.archive);
 notificationRoutes.delete('/all', requirePermission('notifications', 'DELETE'), NotificationController.deleteAll);
+notificationRoutes.delete('/bulk', requirePermission('notifications', 'DELETE'), NotificationController.bulkDelete);
 notificationRoutes.delete('/:id', requirePermission('notifications', 'DELETE'), NotificationController.delete);
 
 export { notificationRoutes };

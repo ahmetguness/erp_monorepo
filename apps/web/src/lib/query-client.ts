@@ -1,7 +1,7 @@
 'use client';
 
 import { QueryClient } from '@tanstack/react-query';
-import { getErrorMessage } from '@/types/api.types';
+import { getErrorMessage, getErrorCode } from '@/types/api.types';
 
 // ─────────────────────────────────────────────
 // TanStack Query global config
@@ -13,7 +13,11 @@ export function makeQueryClient(): QueryClient {
       queries: {
         staleTime: 0, // Her zaman fresh fetch
         retry: (failureCount, error) => {
-          // Don't retry on 4xx errors
+          // Don't retry on 4xx errors or UNAUTHORIZED/FORBIDDEN codes
+          const code = getErrorCode(error);
+          if (code === 'UNAUTHORIZED' || code === 'FORBIDDEN') {
+            return false;
+          }
           const msg = getErrorMessage(error);
           if (msg.includes('401') || msg.includes('403') || msg.includes('404')) {
             return false;

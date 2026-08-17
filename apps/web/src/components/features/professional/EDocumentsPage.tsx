@@ -17,6 +17,7 @@ import { useEDocuments, useCreateEDocument, useEDocumentSummary, useUpdateEDocum
 import { cn, formatDate, formatDateTime } from '@/lib/utils';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import type { EDocument, EDocumentStatus, EDocumentType } from '@/services/e-document.service';
+import { EDocumentExceptionCenter } from '../e-documents/EDocumentExceptionCenter';
 
 const TYPE_MAP: Record<EDocumentType, { label: string; variant: BadgeVariant }> = {
   E_INVOICE: { label: 'E-Fatura', variant: 'info' },
@@ -176,6 +177,7 @@ export function EDocumentsPage() {
   const [createOpen, setCreateOpen] = useState(Boolean(initialDeliveryNoteId || initialInvoiceId));
   const [detailDocument, setDetailDocument] = useState<EDocument | null>(null);
   const [retryDocument, setRetryDocument] = useState<EDocument | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'exceptions'>('all');
   const [form, setForm] = useState<{ type: EDocumentType; invoiceId: string; deliveryNoteId: string }>({
     type: initialDeliveryNoteId ? 'E_WAYBILL' : 'E_INVOICE',
     invoiceId: initialInvoiceId,
@@ -282,6 +284,44 @@ export function EDocumentsPage() {
         action={<Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Yeni e-belge</Button>}
       />
 
+      {/* Main Tab Navigation */}
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={cn(
+            'px-4 py-2 rounded-xl text-xs font-bold transition-all',
+            activeTab === 'all'
+              ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/50',
+          )}
+        >
+          Tüm E-Belgeler
+        </button>
+
+        <button
+          onClick={() => setActiveTab('exceptions')}
+          className={cn(
+            'px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2',
+            activeTab === 'exceptions'
+              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 shadow-md'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/50',
+          )}
+        >
+          <AlertTriangle className="w-3.5 h-3.5" />
+          <span>İstisna & Hata Yönetim Merkezi</span>
+          {summary && summary.sendingErrors > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-[10px] font-black">
+              {summary.sendingErrors}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'exceptions' ? (
+        <EDocumentExceptionCenter />
+      ) : (
+        <>
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <KpiCard label="Toplam" value={String(summary?.total ?? 0)} detail="Tüm e-belge kayıtları" icon={FileCheck} />
         <KpiCard label="Bekleyen" value={String(summary?.pending ?? 0)} detail="Kuyrukta veya işleniyor" icon={Send} tone="warning" />
@@ -356,6 +396,8 @@ export function EDocumentsPage() {
         pagination={data ? { page, pageSize: 20, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
         density={tableDensity}
       />
+        </>
+      )}
 
       <Modal
         isOpen={createOpen}

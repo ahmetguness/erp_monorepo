@@ -29,6 +29,9 @@ serviceRoutes.get('/requests/:id', requirePermission('service', 'READ'), Service
 serviceRoutes.post('/requests', requirePermission('service', 'CREATE'), ServiceRequestController.create);
 serviceRoutes.patch('/requests/:id', requirePermission('service', 'UPDATE'), ServiceRequestController.update);
 serviceRoutes.post('/requests/:id/status', requirePermission('service', 'UPDATE'), ServiceRequestController.changeStatus);
+serviceRoutes.post('/requests/:id/automation/assign', requirePermission('service', 'UPDATE'), ServiceRequestController.assignTechnician);
+serviceRoutes.post('/requests/:id/automation/reserve-parts', requirePermission('service', 'UPDATE'), ServiceRequestController.reserveParts);
+serviceRoutes.post('/requests/:id/automation/complete-invoice', requirePermission('service', 'UPDATE'), ServiceRequestController.completeAndInvoice);
 serviceRoutes.post('/requests/check-sla', requirePermission('service', 'UPDATE'), ServiceRequestController.checkSlaBreaches);
 serviceRoutes.post('/requests/:id/assign', requirePermission('service', 'UPDATE'), ServiceRequestController.assign);
 serviceRoutes.post('/requests/:id/items', requirePermission('service', 'UPDATE'), ServiceRequestController.addItem);

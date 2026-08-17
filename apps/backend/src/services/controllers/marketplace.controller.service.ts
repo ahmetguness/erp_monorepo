@@ -15,8 +15,10 @@ import { encrypt } from '../../utils/encryption.js';
 import { createAuditLog, getRequestMeta } from '../../utils/audit.js';
 import { processTrendyolWebhookPayload } from './trendyol-webhook.controller.service.js';
 import { MarketplaceMonitoringService } from '../marketplace-monitoring.service.js';
+import { MarketplaceAutomationService } from '../marketplace-automation.service.js';
 
 const marketplaceMonitoringService = new MarketplaceMonitoringService(prisma);
+const marketplaceAutomationService = new MarketplaceAutomationService(prisma);
 
 type IntegrationWithSecrets = {
   apiKey: string | null;
@@ -991,5 +993,40 @@ export const MarketplaceMonitoringController = {
     const integrationId = c.req.query('integrationId');
     const data = await marketplaceMonitoringService.driftReport(tenantId, integrationId);
     return c.json({ data });
+  },
+
+  // ── Phase 12 - Marketplace Automation ───────
+
+  async getAutomationSummary(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const summary = await marketplaceAutomationService.getAutomationSummary(tenantId);
+    return c.json({ data: summary });
+  },
+
+  async getAutomationPolicy(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const policy = await marketplaceAutomationService.getPolicy(tenantId);
+    return c.json({ data: policy });
+  },
+
+  async updateAutomationPolicy(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body = await c.req.json<Record<string, boolean>>().catch(() => ({}));
+    const updated = await marketplaceAutomationService.updatePolicy(tenantId, body);
+    return c.json({ data: updated });
+  },
+
+  async triggerOrderAutomation(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const marketplaceOrderId = requireParam(c, 'id');
+    const result = await marketplaceAutomationService.processOrderAutomation(tenantId, marketplaceOrderId);
+    return c.json({ data: result });
+  },
+
+  async triggerStockSync(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const productId = requireParam(c, 'productId');
+    const result = await marketplaceAutomationService.syncErpStockToMarketplaces(tenantId, productId);
+    return c.json({ data: result });
   },
 };

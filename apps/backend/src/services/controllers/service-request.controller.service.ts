@@ -6,6 +6,9 @@ import { getPaginationParams } from '../../utils/pagination.js';
 import { requireTenantId, requireUserId, requireParam } from '../../utils/context.js';
 import { ServiceStatus, ServiceActivityType, Priority, AuditAction, EntityType } from '@prisma/client';
 import { createAuditLog, getRequestMeta } from '../../utils/audit.js';
+import { ServiceAutomationService } from '../service-automation.service.js';
+
+const serviceAutomation = new ServiceAutomationService(prisma);
 
 export function calculateSla(
   createdAt: Date,
@@ -333,5 +336,42 @@ export const ServiceRequestController = {
         breached,
       },
     });
+  },
+
+  // ── Service Automation Uç Noktaları ──
+
+  async assignTechnician(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
+    const body = await c.req.json<{ technicianId: string }>();
+
+    if (!body.technicianId) {
+      return c.json(new ValidationError('technicianId alanı zorunludur.').toJSON(), 400);
+    }
+
+    const result = await serviceAutomation.assignTechnician(tenantId, id, body.technicianId);
+    return c.json({ data: result });
+  },
+
+  async reserveParts(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
+    const body = await c.req.json<{ warehouseId: string }>();
+
+    if (!body.warehouseId) {
+      return c.json(new ValidationError('warehouseId alanı zorunludur.').toJSON(), 400);
+    }
+
+    const result = await serviceAutomation.reserveServiceParts(tenantId, id, body.warehouseId);
+    return c.json({ data: result });
+  },
+
+  async completeAndInvoice(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
+    const body = await c.req.json<{ warehouseId?: string }>().catch(() => ({ warehouseId: undefined }));
+
+    const result = await serviceAutomation.completeServiceAndGenerateInvoice(tenantId, id, body.warehouseId);
+    return c.json({ data: result });
   },
 };

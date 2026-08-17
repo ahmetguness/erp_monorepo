@@ -131,6 +131,53 @@ export const NotificationController = {
     await prisma.notification.deleteMany({ where: { id, tenantId, userId } });
     return c.json({ data: { success: true } });
   },
+
+  async bulkMarkAsRead(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const body = await c.req.json<{ ids: string[] }>().catch(() => ({ ids: [] }));
+    const ids = Array.isArray(body.ids) ? body.ids : [];
+
+    if (ids.length > 0) {
+      await prisma.notification.updateMany({
+        where: { tenantId, userId, id: { in: ids } },
+        data: { status: NotificationStatus.READ, readAt: new Date() },
+      });
+    }
+
+    return c.json({ data: { success: true, count: ids.length } });
+  },
+
+  async bulkArchive(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const body = await c.req.json<{ ids: string[] }>().catch(() => ({ ids: [] }));
+    const ids = Array.isArray(body.ids) ? body.ids : [];
+
+    if (ids.length > 0) {
+      await prisma.notification.updateMany({
+        where: { tenantId, userId, id: { in: ids } },
+        data: { status: NotificationStatus.ARCHIVED },
+      });
+    }
+
+    return c.json({ data: { success: true, count: ids.length } });
+  },
+
+  async bulkDelete(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const body = await c.req.json<{ ids: string[] }>().catch(() => ({ ids: [] }));
+    const ids = Array.isArray(body.ids) ? body.ids : [];
+
+    if (ids.length > 0) {
+      await prisma.notification.deleteMany({
+        where: { tenantId, userId, id: { in: ids } },
+      });
+    }
+
+    return c.json({ data: { success: true, count: ids.length } });
+  },
 };
 
 function isSmartNotificationAction(value: string): value is SmartNotificationAction {

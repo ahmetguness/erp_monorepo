@@ -18,6 +18,7 @@ import {
   type RequestSecurityMeta,
 } from '../security-hardening.service.js';
 import { modulesForPlan } from '../../utils/tenant-modules.js';
+import { isSecureCookieEnabled } from '../../lib/cookie-config.js';
 
 // ─────────────────────────────────────────────
 // Config
@@ -106,7 +107,7 @@ function toTenantMembershipView(input: {
 function setAuthCookie(c: Context, token: string, rememberMe = true): void {
   setCookie(c, AUTH_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecureCookieEnabled(),
     sameSite: 'Lax',
     path: '/',
     ...(rememberMe ? { maxAge: REMEMBER_ME_MAX_AGE_SECONDS } : {}),
@@ -116,7 +117,7 @@ function setAuthCookie(c: Context, token: string, rememberMe = true): void {
 function clearAuthCookie(c: Context): void {
   deleteCookie(c, AUTH_COOKIE_NAME, {
     path: '/',
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecureCookieEnabled(),
     sameSite: 'Lax',
   });
 }

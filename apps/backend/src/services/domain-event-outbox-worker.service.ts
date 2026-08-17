@@ -1,6 +1,7 @@
 import { DomainEventOutboxStatus, Prisma, Priority } from '@prisma/client';
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
+import { runWithTenantIsolationBypass } from '../lib/tenant-isolation-context.js';
 import { domainEvents } from '../domain-events';
 import {
   DOMAIN_EVENT_NAMES,
@@ -481,13 +482,15 @@ export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE):
     DEFAULT_PROCESSING_TIMEOUT_MS,
   );
   const staleProcessingCutoff = new Date(Date.now() - processingTimeoutMs);
-  const staleProcessingEvents = await prisma.domainEventOutbox.findMany({
-    where: {
-      status: DomainEventOutboxStatus.PROCESSING,
-      updatedAt: { lte: staleProcessingCutoff },
-    },
-    select: { id: true, tenantId: true },
-  });
+  const staleProcessingEvents = await runWithTenantIsolationBypass('domain-event-outbox-worker-stale-processing', async () =>
+    prisma.domainEventOutbox.findMany({
+      where: {
+        status: DomainEventOutboxStatus.PROCESSING,
+        updatedAt: { lte: staleProcessingCutoff },
+      },
+      select: { id: true, tenantId: true },
+    }),
+  );
   let requeuedStale = 0;
   for (const event of staleProcessingEvents) {
     const staleProcessing = await prisma.domainEventOutbox.updateMany({
@@ -501,15 +504,17 @@ export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE):
     requeuedStale += staleProcessing.count;
   }
 
-  const dueEvents = await prisma.domainEventOutbox.findMany({
-    where: {
-      status: { in: [DomainEventOutboxStatus.PENDING, DomainEventOutboxStatus.FAILED] },
-      OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: new Date() } }],
-    },
-    orderBy: { updatedAt: 'asc' },
-    take: limit,
-    select: { id: true, tenantId: true },
-  });
+  const dueEvents = await runWithTenantIsolationBypass('domain-event-outbox-worker-due-events', async () =>
+    prisma.domainEventOutbox.findMany({
+      where: {
+        status: { in: [DomainEventOutboxStatus.PENDING, DomainEventOutboxStatus.FAILED] },
+        OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: new Date() } }],
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: limit,
+      select: { id: true, tenantId: true },
+    }),
+  );
 
   const result: DomainEventOutboxBatchResult = {
     claimed: dueEvents.length,

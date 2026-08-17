@@ -98,3 +98,15 @@ export async function archiveNotification(id: string): Promise<Notification> {
   const res = await apiClient.post(`/api/notifications/${id}/archive`);
   return safeParse(SingleResponseSchema(NotificationSchema), res.data, 'archiveNotification').data;
 }
+
+export async function bulkMarkAsRead(ids: string[]): Promise<void> {
+  await apiClient.post('/api/notifications/bulk-read', { ids });
+}
+
+export async function bulkArchiveNotifications(ids: string[]): Promise<void> {
+  await apiClient.post('/api/notifications/bulk-archive', { ids });
+}
+
+export async function bulkDeleteNotifications(ids: string[]): Promise<void> {
+  await apiClient.delete('/api/notifications/bulk', { data: { ids } });
+}

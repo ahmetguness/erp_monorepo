@@ -16,6 +16,7 @@ import {
   useUpdateAiGovernancePolicy,
 } from '@/hooks/useIntelligence';
 import { formatDateTime } from '@/lib/utils';
+import { AiHubCenter } from '@/components/features/ai/AiHubCenter';
 import type { AiGovernanceInsights, AiGovernancePolicy, AiRequestLog, AiRequestStatus, AiRequestType } from '@/services/intelligence.service';
 
 const STATUS_META: Record<AiRequestStatus, { label: string; variant: BadgeVariant }> = {
@@ -197,7 +198,10 @@ export function AiGovernancePage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="AI Governance" subtitle="Kurumsal kontrol merkezi, AI istekleri, izin sonucu, maskeleme ve kullanici aksiyon zinciri." />
+      <PageHeader title="AI Governance & Karar Destek Stüdyosu" subtitle="Kurumsal kontrol merkezi, AI istekleri, izin sonucu, maskeleme ve deterministik yapay zeka boru hattı." />
+
+      {/* AI Karar Destek Stüdyosu */}
+      <AiHubCenter />
 
       {insights && (
         <section className="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">

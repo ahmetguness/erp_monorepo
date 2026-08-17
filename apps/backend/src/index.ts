@@ -30,6 +30,13 @@ import { taskRoutes } from './routes/task.routes';
 import { searchRoutes } from './routes/search.routes';
 import { dataExchangeRoutes } from './routes/data-exchange.routes';
 import { intelligenceRoutes } from './routes/intelligence.routes';
+import { operationsRoutes } from './routes/operations.routes';
+import { integrityRoutes } from './routes/integrity.routes';
+import { financialAutonomyRoutes } from './routes/financial-autonomy.routes';
+import { procurementAutonomyRoutes } from './routes/procurement-autonomy.routes';
+import { productionAutonomyRoutes } from './routes/production-autonomy.routes';
+import { marketplacePricingRoutes } from './routes/marketplace-pricing.routes';
+import { agentCommandRoutes } from './routes/agent-command.routes';
 import { automationRuleRoutes } from './routes/automation-rule.routes';
 import { auditLogRoutes } from './routes/audit-log.routes';
 import { attachmentRoutes } from './routes/attachment.routes';
@@ -144,7 +151,7 @@ function getCorrelationId(c: { req: { header: (name: string) => string | undefin
   return candidate && REQUEST_HEADER_PATTERN.test(candidate) ? candidate : requestId;
 }
 
-// ── CORS ─────────────────────────────────────
+// ── CORS & CSRF ───────────────────────────────
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
   .split(',')
   .map((s) => s.trim())
@@ -156,7 +163,11 @@ app.use('*', cors({
   origin: (origin) => {
     // Production'da origin zorunlu — server-to-server için API key kullanılmalı
     if (!origin) return IS_PRODUCTION ? '' : '*';
-    return ALLOWED_ORIGINS.includes(origin) ? origin : '';
+    if (ALLOWED_ORIGINS.includes(origin)) return origin;
+    if (!IS_PRODUCTION && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      return origin;
+    }
+    return '';
   },
   allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-request-id', 'x-correlation-id'],
@@ -271,6 +282,13 @@ tenantApi.route('/tasks', taskRoutes);
 tenantApi.route('/search', searchRoutes);
 tenantApi.route('/data-exchange', dataExchangeRoutes);
 tenantApi.route('/intelligence', intelligenceRoutes);
+tenantApi.route('/operations', operationsRoutes);
+tenantApi.route('/integrity', integrityRoutes);
+tenantApi.route('/financial-autonomy', financialAutonomyRoutes);
+tenantApi.route('/procurement-autonomy', procurementAutonomyRoutes);
+tenantApi.route('/production-autonomy', productionAutonomyRoutes);
+tenantApi.route('/marketplace-pricing', marketplacePricingRoutes);
+tenantApi.route('/agent-command', agentCommandRoutes);
 tenantApi.route('/automation-rules', automationRuleRoutes);
 tenantApi.route('/audit-logs', auditLogRoutes);
 tenantApi.route('/activity', activityRoutes);

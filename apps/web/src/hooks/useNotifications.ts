@@ -11,6 +11,9 @@ import {
   deleteNotification,
   deleteAllNotifications,
   archiveNotification,
+  bulkMarkAsRead,
+  bulkArchiveNotifications,
+  bulkDeleteNotifications,
   updateSmartNotificationState,
   type SmartNotificationAction,
 } from '@/services/notification.service';
@@ -72,6 +75,45 @@ export function useArchiveNotification() {
   return useMutation({
     mutationFn: (id: string) => archiveNotification(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+}
+
+export function useBulkMarkAsRead() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (ids: string[]) => bulkMarkAsRead(ids),
+    onSuccess: (_, ids) => {
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      toast.success(`${ids.length} bildirim okundu olarak işaretlendi.`);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useBulkArchive() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (ids: string[]) => bulkArchiveNotifications(ids),
+    onSuccess: (_, ids) => {
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      toast.success(`${ids.length} bildirim arşivlendi.`);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useBulkDelete() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (ids: string[]) => bulkDeleteNotifications(ids),
+    onSuccess: (_, ids) => {
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      toast.success(`${ids.length} bildirim silindi.`);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
 

@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
 import { useUIStore } from '@/store/ui.store';
 import { login, logout, register, getMe } from '@/services/auth.service';
@@ -14,19 +13,19 @@ import type { LoginCredentials, RegisterData } from '@/services/auth.service';
 // ─────────────────────────────────────────────
 
 export function useLogin() {
-  const router = useRouter();
   const { login: storeLogin } = useAuthStore();
   const { toast } = useUIStore();
 
   return useMutation({
     mutationFn: (vars: { credentials: LoginCredentials; rememberMe: boolean }) =>
       login({ ...vars.credentials, rememberMe: vars.rememberMe }),
-    onSuccess: (data, vars) => {
+    onSuccess: (data) => {
       storeLogin(data.user, data.tenant);
       toast.success(`Hoş geldiniz, ${data.user.name}`);
       const from = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('from') : null;
       const target = from && from.startsWith('/') && !from.startsWith('//') ? from : '/dashboard';
-      router.push(target);
+      // Hard redirect — çerez ve sayfa durumunun sıfırlanarak temiz yüklenmesini sağlar
+      window.location.assign(target);
     },
     onError: (error: unknown) => {
       toast.error(getErrorMessage(error));
@@ -39,7 +38,6 @@ export function useLogin() {
 // ─────────────────────────────────────────────
 
 export function useRegister() {
-  const router = useRouter();
   const { login: storeLogin } = useAuthStore();
   const { toast } = useUIStore();
 
@@ -48,7 +46,7 @@ export function useRegister() {
     onSuccess: (data) => {
       storeLogin(data.user, data.tenant);
       toast.success('Hesabınız oluşturuldu. Hoş geldiniz!');
-      router.push('/dashboard');
+      window.location.assign('/dashboard');
     },
     onError: (error: unknown) => {
       toast.error(getErrorMessage(error));

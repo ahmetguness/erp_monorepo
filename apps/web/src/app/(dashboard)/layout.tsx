@@ -21,11 +21,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const meQuery = useMe();
 
   useEffect(() => {
-    if (!isAuthenticated && !meQuery.isLoading && !meQuery.isFetching) {
+    if (!isAuthenticated && !meQuery.isLoading && !meQuery.isFetching && meQuery.isError) {
       const currentPath = `${pathname}${window.location.search}`;
       router.replace(`/login?from=${encodeURIComponent(currentPath)}`);
     }
-  }, [isAuthenticated, meQuery.isFetching, meQuery.isLoading, pathname, router]);
+  }, [isAuthenticated, meQuery.isError, meQuery.isFetching, meQuery.isLoading, pathname, router]);
 
   // Auth yoksa login'e yönlenene kadar spinner göster (beyaz ekranı önler)
   if (!isAuthenticated) {

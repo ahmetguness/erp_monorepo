@@ -5,6 +5,7 @@ import type { JwtPayload as JsonWebTokenPayload } from 'jsonwebtoken';
 import { ForbiddenError } from '../errors';
 import { prisma } from '../lib/prisma';
 import { touchSecuritySession } from '../services/security-hardening.service.js';
+import { isSecureCookieEnabled } from '../lib/cookie-config.js';
 import { getTrustedClientIp, isIpv4InCidr } from '../utils/request-ip.js';
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
@@ -91,7 +92,7 @@ export async function requireAuth(c: Context, next: Next) {
   } catch {
     deleteCookie(c, 'axon_token', {
       path: '/',
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecureCookieEnabled(),
       sameSite: 'Lax',
     });
     return c.json(new ForbiddenError('Geçersiz veya süresi dolmuş token.').toJSON(), 401);

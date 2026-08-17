@@ -14,10 +14,21 @@ import { logger } from '../lib/logger';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-const ALLOWED_ORIGINS: readonly string[] = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
+function getAllowedOrigins(): string[] {
+  return (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function isOriginAllowed(requestOrigin: string): boolean {
+  const allowedOrigins = getAllowedOrigins();
+  if (allowedOrigins.includes(requestOrigin)) return true;
+  if (process.env.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(requestOrigin)) {
+    return true;
+  }
+  return false;
+}
 
 function extractOrigin(headerValue: string): string | null {
   try {
@@ -54,7 +65,7 @@ export async function csrfProtection(c: Context, next: Next): Promise<Response |
     );
   }
 
-  if (!ALLOWED_ORIGINS.includes(requestOrigin)) {
+  if (!isOriginAllowed(requestOrigin)) {
     logger.warn(`[CSRF] Blocked request from disallowed origin: ${requestOrigin} → ${c.req.method} ${c.req.path}`);
     return c.json(
       { error: { code: 'CSRF_ERROR', message: 'Bu origin\'den istek yapılamaz.' } },

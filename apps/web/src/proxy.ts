@@ -32,11 +32,12 @@ export function proxy(request: NextRequest): NextResponse {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Already authenticated → redirect away from auth pages
+  // Already authenticated → redirect away from auth pages (/login, /register)
+  // EXCEPT when the user is explicitly arriving with a 'from' query parameter (e.g. redirected after an auth error or fresh login attempt)
   if (token && (pathname === '/login' || pathname === '/register')) {
-    const from = request.nextUrl.searchParams.get('from');
-    const target = from && from.startsWith('/') && !from.startsWith('//') ? from : '/dashboard';
-    return NextResponse.redirect(new URL(target, request.url));
+    if (!request.nextUrl.searchParams.has('from')) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
   }
 
   return NextResponse.next();

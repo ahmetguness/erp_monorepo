@@ -19,6 +19,9 @@ import {
   releaseCapacity,
   postProductionAccountingEntry,
 } from '../production-rules.service.js';
+import { ProductionAutomationService } from '../production-automation.service.js';
+
+const prodAutomation = new ProductionAutomationService(prisma);
 
 // ─────────────────────────────────────────────
 // Work Order Controller — İş emri CRUD + durum geçişleri
@@ -702,5 +705,22 @@ export const WorkOrderController = {
 
     await prisma.workOrder.update({ where: { id }, data: { deletedAt: new Date() } });
     return c.json({ data: { success: true } });
+  },
+
+  // ── Automation Uç Noktaları ──
+
+  async deriveStatus(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
+    const result = await prodAutomation.deriveStatusFromMovements(tenantId, id);
+    return c.json({ data: result });
+  },
+
+  async autoComplete(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
+    const body = await c.req.json<{ outputQty?: number }>().catch(() => ({ outputQty: undefined }));
+    const result = await prodAutomation.autoCompleteProduction(tenantId, id, body.outputQty);
+    return c.json({ data: result });
   },
 };

@@ -15,6 +15,13 @@ const marketplaceRoutes = new Hono();
 
 marketplaceRoutes.use('*', requireAccess(ACCESS_POLICIES.marketplace));
 
+// Phase 12 - Automation
+marketplaceRoutes.get('/automation/summary', requirePermission('marketplace', 'READ'), MarketplaceMonitoringController.getAutomationSummary);
+marketplaceRoutes.get('/automation/policy', requirePermission('marketplace', 'READ'), MarketplaceMonitoringController.getAutomationPolicy);
+marketplaceRoutes.post('/automation/policy', requirePermission('marketplace', 'UPDATE'), MarketplaceMonitoringController.updateAutomationPolicy);
+marketplaceRoutes.post('/orders/:id/automate', requirePermission('marketplace', 'UPDATE'), MarketplaceMonitoringController.triggerOrderAutomation);
+marketplaceRoutes.post('/products/:productId/sync-stock', requirePermission('marketplace', 'UPDATE'), MarketplaceMonitoringController.triggerStockSync);
+
 // Entegrasyonlar
 marketplaceRoutes.get('/integrations', requirePermission('marketplace', 'READ'), MarketplaceIntegrationController.list);
 marketplaceRoutes.get('/integrations/:id', requirePermission('marketplace', 'READ'), MarketplaceIntegrationController.getById);

@@ -14,7 +14,7 @@ const STRICT_TRANSPORT_SECURITY = 'max-age=31536000; includeSubDomains';
 const DEFAULT_CSP_MODE: ContentSecurityPolicyMode = 'both';
 
 function readAllowedConnectSources(): string[] {
-  return (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
+  const origins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean)
@@ -28,6 +28,12 @@ function readAllowedConnectSources(): string[] {
         return [];
       }
     });
+
+  if (process.env.NODE_ENV !== 'production') {
+    origins.push('http://localhost:*', 'http://127.0.0.1:*');
+  }
+
+  return origins;
 }
 
 function readContentSecurityPolicyMode(): ContentSecurityPolicyMode {

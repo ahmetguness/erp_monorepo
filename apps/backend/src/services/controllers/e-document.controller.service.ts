@@ -3,6 +3,9 @@ import { EDocumentType, EDocumentStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { NotFoundError, ValidationError } from '../../errors';
 import { requireTenantId, requireParam } from '../../utils/context.js';
+import { EDocumentAutomationService } from '../edocument-automation.service.js';
+
+const automationService = new EDocumentAutomationService(prisma);
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -328,5 +331,44 @@ export const EDocumentController = {
     });
 
     return c.json({ data: updated });
+  },
+
+  // ── Exception Center (İstisna Yönetim Merkezi) ──
+
+  async getExceptions(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const exceptions = await automationService.getExceptionSummary(tenantId);
+    return c.json({ data: exceptions });
+  },
+
+  async retry(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
+    const result = await automationService.retryEDocument(tenantId, id);
+    return c.json({ data: result });
+  },
+
+  async processCallback(c: Context): Promise<Response> {
+    const tenantId = c.req.param('tenantId') || requireTenantId(c);
+    const body = await c.req.json<{
+      edocumentId: string;
+      status: EDocumentStatus;
+      providerCode?: string;
+      message?: string;
+      responsePayload?: unknown;
+    }>();
+
+    if (!body.edocumentId || !body.status) {
+      return c.json(new ValidationError('edocumentId ve status alanları zorunludur.').toJSON(), 400);
+    }
+
+    const result = await automationService.processProviderCallback(tenantId, body.edocumentId, {
+      status: body.status,
+      providerCode: body.providerCode,
+      message: body.message,
+      responsePayload: body.responsePayload,
+    });
+
+    return c.json({ data: result });
   },
 };
