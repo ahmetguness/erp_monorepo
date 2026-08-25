@@ -752,4 +752,4 @@ export interface IntegrityCheckRuleItem {
   status: 'CLEAN' | 'MISMATCH_DETECTED';
 }
 
-export * from './plans';
+export * from './plans.js';

@@ -8,7 +8,10 @@ FROM base AS deps
 WORKDIR /app/apps/web
 COPY packages/types /app/packages/types
 COPY apps/web/package.json apps/web/package-lock.json ./
-RUN npm ci
+RUN npm ci \
+  && mkdir -p /app/node_modules \
+  && ln -s /app/apps/web/node_modules/zod /app/node_modules/zod \
+  && PATH=/app/apps/web/node_modules/.bin:$PATH npm --prefix /app/packages/types run build
 
 FROM deps AS builder
 WORKDIR /app/apps/web

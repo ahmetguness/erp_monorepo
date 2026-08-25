@@ -1214,10 +1214,10 @@ function pushSetDifferenceIssues(
 
 function validateSharedContractDrift(): CheckIssue[] {
   const issues: CheckIssue[] = [];
-  const packagesTypes = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'index.ts'));
+  const packagesTypes = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'src', 'index.ts'));
   const packagesTypesPackage = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'package.json'));
-  const sharedCommonContracts = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'contracts', 'common.ts'));
-  const sharedApiKeyContracts = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'contracts', 'api-key.ts'));
+  const sharedCommonContracts = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'src', 'contracts', 'common.ts'));
+  const sharedApiKeyContracts = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'src', 'contracts', 'api-key.ts'));
   const apiKeyService = readText(resolve(process.cwd(), '..', 'web', 'src', 'services', 'api-key.service.ts'));
   const apiKeyController = readText(resolve(process.cwd(), 'src', 'services', 'controllers', 'api-key.controller.service.ts'));
   const externalApiRegistry = readText(resolve(process.cwd(), 'src', 'services', 'external-api-registry.service.ts'));
@@ -1231,7 +1231,7 @@ function validateSharedContractDrift(): CheckIssue[] {
   ];
   for (const check of sharedChecks) {
     if (!check.pattern.test(packagesTypes)) {
-      issues.push({ file: '../../packages/types/index.ts', message: `shared contract drift: ${check.label} is missing` });
+      issues.push({ file: '../../packages/types/src/index.ts', message: `shared contract drift: ${check.label} is missing` });
     }
   }
 
@@ -1248,14 +1248,14 @@ function validateSharedContractDrift(): CheckIssue[] {
   }
 
   const sharedZodChecks: Array<{ file: string; label: string; text: string; pattern: RegExp }> = [
-    { file: '../../packages/types/package.json', label: 'contracts export', text: packagesTypesPackage, pattern: /"\.\/contracts\/api-key":\s*\{[\s\S]*"types":\s*"\.\/contracts\/api-key\.ts"[\s\S]*"default":\s*"\.\/contracts\/api-key\.ts"/ },
-    { file: '../../packages/types/package.json', label: 'contracts index export', text: packagesTypesPackage, pattern: /"\.\/contracts":\s*\{[\s\S]*"types":\s*"\.\/contracts\/index\.ts"[\s\S]*"default":\s*"\.\/contracts\/index\.ts"/ },
-    { file: '../../packages/types/contracts/common.ts', label: 'SingleResponseSchema.data', text: sharedCommonContracts, pattern: /function\s+SingleResponseSchema[\s\S]*data:\s*itemSchema/ },
-    { file: '../../packages/types/contracts/common.ts', label: 'PaginatedResponseSchema.meta', text: sharedCommonContracts, pattern: /function\s+PaginatedResponseSchema[\s\S]*meta:\s*PaginationMetaSchema/ },
-    { file: '../../packages/types/contracts/api-key.ts', label: 'contract owner', text: sharedApiKeyContracts, pattern: /API_KEY_CONTRACT_OWNER/ },
-    { file: '../../packages/types/contracts/api-key.ts', label: 'CreateApiKeySchema', text: sharedApiKeyContracts, pattern: /const\s+CreateApiKeySchema\s*=\s*z\.object/ },
-    { file: '../../packages/types/contracts/api-key.ts', label: 'ApiKeySchema', text: sharedApiKeyContracts, pattern: /const\s+ApiKeySchema\s*=\s*z\.object/ },
-    { file: '../../packages/types/contracts/api-key.ts', label: 'ExternalApiManifestSchema', text: sharedApiKeyContracts, pattern: /const\s+ExternalApiManifestSchema\s*=\s*z\.object/ },
+    { file: '../../packages/types/package.json', label: 'contracts export', text: packagesTypesPackage, pattern: /"\.\/contracts\/api-key":\s*\{[\s\S]*"types":\s*"\.\/dist\/esm\/contracts\/api-key\.d\.ts"[\s\S]*"default":\s*"\.\/dist\/esm\/contracts\/api-key\.js"/ },
+    { file: '../../packages/types/package.json', label: 'contracts index export', text: packagesTypesPackage, pattern: /"\.\/contracts":\s*\{[\s\S]*"types":\s*"\.\/dist\/esm\/contracts\/index\.d\.ts"[\s\S]*"default":\s*"\.\/dist\/esm\/contracts\/index\.js"/ },
+    { file: '../../packages/types/src/contracts/common.ts', label: 'SingleResponseSchema.data', text: sharedCommonContracts, pattern: /function\s+SingleResponseSchema[\s\S]*data:\s*itemSchema/ },
+    { file: '../../packages/types/src/contracts/common.ts', label: 'PaginatedResponseSchema.meta', text: sharedCommonContracts, pattern: /function\s+PaginatedResponseSchema[\s\S]*meta:\s*PaginationMetaSchema/ },
+    { file: '../../packages/types/src/contracts/api-key.ts', label: 'contract owner', text: sharedApiKeyContracts, pattern: /API_KEY_CONTRACT_OWNER/ },
+    { file: '../../packages/types/src/contracts/api-key.ts', label: 'CreateApiKeySchema', text: sharedApiKeyContracts, pattern: /const\s+CreateApiKeySchema\s*=\s*z\.object/ },
+    { file: '../../packages/types/src/contracts/api-key.ts', label: 'ApiKeySchema', text: sharedApiKeyContracts, pattern: /const\s+ApiKeySchema\s*=\s*z\.object/ },
+    { file: '../../packages/types/src/contracts/api-key.ts', label: 'ExternalApiManifestSchema', text: sharedApiKeyContracts, pattern: /const\s+ExternalApiManifestSchema\s*=\s*z\.object/ },
     { file: '../web/src/services/api-key.service.ts', label: 'web ApiKeySchema mirror', text: apiKeyService, pattern: /export\s+const\s+ApiKeySchema\s*=\s*z\.object/ },
     { file: '../web/src/services/api-key.service.ts', label: 'web ExternalApiManifestSchema mirror', text: apiKeyService, pattern: /export\s+const\s+ExternalApiManifestSchema\s*=\s*z\.object/ },
   ];

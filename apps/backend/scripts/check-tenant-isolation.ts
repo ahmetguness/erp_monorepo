@@ -80,6 +80,12 @@ const excludedFiles = new Set([
   'src/services/invitation.service.ts',
 ]);
 
+const excludedDirectoryPrefixes = [
+  // Platform-admin operations intentionally select a tenant from the admin
+  // request and run behind requireAdmin, outside the tenant JWT boundary.
+  'src/services/controllers/admin/',
+] as const;
+
 const highRiskCoverage = [
   'src/controllers/activity.controller.ts',
   'src/controllers/search.controller.ts',
@@ -293,7 +299,8 @@ function checkRawSqlPatterns(file: string, text: string): CheckIssue[] {
 }
 
 function isExcluded(file: string): boolean {
-  return excludedFiles.has(toProjectPath(file));
+  const projectPath = toProjectPath(file);
+  return excludedFiles.has(projectPath) || excludedDirectoryPrefixes.some((prefix) => projectPath.startsWith(prefix));
 }
 
 function listSourceFiles(): string[] {

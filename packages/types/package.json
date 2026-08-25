@@ -1,44 +1,84 @@
 {
   "name": "@repo/types",
   "version": "0.0.1",
-  "type": "commonjs",
-  "main": "./index.ts",
-  "types": "./index.ts",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:markers": "node -e \"const f=require('node:fs');f.writeFileSync('dist/esm/package.json',JSON.stringify({type:'module'}));f.writeFileSync('dist/cjs/package.json',JSON.stringify({type:'commonjs'}))\"",
+    "build": "npm run clean && npm run build:esm && npm run build:cjs && npm run build:markers",
+    "typecheck": "tsc -p tsconfig.esm.json --noEmit"
+  },
   "exports": {
     ".": {
-      "types": "./index.ts",
-      "default": "./index.ts"
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      },
+      "default": "./dist/esm/index.js"
     },
     "./contracts": {
-      "types": "./contracts/index.ts",
-      "require": "./contracts/index.js",
-      "import": "./contracts/index.ts",
-      "default": "./contracts/index.ts"
+      "import": {
+        "types": "./dist/esm/contracts/index.d.ts",
+        "default": "./dist/esm/contracts/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/contracts/index.d.ts",
+        "default": "./dist/cjs/contracts/index.js"
+      },
+      "default": "./dist/esm/contracts/index.js"
     },
     "./contracts/api-key": {
-      "types": "./contracts/api-key.ts",
-      "require": "./contracts/api-key.js",
-      "import": "./contracts/api-key.ts",
-      "default": "./contracts/api-key.ts"
+      "import": {
+        "types": "./dist/esm/contracts/api-key.d.ts",
+        "default": "./dist/esm/contracts/api-key.js"
+      },
+      "require": {
+        "types": "./dist/cjs/contracts/api-key.d.ts",
+        "default": "./dist/cjs/contracts/api-key.js"
+      },
+      "default": "./dist/esm/contracts/api-key.js"
     },
     "./contracts/common": {
-      "types": "./contracts/common.ts",
-      "require": "./contracts/common.js",
-      "import": "./contracts/common.ts",
-      "default": "./contracts/common.ts"
+      "import": {
+        "types": "./dist/esm/contracts/common.d.ts",
+        "default": "./dist/esm/contracts/common.js"
+      },
+      "require": {
+        "types": "./dist/cjs/contracts/common.d.ts",
+        "default": "./dist/cjs/contracts/common.js"
+      },
+      "default": "./dist/esm/contracts/common.js"
     },
     "./plans": {
-      "types": "./plans.d.ts",
-      "browser": "./plans.mjs",
-      "import": "./plans.mjs",
-      "require": "./plans.cjs",
-      "default": "./plans.mjs"
+      "browser": "./dist/esm/plans.js",
+      "import": {
+        "types": "./dist/esm/plans.d.ts",
+        "default": "./dist/esm/plans.js"
+      },
+      "require": {
+        "types": "./dist/cjs/plans.d.ts",
+        "default": "./dist/cjs/plans.js"
+      },
+      "default": "./dist/esm/plans.js"
     }
   },
   "peerDependencies": {
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "typescript": "^5.6.0",
     "zod": "^4.3.6"
   }
 }
