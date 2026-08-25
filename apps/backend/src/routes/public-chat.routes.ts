@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { PublicChatController } from '../controllers/public-chat.controller';
+import { PublicChatController } from '../modules/automation-intelligence/http/controllers/index.js';
 
 export const publicChatRoutes = new Hono();
 

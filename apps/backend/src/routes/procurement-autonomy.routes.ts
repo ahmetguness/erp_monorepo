@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { ProcurementAutonomyController } from '../services/controllers/procurement-autonomy.controller.service.js';
+import { ProcurementAutonomyController } from '../modules/procurement/http/controllers/index.js';
 
 const procurementAutonomyRoutes = new Hono();
 

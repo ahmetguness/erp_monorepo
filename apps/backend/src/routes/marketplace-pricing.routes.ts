@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { MarketplacePricingController } from '../services/controllers/marketplace-pricing.controller.service.js';
+import { MarketplacePricingController } from '../modules/marketplace/http/controllers/index.js';
 
 const marketplacePricingRoutes = new Hono();
 

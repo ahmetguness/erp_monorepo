@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { DemoController } from '../controllers/demo.controller';
+import { DemoController } from '../modules/platform/http/controllers/index.js';
 import { requireAdmin } from '../middleware/requireAdmin';
 
 /** Public route – JWT gerektirmez */

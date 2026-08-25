@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { PurchaseOrderController } from '../controllers/purchase-order.controller';
+import { PurchaseOrderController } from '../modules/procurement/http/controllers/index.js';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 

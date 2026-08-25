@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { NotificationController } from '../controllers/notification.controller';
+import { NotificationController } from '../modules/platform/http/controllers/index.js';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 

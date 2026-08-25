@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { FinancialAutonomyController } from '../services/controllers/financial-autonomy.controller.service.js';
+import { FinancialAutonomyController } from '../modules/finance/http/controllers/index.js';
 
 const financialAutonomyRoutes = new Hono();
 

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { InventoryReservationController } from '../controllers/inventory-reservation.controller';
+import { InventoryReservationController } from '../modules/inventory/http/controllers/index.js';
 
 const inventoryReservationRoutes = new Hono();
 

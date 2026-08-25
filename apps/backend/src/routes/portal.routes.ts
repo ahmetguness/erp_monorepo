@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { prisma } from '../lib/prisma';
-import { calculateSla } from '../controllers/service-request.controller';
+import { calculateSla } from '../modules/workforce-service/http/controllers/index.js';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { getPaginationParams } from '../utils/pagination.js';
 import { ServiceStatus, Priority, ServiceActivityType } from '@prisma/client';

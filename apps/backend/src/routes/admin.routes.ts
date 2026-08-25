@@ -6,8 +6,8 @@ import {
   AdminFeatureController,
   AdminMetricsController,
   AdminAuditController,
-} from '../controllers/admin.controller';
-import { AdminSecurityController } from '../controllers/admin-security.controller';
+} from '../modules/platform/http/controllers/index.js';
+import { AdminSecurityController } from '../modules/platform/http/controllers/index.js';
 
 const adminRoutes = new Hono();
 

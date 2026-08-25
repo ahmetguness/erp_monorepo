@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { ChatController } from '../controllers/chat.controller';
+import { ChatController } from '../modules/automation-intelligence/http/controllers/index.js';
 
 export const chatRoutes = new Hono();
 

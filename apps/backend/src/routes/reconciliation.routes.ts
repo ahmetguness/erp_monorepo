@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { ReconciliationController } from '../controllers/reconciliation.controller';
+import { ReconciliationController } from '../modules/finance/http/controllers/index.js';
 
 const reconciliationRoutes = new Hono();
 

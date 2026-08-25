@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { IntegrityController } from '../services/controllers/integrity.controller.service.js';
+import { IntegrityController } from '../modules/finance/http/controllers/index.js';
 
 const integrityRoutes = new Hono();
 

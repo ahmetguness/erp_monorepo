@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { TaskController } from '../controllers/task.controller';
+import { TaskController } from '../modules/platform/http/controllers/index.js';
 
 const taskRoutes = new Hono();
 

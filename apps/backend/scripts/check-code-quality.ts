@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { reportIssues, type CheckIssue } from './lib/static-checks.js';
 import { TYPE_SAFETY_BYPASS_ALLOWLIST } from './code-quality-allowlist.js';
 
@@ -99,7 +99,6 @@ function checkActiveAllowlistEntries(files: readonly string[]): CheckIssue[] {
 function checkBackendNaming(): CheckIssue[] {
   const checks: ReadonlyArray<{ dir: string; suffix: string; label: string }> = [
     { dir: 'apps/backend/src/routes', suffix: '.routes.ts', label: 'route' },
-    { dir: 'apps/backend/src/controllers', suffix: '.controller.ts', label: 'controller' },
     { dir: 'apps/backend/src/services', suffix: '.service.ts', label: 'service' },
   ];
   const issues: CheckIssue[] = [];
@@ -127,6 +126,29 @@ function checkModuleBoundaries(): CheckIssue[] {
   const bootstrapPath = join(backendSource, 'index.ts');
   const bootstrapSource = readFileSync(bootstrapPath, 'utf8');
 
+  for (const legacyDirectory of ['controllers', join('services', 'controllers')]) {
+    if (existsSync(join(backendSource, legacyDirectory))) {
+      issues.push({
+        file: `apps/backend/src/${legacyDirectory.replace(/\\/g, '/')}`,
+        message: 'legacy controller directory is forbidden; controllers belong to modules/<domain>/http/controllers',
+      });
+    }
+  }
+
+  const routesRoot = join(backendSource, 'routes');
+  for (const routeFile of walkSourceFiles(routesRoot)) {
+    const source = readFileSync(routeFile, 'utf8');
+    const controllerImportRegex = /import\s+\{[^}]*Controller[^}]*\}\s+from\s+['"]([^'"]+)['"]/g;
+    for (const match of source.matchAll(controllerImportRegex)) {
+      if (!/modules\/[^/]+\/http\/controllers\/index\.js$/.test(match[1])) {
+        issues.push({
+          file: toRepoPath(routeFile),
+          message: `routes must import controllers through a domain public API, received ${match[1]}`,
+        });
+      }
+    }
+  }
+
   if (/from\s+['"]\.\/(routes|controllers)\//.test(bootstrapSource)) {
     issues.push({
       file: 'apps/backend/src/index.ts',
@@ -141,11 +163,25 @@ function checkModuleBoundaries(): CheckIssue[] {
 
     for (const file of walkSourceFiles(modulePath)) {
       const source = readFileSync(file, 'utf8');
-      const crossModuleImport = /from\s+['"]\.\.\/(?!shared\/)([^./][^/]*)\//g;
-      for (const match of source.matchAll(crossModuleImport)) {
+      const importRegex = /from\s+['"]([^'"]+)['"]/g;
+      for (const match of source.matchAll(importRegex)) {
+        const importPath = match[1];
+        if (!importPath?.startsWith('.')) continue;
+
+        const resolvedImport = resolve(dirname(file), importPath);
+        const moduleRelativePath = relative(modulesRoot, resolvedImport).replace(/\\/g, '/');
+        const importedModuleName = moduleRelativePath.split('/')[0];
+        const crossesModuleBoundary =
+          importedModuleName &&
+          importedModuleName !== '..' &&
+          importedModuleName !== 'shared' &&
+          importedModuleName !== moduleName;
+        const usesPublicApi = importPath.endsWith('/index.js');
+
+        if (!crossesModuleBoundary || usesPublicApi) continue;
         issues.push({
           file: toRepoPath(file),
-          message: `module may not import another module's internals (${match[1]}); use its public API`,
+          message: `module may not import another module's internals (${importedModuleName}); use its public API`,
         });
       }
     }

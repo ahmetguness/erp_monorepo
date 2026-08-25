@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { ProductController } from '../controllers/product.controller';
-import { ProductQuickImportController } from '../controllers/product-quick-import.controller';
+import { ProductController } from '../modules/inventory/http/controllers/index.js';
+import { ProductQuickImportController } from '../modules/inventory/http/controllers/index.js';
 import { enforceStarterLimits } from '../middleware/enforceStarterLimits';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';

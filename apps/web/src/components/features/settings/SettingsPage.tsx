@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Save, Plus, X, Building2, Layers, Pencil,
   Globe, Calendar, Receipt, DollarSign, Clock,
@@ -383,7 +383,6 @@ export function SettingsPage() {
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [logoStatus, setLogoStatus] = useState<ImageUploadStatus>('idle');
 
   const [addOpen, setAddOpen] = useState(false);
@@ -428,24 +427,14 @@ export function SettingsPage() {
     }
   };
 
-  useEffect(() => {
+  const logoPreviewUrl = useMemo(() => {
     const logoSource = logoFile ?? logoBlob;
-    if (!logoSource) {
-      setLogoPreviewUrl(null);
-      return undefined;
-    }
-
-    const objectUrl = URL.createObjectURL(logoSource);
-    setLogoPreviewUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
+    return logoSource ? URL.createObjectURL(logoSource) : null;
   }, [logoBlob, logoFile]);
 
-  useEffect(() => {
-    if (!defaultPolicySnapshot) return;
-    setDefaultPolicyDraft(Object.fromEntries(
-      defaultPolicySnapshot.values.map((item) => [item.storageKey, item.effectiveValue]),
-    ));
-  }, [defaultPolicySnapshot]);
+  useEffect(() => () => {
+    if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+  }, [logoPreviewUrl]);
 
   const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;

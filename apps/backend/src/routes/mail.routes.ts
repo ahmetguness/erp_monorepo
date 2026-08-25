@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { MailController } from '../controllers/mail.controller';
+import { MailController } from '../modules/platform/http/controllers/index.js';
 
 export const mailRoutes = new Hono();
 

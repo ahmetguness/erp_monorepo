@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { InvitationController } from '../controllers/invitation.controller';
+import { InvitationController } from '../modules/identity/http/controllers/index.js';
 import { requirePermission } from '../middleware/requirePermission';
 
 /** Tenant routes (JWT korumalı — index.ts'de tenantApi altına bağlanır) */

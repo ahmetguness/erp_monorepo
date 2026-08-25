@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { SalesTargetController } from '../controllers/sales-target.controller';
+import { SalesTargetController } from '../modules/sales/http/controllers/index.js';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
 import { validateBody } from '../middleware/validateBody';

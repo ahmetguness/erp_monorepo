@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { BulkOperationController } from '../controllers/bulk-operation.controller.js';
+import { BulkOperationController } from '../modules/platform/http/controllers/index.js';
 import { requireAccess } from '../middleware/requireAccess.js';
 import { requirePermission } from '../middleware/requirePermission.js';
 

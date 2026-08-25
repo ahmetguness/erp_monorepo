@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { FeatureKey } from '@prisma/client';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { ReportingBuilderController, ReportingController, SavedReportController } from '../controllers/reporting.controller';
+import { ReportingBuilderController, ReportingController, SavedReportController } from '../modules/platform/http/controllers/index.js';
 import { requireModule } from '../middleware/requireModule';
 import { requireAccess } from '../middleware/requireAccess';
 import { requireFeature } from '../middleware/requireFeature';

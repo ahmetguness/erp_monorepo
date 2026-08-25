@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { PermissionAction } from '@prisma/client';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { DataExchangeController } from '../controllers/data-exchange.controller';
-import { EdiB2BController } from '../controllers/edi-b2b.controller';
+import { DataExchangeController } from '../modules/automation-intelligence/http/controllers/index.js';
+import { EdiB2BController } from '../modules/automation-intelligence/http/controllers/index.js';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 

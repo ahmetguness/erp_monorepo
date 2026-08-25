@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { UserController } from '../controllers/user.controller';
+import { UserController } from '../modules/identity/http/controllers/index.js';
 import { enforceStarterLimits } from '../middleware/enforceStarterLimits';
 import { requirePermission } from '../middleware/requirePermission';
 import { validateBody } from '../middleware/validateBody';

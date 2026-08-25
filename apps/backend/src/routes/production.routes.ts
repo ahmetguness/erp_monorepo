@@ -2,13 +2,13 @@ import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { WorkCenterController } from '../controllers/work-center.controller';
-import { BOMController } from '../controllers/bom.controller';
-import { WorkOrderController } from '../controllers/work-order.controller';
-import { MrpPlanningController } from '../controllers/mrp-planning.controller';
-import { CapacityPlanningController } from '../controllers/capacity-planning.controller';
-import { QualityControlController } from '../controllers/quality-control.controller';
-import { AdvancedProductionController } from '../controllers/advanced-production.controller';
+import { WorkCenterController } from '../modules/production/http/controllers/index.js';
+import { BOMController } from '../modules/production/http/controllers/index.js';
+import { WorkOrderController } from '../modules/production/http/controllers/index.js';
+import { MrpPlanningController } from '../modules/production/http/controllers/index.js';
+import { CapacityPlanningController } from '../modules/production/http/controllers/index.js';
+import { QualityControlController } from '../modules/production/http/controllers/index.js';
+import { AdvancedProductionController } from '../modules/production/http/controllers/index.js';
 
 const productionRoutes = new Hono();
 

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { WarehouseController, LocationController } from '../controllers/warehouse.controller';
+import { WarehouseController, LocationController } from '../modules/inventory/http/controllers/index.js';
 import { enforceStarterLimits } from '../middleware/enforceStarterLimits';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';

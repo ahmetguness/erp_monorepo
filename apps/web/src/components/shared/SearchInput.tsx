@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -19,7 +19,7 @@ export function SearchInput({
   debounceMs = 300,
   className,
 }: SearchInputProps) {
-  const [local, setLocal] = useState(value);
+  const [local, setLocal] = useReducer((_current: string, next: string) => next, value);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { setLocal(value); }, [value]);

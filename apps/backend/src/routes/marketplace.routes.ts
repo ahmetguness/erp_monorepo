@@ -9,7 +9,7 @@ import {
   TrendyolSyncController,
   TrendyolLookupController,
   MarketplaceMonitoringController,
-} from '../controllers/marketplace.controller';
+} from '../modules/marketplace/http/controllers/index.js';
 
 const marketplaceRoutes = new Hono();
 

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { SavedViewController } from '../controllers/saved-view.controller';
+import { SavedViewController } from '../modules/platform/http/controllers/index.js';
 
 const savedViewRoutes = new Hono();
 

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { AgentCommandController } from '../services/controllers/agent-command.controller.service.js';
+import { AgentCommandController } from '../modules/automation-intelligence/http/controllers/index.js';
 
 const agentCommandRoutes = new Hono();
 

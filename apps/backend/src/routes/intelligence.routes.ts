@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { Plan } from '@prisma/client';
 import { requirePermission } from '../middleware/requirePermission';
 import { requirePlan } from '../middleware/requirePlan';
-import { IntelligenceController } from '../controllers/intelligence.controller';
+import { IntelligenceController } from '../modules/automation-intelligence/http/controllers/index.js';
 
 const intelligenceRoutes = new Hono();
 

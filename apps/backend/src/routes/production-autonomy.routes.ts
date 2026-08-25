@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { ProductionAutonomyController } from '../services/controllers/production-autonomy.controller.service.js';
+import { ProductionAutonomyController } from '../modules/production/http/controllers/index.js';
 
 const productionAutonomyRoutes = new Hono();
 

@@ -2,11 +2,11 @@ import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { CustomerAssetController } from '../controllers/customer-asset.controller';
-import { ServiceRequestController } from '../controllers/service-request.controller';
-import { MaintenanceManagementController } from '../controllers/maintenance-management.controller';
-import { FieldServiceMobileController } from '../controllers/field-service-mobile.controller';
-import { AdvancedServiceController } from '../controllers/advanced-service.controller';
+import { CustomerAssetController } from '../modules/workforce-service/http/controllers/index.js';
+import { ServiceRequestController } from '../modules/workforce-service/http/controllers/index.js';
+import { MaintenanceManagementController } from '../modules/workforce-service/http/controllers/index.js';
+import { FieldServiceMobileController } from '../modules/workforce-service/http/controllers/index.js';
+import { AdvancedServiceController } from '../modules/workforce-service/http/controllers/index.js';
 
 const serviceRoutes = new Hono();
 

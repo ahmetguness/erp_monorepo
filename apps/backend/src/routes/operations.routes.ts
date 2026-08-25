@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { OperationsController } from '../services/controllers/operations.controller.service.js';
+import { OperationsController } from '../modules/automation-intelligence/http/controllers/index.js';
 
 const operationsRoutes = new Hono();
 

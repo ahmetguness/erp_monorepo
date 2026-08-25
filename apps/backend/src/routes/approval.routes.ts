@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { ApprovalController } from '../controllers/approval.controller';
+import { ApprovalController } from '../modules/platform/http/controllers/index.js';
 
 const approvalRoutes = new Hono();
 

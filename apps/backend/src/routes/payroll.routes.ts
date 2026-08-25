@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { PayrollController } from '../controllers/payroll.controller';
-import { AdvancedPayrollController } from '../controllers/advanced-payroll.controller';
+import { PayrollController } from '../modules/workforce-service/http/controllers/index.js';
+import { AdvancedPayrollController } from '../modules/workforce-service/http/controllers/index.js';
 
 const payrollRoutes = new Hono();
 

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { SettingsController } from '../controllers/settings.controller';
-import { QuickStartController } from '../controllers/quick-start.controller';
+import { SettingsController } from '../modules/platform/http/controllers/index.js';
+import { QuickStartController } from '../modules/platform/http/controllers/index.js';
 import { requirePermission } from '../middleware/requirePermission';
 import { validateBody } from '../middleware/validateBody';
 import {

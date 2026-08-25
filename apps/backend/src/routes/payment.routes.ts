@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { PaymentController } from '../controllers/payment.controller';
+import { PaymentController } from '../modules/finance/http/controllers/index.js';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
 import { validateBody } from '../middleware/validateBody';

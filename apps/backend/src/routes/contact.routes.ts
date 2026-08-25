@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { ContactController, AccountEntryController } from '../controllers/contact.controller';
+import { ContactController, AccountEntryController } from '../modules/sales/http/controllers/index.js';
 import { requireAccess } from '../middleware/requireAccess';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';

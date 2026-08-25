@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { StarterCsvImportController } from '../controllers/starter-csv-import.controller.js';
+import { StarterCsvImportController } from '../modules/platform/http/controllers/index.js';
 import { requireModule } from '../middleware/requireModule.js';
 import { requirePermission } from '../middleware/requirePermission.js';
 import { MODULE_KEYS } from '../types/module.types.js';

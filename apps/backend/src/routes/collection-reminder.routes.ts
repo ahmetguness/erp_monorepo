@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { requirePermission } from '../middleware/requirePermission';
-import { CollectionReminderController } from '../controllers/collection-reminder.controller';
+import { CollectionReminderController } from '../modules/sales/http/controllers/index.js';
 import { validateBody } from '../middleware/validateBody';
 import { createCollectionReminderBodySchema } from '../schemas/request-body.schemas';
 

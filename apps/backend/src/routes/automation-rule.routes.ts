@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { AutomationRuleController } from '../controllers/automation-rule.controller';
+import { AutomationRuleController } from '../modules/automation-intelligence/http/controllers/index.js';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 

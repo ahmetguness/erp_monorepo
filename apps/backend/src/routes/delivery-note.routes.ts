@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { DeliveryNoteController } from '../controllers/delivery-note.controller';
+import { DeliveryNoteController } from '../modules/sales/http/controllers/index.js';
 
 const deliveryNoteRoutes = new Hono();
 

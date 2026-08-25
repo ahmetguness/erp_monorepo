@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
-import { SetPasswordController } from '../../controllers/set-password.controller.js';
-import { TrendyolWebhookController } from '../../controllers/trendyol-webhook.controller.js';
+import { SetPasswordController } from '../identity/http/controllers/index.js';
+import { TrendyolWebhookController } from '../marketplace/http/controllers/index.js';
 import { adminRoutes } from '../../routes/admin.routes.js';
 import { authRoutes } from '../../routes/auth.routes.js';
 import { biRoutes } from '../../routes/bi.routes.js';

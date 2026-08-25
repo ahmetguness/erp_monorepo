@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { SearchController } from '../controllers/search.controller';
+import { SearchController } from '../modules/platform/http/controllers/index.js';
 
 const searchRoutes = new Hono();
 

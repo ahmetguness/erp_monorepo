@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { requirePermission } from '../middleware/requirePermission';
-import { PlanUsageController } from '../controllers/plan-usage.controller';
+import { PlanUsageController } from '../modules/platform/http/controllers/index.js';
 
 const planUsageRoutes = new Hono();
 

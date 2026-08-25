@@ -51,7 +51,7 @@ const createOperations: ReadonlySet<PrismaOperation> = new Set(['create', 'creat
 const writeOperations: ReadonlySet<PrismaOperation> = new Set(['update', 'updateMany', 'upsert', 'delete', 'deleteMany']);
 
 const scannedRoots = [
-  'src/controllers',
+  'src/modules',
   'src/services',
   'src/domain-events',
   'src/middleware',
@@ -59,23 +59,16 @@ const scannedRoots = [
 ] as const;
 
 const excludedFiles = new Set([
-  'src/controllers/admin.controller.ts',
-  'src/services/controllers/admin.controller.service.ts',
-  'src/controllers/admin-security.controller.ts',
-  'src/services/controllers/admin-security.controller.service.ts',
-  'src/controllers/auth.controller.ts',
-  'src/services/controllers/auth.controller.service.ts',
-  'src/controllers/currency-rates.controller.ts',
-  'src/services/controllers/currency-rates.controller.service.ts',
-  'src/controllers/demo.controller.ts',
-  'src/services/controllers/demo.controller.service.ts',
-  'src/controllers/invitation.controller.ts',
-  'src/controllers/public-chat.controller.ts',
-  'src/services/controllers/public-chat.controller.service.ts',
-  'src/controllers/set-password.controller.ts',
-  'src/services/controllers/set-password.controller.service.ts',
-  'src/controllers/trendyol-webhook.controller.ts',
-  'src/services/controllers/trendyol-webhook.controller.service.ts',
+  'src/modules/identity/http/controllers/auth.controller.ts',
+  'src/modules/platform/http/controllers/currency-rates.controller.ts',
+  'src/modules/platform/http/controllers/demo.controller.ts',
+  'src/modules/identity/http/controllers/invitation.controller.ts',
+  'src/modules/automation-intelligence/http/controllers/public-chat.controller.ts',
+  'src/modules/identity/http/controllers/set-password.controller.ts',
+  'src/modules/marketplace/http/controllers/trendyol-webhook.controller.ts',
+  // Internal attachment helpers receive a required tenantId from the HTTP
+  // handlers; the public attachment controller remains in high-risk coverage.
+  'src/modules/inventory/http/controllers/attachment.controller/shared.ts',
   'src/services/demo.service.ts',
   'src/services/invitation.service.ts',
 ]);
@@ -83,19 +76,20 @@ const excludedFiles = new Set([
 const excludedDirectoryPrefixes = [
   // Platform-admin operations intentionally select a tenant from the admin
   // request and run behind requireAdmin, outside the tenant JWT boundary.
-  'src/services/controllers/admin/',
+  'src/modules/platform/http/controllers/admin/',
+  'src/modules/platform/http/controllers/admin-security.controller.ts',
 ] as const;
 
 const highRiskCoverage = [
-  'src/controllers/activity.controller.ts',
-  'src/controllers/search.controller.ts',
-  'src/controllers/attachment.controller.ts',
-  'src/controllers/mail.controller.ts',
-  'src/controllers/data-exchange.controller.ts',
-  'src/controllers/reporting.controller.ts',
-  'src/controllers/saved-view.controller.ts',
-  'src/controllers/notification.controller.ts',
-  'src/controllers/marketplace.controller.ts',
+  'src/modules/platform/http/controllers/activity.controller.ts',
+  'src/modules/platform/http/controllers/search.controller.ts',
+  'src/modules/inventory/http/controllers/attachment.controller.ts',
+  'src/modules/platform/http/controllers/mail.controller.ts',
+  'src/modules/automation-intelligence/http/controllers/data-exchange.controller.ts',
+  'src/modules/platform/http/controllers/reporting.controller.ts',
+  'src/modules/platform/http/controllers/saved-view.controller.ts',
+  'src/modules/platform/http/controllers/notification.controller.ts',
+  'src/modules/marketplace/http/controllers/marketplace.controller.ts',
   'src/routes/external.routes.ts',
   'src/services/activity.service.ts',
   'src/services/chat-context.service.ts',
@@ -318,7 +312,7 @@ function checkFile(file: string, models: readonly TenantScopedModel[]): CheckIss
   ];
   const calls = findPrismaCalls(text, models);
 
-  if (projectPath.startsWith('src/controllers/') && calls.length > 0 && !text.includes('requireTenantId(c)')) {
+  if (projectPath.includes('/http/controllers/') && calls.length > 0 && !text.includes('requireTenantId(c)')) {
     issues.push({ file: projectPath, message: 'controller with tenant-scoped Prisma calls does not read tenantId via requireTenantId(c)' });
   }
 

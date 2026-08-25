@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { AuthController } from '../controllers/auth.controller';
+import { AuthController } from '../modules/identity/http/controllers/index.js';
 import { requireAuth } from '../middleware/requireAuth';
 import { validateBody } from '../middleware/validateBody';
 import { loginBodySchema, registerBodySchema } from '../schemas/request-body.schemas';

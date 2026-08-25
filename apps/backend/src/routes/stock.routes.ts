@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { StockController } from '../controllers/stock.controller';
+import { StockController } from '../modules/inventory/http/controllers/index.js';
 import { requireAccess } from '../middleware/requireAccess';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { FeatureController } from '../controllers/feature.controller';
+import { FeatureController } from '../modules/platform/http/controllers/index.js';
 
 const featureRoutes = new Hono();
 

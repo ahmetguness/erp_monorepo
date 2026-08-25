@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { RoleController } from '../controllers/role.controller';
+import { RoleController } from '../modules/identity/http/controllers/index.js';
 
 const roleRoutes = new Hono();
 

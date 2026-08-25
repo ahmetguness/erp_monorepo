@@ -1219,7 +1219,7 @@ function validateSharedContractDrift(): CheckIssue[] {
   const sharedCommonContracts = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'src', 'contracts', 'common.ts'));
   const sharedApiKeyContracts = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'src', 'contracts', 'api-key.ts'));
   const apiKeyService = readText(resolve(process.cwd(), '..', 'web', 'src', 'services', 'api-key.service.ts'));
-  const apiKeyController = readText(resolve(process.cwd(), 'src', 'services', 'controllers', 'api-key.controller.service.ts'));
+  const apiKeyController = readText(resolve(process.cwd(), 'src', 'modules', 'identity', 'http', 'controllers', 'api-key.controller.ts'));
   const externalApiRegistry = readText(resolve(process.cwd(), 'src', 'services', 'external-api-registry.service.ts'));
   const webApiTypes = readText(resolve(process.cwd(), '..', 'web', 'src', 'types', 'api.types.ts'));
 
@@ -1290,7 +1290,7 @@ function validateSharedContractDrift(): CheckIssue[] {
   }
   pushSetDifferenceIssues(issues, '../web/src/services/api-key.service.ts', 'web API key scope mirror drift', sharedScopes, webScopes);
   pushSetDifferenceIssues(issues, '../../packages/types/contracts/api-key.ts', 'shared API key scope drift from web mirror', webScopes, sharedScopes);
-  pushSetDifferenceIssues(issues, 'src/services/controllers/api-key.controller.service.ts', 'API key controller scope drift', sharedScopes, controllerScopes);
+  pushSetDifferenceIssues(issues, 'src/modules/identity/http/controllers/api-key.controller.ts', 'API key controller scope drift', sharedScopes, controllerScopes);
   pushSetDifferenceIssues(issues, '../../packages/types/contracts/api-key.ts', 'shared API key scope drift', controllerScopes, sharedScopes);
   pushSetDifferenceIssues(issues, 'src/services/external-api-registry.service.ts', 'external registry scope label drift', endpointScopes, registryLabelScopes);
   pushSetDifferenceIssues(issues, '../../packages/types/contracts/api-key.ts', 'external registry endpoint scope drift', endpointScopes, sharedScopes);

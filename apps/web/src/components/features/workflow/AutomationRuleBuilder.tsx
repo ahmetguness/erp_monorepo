@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CheckCircle2, GitBranch, PlaySquare, SlidersHorizontal, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -154,10 +154,6 @@ export function AutomationRuleBuilder({
   onCancelEdit,
 }: AutomationRuleBuilderProps) {
   const [form, setForm] = useState<RuleFormState>(() => toFormState(editingRule));
-
-  useEffect(() => {
-    setForm(toFormState(editingRule));
-  }, [editingRule]);
 
   const selectedConditionIndex = useMemo(
     () => CONDITION_PRESETS[form.trigger].findIndex((preset) => sameConfig(preset.config, form.conditions)),

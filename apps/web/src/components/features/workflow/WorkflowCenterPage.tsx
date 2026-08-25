@@ -334,6 +334,7 @@ export function WorkflowCenterPage() {
       {activeTab === 'rules' && (
         <div className="space-y-8">
           <AutomationRuleBuilder
+            key={editingRule?.id ?? 'new-rule'}
             templates={templates ?? []}
             editingRule={editingRule}
             isSubmitting={createRule.isPending || updateRule.isPending}

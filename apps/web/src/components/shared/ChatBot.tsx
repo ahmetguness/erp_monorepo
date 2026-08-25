@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useReducer, useRef, useEffect, useCallback, useMemo, type SetStateAction } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   MessageCircle, X, Send, Bot, User, Loader2, Minimize2, Maximize2,
@@ -23,6 +23,12 @@ interface Message {
   usedData?: boolean;
   suggestions?: string[];
   error?: boolean;
+}
+
+function reduceState<T>(current: T, next: SetStateAction<T>): T {
+  return typeof next === 'function'
+    ? (next as (previous: T) => T)(current)
+    : next;
 }
 
 const LEGACY_STORAGE_KEY_PREFIX = 'axon_chat_messages_';
@@ -243,10 +249,10 @@ export function ChatBot() {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useReducer(reduceState<Message[]>, []);
   const [loading, setLoading] = useState(false);
-  const [pageTitle, setPageTitle] = useState('');
-  const [recentRecords, setRecentRecords] = useState<ChatRecentRecord[]>([]);
+  const [pageTitle, setPageTitle] = useReducer(reduceState<string>, '');
+  const [recentRecords, setRecentRecords] = useReducer(reduceState<ChatRecentRecord[]>, []);
   const { displayed: streamingContent, append: appendStream, reset: resetStream } = useSmoothStream();
   const [fetchingData, setFetchingData] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
