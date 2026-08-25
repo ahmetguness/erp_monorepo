@@ -1,4 +1,4 @@
-import { EntityType, Priority } from '@prisma/client';
+import { EntityType,Priority } from '@prisma/client';
 
 export const DOMAIN_EVENT_SCHEMA_VERSION = 1;
 

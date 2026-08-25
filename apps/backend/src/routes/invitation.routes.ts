@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { InvitationController } from '../modules/identity/http/controllers/index.js';
 import { requirePermission } from '../middleware/requirePermission';
+import { InvitationController } from '../modules/identity/http/controllers/index.js';
 
 /** Tenant routes (JWT korumalı — index.ts'de tenantApi altına bağlanır) */
 export const invitationRoutes = new Hono();

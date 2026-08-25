@@ -1,16 +1,16 @@
+import { AuditAction,EntityType,PermissionAction } from '@prisma/client';
 import { Context } from 'hono';
-import { AuditAction, EntityType, PermissionAction } from '@prisma/client';
+import { NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
-import { NotFoundError, ValidationError } from '../../../../errors/index.js';
-import { requireTenantId, requireUserId, requireParam } from '../../../../utils/context.js';
-import { createAuditLog, getRequestMeta } from '../../../../utils/audit.js';
 import {
-  listPermissionMatrix,
-  parsePermissionScreenPreviewInput,
-  parsePermissionSimulationInput,
-  previewUserScreens,
-  simulatePermission as simulatePermissionAccess,
+listPermissionMatrix,
+parsePermissionScreenPreviewInput,
+parsePermissionSimulationInput,
+previewUserScreens,
+simulatePermission as simulatePermissionAccess,
 } from '../../../../services/permission-simulator.service.js';
+import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
+import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs

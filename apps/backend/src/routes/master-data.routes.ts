@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { MasterDataController } from '../modules/inventory/http/controllers/index.js';
 import { requirePermission } from '../middleware/requirePermission';
+import { MasterDataController } from '../modules/inventory/http/controllers/index.js';
 
 // Master data (Unit, Category, TaxRate, Currency) — tüm starter modülleri kullanır
 const masterDataRoutes = new Hono();

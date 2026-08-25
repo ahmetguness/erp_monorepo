@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { prisma } from '../../../../lib/prisma.js';
-import { requireTenantId, requireUserId } from '../../../../utils/context.js';
 import { MarketplacePricingAutonomyService } from '../../../../services/marketplace-pricing-autonomy.service.js';
+import { requireTenantId,requireUserId } from '../../../../utils/context.js';
 
 const pricingService = new MarketplacePricingAutonomyService(prisma);
 

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { DemoController } from '../modules/platform/http/controllers/index.js';
 import { requireAdmin } from '../middleware/requireAdmin';
+import { DemoController } from '../modules/platform/http/controllers/index.js';
 
 /** Public route – JWT gerektirmez */
 export const demoPublicRoutes = new Hono();

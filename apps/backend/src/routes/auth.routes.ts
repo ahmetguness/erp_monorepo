@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { AuthController } from '../modules/identity/http/controllers/index.js';
 import { requireAuth } from '../middleware/requireAuth';
 import { validateBody } from '../middleware/validateBody';
-import { loginBodySchema, registerBodySchema } from '../schemas/request-body.schemas';
+import { AuthController } from '../modules/identity/http/controllers/index.js';
+import { loginBodySchema,registerBodySchema } from '../schemas/request-body.schemas';
 
 const authRoutes = new Hono();
 

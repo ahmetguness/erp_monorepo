@@ -1,21 +1,14 @@
-import { Context } from 'hono';
-import { AuditAction, EntityType, PermissionAction, Prisma } from '@prisma/client';
-import { randomUUID } from 'crypto';
-import { basename, extname } from 'path';
+import { EntityType,PermissionAction,Prisma } from '@prisma/client';
+import { basename,extname } from 'path';
+import { ForbiddenError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
-import { ForbiddenError, NotFoundError, ValidationError } from '../../../../../errors/index.js';
-import { requireTenantId, requireUserId, requireParam } from '../../../../../utils/context.js';
-import { createAuditLog, getRequestMeta } from '../../../../../utils/audit.js';
-import { bufferToArrayBuffer, storageService } from '../../../../../services/storage.service.js';
 import {
-  DocumentCenterService,
-  type DocumentCenterCategory,
-  type DocumentConfidentiality,
-  type DocumentKind,
-  parseDocumentCenterCategory,
-  parseDocumentCenterSource,
-  parseDocumentConfidentiality,
-  parseDocumentKind,
+parseDocumentCenterCategory,
+parseDocumentConfidentiality,
+parseDocumentKind,
+type DocumentCenterCategory,
+type DocumentConfidentiality,
+type DocumentKind
 } from '../../../../../services/document-center.service.js';
 
 export const MAX_FILE_SIZE = 10 * 1024 * 1024;

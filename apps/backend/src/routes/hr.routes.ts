@@ -1,11 +1,8 @@
-import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
+import { Hono } from 'hono';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { EmployeeController } from '../modules/workforce-service/http/controllers/index.js';
-import { LeaveRequestController } from '../modules/workforce-service/http/controllers/index.js';
-import { AttendanceController } from '../modules/workforce-service/http/controllers/index.js';
-import { AdvancedHrController } from '../modules/workforce-service/http/controllers/index.js';
+import { AdvancedHrController,AttendanceController,EmployeeController,LeaveRequestController } from '../modules/workforce-service/http/controllers/index.js';
 
 const hrRoutes = new Hono();
 

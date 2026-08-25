@@ -1,52 +1,31 @@
+import { AuditAction,EntityType,InvoiceStatus,InvoiceType } from '@prisma/client';
 import { Context } from 'hono';
-import { InvoiceType, InvoiceStatus, AuditAction, EntityType } from '@prisma/client';
+import { createEventContext,domainEvents } from '../../../../domain-events/index.js';
+import { NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
-import { NotFoundError, ValidationError } from '../../../../errors/index.js';
 import { getValidatedBody } from '../../../../middleware/validateBody.js';
 import {
-  createInvoiceBodySchema,
-  updateInvoiceBodySchema,
-  type CreateInvoiceBody,
+createInvoiceBodySchema,
+updateInvoiceBodySchema,
+type CreateInvoiceBody,
 } from '../../../../schemas/request-body.schemas.js';
-import { generateDocumentNumber } from '../../../../utils/generate-number.js';
-import { requireTenantId } from '../../../../utils/context.js';
-import { createAuditLog, getRequestMeta } from '../../../../utils/audit.js';
-import { createEventContext, domainEvents } from '../../../../domain-events/index.js';
-import { writeInvoiceAccountEntry, reverseInvoiceAccountEntry } from '../../../../utils/account-entry.js';
 import { BusinessRulesService } from '../../../../services/business-rules.service.js';
-import {
-  assertInvoiceCancelable,
-  assertInvoiceEditable,
-  assertAccountingPeriodOpen,
-  readRequiredReason,
-} from '../../../../services/financial/index.js';
-import { assertInvoiceStatusTransition, isComputedInvoiceStatus } from '../../../../services/financial/status-transition.service.js';
-import { scanAndRecomputeInvoiceStatuses } from '../../../../services/financial/invoice-status.service.js';
 import { EDocumentAutomationService } from '../../../../services/edocument-automation.service.js';
+import {
+assertAccountingPeriodOpen,
+assertInvoiceCancelable,
+readRequiredReason
+} from '../../../../services/financial/index.js';
+import { scanAndRecomputeInvoiceStatuses } from '../../../../services/financial/invoice-status.service.js';
+import { assertInvoiceStatusTransition,isComputedInvoiceStatus } from '../../../../services/financial/status-transition.service.js';
+import { reverseInvoiceAccountEntry,writeInvoiceAccountEntry } from '../../../../utils/account-entry.js';
+import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
+import { requireTenantId } from '../../../../utils/context.js';
+import { generateDocumentNumber } from '../../../../utils/generate-number.js';
 
 // ─────────────────────────────────────────────
 // DTOs
 // ─────────────────────────────────────────────
-
-type InvoiceLineDTO = CreateInvoiceBody['lines'][number];
-
-interface CreateInvoiceDTO {
-  contactId: string;
-  type: InvoiceType;
-  salesOrderId?: string;
-  purchaseOrderId?: string;
-  number?: string;
-  date: string;
-  dueDate?: string;
-  notes?: string;
-  lines: InvoiceLineDTO[];
-}
-
-interface UpdateInvoiceDTO {
-  dueDate?: string;
-  notes?: string;
-  status?: InvoiceStatus;
-}
 
 interface InvoiceListQuery {
   page?: string;

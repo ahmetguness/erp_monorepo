@@ -1,24 +1,24 @@
-import { Context } from 'hono';
+import { PermissionAction,Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { Context } from 'hono';
+import { deleteCookie,getCookie,setCookie } from 'hono/cookie';
 import jwt from 'jsonwebtoken';
-import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import { ForbiddenError,NotFoundError,ValidationError } from '../../../../errors/index.js';
+import { isSecureCookieEnabled } from '../../../../lib/cookie-config.js';
+import { logger } from '../../../../lib/logger.js';
 import { prisma } from '../../../../lib/prisma.js';
-import { ValidationError, ForbiddenError, NotFoundError } from '../../../../errors/index.js';
-import { PermissionAction, Prisma } from '@prisma/client';
+import { rateLimiter } from '../../../../lib/rateLimiter.js';
+import { getValidatedBody } from '../../../../middleware/validateBody.js';
+import { loginBodySchema,registerBodySchema } from '../../../../schemas/request-body.schemas.js';
+import {
+createSecuritySession,
+revokeSecuritySession,
+type RequestSecurityMeta,
+} from '../../../../services/security-hardening.service.js';
 import { requireTenantId } from '../../../../utils/context.js';
 import { validatePasswordStrength } from '../../../../utils/password-policy.js';
-import { getValidatedBody } from '../../../../middleware/validateBody.js';
-import { loginBodySchema, registerBodySchema } from '../../../../schemas/request-body.schemas.js';
-import { logger } from '../../../../lib/logger.js';
-import { rateLimiter } from '../../../../lib/rateLimiter.js';
 import { getTrustedClientIp } from '../../../../utils/request-ip.js';
-import {
-  createSecuritySession,
-  revokeSecuritySession,
-  type RequestSecurityMeta,
-} from '../../../../services/security-hardening.service.js';
 import { modulesForPlan } from '../../../../utils/tenant-modules.js';
-import { isSecureCookieEnabled } from '../../../../lib/cookie-config.js';
 
 // ─────────────────────────────────────────────
 // Config
@@ -42,21 +42,6 @@ const LOGIN_LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
 // ─────────────────────────────────────────────
 // DTOs
 // ─────────────────────────────────────────────
-
-interface LoginDTO {
-  email: string;
-  password: string;
-  tenantSlug?: string;
-  rememberMe?: boolean;
-}
-
-interface RegisterDTO {
-  email: string;
-  name: string;
-  password: string;
-  companyName: string;
-  phone?: string;
-}
 
 interface JwtPayload {
   userId: string;

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { StarterHealthController } from '../modules/platform/http/controllers/index.js';
 import { requirePermission } from '../middleware/requirePermission.js';
+import { StarterHealthController } from '../modules/platform/http/controllers/index.js';
 
 const starterHealthRoutes = new Hono();
 

@@ -1,16 +1,16 @@
+import { AiPermissionCheckResult,AiRequestStatus,AiRequestType,Plan } from '@prisma/client';
 import { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { prisma } from '../../../../lib/prisma.js';
+import { ValidationError } from '../../../../errors/index.js';
 import { logger } from '../../../../lib/logger.js';
 import { sanitizeOutput } from '../../../../lib/output-sanitizer.js';
-import { ValidationError } from '../../../../errors/index.js';
-import { AiPermissionCheckResult, AiRequestStatus, AiRequestType, Plan } from '@prisma/client';
-import { handlePrivateChat, handlePrivateChatStream, clearConversation, type UserPermissions } from '../../../../services/ai-chat.service.js';
-import { CHAT_ENTITY_TYPES, type ChatEntityType, type ChatPageContext, type ChatRecentRecord } from '../../../../services/chat-context.service.js';
-import { requireTenantId } from '../../../../utils/context.js';
+import { prisma } from '../../../../lib/prisma.js';
+import { clearConversation,handlePrivateChat,handlePrivateChatStream,type UserPermissions } from '../../../../services/ai-chat.service.js';
+import { AI_MODELS,AI_PROMPT_VERSIONS,mapAiEntityType,recordAiRequestLog } from '../../../../services/ai-governance.service.js';
+import { assertAiAllowed,buildPolicyContext,type AiGovernancePolicy } from '../../../../services/ai/policy.service.js';
+import { CHAT_ENTITY_TYPES,type ChatEntityType,type ChatPageContext,type ChatRecentRecord } from '../../../../services/chat-context.service.js';
 import { getRequestMeta } from '../../../../utils/audit.js';
-import { AI_MODELS, AI_PROMPT_VERSIONS, mapAiEntityType, recordAiRequestLog } from '../../../../services/ai-governance.service.js';
-import { assertAiAllowed, buildPolicyContext, type AiGovernancePolicy } from '../../../../services/ai/policy.service.js';
+import { requireTenantId } from '../../../../utils/context.js';
 
 // ─────────────────────────────────────────────
 // Config

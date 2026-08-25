@@ -1,11 +1,11 @@
 import { Context } from 'hono';
-import { prisma } from '../../../../lib/prisma.js';
 import { ValidationError } from '../../../../errors/index.js';
-import { ProductQuickImportService } from '../../../../services/product-quick-import.service.js';
-import { requireTenantId, requireUserId } from '../../../../utils/context.js';
-import { getRequestMeta } from '../../../../utils/audit.js';
+import { prisma } from '../../../../lib/prisma.js';
 import { getValidatedBody } from '../../../../middleware/validateBody.js';
-import { productQuickImportBodySchema, type ProductQuickImportBody } from '../../../../schemas/request-body.schemas.js';
+import { productQuickImportBodySchema,type ProductQuickImportBody } from '../../../../schemas/request-body.schemas.js';
+import { ProductQuickImportService } from '../../../../services/product-quick-import.service.js';
+import { getRequestMeta } from '../../../../utils/audit.js';
+import { requireTenantId,requireUserId } from '../../../../utils/context.js';
 
 function csvResponse(csv: string, filename: string): Response {
   return new Response(csv, {
@@ -17,7 +17,7 @@ function csvResponse(csv: string, filename: string): Response {
 }
 
 export const ProductQuickImportController = {
-  async template(c: Context): Promise<Response> {
+  async template(): Promise<Response> {
     const service = new ProductQuickImportService(prisma);
     return csvResponse(service.buildTemplateCsv(), 'product-quick-import-template.csv');
   },

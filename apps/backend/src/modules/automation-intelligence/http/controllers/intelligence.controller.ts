@@ -1,25 +1,25 @@
+import { AiPermissionCheckResult,AiRequestStatus,AiRequestType,AuditAction,EntityType,PermissionAction } from '@prisma/client';
 import { Context } from 'hono';
-import { AiPermissionCheckResult, AiRequestStatus, AiRequestType, AuditAction, EntityType, PermissionAction } from '@prisma/client';
+import { ForbiddenError,NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
-import { ForbiddenError, NotFoundError, ValidationError } from '../../../../errors/index.js';
-import { IntelligenceService, type PermissionView } from '../../../../services/intelligence.service.js';
-import { requireTenantId, requireUserId, requireParam } from '../../../../utils/context.js';
-import { AiAutomationService, type AiUseCase } from '../../../../services/ai-automation.service.js';
-
-const aiAutomation = new AiAutomationService(prisma);
-import { createAuditLog, getRequestMeta } from '../../../../utils/audit.js';
-import { listAiRequestLogs, recordAiRequestLog } from '../../../../services/ai-governance.service.js';
+import { AiAutomationService,type AiUseCase } from '../../../../services/ai-automation.service.js';
 import {
-  getAiGovernanceInsights,
-  updateAiGovernanceCostSettings,
-  type AiGovernanceCostSettingsInput,
+getAiGovernanceInsights,
+updateAiGovernanceCostSettings,
+type AiGovernanceCostSettingsInput,
 } from '../../../../services/ai-governance-insights.service.js';
+import { listAiRequestLogs,recordAiRequestLog } from '../../../../services/ai-governance.service.js';
 import {
-  getAiGovernancePolicy,
-  setAiGovernancePolicy,
-  type AiDataSharingPolicy,
+getAiGovernancePolicy,
+setAiGovernancePolicy,
+type AiDataSharingPolicy,
 } from '../../../../services/ai/policy.service.js';
 import { getAiRedactionRegistry } from '../../../../services/ai/redaction-registry.js';
+import { IntelligenceService,type PermissionView } from '../../../../services/intelligence.service.js';
+import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
+import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
+
+const aiAutomation = new AiAutomationService(prisma);
 
 async function getPermissionView(tenantId: string, userId: string): Promise<PermissionView | null> {
   const tenantUser = await prisma.tenantUser.findFirst({
@@ -127,18 +127,6 @@ async function requirePermissions(c: Context): Promise<{ tenantId: string; permi
     return c.json(new ForbiddenError("Bu tenant'a erisiminiz yok.").toJSON(), 403);
   }
   return { tenantId, permissions };
-}
-
-async function requireOwner(c: Context, tenantId: string): Promise<Response | null> {
-  const userId = requireUserId(c);
-  const tenantUser = await prisma.tenantUser.findFirst({
-    where: { tenantId, userId, isActive: true },
-    select: { isOwner: true },
-  });
-  if (!tenantUser?.isOwner) {
-    return c.json(new ForbiddenError('AI denetim ve politika ekranlarini sadece tenant owner gorebilir.').toJSON(), 403);
-  }
-  return null;
 }
 
 function hasPermission(permissions: PermissionView, module: string, action: PermissionAction): boolean {

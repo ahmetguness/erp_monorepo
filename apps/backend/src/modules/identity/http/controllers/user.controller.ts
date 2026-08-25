@@ -1,34 +1,19 @@
-import { Context } from 'hono';
+import { AuditAction,EntityType } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { AuditAction, EntityType } from '@prisma/client';
-import { prisma } from '../../../../lib/prisma.js';
-import { NotFoundError, ValidationError, ForbiddenError } from '../../../../errors/index.js';
-import { getValidatedBody } from '../../../../middleware/validateBody.js';
-import { createUserBodySchema, updateUserBodySchema } from '../../../../schemas/request-body.schemas.js';
-import { requireTenantId } from '../../../../utils/context.js';
-import { validatePasswordStrength } from '../../../../utils/password-policy.js';
-import { getPaginationParams } from '../../../../utils/pagination.js';
+import { Context } from 'hono';
+import { ForbiddenError,NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { logger } from '../../../../lib/logger.js';
-import { createAuditLog, getRequestMeta } from '../../../../utils/audit.js';
+import { prisma } from '../../../../lib/prisma.js';
+import { getValidatedBody } from '../../../../middleware/validateBody.js';
+import { createUserBodySchema,updateUserBodySchema } from '../../../../schemas/request-body.schemas.js';
+import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
+import { requireTenantId } from '../../../../utils/context.js';
+import { getPaginationParams } from '../../../../utils/pagination.js';
+import { validatePasswordStrength } from '../../../../utils/password-policy.js';
 
 // ─────────────────────────────────────────────
 // DTOs
 // ─────────────────────────────────────────────
-
-interface CreateUserDTO {
-  email: string;
-  name: string;
-  phone?: string;
-  password: string;
-  roleId?: string;
-}
-
-interface UpdateUserDTO {
-  name?: string;
-  phone?: string;
-  isActive?: boolean;
-  roleId?: string;
-}
 
 // ─────────────────────────────────────────────
 // User Controller

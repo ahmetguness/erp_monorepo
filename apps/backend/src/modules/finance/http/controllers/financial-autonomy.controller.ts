@@ -1,8 +1,8 @@
-import { Context } from 'hono';
 import { Prisma } from '@prisma/client';
+import { Context } from 'hono';
 import { prisma } from '../../../../lib/prisma.js';
-import { requireTenantId, requireUserId, requireParam } from '../../../../utils/context.js';
 import { FinancialAutonomyService } from '../../../../services/financial-autonomy.service.js';
+import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
 
 const autonomyService = new FinancialAutonomyService(prisma);
 

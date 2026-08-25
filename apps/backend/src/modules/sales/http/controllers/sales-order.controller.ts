@@ -1,17 +1,17 @@
+import { AuditAction,EntityType,OrderStatus,QuoteStatus,ReservationRefType } from '@prisma/client';
 import { Context } from 'hono';
-import { OrderStatus, QuoteStatus, AuditAction, EntityType, ReservationRefType } from '@prisma/client';
+import { createEventContext,domainEvents } from '../../../../domain-events/index.js';
+import { NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
-import { NotFoundError, ValidationError } from '../../../../errors/index.js';
-import { generateDocumentNumber } from '../../../../utils/generate-number.js';
-import { requireTenantId, requireParam } from '../../../../utils/context.js';
-import { createAuditLog, getRequestMeta } from '../../../../utils/audit.js';
-import { createEventContext, domainEvents } from '../../../../domain-events/index.js';
 import { getValidatedBody } from '../../../../middleware/validateBody.js';
 import { fulfillSalesOrderBodySchema } from '../../../../schemas/request-body.schemas.js';
 import { BusinessRulesService } from '../../../../services/business-rules.service.js';
-import { releaseInventoryReservations } from '../../../../services/inventory-rules.service.js';
 import { assertSalesOrderStatusTransition } from '../../../../services/financial/status-transition.service.js';
+import { releaseInventoryReservations } from '../../../../services/inventory-rules.service.js';
 import { SalesFulfillmentService } from '../../../../services/sales-fulfillment.service.js';
+import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
+import { requireParam,requireTenantId } from '../../../../utils/context.js';
+import { generateDocumentNumber } from '../../../../utils/generate-number.js';
 
 // ─────────────────────────────────────────────
 // DTOs

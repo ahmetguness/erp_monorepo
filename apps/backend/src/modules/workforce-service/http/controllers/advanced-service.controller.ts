@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { prisma } from '../../../../lib/prisma.js';
-import { requireTenantId } from '../../../../utils/context.js';
 import { getAdvancedService } from '../../../../services/advanced-service.service.js';
+import { requireTenantId } from '../../../../utils/context.js';
 
 function parseHorizonDays(value: string | undefined): number {
   const parsed = Number(value ?? 30);

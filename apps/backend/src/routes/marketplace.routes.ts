@@ -1,14 +1,14 @@
-import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
+import { Hono } from 'hono';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
 import {
-  MarketplaceIntegrationController,
-  MarketplaceListingController,
-  MarketplaceOrderController,
-  TrendyolSyncController,
-  TrendyolLookupController,
-  MarketplaceMonitoringController,
+MarketplaceIntegrationController,
+MarketplaceListingController,
+MarketplaceMonitoringController,
+MarketplaceOrderController,
+TrendyolLookupController,
+TrendyolSyncController,
 } from '../modules/marketplace/http/controllers/index.js';
 
 const marketplaceRoutes = new Hono();

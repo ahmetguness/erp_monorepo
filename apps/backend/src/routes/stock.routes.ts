@@ -1,14 +1,14 @@
-import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { StockController } from '../modules/inventory/http/controllers/index.js';
+import { Hono } from 'hono';
 import { requireAccess } from '../middleware/requireAccess';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
 import { validateBody } from '../middleware/validateBody';
+import { StockController } from '../modules/inventory/http/controllers/index.js';
 import {
-  createStockCountBodySchema,
-  createStockMovementBodySchema,
-  finalizeStockCountBodySchema,
+createStockCountBodySchema,
+createStockMovementBodySchema,
+finalizeStockCountBodySchema,
 } from '../schemas/request-body.schemas';
 import { MODULE_KEYS } from '../types/module.types';
 

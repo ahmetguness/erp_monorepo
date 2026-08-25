@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { DomainEventController } from '../modules/platform/http/controllers/index.js';
 import { requirePermission } from '../middleware/requirePermission';
+import { DomainEventController } from '../modules/platform/http/controllers/index.js';
 
 const domainEventRoutes = new Hono();
 

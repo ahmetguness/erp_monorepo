@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
-import { PaymentController } from '../modules/finance/http/controllers/index.js';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
 import { validateBody } from '../middleware/validateBody';
-import { cancelReasonBodySchema, createPaymentBodySchema } from '../schemas/request-body.schemas';
+import { PaymentController } from '../modules/finance/http/controllers/index.js';
+import { cancelReasonBodySchema,createPaymentBodySchema } from '../schemas/request-body.schemas';
 import { MODULE_KEYS } from '../types/module.types';
 
 const paymentRoutes = new Hono();

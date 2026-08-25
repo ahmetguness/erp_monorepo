@@ -1,24 +1,11 @@
-import { requireParam } from '../../../../../utils/context.js';
-import { Context } from 'hono';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
+import { Context } from 'hono';
+import { deleteCookie,setCookie } from 'hono/cookie';
 import jwt from 'jsonwebtoken';
-import { setCookie, deleteCookie } from 'hono/cookie';
-import { AppModule, AuditAction, EntityType, FeatureKey, FeatureType, Plan, Prisma, TenantStatus } from '@prisma/client';
+import { ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
-import { ValidationError, NotFoundError } from '../../../../../errors/index.js';
-import { getPaginationParams } from '../../../../../utils/pagination.js';
-import { createAuditLog, getRequestMeta } from '../../../../../utils/audit.js';
-import { sendMail } from '../../../../../services/mail.service.js';
-import { tenantReadyEmail } from '../../../../../services/mail-templates.service.js';
-import { getObservabilitySnapshot } from '../../../../../services/observability.service.js';
 import { rateLimiter } from '../../../../../lib/rateLimiter.js';
-import { logger } from '../../../../../lib/logger.js';
-import { getTrustedClientIp } from '../../../../../utils/request-ip.js';
-import { modulesForPrismaPlan, toAppModule, VALID_MODULE_KEYS } from '../../../../../utils/tenant-modules.js';
-import { PlanFeatureService } from '../../../../../services/plan-feature.service.js';
-import { PlanChangeExperienceService } from '../../../../../services/plan-change-experience.service.js';
-import { JWT_SECRET, ADMIN_JWT_SECRET, IS_PRODUCTION, RESOLVED_ADMIN_SECRET, ADMIN_COOKIE_NAME, ADMIN_COOKIE_MAX_AGE, ADMIN_LOGIN_LIMIT, ADMIN_LOGIN_WINDOW_MS, ADMIN_LOGIN_LOCKOUT_FAILURES, ADMIN_LOGIN_LOCKOUT_WINDOW_MS, VALID_PLANS, VALID_STATUSES, VALID_FEATURE_KEYS, VALID_FEATURE_TYPES, VALID_MODULES, planFeatureService, planChangeExperienceService, normalizeEmail, getClientIp, getAdminLoginLimitKeys, recordAdminLoginFailure, isFeatureKey, isPlan, isFeatureType, createSlug, parseNullableDate, validateModules, normalizePlanFeatureValue, getPlanFeatureAuditTenantIds, formatNotificationValue, MODULE_TRANSLATIONS, translateModules, buildChangeLine, notifyTenantOwners } from './shared.js';
+import { ADMIN_COOKIE_MAX_AGE,ADMIN_COOKIE_NAME,ADMIN_LOGIN_LIMIT,ADMIN_LOGIN_LOCKOUT_FAILURES,ADMIN_LOGIN_LOCKOUT_WINDOW_MS,ADMIN_LOGIN_WINDOW_MS,getAdminLoginLimitKeys,getClientIp,IS_PRODUCTION,normalizeEmail,recordAdminLoginFailure,RESOLVED_ADMIN_SECRET } from './shared.js';
 
 export const AdminAuthController = {
   async login(c: Context): Promise<Response> {

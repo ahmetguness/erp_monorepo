@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { WarehouseController, LocationController } from '../modules/inventory/http/controllers/index.js';
 import { enforceStarterLimits } from '../middleware/enforceStarterLimits';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
+import { LocationController,WarehouseController } from '../modules/inventory/http/controllers/index.js';
 import { MODULE_KEYS } from '../types/module.types';
 
 const warehouseRoutes = new Hono();

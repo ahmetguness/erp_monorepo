@@ -1,10 +1,9 @@
-import { Hono } from 'hono';
 import { PermissionAction } from '@prisma/client';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { DataExchangeController } from '../modules/automation-intelligence/http/controllers/index.js';
-import { EdiB2BController } from '../modules/automation-intelligence/http/controllers/index.js';
+import { Hono } from 'hono';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
+import { DataExchangeController,EdiB2BController } from '../modules/automation-intelligence/http/controllers/index.js';
 
 const dataExchangeRoutes = new Hono();
 

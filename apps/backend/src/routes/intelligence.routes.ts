@@ -1,5 +1,5 @@
-import { Hono } from 'hono';
 import { Plan } from '@prisma/client';
+import { Hono } from 'hono';
 import { requirePermission } from '../middleware/requirePermission';
 import { requirePlan } from '../middleware/requirePlan';
 import { IntelligenceController } from '../modules/automation-intelligence/http/controllers/index.js';

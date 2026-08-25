@@ -1,14 +1,14 @@
+import { AiPermissionCheckResult,AiRequestStatus,AiRequestType } from '@prisma/client';
 import { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { logger } from '../../../../lib/logger.js';
 import { ValidationError } from '../../../../errors/index.js';
-import { handlePublicChat, handlePublicChatStream } from '../../../../services/ai-chat.service.js';
-import { createDemoRequest } from '../../../../services/demo.service.js';
-import { prisma } from '../../../../lib/prisma.js';
+import { logger } from '../../../../lib/logger.js';
 import { sanitizeOutput } from '../../../../lib/output-sanitizer.js';
+import { prisma } from '../../../../lib/prisma.js';
 import { rateLimiter } from '../../../../lib/rateLimiter.js';
-import { AiPermissionCheckResult, AiRequestStatus, AiRequestType } from '@prisma/client';
-import { AI_MODELS, AI_PROMPT_VERSIONS, recordAiRequestLog } from '../../../../services/ai-governance.service.js';
+import { handlePublicChat,handlePublicChatStream } from '../../../../services/ai-chat.service.js';
+import { AI_MODELS,AI_PROMPT_VERSIONS,recordAiRequestLog } from '../../../../services/ai-governance.service.js';
+import { createDemoRequest } from '../../../../services/demo.service.js';
 import { getTrustedClientIp } from '../../../../utils/request-ip.js';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;

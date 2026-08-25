@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
-import { InvoiceController } from '../modules/sales/http/controllers/index.js';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
 import { validateBody } from '../middleware/validateBody';
-import { createInvoiceBodySchema, updateInvoiceBodySchema } from '../schemas/request-body.schemas';
+import { InvoiceController } from '../modules/sales/http/controllers/index.js';
+import { createInvoiceBodySchema,updateInvoiceBodySchema } from '../schemas/request-body.schemas';
 import { MODULE_KEYS } from '../types/module.types';
 
 const invoiceRoutes = new Hono();

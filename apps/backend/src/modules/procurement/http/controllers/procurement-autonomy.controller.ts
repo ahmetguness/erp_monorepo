@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { prisma } from '../../../../lib/prisma.js';
-import { requireTenantId, requireUserId } from '../../../../utils/context.js';
 import { ProcurementAutonomyService } from '../../../../services/procurement-autonomy.service.js';
+import { requireTenantId,requireUserId } from '../../../../utils/context.js';
 
 const procurementService = new ProcurementAutonomyService(prisma);
 

@@ -1,8 +1,8 @@
-import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { AutomationRuleController } from '../modules/automation-intelligence/http/controllers/index.js';
+import { Hono } from 'hono';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
+import { AutomationRuleController } from '../modules/automation-intelligence/http/controllers/index.js';
 
 const automationRuleRoutes = new Hono();
 

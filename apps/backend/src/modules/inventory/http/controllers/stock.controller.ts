@@ -1,30 +1,30 @@
+import { AuditAction,EntityType,MovementType } from '@prisma/client';
 import { Context } from 'hono';
-import { AuditAction, EntityType, MovementType } from '@prisma/client';
+import { createEventContext,domainEvents } from '../../../../domain-events/index.js';
+import { NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
-import { NotFoundError, ValidationError } from '../../../../errors/index.js';
 import { getValidatedBody } from '../../../../middleware/validateBody.js';
 import {
-  createStockCountBodySchema,
-  createStockMovementBodySchema,
-  finalizeStockCountBodySchema,
-  type CreateStockCountBody,
+createStockCountBodySchema,
+createStockMovementBodySchema,
+finalizeStockCountBodySchema,
+type CreateStockCountBody,
 } from '../../../../schemas/request-body.schemas.js';
-import { generateDocumentNumber } from '../../../../utils/generate-number.js';
-import { requireTenantId, requireUserId, requireParam } from '../../../../utils/context.js';
-import { createAuditLog, getRequestMeta } from '../../../../utils/audit.js';
-import { createEventContext, domainEvents } from '../../../../domain-events/index.js';
 import {
-  assertCanConsumeStock,
-  assertStockCountApproval,
-  getInventoryRules,
-  getReorderSuggestions,
-  getAdvancedStockSuggestions,
-  recordInventoryCosting,
-  resolveStockLevelLocationId,
-  convertReorderSuggestionsToPurchaseRequest,
-  releaseExpiredInventoryReservations,
+assertCanConsumeStock,
+assertStockCountApproval,
+convertReorderSuggestionsToPurchaseRequest,
+getAdvancedStockSuggestions,
+getInventoryRules,
+getReorderSuggestions,
+recordInventoryCosting,
+releaseExpiredInventoryReservations,
+resolveStockLevelLocationId,
 } from '../../../../services/inventory-rules.service.js';
 import { StockAlertService } from '../../../../services/stock-alert.service.js';
+import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
+import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
+import { generateDocumentNumber } from '../../../../utils/generate-number.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -44,13 +44,6 @@ interface StockLevelListQuery {
   warehouseId?: string;
   productId?: string;
   belowMin?: string;
-}
-
-type CreateStockCountDTO = CreateStockCountBody;
-
-interface FinalizeStockCountDTO {
-  applyAdjustments: boolean;
-  approvalReason?: string;
 }
 
 // ─────────────────────────────────────────────

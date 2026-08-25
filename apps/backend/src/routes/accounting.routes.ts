@@ -1,9 +1,9 @@
-import { Hono } from 'hono';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { AccountingController, AccountingExtController } from '../modules/finance/http/controllers/index.js';
+import { Hono } from 'hono';
 import { requireAccess } from '../middleware/requireAccess';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
+import { AccountingController,AccountingExtController } from '../modules/finance/http/controllers/index.js';
 import { MODULE_KEYS } from '../types/module.types';
 
 const accountingRoutes = new Hono();

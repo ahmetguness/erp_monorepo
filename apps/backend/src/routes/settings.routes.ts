@@ -1,12 +1,11 @@
 import { Hono } from 'hono';
-import { SettingsController } from '../modules/platform/http/controllers/index.js';
-import { QuickStartController } from '../modules/platform/http/controllers/index.js';
 import { requirePermission } from '../middleware/requirePermission';
 import { validateBody } from '../middleware/validateBody';
+import { QuickStartController,SettingsController } from '../modules/platform/http/controllers/index.js';
 import {
-  businessRuleBodySchema,
-  moduleSettingBodySchema,
-  tenantSettingBodySchema,
+businessRuleBodySchema,
+moduleSettingBodySchema,
+tenantSettingBodySchema,
 } from '../schemas/request-body.schemas';
 
 // Settings tüm planlara açık — requireAuth zaten tenantApi seviyesinde uygulanıyor

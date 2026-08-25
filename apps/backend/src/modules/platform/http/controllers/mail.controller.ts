@@ -1,36 +1,36 @@
+import { AiPermissionCheckResult,AiRequestStatus,AiRequestType,MailDeliveryStatus,MailDirection } from '@prisma/client';
 import { Context } from 'hono';
-import { AiPermissionCheckResult, AiRequestStatus, AiRequestType, MailDeliveryStatus, MailDirection } from '@prisma/client';
-import { sendMail } from '../../../../services/mail.service.js';
+import { openai } from '../../../../lib/openai.js';
+import { prisma } from '../../../../lib/prisma.js';
+import { AI_MODELS,AI_PROMPT_VERSIONS,recordAiRequestLog } from '../../../../services/ai-governance.service.js';
+import { assertAiAllowed,buildPolicyContext } from '../../../../services/ai/policy.service.js';
+import { BusinessRulesService } from '../../../../services/business-rules.service.js';
 import { MailHistoryService } from '../../../../services/mail-history.service.js';
 import {
-  welcomeEmail,
-  passwordResetEmail,
-  invoiceNotificationEmail,
-  genericNotificationEmail,
-} from '../../../../services/mail-templates.service.js';
-import { requireTenantId, requireUserId } from '../../../../utils/context.js';
-import {
-  MailAttachmentInput,
-  normalizeMailAttachments,
-  validateNormalizedMailAttachments,
-} from '../../../../utils/mail-attachments.js';
-import { prisma } from '../../../../lib/prisma.js';
-import { openai } from '../../../../lib/openai.js';
-import { BusinessRulesService } from '../../../../services/business-rules.service.js';
-import { getRequestMeta } from '../../../../utils/audit.js';
-import { AI_MODELS, AI_PROMPT_VERSIONS, recordAiRequestLog } from '../../../../services/ai-governance.service.js';
-import { assertAiAllowed, buildPolicyContext } from '../../../../services/ai/policy.service.js';
-import {
-  isMailTemplateVariableKey,
-  MailDraftTone,
-  MailTemplateVariableDefinition,
-  MailTemplateVariables,
+isMailTemplateVariableKey,
+MailDraftTone,
+MailTemplateVariableDefinition,
+MailTemplateVariables,
 } from '../../../../services/mail-template-library.service.js';
 import {
-  MailTemplateInput,
-  MailTemplateManagementService,
-  renderMailTemplateText,
+MailTemplateInput,
+MailTemplateManagementService,
+renderMailTemplateText,
 } from '../../../../services/mail-template-management.service.js';
+import {
+genericNotificationEmail,
+invoiceNotificationEmail,
+passwordResetEmail,
+welcomeEmail,
+} from '../../../../services/mail-templates.service.js';
+import { sendMail } from '../../../../services/mail.service.js';
+import { getRequestMeta } from '../../../../utils/audit.js';
+import { requireTenantId,requireUserId } from '../../../../utils/context.js';
+import {
+MailAttachmentInput,
+normalizeMailAttachments,
+validateNormalizedMailAttachments,
+} from '../../../../utils/mail-attachments.js';
 
 // ── Rate limiter (tenant bazlı, saatte max 20 mail) ─────
 const mailRateMap = new Map<string, { count: number; resetAt: number }>();
@@ -85,18 +85,6 @@ function checkMailRateLimit(tenantId: string): boolean {
   if (entry.count >= MAIL_RATE_LIMIT) return false;
   entry.count++;
   return true;
-}
-
-// ── Alıcı validasyonu ────────────────────────────────────
-function validateRecipient(to: string | string[]): string | null {
-  const recipients = Array.isArray(to) ? to : [to];
-  if (recipients.length === 0 || recipients.some((e) => !e)) {
-    return 'Geçerli bir alıcı adresi gereklidir.';
-  }
-  if (recipients.length > 10) {
-    return 'Tek seferde en fazla 10 alıcıya mail gönderilebilir.';
-  }
-  return null;
 }
 
 function normalizeAddresses(value: AddressInput): string[] {

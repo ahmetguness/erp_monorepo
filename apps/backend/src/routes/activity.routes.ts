@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { ActivityController } from '../modules/platform/http/controllers/index.js';
 import { requirePermission } from '../middleware/requirePermission';
+import { ActivityController } from '../modules/platform/http/controllers/index.js';
 
 const activityRoutes = new Hono();
 

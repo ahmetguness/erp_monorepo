@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { requirePermission } from '../middleware/requirePermission';
-import { CollectionReminderController } from '../modules/sales/http/controllers/index.js';
 import { validateBody } from '../middleware/validateBody';
+import { CollectionReminderController } from '../modules/sales/http/controllers/index.js';
 import { createCollectionReminderBodySchema } from '../schemas/request-body.schemas';
 
 const collectionReminderRoutes = new Hono();

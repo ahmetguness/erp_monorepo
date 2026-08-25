@@ -1,11 +1,11 @@
-import { Hono } from 'hono';
 import { FeatureKey } from '@prisma/client';
 import { ACCESS_POLICIES } from '@repo/types/plans';
-import { ReportingBuilderController, ReportingController, SavedReportController } from '../modules/platform/http/controllers/index.js';
-import { requireModule } from '../middleware/requireModule';
+import { Hono } from 'hono';
 import { requireAccess } from '../middleware/requireAccess';
 import { requireFeature } from '../middleware/requireFeature';
+import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
+import { ReportingBuilderController,ReportingController,SavedReportController } from '../modules/platform/http/controllers/index.js';
 import { MODULE_KEYS } from '../types/module.types';
 
 const reportingRoutes = new Hono();

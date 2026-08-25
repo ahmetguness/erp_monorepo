@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
-import { UserController } from '../modules/identity/http/controllers/index.js';
 import { enforceStarterLimits } from '../middleware/enforceStarterLimits';
 import { requirePermission } from '../middleware/requirePermission';
 import { validateBody } from '../middleware/validateBody';
-import { createUserBodySchema, updateUserBodySchema } from '../schemas/request-body.schemas';
+import { UserController } from '../modules/identity/http/controllers/index.js';
+import { createUserBodySchema,updateUserBodySchema } from '../schemas/request-body.schemas';
 
 // ─────────────────────────────────────────────
 // User Routes

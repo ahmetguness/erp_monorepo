@@ -1,10 +1,10 @@
 import { Context } from 'hono';
-import { requireTenantId, requireParam } from '../../../../utils/context.js';
 import {
-  createProductBatch,
-  listProductBatches,
-  updateProductBatch,
+createProductBatch,
+listProductBatches,
+updateProductBatch,
 } from '../../../../services/product-batch.service.js';
+import { requireParam,requireTenantId } from '../../../../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs

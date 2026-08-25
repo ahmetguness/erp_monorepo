@@ -1,8 +1,8 @@
 import { Context } from 'hono';
-import { prisma } from '../../../../lib/prisma.js';
 import { ForbiddenError } from '../../../../errors/index.js';
-import { requireTenantId, requireUserId } from '../../../../utils/context.js';
+import { prisma } from '../../../../lib/prisma.js';
 import { SearchService } from '../../../../services/search.service.js';
+import { requireTenantId,requireUserId } from '../../../../utils/context.js';
 
 const searchService = new SearchService(prisma);
 

@@ -1,23 +1,11 @@
 import { Context } from 'hono';
-import { AuditAction, EntityType, MarketplaceChannel, MarketplaceOrderStatus, Prisma, SyncJobType, SyncJobStatus } from '@prisma/client';
+import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
-import { NotFoundError, ValidationError } from '../../../../../errors/index.js';
 import {
-  TrendyolService,
-  buildTrendyolCredentials,
+TrendyolService,
+buildTrendyolCredentials,
 } from '../../../../../services/trendyol.service.js';
-import type { TrendyolProductItemInput } from '../../../../../services/trendyol.service.js';
-import { TrendyolWorker } from '../../../../../services/trendyol-worker.service.js';
-import type { JobParams } from '../../../../../services/trendyol-worker.service.js';
-import { requireTenantId, requireUserId, requireParam } from '../../../../../utils/context.js';
-import { getPaginationParams } from '../../../../../utils/pagination.js';
-import { encrypt } from '../../../../../utils/encryption.js';
-import { createAuditLog, getRequestMeta } from '../../../../../utils/audit.js';
-import { processTrendyolWebhookPayload } from '../trendyol-webhook.controller.js';
-import { MarketplaceMonitoringService } from '../../../../../services/marketplace-monitoring.service.js';
-import { MarketplaceAutomationService } from '../../../../../services/marketplace-automation.service.js';
-import { marketplaceMonitoringService, marketplaceAutomationService, hideIntegrationSecrets, isJsonObject, isMarketplaceChannel, readOptionalString, parseCreateIntegrationBody, parseUpdateIntegrationBody, toJobParams, parsePositiveNumber, toTrendyolProductItem } from './shared.js';
-import type { IntegrationWithSecrets, TrendyolListingProductDTO, MarketplaceListingActionListing, MarketplaceListingActionResult, CreateIntegrationBody, UpdateIntegrationBody } from './shared.js';
+import { requireParam,requireTenantId } from '../../../../../utils/context.js';
 
 export const TrendyolLookupController = {
   async categories(c: Context): Promise<Response> {

@@ -1,9 +1,9 @@
 import { Context } from 'hono';
-import { prisma } from '../../../../lib/prisma.js';
 import { ValidationError } from '../../../../errors/index.js';
-import { requireTenantId } from '../../../../utils/context.js';
+import { prisma } from '../../../../lib/prisma.js';
 import { SetupChecklistService } from '../../../../services/setup-checklist.service.js';
 import { StarterAccessService } from '../../../../services/starter-access.service.js';
+import { requireTenantId } from '../../../../utils/context.js';
 
 interface QuickStartDTO {
   companyName: string;

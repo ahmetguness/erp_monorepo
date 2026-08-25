@@ -1,10 +1,10 @@
 import { Context } from 'hono';
-import { prisma } from '../../../../lib/prisma.js';
 import { NotFoundError } from '../../../../errors/index.js';
-import { requireTenantId, requireUserId, requireParam } from '../../../../utils/context.js';
+import { prisma } from '../../../../lib/prisma.js';
 import { getValidatedBody } from '../../../../middleware/validateBody.js';
 import { createCollectionReminderBodySchema } from '../../../../schemas/request-body.schemas.js';
 import { CollectionAutomationService } from '../../../../services/collection-automation.service.js';
+import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
 
 export const CollectionReminderController = {
   async runAutomation(c: Context): Promise<Response> {

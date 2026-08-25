@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { StarterCsvImportController } from '../modules/platform/http/controllers/index.js';
 import { requireModule } from '../middleware/requireModule.js';
 import { requirePermission } from '../middleware/requirePermission.js';
+import { StarterCsvImportController } from '../modules/platform/http/controllers/index.js';
 import { MODULE_KEYS } from '../types/module.types.js';
 
 const starterCsvImportRoutes = new Hono();

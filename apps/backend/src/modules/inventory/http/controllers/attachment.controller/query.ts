@@ -1,24 +1,16 @@
+import { AuditAction } from '@prisma/client';
 import { Context } from 'hono';
-import { AuditAction, EntityType, PermissionAction, Prisma } from '@prisma/client';
-import { randomUUID } from 'crypto';
-import { basename, extname } from 'path';
+import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
-import { ForbiddenError, NotFoundError, ValidationError } from '../../../../../errors/index.js';
-import { requireTenantId, requireUserId, requireParam } from '../../../../../utils/context.js';
-import { createAuditLog, getRequestMeta } from '../../../../../utils/audit.js';
-import { bufferToArrayBuffer, storageService } from '../../../../../services/storage.service.js';
 import {
-  DocumentCenterService,
-  type DocumentCenterCategory,
-  type DocumentConfidentiality,
-  type DocumentKind,
-  parseDocumentCenterCategory,
-  parseDocumentCenterSource,
-  parseDocumentConfidentiality,
-  parseDocumentKind,
+DocumentCenterService,
+parseDocumentCenterCategory,
+parseDocumentCenterSource
 } from '../../../../../services/document-center.service.js';
-import { MAX_FILE_SIZE, ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS, ENTITY_TYPES, isEntityType, sanitizeFileName, sanitizeTag, readFormString, parseTagList, parseDateField, parsePositiveVersion, readRecord, isRecord, readBodyString, readStringArray, readStringArrayRequired, parseCategoryInput, parseKindInput, parseConfidentialityInput, validateDocumentDates, parseAttachmentMetadataUpdate, ensureEntityBelongsToTenant, canAccessConfidentialDocuments, ensureAttachmentConfidentialityAccess, countEntity, findEntityOptions, validateFile, getAttachmentIdFromAuditValues } from './shared.js';
-import type { AttachmentMetadataUpdate, EntityOption } from './shared.js';
+import { bufferToArrayBuffer,storageService } from '../../../../../services/storage.service.js';
+import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
+import { requireParam,requireTenantId,requireUserId } from '../../../../../utils/context.js';
+import { canAccessConfidentialDocuments,ensureAttachmentConfidentialityAccess,ensureEntityBelongsToTenant,findEntityOptions,getAttachmentIdFromAuditValues,isEntityType,sanitizeFileName } from './shared.js';
 
 export const queryAttachmentController = {
   async library(c: Context): Promise<Response> {

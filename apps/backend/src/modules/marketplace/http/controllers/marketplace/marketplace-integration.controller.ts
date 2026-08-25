@@ -1,23 +1,11 @@
+import { AuditAction,EntityType } from '@prisma/client';
 import { Context } from 'hono';
-import { AuditAction, EntityType, MarketplaceChannel, MarketplaceOrderStatus, Prisma, SyncJobType, SyncJobStatus } from '@prisma/client';
+import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
-import { NotFoundError, ValidationError } from '../../../../../errors/index.js';
-import {
-  TrendyolService,
-  buildTrendyolCredentials,
-} from '../../../../../services/trendyol.service.js';
-import type { TrendyolProductItemInput } from '../../../../../services/trendyol.service.js';
-import { TrendyolWorker } from '../../../../../services/trendyol-worker.service.js';
-import type { JobParams } from '../../../../../services/trendyol-worker.service.js';
-import { requireTenantId, requireUserId, requireParam } from '../../../../../utils/context.js';
-import { getPaginationParams } from '../../../../../utils/pagination.js';
+import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
+import { requireParam,requireTenantId,requireUserId } from '../../../../../utils/context.js';
 import { encrypt } from '../../../../../utils/encryption.js';
-import { createAuditLog, getRequestMeta } from '../../../../../utils/audit.js';
-import { processTrendyolWebhookPayload } from '../trendyol-webhook.controller.js';
-import { MarketplaceMonitoringService } from '../../../../../services/marketplace-monitoring.service.js';
-import { MarketplaceAutomationService } from '../../../../../services/marketplace-automation.service.js';
-import { marketplaceMonitoringService, marketplaceAutomationService, hideIntegrationSecrets, isJsonObject, isMarketplaceChannel, readOptionalString, parseCreateIntegrationBody, parseUpdateIntegrationBody, toJobParams, parsePositiveNumber, toTrendyolProductItem } from './shared.js';
-import type { IntegrationWithSecrets, TrendyolListingProductDTO, MarketplaceListingActionListing, MarketplaceListingActionResult, CreateIntegrationBody, UpdateIntegrationBody } from './shared.js';
+import { hideIntegrationSecrets,parseCreateIntegrationBody,parseUpdateIntegrationBody } from './shared.js';
 
 export const MarketplaceIntegrationController = {
   async list(c: Context): Promise<Response> {

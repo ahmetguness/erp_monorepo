@@ -1,15 +1,15 @@
 import type { Hono } from 'hono';
-import { SetPasswordController } from '../identity/http/controllers/index.js';
-import { TrendyolWebhookController } from '../marketplace/http/controllers/index.js';
 import { adminRoutes } from '../../routes/admin.routes.js';
 import { authRoutes } from '../../routes/auth.routes.js';
 import { biRoutes } from '../../routes/bi.routes.js';
-import { demoAdminRoutes, demoPublicRoutes } from '../../routes/demo.routes.js';
+import { demoAdminRoutes,demoPublicRoutes } from '../../routes/demo.routes.js';
 import { externalRoutes } from '../../routes/external.routes.js';
 import { invitationPublicRoutes } from '../../routes/invitation.routes.js';
 import { portalRoutes } from '../../routes/portal.routes.js';
 import { publicChatRoutes } from '../../routes/public-chat.routes.js';
 import { scimRoutes } from '../../routes/scim.routes.js';
+import { SetPasswordController } from '../identity/http/controllers/index.js';
+import { TrendyolWebhookController } from '../marketplace/http/controllers/index.js';
 
 /** Programmatic callers are registered before browser CSRF protection. */
 export function registerProgrammaticHttpSurface(app: Hono): void {

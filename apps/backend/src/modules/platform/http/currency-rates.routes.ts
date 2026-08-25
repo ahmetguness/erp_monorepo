@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { CurrencyRatesController } from './controllers/index.js';
 import { requirePermission } from '../../../middleware/requirePermission.js';
+import { CurrencyRatesController } from './controllers/index.js';
 
 export const currencyRatesRoutes = new Hono();
 

@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { prisma } from '../../../../lib/prisma.js';
-import { requireTenantId } from '../../../../utils/context.js';
 import { getHoldingCompany } from '../../../../services/holding-company.service.js';
+import { requireTenantId } from '../../../../utils/context.js';
 
 export const HoldingCompanyController = {
   async get(c: Context): Promise<Response> {

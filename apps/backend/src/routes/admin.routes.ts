@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import { requireAdmin } from '../middleware/requireAdmin';
 import {
-  AdminAuthController,
-  AdminTenantController,
-  AdminFeatureController,
-  AdminMetricsController,
-  AdminAuditController,
+AdminAuditController,
+AdminAuthController,
+AdminFeatureController,
+AdminMetricsController,
+AdminSecurityController,
+AdminTenantController,
 } from '../modules/platform/http/controllers/index.js';
-import { AdminSecurityController } from '../modules/platform/http/controllers/index.js';
 
 const adminRoutes = new Hono();
 

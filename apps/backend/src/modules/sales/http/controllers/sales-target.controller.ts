@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { prisma } from '../../../../lib/prisma.js';
 import { getValidatedBody } from '../../../../middleware/validateBody.js';
 import { salesTargetBodySchema } from '../../../../schemas/request-body.schemas.js';
-import { currentMonthKey, SalesTargetService } from '../../../../services/sales-target.service.js';
+import { currentMonthKey,SalesTargetService } from '../../../../services/sales-target.service.js';
 import { requireTenantId } from '../../../../utils/context.js';
 
 const salesTargetService = new SalesTargetService(prisma);

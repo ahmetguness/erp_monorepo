@@ -1,75 +1,16 @@
-import { Context } from 'hono';
 import { randomUUID } from 'crypto';
-import { basename, extname } from 'path';
+import { Context } from 'hono';
+import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
-import { NotFoundError, ValidationError } from '../../../../../errors/index.js';
-import { getValidatedBody } from '../../../../../middleware/validateBody.js';
 import {
-  businessRuleBodySchema,
-  moduleSettingBodySchema,
-  tenantSettingBodySchema,
-} from '../../../../../schemas/request-body.schemas.js';
-import { requireTenantId, requireUserId, requireParam } from '../../../../../utils/context.js';
-import { createAuditLog, getRequestMeta } from '../../../../../utils/audit.js';
-import { AuditAction, EntityType, Plan } from '@prisma/client';
-import { bufferToArrayBuffer, storageService } from '../../../../../services/storage.service.js';
-import { BusinessRulesService } from '../../../../../services/business-rules.service.js';
-import { getTenantSecurityScore } from '../../../../../services/tenant-security.service.js';
-import {
-  getSecurityHardeningSnapshot,
-  listSecuritySessions,
-  revokeSecuritySession,
+getSecurityHardeningSnapshot,
+listSecuritySessions,
+revokeSecuritySession,
 } from '../../../../../services/security-hardening.service.js';
-import {
-  exportRecentAuditLogsToSiem,
-  getSiemSettings,
-  SIEM_SETTING_KEYS,
-  saveSiemSettings,
-  type SiemDestinationType,
-  type SiemSeverity,
-} from '../../../../../services/siem-export.service.js';
-import {
-  buildDataRetentionPreview,
-  DATA_RETENTION_AUDIT_META,
-  DATA_RETENTION_SETTING_KEYS,
-  dataRetentionAuditValues,
-  getDataRetentionSettings,
-  normalizeRetentionRules,
-  recordDataRetentionDryRun,
-  saveDataRetentionSettings,
-} from '../../../../../services/data-retention-policy.service.js';
-import {
-  buildDeploymentOperationsSnapshot,
-  DEPLOYMENT_OPERATIONS_SETTING_KEYS,
-  getDeploymentOperationsSettings,
-  recordBackupSimulation,
-  saveDeploymentOperationsSettings,
-  type BackupFrequency,
-} from '../../../../../services/deployment-operations.service.js';
-import {
-  AUDIT_LOG_FULL_SETTING_KEYS,
-  getAuditLogFullStatus as buildAuditLogFullStatus,
-  setAuditImmutableEnabled,
-} from '../../../../../services/audit-log-full.service.js';
-import {
-  canUseAuditLogSiem,
-  resolveAuditLogPolicy,
-  type AuditLogPolicy,
-} from '../../../../../services/audit-log-policy.service.js';
-import {
-  BI_CONNECTOR_SETTING_KEYS,
-  BI_TOKEN_SETTING_KEY,
-  getBiConnectorSettings,
-  recordBiScheduleSimulation,
-  saveBiConnectorSettings,
-} from '../../../../../services/bi-connector.service.js';
-import {
-  DefaultPolicyEngineService,
-  defaultPolicyDefinitions,
-  type DefaultPolicyUpdateInput,
-} from '../../../../../services/default-policy-engine.service.js';
-import { TENANT_LOGO_SETTING_KEY, LEGACY_TENANT_LOGO_SETTING_KEY, TENANT_LOGO_SETTING_KEYS, INTERNAL_TENANT_SETTING_KEYS, MAX_LOGO_SIZE, ALLOWED_LOGO_MIME_TYPES, ALLOWED_LOGO_EXTENSIONS, businessRulesService, isJsonObject, readJsonObject, readBoolean, readString, readPositiveNumber, readPositiveInteger, readSiemDestinationType, readSiemSeverity, readBackupFrequency, isDefaultPolicyStorageKey, readDefaultPolicyUpdates, assertEnterpriseTenant, assertAuditLogFullPolicy, isInternalTenantSettingKey, sanitizeFileName, validateLogoFile } from './shared.js';
-import type { JsonObject } from './shared.js';
+import { getTenantSecurityScore } from '../../../../../services/tenant-security.service.js';
+import { getRequestMeta } from '../../../../../utils/audit.js';
+import { requireTenantId,requireUserId } from '../../../../../utils/context.js';
+import { readBoolean,readJsonObject,readPositiveNumber,readString } from './shared.js';
 
 export const securitySettingsController = {
   async securityScore(c: Context): Promise<Response> {
