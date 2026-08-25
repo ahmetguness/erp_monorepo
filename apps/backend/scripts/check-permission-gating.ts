@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { ACCESS_POLICIES } from '@repo/types/plans';
 import { listPermissionMatrix, type PermissionMatrixEntry } from '../src/services/permission-simulator.service';
-import { CheckIssue, joinRoutePath, normalizePath, readText, reportIssues, toProjectPath } from './lib/static-checks';
+import { CheckIssue, joinRoutePath, normalizePath, readText, reportIssues, toProjectPath, walkFiles } from './lib/static-checks';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 type PlanName = 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
@@ -157,6 +157,37 @@ function extractBackendRouteManifest(): BackendRouteGate[] {
   }
 
   routes.push(...extractRoutesFromFile(indexText, 'tenantApi', '/api', 'src/index.ts'));
+
+  for (const moduleFile of walkFiles(join(backendSrc, 'modules'), ['.ts'])) {
+    if (moduleFile.includes(`${join('modules', 'http-surfaces')}`)) continue;
+    const moduleText = readText(moduleFile);
+    const importedFiles = new Map<string, string>();
+    const importRegex = /import\s+\{\s*([A-Za-z0-9_,\s]+)\s*\}\s+from\s+'([^']+)'/g;
+    let importMatch: RegExpExecArray | null;
+    while ((importMatch = importRegex.exec(moduleText)) !== null) {
+      const sourcePath = importMatch[2];
+      if (!sourcePath.startsWith('.')) continue;
+      const absoluteSource = resolve(dirname(moduleFile), sourcePath.replace(/\.js$/, '.ts'));
+      for (const name of importMatch[1].split(',').map((entry) => entry.trim()).filter(Boolean)) {
+        importedFiles.set(name, absoluteSource);
+      }
+    }
+
+    const mountRegex = /app\.route\('([^']+)',\s*([A-Za-z0-9_]+)\)/g;
+    let mountMatch: RegExpExecArray | null;
+    while ((mountMatch = mountRegex.exec(moduleText)) !== null) {
+      const routeVar = mountMatch[2];
+      const routeFile = importedFiles.get(routeVar);
+      if (!routeFile || !existsSync(routeFile)) continue;
+      routes.push(...extractRoutesFromFile(
+        readText(routeFile),
+        routeVar,
+        joinRoutePath('/api', mountMatch[1]),
+        toProjectPath(routeFile),
+      ));
+    }
+  }
+
   return routes;
 }
 

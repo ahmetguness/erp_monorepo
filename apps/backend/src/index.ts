@@ -5,84 +5,13 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { prisma } from './lib/prisma';
 import { logger, printBanner } from './lib/logger';
-import { userRoutes } from './routes/user.routes';
-import { productRoutes } from './routes/product.routes';
-import { warehouseRoutes } from './routes/warehouse.routes';
-import { contactRoutes } from './routes/contact.routes';
-import { invoiceRoutes } from './routes/invoice.routes';
-import { accountingRoutes } from './routes/accounting.routes';
-import { reportingRoutes } from './routes/reporting.routes';
-import { masterDataRoutes } from './routes/master-data.routes';
-import { stockRoutes } from './routes/stock.routes';
-import { salesOrderRoutes } from './routes/sales-order.routes';
-import { salesTargetRoutes } from './routes/sales-target.routes';
-import { purchaseOrderRoutes } from './routes/purchase-order.routes';
-import { paymentRoutes } from './routes/payment.routes';
-import { authRoutes } from './routes/auth.routes';
-import { settingsRoutes } from './routes/settings.routes';
-import { starterHealthRoutes } from './routes/starter-health.routes';
-import { starterCsvImportRoutes } from './routes/starter-csv-import.routes';
-import { planUsageRoutes } from './routes/plan-usage.routes';
-import { featureRoutes } from './routes/feature.routes';
-import { notificationRoutes } from './routes/notification.routes';
-import { collectionReminderRoutes } from './routes/collection-reminder.routes';
-import { taskRoutes } from './routes/task.routes';
-import { searchRoutes } from './routes/search.routes';
-import { dataExchangeRoutes } from './routes/data-exchange.routes';
-import { intelligenceRoutes } from './routes/intelligence.routes';
-import { operationsRoutes } from './routes/operations.routes';
-import { integrityRoutes } from './routes/integrity.routes';
-import { financialAutonomyRoutes } from './routes/financial-autonomy.routes';
-import { procurementAutonomyRoutes } from './routes/procurement-autonomy.routes';
-import { productionAutonomyRoutes } from './routes/production-autonomy.routes';
-import { marketplacePricingRoutes } from './routes/marketplace-pricing.routes';
-import { agentCommandRoutes } from './routes/agent-command.routes';
-import { automationRuleRoutes } from './routes/automation-rule.routes';
-import { auditLogRoutes } from './routes/audit-log.routes';
-import { attachmentRoutes } from './routes/attachment.routes';
-import { CurrencyRatesController } from './controllers/currency-rates.controller';
-import { adminRoutes } from './routes/admin.routes';
 import { requireAuth } from './middleware/requireAuth';
-import { requirePermission } from './middleware/requirePermission';
 import { csrfProtection } from './middleware/csrfProtection';
 import { securityHeaders } from './middleware/securityHeaders';
 import { validateJsonRequestBody } from './middleware/validateBody';
 import { BaseError, ValidationError } from './errors';
 
 // Professional Plan Route Imports
-import { apiKeyRoutes } from './routes/api-key.routes';
-import { approvalRoutes } from './routes/approval.routes';
-import { deliveryNoteRoutes } from './routes/delivery-note.routes';
-import { eDocumentRoutes } from './routes/e-document.routes';
-import { bankTransactionRoutes } from './routes/bank-transaction.routes';
-import { checkPromissoryRoutes } from './routes/check-promissory.routes';
-import { reconciliationRoutes } from './routes/reconciliation.routes';
-import { stockValuationRoutes } from './routes/stock-valuation.routes';
-import { inventoryReservationRoutes } from './routes/inventory-reservation.routes';
-import { productBatchRoutes } from './routes/product-batch.routes';
-import { lotSerialRoutes } from './routes/lot-serial.routes';
-import { bulkOperationRoutes } from './routes/bulk-operation.routes';
-import { roleRoutes } from './routes/role.routes';
-import { externalRoutes } from './routes/external.routes';
-import { productionRoutes } from './routes/production.routes';
-import { serviceRoutes } from './routes/service.routes';
-import { marketplaceRoutes } from './routes/marketplace.routes';
-import { hrRoutes } from './routes/hr.routes';
-import { payrollRoutes } from './routes/payroll.routes';
-import { enterpriseRoutes } from './routes/enterprise.routes';
-import { mailRoutes } from './routes/mail.routes';
-import { scimRoutes } from './routes/scim.routes.js';
-import { biRoutes } from './routes/bi.routes.js';
-import { portalRoutes } from './routes/portal.routes.js';
-import { demoPublicRoutes, demoAdminRoutes } from './routes/demo.routes';
-import { invitationRoutes, invitationPublicRoutes } from './routes/invitation.routes';
-import { SetPasswordController } from './controllers/set-password.controller';
-import { chatRoutes } from './routes/chat.routes';
-import { publicChatRoutes } from './routes/public-chat.routes';
-import { activityRoutes } from './routes/activity.routes';
-import { savedViewRoutes } from './routes/saved-view.routes';
-import { domainEventRoutes } from './routes/domain-event.routes';
-import { TrendyolWebhookController } from './controllers/trendyol-webhook.controller';
 import { TrendyolWorker } from './services/trendyol-worker.service';
 import { DomainEventOutboxWorker } from './services/domain-event-outbox-worker.service';
 import { startMarketplaceMocks } from './mocks';
@@ -91,6 +20,13 @@ import { recordHttpRequest, recordUnhandledError, runWithObservabilityContext } 
 import { globalRateLimit } from './middleware/globalRateLimit';
 import { assertValidStartupEnv } from './config/env';
 import { tenantIsolationBypass } from './lib/tenant-isolation-context';
+import { tenantModules } from './modules/index.js';
+import {
+  registerAdminHttpSurface,
+  registerExternalHttpSurface,
+  registerProgrammaticHttpSurface,
+  registerPublicHttpSurface,
+} from './modules/http-surfaces/index.js';
 
 // ── Startup env var kontrolü ─────────────────
 assertValidStartupEnv();
@@ -224,109 +160,29 @@ app.use('/api/portal/v1/*', tenantIsolationBypass('customer-portal'));
 app.use('/api/auth/*', tenantIsolationBypass('auth-bootstrap'));
 app.use('/api/admin/*', tenantIsolationBypass('admin-console'));
 
-app.post('/api/public/trendyol/webhook/:integrationId', TrendyolWebhookController.handle);
-app.post('/api/public/marketplace/webhook/:integrationId', TrendyolWebhookController.handle);
-
-// SCIM v2 User provisioning (mounted before CSRF protection as it is programmatic API)
-app.route('/api/scim/v2', scimRoutes);
-
-// BI Data Warehouse Connector endpoints (mounted before CSRF protection)
-app.route('/api/bi/v1', biRoutes);
-
-// Customer Portal endpoints (mounted before CSRF protection)
-app.route('/api/portal/v1', portalRoutes);
+registerProgrammaticHttpSurface(app);
 
 // ── CSRF koruması (state-changing isteklerde Origin/Referer doğrulaması) ──
 app.use('*', csrfProtection);
 
 // ── Auth (public) ────────────────────────────
-app.route('/api/auth', authRoutes);
+registerPublicHttpSurface(app);
 
 // ── Public routes (JWT gerektirmez) ──────────
-app.route('/api/public', demoPublicRoutes);
-app.route('/api/public', invitationPublicRoutes);
-app.route('/api/public', publicChatRoutes);
-app.post('/api/public/set-password', SetPasswordController.setPassword);
-app.post('/api/public/set-password/validate', SetPasswordController.validateToken);
 
 // ── Admin Panel ──────────────────────────────
-app.route('/api/admin', adminRoutes);
-app.route('/api/admin', demoAdminRoutes);
+registerAdminHttpSurface(app);
 
 // ── Tenant Routes (JWT protected) ────────────
 const tenantApi = new Hono();
 tenantApi.use('*', requireAuth);
 
-// Starter Plan Routes (tüm planlara açık)
-tenantApi.route('/users', userRoutes);
-tenantApi.route('/products', productRoutes);
-tenantApi.route('/warehouses', warehouseRoutes);
-tenantApi.route('/contacts', contactRoutes);
-tenantApi.route('/invoices', invoiceRoutes);
-tenantApi.route('/sales-orders', salesOrderRoutes);
-tenantApi.route('/sales-targets', salesTargetRoutes);
-tenantApi.route('/purchase-orders', purchaseOrderRoutes);
-tenantApi.route('/accounting', accountingRoutes);
-tenantApi.route('/payments', paymentRoutes);
-tenantApi.route('/stock', stockRoutes);
-tenantApi.route('/master', masterDataRoutes);
-tenantApi.route('/reports', reportingRoutes);
-tenantApi.route('/settings', settingsRoutes);
-tenantApi.route('/starter-health', starterHealthRoutes);
-tenantApi.route('/starter-import', starterCsvImportRoutes);
-tenantApi.route('/plan-usage', planUsageRoutes);
-tenantApi.route('/features', featureRoutes);
-tenantApi.route('/collection-reminders', collectionReminderRoutes);
-tenantApi.route('/notifications', notificationRoutes);
-tenantApi.route('/tasks', taskRoutes);
-tenantApi.route('/search', searchRoutes);
-tenantApi.route('/data-exchange', dataExchangeRoutes);
-tenantApi.route('/intelligence', intelligenceRoutes);
-tenantApi.route('/operations', operationsRoutes);
-tenantApi.route('/integrity', integrityRoutes);
-tenantApi.route('/financial-autonomy', financialAutonomyRoutes);
-tenantApi.route('/procurement-autonomy', procurementAutonomyRoutes);
-tenantApi.route('/production-autonomy', productionAutonomyRoutes);
-tenantApi.route('/marketplace-pricing', marketplacePricingRoutes);
-tenantApi.route('/agent-command', agentCommandRoutes);
-tenantApi.route('/automation-rules', automationRuleRoutes);
-tenantApi.route('/audit-logs', auditLogRoutes);
-tenantApi.route('/activity', activityRoutes);
-tenantApi.route('/saved-views', savedViewRoutes);
-tenantApi.route('/domain-events', domainEventRoutes);
-tenantApi.route('/attachments', attachmentRoutes);
-tenantApi.route('/invitations', invitationRoutes);
-tenantApi.get('/currency-rates/tcmb', requirePermission('settings', 'READ'), CurrencyRatesController.getTcmbRates);
-tenantApi.get('/currency-rates', requirePermission('settings', 'READ'), CurrencyRatesController.listRates);
-tenantApi.post('/currency-rates', requirePermission('settings', 'UPDATE'), CurrencyRatesController.createRate);
-
-// Professional Plan Routes
-tenantApi.route('/api-keys', apiKeyRoutes);
-tenantApi.route('/approvals', approvalRoutes);
-tenantApi.route('/delivery-notes', deliveryNoteRoutes);
-tenantApi.route('/e-documents', eDocumentRoutes);
-tenantApi.route('/bank-transactions', bankTransactionRoutes);
-tenantApi.route('/check-promissory', checkPromissoryRoutes);
-tenantApi.route('/reconciliations', reconciliationRoutes);
-tenantApi.route('/stock-valuations', stockValuationRoutes);
-tenantApi.route('/inventory-reservations', inventoryReservationRoutes);
-tenantApi.route('/product-batches', productBatchRoutes);
-tenantApi.route('/lot-serials', lotSerialRoutes);
-tenantApi.route('/bulk-operations', bulkOperationRoutes);
-tenantApi.route('/roles', roleRoutes);
-
-// Enterprise Plan Routes
-tenantApi.route('/production', productionRoutes);
-tenantApi.route('/service', serviceRoutes);
-tenantApi.route('/marketplace', marketplaceRoutes);
-tenantApi.route('/hr', hrRoutes);
-tenantApi.route('/payroll', payrollRoutes);
-tenantApi.route('/enterprise', enterpriseRoutes);
-tenantApi.route('/mail', mailRoutes);
-tenantApi.route('/chat', chatRoutes);
+for (const module of tenantModules) {
+  module.register(tenantApi);
+}
 
 // ── External API (API Key auth) ──────────────
-app.route('/api/external', externalRoutes);
+registerExternalHttpSurface(app);
 
 // Mount tenant routes under /api (after more specific routes)
 app.route('/api', tenantApi);

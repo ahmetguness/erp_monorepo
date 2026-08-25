@@ -121,6 +121,39 @@ function checkBackendNaming(): CheckIssue[] {
   return issues;
 }
 
+function checkModuleBoundaries(): CheckIssue[] {
+  const issues: CheckIssue[] = [];
+  const backendSource = join(repoRoot, 'apps/backend/src');
+  const bootstrapPath = join(backendSource, 'index.ts');
+  const bootstrapSource = readFileSync(bootstrapPath, 'utf8');
+
+  if (/from\s+['"]\.\/(routes|controllers)\//.test(bootstrapSource)) {
+    issues.push({
+      file: 'apps/backend/src/index.ts',
+      message: 'bootstrap must depend on module public APIs, not route/controller implementations',
+    });
+  }
+
+  const modulesRoot = join(backendSource, 'modules');
+  for (const moduleName of readdirSync(modulesRoot)) {
+    const modulePath = join(modulesRoot, moduleName);
+    if (!statSync(modulePath).isDirectory() || moduleName === 'shared') continue;
+
+    for (const file of walkSourceFiles(modulePath)) {
+      const source = readFileSync(file, 'utf8');
+      const crossModuleImport = /from\s+['"]\.\.\/(?!shared\/)([^./][^/]*)\//g;
+      for (const match of source.matchAll(crossModuleImport)) {
+        issues.push({
+          file: toRepoPath(file),
+          message: `module may not import another module's internals (${match[1]}); use its public API`,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
 function reportLargeFiles(files: readonly string[]): CheckIssue[] {
   const largeFiles = files
     .map((file) => ({ file: toRepoPath(file), lines: readFileSync(file, 'utf8').split(/\r?\n/).length }))
@@ -172,6 +205,7 @@ function main(): void {
     ...checkTypeSafety(sourceFiles),
     ...checkActiveAllowlistEntries(sourceFiles),
     ...checkBackendNaming(),
+    ...checkModuleBoundaries(),
     ...reportLargeFiles(sourceFiles),
     ...checkGeneratedOrCacheChurn(),
   ];

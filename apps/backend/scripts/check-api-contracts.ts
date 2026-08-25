@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import {
   CheckIssue,
   joinRoutePath,
@@ -440,6 +440,47 @@ function extractBackendRoutes(): BackendRoute[] {
         method: match[1].toUpperCase() as HttpMethod,
         path: joinRoutePath(base, match[2]),
       });
+    }
+  }
+
+  const moduleFiles = walkFiles(join(backendSrc, 'modules'), ['.ts']);
+  for (const moduleFile of moduleFiles) {
+    const moduleText = readText(moduleFile);
+    const importedFiles = new Map<string, string>();
+    const importRegex = /import\s+\{\s*([A-Za-z0-9_,\s]+)\s*\}\s+from\s+'([^']+)'/g;
+    let importMatch: RegExpExecArray | null;
+    while ((importMatch = importRegex.exec(moduleText)) !== null) {
+      const sourcePath = importMatch[2];
+      if (!sourcePath.startsWith('.')) continue;
+      const absoluteSource = resolve(dirname(moduleFile), sourcePath.replace(/\.js$/, '.ts'));
+      for (const name of importMatch[1].split(',').map((entry) => entry.trim()).filter(Boolean)) {
+        importedFiles.set(name, absoluteSource);
+      }
+    }
+
+    const isAbsoluteSurface = moduleFile.includes(`${join('modules', 'http-surfaces')}`);
+    const moduleBase = isAbsoluteSurface ? '' : '/api';
+    const mountRegex = /app\.route\('([^']+)',\s*([A-Za-z0-9_]+)\)/g;
+    let mountMatch: RegExpExecArray | null;
+    while ((mountMatch = mountRegex.exec(moduleText)) !== null) {
+      const routeVar = mountMatch[2];
+      const routeFile = importedFiles.get(routeVar);
+      if (!routeFile || !existsSync(routeFile)) continue;
+      const routeText = readText(routeFile);
+      const routeRegex = new RegExp(`${routeVar}\\.(get|post|put|patch|delete)\\(\\s*'([^']+)'`, 'g');
+      let routeMatch: RegExpExecArray | null;
+      while ((routeMatch = routeRegex.exec(routeText)) !== null) {
+        routes.push({
+          method: routeMatch[1].toUpperCase() as HttpMethod,
+          path: joinRoutePath(joinRoutePath(moduleBase, mountMatch[1]), routeMatch[2]),
+        });
+      }
+    }
+
+    const directRegex = /app\.(get|post|put|patch|delete)\('([^']+)'/g;
+    let directMatch: RegExpExecArray | null;
+    while ((directMatch = directRegex.exec(moduleText)) !== null) {
+      routes.push({ method: directMatch[1].toUpperCase() as HttpMethod, path: normalizePath(directMatch[2]) });
     }
   }
 

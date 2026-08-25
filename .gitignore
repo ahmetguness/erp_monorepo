@@ -12,7 +12,11 @@ rapor.md
 rapor2.md
 rapor3.md
 a.txt
+a.md
 backend-schema.dbml
+
+# Node.js dependencies
+node_modules/
 
 # Local environment files
 .env
