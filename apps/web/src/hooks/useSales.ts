@@ -9,7 +9,7 @@ import {
   getInvoices, getInvoiceById, getInvoiceHistory, createInvoice, updateInvoice, cancelInvoice, recomputeInvoiceStatuses,
   type ListParams, type CreateSalesQuoteDTO, type CreateSalesOrderDTO,
   type CreateInvoiceDTO, type FulfillSalesOrderDTO, type OrderStatus, type InvoiceStatus,
-} from '@/services/sales.service';
+} from '@/features/sales/api';
 
 const QUOTE_KEYS = {
   all: ['quotes'] as const,

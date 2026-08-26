@@ -6,6 +6,7 @@ import { createPayrollAccountingVoucher,generateBankPaymentFile,readRequiredReas
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId } from '../../../../utils/context.js';
 import { getPaginationParams } from '../../../../utils/pagination.js';
+import { workforceApplication } from '../../composition.js';
 
 // ─────────────────────────────────────────────
 // Payroll Controller — Bordro CRUD + toplu oluşturma
@@ -15,45 +16,22 @@ export const PayrollController = {
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const { page, limit, skip } = getPaginationParams(c, 20);
+    const { page, limit } = getPaginationParams(c, 20);
     const period = c.req.query('period');
     const employeeId = c.req.query('employeeId');
 
-    const where = {
-      tenantId, deletedAt: null,
-      ...(period && { period }),
-      ...(employeeId && { employeeId }),
-    };
-
-    const [total, data] = await prisma.$transaction([
-      prisma.payroll.count({ where }),
-      prisma.payroll.findMany({
-        where,
-        include: {
-          employee: { select: { id: true, firstName: true, lastName: true, department: true, position: true } },
-          items: true,
-        },
-        orderBy: [{ period: 'desc' }, { employee: { lastName: 'asc' } }],
-        skip: skip,
-        take: limit,
-      }),
-    ]);
-
-    return c.json({ data, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
+    return c.json(await workforceApplication.payrollQueries.list(
+      tenantId,
+      { period, employeeId },
+      { page, pageSize: limit },
+    ));
   },
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const id = requireParam(c, 'id');
 
-    const payroll = await prisma.payroll.findFirst({
-      where: { id, tenantId, deletedAt: null },
-      include: {
-        employee: { select: { id: true, firstName: true, lastName: true, department: true, position: true, salary: true } },
-        items: { orderBy: { isDeduction: 'asc' } },
-      },
-    });
-    if (!payroll) return c.json(new NotFoundError('Bordro', id).toJSON(), 404);
+    const payroll = await workforceApplication.payrollQueries.getById(tenantId, id);
     return c.json({ data: payroll });
   },
 

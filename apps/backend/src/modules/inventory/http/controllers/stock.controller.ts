@@ -24,6 +24,7 @@ import { StockAlertService } from '../../../../services/stock-alert.service.js';
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
 import { generateDocumentNumber } from '../../../../utils/generate-number.js';
+import { inventoryApplication } from '../../composition.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -66,30 +67,11 @@ export const StockController = {
 
     const query = c.req.query() as StockLevelListQuery;
 
-    const stockLevels = await prisma.stockLevel.findMany({
-      where: {
-        tenantId,
-        ...(query.warehouseId && { warehouseId: query.warehouseId }),
-        ...(query.productId && { productId: query.productId }),
-      },
-      include: {
-        product: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            minStockLevel: true,
-            unit: { select: { code: true } },
-          },
-        },
-        warehouse: { select: { id: true, name: true, code: true } },
-      },
-      orderBy: [{ warehouse: { name: 'asc' } }, { product: { name: 'asc' } }],
+    const result = await inventoryApplication.stockLevelQueries.list(tenantId, {
+      warehouseId: query.warehouseId,
+      productId: query.productId,
+      belowMinimum: query.belowMin === 'true',
     });
-
-    const result = query.belowMin === 'true'
-      ? stockLevels.filter((sl) => Number(sl.quantity) < Number(sl.product.minStockLevel))
-      : stockLevels;
 
     return c.json({ data: result });
   },

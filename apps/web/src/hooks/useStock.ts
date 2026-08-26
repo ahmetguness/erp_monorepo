@@ -11,7 +11,7 @@ import {
   cleanupExpiredReservations,
   type StockLevelParams, type StockMovementParams, type CreateManualMovementDTO,
   type CreateStockCountDTO, type CreateWarehouseDTO, type CreateLocationDTO, type TransferStockDTO,
-} from '@/services/stock.service';
+} from '@/features/inventory/api';
 
 export const STOCK_KEYS = {
   warehouses: ['warehouses'] as const,

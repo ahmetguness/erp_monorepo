@@ -5,14 +5,12 @@ import { getValidatedBody } from '../../../../middleware/validateBody.js';
 import { cancelReasonBodySchema,createPaymentBodySchema } from '../../../../schemas/request-body.schemas.js';
 import { readRequiredReason,reversePayment } from '../../../../services/financial/index.js';
 import {
-createPayment,
-getPaymentById,
-listPayments,
 type CreatePaymentInput,
-type ListPaymentsInput,
 } from '../../../../services/payment.service.js';
 import { getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId } from '../../../../utils/context.js';
+import { financeApplication } from '../../composition.js';
+import type { ListPaymentsQuery } from '../../application/queries/payment.queries.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -32,7 +30,7 @@ interface CreateCashAccountDTO {
 }
 
 type CreatePaymentDTO = CreatePaymentInput;
-type PaymentListQuery = ListPaymentsInput;
+type PaymentListQuery = ListPaymentsQuery;
 // ─────────────────────────────────────────────
 // Payment Controller
 // BankAccount, CashAccount, Payment, PaymentAllocation
@@ -186,7 +184,7 @@ export const PaymentController = {
       dateTo: c.req.query('dateTo'),
     };
 
-    return c.json(await listPayments(tenantId, query));
+    return c.json(await financeApplication.paymentQueries.list(tenantId, query));
   },
 
   async createPayment(c: Context): Promise<Response> {
@@ -195,7 +193,7 @@ export const PaymentController = {
     const { ipAddress, userAgent } = getRequestMeta(c);
     const body: CreatePaymentDTO = getValidatedBody(c, createPaymentBodySchema);
 
-    const payment = await createPayment({
+    const payment = await financeApplication.createPayment({
       tenantId,
       userId,
       input: body,
@@ -210,7 +208,7 @@ export const PaymentController = {
     const paymentId = c.req.param('id');
     if (!paymentId) throw new ValidationError('id alani zorunludur.');
 
-    return c.json({ data: await getPaymentById(tenantId, paymentId) });
+    return c.json({ data: await financeApplication.paymentQueries.getById(tenantId, paymentId) });
   },
 
   async cancelPayment(c: Context): Promise<Response> {

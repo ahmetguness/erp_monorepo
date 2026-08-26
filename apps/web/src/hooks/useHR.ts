@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
-import * as svc from '@/services/hr.service';
+import * as svc from '@/features/workforce/api';
 
 // ─── Employees ────────────────────────────────
 

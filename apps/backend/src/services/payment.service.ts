@@ -1,6 +1,5 @@
-import { AuditAction, EntityType, InvoiceType, PaymentMethod, PaymentStatus } from '@prisma/client';
-import { prisma } from '../lib/prisma';
-import { ValidationError, NotFoundError } from '../errors';
+import { AuditAction, EntityType, InvoiceType, PaymentMethod, PaymentStatus, type PrismaClient } from '@prisma/client';
+import { ValidationError } from '../errors';
 import { createEventContext, domainEvents } from '../domain-events';
 import { createAuditLog } from '../utils/audit.js';
 import { writePaymentAccountEntry } from '../utils/account-entry.js';
@@ -29,15 +28,6 @@ export interface CreatePaymentInput {
   idempotencyKey?: string;
   notes?: string;
   allocations?: PaymentAllocationInput[];
-}
-
-export interface ListPaymentsInput {
-  page?: string;
-  limit?: string;
-  contactId?: string;
-  status?: string;
-  dateFrom?: string;
-  dateTo?: string;
 }
 
 export interface RequestAuditMeta {
@@ -95,24 +85,6 @@ function parsePaymentDirection(value: unknown): PaymentDirection | undefined {
   throw new ValidationError('Gecersiz odeme yonu.');
 }
 
-function parsePaymentStatus(value: string | undefined): PaymentStatus | undefined {
-  if (!value) return undefined;
-  switch (value) {
-    case PaymentStatus.PENDING:
-      return PaymentStatus.PENDING;
-    case PaymentStatus.COMPLETED:
-      return PaymentStatus.COMPLETED;
-    case PaymentStatus.CANCELLED:
-      return PaymentStatus.CANCELLED;
-    case PaymentStatus.FAILED:
-      return PaymentStatus.FAILED;
-    case PaymentStatus.REFUNDED:
-      return PaymentStatus.REFUNDED;
-    default:
-      return undefined;
-  }
-}
-
 function parsePaymentDate(value: string): Date {
   const paymentDate = new Date(value);
   if (Number.isNaN(paymentDate.getTime())) throw new ValidationError('Gecersiz tarih.');
@@ -130,12 +102,6 @@ function parseAllocations(value: unknown): PaymentAllocationInput[] | undefined 
       amount: readRequiredNumber(item, 'amount'),
     };
   });
-}
-
-function parsePositiveInt(value: string | undefined, fallback: number, max: number): number {
-  const parsed = Number.parseInt(value ?? '', 10);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.min(max, Math.max(1, parsed));
 }
 
 function isReceivableInvoice(type: InvoiceType): boolean {
@@ -164,70 +130,9 @@ export function parseCreatePaymentInput(value: unknown): CreatePaymentInput {
   };
 }
 
-export async function listPayments(tenantId: string, input: ListPaymentsInput) {
-  const page = parsePositiveInt(input.page, 1, 10_000);
-  const pageSize = parsePositiveInt(input.limit, 20, 100);
-  const status = parsePaymentStatus(input.status);
-
-  const where = {
-    tenantId,
-    deletedAt: null,
-    ...(input.contactId && { contactId: input.contactId }),
-    ...(status && { status }),
-    ...(input.dateFrom || input.dateTo
-      ? {
-          date: {
-            ...(input.dateFrom && { gte: new Date(input.dateFrom) }),
-            ...(input.dateTo && { lte: new Date(input.dateTo) }),
-          },
-        }
-      : {}),
-  };
-
-  const [total, payments] = await prisma.$transaction([
-    prisma.payment.count({ where }),
-    prisma.payment.findMany({
-      where,
-      include: {
-        contact: { select: { id: true, name: true } },
-        bankAccount: { select: { id: true, name: true } },
-        cashAccount: { select: { id: true, name: true } },
-        allocations: {
-          include: { invoice: { select: { id: true, number: true, totalGross: true } } },
-        },
-      },
-      orderBy: { date: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-  ]);
-
-  return {
-    data: payments,
-    meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
-  };
-}
-
-export async function getPaymentById(tenantId: string, paymentId: string) {
-  const payment = await prisma.payment.findFirst({
-    where: { id: paymentId, tenantId, deletedAt: null },
-    include: {
-      contact: { select: { id: true, name: true } },
-      bankAccount: { select: { id: true, name: true } },
-      cashAccount: { select: { id: true, name: true } },
-      allocations: {
-        include: { invoice: { select: { id: true, number: true, totalGross: true } } },
-      },
-    },
-  });
-
-  if (!payment) throw new NotFoundError('Odeme', paymentId);
-  return payment;
-}
-
-async function validatePaymentRelations(tenantId: string, input: CreatePaymentInput): Promise<void> {
+async function validatePaymentRelations(db: PrismaClient, tenantId: string, input: CreatePaymentInput): Promise<void> {
   if (input.contactId) {
-    const contact = await prisma.contact.findFirst({
+    const contact = await db.contact.findFirst({
       where: { id: input.contactId, tenantId, deletedAt: null, isActive: true },
       select: { id: true },
     });
@@ -235,7 +140,7 @@ async function validatePaymentRelations(tenantId: string, input: CreatePaymentIn
   }
 
   if (input.bankAccountId) {
-    const bankAccount = await prisma.bankAccount.findFirst({
+    const bankAccount = await db.bankAccount.findFirst({
       where: { id: input.bankAccountId, tenantId, deletedAt: null, isActive: true },
       select: { id: true },
     });
@@ -243,7 +148,7 @@ async function validatePaymentRelations(tenantId: string, input: CreatePaymentIn
   }
 
   if (input.cashAccountId) {
-    const cashAccount = await prisma.cashAccount.findFirst({
+    const cashAccount = await db.cashAccount.findFirst({
       where: { id: input.cashAccountId, tenantId, deletedAt: null, isActive: true },
       select: { id: true },
     });
@@ -252,6 +157,7 @@ async function validatePaymentRelations(tenantId: string, input: CreatePaymentIn
 }
 
 async function validatePaymentAllocations(
+  db: PrismaClient,
   tenantId: string,
   input: CreatePaymentInput,
   amount: number,
@@ -279,7 +185,7 @@ async function validatePaymentAllocations(
     throw new ValidationError(`Tahsisat toplami (${allocationTotal}) odeme tutarini (${amount}) asamaz.`);
   }
 
-  const invoices = await prisma.invoice.findMany({
+  const invoices = await db.invoice.findMany({
     where: { id: { in: invoiceIds }, tenantId, deletedAt: null },
     select: { id: true, contactId: true, type: true },
   });
@@ -306,7 +212,7 @@ export async function createPayment(options: {
   userId?: string | null;
   input: CreatePaymentInput;
   auditMeta?: RequestAuditMeta;
-}) {
+}, db: PrismaClient) {
   const amount = Number(options.input.amount);
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new ValidationError('Tutar 0dan buyuk olmalidir.');
@@ -317,7 +223,7 @@ export async function createPayment(options: {
   const idempotencyKey = options.input.idempotencyKey?.trim() || undefined;
 
   if (idempotencyKey) {
-    const existing = await prisma.payment.findUnique({
+    const existing = await db.payment.findUnique({
       where: {
         tenantId_idempotencyKey: {
           tenantId: options.tenantId,
@@ -336,11 +242,11 @@ export async function createPayment(options: {
     if (existing) return existing;
   }
 
-  await validatePaymentRelations(options.tenantId, options.input);
-  await validatePaymentAllocations(options.tenantId, options.input, amount, direction);
-  await assertAccountingPeriodOpen(prisma, options.tenantId, paymentDate, 'Odeme');
+  await validatePaymentRelations(db, options.tenantId, options.input);
+  await validatePaymentAllocations(db, options.tenantId, options.input, amount, direction);
+  await assertAccountingPeriodOpen(db, options.tenantId, paymentDate, 'Odeme');
 
-  const payment = await prisma.$transaction(async (tx) => {
+  const payment = await db.$transaction(async (tx) => {
     await assertPaymentAllocationsWithinInvoiceBalance(tx, options.tenantId, options.input.allocations ?? []);
 
     const newPayment = await tx.payment.create({
@@ -406,7 +312,7 @@ export async function createPayment(options: {
     return newPayment;
   });
 
-  await createAuditLog(prisma, {
+  await createAuditLog(db, {
     tenantId: options.tenantId,
     userId: options.userId,
     module: 'accounting',

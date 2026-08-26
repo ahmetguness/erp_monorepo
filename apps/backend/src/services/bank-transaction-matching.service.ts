@@ -710,7 +710,7 @@ export class BankTransactionMatchingService {
         notes: `Banka hareketinden otomatik olusturuldu: ${transaction.description ?? transaction.reference ?? transaction.id}`,
         allocations: [{ invoiceId: invoice.id, amount }],
       },
-    });
+    }, this.db);
 
     return payment.id;
   }

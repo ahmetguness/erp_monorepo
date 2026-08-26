@@ -14,7 +14,7 @@ import {
   type CreateJournalEntryDTO, type JournalEntryListParams, type RunPostingEngineDTO,
   type CreateBankAccountDTO, type UpdateBankAccountDTO, type CreateCashAccountDTO, type UpdateCashAccountDTO,
   type CreatePaymentDTO, type PaymentListParams, type AccountType,
-} from '@/services/accounting.service';
+} from '@/features/finance/api';
 
 const KEYS = {
   accounts: (p?: { type?: AccountType }) => ['accounting', 'accounts', p] as const,

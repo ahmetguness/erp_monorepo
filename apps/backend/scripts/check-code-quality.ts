@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { reportIssues, type CheckIssue } from './lib/static-checks.js';
 import { TYPE_SAFETY_BYPASS_ALLOWLIST } from './code-quality-allowlist.js';
 
@@ -208,6 +208,32 @@ function checkModuleBoundaries(): CheckIssue[] {
           message: `module may not import another module's internals (${importedModuleName}); use its public API`,
         });
       }
+    }
+  }
+
+  for (const file of walkSourceFiles(modulesRoot).filter((path) => path.includes(`${sep}application${sep}`))) {
+    const source = readFileSync(file, 'utf8');
+    if (/from\s+['"]@prisma\/client['"]|from\s+['"][^'"]*(?:lib\/prisma|infrastructure|\/http\/)[^'"]*['"]/.test(source)) {
+      issues.push({
+        file: toRepoPath(file),
+        message: 'application layer must depend on ports/domain types, not Prisma, infrastructure, or HTTP details',
+      });
+    }
+  }
+
+  const webFeatureBoundaries = [
+    ['apps/web/src/hooks/useAccounting.ts', '@/features/finance/api'],
+    ['apps/web/src/hooks/useStock.ts', '@/features/inventory/api'],
+    ['apps/web/src/hooks/useSales.ts', '@/features/sales/api'],
+    ['apps/web/src/hooks/useHR.ts', '@/features/workforce/api'],
+  ] as const;
+  for (const [relativePath, requiredImport] of webFeatureBoundaries) {
+    const source = readFileSync(join(repoRoot, relativePath), 'utf8');
+    if (!source.includes(requiredImport) || /from\s+['"]@\/services\//.test(source)) {
+      issues.push({
+        file: relativePath,
+        message: `critical-domain hooks must use the ${requiredImport} feature gateway`,
+      });
     }
   }
 

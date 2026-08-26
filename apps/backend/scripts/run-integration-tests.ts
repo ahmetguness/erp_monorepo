@@ -214,6 +214,8 @@ async function seedTenant(runId: string, suffix: 'a' | 'b') {
         AppModule.PURCHASING,
         AppModule.APPROVALS,
         AppModule.DOCUMENTS,
+        AppModule.HR,
+        AppModule.PAYROLL,
       ],
     },
   });
@@ -425,6 +427,21 @@ async function testSessionAuthenticationKeepsTenantScope(ctx: TestContext): Prom
     sessionToken(ctx.ownerAId, ctx.tenantAId, session.id),
   );
   assertStatus(result, 200, 'session dogrulamasi tenant scope icinde calismali');
+}
+
+async function testRepositoryBackedQueries(ctx: TestContext): Promise<void> {
+  const bearerToken = token(ctx.ownerAId, ctx.tenantAId);
+  const cases = [
+    ['/api/payments?limit=5', 'payment repository query'],
+    ['/api/stock/levels?belowMin=true', 'stock level repository query'],
+    ['/api/sales-orders/quotes?limit=5', 'sales quote repository query'],
+    ['/api/payroll?limit=5', 'payroll repository query'],
+  ] as const;
+
+  for (const [path, label] of cases) {
+    const result = await api('GET', path, bearerToken);
+    assertStatus(result, 200, `${label} calismali`);
+  }
 }
 
 async function testDataExchangeTenantIsolation(ctx: TestContext): Promise<void> {
@@ -989,6 +1006,8 @@ async function main(): Promise<void> {
     await testTenantIsolation(ctx);
     console.log('Integration: session authentication tenant scope');
     await testSessionAuthenticationKeepsTenantScope(ctx);
+    console.log('Integration: repository-backed critical queries');
+    await testRepositoryBackedQueries(ctx);
     console.log('Integration: data exchange tenant isolation');
     await testDataExchangeTenantIsolation(ctx);
     console.log('Integration: reporting tenant isolation');

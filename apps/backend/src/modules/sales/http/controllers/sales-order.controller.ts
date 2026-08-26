@@ -12,6 +12,7 @@ import { SalesFulfillmentService } from '../../../../services/sales-fulfillment.
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId } from '../../../../utils/context.js';
 import { generateDocumentNumber } from '../../../../utils/generate-number.js';
+import { salesApplication } from '../../composition.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -141,52 +142,17 @@ export const SalesOrderController = {
     const tenantId = requireTenantId(c);
 
     const query = c.req.query() as OrderListQuery;
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
-    const status = parseQuoteStatus(c.req.query('status'));
-    const search = query.search?.trim();
-
-    const where = {
-      tenantId,
-      deletedAt: null,
-      ...(status && { status }),
-      ...(query.contactId && { contactId: query.contactId }),
-      ...(search && {
-        OR: [
-          { number: { contains: search, mode: 'insensitive' as const } },
-          { contact: { name: { contains: search, mode: 'insensitive' as const } } },
-        ],
-      }),
-      ...(query.dateFrom || query.dateTo
-        ? { date: { ...(query.dateFrom && { gte: new Date(query.dateFrom) }), ...(query.dateTo && { lte: new Date(query.dateTo) }) } }
-        : {}),
-    };
-
-    const [total, quotes] = await prisma.$transaction([
-      prisma.salesQuote.count({ where }),
-      prisma.salesQuote.findMany({
-        where,
-        include: { contact: { select: { id: true, name: true } } },
-        orderBy: { date: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-    ]);
-
-    return c.json({ data: quotes, meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) } });
+    return c.json(await salesApplication.salesQuoteQueries.list(tenantId, {
+      ...query,
+      status: parseQuoteStatus(c.req.query('status')),
+    }));
   },
 
   async getQuoteById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const quoteId = c.req.param('id');
+    const quoteId = requireParam(c, 'id');
 
-    const quote = await prisma.salesQuote.findFirst({
-      where: { id: quoteId, tenantId, deletedAt: null },
-      include: {
-        contact: { select: { id: true, name: true, taxNumber: true, email: true } },
-        items: { include: { product: { select: { id: true, code: true, name: true } } } },
-      },
-    });
+    const quote = await salesApplication.salesQuoteQueries.getById(tenantId, quoteId);
 
     if (!quote) return c.json(new NotFoundError('Teklif', quoteId).toJSON(), 404);
     return c.json({ data: quote });
