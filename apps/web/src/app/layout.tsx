@@ -1,4 +1,4 @@
-import { Providers } from "@/lib/providers";
+import { AppProviders } from "@/bootstrap/providers/AppProviders";
 import { ToastContainer } from "@/components/ui/Toast";
 import "./globals.css";
 
@@ -28,7 +28,7 @@ export default function RootLayout({
       </head>
       <body className="font-sans relative text-slate-900 bg-white selection:bg-blue-50 selection:text-blue-900">
         <main id="main-content" role="main">
-          <Providers>{children}</Providers>
+          <AppProviders>{children}</AppProviders>
           <ToastContainer />
         </main>
       </body>

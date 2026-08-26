@@ -20,6 +20,8 @@ import { scanAndRecomputeInvoiceStatuses } from '../../../../services/financial/
 import { assertInvoiceStatusTransition,isComputedInvoiceStatus } from '../../../../services/financial/status-transition.service.js';
 import { reverseInvoiceAccountEntry,writeInvoiceAccountEntry } from '../../../../utils/account-entry.js';
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
+
+type InvoiceLineDTO = CreateInvoiceBody['lines'][number];
 import { requireTenantId } from '../../../../utils/context.js';
 import { generateDocumentNumber } from '../../../../utils/generate-number.js';
 

@@ -1,10 +1,12 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { recordSlowQuery } from '../services/observability.service.js';
-import { getTenantIsolationBypassReason } from './tenant-isolation-context.js';
+import { getTenantIsolationContext } from './tenant-isolation-context.js';
 
 declare global {
   var prisma: PrismaClient | undefined;
 }
+
+type UnknownRecord = Record<string, unknown>;
 
 const prismaLogLevels: Prisma.PrismaClientOptions['log'] =
   process.env.PRISMA_QUERY_LOG === 'true'
@@ -13,157 +15,108 @@ const prismaLogLevels: Prisma.PrismaClientOptions['log'] =
       ? ['error']
       : ['error', 'warn'];
 
-export const prisma =
-  globalThis.prisma ??
-  new PrismaClient({
-    log: prismaLogLevels,
-  });
+export const prisma = globalThis.prisma ?? new PrismaClient({ log: prismaLogLevels });
 
-const tenantScopedModels = new Set([
-  'TenantUser',
-  'Role',
-  'NumberSequence',
-  'TenantSetting',
-  'ModuleSetting',
-  'TenantFeatureOverride',
-  'ApiKey',
-  'AuditLog',
-  'AiRequestLog',
-  'Attachment',
-  'Notification',
-  'MailMessage',
-  'Task',
-  'AutomationRule',
-  'ApprovalFlow',
-  'ApprovalRequest',
-  'Unit',
-  'Category',
-  'TaxRate',
-  'Currency',
-  'CurrencyRate',
-  'Contact',
-  'AccountEntry',
-  'Product',
-  'Warehouse',
-  'Location',
-  'StockLevel',
-  'StockMovement',
-  'StockValuation',
-  'StockCount',
-  'StockCountItem',
-  'InventoryReservation',
-  'ProductBatch',
-  'LotSerialNumber',
-  'SalesQuote',
-  'SalesQuoteItem',
-  'SalesOrder',
-  'SalesOrderItem',
-  'SalesOrderHistory',
-  'PurchaseRequest',
-  'PurchaseRequestItem',
-  'PurchaseOrder',
-  'PurchaseOrderItem',
-  'PurchaseOrderHistory',
-  'DeliveryNote',
-  'DeliveryNoteItem',
-  'Invoice',
-  'InvoiceLine',
-  'InvoiceHistory',
-  'EDocument',
-  'BankAccount',
-  'CashAccount',
-  'BankTransaction',
-  'CheckPromissoryNote',
-  'Payment',
-  'PaymentAllocation',
-  'LedgerAccount',
-  'FiscalPeriod',
-  'JournalEntry',
-  'JournalEntryLine',
-  'Reconciliation',
-  'ReconciliationLine',
-  'Employee',
-  'LeaveRequest',
-  'Attendance',
-  'Payroll',
-  'PayrollItem',
-  'WorkCenter',
-  'BOM',
-  'BOMItem',
-  'RoutingOperation',
-  'WorkOrder',
-  'WorkOrderItem',
-  'WorkOrderOperation',
-  'WorkOrderHistory',
-  'WorkCenterCapacity',
-  'CustomerAsset',
-  'ServiceRequest',
-  'ServiceRequestItem',
-  'ServiceActivity',
-  'ServiceRequestHistory',
-  'MarketplaceIntegration',
-  'MarketplaceListing',
-  'MarketplaceOrder',
-  'MarketplaceOrderItem',
-  'MarketplaceSyncJob',
-  'MarketplaceWebhookEvent',
-  'MarketplaceListingSnapshot',
-  'SavedReport',
-  'SavedView',
-  'DomainEventOutbox',
-  'DemoRequest',
-  'Invitation',
-  'CollectionReminder',
+export const tenantScopedModels: ReadonlySet<Prisma.ModelName> = new Set(
+  Prisma.dmmf.datamodel.models
+    .filter((model) => model.fields.some((field) => field.name === 'tenantId'))
+    .map((model) => model.name as Prisma.ModelName),
+);
+
+const whereActions = new Set([
+  'findMany', 'findFirst', 'findFirstOrThrow', 'findUnique', 'findUniqueOrThrow',
+  'count', 'aggregate', 'groupBy', 'update', 'updateMany', 'delete', 'deleteMany', 'upsert',
 ]);
+const createActions = new Set(['create', 'createMany', 'upsert']);
 
-const tenantScopedReadActions = new Set(['findMany', 'findFirst', 'count', 'aggregate', 'groupBy']);
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
-function containsTenantId(value: unknown): boolean {
-  if (value === null || typeof value !== 'object') return false;
-  if (Array.isArray(value)) return value.some(containsTenantId);
+function hasTenantWherePredicate(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasTenantWherePredicate);
+  if (!isRecord(value)) return false;
   if (Object.prototype.hasOwnProperty.call(value, 'tenantId')) return true;
-
-  return Object.values(value).some(containsTenantId);
+  return ['AND', 'OR', 'NOT'].some((operator) => hasTenantWherePredicate(value[operator]));
 }
 
-function assertTenantScopedRead(params: Prisma.MiddlewareParams): void {
+function hasTenantCreateData(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0 && value.every(hasTenantCreateData);
+  return isRecord(value) && typeof value.tenantId === 'string' && value.tenantId.length > 0;
+}
+
+function requireArgs(params: Prisma.MiddlewareParams): UnknownRecord {
+  if (!isRecord(params.args)) params.args = {};
+  return params.args as UnknownRecord;
+}
+
+function scopeWhere(args: UnknownRecord, tenantId: string): void {
+  const existingWhere = args.where;
+  if (existingWhere !== undefined && !isRecord(existingWhere)) {
+    throw new Error('Tenant isolation violation: where must be an object.');
+  }
+  args.where = { ...(existingWhere ?? {}), tenantId };
+}
+
+function scopeCreateData(data: unknown, tenantId: string, model: string): unknown {
+  if (Array.isArray(data)) return data.map((entry) => scopeCreateData(entry, tenantId, model));
+  if (!isRecord(data)) throw new Error(`Tenant isolation violation: ${model} create data must be an object.`);
+  if (typeof data.tenantId === 'string' && data.tenantId !== tenantId) {
+    throw new Error(`Tenant isolation violation: ${model} create data targets another tenant.`);
+  }
+  return { ...data, tenantId };
+}
+
+function applyTenantScope(params: Prisma.MiddlewareParams, tenantId: string): void {
+  if (!params.model) return;
+  const args = requireArgs(params);
+  if (whereActions.has(params.action)) scopeWhere(args, tenantId);
+
+  if (params.action === 'upsert') {
+    args.create = scopeCreateData(args.create, tenantId, params.model);
+  } else if (createActions.has(params.action)) {
+    args.data = scopeCreateData(args.data, tenantId, params.model);
+  }
+}
+
+function assertExplicitTenantScope(params: Prisma.MiddlewareParams): void {
+  if (!params.model) return;
+  const args = requireArgs(params);
+  if (whereActions.has(params.action) && !hasTenantWherePredicate(args.where)) {
+    throw new Error(`Tenant isolation violation: ${params.model}.${params.action} requires tenantId in where.`);
+  }
+  if (params.action === 'upsert' && !hasTenantCreateData(args.create)) {
+    throw new Error(`Tenant isolation violation: ${params.model}.upsert requires tenantId in create data.`);
+  }
+  if (params.action !== 'upsert' && createActions.has(params.action) && !hasTenantCreateData(args.data)) {
+    throw new Error(`Tenant isolation violation: ${params.model}.${params.action} requires tenantId in data.`);
+  }
+}
+
+export function enforceTenantIsolation(params: Prisma.MiddlewareParams): void {
   if (!params.model || !tenantScopedModels.has(params.model)) return;
-  if (!tenantScopedReadActions.has(params.action)) return;
-  if (getTenantIsolationBypassReason()) return;
-  if (containsTenantId(params.args?.where)) return;
-
-  throw new Error(
-    `Tenant isolation violation: ${params.model}.${params.action} must include tenantId in where, or run inside an explicit tenant isolation bypass.`,
-  );
+  const context = getTenantIsolationContext();
+  if (context?.mode === 'bypass') return;
+  if (context?.mode === 'tenant') applyTenantScope(params, context.tenantId);
+  else assertExplicitTenantScope(params);
 }
 
-// Soft delete guard.
-// Prevent tenant hard deletes; Tenant rows must always use deletedAt.
 prisma.$use(async (params: Prisma.MiddlewareParams, next) => {
   const startedAt = Date.now();
-  assertTenantScopedRead(params);
+  enforceTenantIsolation(params);
 
   if (params.model === 'Tenant' && params.action === 'delete') {
     params.action = 'update';
-    params.args['data'] = { deletedAt: new Date() };
+    params.args.data = { deletedAt: new Date() };
   }
   if (params.model === 'Tenant' && params.action === 'deleteMany') {
     params.action = 'updateMany';
-    if (params.args.data !== undefined) {
-      params.args.data['deletedAt'] = new Date();
-    } else {
-      params.args['data'] = { deletedAt: new Date() };
-    }
+    params.args.data = { ...(isRecord(params.args.data) ? params.args.data : {}), deletedAt: new Date() };
   }
+
   const result = await next(params);
-  recordSlowQuery({
-    model: params.model ?? null,
-    action: params.action,
-    durationMs: Date.now() - startedAt,
-  });
+  recordSlowQuery({ model: params.model ?? null, action: params.action, durationMs: Date.now() - startedAt });
   return result;
 });
 
-if (process.env.NODE_ENV !== 'production') {
-  globalThis.prisma = prisma;
-}
+if (process.env.NODE_ENV !== 'production') globalThis.prisma = prisma;

@@ -25,6 +25,8 @@ import {
   WorkOrderStatus,
 } from '@prisma/client';
 import { prisma } from '../src/lib/prisma';
+import { runWithTenantScope } from '../src/lib/tenant-isolation-context';
+import { createSecuritySession } from '../src/services/security-hardening.service';
 import { createApiKeyHash } from '../src/utils/api-key-hash';
 
 interface TestContext {
@@ -117,6 +119,10 @@ function readSimulationGate(body: unknown, key: string): { allowed: boolean; rea
 
 function token(userId: string, tenantId: string): string {
   return jwt.sign({ userId, tenantId }, process.env.JWT_SECRET as string, { expiresIn: '10m' });
+}
+
+function sessionToken(userId: string, tenantId: string, sessionId: string): string {
+  return jwt.sign({ userId, tenantId, sessionId }, process.env.JWT_SECRET as string, { expiresIn: '10m' });
 }
 
 async function withTimeout<T>(label: string, task: Promise<T>): Promise<T> {
@@ -404,6 +410,21 @@ async function cleanup(): Promise<void> {
 async function testTenantIsolation(ctx: TestContext): Promise<void> {
   const result = await api('GET', `/api/contacts/${ctx.contactBId}`, token(ctx.ownerAId, ctx.tenantAId));
   assertStatus(result, 404, 'tenant A, tenant B carisini okuyamamali');
+}
+
+async function testSessionAuthenticationKeepsTenantScope(ctx: TestContext): Promise<void> {
+  const session = await runWithTenantScope(ctx.tenantAId, () => createSecuritySession(
+    prisma,
+    ctx.tenantAId,
+    ctx.ownerAId,
+    { ipAddress: '127.0.0.1', userAgent: 'integration-test' },
+  ));
+  const result = await api(
+    'GET',
+    '/api/invoices',
+    sessionToken(ctx.ownerAId, ctx.tenantAId, session.id),
+  );
+  assertStatus(result, 200, 'session dogrulamasi tenant scope icinde calismali');
 }
 
 async function testDataExchangeTenantIsolation(ctx: TestContext): Promise<void> {
@@ -966,6 +987,8 @@ async function main(): Promise<void> {
   try {
     console.log('Integration: tenant isolation');
     await testTenantIsolation(ctx);
+    console.log('Integration: session authentication tenant scope');
+    await testSessionAuthenticationKeepsTenantScope(ctx);
     console.log('Integration: data exchange tenant isolation');
     await testDataExchangeTenantIsolation(ctx);
     console.log('Integration: reporting tenant isolation');

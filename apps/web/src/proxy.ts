@@ -1,44 +1,22 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-
-// Public routes — no auth required
-const PUBLIC_PATHS = ['/', '/login', '/register', '/admin/login', '/set-password', '/invite', '/api-docs'];
+import { decideRouteAccess } from '@/bootstrap/routing/access-policy';
 
 export function proxy(request: NextRequest): NextResponse {
-  const { pathname } = request.nextUrl;
+  const decision = decideRouteAccess({
+    pathname: request.nextUrl.pathname,
+    search: request.nextUrl.search,
+    hasToken: Boolean(request.cookies.get('axon_token')?.value),
+    hasReturnTarget: request.nextUrl.searchParams.has('from'),
+  });
 
-  // Admin paths use their own auth (admin-token cookie) — don't interfere
-  const isAdminPath = pathname.startsWith('/admin');
-
-  // Allow public paths and static assets
-  const isPublic =
-    PUBLIC_PATHS.includes(pathname) ||
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
-    pathname.includes('.');
-
-  // Admin routes: only /admin/login is public, rest handled by admin panel layout
-  if (isAdminPath) {
-    return NextResponse.next();
-  }
-
-  // Read token from cookie (set on login) or skip
-  const token = request.cookies.get('axon_token')?.value;
-
-  // Unauthenticated → redirect to login
-  if (!isPublic && !token) {
+  if (decision.type === 'login') {
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('from', `${pathname}${request.nextUrl.search}`);
+    loginUrl.searchParams.set('from', decision.returnTo);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Already authenticated → redirect away from auth pages (/login, /register)
-  // EXCEPT when the user is explicitly arriving with a 'from' query parameter (e.g. redirected after an auth error or fresh login attempt)
-  if (token && (pathname === '/login' || pathname === '/register')) {
-    if (!request.nextUrl.searchParams.has('from')) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
-  }
+  if (decision.type === 'dashboard') return NextResponse.redirect(new URL('/dashboard', request.url));
 
   return NextResponse.next();
 }

@@ -8,7 +8,6 @@ import {
 createStockCountBodySchema,
 createStockMovementBodySchema,
 finalizeStockCountBodySchema,
-type CreateStockCountBody,
 } from '../../../../schemas/request-body.schemas.js';
 import {
 assertCanConsumeStock,

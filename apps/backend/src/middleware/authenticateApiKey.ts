@@ -5,7 +5,7 @@ import { ForbiddenError } from '../errors';
 import { createAuditLog, getRequestMeta } from '../utils/audit.js';
 import { createApiKeyHash, createLegacyApiKeyHash, isLegacyApiKeyHash } from '../utils/api-key-hash.js';
 import { rateLimiter } from '../lib/rateLimiter.js';
-import { runWithTenantIsolationBypass } from '../lib/tenant-isolation-context.js';
+import { runWithTenantIsolationBypass, runWithTenantScope } from '../lib/tenant-isolation-context.js';
 import { getExternalApiRateLimitPerMinute } from '../services/external-api-registry.service.js';
 import { isIpAllowedByAllowlist } from '../services/api-key-access.service.js';
 import { getTrustedClientIpOrNull } from '../utils/request-ip.js';
@@ -158,7 +158,7 @@ export function authenticateApiKey() {
 
     const shouldUpgradeLegacyHash = isLegacyApiKeyHash(rawKey, apiKey.keyHash);
     prisma.apiKey.update({
-      where: { id: apiKey.id },
+      where: { id: apiKey.id, tenantId: apiKey.tenantId },
       data: {
         lastUsedAt: new Date(),
         ...(shouldUpgradeLegacyHash ? { keyHash } : {}),
@@ -170,7 +170,7 @@ export function authenticateApiKey() {
     c.set('apiKeyScopes', apiKey.scopes);
     c.set('apiKeyClientIp', clientIp);
 
-    await next();
+    await runWithTenantScope(apiKey.tenantId, next);
   };
 }
 

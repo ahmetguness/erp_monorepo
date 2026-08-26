@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma';
 import { touchSecuritySession } from '../services/security-hardening.service.js';
 import { isSecureCookieEnabled } from '../lib/cookie-config.js';
 import { getTrustedClientIp, isIpv4InCidr } from '../utils/request-ip.js';
+import { runWithTenantScope } from '../lib/tenant-isolation-context.js';
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
@@ -37,12 +38,23 @@ export async function requireAuth(c: Context, next: Next) {
     return c.json(new ForbiddenError('Yetkilendirme gerekli.').toJSON(), 401);
   }
 
+  let payload: JwtPayload;
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    if (!isJwtPayload(payload)) {
+    const verifiedPayload = jwt.verify(token, JWT_SECRET);
+    if (!isJwtPayload(verifiedPayload)) {
       throw new Error('Invalid auth payload');
     }
+    payload = verifiedPayload;
+  } catch {
+    deleteCookie(c, 'axon_token', {
+      path: '/',
+      secure: isSecureCookieEnabled(),
+      sameSite: 'Lax',
+    });
+    return c.json(new ForbiddenError('Geçersiz veya süresi dolmuş token.').toJSON(), 401);
+  }
 
+  return runWithTenantScope(payload.tenantId, async () => {
     c.set('userId', payload.userId);
     c.set('tenantId', payload.tenantId);
 
@@ -83,18 +95,16 @@ export async function requireAuth(c: Context, next: Next) {
     if (payload.sessionId) {
       const sessionStatus = await touchSecuritySession(prisma, payload.tenantId, payload.sessionId);
       if (sessionStatus !== 'ACTIVE') {
-        throw new Error('Revoked auth session');
+        deleteCookie(c, 'axon_token', {
+          path: '/',
+          secure: isSecureCookieEnabled(),
+          sameSite: 'Lax',
+        });
+        return c.json(new ForbiddenError('Geçersiz veya süresi dolmuş token.').toJSON(), 401);
       }
       c.set('sessionId', payload.sessionId);
     }
 
     await next();
-  } catch {
-    deleteCookie(c, 'axon_token', {
-      path: '/',
-      secure: isSecureCookieEnabled(),
-      sameSite: 'Lax',
-    });
-    return c.json(new ForbiddenError('Geçersiz veya süresi dolmuş token.').toJSON(), 401);
-  }
+  });
 }

@@ -125,6 +125,30 @@ function checkModuleBoundaries(): CheckIssue[] {
   const backendSource = join(repoRoot, 'apps/backend/src');
   const bootstrapPath = join(backendSource, 'index.ts');
   const bootstrapSource = readFileSync(bootstrapPath, 'utf8');
+  const httpRoutesPath = join(backendSource, 'bootstrap/http/routes.ts');
+  const httpRoutesSource = readFileSync(httpRoutesPath, 'utf8');
+
+  if (/\b(app|tenantApi)\.(use|get|post|put|patch|delete|route|onError|notFound)\b|\bserve\s*\(/.test(bootstrapSource)) {
+    issues.push({
+      file: 'apps/backend/src/index.ts',
+      message: 'composition root must delegate HTTP composition and process startup to bootstrap/entrypoint modules',
+    });
+  }
+
+  const orderedHttpComposition = [
+    'registerProgrammaticHttpSurface(app)',
+    'registerBrowserProtection(app)',
+    'registerPublicHttpSurface(app)',
+    'registerAdminHttpSurface(app)',
+  ];
+  const compositionPositions = orderedHttpComposition.map((call) => httpRoutesSource.indexOf(call));
+  if (compositionPositions.some((position) => position < 0)
+    || compositionPositions.some((position, index) => index > 0 && position <= compositionPositions[index - 1])) {
+    issues.push({
+      file: 'apps/backend/src/bootstrap/http/routes.ts',
+      message: 'HTTP surface order must remain programmatic -> browser protection -> public -> admin',
+    });
+  }
 
   for (const legacyDirectory of ['controllers', join('services', 'controllers')]) {
     if (existsSync(join(backendSource, legacyDirectory))) {
