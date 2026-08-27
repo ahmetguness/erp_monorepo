@@ -148,6 +148,14 @@ export interface OperationalObservability {
     thresholdMs: number;
     recent: SlowQuerySnapshot[];
   };
+  authorization: {
+    resolutionCount: number;
+    deniedCount: number;
+    avgDurationMs: number;
+    maxDurationMs: number;
+    totalQueryCount: number;
+    avgQueryCount: number;
+  };
   domainEvents: {
     failedCount: number;
     deadLetterCount: number;

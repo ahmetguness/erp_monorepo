@@ -4,6 +4,7 @@ import type React from 'react';
 import type { AuthUser } from '@repo/types';
 import { X } from 'lucide-react';
 import { Button, type ButtonVariant } from '@/components/ui/Button';
+import { createUserAccessContext, hasUserPermission } from '@/domain/access/user-access-context';
 
 export type BulkPermissionAction = 'CREATE' | 'READ' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'EXPORT';
 export type BulkExecutionMode = 'immediate' | 'job';
@@ -37,16 +38,7 @@ export interface BulkActionBarProps {
 
 function canRunAction(user: AuthUser | null, action: BulkActionDefinition): boolean {
   if (!action.permission) return true;
-  const membership = user?.tenantMembership;
-  if (user && !membership) return true;
-  if (membership?.isOwner) return true;
-  return Boolean(
-    membership?.role?.permissions.some(
-      (permission) =>
-        permission.module === action.permission?.module &&
-        permission.action === action.permission.action,
-    ),
-  );
+  return hasUserPermission(createUserAccessContext(user), action.permission.module, action.permission.action);
 }
 
 export function BulkActionBar({ selectedIds, actions, user, onClear, className }: BulkActionBarProps) {

@@ -4,6 +4,9 @@ import { roleRoutes } from '../../routes/role.routes.js';
 import { apiKeyRoutes } from '../../routes/api-key.routes.js';
 import { invitationRoutes } from '../../routes/invitation.routes.js';
 
+export * from './application/index.js';
+export * from './infrastructure/index.js';
+
 export const identityModule: BackendModule = {
   name: 'identity',
   register(app) {

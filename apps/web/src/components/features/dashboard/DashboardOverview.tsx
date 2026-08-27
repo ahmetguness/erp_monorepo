@@ -33,6 +33,8 @@ import {
 } from "@/hooks/useReporting";
 import type { Recommendation } from "@/services/intelligence.service";
 import type { KpiPreview } from "@/services/reporting.service";
+import type { AuthUser } from "@repo/types";
+import { createUserAccessContext, hasUserPermission, type UserAccessContext } from "@/domain/access/user-access-context";
 import type {
   DashboardApprovalRequest,
   DashboardInvoice,
@@ -126,20 +128,15 @@ const DASHBOARD_PRESET_DESCRIPTION: Record<DashboardPreset, string> = {
   custom: 'Rol izinlerine gore erisebildiginiz moduller gosteriliyor.',
 };
 
-function canReadModule(user: NonNullable<ReturnType<typeof useCurrentUser>['user']>, module: string): boolean {
-  const membership = user.tenantMembership;
-  return Boolean(
-    membership?.isOwner ||
-      membership?.role?.permissions.some((permission) => permission.module === module && permission.action === 'READ'),
-  );
+function canReadModule(context: UserAccessContext | null, module: string): boolean {
+  return hasUserPermission(context, module, 'READ');
 }
 
-function detectDashboardPreset(user: NonNullable<ReturnType<typeof useCurrentUser>['user']> | null): DashboardPreset {
+function detectDashboardPreset(user: AuthUser | null, context: UserAccessContext | null): DashboardPreset {
   if (!user) return 'custom';
-  const membership = user.tenantMembership;
-  if (membership?.isOwner) return 'executive';
-  const roleName = membership?.role?.name.toLocaleLowerCase('tr-TR') ?? '';
-  const canRead = (module: string) => canReadModule(user, module);
+  if (context?.isOwner) return 'executive';
+  const roleName = context?.roleName?.toLocaleLowerCase('tr-TR') ?? '';
+  const canRead = (module: string) => canReadModule(context, module);
 
   if (roleName.includes('yonetici') || roleName.includes('yönetici') || roleName.includes('manager')) return 'executive';
   if (roleName.includes('muhasebe') || roleName.includes('account') || canRead('accounting')) return 'accounting';
@@ -160,8 +157,9 @@ export function DashboardOverview() {
   const { user, tenant } = useCurrentUser();
   const { isStarter, plan } = usePlanFeatures();
   const currentPlan = plan ?? "STARTER";
-  const dashboardPreset = detectDashboardPreset(user);
-  const canRead = (module: string) => (user ? !user.tenantMembership || canReadModule(user, module) : false);
+  const accessContext = createUserAccessContext(user, tenant);
+  const dashboardPreset = detectDashboardPreset(user, accessContext);
+  const canRead = (module: string) => canReadModule(accessContext, module);
   const canReadInvoicing = canRead('invoicing');
   const canReadAccounting = canRead('accounting');
   const canReadInventory = canRead('inventory');

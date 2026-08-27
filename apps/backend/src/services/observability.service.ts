@@ -39,6 +39,12 @@ export interface SlowQueryMetricInput {
   occurredAt?: Date;
 }
 
+export interface AuthorizationResolutionMetricInput {
+  durationMs: number;
+  queryCount: number;
+  outcome: 'allowed' | 'denied';
+}
+
 interface ObservabilityRequestContext {
   requestId: string;
   correlationId: string;
@@ -178,6 +184,14 @@ export interface ObservabilitySnapshot {
     thresholdMs: number;
     recent: SlowQuerySnapshot[];
   };
+  authorization: {
+    resolutionCount: number;
+    deniedCount: number;
+    avgDurationMs: number;
+    maxDurationMs: number;
+    totalQueryCount: number;
+    avgQueryCount: number;
+  };
   domainEvents: {
     failedCount: number;
     deadLetterCount: number;
@@ -203,6 +217,13 @@ const recentSlowEndpoints: SlowEndpointSnapshot[] = [];
 const recentErrors: RecentErrorSnapshot[] = [];
 const recentSlowQueries: SlowQuerySnapshot[] = [];
 const requestTrendBuckets = new Map<number, { requestCount: number; errorCount: number }>();
+const authorizationMetrics = {
+  resolutionCount: 0,
+  deniedCount: 0,
+  totalDurationMs: 0,
+  maxDurationMs: 0,
+  totalQueryCount: 0,
+};
 
 function endpointKey(method: string, path: string): string {
   return `${method.toUpperCase()} ${path}`;
@@ -336,6 +357,14 @@ export function recordSlowQuery(input: SlowQueryMetricInput): void {
   }, MAX_RECENT_SLOW_QUERIES);
 }
 
+export function recordAuthorizationResolution(input: AuthorizationResolutionMetricInput): void {
+  authorizationMetrics.resolutionCount += 1;
+  authorizationMetrics.totalDurationMs += input.durationMs;
+  authorizationMetrics.maxDurationMs = Math.max(authorizationMetrics.maxDurationMs, input.durationMs);
+  authorizationMetrics.totalQueryCount += input.queryCount;
+  if (input.outcome === 'denied') authorizationMetrics.deniedCount += 1;
+}
+
 function resolveMarketplaceWorkerEnabled(): boolean {
   if (process.env.MARKETPLACE_WORKER_ENABLED === 'true') return true;
   if (process.env.MARKETPLACE_WORKER_ENABLED === 'false') return false;
@@ -451,6 +480,18 @@ export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<Ob
     slowQueries: {
       thresholdMs: SLOW_QUERY_THRESHOLD_MS,
       recent: [...recentSlowQueries],
+    },
+    authorization: {
+      resolutionCount: authorizationMetrics.resolutionCount,
+      deniedCount: authorizationMetrics.deniedCount,
+      avgDurationMs: authorizationMetrics.resolutionCount > 0
+        ? Math.round(authorizationMetrics.totalDurationMs / authorizationMetrics.resolutionCount)
+        : 0,
+      maxDurationMs: Math.round(authorizationMetrics.maxDurationMs),
+      totalQueryCount: authorizationMetrics.totalQueryCount,
+      avgQueryCount: authorizationMetrics.resolutionCount > 0
+        ? Math.round((authorizationMetrics.totalQueryCount / authorizationMetrics.resolutionCount) * 100) / 100
+        : 0,
     },
     domainEvents: {
       failedCount,

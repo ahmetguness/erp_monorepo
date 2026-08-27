@@ -9,6 +9,9 @@ import { runWithTenantIsolationBypass, runWithTenantScope } from '../lib/tenant-
 import { getExternalApiRateLimitPerMinute } from '../services/external-api-registry.service.js';
 import { isIpAllowedByAllowlist } from '../services/api-key-access.service.js';
 import { getTrustedClientIpOrNull } from '../utils/request-ip.js';
+import { resolveServiceAccessContext } from '../modules/identity/index.js';
+import { setAccessContext } from './access-context.js';
+import { recordAuthorizationResolution } from '../services/observability.service.js';
 
 const API_KEY_AUTH_FAILURE_LIMIT = 20;
 const API_KEY_AUTH_FAILURE_WINDOW_MS = 60_000;
@@ -170,7 +173,20 @@ export function authenticateApiKey() {
     c.set('apiKeyScopes', apiKey.scopes);
     c.set('apiKeyClientIp', clientIp);
 
-    await runWithTenantScope(apiKey.tenantId, next);
+    return runWithTenantScope(apiKey.tenantId, async () => {
+      const startedAt = performance.now();
+      const resolution = await resolveServiceAccessContext(prisma, `api-key:${apiKey.id}`, apiKey.tenantId);
+      recordAuthorizationResolution({
+        durationMs: performance.now() - startedAt,
+        queryCount: resolution.queryCount,
+        outcome: resolution.context ? 'allowed' : 'denied',
+      });
+      if (!resolution.context) {
+        return c.json(new ForbiddenError('API anahtari tenant bilgisi bulunamadi.').toJSON(), 403);
+      }
+      setAccessContext(c, resolution.context);
+      await next();
+    });
   };
 }
 

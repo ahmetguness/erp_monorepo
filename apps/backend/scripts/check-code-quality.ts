@@ -120,6 +120,31 @@ function checkBackendNaming(): CheckIssue[] {
   return issues;
 }
 
+function checkAuthorizationQueryCentralization(): CheckIssue[] {
+  const middlewareFiles = [
+    'requirePermission.ts',
+    'requireAccess.ts',
+    'requireFeature.ts',
+    'requireModule.ts',
+    'requirePlan.ts',
+  ];
+  const issues: CheckIssue[] = [];
+  for (const fileName of middlewareFiles) {
+    const repoPath = `apps/backend/src/middleware/${fileName}`;
+    const source = readFileSync(join(repoRoot, repoPath), 'utf8');
+    if (/lib\/prisma|TenantFeatureService|\.tenant(?:User|Setting)?\.(?:find|count|aggregate)/.test(source)) {
+      issues.push({
+        file: repoPath,
+        message: 'authorization gates must consume the request-scoped AccessContext instead of querying persistence',
+      });
+    }
+    if (!source.includes('getAccessContext')) {
+      issues.push({ file: repoPath, message: 'authorization gate must consume the centralized request-scoped AccessContext' });
+    }
+  }
+  return issues;
+}
+
 function checkModuleBoundaries(): CheckIssue[] {
   const issues: CheckIssue[] = [];
   const backendSource = join(repoRoot, 'apps/backend/src');
@@ -291,6 +316,7 @@ function main(): void {
     ...checkTypeSafety(sourceFiles),
     ...checkActiveAllowlistEntries(sourceFiles),
     ...checkBackendNaming(),
+    ...checkAuthorizationQueryCentralization(),
     ...checkModuleBoundaries(),
     ...reportLargeFiles(sourceFiles),
     ...checkGeneratedOrCacheChurn(),
