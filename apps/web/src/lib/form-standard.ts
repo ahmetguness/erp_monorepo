@@ -4,40 +4,19 @@ import { z } from 'zod';
 import { AxiosError } from 'axios';
 import { ApiErrorSchema } from '@/types/api.types';
 
-const NUMBER_NORMALIZATION_PATTERN = /[^0-9,.-]/g;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+import { parseDecimalInput } from '@/domain/forms/form-value';
 
-export function parseDecimalInput(value: string | number | null | undefined): number {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-  if (!value) return 0;
-
-  const normalized = value
-    .replace(NUMBER_NORMALIZATION_PATTERN, '')
-    .replace(/\./g, '')
-    .replace(',', '.');
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-export const parseMoneyInput = parseDecimalInput;
-export const parseQuantityInput = parseDecimalInput;
-export const parsePercentageInput = parseDecimalInput;
-
-export function parseOptionalDecimalInput(value: string | number | null | undefined): number | undefined {
-  if (value === null || value === undefined || value === '') return undefined;
-  return parseDecimalInput(value);
-}
-
-export function optionalText(value: string | null | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-}
-
-export function dateToFormValue(value: string | Date | null | undefined): string {
-  if (!value) return '';
-  if (value instanceof Date) return value.toISOString().split('T')[0] ?? '';
-  return value.split('T')[0] ?? '';
-}
+export {
+  dateToFormValue,
+  isSubmitLocked,
+  optionalText,
+  parseDecimalInput,
+  parseMoneyInput,
+  parseOptionalDecimalInput,
+  parsePercentageInput,
+  parseQuantityInput,
+} from '@/domain/forms/form-value';
 
 function isStringRecord(value: unknown): value is Record<string, string> {
   return (
@@ -115,8 +94,4 @@ export function useDirtyStateWarning(isDirty: boolean, message = 'Kaydedilmemiş
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [isDirty, message]);
-}
-
-export function isSubmitLocked(isSubmitting: boolean, isMutationPending: boolean): boolean {
-  return isSubmitting || isMutationPending;
 }

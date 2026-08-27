@@ -2,13 +2,23 @@ import { CostingMethod, MovementType, Prisma, DeliveryNoteStatus, ReservationRef
 import type { PrismaClient } from '@prisma/client';
 import { ValidationError } from '../../errors';
 import { generateDocumentNumber } from '../../utils/generate-number.js';
+import type {
+  LotSerialPolicy,
+  NegativeStockPolicy,
+  ReservationPolicy,
+  StockCountApprovalPolicy,
+} from '../../modules/inventory/domain/inventory-policy.js';
+import type { SalesVelocity, SuggestionPriority } from '../../modules/inventory/domain/replenishment-policy.js';
+
+export type {
+  LotSerialPolicy,
+  NegativeStockPolicy,
+  ReservationPolicy,
+  StockCountApprovalPolicy,
+} from '../../modules/inventory/domain/inventory-policy.js';
+export type { SalesVelocity, SuggestionPriority } from '../../modules/inventory/domain/replenishment-policy.js';
 
 export type InventoryDbClient = PrismaClient | Prisma.TransactionClient;
-
-export type NegativeStockPolicy = 'ALLOW' | 'WARN' | 'BLOCK';
-export type ReservationPolicy = 'IGNORE' | 'RESPECT';
-export type LotSerialPolicy = 'OPTIONAL' | 'REQUIRED' | 'REQUIRED_FOR_OUT';
-export type StockCountApprovalPolicy = 'OPTIONAL' | 'REQUIRED_FOR_DIFFERENCE';
 
 export interface InventoryRules {
   negativeStockPolicy: NegativeStockPolicy;
@@ -46,14 +56,6 @@ export interface StockReorderSuggestion {
   estimatedCost: number;
 }
 
-export type SuggestionPriority = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-
-export interface SalesVelocity {
-  daily30: number;
-  daily60: number;
-  daily90: number;
-  trend: 'ACCELERATING' | 'STABLE' | 'DECELERATING';
-}
 
 export interface AdvancedStockSuggestion {
   productId: string;

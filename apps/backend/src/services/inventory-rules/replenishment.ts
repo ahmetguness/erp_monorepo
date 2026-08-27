@@ -8,6 +8,9 @@ import { parseNegativeStockPolicy, parseReservationPolicy, parseLotSerialPolicy,
 import { resolveStockLevelLocationId, getStockPosition, assertCanConsumeStock, assertCanReserveStock, releaseInventoryReservations, releaseExpiredInventoryReservations, assertStockCountApproval } from './availability.js';
 import { calculateLayerCost, recordInventoryCosting } from './costing.js';
 import { processDeliveryNoteStock } from './delivery.js';
+import { determineSalesVelocityTrend, determineSuggestionPriority } from '../../modules/inventory/domain/replenishment-policy.js';
+
+export { determineSalesVelocityTrend, determineSuggestionPriority } from '../../modules/inventory/domain/replenishment-policy.js';
 
 export async function getReorderSuggestions(
   db: InventoryDbClient,
@@ -73,31 +76,6 @@ export async function getReorderSuggestions(
 }
 
 // ── Advanced Stock Suggestions ──────────────────────────
-
-export function determineSalesVelocityTrend(daily30: number, daily60: number, daily90: number): SalesVelocity['trend'] {
-  if (daily30 === 0 && daily60 === 0 && daily90 === 0) return 'STABLE';
-  const recent = daily30;
-  const older = daily90 > 0 ? daily90 : daily60;
-  if (older === 0) return recent > 0 ? 'ACCELERATING' : 'STABLE';
-  const ratio = recent / older;
-  if (ratio > 1.15) return 'ACCELERATING';
-  if (ratio < 0.85) return 'DECELERATING';
-  return 'STABLE';
-}
-
-export function determineSuggestionPriority(
-  available: number,
-  minStockLevel: number,
-  estimatedDaysToStockout: number | null,
-  reservationRatio: number,
-): SuggestionPriority {
-  if (available <= 0) return 'CRITICAL';
-  if (estimatedDaysToStockout !== null && estimatedDaysToStockout <= 3) return 'CRITICAL';
-  if (estimatedDaysToStockout !== null && estimatedDaysToStockout <= 7) return 'HIGH';
-  if (available < minStockLevel * 0.5 || reservationRatio > 0.7) return 'HIGH';
-  if (available < minStockLevel) return 'MEDIUM';
-  return 'LOW';
-}
 
 export async function getAdvancedStockSuggestions(
   db: InventoryDbClient,

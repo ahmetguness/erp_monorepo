@@ -1,47 +1,9 @@
 import { InvoiceStatus, type Invoice, type Prisma, type PrismaClient } from '@prisma/client';
+import { computeInvoiceStatus } from '../../modules/finance/domain/invoice-status.policy.js';
+export { computeInvoiceStatus } from '../../modules/finance/domain/invoice-status.policy.js';
+export type { InvoicePaymentSnapshot, InvoiceStatusComputation } from '../../modules/finance/domain/invoice-status.policy.js';
 
 type FinancialDbClient = PrismaClient | Prisma.TransactionClient;
-
-export interface InvoicePaymentSnapshot {
-  totalGross: Prisma.Decimal | number;
-  dueDate: Date | null;
-  status: InvoiceStatus;
-  payments?: Array<{ amount: Prisma.Decimal | number }>;
-}
-
-export interface InvoiceStatusComputation {
-  status: InvoiceStatus;
-  paidAmount: number;
-  balance: number;
-}
-
-export function computeInvoiceStatus(
-  invoice: InvoicePaymentSnapshot,
-  asOf: Date = new Date(),
-): InvoiceStatusComputation {
-  const currentStatus = invoice.status;
-  const paidAmount = (invoice.payments ?? []).reduce((sum, allocation) => sum + Number(allocation.amount), 0);
-  const totalGross = Number(invoice.totalGross);
-  const balance = Math.max(0, totalGross - paidAmount);
-
-  if (currentStatus === InvoiceStatus.CANCELLED || currentStatus === InvoiceStatus.DRAFT) {
-    return { status: currentStatus, paidAmount, balance };
-  }
-
-  if (paidAmount >= totalGross && totalGross > 0) {
-    return { status: InvoiceStatus.PAID, paidAmount, balance: 0 };
-  }
-
-  if (paidAmount > 0) {
-    return { status: InvoiceStatus.PARTIALLY_PAID, paidAmount, balance };
-  }
-
-  if (invoice.dueDate && invoice.dueDate.getTime() < startOfDay(asOf).getTime()) {
-    return { status: InvoiceStatus.OVERDUE, paidAmount, balance };
-  }
-
-  return { status: InvoiceStatus.SENT, paidAmount, balance };
-}
 
 export async function recomputeInvoiceStatus(
   db: FinancialDbClient,
@@ -113,10 +75,4 @@ export async function scanAndRecomputeInvoiceStatuses(
   }
 
   return { scanned: invoices.length, changed };
-}
-
-function startOfDay(value: Date): Date {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-  return date;
 }

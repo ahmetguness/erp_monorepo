@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:typecheck && npm run test:unit",
+    "test:typecheck": "tsc --noEmit",
+    "test:unit": "vitest run --config vitest.config.mts",
+    "test:unit:coverage": "vitest run --coverage --config vitest.config.mts",
+    "test:e2e": "npm --workspace=@repo/backend run test:web-smoke"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

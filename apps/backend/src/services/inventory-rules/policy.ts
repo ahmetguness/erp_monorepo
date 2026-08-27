@@ -8,44 +8,23 @@ import { resolveStockLevelLocationId, getStockPosition, assertCanConsumeStock, a
 import { calculateLayerCost, recordInventoryCosting } from './costing.js';
 import { getReorderSuggestions, determineSalesVelocityTrend, determineSuggestionPriority, getAdvancedStockSuggestions, convertReorderSuggestionsToPurchaseRequest } from './replenishment.js';
 import { processDeliveryNoteStock } from './delivery.js';
+import {
+  parseCostingMethod,
+  parseLotSerialPolicy,
+  parseNegativeStockPolicy,
+  parseReservationPolicy,
+  parseStockCountApprovalPolicy,
+  quantityValue,
+} from '../../modules/inventory/domain/inventory-policy.js';
 
-export function parseNegativeStockPolicy(value: string | null | undefined): NegativeStockPolicy | null {
-  if (value === 'ALLOW' || value === 'WARN' || value === 'BLOCK') return value;
-  if (value === 'true') return 'ALLOW';
-  if (value === 'false') return 'BLOCK';
-  return null;
-}
-
-export function parseReservationPolicy(value: string | null | undefined): ReservationPolicy | null {
-  if (value === 'IGNORE' || value === 'RESPECT') return value;
-  return null;
-}
-
-export function parseLotSerialPolicy(value: string | null | undefined): LotSerialPolicy | null {
-  if (value === 'OPTIONAL' || value === 'REQUIRED' || value === 'REQUIRED_FOR_OUT') return value;
-  return null;
-}
-
-export function parseStockCountApprovalPolicy(value: string | null | undefined): StockCountApprovalPolicy | null {
-  if (value === 'OPTIONAL' || value === 'REQUIRED_FOR_DIFFERENCE') return value;
-  return null;
-}
-
-export function parseCostingMethod(value: string | null | undefined): CostingMethod | null {
-  if (
-    value === CostingMethod.MOVING_AVERAGE ||
-    value === CostingMethod.FIFO ||
-    value === CostingMethod.LIFO ||
-    value === CostingMethod.STANDARD
-  ) {
-    return value;
-  }
-  return null;
-}
-
-export function quantityValue(value: Prisma.Decimal | number | null | undefined): number {
-  return Number(value ?? 0);
-}
+export {
+  parseCostingMethod,
+  parseLotSerialPolicy,
+  parseNegativeStockPolicy,
+  parseReservationPolicy,
+  parseStockCountApprovalPolicy,
+  quantityValue,
+} from '../../modules/inventory/domain/inventory-policy.js';
 
 export async function getInventoryRules(db: InventoryDbClient, tenantId: string): Promise<InventoryRules> {
   const settings = await db.moduleSetting.findMany({
