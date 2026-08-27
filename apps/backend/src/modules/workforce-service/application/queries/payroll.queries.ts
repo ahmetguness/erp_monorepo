@@ -1,5 +1,5 @@
 import { NotFoundError } from '../../../../errors/index.js';
-import type { PageRequest, PageResult } from '../../../shared/application/pagination.js';
+import type { PageRequest, PageResult } from '../../../shared/index.js';
 import type { PayrollFilters, PayrollReadRepository } from '../ports/payroll-read.repository.js';
 
 export class PayrollQueries<TListItem extends object, TDetail extends object> {

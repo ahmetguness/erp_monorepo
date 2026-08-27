@@ -1,6 +1,6 @@
 import { Priority, ServiceStatus } from '@prisma/client';
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { calculateSla } from '../modules/workforce-service/http/controllers/index.js';
+import { calculateServiceRequestSla as calculateSla } from '../modules/workforce-service/domain/index.js';
 
 type AdvancedServiceDbClient = PrismaClient;
 

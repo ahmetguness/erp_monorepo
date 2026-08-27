@@ -1,4 +1,4 @@
-import type { PageRequest, PageResult } from '../../../shared/application/pagination.js';
+import type { PageRequest, PageResult } from '../../../shared/index.js';
 
 export interface PaymentFilters {
   contactId?: string;

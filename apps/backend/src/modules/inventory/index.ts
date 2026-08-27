@@ -1,4 +1,4 @@
-import type { BackendModule } from '../shared/module.js';
+import type { BackendModule } from '../shared/index.js';
 import { attachmentRoutes } from '../../routes/attachment.routes.js';
 import { inventoryReservationRoutes } from '../../routes/inventory-reservation.routes.js';
 import { lotSerialRoutes } from '../../routes/lot-serial.routes.js';

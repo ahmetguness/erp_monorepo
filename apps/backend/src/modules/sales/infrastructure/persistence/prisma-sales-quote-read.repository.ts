@@ -1,5 +1,5 @@
 import { Prisma, QuoteStatus, type PrismaClient } from '@prisma/client';
-import { createPageResult, type PageRequest } from '../../../shared/application/pagination.js';
+import { createPageResult, type PageRequest } from '../../../shared/index.js';
 import type { SalesQuoteFilters, SalesQuoteReadRepository } from '../../application/ports/sales-quote-read.repository.js';
 
 const quoteListInclude = Prisma.validator<Prisma.SalesQuoteInclude>()({

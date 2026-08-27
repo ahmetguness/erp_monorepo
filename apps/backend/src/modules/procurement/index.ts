@@ -1,4 +1,4 @@
-import type { BackendModule } from '../shared/module.js';
+import type { BackendModule } from '../shared/index.js';
 import { procurementAutonomyRoutes } from '../../routes/procurement-autonomy.routes.js';
 import { purchaseOrderRoutes } from '../../routes/purchase-order.routes.js';
 

@@ -1,4 +1,4 @@
-import type { BackendModule } from '../shared/module.js';
+import type { BackendModule } from '../shared/index.js';
 import { agentCommandRoutes } from '../../routes/agent-command.routes.js';
 import { automationRuleRoutes } from '../../routes/automation-rule.routes.js';
 import { chatRoutes } from '../../routes/chat.routes.js';

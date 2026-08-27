@@ -1,4 +1,4 @@
-import type { BackendModule } from '../shared/module.js';
+import type { BackendModule } from '../shared/index.js';
 import { accountingRoutes } from '../../routes/accounting.routes.js';
 import { bankTransactionRoutes } from '../../routes/bank-transaction.routes.js';
 import { checkPromissoryRoutes } from '../../routes/check-promissory.routes.js';

@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { assertAccountingPeriodOpen } from '../services/financial-integrity.service';
+import { assertAccountingPeriodOpen } from '../services/financial/period-guard.js';
 
 // ─────────────────────────────────────────────
 // AccountEntry Helper

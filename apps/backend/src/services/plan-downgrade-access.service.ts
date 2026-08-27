@@ -1,9 +1,7 @@
 import type { Context } from 'hono';
 import type { FeatureKey, Plan } from '@prisma/client';
-import { PlanDowngradeLockedError } from '../errors';
+import { PlanDowngradeLockedError, type PlanDowngradeLockReason } from '../errors';
 import type { ModuleKey } from '../types/module.types';
-
-export type PlanDowngradeLockReason = 'plan' | 'module' | 'feature';
 
 export interface PlanDowngradeLockDetails {
   reason: PlanDowngradeLockReason;

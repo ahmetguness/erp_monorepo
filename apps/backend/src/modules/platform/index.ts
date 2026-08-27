@@ -1,4 +1,4 @@
-import type { BackendModule } from '../shared/module.js';
+import type { BackendModule } from '../shared/index.js';
 import { activityRoutes } from '../../routes/activity.routes.js';
 import { approvalRoutes } from '../../routes/approval.routes.js';
 import { auditLogRoutes } from '../../routes/audit-log.routes.js';

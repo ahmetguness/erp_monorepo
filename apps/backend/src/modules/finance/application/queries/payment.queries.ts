@@ -1,5 +1,5 @@
 import { NotFoundError } from '../../../../errors/index.js';
-import { parsePageRequest, type PageResult } from '../../../shared/application/pagination.js';
+import { parsePageRequest, type PageResult } from '../../../shared/index.js';
 import type { PaymentFilters, PaymentReadRepository } from '../ports/payment-read.repository.js';
 
 export interface ListPaymentsQuery extends PaymentFilters {

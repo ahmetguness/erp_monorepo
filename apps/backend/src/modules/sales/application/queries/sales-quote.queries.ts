@@ -1,4 +1,4 @@
-import { parsePageRequest, type PageResult } from '../../../shared/application/pagination.js';
+import { parsePageRequest, type PageResult } from '../../../shared/index.js';
 import type { SalesQuoteFilters, SalesQuoteReadRepository } from '../ports/sales-quote-read.repository.js';
 
 export interface ListSalesQuotesQuery extends SalesQuoteFilters {

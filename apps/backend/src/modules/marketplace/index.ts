@@ -1,4 +1,4 @@
-import type { BackendModule } from '../shared/module.js';
+import type { BackendModule } from '../shared/index.js';
 import { marketplacePricingRoutes } from '../../routes/marketplace-pricing.routes.js';
 import { marketplaceRoutes } from '../../routes/marketplace.routes.js';
 

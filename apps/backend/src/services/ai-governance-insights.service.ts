@@ -1,6 +1,6 @@
 import type { AiRequestType, Prisma, PrismaClient } from '@prisma/client';
 import { AI_GOVERNANCE_INSIGHT_KEYS, AI_POLICY_MODULE } from './ai/governance-settings.js';
-import { getAiGovernancePolicy, type AiGovernancePolicy } from './ai/policy.service.js';
+import { getAiGovernancePolicy, type AiGovernancePolicy } from './ai/governance-policy.js';
 import { getAiRedactionRegistry } from './ai/redaction-registry.js';
 import { getSecurityHardeningSnapshot, type SecurityHardeningSnapshot } from './security-hardening.service.js';
 

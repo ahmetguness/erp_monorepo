@@ -1,5 +1,5 @@
 import { PaymentStatus, Prisma, type PrismaClient } from '@prisma/client';
-import { createPageResult, type PageRequest } from '../../../shared/application/pagination.js';
+import { createPageResult, type PageRequest } from '../../../shared/index.js';
 import type { PaymentFilters, PaymentReadRepository } from '../../application/ports/payment-read.repository.js';
 
 const paymentInclude = Prisma.validator<Prisma.PaymentInclude>()({

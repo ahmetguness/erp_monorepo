@@ -1,7 +1,7 @@
 import { InvoiceStatus, type Invoice, type Prisma, type PrismaClient } from '@prisma/client';
-import { computeInvoiceStatus } from '../../modules/finance/domain/invoice-status.policy.js';
-export { computeInvoiceStatus } from '../../modules/finance/domain/invoice-status.policy.js';
-export type { InvoicePaymentSnapshot, InvoiceStatusComputation } from '../../modules/finance/domain/invoice-status.policy.js';
+import { computeInvoiceStatus } from '../../modules/finance/domain/index.js';
+export { computeInvoiceStatus } from '../../modules/finance/domain/index.js';
+export type { InvoicePaymentSnapshot, InvoiceStatusComputation } from '../../modules/finance/domain/index.js';
 
 type FinancialDbClient = PrismaClient | Prisma.TransactionClient;
 

@@ -1,4 +1,4 @@
-import type { BackendModule } from '../shared/module.js';
+import type { BackendModule } from '../shared/index.js';
 import { hrRoutes } from '../../routes/hr.routes.js';
 import { payrollRoutes } from '../../routes/payroll.routes.js';
 import { serviceRoutes } from '../../routes/service.routes.js';

@@ -7,37 +7,11 @@ import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
 import { generateDocumentNumber } from '../../../../utils/generate-number.js';
 import { getPaginationParams } from '../../../../utils/pagination.js';
+import { calculateServiceRequestSla } from '../../domain/index.js';
 
 const serviceAutomation = new ServiceAutomationService(prisma);
 
-export function calculateSla(
-  createdAt: Date,
-  priority: Priority,
-  status: ServiceStatus,
-  closedAt: Date | null
-) {
-  const limits: Record<Priority, number> = {
-    CRITICAL: 2,
-    HIGH: 4,
-    MEDIUM: 24,
-    LOW: 72,
-  };
-  const limitHours = limits[priority] || 24;
-  const limitMs = limitHours * 60 * 60 * 1000;
-  const targetDate = new Date(createdAt.getTime() + limitMs);
-  const resolvedAt = closedAt || (['COMPLETED', 'CANCELLED'].includes(status) ? new Date() : null);
-  const comparisonDate = resolvedAt || new Date();
-  const isBreached = comparisonDate.getTime() > targetDate.getTime();
-  const remainingMs = targetDate.getTime() - comparisonDate.getTime();
-  const remainingMinutes = Math.round(remainingMs / (60 * 1000));
-
-  return {
-    limitHours,
-    targetDate: targetDate.toISOString(),
-    isBreached,
-    remainingMinutes,
-  };
-}
+export const calculateSla = calculateServiceRequestSla;
 
 // ─────────────────────────────────────────────
 // Service Request Controller

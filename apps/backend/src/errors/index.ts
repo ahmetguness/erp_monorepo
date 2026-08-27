@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────
 import type { FeatureKey, Plan, TenantStatus } from '@prisma/client';
-import type { PlanDowngradeLockReason } from '../services/plan-downgrade-access.service';
+export type PlanDowngradeLockReason = 'plan' | 'module' | 'feature';
 
 // Custom Error Classes
 // ─────────────────────────────────────────────

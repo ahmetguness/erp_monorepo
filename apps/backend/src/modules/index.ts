@@ -1,4 +1,4 @@
-import type { BackendModule } from './shared/module.js';
+import type { BackendModule } from './shared/index.js';
 import { automationIntelligenceModule } from './automation-intelligence/index.js';
 import { financeModule } from './finance/index.js';
 import { identityModule } from './identity/index.js';

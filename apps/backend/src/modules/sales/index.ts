@@ -1,4 +1,4 @@
-import type { BackendModule } from '../shared/module.js';
+import type { BackendModule } from '../shared/index.js';
 import { collectionReminderRoutes } from '../../routes/collection-reminder.routes.js';
 import { contactRoutes } from '../../routes/contact.routes.js';
 import { deliveryNoteRoutes } from '../../routes/delivery-note.routes.js';

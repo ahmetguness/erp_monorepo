@@ -14,6 +14,7 @@ export default defineConfig({
         'src/services/financial/status-transition.service.ts',
         'src/modules/inventory/domain/inventory-policy.ts',
         'src/modules/inventory/domain/replenishment-policy.ts',
+        'src/modules/workforce-service/domain/service-request-sla.ts',
       ],
       thresholds: { lines: 80, functions: 80, statements: 80, branches: 70 },
     },

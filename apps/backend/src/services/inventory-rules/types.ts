@@ -7,16 +7,16 @@ import type {
   NegativeStockPolicy,
   ReservationPolicy,
   StockCountApprovalPolicy,
-} from '../../modules/inventory/domain/inventory-policy.js';
-import type { SalesVelocity, SuggestionPriority } from '../../modules/inventory/domain/replenishment-policy.js';
+} from '../../modules/inventory/domain/index.js';
+import type { SalesVelocity, SuggestionPriority } from '../../modules/inventory/domain/index.js';
 
 export type {
   LotSerialPolicy,
   NegativeStockPolicy,
   ReservationPolicy,
   StockCountApprovalPolicy,
-} from '../../modules/inventory/domain/inventory-policy.js';
-export type { SalesVelocity, SuggestionPriority } from '../../modules/inventory/domain/replenishment-policy.js';
+} from '../../modules/inventory/domain/index.js';
+export type { SalesVelocity, SuggestionPriority } from '../../modules/inventory/domain/index.js';
 
 export type InventoryDbClient = PrismaClient | Prisma.TransactionClient;
 

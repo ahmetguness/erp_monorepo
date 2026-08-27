@@ -1,4 +1,4 @@
-import type { BackendModule } from '../shared/module.js';
+import type { BackendModule } from '../shared/index.js';
 import { userRoutes } from '../../routes/user.routes.js';
 import { roleRoutes } from '../../routes/role.routes.js';
 import { apiKeyRoutes } from '../../routes/api-key.routes.js';
