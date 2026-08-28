@@ -1,0 +1,141 @@
+// Domain: procurement
+// Keep related enums and models together; cross-domain relations are resolved by Prisma.
+
+enum PurchaseRequestStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  ORDERED
+  CANCELLED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseRequest {
+  id              String                @id @default(cuid())
+  tenantId        String
+  number          String
+  date            DateTime
+  status          PurchaseRequestStatus @default(DRAFT)
+  requestedBy     String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  notes           String?
+  /// Sum of (PurchaseRequestItem.unitPrice × quantity); nullable until items have estimated prices
+  totalEstimated  Decimal?              @db.Decimal(18, 2)
+  // Fix #1: FK to the resulting PurchaseOrder when status = ORDERED
+  purchaseOrderId String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  deletedAt       DateTime?
+  createdById     String?
+
+  tenant        Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items         PurchaseRequestItem[]
+  purchaseOrder PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@map("purchase_requests")
+}
+
+model PurchaseRequestItem {
+  id          String   @id @default(cuid())
+  tenantId    String
+  requestId   String
+  productId   String
+  description String?
+  quantity    Decimal  @db.Decimal(18, 3)
+  unitPrice   Decimal? @db.Decimal(18, 2)
+  notes       String?
+
+  request PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, requestId])
+  @@map("purchase_request_items")
+}
+
+model PurchaseOrder {
+  id           String              @id @default(cuid())
+  tenantId     String
+  contactId    String
+  number       String
+  date         DateTime
+  dueDate      DateTime?
+  status       PurchaseOrderStatus @default(DRAFT)
+  currencyCode String              @default("TRY")
+  exchangeRate Decimal             @db.Decimal(18, 6) @default(1)
+  notes        String?
+  totalNet     Decimal             @db.Decimal(18, 2) @default(0)
+  totalTax     Decimal             @db.Decimal(18, 2) @default(0)
+  totalGross   Decimal             @db.Decimal(18, 2) @default(0)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  deletedAt    DateTime?
+  createdById  String?
+  updatedById  String?
+
+  tenant           Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact          Contact                @relation(fields: [contactId], references: [id])
+  items            PurchaseOrderItem[]
+  invoices         Invoice[]
+  history          PurchaseOrderHistory[]
+  deliveryNotes    DeliveryNote[]
+  purchaseRequests PurchaseRequest[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, contactId])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id          String  @id @default(cuid())
+  tenantId    String
+  orderId     String
+  productId   String
+  description String?
+  quantity    Decimal @db.Decimal(18, 3)
+  /// @computed - must be updated within the same transaction as the parent write
+  received    Decimal @db.Decimal(18, 3) @default(0)
+  unitPrice   Decimal @db.Decimal(18, 2)
+  discount    Decimal @db.Decimal(5, 2) @default(0)
+  taxRate     Decimal @db.Decimal(5, 2) @default(0)
+  taxAmount   Decimal @db.Decimal(18, 2) @default(0)
+  lineTotal   Decimal @db.Decimal(18, 2)
+  sortOrder   Int     @default(0)
+
+  order         PurchaseOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product          @relation(fields: [productId], references: [id])
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveryItems DeliveryNoteItem[]
+
+  @@index([tenantId, orderId])
+  @@map("purchase_order_items")
+}
+
+model PurchaseOrderHistory {
+  id          String               @id @default(cuid())
+  tenantId    String
+  orderId     String
+  fromStatus  PurchaseOrderStatus?
+  toStatus    PurchaseOrderStatus
+  notes       String?
+  createdAt   DateTime             @default(now())
+  createdById String?
+
+  order  PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, orderId])
+  @@map("purchase_order_history")
+}

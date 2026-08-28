@@ -1,0 +1,138 @@
+// Domain: reporting
+// Keep related enums and models together; cross-domain relations are resolved by Prisma.
+
+model SavedReport {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  module    String
+  filters   Json     @default("{}")
+  columns   String[] @default([])
+  isShared  Boolean  @default(false)
+  sharedRoleIds String[] @default([])
+  sharedUserIds String[] @default([])
+  columnTemplateName String?
+  pinnedToDashboard Boolean @default(false)
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, module])
+  @@index([tenantId, pinnedToDashboard])
+  @@map("saved_reports")
+}
+
+enum SavedViewScope {
+  PERSONAL
+  TENANT
+  ROLE
+}
+
+enum DomainEventOutboxStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  DEAD_LETTER
+}
+
+model SavedView {
+  id          String         @id @default(cuid())
+  tenantId    String
+  userId      String?
+  roleId      String?
+  name        String
+  module      String
+  listKey     String
+  scope       SavedViewScope @default(PERSONAL)
+  state       Json           @default("{}")
+  isDefault   Boolean        @default(false)
+  createdById String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, listKey])
+  @@index([tenantId, userId])
+  @@index([tenantId, roleId])
+  @@map("saved_views")
+}
+
+model DomainEventOutbox {
+  id              String                  @id @default(cuid())
+  tenantId        String
+  name            String
+  schemaVersion   Int                     @default(1)
+  source          String
+  idempotencyKey  String
+  entityType      EntityType
+  entityId        String
+  payload         Json
+  context         Json
+  status          DomainEventOutboxStatus @default(PENDING)
+  attempts        Int                     @default(0)
+  lastError       String?
+  failedListeners Json?
+  nextRetryAt     DateTime?
+  claimedAt       DateTime?
+  leaseOwner      String?
+  leaseExpiresAt  DateTime?
+  processedAt     DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, name, createdAt])
+  @@index([tenantId, entityType, entityId])
+  @@index([status, nextRetryAt, createdAt])
+  @@index([status, leaseExpiresAt])
+  @@map("domain_event_outbox")
+}
+
+enum DemoRequestStatus {
+  PENDING
+  APPROVED
+  PROVISIONING
+  PROVISIONED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+model DemoRequest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fullName    String
+  companyName String
+  email       String
+  phone       String?
+  plan        Plan       @default(STARTER)
+  status      DemoRequestStatus @default(PENDING)
+
+  /// Provisioning sonrası oluşturulan tenant
+  tenantId    String?
+  /// Şifre belirleme token'ı
+  setPasswordToken   String?
+  setPasswordExpiry  DateTime?
+
+  notes       String?
+  rejectedReason String?
+  processedAt DateTime?
+  processedBy String?
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([email])
+  @@index([status])
+  @@index([tenantId])
+  @@index([createdAt])
+  @@map("demo_requests")
+}

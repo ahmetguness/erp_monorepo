@@ -1,0 +1,201 @@
+// Domain: marketplace
+// Keep related enums and models together; cross-domain relations are resolved by Prisma.
+
+enum MarketplaceChannel {
+  TRENDYOL
+  HEPSIBURADA
+  N11
+  AMAZON
+  CICEKSEPETI
+  OTHER
+}
+
+enum MarketplaceOrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+  REFUNDED
+}
+
+enum SyncJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+  DEAD_LETTER
+}
+
+enum SyncJobType {
+  SYNC_ORDERS
+  SYNC_STOCK
+  SYNC_PRODUCTS
+}
+
+model MarketplaceIntegration {
+  id         String             @id @default(cuid())
+  tenantId   String
+  channel    MarketplaceChannel
+  name       String
+  apiKey     String?
+  apiSecret  String?
+  storeId    String?
+  isActive   Boolean            @default(true)
+  lastSyncAt DateTime?
+  syncErrors Int                @default(0)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  listings MarketplaceListing[]
+  orders   MarketplaceOrder[]
+  syncJobs     MarketplaceSyncJob[]
+  webhookEvents MarketplaceWebhookEvent[]
+
+  @@unique([tenantId, channel])
+  @@map("marketplace_integrations")
+}
+
+model MarketplaceListing {
+  id            String    @id @default(cuid())
+  tenantId      String
+  integrationId String
+  productId     String
+  externalId    String
+  externalSku   String?
+  price         Decimal   @db.Decimal(18, 2)
+  stock         Decimal   @db.Decimal(18, 3) @default(0)
+  isActive      Boolean   @default(true)
+  lastSyncAt    DateTime?
+  syncError     String?
+
+  integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  product     Product                @relation(fields: [productId], references: [id])
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  snapshot    MarketplaceListingSnapshot?
+
+  @@unique([integrationId, externalId])
+  @@index([tenantId, productId])
+  @@map("marketplace_listings")
+}
+
+model MarketplaceOrder {
+  id              String                 @id @default(cuid())
+  tenantId        String
+  integrationId   String
+  externalId      String
+  channel         MarketplaceChannel
+  status          MarketplaceOrderStatus @default(PENDING)
+  customerName    String?
+  customerEmail   String?
+  customerPhone   String?
+  shippingAddress String?
+  totalAmount     Decimal                @db.Decimal(18, 2)
+  orderDate       DateTime
+  syncedAt        DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  items       MarketplaceOrderItem[]
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, externalId])
+  @@index([tenantId, channel])
+  @@index([tenantId, status])
+  @@map("marketplace_orders")
+}
+
+model MarketplaceOrderItem {
+  id                 String  @id @default(cuid())
+  tenantId           String
+  marketplaceOrderId String
+  externalProductId  String
+  productId          String?
+  name               String
+  quantity           Int
+  unitPrice          Decimal @db.Decimal(18, 2)
+  lineTotal          Decimal @db.Decimal(18, 2)
+
+  marketplaceOrder MarketplaceOrder @relation(fields: [marketplaceOrderId], references: [id], onDelete: Cascade)
+  product          Product?         @relation(fields: [productId], references: [id])
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, marketplaceOrderId])
+  @@map("marketplace_order_items")
+}
+
+model MarketplaceSyncJob {
+  id            String        @id @default(cuid())
+  tenantId      String
+  integrationId String
+  jobType       SyncJobType
+  status        SyncJobStatus @default(PENDING)
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  /// Kaç kayıt işlendi
+  processedCount Int          @default(0)
+  /// Kaç kayıt hata verdi
+  errorCount    Int           @default(0)
+  /// Hata mesajı (varsa)
+  errorMessage  String?
+  attempts      Int           @default(0)
+  maxAttempts   Int           @default(5)
+  nextRetryAt   DateTime?
+  leaseOwner    String?
+  leaseExpiresAt DateTime?
+  /// Job parametreleri (JSON): hoursBack, status filtresi vb.
+  params        Json?
+  /// Sonuç özeti (JSON): created, updated, skipped, batchIds vb.
+  result        Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, integrationId, status])
+  @@index([tenantId, jobType, status])
+  @@index([createdAt])
+  @@index([status, nextRetryAt, createdAt])
+  @@index([status, leaseExpiresAt])
+  @@map("marketplace_sync_jobs")
+}
+
+model MarketplaceWebhookEvent {
+  id            String   @id @default(cuid())
+  tenantId      String
+  integrationId String
+  /// Trendyol'un gönderdiği event ID (idempotency key)
+  eventId       String
+  eventType     String   // 'ORDER_STATUS_CHANGED' | 'STOCK_UPDATED' vb.
+  payload       Json
+  processedAt   DateTime?
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+
+  integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, eventId])
+  @@index([tenantId, processedAt])
+  @@map("marketplace_webhook_events")
+}
+
+model MarketplaceListingSnapshot {
+  id            String   @id @default(cuid())
+  tenantId      String
+  listingId     String   @unique
+  lastSentQty   Decimal  @db.Decimal(18, 3)
+  lastSentSalePrice  Decimal @db.Decimal(18, 2)
+  lastSentListPrice  Decimal @db.Decimal(18, 2)
+  lastSentAt    DateTime
+  batchRequestId String?
+
+  listing MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  tenant  Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("marketplace_listing_snapshots")
+}

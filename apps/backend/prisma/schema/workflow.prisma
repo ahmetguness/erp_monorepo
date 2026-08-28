@@ -1,0 +1,285 @@
+// Domain: workflow
+// Keep related enums and models together; cross-domain relations are resolved by Prisma.
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  ESCALATED
+}
+
+enum ApprovalActionType {
+  APPROVE
+  REJECT
+  ESCALATE
+  COMMENT
+  REASSIGN
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
+}
+
+enum MailDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MailDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum TaskType {
+  APPROVAL
+  COLLECTION
+  SERVICE
+  NOTIFICATION
+  CHECK
+  AUTOMATION
+  GENERAL
+}
+
+enum AutomationTrigger {
+  LOW_STOCK
+  OVERDUE_INVOICE
+  HIGH_VALUE_INVOICE
+  LOW_MARGIN
+  CHECK_DUE_SOON
+}
+
+enum AutomationAction {
+  CREATE_TASK
+  CREATE_NOTIFICATION
+  DRAFT_REMINDER_EMAIL
+  REQUEST_APPROVAL
+  CREATE_PURCHASE_REQUEST_DRAFT
+}
+
+enum AutomationExecutionStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum ApprovalModule {
+  PURCHASE_REQUEST
+  LEAVE_REQUEST
+  INVOICE
+  SALES_ORDER
+  PURCHASE_ORDER
+  SERVICE_REQUEST
+  OTHER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model MailMessage {
+  id              String             @id @default(cuid())
+  tenantId        String
+  direction       MailDirection      @default(OUTBOUND)
+  status          MailDeliveryStatus @default(PENDING)
+  providerId      String?
+  from            String?
+  replyTo         String?
+  to              String[]
+  cc              String[]           @default([])
+  bcc             String[]           @default([])
+  subject         String
+  html            String
+  textPreview     String?
+  attachments     Json?
+  attachmentCount Int                @default(0)
+  error           String?
+  sentById        String?
+  sentAt          DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sentBy User?  @relation("MailMessageSender", fields: [sentById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, direction, createdAt])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, sentById])
+  @@map("mail_messages")
+}
+
+model Task {
+  id           String     @id @default(cuid())
+  tenantId     String
+  title        String
+  detail       String?
+  type         TaskType   @default(GENERAL)
+  priority     Priority   @default(MEDIUM)
+  status       TaskStatus @default(TODO)
+  module       String?
+  entityType   EntityType?
+  entityId     String?
+  href         String?
+  source       String?
+  assignedToId String?
+  createdById  String?
+  dueAt        DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, source])
+  @@index([tenantId, assignedToId, status])
+  @@index([tenantId, status, dueAt])
+  @@index([tenantId, entityType, entityId])
+  @@map("tasks")
+}
+
+model AutomationRule {
+  id           String            @id @default(cuid())
+  tenantId     String
+  name         String
+  description  String?
+  trigger      AutomationTrigger
+  action       AutomationAction
+  module       String
+  conditions   Json?
+  actionConfig Json?
+  isActive     Boolean           @default(true)
+  lastRunAt    DateTime?
+  lastResult   Json?
+  createdById  String?
+  updatedById  String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  deletedAt    DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  executions AutomationExecution[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive])
+  @@index([tenantId, trigger])
+  @@index([deletedAt])
+  @@map("automation_rules")
+}
+
+model AutomationExecution {
+  id             String                    @id @default(cuid())
+  tenantId       String
+  ruleId         String?
+  trigger        AutomationTrigger?
+  action         AutomationAction?
+  entityType     EntityType?
+  entityId       String?
+  status         AutomationExecutionStatus @default(RUNNING)
+  input          Json?
+  output         Json?
+  error          String?
+  attempt        Int                       @default(1)
+  startedAt      DateTime                  @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime                  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rule   AutomationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status, startedAt])
+  @@index([tenantId, ruleId, startedAt])
+  @@index([tenantId, entityType, entityId])
+  @@map("automation_executions")
+}
+
+model ApprovalFlow {
+  id         String   @id @default(cuid())
+  tenantId   String
+  name       String
+  module     ApprovalModule
+  conditions Json?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  createdById String?
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  steps    ApprovalStep[]
+  requests ApprovalRequest[]
+
+  @@unique([tenantId, module, name])
+  @@index([tenantId, module])
+  @@map("approval_flows")
+}
+
+model ApprovalStep {
+  id             String   @id @default(cuid())
+  flowId         String
+  stepOrder      Int
+  name           String
+  approverRoleId String?  // Role that can approve this step
+  approverUserId String?  // Specific user override
+  isRequired     Boolean  @default(true)
+
+  flow    ApprovalFlow      @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  actions ApprovalAction[]
+  approverRole Role?   @relation("StepApproverRole", fields: [approverRoleId], references: [id])
+  approverUser User?   @relation("StepApproverUser", fields: [approverUserId], references: [id])
+
+  @@unique([flowId, stepOrder])
+  @@map("approval_steps")
+}
+
+model ApprovalRequest {
+  id          String         @id @default(cuid())
+  tenantId    String
+  flowId      String
+  entityType  EntityType
+  entityId    String
+  context     Json?
+  status      ApprovalStatus @default(PENDING)
+  currentStep Int            @default(1)
+  requestedBy String?
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  resolvedAt  DateTime?
+
+  tenant  Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  flow    ApprovalFlow     @relation(fields: [flowId], references: [id])
+  actions ApprovalAction[]
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, status])
+  @@index([tenantId, entityType, entityId, status])
+  @@map("approval_requests")
+}
+
+model ApprovalAction {
+  id         String             @id @default(cuid())
+  requestId  String
+  stepId     String?
+  actionType ApprovalActionType
+  actorId    String?
+  notes      String?
+  createdAt  DateTime           @default(now())
+
+  request ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  step    ApprovalStep?   @relation(fields: [stepId], references: [id])
+
+  @@index([requestId])
+  @@map("approval_actions")
+}

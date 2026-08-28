@@ -1,0 +1,130 @@
+// Domain: service
+// Keep related enums and models together; cross-domain relations are resolved by Prisma.
+
+enum ServiceStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_PARTS
+  WAITING_CUSTOMER
+  COMPLETED
+  CANCELLED
+}
+
+enum ServiceActivityType {
+  NOTE
+  STATUS_CHANGE
+  ASSIGNMENT
+  CALL
+  VISIT
+  OTHER
+}
+
+model CustomerAsset {
+  id           String    @id @default(cuid())
+  tenantId     String
+  contactId    String
+  name         String
+  brand        String?
+  model        String?
+  serialNo     String?
+  purchaseDate DateTime? @db.Date
+  warrantyEnd  DateTime? @db.Date
+  notes        String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  createdById  String?
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact         Contact          @relation(fields: [contactId], references: [id])
+  serviceRequests ServiceRequest[]
+
+  @@index([tenantId, contactId])
+  @@index([tenantId, serialNo])
+  @@map("customer_assets")
+}
+
+model ServiceRequest {
+  id              String        @id @default(cuid())
+  tenantId        String
+  contactId       String?
+  customerAssetId String?
+  number          String
+  status          ServiceStatus @default(OPEN)
+  subject         String
+  description     String?
+  warrantyEnd     DateTime?
+  assignedToId    String?
+  priority        Priority      @default(MEDIUM)
+  closedAt        DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+  createdById     String?
+  updatedById     String?
+
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact       Contact?                @relation(fields: [contactId], references: [id])
+  customerAsset CustomerAsset?          @relation(fields: [customerAssetId], references: [id])
+  items         ServiceRequestItem[]
+  activities    ServiceActivity[]
+  history       ServiceRequestHistory[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, assignedToId])
+  @@index([deletedAt])
+  @@map("service_requests")
+}
+
+model ServiceRequestItem {
+  id               String  @id @default(cuid())
+  tenantId         String
+  serviceRequestId String
+  productId        String?
+  description      String
+  quantity         Decimal @db.Decimal(18, 3) @default(1)
+  unitPrice        Decimal @db.Decimal(18, 2) @default(0)
+  lineTotal        Decimal @db.Decimal(18, 2) @default(0)
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  product        Product?       @relation(fields: [productId], references: [id])
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, serviceRequestId])
+  @@map("service_request_items")
+}
+
+model ServiceActivity {
+  id               String              @id @default(cuid())
+  tenantId         String
+  serviceRequestId String
+  actorId          String?
+  activityType     ServiceActivityType
+  notes            String?
+  createdAt        DateTime            @default(now())
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, serviceRequestId])
+  @@map("service_activities")
+}
+
+model ServiceRequestHistory {
+  id               String         @id @default(cuid())
+  tenantId         String
+  serviceRequestId String
+  fromStatus       ServiceStatus?
+  toStatus         ServiceStatus
+  notes            String?
+  createdAt        DateTime       @default(now())
+  createdById      String?
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, serviceRequestId])
+  @@map("service_request_history")
+}

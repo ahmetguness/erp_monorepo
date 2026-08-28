@@ -30,6 +30,7 @@
     "test:integration": "npm --workspace=@repo/backend run test:integration",
     "test:e2e": "npm --workspace=web run test:e2e",
     "test:module-boundaries": "npm --workspace=@repo/backend run test:module-boundaries",
+    "test:prisma-architecture": "npm --workspace=@repo/backend run test:prisma-architecture",
     "test:backend": "npm --workspace=@repo/backend run test",
     "test:web": "npm --workspace=web run test",
     "test:quality": "npm --workspace=@repo/backend run test:quality && npm --workspace=web run test:unit:coverage",

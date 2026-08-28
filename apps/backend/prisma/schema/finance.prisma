@@ -1,0 +1,533 @@
+// Domain: finance
+// Keep related enums and models together; cross-domain relations are resolved by Prisma.
+
+enum InvoiceType {
+  SALES
+  PURCHASE
+  RETURN_SALES
+  RETURN_PURCHASE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum EDocumentType {
+  E_INVOICE
+  E_ARCHIVE
+  E_WAYBILL
+}
+
+enum EDocumentStatus {
+  PENDING
+  PROCESSING
+  SENT
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  ERROR
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CREDIT_CARD
+  CHECK
+  PROMISSORY_NOTE
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum JournalEntryType {
+  MANUAL
+  AUTO_INVOICE
+  AUTO_PAYMENT
+  AUTO_PAYROLL
+  OPENING
+  CLOSING
+}
+
+enum BankAccountType {
+  CHECKING
+  SAVINGS
+  CREDIT
+  OTHER
+}
+
+enum BankTransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER
+  FEE
+  INTEREST
+  OTHER
+}
+
+enum CheckStatus {
+  PENDING
+  DEPOSITED
+  CLEARED
+  BOUNCED
+  CANCELLED
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum FiscalPeriodStatus {
+  OPEN
+  CLOSED
+  LOCKED
+}
+
+enum CheckNoteType {
+  CHECK
+  PROMISSORY_NOTE
+}
+
+enum BankTransactionRefType {
+  PAYMENT
+  INVOICE
+  RECONCILIATION
+  OTHER
+}
+
+model Invoice {
+  id              String        @id @default(cuid())
+  tenantId        String
+  contactId       String
+  salesOrderId    String?
+  purchaseOrderId String?
+  type            InvoiceType
+  status          InvoiceStatus @default(DRAFT)
+  number          String
+  date            DateTime
+  dueDate         DateTime?
+  currencyCode    String        @default("TRY")
+  exchangeRate    Decimal       @db.Decimal(18, 6) @default(1)
+  totalNet        Decimal       @db.Decimal(18, 2) @default(0)
+  totalTax        Decimal       @db.Decimal(18, 2) @default(0)
+  totalGross      Decimal       @db.Decimal(18, 2) @default(0)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+  createdById     String?
+  updatedById     String?
+  totalWithholding Decimal      @db.Decimal(18, 2) @default(0)
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact       Contact             @relation(fields: [contactId], references: [id])
+  salesOrder    SalesOrder?         @relation(fields: [salesOrderId], references: [id])
+  purchaseOrder PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
+  lines         InvoiceLine[]
+  eDocuments    EDocument[]
+  payments      PaymentAllocation[]
+  history       InvoiceHistory[]
+  collectionReminders CollectionReminder[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, contactId])
+  @@index([tenantId, date])
+  @@index([tenantId, dueDate])
+  @@index([tenantId, status, dueDate])
+  @@index([tenantId, type, status])
+  @@index([tenantId, salesOrderId, type])
+  @@index([tenantId, purchaseOrderId, type])
+  @@index([deletedAt])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id          String  @id @default(cuid())
+  tenantId    String
+  invoiceId   String
+  productId   String?
+  taxRateId   String?
+  withholdingRateId String?
+  description String
+  quantity    Decimal @db.Decimal(18, 3)
+  unitPrice   Decimal @db.Decimal(18, 2)
+  discount    Decimal @db.Decimal(5, 2) @default(0)
+  taxAmount   Decimal @db.Decimal(18, 2) @default(0)
+  withholdingAmount Decimal @db.Decimal(18, 2) @default(0)
+  lineTotal   Decimal @db.Decimal(18, 2)
+  sortOrder   Int     @default(0)
+
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+  taxRate TaxRate? @relation(fields: [taxRateId], references: [id])
+  withholdingRate TaxRate? @relation("InvoiceLineWithholding", fields: [withholdingRateId], references: [id])
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, invoiceId])
+  @@map("invoice_lines")
+}
+
+model InvoiceHistory {
+  id          String        @id @default(cuid())
+  tenantId    String
+  invoiceId   String
+  fromStatus  InvoiceStatus?
+  toStatus    InvoiceStatus
+  notes       String?
+  createdAt   DateTime      @default(now())
+  createdById String?
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, invoiceId])
+  @@map("invoice_history")
+}
+
+model EDocument {
+  id              String          @id @default(cuid())
+  tenantId        String
+  // Required for E_INVOICE / E_ARCHIVE; must be null for E_WAYBILL
+  invoiceId       String?
+  // Required for E_WAYBILL; must be null for E_INVOICE / E_ARCHIVE
+  deliveryNoteId  String?
+  type            EDocumentType
+  status          EDocumentStatus @default(PENDING)
+  uuid            String?         @unique
+  providerCode    String?
+  providerMessage String?
+  requestPayload  Json?
+  responsePayload Json?
+  retryCount      Int             @default(0)
+  lastRetryAt     DateTime?
+  sentAt          DateTime?
+  acceptedAt      DateTime?
+  rejectedAt      DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  invoice      Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  deliveryNote DeliveryNote? @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, deliveryNoteId])
+  @@map("e_documents")
+}
+
+model BankAccount {
+  id            String          @id @default(cuid())
+  tenantId      String
+  name          String
+  accountNumber String?
+  /// NULL values are excluded from the unique constraint in PostgreSQL (NULL != NULL), so multiple rows with NULL iban are allowed
+  iban          String?
+  bankName      String?
+  branchName    String?
+  branchCode    String?
+  currencyCode  String          @default("TRY")
+  type          BankAccountType @default(CHECKING)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  deletedAt     DateTime?
+  createdById   String?
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions BankTransaction[]
+  payments     Payment[]
+
+  @@unique([tenantId, iban])
+  @@index([tenantId, isActive])
+  @@index([deletedAt])
+  @@map("bank_accounts")
+}
+
+model CashAccount {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String
+  currencyCode String   @default("TRY")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+  createdById  String?
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@index([tenantId, isActive])
+  @@index([deletedAt])
+  @@map("cash_accounts")
+}
+
+model BankTransaction {
+  id            String              @id @default(cuid())
+  tenantId      String
+  bankAccountId String
+  type          BankTransactionType
+  amount        Decimal             @db.Decimal(18, 2)
+  balanceAfter  Decimal             @db.Decimal(18, 2)
+  date          DateTime
+  description   String?
+  reference     String?
+  refType       BankTransactionRefType?
+  refId         String?
+  createdAt     DateTime            @default(now())
+  createdById   String?
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id])
+
+  @@index([tenantId, bankAccountId])
+  @@index([tenantId, date])
+  @@index([refType, refId])
+  @@map("bank_transactions")
+}
+
+model CheckPromissoryNote {
+  id           String      @id @default(cuid())
+  tenantId     String
+  contactId    String?
+  type         CheckNoteType
+  number       String
+  amount       Decimal     @db.Decimal(18, 2)
+  currencyCode String      @default("TRY")
+  issueDate    DateTime    @db.Date
+  dueDate      DateTime    @db.Date
+  bankName     String?
+  status       CheckStatus @default(PENDING)
+  notes        String?
+  deletedAt    DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  createdById  String?
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, dueDate])
+  @@index([tenantId, contactId])
+  @@index([deletedAt])
+  @@map("check_promissory_notes")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  tenantId      String
+  contactId     String?
+  bankAccountId String?
+  cashAccountId String?
+  checkNoteId   String?
+  date          DateTime
+  amount        Decimal       @db.Decimal(18, 2)
+  method        PaymentMethod @default(CASH)
+  direction     String        @default("RECEIVE")
+  reference     String?
+  idempotencyKey String?
+  status        PaymentStatus @default(PENDING)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+  createdById   String?
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact     Contact?             @relation(fields: [contactId], references: [id])
+  bankAccount BankAccount?         @relation(fields: [bankAccountId], references: [id])
+  cashAccount CashAccount?         @relation(fields: [cashAccountId], references: [id])
+  checkNote   CheckPromissoryNote? @relation(fields: [checkNoteId], references: [id])
+  allocations PaymentAllocation[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, date])
+  @@index([tenantId, contactId])
+  @@unique([tenantId, idempotencyKey])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id        String   @id @default(cuid())
+  tenantId  String
+  paymentId String
+  invoiceId String
+  amount    Decimal  @db.Decimal(18, 2)
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentId, invoiceId])
+  @@index([tenantId, paymentId])
+  @@index([tenantId, invoiceId])
+  @@map("payment_allocations")
+}
+
+model LedgerAccount {
+  id          String      @id @default(cuid())
+  tenantId    String
+  code        String
+  name        String
+  parentId    String?
+  isActive    Boolean     @default(true)
+  accountType AccountType @default(ASSET)
+  deletedAt   DateTime?
+
+  tenant   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   LedgerAccount?     @relation("AccountTree", fields: [parentId], references: [id])
+  children LedgerAccount[]    @relation("AccountTree")
+  lines    JournalEntryLine[]
+  reconciliationLines ReconciliationLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+  @@index([deletedAt])
+  @@map("ledger_accounts")
+}
+
+model FiscalPeriod {
+  id         String             @id @default(cuid())
+  tenantId   String
+  name       String
+  startDate  DateTime           @db.Date
+  endDate    DateTime           @db.Date
+  status     FiscalPeriodStatus @default(OPEN)
+  closedAt   DateTime?
+  closedById String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  journalEntries JournalEntry[]
+
+  @@unique([tenantId, startDate, endDate])
+  @@index([tenantId, status])
+  @@map("fiscal_periods")
+}
+
+model JournalEntry {
+  id             String           @id @default(cuid())
+  tenantId       String
+  fiscalPeriodId String?
+  type           JournalEntryType
+  number         String
+  date           DateTime
+  description    String?
+  refType        String?
+  refId          String?
+  isPosted       Boolean          @default(false)
+  postedAt       DateTime?
+  postedById     String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  createdById    String?
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fiscalPeriod FiscalPeriod?      @relation(fields: [fiscalPeriodId], references: [id])
+  lines        JournalEntryLine[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, date])
+  @@index([tenantId, isPosted])
+  @@index([refType, refId])
+  @@map("journal_entries")
+}
+
+model JournalEntryLine {
+  id             String  @id @default(cuid())
+  tenantId       String
+  journalEntryId String
+  accountId      String
+  debit          Decimal @db.Decimal(18, 2) @default(0)
+  credit         Decimal @db.Decimal(18, 2) @default(0)
+  description    String?
+  sortOrder      Int     @default(0)
+
+  journalEntry JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      LedgerAccount @relation(fields: [accountId], references: [id])
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, journalEntryId])
+  @@index([tenantId, accountId])
+  @@map("journal_entry_lines")
+}
+
+model Reconciliation {
+  id            String   @id @default(cuid())
+  tenantId      String
+  name          String
+  description   String?
+  date          DateTime @db.Date
+  isFinalized   Boolean  @default(false)
+  finalizedAt   DateTime?
+  finalizedById String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdById   String?
+
+  tenant Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines  ReconciliationLine[]
+
+  @@index([tenantId, date])
+  @@map("reconciliations")
+}
+
+model ReconciliationLine {
+  id               String  @id @default(cuid())
+  tenantId         String
+  reconciliationId String
+  accountId        String
+  refType          String?
+  refId            String?
+  amount           Decimal @db.Decimal(18, 2)
+  isMatched        Boolean @default(false)
+  notes            String?
+
+  reconciliation Reconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  account        LedgerAccount  @relation(fields: [accountId], references: [id])
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, reconciliationId])
+  @@map("reconciliation_lines")
+}
+
+model CollectionReminder {
+  id         String   @id @default(cuid())
+  tenantId   String
+  contactId  String
+  invoiceId  String?
+  amount     Decimal  @db.Decimal(18, 2)
+  dueDate    DateTime
+  status     String   @default("PENDING") // PENDING, SENT, CANCELLED
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("collection_reminders")
+}

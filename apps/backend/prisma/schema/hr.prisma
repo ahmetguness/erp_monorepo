@@ -1,0 +1,131 @@
+// Domain: hr
+// Keep related enums and models together; cross-domain relations are resolved by Prisma.
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  MATERNITY
+  PATERNITY
+  UNPAID
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model Employee {
+  id          String    @id @default(cuid())
+  tenantId    String
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  position    String?
+  department  String?
+  hireDate    DateTime
+  leaveDate   DateTime?
+  salary      Decimal   @db.Decimal(18, 2) @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leaveRequests LeaveRequest[]
+  attendances   Attendance[]
+  payrolls      Payroll[]
+
+  @@index([tenantId, isActive])
+  @@index([tenantId, department])
+  @@index([deletedAt])
+  @@map("employees")
+}
+
+model LeaveRequest {
+  id         String      @id @default(cuid())
+  tenantId   String
+  employeeId String
+  type       LeaveType
+  status     LeaveStatus @default(PENDING)
+  startDate  DateTime
+  endDate    DateTime
+  days       Decimal     @db.Decimal(5, 1)
+  notes      String?
+  approvedBy String?
+  approvedAt DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  deletedAt  DateTime?
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, status])
+  @@map("leave_requests")
+}
+
+model Attendance {
+  id            String    @id @default(cuid())
+  tenantId      String
+  employeeId    String
+  date          DateTime  @db.Date
+  checkIn       DateTime?
+  checkOut      DateTime?
+  overtimeHours Decimal   @db.Decimal(5, 2) @default(0)
+  notes         String?
+  updatedAt     DateTime  @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([tenantId, date])
+  @@map("attendances")
+}
+
+model Payroll {
+  id          String    @id @default(cuid())
+  tenantId    String
+  employeeId  String
+  period      String    // "2026-03" (YYYY-MM)
+  grossSalary Decimal   @db.Decimal(18, 2)
+  deductions  Decimal   @db.Decimal(18, 2) @default(0)
+  netSalary   Decimal   @db.Decimal(18, 2)
+  paidAt      DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+
+  employee Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items    PayrollItem[]
+
+  @@unique([tenantId, employeeId, period])
+  @@index([tenantId, period])
+  @@index([deletedAt])
+  @@map("payrolls")
+}
+
+model PayrollItem {
+  id          String  @id @default(cuid())
+  tenantId    String
+  payrollId   String
+  label       String
+  amount      Decimal @db.Decimal(18, 2)
+  isDeduction Boolean @default(false)
+
+  payroll Payroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, payrollId])
+  @@map("payroll_items")
+}

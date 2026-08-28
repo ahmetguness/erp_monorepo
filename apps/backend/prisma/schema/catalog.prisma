@@ -1,0 +1,188 @@
+// Domain: catalog
+// Keep related enums and models together; cross-domain relations are resolved by Prisma.
+
+enum ContactType {
+  CUSTOMER
+  SUPPLIER
+  BOTH
+}
+
+enum CostingMethod {
+  MOVING_AVERAGE
+  FIFO
+  LIFO
+  STANDARD
+}
+
+model Unit {
+  id       String @id @default(cuid())
+  tenantId String
+  name     String
+  code     String
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([tenantId, code])
+  @@map("units")
+}
+
+model Category {
+  id       String  @id @default(cuid())
+  tenantId String
+  name     String
+  parentId String?
+
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@index([tenantId])
+  @@map("categories")
+}
+
+model TaxRate {
+  id       String  @id @default(cuid())
+  tenantId String
+  name     String
+  rate     Decimal @db.Decimal(5, 2)
+  isActive Boolean @default(true)
+  isWithholding Boolean @default(false)
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products     Product[]
+  invoiceLines InvoiceLine[]
+  withholdingLines InvoiceLine[] @relation("InvoiceLineWithholding")
+
+  @@map("tax_rates")
+}
+
+model Contact {
+  id       String      @id @default(cuid())
+  tenantId String
+  type     ContactType
+
+  name      String
+  code      String?
+  taxNumber String?
+  taxOffice String?
+  email     String?
+  phone     String?
+  website   String?
+  address   String?
+  city      String?
+  country   String  @default("TR")
+  notes     String?
+  isActive  Boolean @default(true)
+
+  creditLimit     Decimal? @db.Decimal(18, 2)
+  paymentTermDays Int?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salesOrders     SalesOrder[]
+  salesQuotes     SalesQuote[]
+  purchaseOrders  PurchaseOrder[]
+  invoices        Invoice[]
+  accountEntries  AccountEntry[]
+  serviceRequests ServiceRequest[]
+  customerAssets  CustomerAsset[]
+  payments        Payment[]
+  deliveryNotes   DeliveryNote[]
+  collectionReminders CollectionReminder[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, type])
+  @@index([tenantId, isActive])
+  @@index([tenantId, name])
+  @@index([deletedAt])
+  @@map("contacts")
+}
+
+model AccountEntry {
+  id          String   @id @default(cuid())
+  tenantId    String
+  contactId   String
+  date        DateTime
+  debit       Decimal  @db.Decimal(18, 2) @default(0)
+  credit      Decimal  @db.Decimal(18, 2) @default(0)
+  /// @computed - must be updated within the same transaction as the parent write
+  balance     Decimal  @db.Decimal(18, 2) @default(0)
+  description String?
+  refType     String?
+  refId       String?
+  createdAt   DateTime @default(now())
+  createdById String?
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, contactId])
+  @@index([tenantId, date])
+  @@index([refType, refId])
+  @@map("account_entries")
+}
+
+model Product {
+  id         String  @id @default(cuid())
+  tenantId   String
+  categoryId String?
+  unitId     String
+  taxRateId  String?
+
+  code        String
+  name        String
+  barcode     String?
+  description String?
+  imageUrl    String?
+
+  purchasePrice Decimal       @db.Decimal(18, 2) @default(0)
+  salesPrice    Decimal       @db.Decimal(18, 2) @default(0)
+  minStockLevel Decimal       @db.Decimal(18, 3) @default(0)
+  costingMethod CostingMethod @default(MOVING_AVERAGE)
+  averageCost   Decimal       @db.Decimal(18, 4) @default(0)
+
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category             Category?             @relation(fields: [categoryId], references: [id])
+  unit                 Unit                  @relation(fields: [unitId], references: [id])
+  taxRate              TaxRate?              @relation(fields: [taxRateId], references: [id])
+  stockLevels          StockLevel[]
+  movements            StockMovement[]
+  stockValuations      StockValuation[]
+  reservations         InventoryReservation[]
+  batches              ProductBatch[]
+  salesItems           SalesOrderItem[]
+  quoteItems           SalesQuoteItem[]
+  purchaseItems        PurchaseOrderItem[]
+  purchaseRequestItems PurchaseRequestItem[]
+  invoiceLines         InvoiceLine[]
+  bomProducts          BOM[]
+  bomItems             BOMItem[]
+  workOrders           WorkOrder[]
+  workOrderItems       WorkOrderItem[]
+  stockCountItems      StockCountItem[]
+  serviceItems         ServiceRequestItem[]
+  marketplaceListings  MarketplaceListing[]
+  marketplaceOrderItems MarketplaceOrderItem[]
+  deliveryNoteItems    DeliveryNoteItem[]
+  lots                 LotSerialNumber[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+  @@index([tenantId, categoryId])
+  @@index([deletedAt])
+  @@map("products")
+}

@@ -1,0 +1,433 @@
+// Domain: identity
+// Keep related enums and models together; cross-domain relations are resolved by Prisma.
+
+enum Plan {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum DeploymentType {
+  CLOUD
+  ON_PREMISE
+}
+
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  APPROVE
+  EXPORT
+}
+
+enum FeatureType {
+  BOOLEAN   // isEnabled kullanılır, value "true"/"false"
+  LIMIT     // value sayısal limit (örn: "500", "unlimited")
+  ENUM      // value izin verilen değerlerden biri
+}
+
+enum FeatureKey {
+  MAX_USERS
+  MAX_PRODUCTS
+  MULTI_WAREHOUSE
+  ROLE_MANAGEMENT
+  APPROVALS
+  CRM
+  SALES
+  PURCHASING
+  PRODUCTION
+  SERVICE
+  MARKETPLACE
+  PAYROLL
+  HR
+  API_ACCESS
+  AUDIT_LOG
+  CUSTOM_REPORTING
+  DOCUMENT_CENTER
+  SMART_NOTIFICATIONS
+  WORKFLOW_CENTER
+  MAIL_CENTER
+  BULK_OPERATIONS
+  CASHFLOW_FORECAST
+  BANK_RECONCILIATION
+  LOT_SERIAL_TRACKING
+}
+
+enum AppModule {
+  ACCOUNTING
+  INVENTORY
+  CRM
+  SALES
+  PURCHASING
+  WAREHOUSE
+  PRODUCTION
+  SERVICE
+  HR
+  PAYROLL
+  MARKETPLACE
+  REPORTING
+  // Ek modüller — uygulama katmanında kullanılır
+  CONTACTS
+  INVOICING
+  APPROVALS
+  MAIL
+  WORKFLOW
+  DOCUMENTS
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  slug        String  @unique
+  companyName String
+
+  taxNumber String? @unique
+  taxOffice String?
+
+  email   String
+  phone   String?
+  website String?
+
+  address String?
+  city    String?
+  country String @default("TR")
+
+  sector String?
+
+  plan              Plan           @default(STARTER)
+  status            TenantStatus   @default(TRIAL)
+  deploymentType    DeploymentType @default(CLOUD)
+  /// Null means unlimited users
+  maxUsers          Int?
+  /// Price per user in the tenant's subscription (e.g. 10.00 = $10/user)
+  userPrice         Decimal?       @db.Decimal(10, 2)
+  trialEndsAt       DateTime?
+  subscriptionStart DateTime?
+  subscriptionEnd   DateTime?
+  /// DEĞİŞİKLİK 5: plan upgrade/downgrade zamanı
+  planChangedAt     DateTime?
+  /// DEĞİŞİKLİK 5: Enterprise müşteriler için fiyat tablosunu bypass et
+  isCustomPricing   Boolean        @default(false)
+
+  modules AppModule[] @default([])
+  notes   String?
+
+  // Relations
+  users                  TenantUser[]
+  roles                  Role[]
+  units                  Unit[]
+  categories             Category[]
+  taxRates               TaxRate[]
+  currencies             Currency[]
+  currencyRates          CurrencyRate[]
+  contacts               Contact[]
+  products               Product[]
+  warehouses             Warehouse[]
+  stockMovements         StockMovement[]
+  stockCounts            StockCount[]
+  inventoryReservations  InventoryReservation[]
+  salesOrders            SalesOrder[]
+  salesQuotes            SalesQuote[]
+  purchaseRequests       PurchaseRequest[]
+  purchaseOrders         PurchaseOrder[]
+  deliveryNotes          DeliveryNote[]
+  invoices               Invoice[]
+  payments               Payment[]
+  bankAccounts           BankAccount[]
+  cashAccounts           CashAccount[]
+  bankTransactions       BankTransaction[]
+  checkPromissoryNotes   CheckPromissoryNote[]
+  ledgerAccounts         LedgerAccount[]
+  journalEntries         JournalEntry[]
+  fiscalPeriods          FiscalPeriod[]
+  reconciliations        Reconciliation[]
+  employees              Employee[]
+  workOrders             WorkOrder[]
+  workCenters            WorkCenter[]
+  boms                   BOM[]
+  serviceRequests        ServiceRequest[]
+  customerAssets         CustomerAsset[]
+  marketplaces           MarketplaceIntegration[]
+  savedReports           SavedReport[]
+  savedViews             SavedView[]
+  numberSequences        NumberSequence[]
+  auditLogs              AuditLog[]
+  attachments            Attachment[]
+  approvalFlows          ApprovalFlow[]
+  approvalRequests       ApprovalRequest[]
+  notifications          Notification[]
+  mailMessages           MailMessage[]
+  tasks                  Task[]
+  automationRules        AutomationRule[]
+  automationExecutions   AutomationExecution[]
+  domainEventOutbox      DomainEventOutbox[]
+  tenantSettings         TenantSetting[]
+  moduleSettings         ModuleSetting[]
+  aiRequestLogs          AiRequestLog[]
+  // Back-relations for models with tenantId
+  accountEntries           AccountEntry[]
+  stockLevels              StockLevel[]
+  locations                Location[]
+  stockCountItems          StockCountItem[]
+  paymentAllocations       PaymentAllocation[]
+  payrolls                 Payroll[]
+  leaveRequests            LeaveRequest[]
+  attendances              Attendance[]
+  lotSerialNumbers         LotSerialNumber[]
+  productBatches           ProductBatch[]
+  salesOrderHistories      SalesOrderHistory[]
+  purchaseOrderHistories   PurchaseOrderHistory[]
+  invoiceHistories         InvoiceHistory[]
+  workOrderHistories       WorkOrderHistory[]
+  routingOperations        RoutingOperation[]
+  journalEntryLines        JournalEntryLine[]
+  reconciliationLines      ReconciliationLine[]
+  payrollItems             PayrollItem[]
+  bomItems                 BOMItem[]
+  workOrderItems           WorkOrderItem[]
+  workOrderOperations      WorkOrderOperation[]
+  workCenterCapacities     WorkCenterCapacity[]
+  salesQuoteItems          SalesQuoteItem[]
+  salesOrderItems          SalesOrderItem[]
+  purchaseRequestItems     PurchaseRequestItem[]
+  purchaseOrderItems       PurchaseOrderItem[]
+  deliveryNoteItems        DeliveryNoteItem[]
+  invoiceLines             InvoiceLine[]
+  stockValuations          StockValuation[]
+  eDocuments               EDocument[]
+  serviceActivities        ServiceActivity[]
+  serviceRequestHistories  ServiceRequestHistory[]
+  serviceRequestItems      ServiceRequestItem[]
+  marketplaceListings      MarketplaceListing[]
+  marketplaceOrders        MarketplaceOrder[]
+  marketplaceSyncJobs      MarketplaceSyncJob[]
+  marketplaceWebhookEvents MarketplaceWebhookEvent[]
+  marketplaceListingSnapshots MarketplaceListingSnapshot[]
+  marketplaceOrderItems    MarketplaceOrderItem[]
+  // DEĞİŞİKLİK 3: TenantFeatureOverride back-relation
+  featureOverrides         TenantFeatureOverride[]
+  // DEĞİŞİKLİK 6: ApiKey back-relation
+  apiKeys                  ApiKey[]
+  // Invitation & DemoRequest back-relations
+  invitations              Invitation[]
+  demoRequests             DemoRequest[]
+  collectionReminders      CollectionReminder[]
+
+  @@index([status])
+  @@index([deletedAt])
+  @@map("tenants")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  email    String  @unique
+  name     String
+  phone    String?
+  password String
+
+  isActive            Boolean  @default(true)
+  lastLoginAt         DateTime?
+  passwordResetToken  String?
+  passwordResetExpiry DateTime?
+
+  tenants TenantUser[]
+  approvalSteps ApprovalStep[] @relation("StepApproverUser")
+  sentInvitations Invitation[] @relation("InvitationInviter")
+  sentMailMessages MailMessage[] @relation("MailMessageSender")
+  aiRequestLogs AiRequestLog[]
+
+  @@index([email])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model AdminUser {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  email    String  @unique
+  name     String
+  password String
+
+  isActive    Boolean  @default(true)
+  lastLoginAt DateTime?
+
+  @@map("admin_users")
+}
+
+model TenantUser {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId String
+  userId   String
+  roleId   String?
+
+  isOwner  Boolean @default(false)
+  isActive Boolean @default(true)
+  
+  preferences Json? // Eklenen alan: Dashboard layout, widget ayarları vb.
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleRef Role?   @relation(fields: [roleId], references: [id])
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("tenant_users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  users       TenantUser[]
+  approvalSteps ApprovalStep[] @relation("StepApproverRole")
+  invitations Invitation[]
+
+  @@unique([tenantId, name])
+  @@map("roles")
+}
+
+model RolePermission {
+  id     String           @id @default(cuid())
+  roleId String
+  module String
+  action PermissionAction
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, module, action])
+  @@map("role_permissions")
+}
+
+model PlanFeature {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  plan  Plan   
+  key   String 
+  value String
+
+  // DEĞİŞİKLİK 1: yeni alanlar
+  type        FeatureType  @default(LIMIT)
+  isEnabled   Boolean      @default(true)
+  description String?
+
+  // DEĞİŞİKLİK 2: typed key — key String korunur, featureKey nullable eklendi
+  featureKey  FeatureKey?
+
+  // Mevcut unique korunur; featureKey için ayrı unique eklendi
+  @@unique([plan, key])
+  @@unique([plan, featureKey])
+  @@index([plan])
+  @@map("plan_features")
+}
+
+model TenantFeatureOverride {
+  id          String     @id @default(cuid())
+  tenantId    String
+  featureKey  FeatureKey
+  value       String
+  isEnabled   Boolean    @default(true)
+  reason      String?    // neden override edildiğine dair not (Enterprise satış)
+  expiresAt   DateTime?  // geçici override desteği
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdById String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, featureKey])
+  @@index([tenantId])
+  @@map("tenant_feature_overrides")
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  tenantId    String
+  name        String                       // key'e verilen isim (örn: "Production API")
+  keyHash     String    @unique            // bcrypt/sha256 hash — ham key saklanmaz
+  keyPrefix   String                       // ilk 8 karakter, UI'da gösterim için (örn: "sk_live_")
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  scopes      String[]  @default([])       // izin verilen scope'lar (örn: ["invoices:read"])
+  ipAllowlist String[]  @default([])       // bos ise tum IP'lere izin verilir
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  revokedAt   DateTime?
+  revokedById String?
+  rotatedAt   DateTime?
+  rotatedFromId String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isActive])
+  @@index([tenantId, deletedAt])
+  @@index([tenantId, rotatedFromId])
+  @@map("api_keys")
+}
+
+model Invitation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId    String
+  email       String
+  roleId      String?
+  status      InvitationStatus @default(PENDING)
+
+  tokenHash   String   @unique
+  expiresAt   DateTime
+
+  invitedBy   String
+  acceptedAt  DateTime?
+
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role      Role?   @relation(fields: [roleId], references: [id])
+  inviter   User    @relation("InvitationInviter", fields: [invitedBy], references: [id])
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([roleId])
+  @@index([status])
+  @@index([tokenHash])
+  @@map("invitations")
+}

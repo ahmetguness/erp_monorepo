@@ -147,11 +147,18 @@ function checkAuthorizationQueryCentralization(): CheckIssue[] {
 
 function checkWorkerDurability(): CheckIssue[] {
   const issues: CheckIssue[] = [];
-  const schema = readFileSync(join(repoRoot, 'apps/backend/prisma/schema.prisma'), 'utf8');
+  const schemaDirectory = join(repoRoot, 'apps/backend/prisma/schema');
+  const schemaFiles = [
+    join(schemaDirectory, 'schema.prisma'),
+    ...readdirSync(schemaDirectory)
+      .filter((file) => file.endsWith('.prisma') && file !== 'schema.prisma')
+      .map((file) => join(schemaDirectory, file)),
+  ];
+  const schema = schemaFiles.map((file) => readFileSync(file, 'utf8')).join('\n');
   const outboxWorker = readFileSync(join(repoRoot, 'apps/backend/src/services/domain-event-outbox-worker.service.ts'), 'utf8');
   const marketplaceWorker = readFileSync(join(repoRoot, 'apps/backend/src/services/trendyol-worker.service.ts'), 'utf8');
   for (const required of ['leaseOwner', 'leaseExpiresAt', '@@index([status, nextRetryAt, createdAt])', '@@index([status, leaseExpiresAt])']) {
-    if (!schema.includes(required)) issues.push({ file: 'apps/backend/prisma/schema.prisma', message: `durable workers require ${required}` });
+    if (!schema.includes(required)) issues.push({ file: 'apps/backend/prisma', message: `durable workers require ${required}` });
   }
   for (const [file, source] of [
     ['apps/backend/src/services/domain-event-outbox-worker.service.ts', outboxWorker],

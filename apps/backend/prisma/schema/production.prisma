@@ -1,0 +1,222 @@
+// Domain: production
+// Keep related enums and models together; cross-domain relations are resolved by Prisma.
+
+enum WorkOrderStatus {
+  PLANNED
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+model WorkCenter {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  code        String
+  description String?
+  capacity    Decimal? @db.Decimal(10, 2)
+  laborRate    Decimal?             @db.Decimal(10, 2)
+  overheadRate Decimal?             @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  operations   RoutingOperation[]
+  workOrderOps WorkOrderOperation[]
+  capacities   WorkCenterCapacity[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("work_centers")
+}
+
+model BOM {
+  id        String   @id @default(cuid())
+  tenantId  String
+  productId String
+  name      String
+  version   String   @default("1.0")
+  isActive  Boolean  @default(true)
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product    Product            @relation(fields: [productId], references: [id])
+  items      BOMItem[]
+  workOrders WorkOrder[]
+  routings   RoutingOperation[]
+
+  @@unique([tenantId, productId, version])
+  @@map("boms")
+}
+
+model BOMItem {
+  id        String  @id @default(cuid())
+  tenantId  String
+  bomId     String
+  productId String
+  quantity  Decimal @db.Decimal(18, 3)
+  unit      String?
+  notes     String?
+  sortOrder Int     @default(0)
+
+  bom     BOM     @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, bomId])
+  @@map("bom_items")
+}
+
+model RoutingOperation {
+  id           String   @id @default(cuid())
+  tenantId     String
+  bomId        String
+  workCenterId String
+  name         String
+  stepOrder    Int
+  setupTime    Decimal? @db.Decimal(10, 2) // minutes
+  runTime      Decimal? @db.Decimal(10, 2) // minutes per unit
+  notes        String?
+
+  bom          BOM                  @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  workCenter   WorkCenter           @relation(fields: [workCenterId], references: [id])
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrderOps WorkOrderOperation[]
+
+  @@unique([bomId, stepOrder])
+  @@index([tenantId, bomId])
+  @@map("routing_operations")
+}
+
+model WorkOrder {
+  id               String          @id @default(cuid())
+  tenantId         String
+  bomId            String?
+  productId        String
+  number           String
+  status           WorkOrderStatus @default(PLANNED)
+  plannedQty       Decimal         @db.Decimal(18, 3)
+  producedQty      Decimal         @db.Decimal(18, 3) @default(0)
+  startDate        DateTime?
+  endDate          DateTime?
+  notes            String?
+  // Warehouse from which raw materials are consumed
+  inputWarehouseId  String?
+  // Warehouse to which finished goods are output
+  outputWarehouseId String?
+  estimatedMaterialCost Decimal? @db.Decimal(18, 2)
+  estimatedLaborCost    Decimal? @db.Decimal(18, 2)
+  estimatedOverheadCost Decimal? @db.Decimal(18, 2)
+  actualMaterialCost    Decimal? @db.Decimal(18, 2) @default(0)
+  actualLaborCost       Decimal? @db.Decimal(18, 2) @default(0)
+  actualOverheadCost    Decimal? @db.Decimal(18, 2) @default(0)
+  scrapCost             Decimal? @db.Decimal(18, 2) @default(0)
+  scrapQty              Decimal? @db.Decimal(18, 3) @default(0)
+  scrapReason           String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
+  createdById      String?
+
+  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bom             BOM?                 @relation(fields: [bomId], references: [id])
+  product         Product              @relation(fields: [productId], references: [id])
+  inputWarehouse  Warehouse?           @relation("WorkOrderInputWarehouse", fields: [inputWarehouseId], references: [id])
+  outputWarehouse Warehouse?           @relation("WorkOrderOutputWarehouse", fields: [outputWarehouseId], references: [id])
+  items           WorkOrderItem[]
+  operations      WorkOrderOperation[]
+  history         WorkOrderHistory[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([deletedAt])
+  @@map("work_orders")
+}
+
+model WorkOrderItem {
+  id                String  @id @default(cuid())
+  tenantId          String
+  workOrderId       String
+  productId         String
+  requiredQty       Decimal @db.Decimal(18, 3)
+  consumedQty       Decimal @db.Decimal(18, 3) @default(0)
+  // Warehouse from which this specific item is sourced (overrides WorkOrder.inputWarehouseId if set)
+  sourceWarehouseId String?
+
+  workOrder       WorkOrder  @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  product         Product    @relation(fields: [productId], references: [id])
+  tenant          Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceWarehouse Warehouse? @relation("WorkOrderItemSourceWarehouse", fields: [sourceWarehouseId], references: [id])
+
+  @@index([tenantId, workOrderId])
+  @@map("work_order_items")
+}
+
+model WorkOrderOperation {
+  id             String          @id @default(cuid())
+  tenantId       String
+  workOrderId    String
+  routingOpId    String?
+  workCenterId   String
+  name           String
+  stepOrder      Int
+  status         WorkOrderStatus @default(PLANNED)
+  plannedStartAt DateTime?
+  plannedEndAt   DateTime?
+  actualStartAt  DateTime?
+  actualEndAt    DateTime?
+  plannedSetupTime Decimal? @db.Decimal(10, 2)
+  plannedRunTime   Decimal? @db.Decimal(10, 2)
+  actualSetupTime  Decimal? @db.Decimal(10, 2)
+  actualRunTime    Decimal? @db.Decimal(10, 2)
+  notes          String?
+
+  workOrder  WorkOrder         @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  routingOp  RoutingOperation? @relation(fields: [routingOpId], references: [id])
+  workCenter WorkCenter        @relation(fields: [workCenterId], references: [id])
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, workCenterId])
+  @@map("work_order_operations")
+}
+
+model WorkOrderHistory {
+  id          String           @id @default(cuid())
+  tenantId    String
+  workOrderId String
+  fromStatus  WorkOrderStatus?
+  toStatus    WorkOrderStatus
+  notes       String?
+  createdAt   DateTime         @default(now())
+  createdById String?
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, workOrderId])
+  @@map("work_order_history")
+}
+
+model WorkCenterCapacity {
+  id           String   @id @default(cuid())
+  tenantId     String
+  workCenterId String
+  date         DateTime @db.Date
+  capacity     Decimal  @db.Decimal(10, 2) // Available hours
+  allocated    Decimal  @db.Decimal(10, 2) @default(0) // Allocated hours
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workCenter   WorkCenter @relation(fields: [workCenterId], references: [id], onDelete: Cascade)
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, workCenterId, date])
+  @@index([tenantId])
+  @@map("work_center_capacities")
+}

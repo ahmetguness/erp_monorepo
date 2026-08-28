@@ -1,0 +1,232 @@
+// Domain: sales
+// Keep related enums and models together; cross-domain relations are resolved by Prisma.
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_DELIVERED
+  DELIVERED
+  CANCELLED
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum DeliveryNoteType {
+  OUTBOUND
+  INBOUND
+  RETURN
+}
+
+enum DeliveryNoteStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_SHIPPED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model SalesQuote {
+  id           String      @id @default(cuid())
+  tenantId     String
+  contactId    String
+  number       String
+  date         DateTime
+  validUntil   DateTime?
+  status       QuoteStatus @default(DRAFT)
+  currencyCode String      @default("TRY")
+  exchangeRate Decimal     @db.Decimal(18, 6) @default(1)
+  notes        String?
+  totalNet     Decimal     @db.Decimal(18, 2) @default(0)
+  totalTax     Decimal     @db.Decimal(18, 2) @default(0)
+  totalGross   Decimal     @db.Decimal(18, 2) @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
+  createdById  String?
+  updatedById  String?
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact     Contact          @relation(fields: [contactId], references: [id])
+  items       SalesQuoteItem[]
+  salesOrders SalesOrder[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, contactId])
+  @@map("sales_quotes")
+}
+
+model SalesQuoteItem {
+  id          String  @id @default(cuid())
+  tenantId    String
+  quoteId     String
+  productId   String
+  description String?
+  quantity    Decimal @db.Decimal(18, 3)
+  unitPrice   Decimal @db.Decimal(18, 2)
+  discount    Decimal @db.Decimal(5, 2) @default(0)
+  taxRate     Decimal @db.Decimal(5, 2) @default(0)
+  taxAmount   Decimal @db.Decimal(18, 2) @default(0)
+  lineTotal   Decimal @db.Decimal(18, 2)
+  sortOrder   Int     @default(0)
+
+  quote   SalesQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product    @relation(fields: [productId], references: [id])
+  tenant  Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, quoteId])
+  @@map("sales_quote_items")
+}
+
+model SalesOrder {
+  id           String      @id @default(cuid())
+  tenantId     String
+  contactId    String
+  quoteId      String?
+  number       String
+  date         DateTime
+  dueDate      DateTime?
+  status       OrderStatus @default(DRAFT)
+  currencyCode String      @default("TRY")
+  exchangeRate Decimal     @db.Decimal(18, 6) @default(1)
+  notes        String?
+  totalNet     Decimal     @db.Decimal(18, 2) @default(0)
+  totalTax     Decimal     @db.Decimal(18, 2) @default(0)
+  totalGross   Decimal     @db.Decimal(18, 2) @default(0)
+  /// @computed - must be updated within the same transaction as the parent write
+  /// Update this field whenever a PaymentAllocation or Invoice linked to this order changes (application layer responsibility)
+  invoicedAmount Decimal   @db.Decimal(18, 2) @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
+  createdById  String?
+  updatedById  String?
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact       Contact             @relation(fields: [contactId], references: [id])
+  quote         SalesQuote?         @relation(fields: [quoteId], references: [id])
+  items         SalesOrderItem[]
+  invoices      Invoice[]
+  history       SalesOrderHistory[]
+  deliveryNotes DeliveryNote[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, contactId])
+  @@index([tenantId, date])
+  @@map("sales_orders")
+}
+
+model SalesOrderItem {
+  id          String  @id @default(cuid())
+  tenantId    String
+  orderId     String
+  productId   String
+  description String?
+  quantity    Decimal @db.Decimal(18, 3)
+  /// @computed - must be updated within the same transaction as the parent write
+  delivered   Decimal @db.Decimal(18, 3) @default(0)
+  unitPrice   Decimal @db.Decimal(18, 2)
+  discount    Decimal @db.Decimal(5, 2) @default(0)
+  taxRate     Decimal @db.Decimal(5, 2) @default(0)
+  taxAmount   Decimal @db.Decimal(18, 2) @default(0)
+  lineTotal   Decimal @db.Decimal(18, 2)
+  sortOrder   Int     @default(0)
+
+  order         SalesOrder       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product          @relation(fields: [productId], references: [id])
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveryItems DeliveryNoteItem[]
+
+  @@index([tenantId, orderId])
+  @@map("sales_order_items")
+}
+
+model SalesOrderHistory {
+  id          String       @id @default(cuid())
+  tenantId    String
+  orderId     String
+  fromStatus  OrderStatus?
+  toStatus    OrderStatus
+  notes       String?
+  createdAt   DateTime     @default(now())
+  createdById String?
+
+  order  SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, orderId])
+  @@map("sales_order_history")
+}
+
+model DeliveryNote {
+  id              String             @id @default(cuid())
+  tenantId        String
+  number          String
+  type            DeliveryNoteType
+  status          DeliveryNoteStatus @default(DRAFT)
+  salesOrderId    String?
+  purchaseOrderId String?
+  contactId       String?
+  warehouseId     String
+  date            DateTime
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  trackingNumber  String?
+  carrier         String?
+  notes           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  deletedAt       DateTime?
+  createdById     String?
+  updatedById     String?
+
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salesOrder    SalesOrder?        @relation(fields: [salesOrderId], references: [id])
+  purchaseOrder PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
+  contact       Contact?           @relation(fields: [contactId], references: [id])
+  warehouse     Warehouse          @relation(fields: [warehouseId], references: [id])
+  items         DeliveryNoteItem[]
+  eDocuments    EDocument[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, purchaseOrderId])
+  @@map("delivery_notes")
+}
+
+model DeliveryNoteItem {
+  id                  String  @id @default(cuid())
+  tenantId            String
+  deliveryNoteId      String
+  productId           String
+  description         String?
+  orderedQty          Decimal @db.Decimal(18, 3)
+  deliveredQty        Decimal @db.Decimal(18, 3)
+  locationId          String?
+  lotId               String?
+  batchId             String?
+  salesOrderItemId    String?
+  purchaseOrderItemId String?
+  sortOrder           Int     @default(0)
+
+  deliveryNote      DeliveryNote      @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  product           Product           @relation(fields: [productId], references: [id])
+  lot               LotSerialNumber?  @relation("LotDeliveryItems", fields: [lotId], references: [id])
+  batch             ProductBatch?     @relation("BatchDeliveryItems", fields: [batchId], references: [id])
+  salesOrderItem    SalesOrderItem?   @relation(fields: [salesOrderItemId], references: [id])
+  purchaseOrderItem PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id])
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, deliveryNoteId])
+  @@map("delivery_note_items")
+}

@@ -1,22 +1,20 @@
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
 
-const databaseUrl = process.env.DATABASE_URL;
-
-if (!databaseUrl) {
-  console.error('DATABASE_URL is required for migration dry-run.');
-  process.exit(1);
-}
+const moduleResolver = createRequire(resolve(process.cwd(), 'package.json'));
+const prismaCli = moduleResolver.resolve('prisma');
 
 const result = spawnSync(
-  process.platform === 'win32' ? 'npx.cmd' : 'npx',
+  process.execPath,
   [
-    'prisma',
+    prismaCli,
     'migrate',
     'diff',
-    '--from-url',
-    databaseUrl,
+    '--from-schema-datasource',
+    'prisma/schema',
     '--to-schema-datamodel',
-    'prisma/schema.prisma',
+    'prisma/schema',
     '--script',
   ],
   { stdio: 'inherit' },
