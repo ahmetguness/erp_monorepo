@@ -17,6 +17,7 @@ import { starterCsvImportRoutes } from '../../routes/starter-csv-import.routes.j
 import { starterHealthRoutes } from '../../routes/starter-health.routes.js';
 import { taskRoutes } from '../../routes/task.routes.js';
 import { currencyRatesRoutes } from './http/currency-rates.routes.js';
+export { MetricsController } from './http/controllers/metrics.controller.js';
 
 export const platformModule: BackendModule = {
   name: 'platform',

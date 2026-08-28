@@ -4,6 +4,7 @@ import { Context } from 'hono';
 import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
 import { storageService } from '../../../../../services/storage.service.js';
+import { enforceFileSecurity,persistWithObject } from '../../../../shared/index.js';
 import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../../utils/context.js';
 import { ensureEntityBelongsToTenant,isEntityType,parseCategoryInput,parseConfidentialityInput,parseDateField,parseKindInput,parsePositiveVersion,parseTagList,readFormString,validateDocumentDates,validateFile } from './shared.js';
@@ -38,9 +39,8 @@ export const uploadAttachmentController = {
     const storageName = `${randomUUID()}${extension}`;
     const storagePath = `${tenantId}/${storageName}`;
     const buffer = Buffer.from(await fileValue.arrayBuffer());
-    await storageService.put({ key: storagePath, body: buffer, contentType: mimeType });
-
-    const attachment = await prisma.attachment.create({
+    await enforceFileSecurity({ body: buffer, fileName: safeName, contentType: mimeType });
+    const attachment = await persistWithObject(storageService, { key: storagePath, body: buffer, contentType: mimeType }, () => prisma.attachment.create({
       data: {
         tenantId,
         entityType: rawEntityType,
@@ -58,7 +58,7 @@ export const uploadAttachmentController = {
         version,
         uploadedById: userId,
       },
-    });
+    }));
 
     await createAuditLog(prisma, {
       tenantId,
@@ -113,9 +113,8 @@ export const uploadAttachmentController = {
     const storageName = `${randomUUID()}${extension}`;
     const storagePath = `${tenantId}/${storageName}`;
     const buffer = Buffer.from(await fileValue.arrayBuffer());
-    await storageService.put({ key: storagePath, body: buffer, contentType: mimeType });
-
-    const attachment = await prisma.attachment.create({
+    await enforceFileSecurity({ body: buffer, fileName: safeName, contentType: mimeType });
+    const attachment = await persistWithObject(storageService, { key: storagePath, body: buffer, contentType: mimeType }, () => prisma.attachment.create({
       data: {
         tenantId,
         entityType: current.entityType,
@@ -133,7 +132,7 @@ export const uploadAttachmentController = {
         version,
         uploadedById: userId,
       },
-    });
+    }));
 
     await createAuditLog(prisma, {
       tenantId,

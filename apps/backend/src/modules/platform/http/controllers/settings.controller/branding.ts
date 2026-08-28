@@ -3,6 +3,7 @@ import { Context } from 'hono';
 import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
 import { bufferToArrayBuffer,storageService } from '../../../../../services/storage.service.js';
+import { enforceFileSecurity,persistWithObject } from '../../../../shared/index.js';
 import { requireTenantId } from '../../../../../utils/context.js';
 import { LEGACY_TENANT_LOGO_SETTING_KEY,TENANT_LOGO_SETTING_KEY,validateLogoFile } from './shared.js';
 
@@ -22,13 +23,12 @@ export const brandingSettingsController = {
     const { extension, mimeType } = validateLogoFile(fileValue);
     const storagePath = `${tenantId}/tenant-logo/${randomUUID()}${extension}`;
     const buffer = Buffer.from(await fileValue.arrayBuffer());
-    await storageService.put({ key: storagePath, body: buffer, contentType: mimeType });
-
-    const setting = await prisma.tenantSetting.upsert({
+    await enforceFileSecurity({ body: buffer, fileName: fileValue.name, contentType: mimeType });
+    const setting = await persistWithObject(storageService, { key: storagePath, body: buffer, contentType: mimeType }, () => prisma.tenantSetting.upsert({
       where: { tenantId_key: { tenantId, key: TENANT_LOGO_SETTING_KEY } },
       create: { tenantId, key: TENANT_LOGO_SETTING_KEY, value: storagePath },
       update: { value: storagePath },
-    });
+    }));
 
     if (previous?.value && previous.value !== storagePath) {
       await storageService.delete(previous.value);

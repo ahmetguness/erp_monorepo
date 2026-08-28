@@ -113,6 +113,37 @@ export const queryAttachmentController = {
       },
     });
   },
+  async signedDownloadUrl(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const id = requireParam(c, 'id');
+    const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
+    if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
+    await ensureEntityBelongsToTenant(tenantId, attachment.entityType, attachment.entityId);
+    await ensureAttachmentConfidentialityAccess(tenantId, userId, attachment.confidentiality);
+
+    const configuredTtl = Number.parseInt(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? '300', 10);
+    const expiresInSeconds = Number.isFinite(configuredTtl) ? Math.min(3_600, Math.max(30, configuredTtl)) : 300;
+    const signed = await storageService.createSignedGetUrl(attachment.storagePath, expiresInSeconds);
+    const expiresAt = signed?.expiresAt ?? new Date(Date.now() + expiresInSeconds * 1_000);
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'attachments',
+      entityType: attachment.entityType,
+      entityId: attachment.entityId,
+      action: AuditAction.OTHER,
+      newValues: { attachmentId: attachment.id, signedDownloadIssued: Boolean(signed), expiresAt },
+      ...getRequestMeta(c),
+    });
+    return c.json({
+      data: {
+        url: signed?.url ?? `/api/attachments/${encodeURIComponent(id)}/download`,
+        direct: Boolean(signed),
+        expiresAt: expiresAt.toISOString(),
+      },
+    });
+  },
   async accessLog(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);

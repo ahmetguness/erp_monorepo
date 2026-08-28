@@ -187,12 +187,47 @@ function OperationsPanel({ data }: { data: OperationalObservability }) {
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <h2 className="mb-3 text-sm font-semibold text-white">Dış servis izleri</h2>
+        {data.externalServices.length === 0 ? (
+          <p className="text-xs text-slate-500">Henüz dış servis çağrısı gözlenmedi.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {data.externalServices.map((service) => (
+              <div key={service.service} className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                <p className="truncate text-xs font-semibold text-slate-300">{service.service}</p>
+                <p className="mt-2 text-lg font-semibold text-white">{service.avgDurationMs}ms</p>
+                <p className="mt-1 text-[11px] text-slate-500">{service.requestCount} çağrı · {service.errorCount} hata</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <HealthTone active={data.telemetry.persistence.durable} label={`Metric store: ${data.telemetry.persistence.mode}`} />
           <HealthTone active={data.telemetry.sentry.enabled} label="Sentry" />
           <HealthTone active={data.telemetry.openTelemetry.enabled} label="OpenTelemetry" />
+          <HealthTone active={data.telemetry.prometheus.enabled} label={`Prometheus ${data.telemetry.prometheus.path}`} />
+          <HealthTone active={data.telemetry.prometheus.protected} label="Metrics auth" />
         </div>
         <p className="text-xs text-slate-500">{data.telemetry.persistence.detail}</p>
+      </section>
+
+      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-white">Merkezi alarm kuralları</h2>
+          <span className="text-xs text-slate-500">{data.alerts.filter((alert) => alert.active).length} aktif</span>
+        </div>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
+          {data.alerts.map((alert) => (
+            <div key={alert.key} className={`rounded-lg border p-3 ${alert.active ? 'border-red-500/30 bg-red-500/10' : 'border-slate-800 bg-slate-950/40'}`}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{alert.key.replaceAll('_', ' ')}</p>
+              <p className={`mt-2 text-lg font-semibold ${alert.active ? 'text-red-300' : 'text-emerald-300'}`}>{alert.value}</p>
+              <p className="mt-1 text-[11px] text-slate-500">Eşik: {alert.threshold} {alert.unit}</p>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );

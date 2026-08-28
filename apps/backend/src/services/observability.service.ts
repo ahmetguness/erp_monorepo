@@ -45,6 +45,12 @@ export interface AuthorizationResolutionMetricInput {
   outcome: 'allowed' | 'denied';
 }
 
+export interface ExternalRequestMetricInput {
+  service: string;
+  durationMs: number;
+  outcome: 'success' | 'error';
+}
+
 interface ObservabilityRequestContext {
   requestId: string;
   correlationId: string;
@@ -161,6 +167,15 @@ export interface RecentWorkerJobSnapshot {
   updatedAt: string;
 }
 
+export interface ObservabilityAlertSnapshot {
+  key: 'http_error_rate' | 'http_p95_latency' | 'outbox_backlog' | 'worker_retry' | 'dead_letter';
+  severity: 'warning' | 'critical';
+  active: boolean;
+  value: number;
+  threshold: number;
+  unit: 'percent' | 'milliseconds' | 'count';
+}
+
 export interface ObservabilitySnapshot {
   runtime: {
     appRole: string;
@@ -192,6 +207,13 @@ export interface ObservabilitySnapshot {
     totalQueryCount: number;
     avgQueryCount: number;
   };
+  externalServices: Array<{
+    service: string;
+    requestCount: number;
+    errorCount: number;
+    avgDurationMs: number;
+    maxDurationMs: number;
+  }>;
   domainEvents: {
     pendingCount: number;
     processingCount: number;
@@ -213,7 +235,9 @@ export interface ObservabilitySnapshot {
     };
     sentry: { enabled: boolean };
     openTelemetry: { enabled: boolean; exporter: string | null };
+    prometheus: { enabled: boolean; path: string; protected: boolean };
   };
+  alerts: ObservabilityAlertSnapshot[];
 }
 
 const endpointMetrics = new Map<string, EndpointLatencyMetric>();
@@ -228,6 +252,7 @@ const authorizationMetrics = {
   maxDurationMs: 0,
   totalQueryCount: 0,
 };
+const externalRequestMetrics = new Map<string, { requestCount: number; errorCount: number; totalDurationMs: number; maxDurationMs: number }>();
 
 function endpointKey(method: string, path: string): string {
   return `${method.toUpperCase()} ${path}`;
@@ -369,6 +394,15 @@ export function recordAuthorizationResolution(input: AuthorizationResolutionMetr
   if (input.outcome === 'denied') authorizationMetrics.deniedCount += 1;
 }
 
+export function recordExternalRequest(input: ExternalRequestMetricInput): void {
+  const current = externalRequestMetrics.get(input.service) ?? { requestCount: 0, errorCount: 0, totalDurationMs: 0, maxDurationMs: 0 };
+  current.requestCount += 1;
+  current.totalDurationMs += input.durationMs;
+  current.maxDurationMs = Math.max(current.maxDurationMs, input.durationMs);
+  if (input.outcome === 'error') current.errorCount += 1;
+  externalRequestMetrics.set(input.service, current);
+}
+
 function resolveMarketplaceWorkerEnabled(): boolean {
   if (process.env.MARKETPLACE_WORKER_ENABLED === 'true') return true;
   if (process.env.MARKETPLACE_WORKER_ENABLED === 'false') return false;
@@ -377,7 +411,10 @@ function resolveMarketplaceWorkerEnabled(): boolean {
 }
 
 function resolveTelemetry() {
-  const otelExporter = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? null;
+  const otelExporter = process.env.OTEL_EXPORTER_OTLP_ENDPOINT
+    ?? process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+    ?? process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+    ?? null;
   return {
     persistence: {
       mode: 'in-memory' as const,
@@ -386,7 +423,36 @@ function resolveTelemetry() {
     },
     sentry: { enabled: Boolean(process.env.SENTRY_DSN) },
     openTelemetry: { enabled: Boolean(otelExporter), exporter: otelExporter },
+    prometheus: {
+      enabled: process.env.METRICS_ENABLED !== 'false',
+      path: '/metrics',
+      protected: Boolean(process.env.METRICS_BEARER_TOKEN),
+    },
   };
+}
+
+function positiveEnvNumber(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function buildAlerts(input: {
+  errorRatePct: number;
+  p95Ms: number;
+  outboxBacklog: number;
+  retryCount: number;
+  deadLetterCount: number;
+}): ObservabilityAlertSnapshot[] {
+  const errorRateThreshold = positiveEnvNumber('OBSERVABILITY_ERROR_RATE_ALERT_PCT', 5);
+  const p95Threshold = positiveEnvNumber('OBSERVABILITY_P95_ALERT_MS', 1_500);
+  const backlogThreshold = positiveEnvNumber('OBSERVABILITY_OUTBOX_BACKLOG_ALERT', 100);
+  return [
+    { key: 'http_error_rate', severity: 'critical', active: input.errorRatePct >= errorRateThreshold, value: input.errorRatePct, threshold: errorRateThreshold, unit: 'percent' },
+    { key: 'http_p95_latency', severity: 'warning', active: input.p95Ms >= p95Threshold, value: input.p95Ms, threshold: p95Threshold, unit: 'milliseconds' },
+    { key: 'outbox_backlog', severity: 'warning', active: input.outboxBacklog >= backlogThreshold, value: input.outboxBacklog, threshold: backlogThreshold, unit: 'count' },
+    { key: 'worker_retry', severity: 'warning', active: input.retryCount > 0, value: input.retryCount, threshold: 1, unit: 'count' },
+    { key: 'dead_letter', severity: 'critical', active: input.deadLetterCount > 0, value: input.deadLetterCount, threshold: 1, unit: 'count' },
+  ];
 }
 
 export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<ObservabilitySnapshot> {
@@ -465,6 +531,8 @@ export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<Ob
   const totalRequests = allEndpointMetrics.reduce((sum, endpoint) => sum + endpoint.count, 0);
   const totalErrors = allEndpointMetrics.reduce((sum, endpoint) => sum + endpoint.errorCount, 0);
   const generatedAt = new Date();
+  const errorRatePct = totalRequests > 0 ? Math.round((totalErrors / totalRequests) * 10_000) / 100 : 0;
+  const p95Ms = percentile(allSamples, 95);
 
   return {
     runtime: {
@@ -476,9 +544,9 @@ export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<Ob
     http: {
       totalRequests,
       totalErrors,
-      errorRatePct: totalRequests > 0 ? Math.round((totalErrors / totalRequests) * 10_000) / 100 : 0,
+      errorRatePct,
       slowThresholdMs: SLOW_ENDPOINT_THRESHOLD_MS,
-      p95Ms: percentile(allSamples, 95),
+      p95Ms,
       p99Ms: percentile(allSamples, 99),
       endpoints,
       errorRateTrend: trendSnapshot(generatedAt),
@@ -501,6 +569,13 @@ export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<Ob
         ? Math.round((authorizationMetrics.totalQueryCount / authorizationMetrics.resolutionCount) * 100) / 100
         : 0,
     },
+    externalServices: Array.from(externalRequestMetrics.entries()).map(([service, metric]) => ({
+      service,
+      requestCount: metric.requestCount,
+      errorCount: metric.errorCount,
+      avgDurationMs: metric.requestCount > 0 ? Math.round(metric.totalDurationMs / metric.requestCount) : 0,
+      maxDurationMs: metric.maxDurationMs,
+    })),
     domainEvents: {
       pendingCount: pendingEvents,
       processingCount: processingEvents,
@@ -544,5 +619,12 @@ export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<Ob
       })),
     },
     telemetry: resolveTelemetry(),
+    alerts: buildAlerts({
+      errorRatePct,
+      p95Ms,
+      outboxBacklog: pendingEvents + processingEvents,
+      retryCount: failedCount + retryScheduledJobs,
+      deadLetterCount: deadLetterCount + deadLetterJobs,
+    }),
   };
 }

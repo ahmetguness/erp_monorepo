@@ -120,12 +120,12 @@ async function databaseCheck(db: DeploymentDbClient): Promise<DeploymentHealthCh
 
 function storageCheck(): DeploymentHealthCheck {
   const storage = getStorageStatus();
-  if (storage.driver === 'r2') {
+  if (storage.driver === 's3') {
     return {
       key: 'storage',
       label: 'Object storage',
       status: storage.ready ? 'ok' : 'fail',
-      message: storage.ready ? 'R2 storage hazır.' : `R2 storage eksik: ${storage.missing.join(', ') || 'unknown'}`,
+      message: storage.ready ? 'S3-compatible storage hazır.' : `Object storage eksik: ${storage.missing.join(', ') || 'unknown'}`,
     };
   }
   return {

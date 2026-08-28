@@ -150,12 +150,12 @@ function redisCheck(): SecurityCheck {
 
 function storageCheck(): SecurityCheck {
   const status = getStorageStatus();
-  if (status.driver === 'r2') {
+  if (status.driver === 's3') {
     return {
       key: 'uploads:storage',
       label: 'Attachment storage',
       status: status.ready ? 'pass' : 'fail',
-      message: status.ready ? 'R2 object storage yapılandırılmış.' : 'R2 object storage env değerleri eksik.',
+      message: status.ready ? 'S3-compatible object storage yapılandırılmış.' : 'Object storage env değerleri eksik.',
       details: [
         `STORAGE_DRIVER=${status.driver}`,
         `missing=${status.missing.join(', ') || 'none'}`,
@@ -168,7 +168,7 @@ function storageCheck(): SecurityCheck {
     label: 'Attachment storage',
     status: status.productionLocalAllowed ? 'warn' : 'pass',
     message: status.productionLocalAllowed
-      ? 'Production local upload açık; R2 object storage önerilir.'
+      ? 'Production local upload açık; S3-compatible object storage önerilir.'
       : 'Local upload yalnızca dev varsayılanı olarak kullanılıyor.',
     details: [`STORAGE_DRIVER=${status.driver}`],
   };

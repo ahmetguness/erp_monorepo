@@ -1,5 +1,5 @@
 export type EnvRuntime = 'all' | 'development' | 'test' | 'production';
-export type EnvValueKind = 'string' | 'number' | 'boolean' | 'url' | 'csv';
+export type EnvValueKind = 'string' | 'number' | 'boolean' | 'url' | 'csv' | 'enum';
 export type EnvSecretClass = 'secret' | 'sensitive' | 'public' | 'internal';
 export type RuntimeConfigStatus = 'ok' | 'warn' | 'error' | 'disabled';
 
@@ -13,6 +13,7 @@ export interface EnvVarDefinition {
   secretClass: EnvSecretClass;
   securityNote: string;
   legacyAliasFor?: string;
+  values?: readonly string[];
 }
 
 export interface EnvValidationIssue {
@@ -57,6 +58,15 @@ export const ENV_REGISTRY: readonly EnvVarDefinition[] = [
   { name: 'R2_BUCKET', kind: 'string', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'R2 bucket name; needed when R2 storage is active.' },
   { name: 'R2_ENDPOINT', kind: 'url', required: false, runtime: 'all', defaultValue: 'https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com', secretClass: 'sensitive', securityNote: 'R2 endpoint; may reveal account identifier.' },
   { name: 'ALLOW_LOCAL_UPLOADS_IN_PRODUCTION', kind: 'boolean', required: false, runtime: 'production', defaultValue: 'false', secretClass: 'internal', securityNote: 'Exception switch for production local upload fallback.' },
+  { name: 'S3_ENDPOINT', kind: 'url', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'S3-compatible object storage endpoint.' },
+  { name: 'S3_REGION', kind: 'string', required: false, runtime: 'all', defaultValue: 'auto', secretClass: 'internal', securityNote: 'S3 signing region.' },
+  { name: 'S3_ACCESS_KEY_ID', kind: 'string', required: false, runtime: 'all', secretClass: 'secret', securityNote: 'S3-compatible access key.' },
+  { name: 'S3_SECRET_ACCESS_KEY', kind: 'string', required: false, runtime: 'all', secretClass: 'secret', securityNote: 'S3-compatible secret key.' },
+  { name: 'S3_BUCKET', kind: 'string', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'S3-compatible bucket.' },
+  { name: 'STORAGE_LEGACY_LOCAL_READ', kind: 'boolean', required: false, runtime: 'all', defaultValue: 'false', secretClass: 'internal', securityNote: 'Temporarily reads missing S3 objects from legacy local storage during migration.' },
+  { name: 'STORAGE_SIGNED_URL_TTL_SECONDS', kind: 'number', required: false, runtime: 'all', defaultValue: '300', secretClass: 'internal', securityNote: 'Short-lived object download URL lifetime.' },
+  { name: 'MALWARE_SCAN_MODE', kind: 'enum', values: ['disabled', 'monitor', 'enforce'], required: false, runtime: 'all', defaultValue: 'disabled', secretClass: 'internal', securityNote: 'Controls upload malware scanning behavior.' },
+  { name: 'MALWARE_SCAN_ENDPOINT', kind: 'url', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'Multipart malware scanning service endpoint.' },
   { name: 'MARKETPLACE_MOCK', kind: 'csv', required: false, runtime: 'development', secretClass: 'internal', securityNote: 'Canonical marketplace mock selector.' },
   { name: 'TRENDYOL_MOCK', kind: 'boolean', required: false, runtime: 'development', secretClass: 'internal', legacyAliasFor: 'MARKETPLACE_MOCK', securityNote: 'Legacy alias; prefer MARKETPLACE_MOCK=trendyol.' },
   { name: 'REDIS_URL', kind: 'url', required: false, requiredInProduction: true, runtime: 'all', secretClass: 'secret', securityNote: 'Redis connection string for production-safe rate limiting and multi-process coordination.' },
@@ -71,9 +81,16 @@ export const ENV_REGISTRY: readonly EnvVarDefinition[] = [
   { name: 'WORKER_CONCURRENCY', kind: 'number', required: false, runtime: 'all', defaultValue: '2', secretClass: 'internal', securityNote: 'Background worker concurrency.' },
   { name: 'EXTERNAL_API_KEY_RATE_LIMIT_PER_MINUTE', kind: 'number', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'External API key per-minute rate limit override.' },
   { name: 'PRISMA_QUERY_LOG', kind: 'boolean', required: false, runtime: 'all', defaultValue: 'false', secretClass: 'internal', securityNote: 'Enables verbose Prisma query logs; keep disabled in normal production.' },
+  { name: 'LOG_FORMAT', kind: 'enum', values: ['pretty', 'json'], required: false, runtime: 'all', defaultValue: 'pretty', secretClass: 'internal', securityNote: 'Use json in production for centralized log ingestion.' },
+  { name: 'METRICS_ENABLED', kind: 'boolean', required: false, runtime: 'all', defaultValue: 'true', secretClass: 'internal', securityNote: 'Enables the Prometheus-compatible metrics endpoint.' },
+  { name: 'METRICS_BEARER_TOKEN', kind: 'string', required: false, runtime: 'production', secretClass: 'secret', securityNote: 'Protects the metrics scrape endpoint in production.' },
+  { name: 'OBSERVABILITY_ERROR_RATE_ALERT_PCT', kind: 'number', required: false, runtime: 'all', defaultValue: '5', secretClass: 'internal', securityNote: 'HTTP error-rate alert threshold.' },
+  { name: 'OBSERVABILITY_P95_ALERT_MS', kind: 'number', required: false, runtime: 'all', defaultValue: '1500', secretClass: 'internal', securityNote: 'HTTP p95 latency alert threshold.' },
+  { name: 'OBSERVABILITY_OUTBOX_BACKLOG_ALERT', kind: 'number', required: false, runtime: 'all', defaultValue: '100', secretClass: 'internal', securityNote: 'Outbox backlog alert threshold.' },
   { name: 'SENTRY_DSN', kind: 'url', required: false, runtime: 'production', secretClass: 'sensitive', securityNote: 'Optional error telemetry DSN.' },
   { name: 'OTEL_EXPORTER_OTLP_ENDPOINT', kind: 'url', required: false, runtime: 'production', secretClass: 'sensitive', securityNote: 'Optional OpenTelemetry endpoint.' },
   { name: 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', kind: 'url', required: false, runtime: 'production', secretClass: 'sensitive', securityNote: 'Optional OpenTelemetry traces endpoint.' },
+  { name: 'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', kind: 'url', required: false, runtime: 'production', secretClass: 'sensitive', securityNote: 'Optional OpenTelemetry metrics endpoint.' },
 ] as const;
 
 export function isProductionEnv(): boolean {
@@ -91,6 +108,9 @@ function readEnv(name: string): string | undefined {
 }
 
 function validateKind(definition: EnvVarDefinition, value: string): string | null {
+  if (definition.kind === 'enum') {
+    return definition.values?.includes(value) ? null : `must be one of: ${(definition.values ?? []).join(', ')}`;
+  }
   if (definition.kind === 'number') {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed >= 0 ? null : 'must be a non-negative number';
@@ -151,13 +171,33 @@ export function validateEnvRegistry(): EnvValidationIssue[] {
   }
 
   const storageDriver = readEnv('STORAGE_DRIVER')?.toLowerCase();
-  const r2Active = storageDriver === 'r2' || (isProductionEnv() && storageDriver !== 'local');
-  if (r2Active) {
-    for (const name of ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET']) {
-      if (!isPresent(name)) {
-        issues.push({ name, severity: 'error', message: `${name} is required when R2 storage is active.` });
-      }
+  const objectStorageActive = storageDriver === 's3' || storageDriver === 'r2' || (isProductionEnv() && storageDriver !== 'local');
+  if (objectStorageActive) {
+    const requirements = [
+      { name: 'S3_ENDPOINT', available: isPresent('S3_ENDPOINT') || isPresent('R2_ENDPOINT') || isPresent('R2_ACCOUNT_ID') },
+      { name: 'S3_ACCESS_KEY_ID', available: isPresent('S3_ACCESS_KEY_ID') || isPresent('R2_ACCESS_KEY_ID') },
+      { name: 'S3_SECRET_ACCESS_KEY', available: isPresent('S3_SECRET_ACCESS_KEY') || isPresent('R2_SECRET_ACCESS_KEY') },
+      { name: 'S3_BUCKET', available: isPresent('S3_BUCKET') || isPresent('R2_BUCKET') },
+    ];
+    for (const requirement of requirements.filter(({ available }) => !available)) {
+      issues.push({ name: requirement.name, severity: 'error', message: `${requirement.name} (or its legacy R2 alias) is required when object storage is active.` });
     }
+  }
+
+  if (isProductionEnv() && readEnv('MALWARE_SCAN_MODE') === 'enforce' && !isPresent('MALWARE_SCAN_ENDPOINT')) {
+    issues.push({
+      name: 'MALWARE_SCAN_ENDPOINT',
+      severity: 'error',
+      message: 'MALWARE_SCAN_ENDPOINT is required when production malware scanning is enforced.',
+    });
+  }
+
+  if (isProductionEnv() && process.env.METRICS_ENABLED !== 'false' && !isPresent('METRICS_BEARER_TOKEN')) {
+    issues.push({
+      name: 'METRICS_BEARER_TOKEN',
+      severity: 'error',
+      message: 'is required in production when METRICS_ENABLED is not false',
+    });
   }
 
   return issues;
@@ -193,8 +233,13 @@ export function isMarketplaceMockChannelEnabled(channel: string): boolean {
 }
 
 export function getRuntimeConfigChecks(): RuntimeConfigCheck[] {
-  const storageDriver = readEnv('STORAGE_DRIVER')?.toLowerCase() ?? (isProductionEnv() ? 'r2' : 'local');
-  const r2Missing = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET'].filter((name) => !isPresent(name));
+  const storageDriver = readEnv('STORAGE_DRIVER')?.toLowerCase() ?? (isProductionEnv() ? 's3' : 'local');
+  const objectStorageMissing = [
+    !isPresent('S3_ENDPOINT') && !isPresent('R2_ENDPOINT') && !isPresent('R2_ACCOUNT_ID') ? 'S3_ENDPOINT' : null,
+    !isPresent('S3_ACCESS_KEY_ID') && !isPresent('R2_ACCESS_KEY_ID') ? 'S3_ACCESS_KEY_ID' : null,
+    !isPresent('S3_SECRET_ACCESS_KEY') && !isPresent('R2_SECRET_ACCESS_KEY') ? 'S3_SECRET_ACCESS_KEY' : null,
+    !isPresent('S3_BUCKET') && !isPresent('R2_BUCKET') ? 'S3_BUCKET' : null,
+  ].filter((name): name is string => name !== null);
   const marketplaceChannels = getMarketplaceMockChannels();
 
   return [
@@ -224,15 +269,15 @@ export function getRuntimeConfigChecks(): RuntimeConfigCheck[] {
       details: ['connectionString=redacted'],
     },
     {
-      key: 'integration:r2',
-      label: 'R2 object storage',
-      status: storageDriver === 'r2' ? r2Missing.length === 0 ? 'ok' : 'error' : isProductionEnv() ? 'warn' : 'disabled',
-      message: storageDriver === 'r2'
-        ? r2Missing.length === 0 ? 'R2 attachment storage is configured.' : 'R2 attachment storage is selected but required env values are missing.'
+      key: 'integration:object-storage',
+      label: 'S3-compatible object storage',
+      status: storageDriver === 's3' || storageDriver === 'r2' ? objectStorageMissing.length === 0 ? 'ok' : 'error' : isProductionEnv() ? 'warn' : 'disabled',
+      message: storageDriver === 's3' || storageDriver === 'r2'
+        ? objectStorageMissing.length === 0 ? 'Object storage is configured.' : 'Object storage is selected but required env values are missing.'
         : isProductionEnv()
           ? 'Production is using local attachment storage; this should be an explicit exception.'
           : 'Local attachment storage is active for development.',
-      details: [`driver=${storageDriver}`, `missing=${r2Missing.join(', ') || 'none'}`],
+      details: [`driver=${storageDriver}`, `missing=${objectStorageMissing.join(', ') || 'none'}`],
     },
     {
       key: 'integration:marketplace-mock',

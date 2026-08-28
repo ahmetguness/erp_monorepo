@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma.js';
 import { runWithTenantIsolationBypass, runWithTenantScope } from '../lib/tenant-isolation-context.js';
 import { domainEvents } from '../domain-events';
 import { WorkerLoop } from '../modules/shared/index.js';
+import { runWithObservabilityContext } from './observability.service.js';
 import {
   DOMAIN_EVENT_NAMES,
   DOMAIN_EVENT_SCHEMA_VERSION,
@@ -490,6 +491,7 @@ export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE):
   const requeuedStale = await runWithTenantIsolationBypass('domain-event-outbox-worker-stale-processing', async () => {
     const stale = await prisma.domainEventOutbox.updateMany({
       where: {
+        tenantId: { not: '' },
         status: DomainEventOutboxStatus.PROCESSING,
         OR: [{ leaseExpiresAt: { lte: new Date() } }, { leaseExpiresAt: null, updatedAt: { lte: staleProcessingCutoff } }],
       },
@@ -506,7 +508,7 @@ export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE):
 
   await runWithTenantIsolationBypass('domain-event-outbox-worker-poison-messages', async () =>
     await prisma.domainEventOutbox.updateMany({
-      where: { status: DomainEventOutboxStatus.FAILED, attempts: { gte: MAX_OUTBOX_ATTEMPTS } },
+      where: { tenantId: { not: '' }, status: DomainEventOutboxStatus.FAILED, attempts: { gte: MAX_OUTBOX_ATTEMPTS } },
       data: { status: DomainEventOutboxStatus.DEAD_LETTER, nextRetryAt: null, leaseOwner: null, leaseExpiresAt: null },
     }),
   );
@@ -549,7 +551,12 @@ export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE):
       const replayed = await runWithTenantScope(event.tenantId, async () => {
         const record = await loadOutboxEvent(event.tenantId, event.id);
         if (!record) return false;
-        await domainEvents.publishClaimed(restoreStoredEvent(record), record.id);
+        const restoredEvent = restoreStoredEvent(record);
+        const correlationId = restoredEvent.context.correlationId ?? record.id;
+        await runWithObservabilityContext(
+          { requestId: record.id, correlationId },
+          () => domainEvents.publishClaimed(restoredEvent, record.id),
+        );
         return true;
       });
       if (!replayed) {

@@ -2,6 +2,7 @@ import { AuditAction, EntityType, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { resolveAuditStandardFlags } from './audit/audit-standard.js';
 import { canUseAuditLogSiem, resolveAuditLogPolicy } from './audit-log-policy.service.js';
+import { observedFetch } from '../modules/shared/index.js';
 
 export const SIEM_SETTING_KEYS = {
   enabled: 'security.siem.enabled',
@@ -257,7 +258,7 @@ export async function exportRecentAuditLogsToSiem(tenantId: string, limit = 25):
   }
 
   try {
-    const response = await fetch(settings.endpointUrl, {
+    const response = await observedFetch(settings.endpointUrl, {
       method: 'POST',
       headers: {
         'Content-Type': settings.destinationType === 'syslog' ? 'text/plain' : 'application/json',
@@ -297,7 +298,7 @@ export async function pushSingleAuditLogToSiem(log: AuditLogLike): Promise<void>
   const event = toSiemAuditEvent(log, settings.includeDiff);
   if (!shouldExport(event.severity, settings.minSeverity)) return;
   const payload = buildPayload(settings, [event]);
-  const response = await fetch(settings.endpointUrl, {
+  const response = await observedFetch(settings.endpointUrl, {
     method: 'POST',
     headers: {
       'Content-Type': settings.destinationType === 'syslog' ? 'text/plain' : 'application/json',

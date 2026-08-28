@@ -3,6 +3,7 @@ import { Context } from 'hono';
 import { ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { requireTenantId } from '../../../../utils/context.js';
+import { observedFetch } from '../../../shared/index.js';
 
 interface TcmbCurrency {
   code: string;
@@ -62,7 +63,7 @@ export const CurrencyRatesController = {
     }
 
     try {
-      const res = await fetch('https://www.tcmb.gov.tr/kurlar/today.xml');
+      const res = await observedFetch('https://www.tcmb.gov.tr/kurlar/today.xml');
       if (!res.ok) throw new Error(`TCMB HTTP ${res.status}`);
       const xml = await res.text();
       const parsed = parseXml(xml);

@@ -176,6 +176,38 @@ async function apiText(method: HttpMethod, path: string, bearerToken: string): P
   return { status: response.status, text: await response.text() };
 }
 
+async function testPrometheusMetricsEndpoint(): Promise<void> {
+  const { app } = await withTimeout('app import', import('../src/index.js'));
+  const response = await withTimeout('GET /metrics', Promise.resolve(app.request('/metrics')));
+  const body = await response.text();
+  if (response.status !== 200 || !response.headers.get('content-type')?.includes('text/plain')) {
+    throw new Error('Prometheus metrics endpoint scrape edilebilir formatta donmedi.');
+  }
+  if (!body.includes('axon_http_requests_total') || !body.includes('axon_outbox_pending')) {
+    throw new Error('Prometheus metrics endpoint zorunlu uygulama metriklerini icermiyor.');
+  }
+  if (body.includes('tenantId') || body.includes('userId')) {
+    throw new Error('Prometheus metrics endpoint hassas veya yuksek-cardinality kimlik etiketi sizdiriyor.');
+  }
+
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousToken = process.env.METRICS_BEARER_TOKEN;
+  process.env.NODE_ENV = 'production';
+  process.env.METRICS_BEARER_TOKEN = 'integration-metrics-token';
+  try {
+    const unauthorized = await app.request('/metrics');
+    if (unauthorized.status !== 401) throw new Error('Production metrics endpoint token olmadan erisime izin verdi.');
+    const authorized = await app.request('/metrics', {
+      headers: { authorization: 'Bearer integration-metrics-token' },
+    });
+    if (authorized.status !== 200) throw new Error('Production metrics endpoint gecerli bearer tokeni reddetti.');
+  } finally {
+    process.env.NODE_ENV = previousNodeEnv;
+    if (previousToken === undefined) delete process.env.METRICS_BEARER_TOKEN;
+    else process.env.METRICS_BEARER_TOKEN = previousToken;
+  }
+}
+
 async function apiKeyRequest(method: HttpMethod, path: string, rawKey: string, body?: unknown): Promise<ApiResult> {
   const { app } = await withTimeout('app import', import('../src/index.js'));
   const headers = new Headers({
@@ -1077,6 +1109,8 @@ async function testAttachmentTenantValidation(ctx: TestContext): Promise<void> {
 async function main(): Promise<void> {
   const ctx = await withTimeout('seed', seed());
   try {
+    console.log('Integration: Prometheus metrics export');
+    await testPrometheusMetricsEndpoint();
     console.log('Integration: tenant isolation');
     await testTenantIsolation(ctx);
     console.log('Integration: session authentication tenant scope');

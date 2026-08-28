@@ -17,6 +17,7 @@
 import { logger } from '../../lib/logger';
 import { decrypt } from '../../utils/encryption.js';
 import { isMarketplaceMockChannelEnabled } from '../../config/env';
+import { observedFetch } from '../../modules/shared/index.js';
 
 // ─────────────────────────────────────────────
 
@@ -255,7 +256,7 @@ export async function trendyolFetch<T>(
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const res = await fetch(url, {
+      const res = await observedFetch(url, {
         ...options,
         headers: { ...headers, ...(options.headers as Record<string, string> ?? {}) },
         signal: controller.signal,

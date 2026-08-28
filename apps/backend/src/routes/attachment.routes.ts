@@ -16,6 +16,7 @@ attachmentRoutes.post('/upload', requirePermission('attachments', 'CREATE'), Att
 attachmentRoutes.post('/bulk-metadata', requirePermission('attachments', 'UPDATE'), AttachmentController.bulkMetadata);
 attachmentRoutes.get('/:id/access-log', requirePermission('attachments', 'READ'), AttachmentController.accessLog);
 attachmentRoutes.post('/:id/version', requirePermission('attachments', 'CREATE'), AttachmentController.uploadVersion);
+attachmentRoutes.get('/:id/signed-url', requirePermission('attachments', 'READ'), AttachmentController.signedDownloadUrl);
 attachmentRoutes.get('/:id/download', requirePermission('attachments', 'READ'), AttachmentController.download);
 attachmentRoutes.patch('/:id', requirePermission('attachments', 'UPDATE'), AttachmentController.rename);
 attachmentRoutes.delete('/:id', requirePermission('attachments', 'DELETE'), AttachmentController.delete);

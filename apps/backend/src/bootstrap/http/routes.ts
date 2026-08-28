@@ -9,10 +9,12 @@ import {
 } from '../../modules/http-surfaces/index.js';
 import { tenantModules } from '../../modules/index.js';
 import { registerBrowserProtection } from './middleware.js';
+import { MetricsController } from '../../modules/platform/index.js';
 
 export function registerPublicRoutes(app: Hono): void {
   app.get('/', (context) => context.json({ status: 'ok', service: 'Axon ERP API' }));
   app.get('/health', (context) => context.json({ status: 'ok' }));
+  app.get('/metrics', MetricsController.prometheus);
 
   app.use('/api/public/*', tenantIsolationBypass('public-api'));
   app.use('/api/scim/v2/*', tenantIsolationBypass('scim-provisioning'));

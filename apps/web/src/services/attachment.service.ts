@@ -179,6 +179,21 @@ export async function uploadAttachmentVersion(id: string, file: File, metadata?:
 }
 
 export async function downloadAttachment(id: string): Promise<Blob> {
+  const accessResponse = await apiClient.get(`/api/attachments/${id}/signed-url`);
+  const access = safeParse(
+    SingleResponseSchema(z.object({ url: z.string(), direct: z.boolean(), expiresAt: z.string() })),
+    accessResponse.data,
+    'getAttachmentSignedUrl',
+  ).data;
+  if (access.direct) {
+    try {
+      const response = await fetch(access.url, { method: 'GET', credentials: 'omit' });
+      if (response.ok) return response.blob();
+    } catch {
+      // Bucket CORS or a short-lived URL may fail; the authenticated proxy is
+      // the backward-compatible path and preserves the user's download flow.
+    }
+  }
   const res = await apiClient.get(`/api/attachments/${id}/download`, { responseType: 'blob' });
   return res.data instanceof Blob ? res.data : new Blob([res.data]);
 }

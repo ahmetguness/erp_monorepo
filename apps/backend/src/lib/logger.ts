@@ -62,6 +62,32 @@ export interface StructuredLogFields {
   [key: string]: string | number | boolean | null | undefined;
 }
 
+type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'http';
+
+const SENSITIVE_FIELD_PATTERN = /(authorization|cookie|password|secret|token|api[-_]?key|dsn)/i;
+
+function sanitizeFields(fields: StructuredLogFields | undefined): StructuredLogFields {
+  if (!fields) return {};
+  return Object.fromEntries(
+    Object.entries(fields).map(([key, value]) => [key, SENSITIVE_FIELD_PATTERN.test(key) ? '[REDACTED]' : value]),
+  );
+}
+
+function useJsonLogs(): boolean {
+  return process.env.LOG_FORMAT === 'json' || (process.env.LOG_FORMAT !== 'pretty' && process.env.NODE_ENV === 'production');
+}
+
+function writeJson(level: LogLevel, message: string, fields?: StructuredLogFields): void {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level,
+    service: process.env.OTEL_SERVICE_NAME ?? '@repo/backend',
+    environment: process.env.NODE_ENV ?? 'development',
+    message,
+    ...sanitizeFields(fields),
+  }));
+}
+
 function formatFields(fields: StructuredLogFields | undefined): string {
   if (!fields) return '';
   const parts = Object.entries(fields)
@@ -75,19 +101,27 @@ function formatFields(fields: StructuredLogFields | undefined): string {
 // ─────────────────────────────────────────────
 
 export const logger = {
-  info: (msg: string, fields?: StructuredLogFields) =>
-    console.log(`${time()} ${badge('INFO', bg.blue, fg.white)}  ${fg.white}${msg}${r}${formatFields(fields)}`),
+  info: (msg: string, fields?: StructuredLogFields) => useJsonLogs()
+    ? writeJson('info', msg, fields)
+    : console.log(`${time()} ${badge('INFO', bg.blue, fg.white)}  ${fg.white}${msg}${r}${formatFields(sanitizeFields(fields))}`),
 
-  success: (msg: string, fields?: StructuredLogFields) =>
-    console.log(`${time()} ${badge(' OK ', bg.green, fg.white)}  ${fg.white}${msg}${r}${formatFields(fields)}`),
+  success: (msg: string, fields?: StructuredLogFields) => useJsonLogs()
+    ? writeJson('success', msg, fields)
+    : console.log(`${time()} ${badge(' OK ', bg.green, fg.white)}  ${fg.white}${msg}${r}${formatFields(sanitizeFields(fields))}`),
 
-  warn: (msg: string, fields?: StructuredLogFields) =>
-    console.log(`${time()} ${badge('WARN', bg.yellow, fg.black)}  ${fg.yellow}${msg}${r}${formatFields(fields)}`),
+  warn: (msg: string, fields?: StructuredLogFields) => useJsonLogs()
+    ? writeJson('warn', msg, fields)
+    : console.log(`${time()} ${badge('WARN', bg.yellow, fg.black)}  ${fg.yellow}${msg}${r}${formatFields(sanitizeFields(fields))}`),
 
-  error: (msg: string, fields?: StructuredLogFields) =>
-    console.log(`${time()} ${badge('ERR ', bg.red, fg.white)}  ${fg.red}${msg}${r}${formatFields(fields)}`),
+  error: (msg: string, fields?: StructuredLogFields) => useJsonLogs()
+    ? writeJson('error', msg, fields)
+    : console.log(`${time()} ${badge('ERR ', bg.red, fg.white)}  ${fg.red}${msg}${r}${formatFields(sanitizeFields(fields))}`),
 
   http: (method: string, path: string, status: number, ms: number, fields?: StructuredLogFields) => {
+    if (useJsonLogs()) {
+      writeJson('http', 'HTTP request completed', { method, path, status, durationMs: ms, ...fields });
+      return;
+    }
     const pathStr = `${fg.white}${path}${r}`;
     const msStr   = ms > 500
       ? `${fg.red}${bold}${ms}ms${r}`
@@ -96,7 +130,7 @@ export const logger = {
         : `${dim}${ms}ms${r}`;
 
     console.log(
-      `${time()} ${httpMethodBadge(method)} ${pathStr.padEnd(38)} ${statusBadge(status)}  ${msStr}${formatFields(fields)}`,
+      `${time()} ${httpMethodBadge(method)} ${pathStr.padEnd(38)} ${statusBadge(status)}  ${msStr}${formatFields(sanitizeFields(fields))}`,
     );
   },
 };

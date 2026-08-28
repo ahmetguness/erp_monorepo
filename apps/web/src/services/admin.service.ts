@@ -156,6 +156,13 @@ export interface OperationalObservability {
     totalQueryCount: number;
     avgQueryCount: number;
   };
+  externalServices: Array<{
+    service: string;
+    requestCount: number;
+    errorCount: number;
+    avgDurationMs: number;
+    maxDurationMs: number;
+  }>;
   domainEvents: {
     pendingCount: number;
     processingCount: number;
@@ -177,7 +184,16 @@ export interface OperationalObservability {
     };
     sentry: { enabled: boolean };
     openTelemetry: { enabled: boolean; exporter: string | null };
+    prometheus: { enabled: boolean; path: string; protected: boolean };
   };
+  alerts: Array<{
+    key: 'http_error_rate' | 'http_p95_latency' | 'outbox_backlog' | 'worker_retry' | 'dead_letter';
+    severity: 'warning' | 'critical';
+    active: boolean;
+    value: number;
+    threshold: number;
+    unit: 'percent' | 'milliseconds' | 'count';
+  }>;
 }
 
 export interface ObservabilityAuditSearchResult {
