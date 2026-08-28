@@ -10,6 +10,7 @@ export default defineConfig({
       reportsDirectory: '../../coverage/backend',
       include: [
         'src/modules/shared/application/pagination.ts',
+        'src/modules/shared/domain/worker-policy.ts',
         'src/modules/finance/domain/invoice-status.policy.ts',
         'src/services/financial/status-transition.service.ts',
         'src/modules/inventory/domain/inventory-policy.ts',

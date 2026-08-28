@@ -515,6 +515,7 @@ enum SyncJobStatus {
   RUNNING
   DONE
   FAILED
+  DEAD_LETTER
 }
 
 enum SyncJobType {
@@ -3053,6 +3054,11 @@ model MarketplaceSyncJob {
   errorCount    Int           @default(0)
   /// Hata mesajı (varsa)
   errorMessage  String?
+  attempts      Int           @default(0)
+  maxAttempts   Int           @default(5)
+  nextRetryAt   DateTime?
+  leaseOwner    String?
+  leaseExpiresAt DateTime?
   /// Job parametreleri (JSON): hoursBack, status filtresi vb.
   params        Json?
   /// Sonuç özeti (JSON): created, updated, skipped, batchIds vb.
@@ -3066,6 +3072,8 @@ model MarketplaceSyncJob {
   @@index([tenantId, integrationId, status])
   @@index([tenantId, jobType, status])
   @@index([createdAt])
+  @@index([status, nextRetryAt, createdAt])
+  @@index([status, leaseExpiresAt])
   @@map("marketplace_sync_jobs")
 }
 
@@ -3191,6 +3199,9 @@ model DomainEventOutbox {
   lastError       String?
   failedListeners Json?
   nextRetryAt     DateTime?
+  claimedAt       DateTime?
+  leaseOwner      String?
+  leaseExpiresAt  DateTime?
   processedAt     DateTime?
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
@@ -3201,6 +3212,8 @@ model DomainEventOutbox {
   @@index([tenantId, status, createdAt])
   @@index([tenantId, name, createdAt])
   @@index([tenantId, entityType, entityId])
+  @@index([status, nextRetryAt, createdAt])
+  @@index([status, leaseExpiresAt])
   @@map("domain_event_outbox")
 }
 

@@ -193,11 +193,15 @@ export interface ObservabilitySnapshot {
     avgQueryCount: number;
   };
   domainEvents: {
+    pendingCount: number;
+    processingCount: number;
     failedCount: number;
     deadLetterCount: number;
     recentFailures: DomainEventFailureSnapshot[];
   };
   workerJobs: {
+    retryScheduledCount: number;
+    deadLetterCount: number;
     byStatus: WorkerJobMetricSnapshot[];
     recentProblemJobs: RecentWorkerJobSnapshot[];
   };
@@ -386,7 +390,9 @@ function resolveTelemetry() {
 }
 
 export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<ObservabilitySnapshot> {
-  const [failedCount, deadLetterCount, recentFailures, pendingJobs, runningJobs, doneJobs, failedJobs, recentProblemJobs] = await prisma.$transaction([
+  const [pendingEvents, processingEvents, failedCount, deadLetterCount, recentFailures, pendingJobs, runningJobs, doneJobs, failedJobs, deadLetterJobs, retryScheduledJobs, recentProblemJobs] = await prisma.$transaction([
+    prisma.domainEventOutbox.count({ where: { tenantId: { not: '' }, status: DomainEventOutboxStatus.PENDING } }),
+    prisma.domainEventOutbox.count({ where: { tenantId: { not: '' }, status: DomainEventOutboxStatus.PROCESSING } }),
     prisma.domainEventOutbox.count({ where: { tenantId: { not: '' }, status: DomainEventOutboxStatus.FAILED } }),
     prisma.domainEventOutbox.count({ where: { tenantId: { not: '' }, status: DomainEventOutboxStatus.DEAD_LETTER } }),
     prisma.domainEventOutbox.findMany({
@@ -409,8 +415,10 @@ export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<Ob
     prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, status: SyncJobStatus.RUNNING } }),
     prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, status: SyncJobStatus.DONE } }),
     prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, status: SyncJobStatus.FAILED } }),
+    prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, status: SyncJobStatus.DEAD_LETTER } }),
+    prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, status: SyncJobStatus.FAILED, nextRetryAt: { not: null } } }),
     prisma.marketplaceSyncJob.findMany({
-      where: { tenantId: { not: '' }, status: { in: [SyncJobStatus.PENDING, SyncJobStatus.RUNNING, SyncJobStatus.FAILED] } },
+      where: { tenantId: { not: '' }, status: { in: [SyncJobStatus.PENDING, SyncJobStatus.RUNNING, SyncJobStatus.FAILED, SyncJobStatus.DEAD_LETTER] } },
       select: {
         id: true,
         tenantId: true,
@@ -494,6 +502,8 @@ export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<Ob
         : 0,
     },
     domainEvents: {
+      pendingCount: pendingEvents,
+      processingCount: processingEvents,
       failedCount,
       deadLetterCount,
       recentFailures: recentFailures.map((event): DomainEventFailureSnapshot => ({
@@ -509,11 +519,14 @@ export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<Ob
       })),
     },
     workerJobs: {
+      retryScheduledCount: retryScheduledJobs,
+      deadLetterCount: deadLetterJobs,
       byStatus: [
         { status: SyncJobStatus.PENDING, count: pendingJobs },
         { status: SyncJobStatus.RUNNING, count: runningJobs },
         { status: SyncJobStatus.DONE, count: doneJobs },
         { status: SyncJobStatus.FAILED, count: failedJobs },
+        { status: SyncJobStatus.DEAD_LETTER, count: deadLetterJobs },
       ],
       recentProblemJobs: recentProblemJobs.map((job): RecentWorkerJobSnapshot => ({
         id: job.id,

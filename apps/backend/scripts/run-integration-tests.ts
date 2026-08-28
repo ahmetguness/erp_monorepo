@@ -16,18 +16,23 @@ import {
   InvoiceStatus,
   InvoiceType,
   MovementType,
+  MarketplaceChannel,
   OrderStatus,
   PaymentMethod,
   PermissionAction,
   Plan,
   PurchaseOrderStatus,
   TenantStatus,
+  SyncJobStatus,
+  SyncJobType,
   WorkOrderStatus,
 } from '@prisma/client';
 import { prisma } from '../src/lib/prisma';
 import { runWithTenantScope } from '../src/lib/tenant-isolation-context';
 import { createSecuritySession } from '../src/services/security-hardening.service';
 import { createApiKeyHash } from '../src/utils/api-key-hash';
+import { processDomainEventOutboxBatch } from '../src/services/domain-event-outbox-worker.service';
+import { processPendingJobs, TrendyolWorker } from '../src/services/trendyol-worker.service';
 
 interface TestContext {
   tenantAId: string;
@@ -390,6 +395,8 @@ async function cleanup(): Promise<void> {
   await prisma.notification.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.task.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.domainEventOutbox.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.marketplaceSyncJob.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.marketplaceIntegration.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.auditLog.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.apiKey.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.cashAccount.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
@@ -894,6 +901,74 @@ async function testDomainEventCoverageAndDeadLetterReplay(ctx: TestContext): Pro
   if (!task) throw new Error('Dead-letter replay workflow listener idempotent task uretmedi.');
 }
 
+async function testAtomicOutboxClaim(ctx: TestContext): Promise<void> {
+  const marker = crypto.randomUUID();
+  const source = `domain:stock.low:${marker}`;
+  const event = await prisma.domainEventOutbox.create({
+    data: {
+      tenantId: ctx.tenantAId,
+      name: 'stock.low',
+      schemaVersion: 1,
+      source,
+      idempotencyKey: source,
+      entityType: EntityType.PRODUCT,
+      entityId: ctx.productAId,
+      payload: {
+        productId: ctx.productAId,
+        productCode: 'IT-ATOMIC',
+        productName: 'Atomic Claim Product',
+        currentQuantity: 0,
+        minStockLevel: 5,
+        warehouseId: ctx.warehouseAId,
+      },
+      context: { tenantId: ctx.tenantAId, userId: ctx.ownerAId, occurredAt: new Date().toISOString() },
+      status: DomainEventOutboxStatus.PENDING,
+    },
+    select: { id: true },
+  });
+
+  await Promise.all([processDomainEventOutboxBatch(100), processDomainEventOutboxBatch(100)]);
+  const processed = await prisma.domainEventOutbox.findFirst({
+    where: { id: event.id, tenantId: ctx.tenantAId },
+    select: { status: true, attempts: true, leaseOwner: true, leaseExpiresAt: true },
+  });
+  if (!processed || processed.status !== DomainEventOutboxStatus.PROCESSED || processed.attempts !== 1) {
+    throw new Error('Atomic outbox claim ayni eventi tek worker yerine birden fazla kez sahiplendi.');
+  }
+  if (processed.leaseOwner !== null || processed.leaseExpiresAt !== null) {
+    throw new Error('Islenen outbox event lease bilgisi temizlenmedi.');
+  }
+}
+
+async function testAtomicMarketplaceClaim(ctx: TestContext): Promise<void> {
+  const integration = await prisma.marketplaceIntegration.create({
+    data: {
+      tenantId: ctx.tenantAId,
+      channel: MarketplaceChannel.TRENDYOL,
+      name: 'Atomic worker integration',
+      apiKey: 'test-key',
+      apiSecret: 'test-secret',
+      storeId: '12345',
+    },
+    select: { id: true },
+  });
+  const jobId = await runWithTenantScope(ctx.tenantAId, () =>
+    TrendyolWorker.enqueue(ctx.tenantAId, integration.id, SyncJobType.SYNC_STOCK),
+  );
+
+  await Promise.all([processPendingJobs(ctx.tenantAId), processPendingJobs(ctx.tenantAId)]);
+  const job = await prisma.marketplaceSyncJob.findFirst({
+    where: { id: jobId, tenantId: ctx.tenantAId },
+    select: { status: true, attempts: true, leaseOwner: true, leaseExpiresAt: true },
+  });
+  if (!job || job.status !== SyncJobStatus.DONE || job.attempts !== 1) {
+    throw new Error('Atomic marketplace claim ayni job icin tek worker sahipligini koruyamadi.');
+  }
+  if (job.leaseOwner !== null || job.leaseExpiresAt !== null) {
+    throw new Error('Tamamlanan marketplace job lease bilgisi temizlenmedi.');
+  }
+}
+
 async function testStockMovementUpdatesLevel(ctx: TestContext): Promise<void> {
   const result = await api('POST', '/api/stock/movements', token(ctx.ownerAId, ctx.tenantAId), {
     productId: ctx.productAId,
@@ -1032,6 +1107,10 @@ async function main(): Promise<void> {
     await testDomainEventIdempotency(ctx);
     console.log('Integration: domain event coverage and dead-letter replay');
     await testDomainEventCoverageAndDeadLetterReplay(ctx);
+    console.log('Integration: atomic outbox multi-instance claim');
+    await testAtomicOutboxClaim(ctx);
+    console.log('Integration: atomic marketplace multi-instance claim');
+    await testAtomicMarketplaceClaim(ctx);
     console.log('Integration: stock movement');
     await testStockMovementUpdatesLevel(ctx);
     console.log('Integration: sales order delivery invoice chain');

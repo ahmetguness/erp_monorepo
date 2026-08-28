@@ -12,6 +12,9 @@ export const TENANT_ISOLATION_BYPASS_REASONS = [
   'api-key-bootstrap',
   'domain-event-outbox-worker-stale-processing',
   'domain-event-outbox-worker-due-events',
+  'domain-event-outbox-worker-poison-messages',
+  'domain-event-outbox-worker-atomic-claim',
+  'marketplace-worker-atomic-claim',
 ] as const;
 
 export type TenantIsolationBypassReason = typeof TENANT_ISOLATION_BYPASS_REASONS[number];

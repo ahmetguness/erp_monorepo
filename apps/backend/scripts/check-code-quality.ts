@@ -145,6 +145,24 @@ function checkAuthorizationQueryCentralization(): CheckIssue[] {
   return issues;
 }
 
+function checkWorkerDurability(): CheckIssue[] {
+  const issues: CheckIssue[] = [];
+  const schema = readFileSync(join(repoRoot, 'apps/backend/prisma/schema.prisma'), 'utf8');
+  const outboxWorker = readFileSync(join(repoRoot, 'apps/backend/src/services/domain-event-outbox-worker.service.ts'), 'utf8');
+  const marketplaceWorker = readFileSync(join(repoRoot, 'apps/backend/src/services/trendyol-worker.service.ts'), 'utf8');
+  for (const required of ['leaseOwner', 'leaseExpiresAt', '@@index([status, nextRetryAt, createdAt])', '@@index([status, leaseExpiresAt])']) {
+    if (!schema.includes(required)) issues.push({ file: 'apps/backend/prisma/schema.prisma', message: `durable workers require ${required}` });
+  }
+  for (const [file, source] of [
+    ['apps/backend/src/services/domain-event-outbox-worker.service.ts', outboxWorker],
+    ['apps/backend/src/services/trendyol-worker.service.ts', marketplaceWorker],
+  ] as const) {
+    if (!source.includes('FOR UPDATE SKIP LOCKED')) issues.push({ file, message: 'multi-instance workers require an atomic SKIP LOCKED claim' });
+    if (/setInterval\s*\(/.test(source)) issues.push({ file, message: 'worker services must use the shared non-overlapping WorkerLoop' });
+  }
+  return issues;
+}
+
 function checkModuleBoundaries(): CheckIssue[] {
   const issues: CheckIssue[] = [];
   const backendSource = join(repoRoot, 'apps/backend/src');
@@ -317,6 +335,7 @@ function main(): void {
     ...checkActiveAllowlistEntries(sourceFiles),
     ...checkBackendNaming(),
     ...checkAuthorizationQueryCentralization(),
+    ...checkWorkerDurability(),
     ...checkModuleBoundaries(),
     ...reportLargeFiles(sourceFiles),
     ...checkGeneratedOrCacheChurn(),

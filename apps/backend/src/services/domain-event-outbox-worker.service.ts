@@ -1,8 +1,11 @@
 import { DomainEventOutboxStatus, Prisma, Priority } from '@prisma/client';
+import { hostname } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
-import { runWithTenantIsolationBypass } from '../lib/tenant-isolation-context.js';
+import { runWithTenantIsolationBypass, runWithTenantScope } from '../lib/tenant-isolation-context.js';
 import { domainEvents } from '../domain-events';
+import { WorkerLoop } from '../modules/shared/index.js';
 import {
   DOMAIN_EVENT_NAMES,
   DOMAIN_EVENT_SCHEMA_VERSION,
@@ -14,6 +17,8 @@ import {
 const DEFAULT_BATCH_SIZE = 25;
 const DEFAULT_POLL_INTERVAL_MS = 10_000;
 const DEFAULT_PROCESSING_TIMEOUT_MS = 5 * 60_000;
+const MAX_OUTBOX_ATTEMPTS = 3;
+const WORKER_ID = `${hostname()}:${process.pid}:${randomUUID()}`;
 
 function readPositiveNumberEnv(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
@@ -482,38 +487,54 @@ export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE):
     DEFAULT_PROCESSING_TIMEOUT_MS,
   );
   const staleProcessingCutoff = new Date(Date.now() - processingTimeoutMs);
-  const staleProcessingEvents = await runWithTenantIsolationBypass('domain-event-outbox-worker-stale-processing', async () =>
-    prisma.domainEventOutbox.findMany({
+  const requeuedStale = await runWithTenantIsolationBypass('domain-event-outbox-worker-stale-processing', async () => {
+    const stale = await prisma.domainEventOutbox.updateMany({
       where: {
         status: DomainEventOutboxStatus.PROCESSING,
-        updatedAt: { lte: staleProcessingCutoff },
+        OR: [{ leaseExpiresAt: { lte: new Date() } }, { leaseExpiresAt: null, updatedAt: { lte: staleProcessingCutoff } }],
       },
-      select: { id: true, tenantId: true },
-    }),
-  );
-  let requeuedStale = 0;
-  for (const event of staleProcessingEvents) {
-    const staleProcessing = await prisma.domainEventOutbox.updateMany({
-      where: { id: event.id, tenantId: event.tenantId },
       data: {
         status: DomainEventOutboxStatus.FAILED,
-        lastError: 'PROCESSING timeout sonrasi worker tarafindan tekrar kuyruga alindi.',
-        nextRetryAt: null,
+        lastError: 'Worker lease expired; event safely returned to the durable outbox.',
+        nextRetryAt: new Date(),
+        leaseOwner: null,
+        leaseExpiresAt: null,
       },
     });
-    requeuedStale += staleProcessing.count;
-  }
+    return stale.count;
+  });
 
-  const dueEvents = await runWithTenantIsolationBypass('domain-event-outbox-worker-due-events', async () =>
-    prisma.domainEventOutbox.findMany({
-      where: {
-        status: { in: [DomainEventOutboxStatus.PENDING, DomainEventOutboxStatus.FAILED] },
-        OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: new Date() } }],
-      },
-      orderBy: { updatedAt: 'asc' },
-      take: limit,
-      select: { id: true, tenantId: true },
+  await runWithTenantIsolationBypass('domain-event-outbox-worker-poison-messages', async () =>
+    await prisma.domainEventOutbox.updateMany({
+      where: { status: DomainEventOutboxStatus.FAILED, attempts: { gte: MAX_OUTBOX_ATTEMPTS } },
+      data: { status: DomainEventOutboxStatus.DEAD_LETTER, nextRetryAt: null, leaseOwner: null, leaseExpiresAt: null },
     }),
+  );
+
+  const leaseExpiresAt = new Date(Date.now() + processingTimeoutMs);
+  const dueEvents = await runWithTenantIsolationBypass('domain-event-outbox-worker-atomic-claim', async () =>
+    await prisma.$queryRaw<Array<{ id: string; tenantId: string }>>`
+      WITH candidates AS (
+        SELECT id
+        FROM domain_event_outbox
+        WHERE status IN ('PENDING', 'FAILED')
+          AND attempts < ${MAX_OUTBOX_ATTEMPTS}
+          AND ("nextRetryAt" IS NULL OR "nextRetryAt" <= NOW())
+        ORDER BY "createdAt" ASC
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE domain_event_outbox AS event
+      SET status = 'PROCESSING',
+          attempts = event.attempts + 1,
+          "claimedAt" = NOW(),
+          "leaseOwner" = ${WORKER_ID},
+          "leaseExpiresAt" = ${leaseExpiresAt},
+          "updatedAt" = NOW()
+      FROM candidates
+      WHERE event.id = candidates.id
+      RETURNING event.id, event."tenantId"
+    `,
   );
 
   const result: DomainEventOutboxBatchResult = {
@@ -525,9 +546,17 @@ export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE):
   };
   for (const event of dueEvents) {
     try {
-      const replay = await replayDomainEventOutbox(event.tenantId, event.id, false);
-      if (replay?.replayed) result.replayed += 1;
-      else result.skipped += 1;
+      const replayed = await runWithTenantScope(event.tenantId, async () => {
+        const record = await loadOutboxEvent(event.tenantId, event.id);
+        if (!record) return false;
+        await domainEvents.publishClaimed(restoreStoredEvent(record), record.id);
+        return true;
+      });
+      if (!replayed) {
+        result.skipped += 1;
+        continue;
+      }
+      result.replayed += 1;
     } catch (error) {
       result.failed += 1;
       const message = error instanceof Error ? error.message : 'Bilinmeyen outbox worker hatasi';
@@ -547,43 +576,34 @@ export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE):
 }
 
 class DomainEventOutboxWorkerService {
-  private timer: NodeJS.Timeout | null = null;
-  private running = false;
+  private loop: WorkerLoop | null = null;
 
   start(intervalMs = Number(process.env.DOMAIN_EVENT_OUTBOX_WORKER_INTERVAL_MS ?? DEFAULT_POLL_INTERVAL_MS)): void {
-    if (this.timer) return;
-    logger.info(`[DomainEventOutboxWorker] Started. intervalMs=${intervalMs}`);
-    this.timer = setInterval(() => {
-      void this.tick();
-    }, intervalMs);
-    void this.tick();
+    if (this.loop) return;
+    this.loop = new WorkerLoop('DomainEventOutboxWorker', intervalMs, async () => {
+      await this.tick();
+    });
+    this.loop.start();
   }
 
-  stop(): void {
-    if (!this.timer) return;
-    clearInterval(this.timer);
-    this.timer = null;
-    logger.info('[DomainEventOutboxWorker] Stopped.');
+  async stop(): Promise<void> {
+    const loop = this.loop;
+    this.loop = null;
+    await loop?.stop();
   }
 
-  async tick(): Promise<DomainEventOutboxBatchResult | null> {
-    if (this.running) return null;
-    this.running = true;
-    try {
-      const result = await processDomainEventOutboxBatch();
-      if (result.claimed > 0 || result.requeuedStale > 0) {
-        logger.info('[DomainEventOutboxWorker] Batch processed', {
-          claimed: result.claimed,
-          replayed: result.replayed,
-          skipped: result.skipped,
-          failed: result.failed,
-          requeuedStale: result.requeuedStale,
-        });
-      }
-      return result;
-    } finally {
-      this.running = false;
+  async tick(): Promise<DomainEventOutboxBatchResult> {
+    const result = await processDomainEventOutboxBatch();
+    if (result.claimed > 0 || result.requeuedStale > 0) {
+      logger.info('[DomainEventOutboxWorker] Batch processed', {
+        claimed: result.claimed,
+        replayed: result.replayed,
+        skipped: result.skipped,
+        failed: result.failed,
+        requeuedStale: result.requeuedStale,
+      });
     }
+    return result;
   }
 }
 

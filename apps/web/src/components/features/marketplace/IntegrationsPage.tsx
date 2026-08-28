@@ -143,7 +143,7 @@ function TrendyolActions({ integrationId }: TrendyolActionsProps) {
       try {
         const job = await getTrendyolJobStatus(integrationId, jobId);
         setActiveJob(job);
-        if (job.status === "DONE" || job.status === "FAILED") {
+        if (job.status === "DONE" || job.status === "FAILED" || job.status === "DEAD_LETTER") {
           qc.invalidateQueries({ queryKey: ["mp-integrations"] });
           qc.invalidateQueries({ queryKey: ["mp-orders"] });
           qc.invalidateQueries({ queryKey: ["mp-sync-jobs"] });
@@ -285,7 +285,7 @@ function OperationsPanel({ integrationId }: { integrationId: string }) {
         label="Son Job"
         value={lastJob?.status ?? "Yok"}
         detail={lastJob ? formatDate(lastJob.createdAt) : undefined}
-        action={lastJob?.status === "FAILED" ? { label: "Tekrar dene", onClick: () => retry.mutate(lastJob.id) } : undefined}
+        action={lastJob?.status === "FAILED" || lastJob?.status === "DEAD_LETTER" ? { label: "Tekrar dene", onClick: () => retry.mutate(lastJob.id) } : undefined}
       />
       <MiniMetric
         label="Son Webhook"
@@ -571,7 +571,7 @@ function IntegrationHealthCenter() {
                       <td className="py-2 px-3 font-mono text-[10px] text-slate-400 truncate max-w-[120px]">{job.id}</td>
                       <td className="py-2 px-3 font-medium text-slate-300">{job.jobType}</td>
                       <td className="py-2 px-3">
-                        <Badge variant={job.status === 'DONE' ? 'success' : job.status === 'FAILED' ? 'danger' : job.status === 'RUNNING' ? 'warning' : 'neutral'}>
+                        <Badge variant={job.status === 'DONE' ? 'success' : job.status === 'FAILED' || job.status === 'DEAD_LETTER' ? 'danger' : job.status === 'RUNNING' ? 'warning' : 'neutral'}>
                           {job.status}
                         </Badge>
                       </td>
@@ -588,7 +588,7 @@ function IntegrationHealthCenter() {
                         {job.errorMessage ?? '-'}
                       </td>
                       <td className="py-2 px-3 text-right">
-                        {job.status === 'FAILED' && (
+                        {(job.status === 'FAILED' || job.status === 'DEAD_LETTER') && (
                           <Button
                             size="sm"
                             onClick={() => retryJob.mutate(job.id)}

@@ -120,7 +120,13 @@ export class MarketplaceMonitoringService {
           latestJobWithResult,
         ] = await this.db.$transaction([
           this.db.marketplaceSyncJob.count({ where: { tenantId, integrationId: integration.id } }),
-          this.db.marketplaceSyncJob.count({ where: { tenantId, integrationId: integration.id, status: SyncJobStatus.FAILED } }),
+          this.db.marketplaceSyncJob.count({
+            where: {
+              tenantId,
+              integrationId: integration.id,
+              status: { in: [SyncJobStatus.FAILED, SyncJobStatus.DEAD_LETTER] },
+            },
+          }),
           this.db.marketplaceSyncJob.count({ where: { tenantId, integrationId: integration.id, status: SyncJobStatus.PENDING } }),
           this.db.marketplaceSyncJob.count({ where: { tenantId, integrationId: integration.id, status: SyncJobStatus.RUNNING } }),
           this.db.marketplaceSyncJob.findFirst({
@@ -129,7 +135,11 @@ export class MarketplaceMonitoringService {
             select: { finishedAt: true },
           }),
           this.db.marketplaceSyncJob.findFirst({
-            where: { tenantId, integrationId: integration.id, status: SyncJobStatus.FAILED },
+            where: {
+              tenantId,
+              integrationId: integration.id,
+              status: { in: [SyncJobStatus.FAILED, SyncJobStatus.DEAD_LETTER] },
+            },
             orderBy: { finishedAt: 'desc' },
             select: { finishedAt: true, updatedAt: true, errorMessage: true },
           }),

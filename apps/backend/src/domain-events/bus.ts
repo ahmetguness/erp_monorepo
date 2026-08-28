@@ -20,7 +20,14 @@ class InProcessDomainEventBus {
   async publish(event: DomainEvent): Promise<void> {
     const claim = await safeClaimDomainEvent(event);
     if (!claim.shouldDispatch) return;
+    await this.dispatch(event, claim.outboxId);
+  }
 
+  async publishClaimed(event: DomainEvent, outboxId: string): Promise<void> {
+    await this.dispatch(event, outboxId);
+  }
+
+  private async dispatch(event: DomainEvent, outboxId: string | null): Promise<void> {
     const failures: DomainEventListenerFailure[] = [];
     for (const listener of this.listeners) {
       try {
@@ -34,11 +41,11 @@ class InProcessDomainEventBus {
     }
 
     if (failures.length > 0) {
-      await markDomainEventFailed(claim.outboxId, event.context.tenantId, failures);
+      await markDomainEventFailed(outboxId, event.context.tenantId, failures);
       return;
     }
 
-    await markDomainEventProcessed(claim.outboxId, event.context.tenantId);
+    await markDomainEventProcessed(outboxId, event.context.tenantId);
   }
 }
 

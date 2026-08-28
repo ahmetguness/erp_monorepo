@@ -110,6 +110,8 @@ export async function markDomainEventProcessed(outboxId: string | null, tenantId
       lastError: null,
       failedListeners: Prisma.JsonNull,
       nextRetryAt: null,
+      leaseOwner: null,
+      leaseExpiresAt: null,
     },
   });
 }
@@ -131,6 +133,8 @@ export async function markDomainEventFailed(outboxId: string | null, tenantId: s
       lastError: message.slice(0, 2000),
       failedListeners: toJson(failures) ?? Prisma.JsonNull,
       nextRetryAt: status === DomainEventOutboxStatus.FAILED ? retryAt(attempts) : null,
+      leaseOwner: null,
+      leaseExpiresAt: null,
     },
   });
 }

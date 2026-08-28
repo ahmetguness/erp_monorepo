@@ -42,7 +42,7 @@ export interface PlatformMetrics {
 }
 
 export type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DEAD_LETTER';
-export type SyncJobStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
+export type SyncJobStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | 'DEAD_LETTER';
 
 export interface EndpointLatencySnapshot {
   key: string;
@@ -157,11 +157,15 @@ export interface OperationalObservability {
     avgQueryCount: number;
   };
   domainEvents: {
+    pendingCount: number;
+    processingCount: number;
     failedCount: number;
     deadLetterCount: number;
     recentFailures: DomainEventFailureSnapshot[];
   };
   workerJobs: {
+    retryScheduledCount: number;
+    deadLetterCount: number;
     byStatus: WorkerJobMetricSnapshot[];
     recentProblemJobs: RecentWorkerJobSnapshot[];
   };

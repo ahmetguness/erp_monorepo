@@ -231,7 +231,7 @@ export const deleteOrder = (id: string) =>
 
 export interface MarketplaceSyncJobRecord {
   id: string; tenantId: string; integrationId: string;
-  jobType: string; status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
+  jobType: string; status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | 'DEAD_LETTER';
   startedAt: string | null; finishedAt: string | null;
   processedCount: number; errorCount: number; errorMessage: string | null;
   params: Record<string, unknown> | null; result: Record<string, unknown> | null;
@@ -327,7 +327,7 @@ export interface TrendyolSyncJob {
   tenantId: string;
   integrationId: string;
   jobType: string;
-  status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
+  status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | 'DEAD_LETTER';
   startedAt: string | null;
   finishedAt: string | null;
   processedCount: number;

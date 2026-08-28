@@ -64,7 +64,7 @@ export const MarketplaceMonitoringController = {
 
     const job = await prisma.marketplaceSyncJob.findFirst({ where: { id, tenantId } });
     if (!job) return c.json(new NotFoundError('Sync Job', id).toJSON(), 404);
-    if (job.status !== SyncJobStatus.FAILED) {
+    if (job.status !== SyncJobStatus.FAILED && job.status !== SyncJobStatus.DEAD_LETTER) {
       return c.json(new ValidationError('Sadece başarısız job tekrar kuyruğa alınabilir.').toJSON(), 400);
     }
 

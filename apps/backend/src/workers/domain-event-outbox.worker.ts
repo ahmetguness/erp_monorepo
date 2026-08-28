@@ -10,7 +10,7 @@ DomainEventOutboxWorker.start();
 
 async function shutdown(signal: string): Promise<void> {
   logger.info(`[DomainEventOutboxWorker] ${signal} received, shutting down.`);
-  DomainEventOutboxWorker.stop();
+  await DomainEventOutboxWorker.stop();
   await prisma.$disconnect();
   process.exit(0);
 }

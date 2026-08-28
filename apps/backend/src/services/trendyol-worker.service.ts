@@ -16,6 +16,10 @@ import {
   mapTrendyolOrderStatus,
 } from './trendyol.service';
 import { MarketplaceOrderStatus, Prisma, SyncJobType, SyncJobStatus } from '@prisma/client';
+import { hostname } from 'node:os';
+import { randomUUID } from 'node:crypto';
+import { nextRetryDate, WorkerLoop } from '../modules/shared/index.js';
+import { runWithTenantIsolationBypass, runWithTenantScope } from '../lib/tenant-isolation-context.js';
 
 // ---------------------------------------------
 // Config
@@ -24,6 +28,7 @@ import { MarketplaceOrderStatus, Prisma, SyncJobType, SyncJobStatus } from '@pri
 const POLL_INTERVAL_MS = 5_000;
 const JOB_TIMEOUT_MS = 5 * 60_000;
 const FIFTEEN_MIN_MS = 15 * 60_000;
+const WORKER_ID = `${hostname()}:${process.pid}:${randomUUID()}`;
 
 // ---------------------------------------------
 // Job param types
@@ -47,22 +52,20 @@ export type JobParams = SyncOrdersParams | SyncStockParams;
 // Worker
 // ---------------------------------------------
 
-let running = false;
-let pollTimer: ReturnType<typeof setTimeout> | null = null;
+let workerLoop: WorkerLoop | null = null;
 
 export const TrendyolWorker = {
 
   start() {
-    if (running) return;
-    running = true;
-    logger.info('[TrendyolWorker] Started');
-    schedulePoll();
+    if (workerLoop) return;
+    workerLoop = new WorkerLoop('TrendyolWorker', POLL_INTERVAL_MS, processPendingJobs);
+    workerLoop.start();
   },
 
-  stop() {
-    running = false;
-    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
-    logger.info('[TrendyolWorker] Stopped');
+  async stop(): Promise<void> {
+    const loop = workerLoop;
+    workerLoop = null;
+    await loop?.stop();
   },
 
   async enqueue(
@@ -96,41 +99,58 @@ export const TrendyolWorker = {
  * Safe for multi-process/pod deployments because the row is locked and status
  * is changed to RUNNING in a single statement.
  */
-async function claimNextJob() {
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
-    UPDATE marketplace_sync_jobs
-    SET    status = 'RUNNING', "startedAt" = NOW(), "updatedAt" = NOW()
-    WHERE  id = (
-      SELECT id FROM marketplace_sync_jobs
-      WHERE  status = 'PENDING'
-      ORDER  BY "createdAt" ASC
-      LIMIT  1
-      FOR UPDATE SKIP LOCKED
-    )
-    RETURNING id
-  `;
-  if (!rows.length) return null;
-  return prisma.marketplaceSyncJob.findUnique({ where: { id: rows[0].id } });
+async function claimNextJob(tenantId?: string) {
+  return runWithTenantIsolationBypass('marketplace-worker-atomic-claim', async () => {
+    const leaseExpiresAt = new Date(Date.now() + JOB_TIMEOUT_MS + 30_000);
+    await prisma.marketplaceSyncJob.updateMany({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        status: SyncJobStatus.RUNNING,
+        leaseExpiresAt: { lte: new Date() },
+      },
+      data: {
+        status: SyncJobStatus.FAILED,
+        errorMessage: 'Worker lease expired; job returned for retry.',
+        nextRetryAt: new Date(),
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      },
+    });
+    const rows = await prisma.$queryRaw<Array<{ id: string; tenantId: string }>>`
+      UPDATE marketplace_sync_jobs
+      SET    status = 'RUNNING',
+             "startedAt" = NOW(),
+             "finishedAt" = NULL,
+             attempts = attempts + 1,
+             "leaseOwner" = ${WORKER_ID},
+             "leaseExpiresAt" = ${leaseExpiresAt},
+             "updatedAt" = NOW()
+      WHERE  id = (
+        SELECT id FROM marketplace_sync_jobs
+        WHERE  status IN ('PENDING', 'FAILED')
+          AND (${tenantId ?? null}::text IS NULL OR "tenantId" = ${tenantId ?? null})
+          AND attempts < "maxAttempts"
+          AND ("nextRetryAt" IS NULL OR "nextRetryAt" <= NOW())
+        ORDER  BY "createdAt" ASC
+        LIMIT  1
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING id, "tenantId"
+    `;
+    const claimed = rows[0];
+    if (!claimed) return null;
+    return prisma.marketplaceSyncJob.findFirst({ where: { id: claimed.id, tenantId: claimed.tenantId } });
+  });
 }
 
 // ---------------------------------------------
 // Poll loop
 // ---------------------------------------------
 
-function schedulePoll() {
-  if (!running) return;
-  pollTimer = setTimeout(async () => {
-    try { await processPendingJobs(); } catch (err) {
-      logger.error(`[TrendyolWorker] Poll error: ${(err as Error).message}`);
-    }
-    schedulePoll();
-  }, POLL_INTERVAL_MS);
-}
-
-async function processPendingJobs() {
+export async function processPendingJobs(tenantId?: string): Promise<void> {
   let job: Awaited<ReturnType<typeof claimNextJob>>;
   try {
-    job = await claimNextJob();
+    job = await claimNextJob(tenantId);
   } catch (err) {
     const msg = (err as Error).message ?? '';
     if (msg.includes('does not exist') || msg.includes('P2021')) return;
@@ -138,11 +158,17 @@ async function processPendingJobs() {
   }
   if (!job) return;
 
+  await runWithTenantScope(job.tenantId, () => processClaimedJob(job));
+}
+
+async function processClaimedJob(job: NonNullable<Awaited<ReturnType<typeof claimNextJob>>>): Promise<void> {
+
   logger.info(`[TrendyolWorker] Running job ${job.id} (${job.jobType})`);
 
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Job timeout')), JOB_TIMEOUT_MS),
-  );
+  let timeoutHandle: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new Error('Job timeout')), JOB_TIMEOUT_MS);
+  });
 
   try {
     const result = await Promise.race([
@@ -165,20 +191,34 @@ async function processPendingJobs() {
         processedCount: result.processedCount,
         errorCount: result.errorCount,
         result: finalResult as Prisma.InputJsonValue,
+        nextRetryAt: null,
+        leaseOwner: null,
+        leaseExpiresAt: null,
       },
     });
     logger.info(`[TrendyolWorker] Job ${job.id} done: ${JSON.stringify(finalResult)}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`[TrendyolWorker] Job ${job.id} failed: ${msg}`);
+    const exhausted = job.attempts >= job.maxAttempts;
     await prisma.marketplaceSyncJob.updateMany({
       where: { id: job.id, tenantId: job.tenantId },
-      data: { status: SyncJobStatus.FAILED, finishedAt: new Date(), errorMessage: msg, errorCount: 1 },
+      data: {
+        status: exhausted ? SyncJobStatus.DEAD_LETTER : SyncJobStatus.FAILED,
+        finishedAt: new Date(),
+        errorMessage: msg.slice(0, 2000),
+        errorCount: 1,
+        nextRetryAt: exhausted ? null : nextRetryDate(job.attempts, new Date()),
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      },
     });
     await prisma.marketplaceIntegration.updateMany({
       where: { id: job.integrationId, tenantId: job.tenantId },
       data: { syncErrors: { increment: 1 } },
     }).catch(() => {});
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
   }
 }
 
