@@ -21,23 +21,23 @@
     "test:tenant-isolation": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-tenant-isolation.ts",
     "test:tenant-runtime": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-runtime-tenant-guard.ts",
     "test:permission-gating": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-permission-gating.ts",
-    "test:prisma-architecture": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-prisma-architecture.ts && prisma validate",
+    "test:prisma-architecture": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-prisma-architecture.ts && prisma validate --schema=prisma/schema",
     "test:quality": "npm run test:typecheck && npm run test:prisma-architecture && npm run test:unit:coverage && npm run test:code-quality && npm run test:module-boundaries && npm run test:contracts && npm run test:tenant-isolation && npm run test:tenant-runtime && npm run test:permission-gating && npm run test:e2e && npm run test:integration && npm run db:health",
     "ci:artifacts": "tsx scripts/generate-ci-artifacts.ts",
     "start": "node dist/src/index.js",
     "db:health": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-db-health.ts",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate --schema=prisma/schema",
+    "db:migrate": "prisma migrate dev --schema=prisma/schema",
     "db:migrate:dry-run": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/migration-dry-run.ts",
     "db:migrate:review": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-migration-safety.ts",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio",
+    "db:push": "prisma db push --schema=prisma/schema",
+    "db:studio": "prisma studio --schema=prisma/schema",
     "db:seed": "tsx prisma/seed.ts",
     "storage:migrate": "tsx scripts/migrate-local-storage-to-object-storage.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
-    "@prisma/client": "^6.19.0",
+    "@prisma/client": "^5.22.0",
     "@repo/types": "file:../../packages/types",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
@@ -51,7 +51,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "prisma": "^6.19.0",
+    "prisma": "^5.22.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }

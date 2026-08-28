@@ -7,8 +7,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 FROM base AS deps
 WORKDIR /app/apps/web
 COPY packages/types /app/packages/types
-COPY apps/web/package.json apps/web/package-lock.json ./
-RUN npm ci \
+COPY package.json package-lock.json /app/
+COPY apps/web/package.json ./
+RUN cd /app && npm ci --workspace=apps/web --ignore-scripts \
   && mkdir -p /app/node_modules \
   && ln -s /app/apps/web/node_modules/zod /app/node_modules/zod \
   && PATH=/app/apps/web/node_modules/.bin:$PATH npm --prefix /app/packages/types run build
@@ -31,4 +32,3 @@ RUN mkdir -p apps/web/.next/cache && chown -R node:node /app
 USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
-
