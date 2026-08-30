@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { CheckIssue, readText, reportIssues, toProjectPath, walkFiles } from './lib/static-checks';
 
@@ -342,7 +342,12 @@ function checkHighRiskCoverage(files: readonly string[]): CheckIssue[] {
 }
 
 function main(): void {
-  const schema = readText(resolve(process.cwd(), 'prisma', 'schema.prisma'));
+  const schemaDirectory = resolve(process.cwd(), 'prisma', 'schema');
+  const schema = readdirSync(schemaDirectory)
+    .filter((file) => file.endsWith('.prisma'))
+    .sort()
+    .map((file) => readText(resolve(schemaDirectory, file)))
+    .join('\n');
   const models = parseTenantScopedModels(schema);
   const files = listSourceFiles().filter((file) => basename(dirname(file)) !== 'node_modules');
   const issues = [

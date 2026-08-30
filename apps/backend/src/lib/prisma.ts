@@ -3,10 +3,16 @@ import { recordSlowQuery } from '../services/observability.service.js';
 import { getTenantIsolationContext } from './tenant-isolation-context.js';
 
 declare global {
-  var prisma: PrismaClient | undefined;
+  var prismaClient: PrismaClient | undefined;
 }
 
 type UnknownRecord = Record<string, unknown>;
+
+export interface TenantQueryParams {
+  model?: Prisma.ModelName;
+  action: Prisma.PrismaAction;
+  args: UnknownRecord;
+}
 
 const prismaLogLevels: Prisma.PrismaClientOptions['log'] =
   process.env.PRISMA_QUERY_LOG === 'true'
@@ -15,7 +21,7 @@ const prismaLogLevels: Prisma.PrismaClientOptions['log'] =
       ? ['error']
       : ['error', 'warn'];
 
-export const prisma = globalThis.prisma ?? new PrismaClient({ log: prismaLogLevels });
+const basePrisma = globalThis.prismaClient ?? new PrismaClient({ log: prismaLogLevels });
 
 export const tenantScopedModels: ReadonlySet<Prisma.ModelName> = new Set(
   Prisma.dmmf.datamodel.models
@@ -45,9 +51,8 @@ function hasTenantCreateData(value: unknown): boolean {
   return isRecord(value) && typeof value.tenantId === 'string' && value.tenantId.length > 0;
 }
 
-function requireArgs(params: Prisma.MiddlewareParams): UnknownRecord {
-  if (!isRecord(params.args)) params.args = {};
-  return params.args as UnknownRecord;
+function requireArgs(params: TenantQueryParams): UnknownRecord {
+  return params.args;
 }
 
 function scopeWhere(args: UnknownRecord, tenantId: string): void {
@@ -67,7 +72,7 @@ function scopeCreateData(data: unknown, tenantId: string, model: string): unknow
   return { ...data, tenantId };
 }
 
-function applyTenantScope(params: Prisma.MiddlewareParams, tenantId: string): void {
+function applyTenantScope(params: TenantQueryParams, tenantId: string): void {
   if (!params.model) return;
   const args = requireArgs(params);
   if (whereActions.has(params.action)) scopeWhere(args, tenantId);
@@ -79,7 +84,7 @@ function applyTenantScope(params: Prisma.MiddlewareParams, tenantId: string): vo
   }
 }
 
-function assertExplicitTenantScope(params: Prisma.MiddlewareParams): void {
+function assertExplicitTenantScope(params: TenantQueryParams): void {
   if (!params.model) return;
   const args = requireArgs(params);
   if (whereActions.has(params.action) && !hasTenantWherePredicate(args.where)) {
@@ -93,7 +98,7 @@ function assertExplicitTenantScope(params: Prisma.MiddlewareParams): void {
   }
 }
 
-export function enforceTenantIsolation(params: Prisma.MiddlewareParams): void {
+export function enforceTenantIsolation(params: TenantQueryParams): void {
   if (!params.model || !tenantScopedModels.has(params.model)) return;
   const context = getTenantIsolationContext();
   if (context?.mode === 'bypass') return;
@@ -101,22 +106,37 @@ export function enforceTenantIsolation(params: Prisma.MiddlewareParams): void {
   else assertExplicitTenantScope(params);
 }
 
-prisma.$use(async (params: Prisma.MiddlewareParams, next) => {
-  const startedAt = Date.now();
-  enforceTenantIsolation(params);
-
-  if (params.model === 'Tenant' && params.action === 'delete') {
-    params.action = 'update';
-    params.args.data = { deletedAt: new Date() };
-  }
-  if (params.model === 'Tenant' && params.action === 'deleteMany') {
-    params.action = 'updateMany';
-    params.args.data = { ...(isRecord(params.args.data) ? params.args.data : {}), deletedAt: new Date() };
-  }
-
-  const result = await next(params);
-  recordSlowQuery({ model: params.model ?? null, action: params.action, durationMs: Date.now() - startedAt });
-  return result;
+const tenantSafePrisma = basePrisma.$extends({
+  query: {
+    $allModels: {
+      async $allOperations({ model, operation, args, query }) {
+        const startedAt = Date.now();
+        enforceTenantIsolation({
+          model: model as Prisma.ModelName,
+          action: operation as Prisma.PrismaAction,
+          args: args as UnknownRecord,
+        });
+        const result = await query(args);
+        recordSlowQuery({ model, action: operation, durationMs: Date.now() - startedAt });
+        return result;
+      },
+    },
+  },
 });
 
-if (process.env.NODE_ENV !== 'production') globalThis.prisma = prisma;
+function isPrismaClient(value: unknown): value is PrismaClient {
+  if (!isRecord(value)) return false;
+  return ['$connect', '$disconnect', '$transaction', '$queryRaw']
+    .every((member) => typeof Reflect.get(value, member) === 'function');
+}
+
+function requirePrismaClient(value: unknown): PrismaClient {
+  if (!isPrismaClient(value)) {
+    throw new Error('Prisma tenant extension does not expose the required client lifecycle API.');
+  }
+  return value;
+}
+
+export const prisma = requirePrismaClient(tenantSafePrisma);
+
+if (process.env.NODE_ENV !== 'production') globalThis.prismaClient = basePrisma;

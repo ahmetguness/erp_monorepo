@@ -9,6 +9,7 @@ packages/types/dist
 /apps/web/package-lock.json
 ci-artifacts
 apps/backend/ci-artifacts
+/coverage
 .github
 rapor.md
 rapor2.md

@@ -1,9 +1,9 @@
 import type { Prisma } from '@prisma/client';
-import { enforceTenantIsolation, tenantScopedModels } from '../src/lib/prisma.js';
+import { enforceTenantIsolation, tenantScopedModels, type TenantQueryParams } from '../src/lib/prisma.js';
 import { runWithTenantScope } from '../src/lib/tenant-isolation-context.js';
 
-function params(model: Prisma.ModelName, action: Prisma.PrismaAction, args: Record<string, unknown>): Prisma.MiddlewareParams {
-  return { model, action, args, dataPath: [], runInTransaction: false };
+function params(model: Prisma.ModelName, action: Prisma.PrismaAction, args: Record<string, unknown>): TenantQueryParams {
+  return { model, action, args };
 }
 
 function expectViolation(model: Prisma.ModelName, action: Prisma.PrismaAction, args: Record<string, unknown>): void {

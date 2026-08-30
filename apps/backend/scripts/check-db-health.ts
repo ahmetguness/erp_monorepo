@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
@@ -50,7 +50,7 @@ function extractModelTables(schemaText: string): ModelTable[] {
 
 function runPrismaMigrateStatus(): boolean {
   try {
-    execSync('npx prisma migrate status --schema prisma/schema.prisma', {
+    execSync('npx prisma migrate status --schema prisma/schema', {
       cwd: process.cwd(),
       stdio: 'pipe',
       encoding: 'utf8',
@@ -76,8 +76,12 @@ function runPrismaMigrateStatus(): boolean {
 async function main(): Promise<void> {
   loadDotEnv(resolve(process.cwd(), '.env'));
 
-  const schemaPath = resolve(process.cwd(), 'prisma/schema.prisma');
-  const schemaText = readFileSync(schemaPath, 'utf8');
+  const schemaDirectory = resolve(process.cwd(), 'prisma/schema');
+  const schemaText = readdirSync(schemaDirectory)
+    .filter((file) => file.endsWith('.prisma'))
+    .sort()
+    .map((file) => readFileSync(resolve(schemaDirectory, file), 'utf8'))
+    .join('\n');
   const expectedTables = extractModelTables(schemaText);
 
   const prisma = new PrismaClient();

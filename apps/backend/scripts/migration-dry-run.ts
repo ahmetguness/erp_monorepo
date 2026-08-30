@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
 const moduleResolver = createRequire(resolve(process.cwd(), 'package.json'));
-const prismaCli = moduleResolver.resolve('prisma');
+const prismaCli = moduleResolver.resolve('prisma/build/index.js');
 
 const result = spawnSync(
   process.execPath,
