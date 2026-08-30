@@ -102,7 +102,7 @@ export class SetupChecklistService {
     ] = await this.prisma.$transaction([
       this.prisma.tenant.findUnique({
         where: { id: tenantId },
-        select: { companyName: true, taxNumber: true, taxOffice: true, address: true, city: true },
+        select: { companyName: true, country: true, sector: true },
       }),
       this.prisma.contact.count({ where: { tenantId, deletedAt: null, isActive: true } }),
       this.prisma.product.count({ where: { tenantId, deletedAt: null, isActive: true } }),
@@ -130,7 +130,7 @@ export class SetupChecklistService {
       this.prisma.stockLevel.count({ where: { tenantId, quantity: { lt: 0 } } }),
     ]);
 
-    const companyProfile = tenant?.companyName?.trim() && tenant.taxNumber?.trim() && tenant.taxOffice?.trim() && tenant.address?.trim() && tenant.city?.trim() ? 1 : 0;
+    const companyProfile = tenant?.companyName?.trim() && tenant.country?.trim() && tenant.sector?.trim() ? 1 : 0;
     const dataQualityIssueCount = contactsMissingTaxNumber + productsWithoutMinStock + productsMissingTaxRate + negativeStockLevels;
 
     return {
@@ -149,7 +149,7 @@ export class SetupChecklistService {
       makeItem(
         'company_profile',
         'Sirket bilgileri',
-        'Unvan, vergi bilgileri, adres ve sehir alanlarini tamamlayin.',
+        'Firma adi, ulke ve sektor profilini tamamlayin.',
         counts.companyProfile,
         '/dashboard/settings/general',
         'Sirket bilgilerini gir',
@@ -185,6 +185,7 @@ export class SetupChecklistService {
         counts.products,
         '/dashboard/products/new',
         'Urun ekle',
+        'recommended',
       ),
       makeItem(
         'contacts',
@@ -193,6 +194,7 @@ export class SetupChecklistService {
         counts.contacts,
         '/dashboard/contacts/new',
         'Cari ekle',
+        'recommended',
       ),
       makeItem(
         'data_quality',
@@ -201,6 +203,7 @@ export class SetupChecklistService {
         counts.dataQuality,
         '/dashboard/data-exchange',
         'Kalite skorunu incele',
+        'recommended',
       ),
     ];
   }

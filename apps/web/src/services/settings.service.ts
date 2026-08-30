@@ -308,30 +308,40 @@ export async function upsertModuleSetting(module: string, key: string, value: st
   return safeParse(SingleResponseSchema(ModuleSettingSchema), res.data, 'upsertModuleSetting').data;
 }
 
-export interface QuickStartDTO {
-  companyName: string;
-  taxNumber?: string;
-  taxOffice?: string;
-  address?: string;
-  city?: string;
-  warehouseName: string;
-  currencyCode: string;
-  invoicePrefix: string;
-  firstProductCode: string;
-  firstProductName: string;
-  firstProductPrice: number;
-  firstProductTaxRate: number;
-  firstContactName: string;
-  firstContactCode: string;
-  firstContactType: 'CUSTOMER' | 'SUPPLIER' | 'BOTH';
-  firstContactTaxNumber: string;
-  firstContactEmail?: string;
-  firstContactPhone?: string;
-}
+export const OnboardingIndustrySchema = z.enum(['RETAIL', 'WHOLESALE', 'SERVICES', 'MANUFACTURING', 'ECOMMERCE', 'OTHER']);
+export const OnboardingCompanyScaleSchema = z.enum(['MICRO', 'SMALL', 'MEDIUM', 'LARGE']);
+export const OnboardingGoalSchema = z.enum(['SALES', 'FINANCE', 'INVENTORY', 'PROCUREMENT', 'PRODUCTION', 'SERVICE']);
 
-export async function runQuickStart(data: QuickStartDTO): Promise<unknown> {
+export const QuickStartSchema = z.object({
+  companyName: z.string().trim().min(2).max(160),
+  country: z.string().length(2),
+  industry: OnboardingIndustrySchema,
+  companyScale: OnboardingCompanyScaleSchema,
+  primaryGoal: OnboardingGoalSchema,
+  taxNumber: z.string().optional(),
+  taxOffice: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+});
+
+export const QuickStartResultSchema = z.object({
+  profile: QuickStartSchema.pick({ companyName: true, country: true, industry: true, companyScale: true, primaryGoal: true }),
+  applied: z.object({
+    currencyCode: z.string(),
+    warehouseName: z.string(),
+    invoicePrefix: z.string(),
+    taxRates: z.array(z.number()),
+    recommendedModules: z.array(z.string()),
+  }),
+  nextSteps: z.tuple([z.literal('products'), z.literal('contacts'), z.literal('data_quality')]),
+});
+
+export type QuickStartDTO = z.infer<typeof QuickStartSchema>;
+export type QuickStartResult = z.infer<typeof QuickStartResultSchema>;
+
+export async function runQuickStart(data: QuickStartDTO): Promise<QuickStartResult> {
   const res = await apiClient.post('/api/settings/quick-start', data);
-  return res.data;
+  return safeParse(SingleResponseSchema(QuickStartResultSchema), res.data, 'runQuickStart').data;
 }
 
 export async function cleanDemoData(): Promise<unknown> {

@@ -51,6 +51,7 @@ import {
 } from '@/services/settings.service';
 
 function invalidateSetupData(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['auth', 'me'] });
   qc.invalidateQueries({ queryKey: ['settings', 'tenant'] });
   qc.invalidateQueries({ queryKey: ['settings', 'setup-checklist'] });
   qc.invalidateQueries({ queryKey: ['master'] });

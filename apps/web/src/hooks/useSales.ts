@@ -164,7 +164,11 @@ export function useCreateInvoice() {
   const { toast } = useUIStore();
   return useMutation({
     mutationFn: (data: CreateInvoiceDTO) => createInvoice(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: INVOICE_KEYS.all }); toast.success('Fatura oluşturuldu.'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: INVOICE_KEYS.all });
+      qc.invalidateQueries({ queryKey: ['adaptive-defaults'] });
+      toast.success('Fatura oluşturuldu.');
+    },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }

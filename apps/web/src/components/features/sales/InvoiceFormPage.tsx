@@ -18,12 +18,14 @@ import { Button } from '@/components/ui/Button';
 import { FormRow } from '@/components/shared/FormField';
 import { ContactSelect, ProductSelect } from '@/components/shared/EntitySelect';
 import { SmartFormSidePanel, type SmartFormLine } from '@/components/shared/SmartFormSidePanel';
+import { AdaptiveDefaultsPanel } from '@/components/features/onboarding/AdaptiveDefaultsPanel';
 import { useCreateInvoice, useSalesOrder, useSalesOrders, useSalesQuotes } from '@/hooks/useSales';
 import { useStockLevels } from '@/hooks/useStock';
 import { useContacts } from '@/hooks/useContacts';
 import { useProducts } from '@/hooks/useProducts';
 import { useTaxRates } from '@/hooks/useMasterData';
 import { useBusinessRules } from '@/hooks/useSettings';
+import { useAdaptiveDefaults, useDismissAdaptiveDefault, useResetAdaptiveDefaults } from '@/hooks/useAdaptiveDefaults';
 import {
   applyServerFieldErrors,
   isSubmitLocked,
@@ -38,6 +40,7 @@ import {
 import { cn, formatCurrency } from '@/lib/utils';
 import type { BusinessRule } from '@/services/settings.service';
 import type { InvoiceLineDTO } from '@/services/sales.service';
+import type { AdaptiveDefaultSuggestion } from '@/services/adaptive-defaults.service';
 
 // ─────────────────────────────────────────────
 // Schema
@@ -132,6 +135,10 @@ export function InvoiceFormPage() {
   const watchContact = useWatch({ control, name: 'contactId' });
   const watchDate = useWatch({ control, name: 'date' });
   const watchDueDate = useWatch({ control, name: 'dueDate' });
+  const { data: adaptiveDefaults } = useAdaptiveDefaults(watchType, watchContact || undefined);
+  const dismissAdaptiveDefault = useDismissAdaptiveDefault();
+  const resetAdaptiveDefaults = useResetAdaptiveDefaults();
+  const autoAppliedDefaultsRef = useRef(new Set<string>());
   const invoiceDueDays = getNumberRule(businessRules, 'invoicing.invoice_due_days', 30);
   const { data: openQuotesData } = useSalesQuotes(
     { page: 1, limit: 5, contactId: watchContact || undefined, status: 'DRAFT' },
@@ -148,6 +155,22 @@ export function InvoiceFormPage() {
     if (!watchDate || dirtyFields.dueDate) return;
     setValue('dueDate', addDaysString(watchDate, invoiceDueDays), { shouldDirty: false, shouldValidate: true });
   }, [dirtyFields.dueDate, invoiceDueDays, setValue, watchDate]);
+
+  useEffect(() => {
+    if (!watchDate || sourceSalesOrderId) return;
+    for (const suggestion of adaptiveDefaults?.suggestions ?? []) {
+      const signature = `${watchType}:${watchContact ?? ''}:${suggestion.field}:${suggestion.value}`;
+      if (!suggestion.autoApplicable || autoAppliedDefaultsRef.current.has(signature)) continue;
+      if (suggestion.field === 'paymentTermDays' && !dirtyFields.dueDate) {
+        setValue('dueDate', addDaysString(watchDate, Number(suggestion.value)), { shouldDirty: false, shouldValidate: true });
+        autoAppliedDefaultsRef.current.add(signature);
+      }
+      if (suggestion.field === 'taxRateId' && !dirtyFields.lines?.[0]?.taxRateId && taxRates.some((rate) => rate.id === suggestion.value)) {
+        setValue('lines.0.taxRateId', suggestion.value, { shouldDirty: false, shouldValidate: true });
+        autoAppliedDefaultsRef.current.add(signature);
+      }
+    }
+  }, [adaptiveDefaults, dirtyFields.dueDate, dirtyFields.lines, setValue, sourceSalesOrderId, taxRates, watchContact, watchDate, watchType]);
 
   useEffect(() => {
     if (!initialContactId || sourceSalesOrderId || initialContactAppliedRef.current) return;
@@ -208,6 +231,17 @@ export function InvoiceFormPage() {
     if (product) {
       setValue(`lines.${idx}.description`, product.name);
       setValue(`lines.${idx}.unitPrice`, String(product.salesPrice));
+      if (product.taxRateId) setValue(`lines.${idx}.taxRateId`, product.taxRateId, { shouldDirty: true, shouldValidate: true });
+    }
+  };
+
+  const applyAdaptiveDefault = (suggestion: AdaptiveDefaultSuggestion): void => {
+    if (suggestion.field === 'paymentTermDays' && watchDate) {
+      setValue('dueDate', addDaysString(watchDate, Number(suggestion.value)), { shouldDirty: true, shouldValidate: true });
+      return;
+    }
+    if (suggestion.field === 'taxRateId' && taxRates.some((rate) => rate.id === suggestion.value)) {
+      setValue('lines.0.taxRateId', suggestion.value, { shouldDirty: true, shouldValidate: true });
     }
   };
 
@@ -459,6 +493,13 @@ export function InvoiceFormPage() {
           {/* ── Right sidebar ───────────────────── */}
           <div className="hidden lg:block w-72 shrink-0">
             <div className="sticky top-4 space-y-4">
+              <AdaptiveDefaultsPanel
+                suggestions={adaptiveDefaults?.suggestions ?? []}
+                taxRateLabels={Object.fromEntries(taxRates.map((rate) => [rate.id, `${rate.name} (%${rate.rate})`]))}
+                onApply={applyAdaptiveDefault}
+                onDismiss={(suggestion) => dismissAdaptiveDefault.mutate(suggestion.field)}
+                onReset={() => resetAdaptiveDefaults.mutate()}
+              />
               <SmartFormSidePanel
                 formKind="invoice"
                 contact={selectedContact}

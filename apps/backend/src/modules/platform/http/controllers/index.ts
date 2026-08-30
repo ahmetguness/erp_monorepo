@@ -1,4 +1,5 @@
 export * from './activity.controller.js';
+export * from './adaptive-defaults.controller.js';
 export * from './admin-security.controller.js';
 export * from './admin.controller.js';
 export * from './approval.controller.js';
