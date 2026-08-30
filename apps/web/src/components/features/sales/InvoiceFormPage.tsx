@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useForm, useFieldArray, useWatch } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   ArrowLeft, Receipt, Users, Plus, Trash2, Save, X,
   Hash, DollarSign, Percent, ShoppingCart,
-  FileText, ArrowDownToLine, ArrowUpFromLine,
+  FileText, ArrowDownToLine, ArrowUpFromLine, Copy,
 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
@@ -19,6 +19,7 @@ import { FormRow } from '@/components/shared/FormField';
 import { ContactSelect, ProductSelect } from '@/components/shared/EntitySelect';
 import { SmartFormSidePanel, type SmartFormLine } from '@/components/shared/SmartFormSidePanel';
 import { AdaptiveDefaultsPanel } from '@/components/features/onboarding/AdaptiveDefaultsPanel';
+import { AdvancedFieldsToggle } from '@/components/shared/AdvancedFieldsToggle';
 import { useCreateInvoice, useSalesOrder, useSalesOrders, useSalesQuotes } from '@/hooks/useSales';
 import { useStockLevels } from '@/hooks/useStock';
 import { useContacts } from '@/hooks/useContacts';
@@ -26,6 +27,10 @@ import { useProducts } from '@/hooks/useProducts';
 import { useTaxRates } from '@/hooks/useMasterData';
 import { useBusinessRules } from '@/hooks/useSettings';
 import { useAdaptiveDefaults, useDismissAdaptiveDefault, useResetAdaptiveDefaults } from '@/hooks/useAdaptiveDefaults';
+import { useContextualFormPolicy } from '@/hooks/useContextualForm';
+import { useLocalFormDraft } from '@/hooks/useLocalFormDraft';
+import { useAuthStore } from '@/store/auth.store';
+import { QuickCreateContactModal } from './QuickCreateContactModal';
 import {
   applyServerFieldErrors,
   isSubmitLocked,
@@ -63,6 +68,17 @@ const invoiceSchema = z.object({
   dueDate: z.string().optional(),
   notes: z.string().optional(),
   lines: z.array(lineSchema).min(1, 'En az bir kalem ekleyin'),
+});
+const invoiceDraftSchema = z.object({
+  contactId: z.string(),
+  type: z.enum(['SALES', 'PURCHASE', 'RETURN_SALES', 'RETURN_PURCHASE']),
+  date: z.string(),
+  dueDate: z.string().optional(),
+  notes: z.string().optional(),
+  lines: z.array(z.object({
+    description: z.string(), productId: z.string().optional(), taxRateId: z.string().optional(), withholdingRateId: z.string().optional(),
+    quantity: z.string(), unitPrice: z.string(), discount: z.string().optional(),
+  })),
 });
 
 type InvoiceForm = z.infer<typeof invoiceSchema>;
@@ -104,6 +120,10 @@ export function InvoiceFormPage() {
   const initialContactId = searchParams.get('contactId') ?? '';
   const sourceSalesOrderId = searchParams.get('salesOrderId') ?? '';
   const createInvoice = useCreateInvoice();
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [quickContactOpen, setQuickContactOpen] = useState(false);
+  const tenantId = useAuthStore((state) => state.tenant?.id);
+  const userId = useAuthStore((state) => state.user?.id);
   const { data: sourceSalesOrder } = useSalesOrder(sourceSalesOrderId);
   const { data: contactsData } = useContacts({ limit: 200 });
   const { data: productsData } = useProducts({ page: 1, limit: 200 });
@@ -118,7 +138,7 @@ export function InvoiceFormPage() {
 
   const today = new Date().toISOString().split('T')[0];
 
-  const { register, control, handleSubmit, setValue, setError, formState: { errors, dirtyFields, isDirty, isSubmitting } } = useForm<InvoiceForm>({
+  const { register, control, handleSubmit, setValue, setError, reset, formState: { errors, dirtyFields, isDirty, isSubmitting } } = useForm<InvoiceForm>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       type: 'SALES', date: today, dueDate: addDaysString(today, 30),
@@ -135,6 +155,19 @@ export function InvoiceFormPage() {
   const watchContact = useWatch({ control, name: 'contactId' });
   const watchDate = useWatch({ control, name: 'date' });
   const watchDueDate = useWatch({ control, name: 'dueDate' });
+  const watchedDraftCandidate = useWatch({ control });
+  const parsedDraftCandidate = invoiceDraftSchema.safeParse(watchedDraftCandidate);
+  const draftSnapshot = parsedDraftCandidate.success ? parsedDraftCandidate.data : null;
+  const { data: formPolicy } = useContextualFormPolicy('invoice', watchType);
+  const draftStorageKey = `axon:form-draft:${tenantId ?? 'tenant'}:${userId ?? 'user'}:invoice:new:${initialContactId || 'general'}`;
+  const localDraft = useLocalFormDraft({
+    storageKey: draftStorageKey,
+    value: draftSnapshot,
+    schema: invoiceDraftSchema.nullable(),
+    enabled: Boolean(tenantId && userId && !sourceSalesOrderId),
+    intervalMs: formPolicy?.autoSaveIntervalMs ?? 1_500,
+    onRestore: (saved) => { if (saved) reset(saved); },
+  });
   const { data: adaptiveDefaults } = useAdaptiveDefaults(watchType, watchContact || undefined);
   const dismissAdaptiveDefault = useDismissAdaptiveDefault();
   const resetAdaptiveDefaults = useResetAdaptiveDefaults();
@@ -200,6 +233,8 @@ export function InvoiceFormPage() {
 
   const selectedContact = contacts.find((c) => c.id === watchContact);
   const activeType = INVOICE_TYPES.find((t) => t.value === watchType) ?? INVOICE_TYPES[0];
+  const suggestedContactType = watchType === 'PURCHASE' || watchType === 'RETURN_PURCHASE' ? 'SUPPLIER' as const : 'CUSTOMER' as const;
+  const advancedFieldCount = formPolicy?.sections.filter((section) => section.level === 'advanced').reduce((sum, section) => sum + section.fields.length, 0) ?? 4;
 
   // Line totals
   const lineTotals = watchedLines.map((line) => {
@@ -236,6 +271,15 @@ export function InvoiceFormPage() {
     }
   };
 
+  const duplicateLine = (index: number): void => {
+    const line = watchedLines[index];
+    if (!line) return;
+    append({
+      description: line.description ?? '', productId: line.productId ?? '', quantity: line.quantity ?? '1',
+      unitPrice: line.unitPrice ?? '0', discount: line.discount ?? '0', taxRateId: line.taxRateId ?? '', withholdingRateId: line.withholdingRateId ?? '',
+    });
+  };
+
   const applyAdaptiveDefault = (suggestion: AdaptiveDefaultSuggestion): void => {
     if (suggestion.field === 'paymentTermDays' && watchDate) {
       setValue('dueDate', addDaysString(watchDate, Number(suggestion.value)), { shouldDirty: true, shouldValidate: true });
@@ -246,7 +290,7 @@ export function InvoiceFormPage() {
     }
   };
 
-  const onSubmit = (data: InvoiceForm) => {
+  const onSubmit = useCallback((data: InvoiceForm) => {
     createInvoice.mutate({
       contactId: data.contactId, type: data.type, date: data.date,
       salesOrderId: optionalText(sourceSalesOrderId),
@@ -259,12 +303,31 @@ export function InvoiceFormPage() {
         unitPrice: parseDecimalInput(l.unitPrice), discount: parseDecimalInput(l.discount),
       } satisfies InvoiceLineDTO)),
     }, {
-      onSuccess: (inv) => router.push(`/dashboard/invoices/${inv.id}`),
+      onSuccess: (inv) => { localDraft.clear(); router.push(`/dashboard/invoices/${inv.id}`); },
       onError: (error) => {
         applyServerFieldErrors<InvoiceForm>(error, setError, INVOICE_FORM_SERVER_FIELDS);
       },
     });
-  };
+  }, [createInvoice, localDraft, router, setError, sourceSalesOrderId]);
+
+  const onInvalid = useCallback((validationErrors: FieldErrors<InvoiceForm>): void => {
+    const hasAdvancedLineError = Array.isArray(validationErrors.lines)
+      && validationErrors.lines.some((line) => Boolean(line?.discount || line?.withholdingRateId));
+    if (validationErrors.dueDate || validationErrors.notes || hasAdvancedLineError) setShowAdvanced(true);
+  }, []);
+
+  useEffect(() => {
+    if (!formPolicy?.quickEntry) return;
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.key === 'Enter') { event.preventDefault(); void handleSubmit(onSubmit, onInvalid)(); }
+      if (event.altKey && event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        append({ description: '', quantity: '1', unitPrice: '0', discount: '0', taxRateId: '', withholdingRateId: '' });
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [append, formPolicy?.quickEntry, handleSubmit, onInvalid, onSubmit]);
 
   return (
     <div>
@@ -294,7 +357,7 @@ export function InvoiceFormPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit(onSubmit, onInvalid)}>
         <div className="flex gap-6">
           {/* ── Left: main form ─────────────────── */}
           <div className="flex-1 min-w-0 space-y-5">
@@ -338,14 +401,19 @@ export function InvoiceFormPage() {
                 </div>
               </div>
               <div className="p-5 space-y-4">
-                <ContactSelect label="Cari" required value={watchContact ?? ''} onChange={(value) => setValue('contactId', value, { shouldDirty: true, shouldValidate: true })} error={errors.contactId?.message} />
-                <FormRow cols={2}>
+                <div className="space-y-2">
+                  <ContactSelect label="Cari" required value={watchContact ?? ''} onChange={(value) => setValue('contactId', value, { shouldDirty: true, shouldValidate: true })} error={errors.contactId?.message} />
+                  <button type="button" onClick={() => setQuickContactOpen(true)} className="text-xs font-medium text-sky-400 hover:text-sky-300">+ Listede yoksa yeni cari oluştur</button>
+                </div>
+                <FormRow cols={showAdvanced ? 2 : 1}>
                   <DatePicker label="Fatura Tarihi" required value={watchDate} onValueChange={(value) => setValue('date', value ?? '', { shouldDirty: true, shouldValidate: true })} error={errors.date?.message} clearable={false} />
-                  <DatePicker label="Vade Tarihi" value={watchDueDate ?? ''} onValueChange={(value) => setValue('dueDate', value ?? '', { shouldDirty: true, shouldValidate: true })} />
+                  {showAdvanced && <DatePicker label="Vade Tarihi" value={watchDueDate ?? ''} onValueChange={(value) => setValue('dueDate', value ?? '', { shouldDirty: true, shouldValidate: true })} />}
                 </FormRow>
-                <Textarea label="Notlar" placeholder="Fatura ile ilgili notlar…" {...register('notes')} />
+                {showAdvanced && <Textarea label="Notlar" placeholder="Fatura ile ilgili notlar…" {...register('notes')} />}
               </div>
             </div>
+
+            <AdvancedFieldsToggle expanded={showAdvanced} onToggle={() => setShowAdvanced((current) => !current)} hiddenFieldCount={advancedFieldCount} />
 
             {/* ── Kalemler ─────────────────────── */}
             <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
@@ -393,16 +461,14 @@ export function InvoiceFormPage() {
                             </div>
                           </div>
                         </div>
-                        {fields.length > 1 && (
-                          <button type="button" onClick={() => remove(idx)}
-                            className="mt-6 p-2 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        <div className="mt-6 flex gap-1">
+                          {formPolicy?.allowLineDuplication !== false && <button type="button" onClick={() => duplicateLine(idx)} title="Satırı kopyala" className="p-2 rounded-lg text-slate-600 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"><Copy className="w-4 h-4" /></button>}
+                          {fields.length > 1 && <button type="button" onClick={() => remove(idx)} title="Satırı sil" className="p-2 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"><Trash2 className="w-4 h-4" /></button>}
+                        </div>
                       </div>
 
                       {/* Bottom: qty, price, discount, VAT, withholding, total */}
-                      <div className="grid grid-cols-6 gap-3 mt-3 ml-4">
+                      <div className={cn('grid gap-3 mt-3 ml-4', showAdvanced ? 'grid-cols-6' : 'grid-cols-4')}>
                         <div>
                           <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                             <Hash className="w-2.5 h-2.5" />Miktar
@@ -423,14 +489,14 @@ export function InvoiceFormPage() {
                             className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-3 py-2 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
                             {...register(`lines.${idx}.unitPrice`)} />
                         </div>
-                        <div>
+                        {showAdvanced && <div>
                           <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                             <Percent className="w-2.5 h-2.5" />İskonto
                           </label>
                           <input type="number" step="1" min="0" max="100" placeholder="0"
                             className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-3 py-2 text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
                             {...register(`lines.${idx}.discount`)} />
-                        </div>
+                        </div>}
                         <div>
                           <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">KDV</label>
                           <select
@@ -439,14 +505,14 @@ export function InvoiceFormPage() {
                             {vatRateOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
                         </div>
-                        <div>
+                        {showAdvanced && <div>
                           <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Stopaj</label>
                           <select
                             className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm text-white px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
                             {...register(`lines.${idx}.withholdingRateId`)}>
                             {withholdingRateOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
-                        </div>
+                        </div>}
                         <div>
                           <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block text-right">Tutar</label>
                           <div className="h-[38px] flex items-center justify-end">
@@ -478,6 +544,7 @@ export function InvoiceFormPage() {
                   </span>
                   <span className="w-px h-3.5 bg-slate-800" />
                   <span className="font-semibold text-white text-sm">{formatCurrency(totalGross)}</span>
+                  {localDraft.savedAt && <><span className="w-px h-3.5 bg-slate-800" /><span className="text-emerald-400">Taslak otomatik kaydedildi</span></>}
                 </div>
                 <div className="flex items-center gap-2.5">
                   <Button type="button" variant="ghost" size="sm" leftIcon={<X className="w-3.5 h-3.5" />}
@@ -586,6 +653,12 @@ export function InvoiceFormPage() {
           </div>
         </div>
       </form>
+      {quickContactOpen && <QuickCreateContactModal
+        isOpen={quickContactOpen}
+        suggestedType={suggestedContactType}
+        onClose={() => setQuickContactOpen(false)}
+        onCreated={(contactId) => setValue('contactId', contactId, { shouldDirty: true, shouldValidate: true })}
+      />}
     </div>
   );
 }

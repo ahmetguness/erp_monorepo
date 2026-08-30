@@ -12,6 +12,7 @@ export * from './feature.controller.js';
 export * from './holding-company.controller.js';
 export * from './mail.controller.js';
 export * from './master-data-enrichment.controller.js';
+export * from './contextual-form.controller.js';
 export * from './notification.controller.js';
 export * from './plan-usage.controller.js';
 export * from './quick-start.controller.js';

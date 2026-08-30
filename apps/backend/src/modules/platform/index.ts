@@ -8,6 +8,7 @@ import { enterpriseRoutes } from '../../routes/enterprise.routes.js';
 import { featureRoutes } from '../../routes/feature.routes.js';
 import { mailRoutes } from '../../routes/mail.routes.js';
 import { masterDataEnrichmentRoutes } from '../../routes/master-data-enrichment.routes.js';
+import { contextualFormRoutes } from '../../routes/contextual-form.routes.js';
 import { notificationRoutes } from '../../routes/notification.routes.js';
 import { planUsageRoutes } from '../../routes/plan-usage.routes.js';
 import { reportingRoutes } from '../../routes/reporting.routes.js';
@@ -41,6 +42,7 @@ export const platformModule: BackendModule = {
     app.route('/enterprise', enterpriseRoutes);
     app.route('/mail', mailRoutes);
     app.route('/master-data-enrichment', masterDataEnrichmentRoutes);
+    app.route('/contextual-forms', contextualFormRoutes);
     app.route('/currency-rates', currencyRatesRoutes);
   },
 };
