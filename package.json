@@ -18,6 +18,7 @@
     "prebuild:web": "npm run build:types",
     "build:web": "npm --workspace=web run build",
     "typecheck:types": "npm --workspace=@repo/types run typecheck",
+    "test:types-layout": "npm --workspace=@repo/types run test:layout",
     "typecheck:backend": "npm --workspace=@repo/backend run typecheck",
     "typecheck:web": "npm --workspace=web run typecheck",
     "typecheck": "npm run build:types && npm run typecheck:types && npm run typecheck:backend && npm run typecheck:web",
@@ -34,7 +35,7 @@
     "test:backend": "npm --workspace=@repo/backend run test",
     "test:web": "npm --workspace=web run test",
     "test:quality": "npm --workspace=@repo/backend run test:quality && npm --workspace=web run test:unit:coverage",
-    "test": "npm run test:typecheck && npm run test:module-boundaries && npm run test:unit && npm run test:integration && npm run test:e2e"
+    "test": "npm run test:typecheck && npm run test:types-layout && npm run test:module-boundaries && npm run test:unit && npm run test:integration && npm run test:e2e"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.11",

@@ -8,7 +8,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "npm run test:typecheck && npm run test:prisma-architecture && npm run test:module-boundaries && npm run test:unit && npm run test:integration",
+    "test": "npm run test:typecheck && npm run test:prisma-architecture && npm run test:module-boundaries && npm run test:contracts && npm run test:unit && npm run test:integration",
     "test:typecheck": "tsc --noEmit",
     "test:unit": "vitest run --config vitest.config.mts",
     "test:unit:coverage": "vitest run --coverage --config vitest.config.mts",
@@ -38,7 +38,7 @@
   "dependencies": {
     "@hono/node-server": "^1.19.14",
     "@prisma/client": "^5.22.0",
-    "@repo/types": "file:../../packages/types",
+    "@repo/types": "*",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "bcryptjs": "^3.0.3",

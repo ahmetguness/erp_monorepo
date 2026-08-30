@@ -178,6 +178,10 @@ async function apiText(method: HttpMethod, path: string, bearerToken: string): P
 
 async function testPrometheusMetricsEndpoint(): Promise<void> {
   const { app } = await withTimeout('app import', import('../src/index.js'));
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousToken = process.env.METRICS_BEARER_TOKEN;
+  process.env.NODE_ENV = 'test';
+  delete process.env.METRICS_BEARER_TOKEN;
   const response = await withTimeout('GET /metrics', Promise.resolve(app.request('/metrics')));
   const body = await response.text();
   if (response.status !== 200 || !response.headers.get('content-type')?.includes('text/plain')) {
@@ -190,8 +194,6 @@ async function testPrometheusMetricsEndpoint(): Promise<void> {
     throw new Error('Prometheus metrics endpoint hassas veya yuksek-cardinality kimlik etiketi sizdiriyor.');
   }
 
-  const previousNodeEnv = process.env.NODE_ENV;
-  const previousToken = process.env.METRICS_BEARER_TOKEN;
   process.env.NODE_ENV = 'production';
   process.env.METRICS_BEARER_TOKEN = 'integration-metrics-token';
   try {

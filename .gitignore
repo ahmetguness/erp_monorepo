@@ -6,6 +6,7 @@ apps/backend/uploads
 packages/types/contracts/README.md
 packages/types/node_modules
 packages/types/dist
+/apps/web/package-lock.json
 ci-artifacts
 apps/backend/ci-artifacts
 .github

@@ -1,36 +1,23 @@
-import { AxiosError } from 'axios';
+import { normalizeApiError } from '@/lib/http/api-error.interceptor';
 
 export type FieldErrors<T extends string> = Partial<Record<T, string>>;
 
-interface ApiErrorPayload {
-  error?: {
-    message?: string;
-    details?: unknown;
-  };
-}
-
-function isApiErrorPayload(value: unknown): value is ApiErrorPayload {
-  return typeof value === 'object' && value !== null;
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export function getFieldErrors<T extends string>(error: unknown, fields: readonly T[]): FieldErrors<T> {
-  if (!(error instanceof AxiosError) || !isApiErrorPayload(error.response?.data)) return {};
-
-  const payload = error.response.data;
-  const details = payload.error?.details;
-  if (typeof details === 'object' && details !== null && !Array.isArray(details)) {
-    const record = details as Record<string, unknown>;
-    return fields.reduce<FieldErrors<T>>((acc, field) => {
-      const value = record[field];
-      if (typeof value === 'string') acc[field] = value;
-      return acc;
+  const payload = normalizeApiError(error);
+  const source = payload.error.fields ?? (isUnknownRecord(payload.error.details) ? payload.error.details : undefined);
+  if (source) {
+    return fields.reduce<FieldErrors<T>>((accumulator, field) => {
+      const value = source[field];
+      if (typeof value === 'string') accumulator[field] = value;
+      return accumulator;
     }, {});
   }
 
-  const message = payload.error?.message ?? error.message;
+  const message = payload.error.message;
   const matchedField = fields.find((field) => message.toLowerCase().includes(field.toLowerCase()));
-  if (!matchedField) return {};
-  const errors: FieldErrors<T> = {};
-  errors[matchedField] = message;
-  return errors;
+  return matchedField ? { [matchedField]: message } as FieldErrors<T> : {};
 }

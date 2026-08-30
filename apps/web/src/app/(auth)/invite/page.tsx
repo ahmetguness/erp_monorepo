@@ -7,6 +7,7 @@ import { Eye, EyeOff, Lock, User as UserIcon, Loader2, CheckCircle2, XCircle, Bu
 import axios from 'axios';
 import { API_BASE_URL } from '@/lib/constants';
 import { getPasswordPolicyError, PASSWORD_POLICY_MESSAGE } from '@/lib/password-policy';
+import { getErrorMessage } from '@/types/api.types';
 
 type Status = 'validating' | 'ready' | 'submitting' | 'success' | 'error';
 
@@ -69,8 +70,7 @@ function InviteContent() {
       setStatus('success');
     } catch (err: unknown) {
       setStatus('ready');
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
-      setFormError(message || 'Bir hata oluştu.');
+      setFormError(getErrorMessage(axios.isAxiosError(err) ? err.response?.data : err));
     }
   };
 

@@ -6,6 +6,7 @@ import { csrfProtection } from '../../middleware/csrfProtection.js';
 import { globalRateLimit } from '../../middleware/globalRateLimit.js';
 import { securityHeaders } from '../../middleware/securityHeaders.js';
 import { validateJsonRequestBody } from '../../middleware/validateBody.js';
+import { enforceResponseContract } from '../../modules/shared/index.js';
 import { recordHttpRequest, runWithObservabilityContext } from '../../services/observability.service.js';
 import type { RuntimeConfig } from '../runtime-config.js';
 
@@ -26,6 +27,7 @@ function readCorrelationId(context: RequestHeaders, requestId: string): string {
 }
 
 export function registerPreRoutingMiddleware(app: Hono, config: RuntimeConfig): void {
+  app.use('*', enforceResponseContract);
   app.use('*', securityHeaders);
   app.use('*', cors({
     origin: (origin) => {

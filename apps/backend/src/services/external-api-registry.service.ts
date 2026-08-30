@@ -41,10 +41,12 @@ export interface ExternalApiManifest {
 }
 
 interface OpenApiSchemaRef {
+  $ref?: string;
   type?: 'object' | 'array' | 'string' | 'number' | 'integer' | 'boolean';
   properties?: Record<string, OpenApiSchemaRef>;
   items?: OpenApiSchemaRef;
   additionalProperties?: boolean;
+  required?: string[];
   example?: unknown;
 }
 
@@ -383,6 +385,13 @@ function buildParameters(endpoint: ExternalApiEndpoint): OpenApiOperation['param
   return params;
 }
 
+function standardErrorResponse(description: string): OpenApiResponse {
+  return {
+    description,
+    content: { 'application/json': { schema: { $ref: '#/components/schemas/StandardError' } } },
+  };
+}
+
 export function getExternalOpenApiDocument(baseUrl = 'https://api.axonerp.com'): OpenApiDocument {
   const paths: OpenApiDocument['paths'] = {};
   const serverUrl = baseUrl.endsWith('/api/external') ? baseUrl : `${baseUrl.replace(/\/$/, '')}/api/external`;
@@ -421,10 +430,10 @@ export function getExternalOpenApiDocument(baseUrl = 'https://api.axonerp.com'):
               },
             },
           },
-          '400': { description: 'Validation error.' },
-          '401': { description: 'Missing or invalid API key.' },
-          '403': { description: 'Missing scope, feature, or tenant access.' },
-          '429': { description: 'API key rate limit exceeded.' },
+          '400': standardErrorResponse('Validation error.'),
+          '401': standardErrorResponse('Missing or invalid API key.'),
+          '403': standardErrorResponse('Missing scope, feature, or tenant access.'),
+          '429': standardErrorResponse('API key rate limit exceeded.'),
         },
       },
     };
@@ -445,7 +454,20 @@ export function getExternalOpenApiDocument(baseUrl = 'https://api.axonerp.com'):
       schemas: {
         StandardError: {
           type: 'object',
-          additionalProperties: true,
+          required: ['error'],
+          properties: {
+            error: {
+              type: 'object',
+              required: ['code', 'message'],
+              properties: {
+                code: { type: 'string' },
+                message: { type: 'string' },
+                requestId: { type: 'string' },
+                details: { type: 'object', additionalProperties: true },
+                fields: { type: 'object', additionalProperties: true },
+              },
+            },
+          },
           example: { error: { code: 'VALIDATION_ERROR', message: 'Validation failed.' } },
         },
       },

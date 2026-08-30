@@ -1,6 +1,6 @@
-import axios, { AxiosError, type AxiosInstance } from 'axios';
+import axios, { type AxiosInstance } from 'axios';
 import { API_URL } from '@/lib/constants';
-import { ApiErrorSchema, type ApiError } from '@/types/api.types';
+import { installApiErrorInterceptor } from '@/lib/http/api-error.interceptor';
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_URL,
@@ -9,49 +9,20 @@ const apiClient: AxiosInstance = axios.create({
   withCredentials: true,
 });
 
-// ─────────────────────────────────────────────
-// Response interceptor
-// ─────────────────────────────────────────────
+function clearUnauthorizedSession(): void {
+  if (typeof window === 'undefined') return;
+  document.cookie = 'axon_token=; path=/; max-age=0; SameSite=Lax';
+  import('@/store/auth.store')
+    .then(({ useAuthStore }) => useAuthStore.getState().logout())
+    .catch(() => undefined);
 
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error: AxiosError) => {
-    if (error.response) {
-      const parsed = ApiErrorSchema.safeParse(error.response.data);
-      if (parsed.success) {
-        if (error.response.status === 401 && typeof window !== 'undefined') {
-          document.cookie = 'axon_token=; path=/; max-age=0; SameSite=Lax';
-          // Store'u temizle
-          import('@/store/auth.store')
-            .then(({ useAuthStore }) => {
-              useAuthStore.getState().logout();
-            })
-            .catch(() => {});
+  if (window.location.pathname.startsWith('/login')) return;
+  const currentPath = `${window.location.pathname}${window.location.search}`;
+  const loginUrl = new URL('/login', window.location.origin);
+  if (currentPath.startsWith('/dashboard')) loginUrl.searchParams.set('from', currentPath);
+  window.location.replace(loginUrl.toString());
+}
 
-          if (!window.location.pathname.startsWith('/login')) {
-            const currentPath = `${window.location.pathname}${window.location.search}`;
-            const loginUrl = new URL('/login', window.location.origin);
-            if (currentPath.startsWith('/dashboard')) {
-              loginUrl.searchParams.set('from', currentPath);
-            }
-            window.location.replace(loginUrl.toString());
-          }
-        }
-        return Promise.reject(parsed.data);
-      }
-      return Promise.reject({
-        error: { code: 'UNKNOWN_ERROR', message: `Sunucu hatası: ${error.response.status}` },
-      } as ApiError);
-    }
-    if (error.request) {
-      return Promise.reject({
-        error: { code: 'NETWORK_ERROR', message: 'Sunucuya bağlanılamadı.' },
-      } as ApiError);
-    }
-    return Promise.reject({
-      error: { code: 'UNKNOWN_ERROR', message: error.message },
-    } as ApiError);
-  },
-);
+installApiErrorInterceptor(apiClient, { onUnauthorized: clearUnauthorizedSession });
 
 export { apiClient };

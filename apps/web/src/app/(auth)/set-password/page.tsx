@@ -7,6 +7,7 @@ import { Eye, EyeOff, Lock, Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import axios from 'axios';
 import { API_BASE_URL } from '@/lib/constants';
 import { getPasswordPolicyError, PASSWORD_POLICY_MESSAGE } from '@/lib/password-policy';
+import { getErrorMessage } from '@/types/api.types';
 
 type Status = 'validating' | 'ready' | 'submitting' | 'success' | 'error';
 
@@ -86,8 +87,7 @@ function SetPasswordContent() {
       setStatus('success');
     } catch (err: unknown) {
       setStatus('ready');
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
-      setFormError(message || 'Bir hata oluştu. Lütfen tekrar deneyin.');
+      setFormError(getErrorMessage(axios.isAxiosError(err) ? err.response?.data : err));
     }
   };
 

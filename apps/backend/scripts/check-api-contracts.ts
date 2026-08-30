@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { ApiErrorSchema } from '@repo/types/contracts';
 import {
   CheckIssue,
   joinRoutePath,
@@ -94,13 +95,10 @@ function validatePaginatedResponse(value: unknown): string[] {
 }
 
 function validateErrorResponse(value: unknown): string[] {
-  if (!isRecord(value)) return ['error response must be an object'];
-  if (!isRecord(value.error)) return ['error response must include error object'];
-  const issues: string[] = [];
-  if (!hasString(value.error, 'code')) issues.push('error.code must be a string');
-  if (!hasString(value.error, 'message')) issues.push('error.message must be a string');
-  if ('fields' in value.error && !isRecord(value.error.fields)) issues.push('error.fields must be an object when present');
-  return issues;
+  const parsed = ApiErrorSchema.safeParse(value);
+  return parsed.success
+    ? []
+    : parsed.error.issues.map((issue) => `${issue.path.join('.') || 'response'}: ${issue.message}`);
 }
 
 function validateByKind(kind: ResponseKind, fixture: unknown): string[] {
@@ -1214,7 +1212,6 @@ function pushSetDifferenceIssues(
 
 function validateSharedContractDrift(): CheckIssue[] {
   const issues: CheckIssue[] = [];
-  const packagesTypes = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'src', 'index.ts'));
   const packagesTypesPackage = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'package.json'));
   const sharedCommonContracts = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'src', 'contracts', 'common.ts'));
   const sharedApiKeyContracts = readText(resolve(process.cwd(), '..', '..', 'packages', 'types', 'src', 'contracts', 'api-key.ts'));
@@ -1225,21 +1222,19 @@ function validateSharedContractDrift(): CheckIssue[] {
 
   const sharedChecks: Array<{ label: string; pattern: RegExp }> = [
     { label: 'ApiResponse<T>.data', pattern: /interface\s+ApiResponse<[^>]+>\s*\{[\s\S]*data:\s*T/ },
-    { label: 'PaginatedResponse<T>.meta.total', pattern: /interface\s+PaginatedResponse<[^>]+>\s*\{[\s\S]*meta:\s*\{[\s\S]*total:\s*number/ },
-    { label: 'PaginatedResponse<T>.meta.pageSize', pattern: /interface\s+PaginatedResponse<[^>]+>\s*\{[\s\S]*pageSize:\s*number/ },
-    { label: 'ApiErrorBody.error.code', pattern: /interface\s+ApiErrorBody\s*\{[\s\S]*error:\s*\{[\s\S]*code:\s*string/ },
+    { label: 'PaginatedResponse<T>.meta', pattern: /interface\s+PaginatedResponse<[^>]+>\s*\{[\s\S]*meta:\s*PaginationMeta/ },
+    { label: 'ApiError.error.code', pattern: /ApiErrorSchema[\s\S]*code:\s*z\.string/ },
   ];
   for (const check of sharedChecks) {
-    if (!check.pattern.test(packagesTypes)) {
-      issues.push({ file: '../../packages/types/src/index.ts', message: `shared contract drift: ${check.label} is missing` });
+    if (!check.pattern.test(sharedCommonContracts)) {
+      issues.push({ file: '../../packages/types/src/contracts/common.ts', message: `shared contract drift: ${check.label} is missing` });
     }
   }
 
   const webChecks: Array<{ label: string; pattern: RegExp }> = [
-    { label: 'SingleResponseSchema.data', pattern: /function\s+SingleResponseSchema[\s\S]*data:\s*itemSchema/ },
-    { label: 'PaginatedResponseSchema.meta', pattern: /function\s+PaginatedResponseSchema[\s\S]*meta:\s*PaginationMetaSchema/ },
-    { label: 'ApiErrorSchema.error.code', pattern: /ApiErrorSchema[\s\S]*code:\s*z\.string\(\)/ },
-    { label: 'ApiErrorSchema.error.fields', pattern: /ApiErrorSchema[\s\S]*fields:\s*z\.record\(z\.string\(\),\s*z\.string\(\)\)\.optional\(\)/ },
+    { label: 'shared contract import', pattern: /from\s+'@repo\/types\/contracts'/ },
+    { label: 'ApiErrorSchema re-export', pattern: /export\s*\{[\s\S]*ApiErrorSchema/ },
+    { label: 'SingleResponseSchema re-export', pattern: /export\s*\{[\s\S]*SingleResponseSchema/ },
   ];
   for (const check of webChecks) {
     if (!check.pattern.test(webApiTypes)) {
@@ -1267,7 +1262,7 @@ function validateSharedContractDrift(): CheckIssue[] {
 
   if (/tenantId\s*:/.test(sharedApiKeyContracts)) {
     issues.push({
-      file: '../../packages/types/contracts/api-key.ts',
+      file: '../../packages/types/src/contracts/api-key.ts',
       message: 'shared zod contract drift: web-facing ApiKeySchema must not require backend-only tenantId',
     });
   }
@@ -1286,14 +1281,14 @@ function validateSharedContractDrift(): CheckIssue[] {
   const registryLabelScopes = extractObjectStringKeys(externalApiRegistry, 'SCOPE_LABELS');
   const endpointScopes = extractExternalEndpointScopes(externalApiRegistry);
   if (sharedScopes.size === 0) {
-    issues.push({ file: '../../packages/types/contracts/api-key.ts', message: 'shared zod contract drift: API_KEY_SCOPE_VALUES is empty or missing' });
+    issues.push({ file: '../../packages/types/src/contracts/api-key.ts', message: 'shared zod contract drift: API_KEY_SCOPE_VALUES is empty or missing' });
   }
   pushSetDifferenceIssues(issues, '../web/src/services/api-key.service.ts', 'web API key scope mirror drift', sharedScopes, webScopes);
-  pushSetDifferenceIssues(issues, '../../packages/types/contracts/api-key.ts', 'shared API key scope drift from web mirror', webScopes, sharedScopes);
+  pushSetDifferenceIssues(issues, '../../packages/types/src/contracts/api-key.ts', 'shared API key scope drift from web mirror', webScopes, sharedScopes);
   pushSetDifferenceIssues(issues, 'src/modules/identity/http/controllers/api-key.controller.ts', 'API key controller scope drift', sharedScopes, controllerScopes);
-  pushSetDifferenceIssues(issues, '../../packages/types/contracts/api-key.ts', 'shared API key scope drift', controllerScopes, sharedScopes);
+  pushSetDifferenceIssues(issues, '../../packages/types/src/contracts/api-key.ts', 'shared API key scope drift', controllerScopes, sharedScopes);
   pushSetDifferenceIssues(issues, 'src/services/external-api-registry.service.ts', 'external registry scope label drift', endpointScopes, registryLabelScopes);
-  pushSetDifferenceIssues(issues, '../../packages/types/contracts/api-key.ts', 'external registry endpoint scope drift', endpointScopes, sharedScopes);
+  pushSetDifferenceIssues(issues, '../../packages/types/src/contracts/api-key.ts', 'external registry endpoint scope drift', endpointScopes, sharedScopes);
 
   return issues;
 }

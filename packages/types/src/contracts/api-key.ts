@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const API_KEY_CONTRACT_OWNER = 'packages/types/contracts/api-key.ts' as const;
+export const API_KEY_CONTRACT_OWNER = 'packages/types/src/contracts/api-key.ts' as const;
 
 export const API_KEY_SCOPE_VALUES = [
   'products:read',

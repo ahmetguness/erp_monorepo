@@ -1,29 +1,36 @@
 import { z } from 'zod';
+import {
+  API_ERROR_CODES,
+  ApiErrorSchema,
+  PaginatedResponseSchema,
+  PaginationMetaSchema,
+  SingleResponseSchema,
+  type ApiError,
+  type PaginationMeta,
+} from '@repo/types/contracts';
+
+export {
+  ApiErrorSchema,
+  PaginatedResponseSchema,
+  PaginationMetaSchema,
+  SingleResponseSchema,
+  type ApiError,
+  type PaginationMeta,
+};
 
 // ─────────────────────────────────────────────
 // API Error
 // ─────────────────────────────────────────────
 
-export const ApiErrorSchema = z.object({
-  error: z.object({
-    code: z.string(),
-    message: z.string(),
-    details: z.unknown().optional(),
-    fields: z.record(z.string(), z.string()).optional(),
-  }),
-});
-
-export type ApiError = z.infer<typeof ApiErrorSchema>;
-
 // Known error codes from backend
 export const ERROR_CODES = {
-  FORBIDDEN: 'FORBIDDEN',
+  FORBIDDEN: API_ERROR_CODES.FORBIDDEN,
   LIMIT_EXCEEDED: 'LIMIT_EXCEEDED',
   FEATURE_DISABLED: 'FEATURE_DISABLED',
   MODULE_DISABLED: 'MODULE_DISABLED',
-  NOT_FOUND: 'NOT_FOUND',
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  UNAUTHORIZED: 'UNAUTHORIZED',
+  NOT_FOUND: API_ERROR_CODES.NOT_FOUND,
+  VALIDATION_ERROR: API_ERROR_CODES.VALIDATION,
+  UNAUTHORIZED: API_ERROR_CODES.UNAUTHORIZED,
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -31,28 +38,6 @@ export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 // ─────────────────────────────────────────────
 // Pagination
 // ─────────────────────────────────────────────
-
-export const PaginationMetaSchema = z.object({
-  total: z.number(),
-  page: z.number(),
-  pageSize: z.number(),
-  totalPages: z.number(),
-});
-
-export type PaginationMeta = z.infer<typeof PaginationMetaSchema>;
-
-export function PaginatedResponseSchema<T extends z.ZodTypeAny>(itemSchema: T) {
-  return z.object({
-    data: z.array(itemSchema),
-    meta: PaginationMetaSchema,
-  });
-}
-
-export function SingleResponseSchema<T extends z.ZodTypeAny>(itemSchema: T) {
-  return z.object({
-    data: itemSchema,
-  });
-}
 
 // ─────────────────────────────────────────────
 // Query Params

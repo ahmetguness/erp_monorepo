@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import type { FieldValues, Path, UseFormSetError } from 'react-hook-form';
 import { z } from 'zod';
-import { AxiosError } from 'axios';
 import { ApiErrorSchema } from '@/types/api.types';
+import { normalizeApiError } from '@/lib/http/api-error.interceptor';
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 import { parseDecimalInput } from '@/domain/forms/form-value';
@@ -28,8 +28,7 @@ function isStringRecord(value: unknown): value is Record<string, string> {
 }
 
 export function getServerFieldErrors(error: unknown): Record<string, string> {
-  const payload = error instanceof AxiosError ? error.response?.data : error;
-  const parsed = ApiErrorSchema.safeParse(payload);
+  const parsed = ApiErrorSchema.safeParse(normalizeApiError(error));
   if (!parsed.success) return {};
 
   if (parsed.data.error.fields) return parsed.data.error.fields;

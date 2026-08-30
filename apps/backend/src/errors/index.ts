@@ -1,13 +1,24 @@
 // ─────────────────────────────────────────────
 import type { FeatureKey, Plan, TenantStatus } from '@prisma/client';
+import { ApplicationError, type ErrorCategory } from '../modules/shared/domain/index.js';
 export type PlanDowngradeLockReason = 'plan' | 'module' | 'feature';
 
 // Custom Error Classes
 // ─────────────────────────────────────────────
 
-export class BaseError extends Error {
+function categoryFromStatus(statusCode: number): ErrorCategory {
+  if (statusCode === 400) return 'validation';
+  if (statusCode === 401 || statusCode === 403) return 'authorization';
+  if (statusCode === 404) return 'not-found';
+  if (statusCode === 409) return 'conflict';
+  if (statusCode === 422) return 'state-transition';
+  if (statusCode === 429) return 'rate-limit';
+  if (statusCode === 502 || statusCode === 503) return 'external-provider';
+  return 'internal';
+}
+
+export class BaseError extends ApplicationError {
   public readonly statusCode: number;
-  public readonly code: string;
   public readonly isOperational: boolean;
 
   constructor(
@@ -16,12 +27,10 @@ export class BaseError extends Error {
     code: string,
     isOperational = true,
   ) {
-    super(message);
+    super(message, categoryFromStatus(statusCode), code, undefined, undefined, isOperational);
     this.name = this.constructor.name;
     this.statusCode = statusCode;
-    this.code = code;
     this.isOperational = isOperational;
-    Error.captureStackTrace(this, this.constructor);
   }
 
   toJSON() {
