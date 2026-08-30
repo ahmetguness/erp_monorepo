@@ -14,6 +14,7 @@ interface AdaptiveDefaultsPanelProps {
 const SOURCE_LABELS: Record<AdaptiveDefaultSuggestion['source'], string> = {
   contact: 'Cari tercihi',
   user: 'Kişisel örüntü',
+  role: 'Rol örüntüsü',
   tenant: 'Şirket örüntüsü',
   policy: 'Kesin şirket kuralı',
 };

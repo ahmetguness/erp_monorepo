@@ -16,7 +16,7 @@ settingsRoutes.get('/defaults-policies', requirePermission('settings', 'READ'), 
 settingsRoutes.put('/defaults-policies', requirePermission('settings', 'UPDATE'), SettingsController.updateDefaultPolicies);
 settingsRoutes.get('/adaptive-defaults', requirePermission('invoicing', 'READ'), AdaptiveDefaultsController.snapshot);
 settingsRoutes.post('/adaptive-defaults/dismiss', requirePermission('invoicing', 'CREATE'), validateBody(dismissAdaptiveDefaultSchema), AdaptiveDefaultsController.dismiss);
-settingsRoutes.delete('/adaptive-defaults', requirePermission('settings', 'UPDATE'), AdaptiveDefaultsController.reset);
+settingsRoutes.delete('/adaptive-defaults', requirePermission('invoicing', 'CREATE'), AdaptiveDefaultsController.reset);
 settingsRoutes.get('/security-score', requirePermission('settings', 'READ'), SettingsController.securityScore);
 settingsRoutes.get('/security/dashboard', requirePermission('settings', 'READ'), SettingsController.securityDashboard);
 settingsRoutes.get('/security/sessions', requirePermission('settings', 'READ'), SettingsController.listSecuritySessions);

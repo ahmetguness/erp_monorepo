@@ -23,6 +23,10 @@ function dismissalKey(userId: string, formKind: AdaptiveFormKind, field: Adaptiv
   return `adaptive-defaults.dismissed.${userId}.${formKind}.${field}`;
 }
 
+function resetKey(userId: string): string {
+  return `adaptive-defaults.reset.${userId}`;
+}
+
 function countValues(values: readonly string[]): AdaptiveDefaultCandidate[] {
   const counts = new Map<string, number>();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
@@ -43,44 +47,57 @@ function valuesFor(field: AdaptiveDefaultField, rows: readonly InvoicePreference
 export class AdaptiveDefaultsService {
   constructor(private readonly db: PrismaClient) {}
 
-  async snapshot(params: {
-    tenantId: string;
+  async snapshot(tenantId: string, request: {
     userId: string;
     formKind: AdaptiveFormKind;
     transactionType: AdaptiveTransactionType;
     contactId?: string;
   }): Promise<AdaptiveDefaultsSnapshot> {
-    const [rows, contact, dismissed] = await Promise.all([
+    const membership = await this.db.tenantUser.findUnique({
+      where: { tenantId_userId: { tenantId, userId: request.userId } },
+      select: { roleId: true },
+    });
+    const roleMembers = membership?.roleId
+      ? await this.db.tenantUser.findMany({ where: { tenantId, roleId: membership.roleId, isActive: true }, select: { userId: true } })
+      : [];
+    const roleUserIds = new Set(roleMembers.map((member) => member.userId));
+    const [rows, contact, dismissed, resetSetting] = await Promise.all([
       this.db.invoice.findMany({
-        where: { tenantId: params.tenantId, type: params.transactionType as InvoiceType, deletedAt: null },
+        where: { tenantId, type: request.transactionType as InvoiceType, deletedAt: null },
         select: { contactId: true, createdById: true, date: true, dueDate: true, lines: { select: { taxRateId: true } } },
         orderBy: { date: 'desc' },
         take: 100,
       }),
-      params.contactId
-        ? this.db.contact.findFirst({ where: { id: params.contactId, tenantId: params.tenantId, deletedAt: null }, select: { id: true, paymentTermDays: true } })
+      request.contactId
+        ? this.db.contact.findFirst({ where: { id: request.contactId, tenantId, deletedAt: null }, select: { id: true, paymentTermDays: true } })
         : null,
       this.db.tenantSetting.findMany({
-        where: { tenantId: params.tenantId, key: { startsWith: `adaptive-defaults.dismissed.${params.userId}.${params.formKind}.` } },
+        where: { tenantId, key: { startsWith: `adaptive-defaults.dismissed.${request.userId}.${request.formKind}.` } },
         select: { key: true },
       }),
+      this.db.tenantSetting.findUnique({
+        where: { tenantId_key: { tenantId, key: resetKey(request.userId) } },
+        select: { value: true },
+      }),
     ]);
+    const resetAt = resetSetting ? new Date(resetSetting.value) : null;
+    const usableRows = resetAt && !Number.isNaN(resetAt.getTime()) ? rows.filter((row) => row.date > resetAt) : rows;
     const dismissedKeys = new Set(dismissed.map((setting) => setting.key));
     const suggestions: AdaptiveDefaultSuggestion[] = [];
 
     for (const field of ['paymentTermDays', 'taxRateId'] as const) {
-      if (dismissedKeys.has(dismissalKey(params.userId, params.formKind, field))) continue;
+      if (dismissedKeys.has(dismissalKey(request.userId, request.formKind, field))) continue;
       const deterministic = field === 'paymentTermDays' && contact?.paymentTermDays !== null && contact?.paymentTermDays !== undefined
         ? this.deterministicContactTerm(contact.paymentTermDays)
         : null;
-      const learned = deterministic ?? await this.resolveLearned(field, rows, params.userId, params.contactId, params.tenantId);
+      const learned = deterministic ?? await this.resolveLearned(field, usableRows, request.userId, roleUserIds, request.contactId, tenantId);
       if (learned) suggestions.push(learned);
     }
 
     return {
-      formKind: params.formKind,
-      transactionType: params.transactionType,
-      contactId: params.contactId ?? null,
+      formKind: request.formKind,
+      transactionType: request.transactionType,
+      contactId: request.contactId ?? null,
       suggestions,
       generatedAt: new Date().toISOString(),
     };
@@ -92,8 +109,17 @@ export class AdaptiveDefaultsService {
   }
 
   async reset(tenantId: string, userId: string): Promise<number> {
-    const result = await this.db.tenantSetting.deleteMany({ where: { tenantId, key: { startsWith: `adaptive-defaults.dismissed.${userId}.` } } });
-    return result.count;
+    const result = await this.db.$transaction(async (tx) => {
+      const deleted = await tx.tenantSetting.deleteMany({ where: { tenantId, key: { startsWith: `adaptive-defaults.dismissed.${userId}.` } } });
+      const key = resetKey(userId);
+      await tx.tenantSetting.upsert({
+        where: { tenantId_key: { tenantId, key } },
+        create: { tenantId, key, value: new Date().toISOString() },
+        update: { value: new Date().toISOString() },
+      });
+      return deleted.count;
+    });
+    return result;
   }
 
   private deterministicContactTerm(days: number): AdaptiveDefaultSuggestion {
@@ -104,12 +130,14 @@ export class AdaptiveDefaultsService {
     field: AdaptiveDefaultField,
     rows: readonly InvoicePreferenceRow[],
     userId: string,
+    roleUserIds: ReadonlySet<string>,
     contactId: string | undefined,
     tenantId: string,
   ): Promise<AdaptiveDefaultSuggestion | null> {
     const cohorts: Array<{ source: AdaptiveDefaultSource; rows: readonly InvoicePreferenceRow[] }> = [
       { source: 'contact', rows: contactId ? rows.filter((row) => row.contactId === contactId) : [] },
       { source: 'user', rows: rows.filter((row) => row.createdById === userId) },
+      { source: 'role', rows: rows.filter((row) => row.createdById !== null && roleUserIds.has(row.createdById)) },
       { source: 'tenant', rows },
     ];
     for (const cohort of cohorts) {

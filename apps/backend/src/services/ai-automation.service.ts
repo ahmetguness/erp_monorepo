@@ -7,8 +7,11 @@ import {
   PrismaClient,
 } from '@prisma/client';
 import { logger } from '../lib/logger.js';
+import { ValidationError } from '../errors/index.js';
 import { createAuditLog } from '../utils/audit.js';
 import { generateDocumentNumber } from '../utils/generate-number.js';
+import { writeInvoiceAccountEntry } from '../utils/account-entry.js';
+import { createEventContext, domainEvents } from '../domain-events/index.js';
 
 export type AiUseCase =
   | 'INVOICE_OCR'
@@ -82,6 +85,35 @@ export interface PaymentMatchCandidate {
   matchReason: string;
 }
 
+function payloadString(payload: Readonly<Record<string, unknown>>, key: string): string | null {
+  const value = payload[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function payloadAmount(payload: Readonly<Record<string, unknown>>, key: string): number {
+  const value = payload[key];
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new ValidationError(`${key} geçerli ve negatif olmayan bir sayı olmalıdır.`);
+  }
+  return value;
+}
+
+export function parseLocalizedMoney(value: string | undefined): number {
+  if (!value) return 0;
+  const compact = value.replace(/\s/g, '').replace(/[^\d.,-]/g, '');
+  const lastComma = compact.lastIndexOf(',');
+  const lastDot = compact.lastIndexOf('.');
+  const decimalIndex = Math.max(lastComma, lastDot);
+  let normalized = compact;
+  if (decimalIndex >= 0 && compact.length - decimalIndex - 1 === 2) {
+    normalized = `${compact.slice(0, decimalIndex).replace(/[.,]/g, '')}.${compact.slice(decimalIndex + 1)}`;
+  } else {
+    normalized = compact.replace(/[.,]/g, '');
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export class AiAutomationService {
   constructor(private readonly db: PrismaClient) {}
 
@@ -111,15 +143,8 @@ export class AiAutomationService {
       });
     }
 
-    const parseMoney = (val: string | undefined): number => {
-      if (!val) return 0;
-      const clean = val.replace(/\./g, '').replace(',', '.');
-      const num = parseFloat(clean);
-      return Number.isFinite(num) ? num : 0;
-    };
-
-    const totalGross = parseMoney(amountMatch?.[1]);
-    const totalTax = parseMoney(kdvMatch?.[1]);
+    const totalGross = parseLocalizedMoney(amountMatch?.[1]);
+    const totalTax = parseLocalizedMoney(kdvMatch?.[1]);
     const totalNet = Math.max(0, totalGross - totalTax);
 
     // Business Rules Check
@@ -435,34 +460,92 @@ export class AiAutomationService {
     let resultId: string | undefined;
 
     if (useCase === 'INVOICE_OCR') {
-      const contactId = payload.matchedContactId as string | undefined;
-      if (!contactId) throw new Error('Deterministik Fatura Oluşturma için geçerli bir cari seçilmelidir.');
+      const contactId = payloadString(payload, 'matchedContactId');
+      if (!contactId) throw new ValidationError('Fatura taslağı için geçerli bir cari seçilmelidir.');
+      const contactExists = await this.db.contact.count({ where: { id: contactId, tenantId, deletedAt: null } });
+      if (contactExists === 0) throw new ValidationError('Seçilen cari bu tenant içinde bulunamadı.');
+
+      const attachmentId = payloadString(payload, 'sourceAttachmentId');
+      const sourceAttachment = attachmentId ? await this.db.attachment.findFirst({ where: { id: attachmentId, tenantId } }) : null;
+      if (attachmentId && !sourceAttachment) throw new ValidationError('Kaynak belge bu tenant içinde bulunamadı.');
+      if (sourceAttachment?.entityType === EntityType.INVOICE) {
+        const existingInvoice = await this.db.invoice.findFirst({ where: { id: sourceAttachment.entityId, tenantId, deletedAt: null }, select: { id: true } });
+        if (existingInvoice) return { success: true, resultId: existingInvoice.id, message: 'Bu kaynak belge için fatura taslağı daha önce oluşturulmuş.' };
+      }
+
+      const totalNet = payloadAmount(payload, 'totalNet');
+      const totalTax = payloadAmount(payload, 'totalTax');
+      const totalGross = payloadAmount(payload, 'totalGross');
+      if (Math.abs(totalNet + totalTax - totalGross) > 0.02) throw new ValidationError('Net, vergi ve genel toplam birbiriyle uyuşmuyor.');
 
       const number = await generateDocumentNumber(tenantId, 'invoice', 'INV-OCR-', 'invoice');
-      const inv = await this.db.invoice.create({
-        data: {
+      const inv = await this.db.$transaction(async (tx) => {
+        const created = await tx.invoice.create({
+          data: {
+            tenantId,
+            contactId,
+            type: InvoiceType.PURCHASE,
+            status: InvoiceStatus.DRAFT,
+            number,
+            date: new Date(),
+            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            createdById: userId,
+            notes: `Belge işleme hattından oluşturuldu${payloadString(payload, 'invoiceNumber') ? `; kaynak no: ${payloadString(payload, 'invoiceNumber')}` : ''}.`,
+            totalNet: new Prisma.Decimal(totalNet),
+            totalTax: new Prisma.Decimal(totalTax),
+            totalGross: new Prisma.Decimal(totalGross),
+            lines: {
+              create: [{
+                tenantId,
+                description: 'Belgeden çıkarılan genel fatura kalemi',
+                quantity: new Prisma.Decimal(1),
+                unitPrice: new Prisma.Decimal(totalNet),
+                taxAmount: new Prisma.Decimal(totalTax),
+                lineTotal: new Prisma.Decimal(totalGross),
+              }],
+            },
+          },
+        });
+        await tx.invoiceHistory.create({
+          data: { tenantId, invoiceId: created.id, toStatus: InvoiceStatus.DRAFT, notes: 'Belge işleme hattından fatura taslağı oluşturuldu' },
+        });
+        await writeInvoiceAccountEntry(tx, {
           tenantId,
           contactId,
-          type: InvoiceType.PURCHASE,
-          status: InvoiceStatus.DRAFT,
-          number,
-          date: new Date(),
-          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          notes: 'AI OCR Taramasından Otomatik Deterministik Olarak Üretilmiştir.',
-          totalNet: new Prisma.Decimal(Number(payload.totalNet ?? 0)),
-          totalTax: new Prisma.Decimal(Number(payload.totalTax ?? 0)),
-          totalGross: new Prisma.Decimal(Number(payload.totalGross ?? 0)),
-        },
+          invoiceId: created.id,
+          invoiceNumber: created.number,
+          invoiceType: InvoiceType.PURCHASE,
+          totalGross,
+          date: created.date,
+          userId,
+        });
+        if (sourceAttachment) {
+          await tx.attachment.updateMany({ where: { id: sourceAttachment.id, tenantId }, data: { entityType: EntityType.INVOICE, entityId: created.id, category: 'PURCHASING', documentKind: 'GENERAL' } });
+        }
+        return created;
       });
       resultId = inv.id;
+
+      await domainEvents.publish({
+        name: 'invoice.created',
+        context: createEventContext({ tenantId, userId }),
+        payload: {
+          invoiceId: inv.id,
+          number: inv.number,
+          contactId,
+          contactName: payloadString(payload, 'contactName') ?? 'Cari',
+          totalGross,
+          dueDate: inv.dueDate,
+        },
+      });
     }
 
     // 2. Audit Log Record
     await createAuditLog(this.db, {
       tenantId,
       userId,
-      module: 'ai_governance',
-      entityType: EntityType.OTHER,
+      module: resultId ? 'invoicing' : 'ai_governance',
+      entityType: resultId ? EntityType.INVOICE : EntityType.OTHER,
       entityId: resultId ?? `ai-${useCase}`,
       action: AuditAction.CREATE,
       newValues: { useCase, resultId, payload: payload as Prisma.InputJsonValue },

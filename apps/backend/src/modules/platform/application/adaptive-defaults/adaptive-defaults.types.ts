@@ -5,7 +5,7 @@ export const ADAPTIVE_TRANSACTION_TYPES = ['SALES', 'PURCHASE', 'RETURN_SALES', 
 export type AdaptiveDefaultField = (typeof ADAPTIVE_DEFAULT_FIELDS)[number];
 export type AdaptiveFormKind = (typeof ADAPTIVE_FORM_KINDS)[number];
 export type AdaptiveTransactionType = (typeof ADAPTIVE_TRANSACTION_TYPES)[number];
-export type AdaptiveDefaultSource = 'contact' | 'user' | 'tenant' | 'policy';
+export type AdaptiveDefaultSource = 'contact' | 'user' | 'role' | 'tenant' | 'policy';
 
 export interface AdaptiveDefaultCandidate {
   value: string;

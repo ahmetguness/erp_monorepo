@@ -49,6 +49,8 @@ export const ENV_REGISTRY: readonly EnvVarDefinition[] = [
   { name: 'ALLOWED_ORIGINS', kind: 'csv', required: false, requiredInProduction: true, runtime: 'all', defaultValue: 'http://localhost:3000', secretClass: 'internal', securityNote: 'CORS allow-list; production should contain only approved origins.' },
   { name: 'CONTENT_SECURITY_POLICY_MODE', kind: 'string', required: false, runtime: 'all', defaultValue: 'both', secretClass: 'internal', securityNote: 'Controls CSP headers: report-only, enforce, or both.' },
   { name: 'OPENAI_API_KEY', kind: 'string', required: false, runtime: 'all', secretClass: 'secret', securityNote: 'Optional AI provider key; absence disables AI chat features.' },
+  { name: 'DOCUMENT_OCR_URL', kind: 'url', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'Optional document OCR provider endpoint for PDF and image extraction.' },
+  { name: 'DOCUMENT_OCR_TOKEN', kind: 'string', required: false, runtime: 'all', secretClass: 'secret', securityNote: 'Bearer token for the configured document OCR provider.' },
   { name: 'PUBLIC_CHAT_SESSION_DAILY_LIMIT', kind: 'number', required: false, runtime: 'all', defaultValue: '30', secretClass: 'internal', securityNote: 'Public chat abuse control.' },
   { name: 'PUBLIC_CHAT_DAILY_REQUEST_BUDGET', kind: 'number', required: false, runtime: 'all', defaultValue: '1000', secretClass: 'internal', securityNote: 'Public chat cost control.' },
   { name: 'STORAGE_DRIVER', kind: 'string', required: false, runtime: 'all', defaultValue: 'local in dev, r2 in production', secretClass: 'internal', securityNote: 'Attachment storage backend selector.' },

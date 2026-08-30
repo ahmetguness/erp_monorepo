@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { useAttachmentAccessLog, useAttachmentEntityOptions, useBulkUpdateAttachmentMetadata, useDocumentCenter, useUpdateAttachmentMetadata, useUploadAttachment, useUploadAttachmentVersion } from '@/hooks/useAttachments';
 import { useBulkSelection } from '@/hooks/useBulkSelection';
+import { DocumentIntakeModal } from './DocumentIntakeModal';
 import { cn, formatDateTime } from '@/lib/utils';
 import {
   downloadAttachment,
@@ -241,6 +242,7 @@ export function DocumentCenterPage() {
   const [accessLogId, setAccessLogId] = useState<string | null>(null);
   const [isBulkMetadataOpen, setIsBulkMetadataOpen] = useState(false);
   const [bulkMetadataForm, setBulkMetadataForm] = useState<BulkMetadataFormState>(DEFAULT_BULK_METADATA_FORM);
+  const [intakeTarget, setIntakeTarget] = useState<DocumentCenterItem | null>(null);
 
   const params = useMemo(
     () => ({
@@ -269,6 +271,11 @@ export function DocumentCenterPage() {
   const selectableAttachmentIdSet = useMemo(() => new Set(selectableAttachmentIds), [selectableAttachmentIds]);
   const toggleSelectableRow = (id: string) => {
     if (selectableAttachmentIdSet.has(id)) bulkSelection.toggleOne(id);
+  };
+
+  const startDocumentIntake = (item: DocumentCenterItem) => {
+    if (item.source !== 'ATTACHMENT') return;
+    setIntakeTarget(item);
   };
 
   const handleDownload = async (item: DocumentCenterItem) => {
@@ -480,6 +487,18 @@ export function DocumentCenterPage() {
           )}
           {row.source === 'ATTACHMENT' && (
             <>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  startDocumentIntake(row);
+                }}
+                className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-800 hover:text-cyan-300"
+                aria-label="Belgeden taslak çıkar"
+                title="Belgeden ERP taslağı çıkar"
+              >
+                <ScanText className="h-3.5 w-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={(event) => {
@@ -904,6 +923,8 @@ export function DocumentCenterPage() {
           </div>
         </div>
       </Modal>
+
+      <DocumentIntakeModal target={intakeTarget} onClose={() => setIntakeTarget(null)} />
 
       <Modal
         isOpen={Boolean(accessLogId)}

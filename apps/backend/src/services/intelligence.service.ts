@@ -1,6 +1,5 @@
 import { AutomationAction, AutomationTrigger, InvoiceStatus, InvoiceType, MovementType, PaymentStatus, PermissionAction } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { storageService } from './storage.service.js';
 
 type RecommendationSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 type RecommendationKind = 'LOW_STOCK' | 'PURCHASE_SUGGESTION' | 'SLOW_MOVING_STOCK' | 'COLLECTION_RISK' | 'LOW_MARGIN';
@@ -404,42 +403,4 @@ export const IntelligenceService = {
     return SECTOR_TEMPLATES;
   },
 
-  async getDocumentDraft(tenantId: string, attachmentId: string) {
-    const attachment = await prisma.attachment.findFirst({
-      where: { id: attachmentId, tenantId },
-      select: { id: true, fileName: true, mimeType: true, storagePath: true, entityType: true, entityId: true },
-    });
-    if (!attachment) return null;
-
-    if (attachment.mimeType !== 'text/plain' && attachment.mimeType !== 'text/csv') {
-      return {
-        attachment: { id: attachment.id, fileName: attachment.fileName, mimeType: attachment.mimeType },
-        status: 'PROVIDER_REQUIRED',
-        providerRequired: true,
-        message: 'PDF/gorsel OCR icin harici OCR saglayicisi baglanmali. Text/CSV belgelerde taslak cikarimi desteklenir.',
-      };
-    }
-
-    const stored = await storageService.get(attachment.storagePath);
-    if (!stored) return null;
-
-    const text = stored.body.toString('utf8').slice(0, 20_000);
-    const amountMatch = text.match(/(?:toplam|total|tutar|amount)\D{0,20}(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2})?)/i);
-    const taxMatch = text.match(/(?:kdv|vat|tax)\D{0,20}(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2})?)/i);
-    const invoiceNoMatch = text.match(/(?:fatura|invoice|fis|receipt)\D{0,20}([A-Z0-9-]{3,30})/i);
-
-    return {
-      attachment: { id: attachment.id, fileName: attachment.fileName, mimeType: attachment.mimeType },
-      status: 'DRAFT_READY',
-      providerRequired: false,
-      draft: {
-        documentType: text.toLowerCase().includes('invoice') || text.toLowerCase().includes('fatura') ? 'invoice' : 'document',
-        referenceNo: invoiceNoMatch?.[1] ?? null,
-        grossAmountText: amountMatch?.[1] ?? null,
-        taxAmountText: taxMatch?.[1] ?? null,
-        confidence: amountMatch || invoiceNoMatch ? 'MEDIUM' : 'LOW',
-      },
-      previewText: text.slice(0, 800),
-    };
-  },
 };

@@ -6,6 +6,7 @@ import { dataExchangeRoutes } from '../../routes/data-exchange.routes.js';
 import { intelligenceRoutes } from '../../routes/intelligence.routes.js';
 import { operationsRoutes } from '../../routes/operations.routes.js';
 
+
 export const automationIntelligenceModule: BackendModule = {
   name: 'automation-intelligence',
   register(app) {

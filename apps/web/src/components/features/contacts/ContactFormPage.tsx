@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Tag, X, Save } from "lucide-react";
+import { ArrowLeft, Tag, X, Save, Sparkles } from "lucide-react";
+import { MasterDataSuggestionsPanel } from "@/components/features/onboarding/MasterDataSuggestionsPanel";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FormRow, FormSection } from "@/components/shared/FormField";
 import { Input } from "@/components/ui/Input";
@@ -19,6 +20,8 @@ import {
   useCreateContact,
   useUpdateContact,
 } from "@/hooks/useContacts";
+import { useMasterDataEnrichment } from "@/hooks/useMasterDataEnrichment";
+import type { MasterDataSuggestion } from "@/services/master-data-enrichment.service";
 
 // ─────────────────────────────────────────────
 // Schema
@@ -99,6 +102,7 @@ export function ContactFormPage({ editId }: Props) {
   );
   const createContact = useCreateContact();
   const updateContact = useUpdateContact(editId ?? "");
+  const enrichment = useMasterDataEnrichment();
 
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -117,6 +121,10 @@ export function ContactFormPage({ editId }: Props) {
   });
 
   const watchType = useWatch({ control, name: "type" });
+  const watchName = useWatch({ control, name: "name" });
+  const watchTaxNumber = useWatch({ control, name: "taxNumber" });
+  const watchEmail = useWatch({ control, name: "email" });
+  const watchPhone = useWatch({ control, name: "phone" });
   const watchPaymentTerm = useWatch({ control, name: "paymentTermDays" });
   const isPresetPaymentTerm = PAYMENT_TERM_PRESETS.some((p) => p.value === (watchPaymentTerm ?? ""));
   const usePresetTerm = paymentTermMode ? paymentTermMode === "preset" : isPresetPaymentTerm;
@@ -156,6 +164,12 @@ export function ContactFormPage({ editId }: Props) {
   };
 
   const removeTag = (tag: string) => setTags(tags.filter((t) => t !== tag));
+
+  const applyEnrichment = (item: MasterDataSuggestion): void => {
+    if (item.field === "code" || item.field === "name" || item.field === "taxNumber" || item.field === "taxOffice" || item.field === "email" || item.field === "phone" || item.field === "address" || item.field === "city" || item.field === "country") {
+      setValue(item.field, item.value, { shouldDirty: true, shouldValidate: true });
+    }
+  };
 
   const onSubmit = (data: ContactFormData) => {
     const payload = {
@@ -267,6 +281,13 @@ export function ContactFormPage({ editId }: Props) {
                   {...register("taxOffice")}
                 />
               </FormRow>
+              {!isEdit && (
+                <Button type="button" variant="outline" size="sm" leftIcon={<Sparkles className="w-3.5 h-3.5" />}
+                  loading={enrichment.isPending} disabled={!watchTaxNumber && !watchEmail && !watchPhone}
+                  onClick={() => enrichment.mutate({ entityType: "contact", taxNumber: watchTaxNumber, email: watchEmail, phone: watchPhone, name: watchName })}>
+                  Bilgileri doğrula ve tamamla
+                </Button>
+              )}
             </FormSection>
 
             {/* Contact Info */}
@@ -390,6 +411,7 @@ export function ContactFormPage({ editId }: Props) {
 
           {/* Sidebar — 1 col */}
           <div className="space-y-5">
+            {!isEdit && <MasterDataSuggestionsPanel result={enrichment.data} onApply={applyEnrichment} />}
             {/* Tags */}
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">

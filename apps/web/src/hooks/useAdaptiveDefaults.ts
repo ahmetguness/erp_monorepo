@@ -41,7 +41,7 @@ export function useResetAdaptiveDefaults() {
     mutationFn: resetAdaptiveDefaults,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adaptive-defaults'] });
-      toast.success('Öğrenilmiş tercih gizlemeleri sıfırlandı.');
+      toast.success('Kişisel öğrenme geçmişi sıfırlandı.');
     },
     onError: (error: unknown) => toast.error(getErrorMessage(error)),
   });

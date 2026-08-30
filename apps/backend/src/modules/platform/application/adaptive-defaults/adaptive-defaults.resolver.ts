@@ -6,6 +6,7 @@ const AUTO_APPLY_CONFIDENCE = 0.8;
 const SOURCE_LABELS: Record<AdaptiveDefaultSource, string> = {
   contact: 'Bu cariyle yaptığınız işlemler',
   user: 'Kendi son işlemleriniz',
+  role: 'Aynı roldeki kullanıcıların işlemleri',
   tenant: 'Şirketinizin işlem geçmişi',
   policy: 'Şirket varsayılanı',
 };

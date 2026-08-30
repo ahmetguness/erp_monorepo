@@ -150,11 +150,12 @@ export function InvoiceFormPage() {
   );
   const selectedProductIds = watchedLines.map((line) => line.productId).filter(Boolean);
   const { data: stockLevels = [], isLoading: stockLoading } = useStockLevels({}, { enabled: selectedProductIds.length > 0 });
+  const autoPaymentTermSuggestion = adaptiveDefaults?.suggestions.find((suggestion) => suggestion.field === 'paymentTermDays' && suggestion.autoApplicable);
 
   useEffect(() => {
-    if (!watchDate || dirtyFields.dueDate) return;
+    if (!watchDate || dirtyFields.dueDate || autoPaymentTermSuggestion) return;
     setValue('dueDate', addDaysString(watchDate, invoiceDueDays), { shouldDirty: false, shouldValidate: true });
-  }, [dirtyFields.dueDate, invoiceDueDays, setValue, watchDate]);
+  }, [autoPaymentTermSuggestion, dirtyFields.dueDate, invoiceDueDays, setValue, watchDate]);
 
   useEffect(() => {
     if (!watchDate || sourceSalesOrderId) return;

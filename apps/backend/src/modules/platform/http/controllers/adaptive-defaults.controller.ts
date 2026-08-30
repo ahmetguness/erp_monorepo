@@ -16,8 +16,7 @@ export const AdaptiveDefaultsController = {
       contactId: c.req.query('contactId'),
     });
     if (!parsed.success) throw new ValidationError('Öğrenilen varsayılan sorgusu geçersiz.', { query: parsed.error.issues[0]?.message ?? 'Geçersiz sorgu.' });
-    const snapshot = await new AdaptiveDefaultsService(prisma).snapshot({
-      tenantId: requireTenantId(c),
+    const snapshot = await new AdaptiveDefaultsService(prisma).snapshot(requireTenantId(c), {
       userId: requireUserId(c),
       ...parsed.data,
     });

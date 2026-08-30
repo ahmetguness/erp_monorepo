@@ -18,6 +18,9 @@ import { getAiRedactionRegistry } from '../../../../services/ai/redaction-regist
 import { IntelligenceService,type PermissionView } from '../../../../services/intelligence.service.js';
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
+import { storageService } from '../../../../services/storage.service.js';
+import { DocumentDraftService } from '../../infrastructure/document-intake/document-draft.service.js';
+import { HttpDocumentTextExtractorAdapter } from '../../infrastructure/document-intake/http-document-text-extractor.adapter.js';
 
 const aiAutomation = new AiAutomationService(prisma);
 
@@ -68,6 +71,15 @@ function parseAiRequestType(value: string | undefined): AiRequestType | undefine
 function parseAiRequestStatus(value: string | undefined): AiRequestStatus | undefined {
   if (!value) return undefined;
   return Object.values(AiRequestStatus).find((item) => item === value);
+}
+
+const AI_USE_CASES: readonly AiUseCase[] = [
+  'INVOICE_OCR', 'EMAIL_ORDER_EXTRACTION', 'PAYMENT_DESCRIPTION_MATCHING', 'SKU_MATCHING',
+  'SUPPLIER_MATCHING', 'ANOMALY_DETECTION', 'PURCHASE_RECOMMENDATION', 'NATURAL_LANGUAGE_ERP_QUERY',
+];
+
+function isAiUseCase(value: unknown): value is AiUseCase {
+  return typeof value === 'string' && AI_USE_CASES.includes(value as AiUseCase);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -199,7 +211,7 @@ export const IntelligenceController = {
     }
 
     const id = requireParam(c, 'id');
-    const data = await IntelligenceService.getDocumentDraft(context.tenantId, id);
+    const data = await new DocumentDraftService(prisma, storageService, new HttpDocumentTextExtractorAdapter(), aiAutomation).get(context.tenantId, id);
     if (!data) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
     return c.json({ data });
   },
@@ -391,14 +403,19 @@ export const IntelligenceController = {
   // ── Phase 15 AI Pipeline Uç Noktaları ──
 
   async processOcr(c: Context): Promise<Response> {
-    const tenantId = requireTenantId(c);
-    const body = await c.req.json<{ text: string }>();
+    const context = await requirePermissions(c);
+    if (context instanceof Response) return context;
+    if (!canCreate(context.permissions, 'invoicing')) {
+      return c.json(new ForbiddenError('invoicing:CREATE yetkisi gerekli.').toJSON(), 403);
+    }
+    const rawBody: unknown = await c.req.json().catch(() => null);
+    const body = isRecord(rawBody) && typeof rawBody.text === 'string' ? { text: rawBody.text } : null;
 
-    if (!body.text) {
+    if (!body?.text.trim()) {
       return c.json(new ValidationError('text alanı zorunludur.').toJSON(), 400);
     }
 
-    const suggestion = await aiAutomation.processInvoiceOcr(tenantId, body.text);
+    const suggestion = await aiAutomation.processInvoiceOcr(context.tenantId, body.text);
     return c.json({ data: suggestion });
   },
 
@@ -437,11 +454,21 @@ export const IntelligenceController = {
   },
 
   async executeAiSuggestion(c: Context): Promise<Response> {
-    const tenantId = requireTenantId(c);
+    const context = await requirePermissions(c);
+    if (context instanceof Response) return context;
     const userId = requireUserId(c);
-    const body = await c.req.json<{ useCase: AiUseCase; draftData: Record<string, unknown> }>();
+    const rawBody: unknown = await c.req.json().catch(() => null);
+    if (!isRecord(rawBody) || !isAiUseCase(rawBody.useCase) || !isRecord(rawBody.draftData)) {
+      return c.json(new ValidationError('Geçerli useCase ve draftData alanları zorunludur.').toJSON(), 400);
+    }
+    const body: { useCase: AiUseCase; draftData: Record<string, unknown> } = { useCase: rawBody.useCase, draftData: rawBody.draftData };
+    const requiresAttachmentAccess = typeof body.draftData.sourceAttachmentId === 'string';
 
-    const result = await aiAutomation.executeAiSuggestion(tenantId, userId, body.useCase, body.draftData ?? {});
+    if (body.useCase === 'INVOICE_OCR' && ((requiresAttachmentAccess && !canRead(context.permissions, 'attachments')) || !canCreate(context.permissions, 'invoicing'))) {
+      return c.json(new ForbiddenError('attachments:READ ve invoicing:CREATE yetkileri gerekli.').toJSON(), 403);
+    }
+
+    const result = await aiAutomation.executeAiSuggestion(context.tenantId, userId, body.useCase, body.draftData ?? {});
     return c.json({ data: result });
   },
 };

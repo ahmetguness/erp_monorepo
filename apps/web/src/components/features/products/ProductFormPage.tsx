@@ -20,6 +20,7 @@ import {
   TrendingDown,
   Layers,
   AlertCircle,
+  Sparkles,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FormRow } from "@/components/shared/FormField";
@@ -73,6 +74,9 @@ import {
 } from "./product-form/schema";
 import { ProductLimitNotice } from "./ProductLimitNotice";
 import { getProductLimitStatus, PRODUCT_LIMIT_UPGRADE_HREF } from "./product-limit";
+import { MasterDataSuggestionsPanel } from "@/components/features/onboarding/MasterDataSuggestionsPanel";
+import { useMasterDataEnrichment } from "@/hooks/useMasterDataEnrichment";
+import type { MasterDataSuggestion } from "@/services/master-data-enrichment.service";
 
 function isImageAttachment(attachment: Attachment): boolean {
   return attachment.mimeType?.startsWith("image/") ?? false;
@@ -289,6 +293,7 @@ export function ProductFormPage({ editId }: Props) {
     editId ?? "",
   );
   const { toast } = useUIStore();
+  const enrichment = useMasterDataEnrichment();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [existingImagePreviewUrl, setExistingImagePreviewUrl] = useState<
@@ -325,6 +330,10 @@ export function ProductFormPage({ editId }: Props) {
 
   const watchAll = useWatch({ control });
   useDirtyStateWarning(isDirty && !createProduct.isSuccess && !updateProduct.isSuccess);
+
+  const applyEnrichment = (item: MasterDataSuggestion): void => {
+    if (item.field === "code" || item.field === "name") setValue(item.field, item.value, { shouldDirty: true, shouldValidate: true });
+  };
 
   // Section completion checks
   const step1Done = !!(watchAll.code && watchAll.name && watchAll.unitId);
@@ -674,6 +683,13 @@ export function ProductFormPage({ editId }: Props) {
                 {...register("taxRateId")}
               />
             </FormRow>
+            {!isEdit && (
+              <Button type="button" variant="outline" size="sm" leftIcon={<Sparkles className="w-3.5 h-3.5" />}
+                loading={enrichment.isPending} disabled={!watchAll.barcode}
+                onClick={() => enrichment.mutate({ entityType: "product", barcode: watchAll.barcode, name: watchAll.name })}>
+                Barkodu doğrula ve kod öner
+              </Button>
+            )}
             <Textarea
               label="Açıklama"
               placeholder="Ürün hakkında kısa bir açıklama…"
@@ -811,6 +827,7 @@ export function ProductFormPage({ editId }: Props) {
         {/* ── Sidebar: live preview ─────────────── */}
         <div className="hidden lg:block w-72 shrink-0">
           <div className="sticky top-4 space-y-4">
+            {!isEdit && <MasterDataSuggestionsPanel result={enrichment.data} onApply={applyEnrichment} />}
             <LivePreview
               name={watchAll.name ?? ""}
               code={watchAll.code ?? ""}

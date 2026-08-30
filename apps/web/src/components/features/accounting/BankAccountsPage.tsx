@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
@@ -14,6 +14,9 @@ import { Input } from "@/components/ui/Input";
 import { FormRow } from "@/components/shared/FormField";
 import { useBankAccounts, useCreateBankAccount } from "@/hooks/useAccounting";
 import type { BankAccount } from "@/services/accounting.service";
+import { MasterDataSuggestionsPanel } from "@/components/features/onboarding/MasterDataSuggestionsPanel";
+import { useMasterDataEnrichment } from "@/hooks/useMasterDataEnrichment";
+import type { MasterDataSuggestion } from "@/services/master-data-enrichment.service";
 
 const schema = z.object({
   name: z.string().min(1, "Ad zorunludur"),
@@ -33,17 +36,32 @@ export function BankAccountsPage() {
     register,
     handleSubmit,
     reset,
+    setValue,
+    control,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { currencyCode: "TRY" },
   });
+  const iban = useWatch({ control, name: "iban" });
+  const enrichment = useMasterDataEnrichment();
+
+  const closeCreateModal = () => {
+    setCreateOpen(false);
+    reset();
+    enrichment.reset();
+  };
+
+  const applySuggestion = (suggestion: MasterDataSuggestion) => {
+    if (suggestion.field === "iban" || suggestion.field === "bankName" || suggestion.field === "currencyCode") {
+      setValue(suggestion.field, suggestion.value, { shouldDirty: true, shouldValidate: true });
+    }
+  };
 
   const onSubmit = (data: FormData) => {
     createAccount.mutate(data, {
       onSuccess: () => {
-        setCreateOpen(false);
-        reset();
+        closeCreateModal();
       },
     });
   };
@@ -111,8 +129,7 @@ export function BankAccountsPage() {
       <Modal
         isOpen={createOpen}
         onClose={() => {
-          setCreateOpen(false);
-          reset();
+          closeCreateModal();
         }}
         title="Yeni Banka Hesabı"
         size="sm"
@@ -121,8 +138,7 @@ export function BankAccountsPage() {
             <Button
               variant="ghost"
               onClick={() => {
-                setCreateOpen(false);
-                reset();
+                closeCreateModal();
               }}
             >
               İptal
@@ -166,6 +182,17 @@ export function BankAccountsPage() {
             placeholder="TR00 0000 0000 0000 0000 0000 00"
             {...register("iban")}
           />
+          <Button
+            type="button"
+            variant="secondary"
+            leftIcon={<Sparkles className="h-4 w-4" />}
+            disabled={!iban || enrichment.isPending}
+            loading={enrichment.isPending}
+            onClick={() => enrichment.mutate({ entityType: "bankAccount", iban })}
+          >
+            IBAN'ı doğrula ve tamamla
+          </Button>
+          <MasterDataSuggestionsPanel result={enrichment.data} onApply={applySuggestion} />
         </form>
       </Modal>
     </div>

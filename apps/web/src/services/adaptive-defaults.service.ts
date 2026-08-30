@@ -10,7 +10,7 @@ export const AdaptiveDefaultSuggestionSchema = z.object({
   value: z.string(),
   confidence: z.number().min(0).max(1),
   sampleSize: z.number().int().nonnegative(),
-  source: z.enum(['contact', 'user', 'tenant', 'policy']),
+  source: z.enum(['contact', 'user', 'role', 'tenant', 'policy']),
   reason: z.string(),
   autoApplicable: z.boolean(),
 });
