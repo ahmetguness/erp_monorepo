@@ -7,7 +7,8 @@ import { SchedulerJobEngineService,parseSchedulerJobKey,schedulerJobDefinitions 
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
 import { toInputJson } from '../../../../utils/json.js';
-import { previewAutomationAssistantQuery } from '../../composition.js';
+import { automationGovernancePolicyRepository,previewAutomationAssistantQuery } from '../../composition.js';
+import { evaluateAutomationDecision } from '../../application/automation-governance/index.js';
 
 const TRIGGERS: readonly AutomationTrigger[] = Object.values(AutomationTrigger);
 const ACTIONS: readonly AutomationAction[] = Object.values(AutomationAction);
@@ -30,6 +31,13 @@ function readBoolean(body: Record<string, unknown>, key: string): boolean | unde
   return typeof value === 'boolean' ? value : undefined;
 }
 
+function readJsonNumber(value: unknown, key: string): number | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const field = Object.entries(value).find(([entryKey]) => entryKey === key)?.[1];
+  const parsed = Number(field);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 async function readBody(c: Context): Promise<Record<string, unknown>> {
   const body = await c.req.json<unknown>().catch(() => null);
   if (typeof body !== 'object' || body === null || Array.isArray(body)) return {};
@@ -37,6 +45,23 @@ async function readBody(c: Context): Promise<Record<string, unknown>> {
 }
 
 export const AutomationRuleController = {
+  async getGovernancePolicy(c: Context): Promise<Response> {
+    const policy = await automationGovernancePolicyRepository.get(requireTenantId(c));
+    return c.json({ data: policy });
+  },
+
+  async updateGovernancePolicy(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body = await readBody(c);
+    const approvalThreshold = Number(body.approvalThreshold);
+    const minimumAutomaticConfidence = Number(body.minimumAutomaticConfidence);
+    if (!Number.isFinite(approvalThreshold) || approvalThreshold < 0 || !Number.isFinite(minimumAutomaticConfidence) || minimumAutomaticConfidence < 0 || minimumAutomaticConfidence > 1) {
+      return c.json(new ValidationError('Gecersiz otomasyon guven politikasi.').toJSON(), 400);
+    }
+    const policy = await automationGovernancePolicyRepository.save(tenantId, { approvalThreshold, minimumAutomaticConfidence });
+    return c.json({ data: policy });
+  },
+
   async previewAssistant(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const body = await readBody(c);
@@ -71,15 +96,33 @@ export const AutomationRuleController = {
 
   async listExecutions(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const executions = await prisma.automationExecution.findMany({
-      where: { tenantId },
-      include: {
-        rule: { select: { id: true, name: true } },
-      },
-      orderBy: { startedAt: 'desc' },
-      take: 50,
-    });
-    return c.json({ data: executions });
+    const [executions, policy] = await Promise.all([
+      prisma.automationExecution.findMany({
+        where: { tenantId },
+        include: { rule: { select: { id: true, name: true, conditions: true } } },
+        orderBy: { startedAt: 'desc' },
+        take: 50,
+      }),
+      automationGovernancePolicyRepository.get(tenantId),
+    ]);
+    const data = executions.map((execution) => ({
+      ...execution,
+      decision: execution.trigger && execution.action
+        ? evaluateAutomationDecision({
+            tenantId,
+            ruleId: execution.ruleId ?? execution.id,
+            trigger: execution.trigger,
+            action: execution.action,
+            reason: execution.rule?.name ? `“${execution.rule.name}” kuralı eşleşti.` : 'Sistem otomasyonu çalıştırıldı.',
+            sources: ['Otomasyon çalışma günlüğü', 'Kural koşulları', 'Tenant güven politikası'],
+            confidence: 0.9,
+            matchedRecords: readJsonNumber(execution.output, 'matched') ?? 0,
+            estimatedMonetaryAmount: readJsonNumber(execution.rule?.conditions, 'minAmount'),
+            dryRun: false,
+          }, policy)
+        : null,
+    }));
+    return c.json({ data });
   },
 
   async list(c: Context): Promise<Response> {

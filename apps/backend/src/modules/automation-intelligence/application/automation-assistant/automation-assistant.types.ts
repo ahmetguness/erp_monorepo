@@ -1,5 +1,7 @@
-export type AutomationAssistantTrigger = 'LOW_STOCK' | 'OVERDUE_INVOICE' | 'HIGH_VALUE_INVOICE' | 'LOW_MARGIN' | 'CHECK_DUE_SOON';
-export type AutomationAssistantAction = 'CREATE_TASK' | 'CREATE_NOTIFICATION' | 'DRAFT_REMINDER_EMAIL' | 'REQUEST_APPROVAL' | 'CREATE_PURCHASE_REQUEST_DRAFT';
+import type { AutomationDomainAction, AutomationDomainTrigger } from '../automation.types.js';
+
+export type AutomationAssistantTrigger = AutomationDomainTrigger;
+export type AutomationAssistantAction = AutomationDomainAction;
 
 export interface AutomationAssistantDraft {
   name: string;
@@ -14,6 +16,7 @@ export interface AutomationAssistantDraft {
 
 export interface AutomationSimulation {
   matchedCount: number;
+  estimatedMonetaryAmount: number | null;
   examples: Array<{ title: string; detail: string }>;
 }
 
@@ -32,4 +35,5 @@ export interface AutomationAssistantPreview {
   conflicts: AutomationConflict[];
   recommendedMode: 'SUGGESTION';
   safeguards: string[];
+  decision: import('../automation-governance/automation-decision.types.js').AutomationDecisionExplanation;
 }

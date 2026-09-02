@@ -11,6 +11,12 @@ import {
   getImportBatches,
   previewImport,
   rollbackImportBatch,
+  scanDuplicates,
+  previewContactMerge,
+  mergeContacts,
+  rollbackContactMerge,
+  type ContactMergeInput,
+  type DedupEntity,
   type DataExchangeEntity,
   type ImportPreviewInput,
 } from '@/services/data-exchange.service';
@@ -19,6 +25,24 @@ export function useImportPreview() {
   return useMutation({
     mutationFn: (input: ImportPreviewInput) => previewImport(input),
   });
+}
+
+export function useDuplicateCandidates(entity: DedupEntity, enabled = true) {
+  return useQuery({ queryKey: ['data-exchange', 'duplicates', entity], queryFn: () => scanDuplicates(entity), enabled });
+}
+
+export function usePreviewContactMerge() {
+  return useMutation({ mutationFn: (input: ContactMergeInput) => previewContactMerge(input) });
+}
+
+export function useMergeContacts() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (input: ContactMergeInput) => mergeContacts(input), onSuccess: () => { qc.invalidateQueries({ queryKey: ['data-exchange', 'duplicates'] }); qc.invalidateQueries({ queryKey: ['contacts'] }); qc.invalidateQueries({ queryKey: ['data-exchange', 'quality'] }); } });
+}
+
+export function useRollbackContactMerge() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: rollbackContactMerge, onSuccess: () => { qc.invalidateQueries({ queryKey: ['data-exchange', 'duplicates'] }); qc.invalidateQueries({ queryKey: ['contacts'] }); } });
 }
 
 export function useTemplateDownload() {

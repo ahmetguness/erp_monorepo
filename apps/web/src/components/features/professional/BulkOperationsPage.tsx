@@ -11,6 +11,9 @@ import { Select } from "@/components/ui/Select";
 import { useExecuteBulkOperation, usePreviewBulkOperation } from "@/hooks/useBulkOperations";
 import { cn } from "@/lib/utils";
 import type { BulkOperationPayload, BulkOperationResult, BulkOperationTarget, BulkOperationValue } from "@/services/bulk-operation.service";
+import { BulkImportAssistant } from "./BulkImportAssistant";
+import { useCurrentUser } from "@/hooks/useAuth";
+import { createUserAccessContext, hasUserPermission } from "@/domain/access/user-access-context";
 
 interface FieldOption {
   value: string;
@@ -145,6 +148,8 @@ function OperationDecisionPanel({ result }: { result: BulkOperationResult }) {
 }
 
 export function BulkOperationsPage() {
+  const { user, tenant } = useCurrentUser();
+  const canManageImports = hasUserPermission(createUserAccessContext(user, tenant), "settings", "CREATE");
   const [target, setTarget] = useState<BulkOperationTarget>("contacts");
   const [field, setField] = useState(FIELD_OPTIONS.contacts[0].value);
   const [rawValue, setRawValue] = useState("true");
@@ -196,6 +201,8 @@ export function BulkOperationsPage() {
         title="Toplu Islem Merkezi"
         subtitle="Cari, urun ve fatura kayitlari icin onizlemeli ve audit kayitli toplu guncelleme."
       />
+
+      <BulkImportAssistant canManage={canManageImports} />
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <div className="grid gap-4 lg:grid-cols-4">

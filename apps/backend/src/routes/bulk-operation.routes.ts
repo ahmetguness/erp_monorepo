@@ -14,5 +14,8 @@ bulkOperationRoutes.post('/products/preview', requirePermission('inventory', 'UP
 bulkOperationRoutes.post('/products/execute', requirePermission('inventory', 'UPDATE'), BulkOperationController.executeProducts);
 bulkOperationRoutes.post('/invoices/preview', requirePermission('invoicing', 'UPDATE'), BulkOperationController.previewInvoices);
 bulkOperationRoutes.post('/invoices/execute', requirePermission('invoicing', 'UPDATE'), BulkOperationController.executeInvoices);
+bulkOperationRoutes.post('/imports/analyze', requirePermission('settings', 'CREATE'), BulkOperationController.analyzeImport);
+bulkOperationRoutes.get('/imports/profiles', requirePermission('settings', 'READ'), BulkOperationController.listMappingProfiles);
+bulkOperationRoutes.post('/imports/profiles', requirePermission('settings', 'CREATE'), BulkOperationController.saveMappingProfile);
 
 export { bulkOperationRoutes };

@@ -15,6 +15,7 @@ import {
 import { useTenantUsers, useUpdateUserRole } from '@/hooks/useUsers';
 import { formatDate } from '@/lib/utils';
 import type { Role, Permission, PermissionAction, PermissionMatrixEntry, PermissionScreenPreviewItem } from '@/services/role.service';
+import { RoleNavigationProfileDistributor } from '@/features/navigation';
 
 const MODULES = [
   { key: 'accounting', label: 'Muhasebe' },
@@ -708,6 +709,11 @@ export function RolesPage() {
                 );
               })()}
             </div>
+
+            <RoleNavigationProfileDistributor
+              roleId={detailRole.id}
+              readableModules={(detailRole.permissions ?? []).filter((permission) => permission.action === 'READ').map((permission) => permission.module)}
+            />
 
             {/* Permission matrix */}
             <div>

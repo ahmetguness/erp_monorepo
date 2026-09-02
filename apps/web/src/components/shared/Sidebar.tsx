@@ -3,14 +3,14 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, LogOut, Search, Lock } from 'lucide-react';
+import { ChevronDown, LogOut, Search, Settings2, Star, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NAV_GROUPS, type NavItem } from '@/lib/nav-config';
 import { useCurrentUser, useLogout } from '@/hooks/useAuth';
 import { useUIStore } from '@/store/ui.store';
 import { PLAN_RANK, type PlanName } from '@/lib/plans';
-import { getAccessLockReasons, hasRequiredModule, hasRequiredPlan, lockReasonSummary, type AccessLockReason } from '@/lib/access-lock';
 import { TenantLogo } from './TenantLogo';
+import { findNavigationItems, personalizeNavigation, useNavigationWorkspace, useRecordNavigationActivity, useUpdateNavigationPreferences, type NavigationPersona, type NavigationWorkspace } from '@/features/navigation';
 
 // ─────────────────────────────────────────────
 // Nav item types — NavGroup burada tanımlanıyor
@@ -26,27 +26,6 @@ const EMPTY_MODULES: string[] = [];
 
 function isPlanName(plan: string): plan is PlanName {
   return plan in PLAN_RANK;
-}
-
-function hasPlanAccess(tenantPlan: string, requiredPlan?: PlanName): boolean {
-  if (!requiredPlan) return true;
-  const normalizedTenantPlan = isPlanName(tenantPlan) ? tenantPlan : 'STARTER';
-  return hasRequiredPlan(normalizedTenantPlan, requiredPlan);
-}
-
-function hasModuleAccess(tenantModules: string[] | undefined | null, requiredModule?: string): boolean {
-  return hasRequiredModule(tenantModules, requiredModule);
-}
-
-function hasAccess(tenantPlan: string, tenantModules: string[] | undefined | null, item: { plan?: PlanName; module?: string }): boolean {
-  const hasRequiredPlan = hasPlanAccess(tenantPlan, item.plan);
-  if (!tenantModules || tenantModules.length === 0) return hasRequiredPlan;
-
-  if (!item.module) {
-    return hasRequiredPlan;
-  }
-  const hasRequiredModule = hasModuleAccess(tenantModules, item.module);
-  return hasRequiredPlan && hasRequiredModule;
 }
 
 function normalizeSearchText(value: string): string {
@@ -135,40 +114,18 @@ function isPathMatch(pathname: string, search: string, href: string): boolean {
 
 interface NavItemProps {
   item: NavItem;
-  tenantPlan: string;
-  tenantModules: string[];
   depth?: number;
-  parentLocked?: boolean;
-  parentPlan?: string;
-  parentLockReasons?: readonly AccessLockReason[];
+  favoriteHrefs: readonly string[];
+  onNavigate: (href: string) => void;
+  onToggleFavorite: (href: string) => void;
 }
 
-function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked = false, parentPlan, parentLockReasons = [] }: NavItemProps) {
+function NavItemRow({ item, depth = 0, favoriteHrefs, onNavigate, onToggleFavorite }: NavItemProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const search = searchParams.toString();
 
-  const normalizedTenantPlan = isPlanName(tenantPlan) ? tenantPlan : 'STARTER';
-  const lockReasons = getAccessLockReasons({
-    currentPlan: normalizedTenantPlan,
-    requiredPlan: item.plan,
-    requiredModule: item.module,
-    tenantModules,
-  });
-  const isLocked = parentLocked || lockReasons.length > 0;
-  const effectiveLockReasons = lockReasons.length > 0 ? lockReasons : parentLockReasons;
-  const effectivePlan = item.plan || parentPlan || 'PROFESSIONAL';
-
-  const visibleChildren = item.children?.filter((c) => {
-    const childReasons = getAccessLockReasons({
-      currentPlan: normalizedTenantPlan,
-      requiredPlan: c.plan,
-      requiredModule: c.module,
-      tenantModules,
-    });
-    const isChildLocked = isLocked || childReasons.length > 0;
-    return hasAccess(tenantPlan, tenantModules, c) || isChildLocked;
-  });
+  const visibleChildren = item.children;
 
   const hasActiveChild = visibleChildren?.some((c) => isPathMatch(pathname, search, c.href)) ?? false;
 
@@ -183,16 +140,9 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked =
     return () => window.clearTimeout(timer);
   }, [hasActiveChild]);
 
-  if (!hasAccess(tenantPlan, tenantModules, item) && !isLocked) return null;
-
   const isActive = visibleChildren ? hasActiveChild : isPathMatch(pathname, search, item.href);
 
   const Icon = item.icon;
-
-  const href = isLocked
-    ? `/dashboard/upgrade-preview?feature=${encodeURIComponent(item.label)}&plan=${effectivePlan}&module=${item.module || ''}&reason=${encodeURIComponent(effectiveLockReasons.map((reason) => reason.code).join(','))}`
-    : item.href;
-  const lockTitle = lockReasonSummary(effectiveLockReasons);
 
   // Has children → collapsible
   if (visibleChildren && visibleChildren.length > 0) {
@@ -200,20 +150,14 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked =
       <div>
         <button
           onClick={() => setOpen((o) => !o)}
-          title={isLocked ? lockTitle : undefined}
           className={cn(
             'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
             depth > 0 ? 'pl-8' : '',
-            isActive
-              ? 'bg-sky-500/10 text-sky-400 font-medium'
-              : isLocked
-              ? 'text-slate-500 hover:text-slate-400 hover:bg-slate-800/20'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
+            isActive ? 'bg-sky-500/10 text-sky-400 font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
           )}
         >
-          <Icon className={cn('w-4 h-4 shrink-0', isLocked && 'text-slate-600')} />
+          <Icon className="w-4 h-4 shrink-0" />
           <span className="flex-1 text-left truncate">{item.label}</span>
-          {isLocked && <Lock className="w-3 h-3 text-slate-600 shrink-0 mr-1" />}
           <ChevronDown
             className={cn('w-3.5 h-3.5 shrink-0 transition-transform', open && 'rotate-180')}
           />
@@ -225,12 +169,10 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked =
               <NavItemRow
                 key={`${child.href}-${child.label}`}
                 item={child}
-                tenantPlan={tenantPlan}
-                tenantModules={tenantModules}
                 depth={depth + 1}
-                parentLocked={isLocked}
-                parentPlan={effectivePlan}
-                parentLockReasons={effectiveLockReasons}
+                favoriteHrefs={favoriteHrefs}
+                onNavigate={onNavigate}
+                onToggleFavorite={onToggleFavorite}
               />
             ))}
           </div>
@@ -241,23 +183,55 @@ function NavItemRow({ item, tenantPlan, tenantModules, depth = 0, parentLocked =
 
   // Leaf item
   return (
-    <Link
-      href={href}
-      title={isLocked ? lockTitle : undefined}
-      className={cn(
-        'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
-        depth > 0 ? 'pl-8' : '',
-        isActive
-          ? 'bg-sky-500/10 text-sky-400 font-medium'
-          : isLocked
-          ? 'text-slate-500 hover:text-slate-400 hover:bg-slate-800/20'
-          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
+    <div className="group/nav flex items-center">
+      <Link
+        href={item.href}
+        onClick={() => onNavigate(item.href)}
+        className={cn(
+          'flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
+          depth > 0 ? 'pl-8' : '',
+          isActive ? 'bg-sky-500/10 text-sky-400 font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
+        )}
+      >
+        <Icon className="w-4 h-4 shrink-0" />
+        <span className="flex-1 truncate">{item.label}</span>
+      </Link>
+      {(
+        <button type="button" onClick={() => onToggleFavorite(item.href)} aria-label={`${item.label} favorisini değiştir`} className={cn('mr-1 rounded p-1 text-slate-600 hover:text-amber-300', favoriteHrefs.includes(item.href) ? 'text-amber-300' : 'opacity-0 group-hover/nav:opacity-100')}>
+          <Star className="h-3.5 w-3.5" fill={favoriteHrefs.includes(item.href) ? 'currentColor' : 'none'} />
+        </button>
       )}
-    >
-      <Icon className={cn('w-4 h-4 shrink-0', isLocked && 'text-slate-600')} />
-      <span className="flex-1 truncate">{item.label}</span>
-      {isLocked && <Lock className="w-3 h-3 text-slate-600 shrink-0" />}
-    </Link>
+    </div>
+  );
+}
+
+const PERSONA_LABELS: Record<NavigationPersona, string> = { AUTO: 'Otomatik', SALES: 'Satış', FINANCE: 'Finans', OPERATIONS: 'Operasyon', PEOPLE: 'İnsan & ekip', MANAGEMENT: 'Yönetim' };
+
+function WorkspaceSettings({ workspace }: { workspace: NavigationWorkspace }) {
+  const update = useUpdateNavigationPreferences();
+  const modules = workspace.allowedModules === '*' ? ['sales', 'contacts', 'invoicing', 'inventory', 'purchasing', 'accounting', 'production', 'service', 'marketplace', 'hr', 'payroll', 'mail', 'reporting', 'approvals'] : workspace.allowedModules;
+  function save(persona: NavigationPersona, hiddenModules: string[]) {
+    update.mutate({ persona, hiddenModules, favoriteHrefs: workspace.favoriteHrefs });
+  }
+  return (
+    <details className="relative">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 hover:bg-slate-800/60"><Settings2 className="h-3.5 w-3.5" /> Çalışma alanını düzenle</summary>
+      <div className="mt-1 rounded-xl border border-slate-800 bg-slate-950 p-3">
+        <label className="text-[10px] font-semibold uppercase text-slate-500">Çalışma biçimi</label>
+        <select value={workspace.persona} onChange={(event) => save(event.target.value as NavigationPersona, workspace.hiddenModules)} className="mt-1 h-8 w-full rounded border border-slate-800 bg-slate-900 px-2 text-xs text-slate-200">
+          {Object.entries(PERSONA_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        <p className="mt-3 text-[10px] font-semibold uppercase text-slate-500">Gizlenebilir alanlar</p>
+        <div className="mt-1 max-h-28 space-y-1 overflow-y-auto">
+          {modules.map((module) => (
+            <label key={module} className="flex items-center gap-2 text-xs text-slate-400">
+              <input type="checkbox" checked={!workspace.hiddenModules.includes(module)} onChange={() => save(workspace.persona, workspace.hiddenModules.includes(module) ? workspace.hiddenModules.filter((item) => item !== module) : [...workspace.hiddenModules, module])} />
+              {module}
+            </label>
+          ))}
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -272,32 +246,33 @@ export function Sidebar() {
   const tenantPlan = tenant?.plan ?? 'STARTER';
   const tenantModules = tenant?.modules ?? EMPTY_MODULES;
   const [menuSearch, setMenuSearch] = useState('');
+  const { data: workspace } = useNavigationWorkspace();
+  const updateWorkspace = useUpdateNavigationPreferences();
+  const recordActivity = useRecordNavigationActivity();
   const searchTerm = normalizeSearchText(menuSearch);
+  const effectiveWorkspace = useMemo<NavigationWorkspace>(() => {
+    if (workspace) return workspace;
+    const membership = user?.tenantMembership;
+    const allowedModules = membership?.isOwner
+      ? '*'
+      : [...new Set((membership?.role?.permissions ?? []).filter((permission) => permission.action === 'READ').map((permission) => permission.module))];
+    return { persona: 'AUTO', effectivePersona: 'MANAGEMENT', allowedModules, favoriteHrefs: [], hiddenModules: [], recentHrefs: [], usage: {}, goals: [], canDistributeProfiles: false };
+  }, [user?.tenantMembership, workspace]);
   const visibleGroups = useMemo(
     () =>
-      NAV_GROUPS.map((group) => {
-        const accessibleItems = group.items.reduce<NavItem[]>((items, item) => {
-          const isItemLocked = Boolean(item.plan && !hasPlanAccess(tenantPlan, item.plan));
-          if (!hasAccess(tenantPlan, tenantModules, item) && !isItemLocked) return items;
-
-          if (item.children) {
-            items.push({
-              ...item,
-              children: item.children.filter((child) => {
-                const isChildLocked = isItemLocked || Boolean(child.plan && !hasPlanAccess(tenantPlan, child.plan));
-                return hasAccess(tenantPlan, tenantModules, child) || isChildLocked;
-              }),
-            });
-            return items;
-          }
-
-          items.push(item);
-          return items;
-        }, []);
-        return { ...group, items: filterItemsBySearch(accessibleItems, searchTerm) };
-      }).filter((group) => group.items.length > 0),
-    [searchTerm, tenantModules, tenantPlan],
+      personalizeNavigation(NAV_GROUPS, effectiveWorkspace, isPlanName(tenantPlan) ? tenantPlan : 'STARTER', tenantModules)
+        .map((group) => ({ ...group, items: filterItemsBySearch(group.items, searchTerm) }))
+        .filter((group) => group.items.length > 0),
+    [effectiveWorkspace, searchTerm, tenantModules, tenantPlan],
   );
+
+  const favoriteItems = useMemo(() => workspace ? findNavigationItems(visibleGroups, workspace.favoriteHrefs) : [], [visibleGroups, workspace]);
+  function toggleFavorite(href: string) {
+    if (!workspace) return;
+    const favoriteHrefs = workspace.favoriteHrefs.includes(href) ? workspace.favoriteHrefs.filter((item) => item !== href) : [...workspace.favoriteHrefs, href];
+    updateWorkspace.mutate({ persona: workspace.persona, hiddenModules: workspace.hiddenModules, favoriteHrefs });
+  }
+  function navigate(href: string) { recordActivity.mutate(href); }
 
   return (
     <aside
@@ -333,6 +308,15 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
+        {workspace && workspace.goals.length > 0 && !searchTerm && (
+          <div>
+            <p className="px-3 mb-1 text-[10px] font-semibold text-violet-400 uppercase tracking-wider">İş hedefleri</p>
+            <div className="space-y-0.5">{workspace.goals.map((goal) => <Link key={goal.id} href={goal.href} onClick={() => navigate(goal.href)} title={goal.description} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-violet-200 hover:bg-violet-500/10"><Zap className="h-4 w-4" />{goal.label}</Link>)}</div>
+          </div>
+        )}
+        {favoriteItems.length > 0 && !searchTerm && (
+          <div><p className="px-3 mb-1 text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Favoriler</p><div className="space-y-0.5">{favoriteItems.map((item) => <NavItemRow key={`favorite-${item.href}`} item={item} favoriteHrefs={workspace?.favoriteHrefs ?? []} onNavigate={navigate} onToggleFavorite={toggleFavorite} />)}</div></div>
+        )}
         {visibleGroups.map((group, gi) => (
           <div key={`${group.label ?? 'primary'}-${gi}`}>
             {group.label && (
@@ -342,7 +326,7 @@ export function Sidebar() {
             )}
             <div className="space-y-0.5">
               {group.items.map((item) => (
-                <NavItemRow key={`${item.href}-${item.label}`} item={item} tenantPlan={tenantPlan} tenantModules={tenantModules} />
+                <NavItemRow key={`${item.href}-${item.label}`} item={item} favoriteHrefs={workspace?.favoriteHrefs ?? []} onNavigate={navigate} onToggleFavorite={toggleFavorite} />
               ))}
             </div>
           </div>
@@ -356,6 +340,7 @@ export function Sidebar() {
 
       {/* User + tenant info */}
       <div className="px-3 py-3 border-t border-slate-800 shrink-0">
+        {workspace && <WorkspaceSettings workspace={workspace} />}
         {user && (
           <div className="flex items-center gap-2 mb-2">
             <div className="w-7 h-7 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs font-bold shrink-0">

@@ -14,6 +14,7 @@ import { planUsageRoutes } from '../../routes/plan-usage.routes.js';
 import { reportingRoutes } from '../../routes/reporting.routes.js';
 import { savedViewRoutes } from '../../routes/saved-view.routes.js';
 import { searchRoutes } from '../../routes/search.routes.js';
+import { navigationWorkspaceRoutes } from '../../routes/navigation-workspace.routes.js';
 import { settingsRoutes } from '../../routes/settings.routes.js';
 import { starterCsvImportRoutes } from '../../routes/starter-csv-import.routes.js';
 import { starterHealthRoutes } from '../../routes/starter-health.routes.js';
@@ -33,6 +34,7 @@ export const platformModule: BackendModule = {
     app.route('/notifications', notificationRoutes);
     app.route('/tasks', taskRoutes);
     app.route('/search', searchRoutes);
+    app.route('/navigation-workspace', navigationWorkspaceRoutes);
     app.route('/audit-logs', auditLogRoutes);
     app.route('/activity', activityRoutes);
     app.route('/saved-views', savedViewRoutes);

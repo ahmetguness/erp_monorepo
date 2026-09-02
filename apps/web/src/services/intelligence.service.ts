@@ -284,6 +284,33 @@ export const AutomationRuleSchema = z.object({
 });
 export type AutomationRule = z.infer<typeof AutomationRuleSchema>;
 
+export const AutomationGovernancePolicySchema = z.object({
+  approvalThreshold: z.coerce.number().nonnegative(),
+  minimumAutomaticConfidence: z.number().min(0).max(1),
+});
+export type AutomationGovernancePolicy = z.infer<typeof AutomationGovernancePolicySchema>;
+
+export const AutomationDecisionExplanationSchema = z.object({
+  version: z.literal(1),
+  reason: z.string(),
+  sources: z.array(z.string()),
+  confidence: z.object({ score: z.number().min(0).max(1), band: z.enum(['LOW', 'MEDIUM', 'HIGH']) }),
+  risk: z.object({ level: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']), reasons: z.array(z.string()) }),
+  impact: z.object({ matchedRecords: z.coerce.number(), estimatedMonetaryAmount: z.number().nullable(), currency: z.literal('TRY') }),
+  control: z.object({
+    mode: z.enum(['DRY_RUN', 'SUGGESTION', 'APPROVAL_REQUIRED', 'AUTOMATIC']),
+    requiresApproval: z.boolean(),
+    approvalThreshold: z.coerce.number(),
+    dryRun: z.boolean(),
+    idempotencyKey: z.string(),
+    reversible: z.boolean(),
+    compensation: z.string(),
+  }),
+  trigger: AutomationRuleTriggerSchema,
+  action: AutomationRuleActionSchema,
+});
+export type AutomationDecisionExplanation = z.infer<typeof AutomationDecisionExplanationSchema>;
+
 export const AutomationAssistantPreviewSchema = z.object({
   interpretation: z.string(),
   confidence: z.number().min(0).max(1),
@@ -309,6 +336,7 @@ export const AutomationAssistantPreviewSchema = z.object({
   })),
   recommendedMode: z.literal('SUGGESTION'),
   safeguards: z.array(z.string()),
+  decision: AutomationDecisionExplanationSchema,
 });
 export type AutomationAssistantPreview = z.infer<typeof AutomationAssistantPreviewSchema>;
 
@@ -336,6 +364,16 @@ export async function createAutomationRule(data: CreateAutomationRuleDTO): Promi
 export async function previewAutomationAssistant(prompt: string): Promise<AutomationAssistantPreview> {
   const res = await apiClient.post('/api/automation-rules/assistant/preview', { prompt });
   return safeParse(SingleResponseSchema(AutomationAssistantPreviewSchema), res.data, 'previewAutomationAssistant').data;
+}
+
+export async function getAutomationGovernancePolicy(): Promise<AutomationGovernancePolicy> {
+  const res = await apiClient.get('/api/automation-rules/governance/policy');
+  return safeParse(SingleResponseSchema(AutomationGovernancePolicySchema), res.data, 'getAutomationGovernancePolicy').data;
+}
+
+export async function updateAutomationGovernancePolicy(policy: AutomationGovernancePolicy): Promise<AutomationGovernancePolicy> {
+  const res = await apiClient.put('/api/automation-rules/governance/policy', policy);
+  return safeParse(SingleResponseSchema(AutomationGovernancePolicySchema), res.data, 'updateAutomationGovernancePolicy').data;
 }
 
 export async function updateAutomationRule(id: string, data: Partial<CreateAutomationRuleDTO> & { isActive?: boolean }): Promise<AutomationRule> {
@@ -371,7 +409,8 @@ export const AutomationExecutionSchema = z.object({
   startedAt: z.string(),
   completedAt: z.string().nullable(),
   createdAt: z.string(),
-  rule: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+  rule: z.object({ id: z.string(), name: z.string() }).passthrough().nullable().optional(),
+  decision: AutomationDecisionExplanationSchema.nullable().optional(),
 });
 export type AutomationExecution = z.infer<typeof AutomationExecutionSchema>;
 

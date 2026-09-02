@@ -18,6 +18,7 @@ import type { DataExchangeEntity } from '@/services/data-exchange.service';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import { cn } from '@/lib/utils';
+import { DataDeduplicationCenter } from './DataDeduplicationCenter';
 
 const ENTITIES: { value: DataExchangeEntity; label: string; description: string }[] = [
   { value: 'products', label: 'Urunler', description: 'Kod, ad, fiyat ve stok esigi' },
@@ -150,6 +151,8 @@ export function DataExchangePage() {
           </>
         }
       />
+
+      <DataDeduplicationCenter />
 
       <section className="mb-5 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

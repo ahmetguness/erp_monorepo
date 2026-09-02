@@ -11,6 +11,7 @@ import {
   Package,
   Receipt,
   Search,
+  ShieldCheck,
   Sparkles,
   User,
   Wrench,
@@ -18,9 +19,10 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useGlobalSearch } from '@/hooks/useGlobalSearch';
+import { useConfirmUnifiedCommand, useGlobalSearch } from '@/hooks/useGlobalSearch';
 import { cn, formatDate } from '@/lib/utils';
 import type { GlobalSearchResult } from '@/services/search.service';
+import { getErrorMessage } from '@/types/api.types';
 
 const RECENT_KEY = 'axon.commandPalette.recent';
 const MAX_RECENT = 6;
@@ -183,8 +185,13 @@ export function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [recent, setRecent] = useState<RecentItem[]>([]);
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { data: results = [], isFetching } = useGlobalSearch(query, open);
+  const recentHrefs = useMemo(() => recent.map((item) => item.href), [recent]);
+  const { data: unified, error: searchError, isError: isSearchError, isFetching } = useGlobalSearch(query, recentHrefs, open);
+  const confirmCommand = useConfirmUnifiedCommand();
+  const results = useMemo(() => unified?.results ?? [], [unified?.results]);
+  const intent = unified?.intent ?? null;
   const normalized = query.trim();
 
   function openPalette() {
@@ -227,6 +234,19 @@ export function GlobalSearch() {
     setOpen(false);
     setQuery('');
     setActiveIndex(0);
+    setSelectedOptionId(null);
+  }
+
+  async function continueIntent() {
+    if (!intent) return;
+    if (!intent.requiresConfirmation && intent.href) {
+      closePalette();
+      router.push(intent.href);
+      return;
+    }
+    const handoff = await confirmCommand.mutateAsync({ query: normalized, intentId: intent.id, selectedOptionId });
+    closePalette();
+    router.push(handoff.href);
   }
 
   function goTo(item: GlobalSearchResult | RecentItem) {
@@ -278,6 +298,7 @@ export function GlobalSearch() {
                 onChange={(event) => {
                   setQuery(event.target.value);
                   setActiveIndex(0);
+                  setSelectedOptionId(null);
                 }}
                 onKeyDown={handleKeyDown}
                 placeholder="Ara veya komut yaz..."
@@ -290,6 +311,47 @@ export function GlobalSearch() {
             </div>
 
             <div className="max-h-[60vh] overflow-y-auto p-3">
+              {(isSearchError || confirmCommand.isError) && (
+                <div role="alert" className="mb-3 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+                  {getErrorMessage(confirmCommand.error ?? searchError)}
+                </div>
+              )}
+              {intent && (
+                <div className="mb-3 rounded-xl border border-violet-500/25 bg-violet-500/10 p-3">
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 rounded-lg bg-violet-500/15 p-2 text-violet-300"><Sparkles className="h-4 w-4" /></span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-violet-100">{intent.title}</p>
+                        <span className="rounded bg-slate-950/60 px-1.5 py-0.5 text-[10px] text-slate-400">%{Math.round(intent.confidence * 100)} güven</span>
+                        <span className="rounded bg-slate-950/60 px-1.5 py-0.5 text-[10px] text-slate-400">{intent.risk} risk</span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-400">{intent.explanation}</p>
+                      {intent.status === 'NEEDS_CLARIFICATION' && (
+                        <div className="mt-2 grid gap-1.5">
+                          {intent.options.map((option) => (
+                            <label key={option.id} className="flex cursor-pointer gap-2 rounded-lg border border-slate-800 bg-slate-950/40 p-2 text-xs text-slate-300">
+                              <input type="radio" name="intent-option" checked={selectedOptionId === option.id} onChange={() => setSelectedOptionId(option.id)} />
+                              <span><strong className="block text-slate-200">{option.label}</strong>{option.description}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-1 text-[11px] text-emerald-300"><ShieldCheck className="h-3.5 w-3.5" /> Veri doğrudan değiştirilmez; güvenli taslak açılır.</span>
+                        <button
+                          type="button"
+                          disabled={confirmCommand.isPending || (intent.status === 'NEEDS_CLARIFICATION' && !selectedOptionId)}
+                          onClick={() => void continueIntent()}
+                          className="rounded-lg bg-violet-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                        >
+                          {intent.requiresConfirmation ? 'Onayla ve devam et' : 'Sonuçları aç'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               {visibleResults.length > 0 && (
                 <div>
                   <div className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-600">

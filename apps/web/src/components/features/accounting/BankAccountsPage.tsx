@@ -190,7 +190,7 @@ export function BankAccountsPage() {
             loading={enrichment.isPending}
             onClick={() => enrichment.mutate({ entityType: "bankAccount", iban })}
           >
-            IBAN'ı doğrula ve tamamla
+            IBAN&apos;ı doğrula ve tamamla
           </Button>
           <MasterDataSuggestionsPanel result={enrichment.data} onApply={applySuggestion} />
         </form>

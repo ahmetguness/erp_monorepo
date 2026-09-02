@@ -60,7 +60,7 @@ interface ApiTextResult {
   text: string;
 }
 
-type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 const createdTenantIds: string[] = [];
 const createdUserIds: string[] = [];
@@ -509,6 +509,14 @@ async function testAutomationAssistantFlow(ctx: TestContext): Promise<void> {
     },
   });
 
+  const policyUpdate = await api(
+    'PUT',
+    '/api/automation-rules/governance/policy',
+    token(ctx.ownerAId, ctx.tenantAId),
+    { approvalThreshold: 50000, minimumAutomaticConfidence: 0.9 },
+  );
+  assertStatus(policyUpdate, 200, 'automation governance policy guncellenebilmeli');
+
   const preview = await api(
     'POST',
     '/api/automation-rules/assistant/preview',
@@ -522,6 +530,9 @@ async function testAutomationAssistantFlow(ctx: TestContext): Promise<void> {
   }
   if (!serializedPreview.includes('"isActive":false') || !serializedPreview.includes('"recommendedMode":"SUGGESTION"')) {
     throw new Error('Automation assistant guvenli pasif oneri contractini dondurmedi.');
+  }
+  if (!serializedPreview.includes('"decision"') || !serializedPreview.includes('"approvalThreshold":50000') || !serializedPreview.includes('"dryRun":true')) {
+    throw new Error('Automation assistant tenant guven politikasi ve karar aciklamasini dondurmedi.');
   }
 
   const createResult = await api(
@@ -542,9 +553,19 @@ async function testAutomationAssistantFlow(ctx: TestContext): Promise<void> {
   assertStatus(createResult, 201, 'automation assistant taslagi olusturulabilmeli');
   const created = await prisma.automationRule.findFirst({
     where: { tenantId: ctx.tenantAId, name: 'Integration assistant suggestion' },
-    select: { isActive: true },
+    select: { id: true, isActive: true },
   });
   if (!created || created.isActive) throw new Error('Automation assistant taslagi pasif kaydedilmedi.');
+
+  await prisma.automationRule.updateMany({ where: { id: created.id, tenantId: ctx.tenantAId }, data: { isActive: true } });
+  const runResult = await api('POST', `/api/automation-rules/${created.id}/run`, token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(runResult, 200, 'automation rule guven gunluguyle calismali');
+  const executions = await api('GET', '/api/automation-rules/executions', token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(executions, 200, 'automation execution guven gunlugu okunabilmeli');
+  const serializedExecutions = JSON.stringify(executions.body);
+  if (!serializedExecutions.includes('"decision"') || !serializedExecutions.includes('"idempotencyKey"') || !serializedExecutions.includes('"compensation"')) {
+    throw new Error('Automation execution ortak karar aciklamasi contractini dondurmedi.');
+  }
 }
 
 async function testDataExchangeTenantIsolation(ctx: TestContext): Promise<void> {
@@ -801,6 +822,79 @@ async function testSalesOrderDeliveryInvoiceChain(ctx: TestContext): Promise<voi
 
   const crossTenantWorkspace = await api('GET', `/api/sales-orders/${orderId}/process-workspace`, token(ctx.ownerBId, ctx.tenantBId));
   assertStatus(crossTenantWorkspace, 404, 'satis is dosyasi tenant disina sizmamali');
+}
+
+async function testDataDeduplicationMergeAndRollback(ctx: TestContext): Promise<void> {
+  const source = await prisma.contact.create({ data: { tenantId: ctx.tenantAId, type: ContactType.CUSTOMER, name: 'Dedup Acme Limited', code: `DEDUP-S-${crypto.randomUUID()}`, taxNumber: 'DEDUP-123', email: 'source@dedup.test' } });
+  const target = await prisma.contact.create({ data: { tenantId: ctx.tenantAId, type: ContactType.CUSTOMER, name: 'Dedup Acme Ltd', code: `DEDUP-T-${crypto.randomUUID()}`, taxNumber: 'DEDUP-123', email: 'target@dedup.test' } });
+  const entry = await prisma.accountEntry.create({ data: { tenantId: ctx.tenantAId, contactId: source.id, date: new Date(), debit: 10, credit: 0, balance: 10, description: 'dedup reference marker' } });
+  const bearerToken = token(ctx.ownerAId, ctx.tenantAId);
+  const crossTenantPreview = await api('POST', '/api/data-exchange/quality/duplicates/contacts/preview', bearerToken, { sourceId: ctx.contactBId, targetId: target.id, fieldWinners: {} });
+  assertStatus(crossTenantPreview, 404, 'tenant disi cari merge onizlemesine girememeli');
+  const scan = await api('GET', '/api/data-exchange/quality/duplicates/contacts', bearerToken);
+  assertStatus(scan, 200, 'mukerrer cari taramasi calismali');
+  if (!JSON.stringify(scan.body).includes(source.id) || !JSON.stringify(scan.body).includes(target.id)) throw new Error('Mükerrer cari adayi bulunamadi.');
+  const input = { sourceId: source.id, targetId: target.id, fieldWinners: { email: 'source' } };
+  const preview = await api('POST', '/api/data-exchange/quality/duplicates/contacts/preview', bearerToken, input);
+  assertStatus(preview, 200, 'cari merge onizlemesi calismali');
+  if (!JSON.stringify(preview.body).includes('"totalReferences":1')) throw new Error('Cari merge referans sayisi yanlis.');
+  const merged = await api('POST', '/api/data-exchange/quality/duplicates/contacts/merge', bearerToken, input);
+  assertStatus(merged, 200, 'cari merge calismali');
+  const mergedData = readDataRecord(merged.body);
+  const auditLogId = readStringField(mergedData, 'auditLogId');
+  const movedEntry = await prisma.accountEntry.findFirst({ where: { tenantId: ctx.tenantAId, id: entry.id }, select: { contactId: true } });
+  if (movedEntry?.contactId !== target.id) throw new Error('Cari merge referansi hedefe tasimadi.');
+  const deletedSource = await prisma.contact.findFirst({ where: { tenantId: ctx.tenantAId, id: source.id }, select: { deletedAt: true, isActive: true } });
+  if (!deletedSource?.deletedAt || deletedSource.isActive) throw new Error('Cari merge kaynak kaydi pasif soft-delete yapmadi.');
+  await prisma.contact.updateMany({ where: { tenantId: ctx.tenantAId, id: target.id }, data: { city: 'Merge sonrasi degisiklik' } });
+  const staleRollback = await api('POST', `/api/data-exchange/quality/duplicates/contacts/rollback/${auditLogId}`, bearerToken);
+  assertStatus(staleRollback, 400, 'rollback merge sonrasindaki hedef degisikligini ezmemeli');
+  await prisma.contact.updateMany({ where: { tenantId: ctx.tenantAId, id: target.id }, data: { city: null } });
+  const rollback = await api('POST', `/api/data-exchange/quality/duplicates/contacts/rollback/${auditLogId}`, bearerToken);
+  assertStatus(rollback, 200, 'cari merge rollback calismali');
+  const restoredEntry = await prisma.accountEntry.findFirst({ where: { tenantId: ctx.tenantAId, id: entry.id }, select: { contactId: true } });
+  if (restoredEntry?.contactId !== source.id) throw new Error('Cari merge rollback referansi kaynaga dondurmedi.');
+  const restoredSource = await prisma.contact.findFirst({ where: { tenantId: ctx.tenantAId, id: source.id }, select: { deletedAt: true, isActive: true } });
+  if (restoredSource?.deletedAt || !restoredSource?.isActive) throw new Error('Cari merge rollback kaynak kaydi geri acmadi.');
+  const repeatedRollback = await api('POST', `/api/data-exchange/quality/duplicates/contacts/rollback/${auditLogId}`, bearerToken);
+  assertStatus(repeatedRollback, 400, 'ayni cari merge rollback ikinci kez calismamali');
+}
+
+async function testBulkImportAssistanceFlow(ctx: TestContext): Promise<void> {
+  const tenantAToken = token(ctx.ownerAId, ctx.tenantAId);
+  const tenantBToken = token(ctx.ownerBId, ctx.tenantBId);
+  const mappings = [
+    { source: 'Stok Kodu', target: 'code', confidence: 1, learned: true },
+    { source: 'Satış Fiyatı', target: 'salesPrice', confidence: 1, learned: true },
+  ];
+  const saveA = await api('POST', '/api/bulk-operations/imports/profiles', tenantAToken, {
+    name: 'Tenant A ürün eşlemesi', target: 'products', headers: ['Stok Kodu', 'Satış Fiyatı'], mappings,
+  });
+  assertStatus(saveA, 201, 'bulk import esleme profili kaydedilebilmeli');
+  const saveB = await api('POST', '/api/bulk-operations/imports/profiles', tenantBToken, {
+    name: 'TENANT-B-BULK-PROFILE-MARKER', target: 'products', headers: ['Kod'],
+    mappings: [{ source: 'Kod', target: 'code', confidence: 1, learned: true }],
+  });
+  assertStatus(saveB, 201, 'tenant B bulk import profili kaydedilebilmeli');
+
+  const profiles = await api('GET', '/api/bulk-operations/imports/profiles', tenantAToken);
+  assertStatus(profiles, 200, 'bulk import profilleri listelenebilmeli');
+  if (JSON.stringify(profiles.body).includes('TENANT-B-BULK-PROFILE-MARKER')) {
+    throw new Error('Bulk import profilleri tenant B verisini sizdirdi.');
+  }
+
+  const analysis = await api('POST', '/api/bulk-operations/imports/analyze', tenantAToken, {
+    target: 'products', headers: ['Stok Kodu', 'Satış Fiyatı'],
+    rows: [{ 'Stok Kodu': 'P-1', 'Satış Fiyatı': '1.250,50' }, { 'Stok Kodu': 'P-1', 'Satış Fiyatı': '20' }],
+  });
+  assertStatus(analysis, 200, 'bulk import analizi calismali');
+  const serialized = JSON.stringify(analysis.body);
+  if (!serialized.includes('"salesPrice":1250.5') || !serialized.includes('"duplicateCandidates":1')) {
+    throw new Error('Bulk import normalizasyon veya mukerrer analizi contracti bozuk.');
+  }
+  if (!serialized.includes('"status":"planning_only"') || !serialized.includes('"resumeSupported":false')) {
+    throw new Error('Bulk import worker hazirlik durumu dogru raporlanmadi.');
+  }
 }
 
 async function testPurchaseOrderReceiptInvoiceChain(ctx: TestContext): Promise<void> {
@@ -1181,6 +1275,50 @@ async function testAttachmentTenantValidation(ctx: TestContext): Promise<void> {
   assertStatus(result, 400, 'dosya upload baska tenant entity id kabul etmemeli');
 }
 
+async function testNavigationWorkspaceFlow(ctx: TestContext): Promise<void> {
+  const ownerToken = token(ctx.ownerAId, ctx.tenantAId);
+  await prisma.tenantUser.update({
+    where: { tenantId_userId: { tenantId: ctx.tenantAId, userId: ctx.ownerAId } },
+    data: { preferences: { unrelatedPreference: { preserved: true } } },
+  });
+
+  const initial = await api('GET', '/api/navigation-workspace', ownerToken);
+  assertStatus(initial, 200, 'navigation workspace yuklenebilmeli');
+  const initialData = readDataRecord(initial.body);
+  if (initialData.allowedModules !== '*') throw new Error('Tenant sahibi navigation workspace tam erisim almadi.');
+
+  const updated = await api('PATCH', '/api/navigation-workspace/preferences', ownerToken, {
+    persona: 'FINANCE',
+    favoriteHrefs: ['/dashboard/payments', '/external/unsafe'],
+    hiddenModules: ['inventory', 'unknown'],
+  });
+  assertStatus(updated, 200, 'navigation tercihleri kaydedilebilmeli');
+  const updatedData = readDataRecord(updated.body);
+  if (!Array.isArray(updatedData.favoriteHrefs) || updatedData.favoriteHrefs.includes('/external/unsafe')) {
+    throw new Error('Navigation tercihleri guvensiz hedefi filtrelemedi.');
+  }
+
+  const activity = await api('POST', '/api/navigation-workspace/activity', ownerToken, { href: '/dashboard/payments?status=open' });
+  assertStatus(activity, 204, 'navigation kullanimi kaydedilebilmeli');
+  const stored = await prisma.tenantUser.findUnique({ where: { tenantId_userId: { tenantId: ctx.tenantAId, userId: ctx.ownerAId } }, select: { preferences: true } });
+  if (!isRecord(stored?.preferences) || !isRecord(stored.preferences.unrelatedPreference)) {
+    throw new Error('Navigation kaydi diger kullanici tercihlerini ezdi.');
+  }
+
+  const limitedMember = await prisma.tenantUser.findUnique({ where: { tenantId_userId: { tenantId: ctx.tenantAId, userId: ctx.limitedAId } }, select: { roleId: true } });
+  if (!limitedMember?.roleId) throw new Error('Navigation profil testi icin rol bulunamadi.');
+  const denied = await api('PUT', `/api/navigation-workspace/profiles/${limitedMember.roleId}`, token(ctx.limitedAId, ctx.tenantAId), { persona: 'SALES', favoriteHrefs: [], hiddenModules: [] });
+  assertStatus(denied, 403, 'tenant sahibi olmayan kullanici profil dagitamamali');
+
+  const foreignRole = await prisma.role.findFirst({ where: { tenantId: ctx.tenantBId }, select: { id: true } });
+  if (!foreignRole) throw new Error('Navigation tenant izolasyonu icin yabanci rol bulunamadi.');
+  const foreign = await api('PUT', `/api/navigation-workspace/profiles/${foreignRole.id}`, ownerToken, { persona: 'SALES', favoriteHrefs: [], hiddenModules: [] });
+  assertStatus(foreign, 404, 'baska tenant rolu icin navigation profili dagitilmamali');
+
+  const distributed = await api('PUT', `/api/navigation-workspace/profiles/${limitedMember.roleId}`, ownerToken, { persona: 'SALES', favoriteHrefs: ['/dashboard/sales-orders'], hiddenModules: [] });
+  assertStatus(distributed, 200, 'tenant sahibi rol navigation profilini dagitabilmeli');
+}
+
 async function main(): Promise<void> {
   const ctx = await withTimeout('seed', seed());
   try {
@@ -1194,6 +1332,10 @@ async function main(): Promise<void> {
     await testRepositoryBackedQueries(ctx);
     console.log('Integration: automation assistant tenant-safe preview and draft');
     await testAutomationAssistantFlow(ctx);
+    console.log('Integration: bulk import assistance tenant-safe analysis and learning');
+    await testBulkImportAssistanceFlow(ctx);
+    console.log('Integration: data deduplication merge and rollback');
+    await testDataDeduplicationMergeAndRollback(ctx);
     console.log('Integration: data exchange tenant isolation');
     await testDataExchangeTenantIsolation(ctx);
     console.log('Integration: reporting tenant isolation');
@@ -1232,6 +1374,8 @@ async function main(): Promise<void> {
     await testProductionExecutionFlow(ctx);
     console.log('Integration: attachment tenant validation');
     await testAttachmentTenantValidation(ctx);
+    console.log('Integration: navigation workspace personalization and tenant isolation');
+    await testNavigationWorkspaceFlow(ctx);
     console.log('Integration: data import partial failure plan');
     await testDataImportPartialFailurePlan(ctx);
     console.log('Integration: external API key scope and tenant isolation');

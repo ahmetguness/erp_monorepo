@@ -22,7 +22,12 @@ const ACTION_FROM_PRISMA: Record<AutomationAction, ExistingAutomationRule['actio
 export class PrismaAutomationAssistantRepository implements AutomationAssistantRepository {
   async simulate(tenantId: string, trigger: ExistingAutomationRule['trigger']) {
     const matches = await previewAutomationTrigger(tenantId, TRIGGER_TO_PRISMA[trigger]);
-    return { matchedCount: matches.length, examples: matches.slice(0, 5) };
+    const monetaryValues = matches.flatMap((match) => match.monetaryImpact === null ? [] : [match.monetaryImpact]);
+    return {
+      matchedCount: matches.length,
+      estimatedMonetaryAmount: monetaryValues.length > 0 ? monetaryValues.reduce((total, value) => total + value, 0) : null,
+      examples: matches.slice(0, 5).map(({ title, detail }) => ({ title, detail })),
+    };
   }
 
   async listExisting(tenantId: string): Promise<ExistingAutomationRule[]> {

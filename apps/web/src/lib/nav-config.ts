@@ -237,12 +237,12 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Yönetim',
     items: [
-      { label: 'Otonom Komut Ajanı', href: '/dashboard/agent/command', icon: Bot, plan: ENTERPRISE_PLAN },
-      { label: 'Operasyon Sağlığı', href: '/dashboard/operations', icon: Activity, plan: PROFESSIONAL_PLAN },
+      { label: 'Otonom Komut Ajanı', href: '/dashboard/agent/command', icon: Bot, plan: ENTERPRISE_PLAN, module: 'operations' },
+      { label: 'Operasyon Sağlığı', href: '/dashboard/operations', icon: Activity, plan: PROFESSIONAL_PLAN, module: 'operations' },
       { label: 'Onay Akışları', href: '/dashboard/approvals', icon: GitBranch, plan: PROFESSIONAL_PLAN, module: 'approvals' },
-      { label: 'İş Akışı Merkezi', href: '/dashboard/workflow', icon: ClipboardCheck, plan: PROFESSIONAL_PLAN },
-      { label: 'Toplu Islem Merkezi', href: '/dashboard/bulk-operations', icon: ListChecks, plan: PROFESSIONAL_PLAN },
-      { label: 'Doküman Merkezi', href: '/dashboard/documents', icon: FolderOpen },
+      { label: 'İş Akışı Merkezi', href: '/dashboard/workflow', icon: ClipboardCheck, plan: PROFESSIONAL_PLAN, module: 'settings' },
+      { label: 'Toplu Islem Merkezi', href: '/dashboard/bulk-operations', icon: ListChecks, plan: PROFESSIONAL_PLAN, module: 'contacts' },
+      { label: 'Doküman Merkezi', href: '/dashboard/documents', icon: FolderOpen, module: 'attachments' },
       {
         label: 'İçe / Dışa Aktarma',
         href: '/dashboard/data-exchange',
@@ -252,9 +252,9 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: 'EDI / B2B Entegrasyonları', href: '/dashboard/data-exchange/b2b', icon: Link2, plan: ENTERPRISE_PLAN, module: 'marketplace' },
         ],
       },
-      { label: 'Rol Yönetimi', href: '/dashboard/roles', icon: Shield, plan: PROFESSIONAL_PLAN },
-      { label: 'API Anahtarları', href: '/dashboard/api-keys', icon: Key, plan: PROFESSIONAL_PLAN },
-      { label: 'Coklu sirket/sube', href: '/dashboard/enterprise/holding', icon: Building2, plan: ENTERPRISE_PLAN },
+      { label: 'Rol Yönetimi', href: '/dashboard/roles', icon: Shield, plan: PROFESSIONAL_PLAN, module: 'roles' },
+      { label: 'API Anahtarları', href: '/dashboard/api-keys', icon: Key, plan: PROFESSIONAL_PLAN, module: 'api_keys' },
+      { label: 'Coklu sirket/sube', href: '/dashboard/enterprise/holding', icon: Building2, plan: ENTERPRISE_PLAN, module: 'holding' },
     ],
   },
   {
@@ -264,9 +264,10 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Ayarlar',
         href: '/dashboard/settings',
         icon: Settings,
+        module: 'settings',
         children: [
-          { label: 'Genel Ayarlar', href: '/dashboard/settings', icon: Settings },
-          { label: 'AI Governance', href: '/dashboard/settings/ai-governance', icon: Bot, plan: ENTERPRISE_PLAN },
+          { label: 'Genel Ayarlar', href: '/dashboard/settings', icon: Settings, module: 'settings' },
+          { label: 'AI Governance', href: '/dashboard/settings/ai-governance', icon: Bot, plan: ENTERPRISE_PLAN, module: 'ai_governance' },
         ],
       },
     ],

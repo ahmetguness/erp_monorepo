@@ -15,6 +15,10 @@ import {
 } from '@/hooks/useAutomation';
 import { AutomationRuleBuilder } from './AutomationRuleBuilder';
 import { AutomationAssistant } from './AutomationAssistant';
+import { AutomationDecisionCard } from './AutomationDecisionCard';
+import { AutomationGovernancePanel } from './AutomationGovernancePanel';
+import { useCurrentUser } from '@/hooks/useAuth';
+import { createUserAccessContext, hasUserPermission } from '@/domain/access/user-access-context';
 
 const TYPE_LABEL: Record<WorkflowTask['type'], string> = {
   APPROVAL: 'Onay',
@@ -106,6 +110,10 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 export function WorkflowCenterPage() {
+  const { user, tenant } = useCurrentUser();
+  const accessContext = createUserAccessContext(user, tenant);
+  const canCreateAutomation = hasUserPermission(accessContext, 'settings', 'CREATE');
+  const canUpdateAutomation = hasUserPermission(accessContext, 'settings', 'UPDATE');
   const [activeTab, setActiveTab] = useState<'exceptions' | 'tasks' | 'rules' | 'scheduler'>('exceptions');
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
   const { data, isLoading, isError } = useWorkflowTasks();
@@ -334,10 +342,13 @@ export function WorkflowCenterPage() {
 
       {activeTab === 'rules' && (
         <div className="space-y-8">
-          <AutomationAssistant
-            isCreating={createRule.isPending}
-            onCreateSuggestion={(draft) => createRule.mutate({ ...draft, isActive: false })}
-          />
+          <AutomationGovernancePanel canEdit={canUpdateAutomation} />
+          {canCreateAutomation && (
+            <AutomationAssistant
+              isCreating={createRule.isPending}
+              onCreateSuggestion={(draft) => createRule.mutate({ ...draft, isActive: false })}
+            />
+          )}
           <AutomationRuleBuilder
             key={editingRule?.id ?? 'new-rule'}
             templates={templates ?? []}
@@ -526,6 +537,7 @@ export function WorkflowCenterPage() {
                         </div>
                         <p className="truncate font-medium text-slate-200">{execution.rule?.name ?? 'Manuel / sistem çalışması'}</p>
                         {execution.error && <p className="mt-1 truncate text-xs text-red-300">{execution.error}</p>}
+                        {execution.decision && <div className="mt-2"><AutomationDecisionCard decision={execution.decision} compact /></div>}
                       </div>
                       <div className="text-xs text-slate-500">
                         <p>Deneme: {execution.attempt}</p>

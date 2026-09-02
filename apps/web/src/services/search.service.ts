@@ -38,7 +38,62 @@ const GlobalSearchResponseSchema = z.object({
 
 export type GlobalSearchResult = z.infer<typeof GlobalSearchResultSchema>;
 
+export const UnifiedIntentOptionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  description: z.string(),
+  href: z.string(),
+});
+
+export const UnifiedIntentPreviewSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  explanation: z.string(),
+  confidence: z.number().min(0).max(1),
+  risk: z.enum(['LOW', 'MEDIUM', 'HIGH']),
+  status: z.enum(['READY', 'NEEDS_CLARIFICATION']),
+  requiresConfirmation: z.boolean(),
+  href: z.string().nullable(),
+  options: z.array(UnifiedIntentOptionSchema),
+});
+
+const UnifiedSearchResponseSchema = z.object({
+  data: z.object({
+    query: z.string(),
+    mode: z.enum(['SEARCH', 'COMMAND', 'AMBIGUOUS']),
+    results: z.array(GlobalSearchResultSchema),
+    intent: UnifiedIntentPreviewSchema.nullable(),
+    contextualShortcuts: z.array(GlobalSearchResultSchema),
+  }),
+});
+
+const UnifiedCommandHandoffSchema = z.object({
+  data: z.object({
+    intentId: z.string(),
+    href: z.string(),
+    message: z.string(),
+    mutationExecuted: z.literal(false),
+  }),
+});
+
+export type UnifiedSearchResponse = z.infer<typeof UnifiedSearchResponseSchema>['data'];
+export type UnifiedCommandHandoff = z.infer<typeof UnifiedCommandHandoffSchema>['data'];
+
 export async function searchGlobal(query: string, limit = 12): Promise<GlobalSearchResult[]> {
   const res = await apiClient.get('/api/search', { params: { q: query, limit } });
   return safeParse(GlobalSearchResponseSchema, res.data, 'searchGlobal').data;
+}
+
+export async function searchUnified(query: string, recentHrefs: string[], limit = 12): Promise<UnifiedSearchResponse> {
+  const res = await apiClient.post('/api/search/unified', { query, recentHrefs, limit });
+  return safeParse(UnifiedSearchResponseSchema, res.data, 'searchUnified').data;
+}
+
+export async function confirmUnifiedCommand(input: {
+  query: string;
+  intentId: string;
+  selectedOptionId: string | null;
+}): Promise<UnifiedCommandHandoff> {
+  const res = await apiClient.post('/api/search/unified/confirm', { ...input, recentHrefs: [], limit: 12, confirmed: true });
+  return safeParse(UnifiedCommandHandoffSchema, res.data, 'confirmUnifiedCommand').data;
 }

@@ -1,14 +1,19 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { searchGlobal } from '@/services/search.service';
+import { useMutation } from '@tanstack/react-query';
+import { confirmUnifiedCommand, searchUnified } from '@/services/search.service';
 
-export function useGlobalSearch(query: string, enabled = true) {
+export function useGlobalSearch(query: string, recentHrefs: string[], enabled = true) {
   const normalized = query.trim();
   return useQuery({
-    queryKey: ['global-search', normalized],
-    queryFn: () => searchGlobal(normalized),
+    queryKey: ['unified-search', normalized, recentHrefs],
+    queryFn: () => searchUnified(normalized, recentHrefs),
     enabled,
     staleTime: 30_000,
   });
+}
+
+export function useConfirmUnifiedCommand() {
+  return useMutation({ mutationFn: confirmUnifiedCommand });
 }

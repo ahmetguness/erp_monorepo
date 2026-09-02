@@ -32,6 +32,7 @@ interface AutomationMatch {
   entityId: string;
   href: string;
   dueAt: Date | null;
+  monetaryImpact: number | null;
 }
 
 function numberValue(value: unknown): number {
@@ -108,6 +109,7 @@ async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): 
           entityId: item.productId,
           href: '/dashboard/stock/levels',
           dueAt: now,
+          monetaryImpact: null,
         }));
     }
     case AutomationTrigger.OVERDUE_INVOICE:
@@ -142,6 +144,7 @@ async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): 
         entityId: invoice.id,
         href: `/dashboard/invoices/${invoice.id}`,
         dueAt: invoice.dueDate ?? now,
+        monetaryImpact: numberValue(invoice.totalGross),
       }));
     }
     case AutomationTrigger.LOW_MARGIN: {
@@ -170,6 +173,7 @@ async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): 
           entityId: product.id,
           href: `/dashboard/products/${product.id}`,
           dueAt: null,
+          monetaryImpact: null,
         }));
     }
     case AutomationTrigger.CHECK_DUE_SOON: {
@@ -194,6 +198,7 @@ async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): 
         entityId: check.id,
         href: '/dashboard/check-promissory',
         dueAt: check.dueDate,
+        monetaryImpact: numberValue(check.amount),
       }));
     }
   }
@@ -202,9 +207,9 @@ async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): 
 export async function previewAutomationTrigger(
   tenantId: string,
   trigger: AutomationTrigger,
-): Promise<Array<{ title: string; detail: string }>> {
+): Promise<Array<{ title: string; detail: string; monetaryImpact: number | null }>> {
   const matches = await findMatches({ tenantId, trigger });
-  return matches.map(({ title, detail }) => ({ title, detail }));
+  return matches.map(({ title, detail, monetaryImpact }) => ({ title, detail, monetaryImpact }));
 }
 
 export const AutomationRuleService = {

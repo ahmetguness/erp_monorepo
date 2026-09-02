@@ -98,6 +98,27 @@ export const DataQualitySummarySchema = z.object({
 
 export type DataQualitySummary = z.infer<typeof DataQualitySummarySchema>;
 
+export const DedupEntitySchema = z.enum(['contacts', 'products', 'invoices']);
+const DedupValueSchema = z.union([z.string(), z.number(), z.null()]);
+export const DedupRecordSchema = z.object({ id: z.string(), label: z.string(), values: z.record(z.string(), DedupValueSchema) });
+export const DuplicateCandidateSchema = z.object({
+  id: z.string(), entity: DedupEntitySchema, left: DedupRecordSchema, right: DedupRecordSchema, score: z.number(), risk: z.enum(['low', 'medium', 'high']),
+  reasons: z.array(z.object({ field: z.string(), strength: z.enum(['exact', 'similar']), weight: z.number(), description: z.string() })),
+  mergeSupported: z.boolean(), mergeBlockedReason: z.string().nullable(),
+});
+const ContactFieldWinnersSchema = z.record(z.string(), z.enum(['source', 'target']));
+export const ContactMergePlanSchema = z.object({
+  source: DedupRecordSchema, target: DedupRecordSchema, fieldWinners: ContactFieldWinnersSchema, mergedValues: z.record(z.string(), DedupValueSchema),
+  references: z.record(z.string(), z.number()), totalReferences: z.number(), warnings: z.array(z.string()), rollbackSupported: z.literal(true),
+});
+export const ContactMergeResultSchema = ContactMergePlanSchema.extend({ auditLogId: z.string(), mergedAt: z.string() });
+export const ContactMergeRollbackResultSchema = z.object({ auditLogId: z.string(), restoredSourceId: z.string(), targetId: z.string(), restoredReferences: z.number(), rolledBackAt: z.string() });
+export type DedupEntity = z.infer<typeof DedupEntitySchema>;
+export type DuplicateCandidate = z.infer<typeof DuplicateCandidateSchema>;
+export type ContactMergePlan = z.infer<typeof ContactMergePlanSchema>;
+export type ContactMergeResult = z.infer<typeof ContactMergeResultSchema>;
+export interface ContactMergeInput { sourceId: string; targetId: string; fieldWinners: Record<string, 'source' | 'target'> }
+
 export const DataQualityTaskResultSchema = z.object({
   taskId: z.string(),
   issueKey: z.string(),
@@ -261,6 +282,26 @@ export async function rollbackImportBatch(batchId: string): Promise<ImportBatchH
 export async function getDataQualitySummary(): Promise<DataQualitySummary> {
   const res = await apiClient.get('/api/data-exchange/quality');
   return safeParse(SingleResponseSchema(DataQualitySummarySchema), res.data, 'getDataQualitySummary').data;
+}
+
+export async function scanDuplicates(entity: DedupEntity): Promise<DuplicateCandidate[]> {
+  const res = await apiClient.get(`/api/data-exchange/quality/duplicates/${entity}`);
+  return safeParse(SingleResponseSchema(z.array(DuplicateCandidateSchema)), res.data, 'scanDuplicates').data;
+}
+
+export async function previewContactMerge(input: ContactMergeInput): Promise<ContactMergePlan> {
+  const res = await apiClient.post('/api/data-exchange/quality/duplicates/contacts/preview', input);
+  return safeParse(SingleResponseSchema(ContactMergePlanSchema), res.data, 'previewContactMerge').data;
+}
+
+export async function mergeContacts(input: ContactMergeInput): Promise<ContactMergeResult> {
+  const res = await apiClient.post('/api/data-exchange/quality/duplicates/contacts/merge', input);
+  return safeParse(SingleResponseSchema(ContactMergeResultSchema), res.data, 'mergeContacts').data;
+}
+
+export async function rollbackContactMerge(auditLogId: string) {
+  const res = await apiClient.post(`/api/data-exchange/quality/duplicates/contacts/rollback/${encodeURIComponent(auditLogId)}`);
+  return safeParse(SingleResponseSchema(ContactMergeRollbackResultSchema), res.data, 'rollbackContactMerge').data;
 }
 
 export async function createDataQualityTask(issueKey: string): Promise<DataQualityTaskResult> {

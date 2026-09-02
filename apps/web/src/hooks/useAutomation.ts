@@ -16,6 +16,9 @@ import {
   getSchedulerRuns,
   runSchedulerJob,
   previewAutomationAssistant,
+  getAutomationGovernancePolicy,
+  updateAutomationGovernancePolicy,
+  type AutomationGovernancePolicy,
   type CreateAutomationRuleDTO,
   type SchedulerJobKey,
 } from '@/services/intelligence.service';
@@ -26,6 +29,7 @@ export const AUTOMATION_KEYS = {
   executions: ['automation-rules', 'executions'] as const,
   schedulerJobs: ['automation-rules', 'scheduler', 'jobs'] as const,
   schedulerRuns: ['automation-rules', 'scheduler', 'runs'] as const,
+  governancePolicy: ['automation-rules', 'governance', 'policy'] as const,
 };
 
 export function useAutomationRules() {
@@ -46,6 +50,23 @@ export function usePreviewAutomationAssistant() {
   const { toast } = useUIStore();
   return useMutation({
     mutationFn: (prompt: string) => previewAutomationAssistant(prompt),
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+}
+
+export function useAutomationGovernancePolicy() {
+  return useQuery({ queryKey: AUTOMATION_KEYS.governancePolicy, queryFn: getAutomationGovernancePolicy });
+}
+
+export function useUpdateAutomationGovernancePolicy() {
+  const queryClient = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (policy: AutomationGovernancePolicy) => updateAutomationGovernancePolicy(policy),
+    onSuccess: (policy) => {
+      queryClient.setQueryData(AUTOMATION_KEYS.governancePolicy, policy);
+      toast.success('Otomasyon güven politikası güncellendi.');
+    },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
 }

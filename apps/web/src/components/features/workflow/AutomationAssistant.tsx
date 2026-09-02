@@ -5,6 +5,7 @@ import { AlertTriangle, Bot, CheckCircle2, FlaskConical, Sparkles } from 'lucide
 import { Button } from '@/components/ui/Button';
 import { usePreviewAutomationAssistant } from '@/hooks/useAutomation';
 import type { CreateAutomationRuleDTO } from '@/services/intelligence.service';
+import { AutomationDecisionCard } from './AutomationDecisionCard';
 
 interface AutomationAssistantProps {
   isCreating: boolean;
@@ -72,6 +73,7 @@ export function AutomationAssistant({ isCreating, onCreateSuggestion }: Automati
                 <AlertTriangle className="h-4 w-4 shrink-0" /><span><strong>{conflict.ruleName}:</strong> {conflict.reason}</span>
               </div>
             ))}
+            <AutomationDecisionCard decision={result.decision} />
             <Button loading={isCreating} onClick={() => onCreateSuggestion(result.draft)}>
               Pasif öneri olarak oluştur
             </Button>
