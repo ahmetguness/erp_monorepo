@@ -13,6 +13,7 @@ automationRuleRoutes.get('/scheduler/runs', requirePermission('settings', 'READ'
 automationRuleRoutes.post('/scheduler/run', requirePermission('settings', 'UPDATE'), AutomationRuleController.runScheduler);
 automationRuleRoutes.get('/', requirePermission('settings', 'READ'), AutomationRuleController.list);
 automationRuleRoutes.get('/executions', requirePermission('settings', 'READ'), AutomationRuleController.listExecutions);
+automationRuleRoutes.post('/assistant/preview', requirePermission('settings', 'CREATE'), AutomationRuleController.previewAssistant);
 automationRuleRoutes.post('/', requirePermission('settings', 'CREATE'), AutomationRuleController.create);
 automationRuleRoutes.post('/run-active', requirePermission('settings', 'UPDATE'), AutomationRuleController.runActive);
 automationRuleRoutes.patch('/:id', requirePermission('settings', 'UPDATE'), AutomationRuleController.update);

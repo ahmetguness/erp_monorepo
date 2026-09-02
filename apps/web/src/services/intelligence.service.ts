@@ -284,6 +284,34 @@ export const AutomationRuleSchema = z.object({
 });
 export type AutomationRule = z.infer<typeof AutomationRuleSchema>;
 
+export const AutomationAssistantPreviewSchema = z.object({
+  interpretation: z.string(),
+  confidence: z.number().min(0).max(1),
+  draft: z.object({
+    name: z.string(),
+    description: z.string(),
+    module: z.string(),
+    trigger: AutomationRuleTriggerSchema,
+    action: AutomationRuleActionSchema,
+    conditions: AutomationRuleConfigSchema,
+    actionConfig: AutomationRuleConfigSchema,
+    isActive: z.literal(false),
+  }),
+  simulation: z.object({
+    matchedCount: z.coerce.number(),
+    examples: z.array(z.object({ title: z.string(), detail: z.string() })),
+  }),
+  conflicts: z.array(z.object({
+    ruleId: z.string(),
+    ruleName: z.string(),
+    severity: z.enum(['INFO', 'WARNING']),
+    reason: z.string(),
+  })),
+  recommendedMode: z.literal('SUGGESTION'),
+  safeguards: z.array(z.string()),
+});
+export type AutomationAssistantPreview = z.infer<typeof AutomationAssistantPreviewSchema>;
+
 export interface CreateAutomationRuleDTO {
   name: string;
   module: string;
@@ -303,6 +331,11 @@ export async function getAutomationRules(): Promise<AutomationRule[]> {
 export async function createAutomationRule(data: CreateAutomationRuleDTO): Promise<AutomationRule> {
   const res = await apiClient.post('/api/automation-rules', data);
   return safeParse(SingleResponseSchema(AutomationRuleSchema), res.data, 'createAutomationRule').data;
+}
+
+export async function previewAutomationAssistant(prompt: string): Promise<AutomationAssistantPreview> {
+  const res = await apiClient.post('/api/automation-rules/assistant/preview', { prompt });
+  return safeParse(SingleResponseSchema(AutomationAssistantPreviewSchema), res.data, 'previewAutomationAssistant').data;
 }
 
 export async function updateAutomationRule(id: string, data: Partial<CreateAutomationRuleDTO> & { isActive?: boolean }): Promise<AutomationRule> {

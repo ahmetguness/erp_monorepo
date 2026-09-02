@@ -7,6 +7,7 @@ import { SchedulerJobEngineService,parseSchedulerJobKey,schedulerJobDefinitions 
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
 import { toInputJson } from '../../../../utils/json.js';
+import { previewAutomationAssistantQuery } from '../../composition.js';
 
 const TRIGGERS: readonly AutomationTrigger[] = Object.values(AutomationTrigger);
 const ACTIONS: readonly AutomationAction[] = Object.values(AutomationAction);
@@ -36,6 +37,15 @@ async function readBody(c: Context): Promise<Record<string, unknown>> {
 }
 
 export const AutomationRuleController = {
+  async previewAssistant(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const body = await readBody(c);
+    const prompt = readString(body, 'prompt');
+    if (!prompt) return c.json(new ValidationError('prompt zorunludur.').toJSON(), 400);
+    const preview = await previewAutomationAssistantQuery.execute(tenantId, prompt);
+    return c.json({ data: preview });
+  },
+
   async listSchedulerJobs(c: Context): Promise<Response> {
     return c.json({ data: schedulerJobDefinitions() });
   },

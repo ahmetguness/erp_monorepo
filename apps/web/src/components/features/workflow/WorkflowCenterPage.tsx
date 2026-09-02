@@ -14,6 +14,7 @@ import {
   useAutomationExecutions, useAutomationRules, useAutomationRuleTemplates, useCreateAutomationRule, useUpdateAutomationRule, useDeleteAutomationRule, useRunAutomationRule, useRunActiveAutomationRules, useSchedulerJobs, useSchedulerRuns, useRunSchedulerJob
 } from '@/hooks/useAutomation';
 import { AutomationRuleBuilder } from './AutomationRuleBuilder';
+import { AutomationAssistant } from './AutomationAssistant';
 
 const TYPE_LABEL: Record<WorkflowTask['type'], string> = {
   APPROVAL: 'Onay',
@@ -333,6 +334,10 @@ export function WorkflowCenterPage() {
 
       {activeTab === 'rules' && (
         <div className="space-y-8">
+          <AutomationAssistant
+            isCreating={createRule.isPending}
+            onCreateSuggestion={(draft) => createRule.mutate({ ...draft, isActive: false })}
+          />
           <AutomationRuleBuilder
             key={editingRule?.id ?? 'new-rule'}
             templates={templates ?? []}

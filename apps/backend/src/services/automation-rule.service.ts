@@ -60,7 +60,7 @@ async function getNotificationUserIds(tenantId: string, assignedToId: string | n
   return users.map((user) => user.userId);
 }
 
-async function findMatches(rule: AutomationRule): Promise<AutomationMatch[]> {
+async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): Promise<AutomationMatch[]> {
   const now = new Date();
   const soon = new Date(now.getTime() + 7 * 86_400_000);
 
@@ -197,6 +197,14 @@ async function findMatches(rule: AutomationRule): Promise<AutomationMatch[]> {
       }));
     }
   }
+}
+
+export async function previewAutomationTrigger(
+  tenantId: string,
+  trigger: AutomationTrigger,
+): Promise<Array<{ title: string; detail: string }>> {
+  const matches = await findMatches({ tenantId, trigger });
+  return matches.map(({ title, detail }) => ({ title, detail }));
 }
 
 export const AutomationRuleService = {

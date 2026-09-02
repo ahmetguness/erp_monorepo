@@ -15,6 +15,7 @@ import {
   getSchedulerJobs,
   getSchedulerRuns,
   runSchedulerJob,
+  previewAutomationAssistant,
   type CreateAutomationRuleDTO,
   type SchedulerJobKey,
 } from '@/services/intelligence.service';
@@ -38,6 +39,14 @@ export function useAutomationRuleTemplates() {
   return useQuery({
     queryKey: AUTOMATION_KEYS.templates,
     queryFn: getAutomationRuleTemplates,
+  });
+}
+
+export function usePreviewAutomationAssistant() {
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (prompt: string) => previewAutomationAssistant(prompt),
+    onError: (error) => toast.error(getErrorMessage(error)),
   });
 }
 

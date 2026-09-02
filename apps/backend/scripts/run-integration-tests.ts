@@ -254,6 +254,7 @@ async function seedTenant(runId: string, suffix: 'a' | 'b') {
         AppModule.PURCHASING,
         AppModule.APPROVALS,
         AppModule.DOCUMENTS,
+        AppModule.WORKFLOW,
         AppModule.HR,
         AppModule.PAYROLL,
       ],
@@ -430,6 +431,8 @@ async function cleanup(): Promise<void> {
   await prisma.attachment.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.notification.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.task.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.automationExecution.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.automationRule.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.domainEventOutbox.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.marketplaceSyncJob.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.marketplaceIntegration.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
@@ -492,6 +495,56 @@ async function testRepositoryBackedQueries(ctx: TestContext): Promise<void> {
   if (JSON.stringify(queueResult.body).includes('TENANT-B-TODAY-QUEUE-MARKER')) {
     throw new Error('Today work queue tenant B gorevini sizdirdi.');
   }
+}
+
+async function testAutomationAssistantFlow(ctx: TestContext): Promise<void> {
+  await prisma.automationRule.create({
+    data: {
+      tenantId: ctx.tenantBId,
+      name: 'TENANT-B-AUTOMATION-MARKER',
+      module: 'inventory',
+      trigger: 'LOW_STOCK',
+      action: 'CREATE_TASK',
+      isActive: true,
+    },
+  });
+
+  const preview = await api(
+    'POST',
+    '/api/automation-rules/assistant/preview',
+    token(ctx.ownerAId, ctx.tenantAId),
+    { prompt: 'Stok minimum altina dusunce gorev olustur' },
+  );
+  assertStatus(preview, 200, 'automation assistant preview calismali');
+  const serializedPreview = JSON.stringify(preview.body);
+  if (serializedPreview.includes('TENANT-B-AUTOMATION-MARKER')) {
+    throw new Error('Automation assistant tenant B kuralini conflict olarak sizdirdi.');
+  }
+  if (!serializedPreview.includes('"isActive":false') || !serializedPreview.includes('"recommendedMode":"SUGGESTION"')) {
+    throw new Error('Automation assistant guvenli pasif oneri contractini dondurmedi.');
+  }
+
+  const createResult = await api(
+    'POST',
+    '/api/automation-rules',
+    token(ctx.ownerAId, ctx.tenantAId),
+    {
+      name: 'Integration assistant suggestion',
+      description: 'Integration dry-run suggestion',
+      module: 'inventory',
+      trigger: 'LOW_STOCK',
+      action: 'CREATE_TASK',
+      conditions: { minStockRequired: true },
+      actionConfig: { priorityPolicy: 'deficit_based' },
+      isActive: false,
+    },
+  );
+  assertStatus(createResult, 201, 'automation assistant taslagi olusturulabilmeli');
+  const created = await prisma.automationRule.findFirst({
+    where: { tenantId: ctx.tenantAId, name: 'Integration assistant suggestion' },
+    select: { isActive: true },
+  });
+  if (!created || created.isActive) throw new Error('Automation assistant taslagi pasif kaydedilmedi.');
 }
 
 async function testDataExchangeTenantIsolation(ctx: TestContext): Promise<void> {
@@ -1139,6 +1192,8 @@ async function main(): Promise<void> {
     await testSessionAuthenticationKeepsTenantScope(ctx);
     console.log('Integration: repository-backed critical queries');
     await testRepositoryBackedQueries(ctx);
+    console.log('Integration: automation assistant tenant-safe preview and draft');
+    await testAutomationAssistantFlow(ctx);
     console.log('Integration: data exchange tenant isolation');
     await testDataExchangeTenantIsolation(ctx);
     console.log('Integration: reporting tenant isolation');
