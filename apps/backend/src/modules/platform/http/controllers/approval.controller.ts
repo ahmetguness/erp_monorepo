@@ -67,6 +67,7 @@ interface ApprovalFlowListQuery {
 interface ApprovalRequestListQuery {
   page?: string;
   limit?: string;
+  requestId?: string;
   status?: ApprovalStatus;
   entityType?: EntityType;
 }
@@ -229,6 +230,7 @@ export const ApprovalController = {
 
     const where = {
       tenantId,
+      ...(query.requestId && { id: query.requestId }),
       ...(query.status && { status: query.status }),
       ...(query.entityType && { entityType: query.entityType }),
     };

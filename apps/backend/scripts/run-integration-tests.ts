@@ -38,6 +38,7 @@ interface TestContext {
   tenantAId: string;
   tenantBId: string;
   ownerAId: string;
+  ownerBId: string;
   limitedAId: string;
   contactAId: string;
   contactBId: string;
@@ -383,6 +384,7 @@ async function seed(): Promise<TestContext> {
     tenantAId: tenantA.tenant.id,
     tenantBId: tenantB.tenant.id,
     ownerAId: tenantA.owner.id,
+    ownerBId: tenantB.owner.id,
     limitedAId: limitedUser.id,
     contactAId: contactA.id,
     contactBId: contactB.id,
@@ -477,11 +479,18 @@ async function testRepositoryBackedQueries(ctx: TestContext): Promise<void> {
     ['/api/stock/levels?belowMin=true', 'stock level repository query'],
     ['/api/sales-orders/quotes?limit=5', 'sales quote repository query'],
     ['/api/payroll?limit=5', 'payroll repository query'],
+    ['/api/tasks/today', 'today work queue repository query'],
   ] as const;
 
   for (const [path, label] of cases) {
     const result = await api('GET', path, bearerToken);
     assertStatus(result, 200, `${label} calismali`);
+  }
+
+  await prisma.task.create({ data: { tenantId: ctx.tenantBId, title: 'TENANT-B-TODAY-QUEUE-MARKER', status: 'TODO' } });
+  const queueResult = await api('GET', '/api/tasks/today', bearerToken);
+  if (JSON.stringify(queueResult.body).includes('TENANT-B-TODAY-QUEUE-MARKER')) {
+    throw new Error('Today work queue tenant B gorevini sizdirdi.');
   }
 }
 
@@ -728,6 +737,17 @@ async function testSalesOrderDeliveryInvoiceChain(ctx: TestContext): Promise<voi
   if (!invoicedOrder || Number(invoicedOrder.invoicedAmount) !== 200) {
     throw new Error('Satis siparisi faturalanan tutari guncellenmedi.');
   }
+
+  const workspaceResult = await api('GET', `/api/sales-orders/${orderId}/process-workspace`, token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(workspaceResult, 200, 'satis is dosyasi okunabilmeli');
+  const workspace = readDataRecord(workspaceResult.body);
+  const progress = workspace.progress;
+  if (!isRecord(progress) || readNumberField(progress, 'deliveryPercent') !== 100 || readNumberField(progress, 'invoicedPercent') !== 100) {
+    throw new Error('Satis is dosyasi teslimat ve faturalama ilerlemesini dogru hesaplamadi.');
+  }
+
+  const crossTenantWorkspace = await api('GET', `/api/sales-orders/${orderId}/process-workspace`, token(ctx.ownerBId, ctx.tenantBId));
+  assertStatus(crossTenantWorkspace, 404, 'satis is dosyasi tenant disina sizmamali');
 }
 
 async function testPurchaseOrderReceiptInvoiceChain(ctx: TestContext): Promise<void> {

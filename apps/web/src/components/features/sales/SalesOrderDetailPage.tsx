@@ -23,6 +23,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 import { SalesConversionFlowCard } from '@/components/features/sales/SalesConversionFlowCard';
+import { SalesProcessWorkspace } from '@/components/features/sales/SalesProcessWorkspace';
 import { DocumentPdfThemePanel } from '@/components/features/sales/DocumentPdfThemePanel';
 import { useSalesOrder, useCancelSalesOrder, useFulfillSalesOrder, useUpdateSalesOrder } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -468,6 +469,8 @@ export function SalesOrderDetailPage({ id }: Props) {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="space-y-6">
           <SalesConversionFlowCard stage="order" invoiceHref={invoiceHref} />
+
+          <SalesProcessWorkspace orderId={id} onFulfill={() => setFulfillOpen(true)} />
 
           <OrderRiskBand order={order} highDiscountCount={highDiscountLines.length} />
 

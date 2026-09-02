@@ -73,7 +73,7 @@ export interface UpdateFlowDTO {
 export interface CreateRequestDTO { flowId: string; entityType: string; entityId: string; context?: ApprovalRequestContext; requestedBy?: string; notes?: string }
 export interface ActionDTO { actionType: 'APPROVE' | 'REJECT' | 'ESCALATE' | 'COMMENT'; stepId?: string; actorId?: string; notes?: string }
 export interface FlowListParams extends PaginationParams { module?: string; isActive?: string }
-export interface RequestListParams extends PaginationParams { status?: string; entityType?: string }
+export interface RequestListParams extends PaginationParams { requestId?: string; status?: string; entityType?: string }
 
 export async function getApprovalFlows(params: FlowListParams) {
   const res = await apiClient.get('/api/approvals/flows', { params });

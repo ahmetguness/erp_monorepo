@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, CalendarDays, ClipboardCheck, Download, ExternalLink, Eye, FileText, PackageCheck, Plus, Printer, Search, Send, Truck, Warehouse } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
-import { useDeliveryNotes, useUpdateDeliveryNoteStatus } from '@/hooks/useDeliveryNotes';
+import { useDeliveryNote, useDeliveryNotes, useUpdateDeliveryNoteStatus } from '@/hooks/useDeliveryNotes';
 import { cn, formatDate, formatDateTime } from '@/lib/utils';
 import type { DeliveryNote, DeliveryNoteStatus, DeliveryNoteType } from '@/services/delivery-note.service';
 
@@ -178,6 +178,9 @@ function DetailModal({ note, onClose }: { note: DeliveryNote | null; onClose: ()
 
 export function DeliveryNotesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialSalesOrderId = searchParams.get('salesOrderId') ?? '';
+  const initialDeliveryNoteId = searchParams.get('deliveryNoteId') ?? '';
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<DeliveryNoteType | ''>('');
@@ -187,6 +190,7 @@ export function DeliveryNotesPage() {
   const [dateTo, setDateTo] = useState('');
   const [tableDensity, setTableDensity] = useState<'comfortable' | 'compact'>('compact');
   const [detailNote, setDetailNote] = useState<DeliveryNote | null>(null);
+  const [initialDetailDismissed, setInitialDetailDismissed] = useState(false);
   const [transitionNote, setTransitionNote] = useState<DeliveryNote | null>(null);
   const [transitionDate, setTransitionDate] = useState(new Date().toISOString().slice(0, 10));
 
@@ -199,7 +203,9 @@ export function DeliveryNotesPage() {
     carrier: carrier || undefined,
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
+    salesOrderId: initialSalesOrderId || undefined,
   });
+  const { data: linkedDetailNote } = useDeliveryNote(initialDetailDismissed ? '' : initialDeliveryNoteId);
   const updateStatus = useUpdateDeliveryNoteStatus();
   const notes = useMemo(() => data?.data ?? [], [data?.data]);
   const selectedTransition = transitionNote ? nextTransition(transitionNote) : null;
@@ -374,7 +380,10 @@ export function DeliveryNotesPage() {
         density={tableDensity}
       />
 
-      <DetailModal note={detailNote} onClose={() => setDetailNote(null)} />
+      <DetailModal
+        note={detailNote ?? linkedDetailNote ?? null}
+        onClose={() => { setDetailNote(null); setInitialDetailDismissed(true); }}
+      />
 
       <Modal
         isOpen={!!transitionNote && !!selectedTransition}

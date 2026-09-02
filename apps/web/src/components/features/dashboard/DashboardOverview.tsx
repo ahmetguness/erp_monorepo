@@ -49,6 +49,7 @@ import { StarterHealthScoreCard } from "@/components/features/dashboard/StarterH
 import { StarterEDocumentControlCard } from "@/components/features/dashboard/StarterEDocumentControlCard";
 import { PlanUsageLimitsCard } from "@/components/features/dashboard/PlanUsageLimitsCard";
 import { PlanRecommendedActionsCard } from "@/components/features/dashboard/PlanRecommendedActionsCard";
+import { TodayWorkQueue } from "@/components/features/dashboard/TodayWorkQueue";
 
 /* ── Types ──────────────────────────────────── */
 
@@ -169,6 +170,15 @@ export function DashboardOverview() {
   const canReadTasks = canRead('tasks');
   const canReadNotifications = canRead('notifications');
   const canReadSettings = canRead('settings');
+  const canReadTodayQueue = canReadTasks
+    || canReadApprovals
+    || canReadInvoicing
+    || canReadNotifications
+    || canReadAccounting
+    || canReadInventory
+    || canRead('service')
+    || canRead('automation')
+    || canRead('marketplace');
 
   const [clock, setClock] = useState("");
   useEffect(() => {
@@ -348,6 +358,8 @@ export function DashboardOverview() {
       </Card>
 
       <PlanRecommendedActionsCard plan={currentPlan} />
+
+      <TodayWorkQueue enabled={canReadTodayQueue} />
 
       <SetupChecklistCard enabled={canReadSettings} compact />
       <StarterHealthScoreCard enabled={isStarter} />

@@ -7,6 +7,7 @@ import { ExceptionCenterService } from '../../../../services/exception-center.se
 import { createTask } from '../../../../services/task.service.js';
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
+import { platformApplication } from '../../composition.js';
 
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 type DashboardTaskType = 'APPROVAL' | 'COLLECTION' | 'SERVICE' | 'NOTIFICATION' | 'CHECK' | 'AUTOMATION' | 'STOCK' | 'FISCAL' | 'GENERAL';
@@ -100,6 +101,11 @@ function invoicePriority(daysLate: number): TaskPriority {
 }
 
 export const TaskController = {
+  async today(c: Context): Promise<Response> {
+    const queue = await platformApplication.todayWorkQueueQueries.getToday(requireTenantId(c), requireUserId(c));
+    return c.json({ data: queue });
+  },
+
   async exceptionCenter(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const snapshot = await new ExceptionCenterService(prisma).snapshot(tenantId);

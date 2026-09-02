@@ -16,6 +16,7 @@ salesOrderRoutes.post('/quotes', requirePermission('invoicing', 'CREATE'), Sales
 salesOrderRoutes.post('/quotes/:id/convert', requirePermission('invoicing', 'CREATE'), SalesOrderController.convertQuoteToOrder);
 
 salesOrderRoutes.get('/', requirePermission('invoicing', 'READ'), SalesOrderController.listOrders);
+salesOrderRoutes.get('/:id/process-workspace', requirePermission('invoicing', 'READ'), SalesOrderController.getProcessWorkspace);
 salesOrderRoutes.get('/:id', requirePermission('invoicing', 'READ'), SalesOrderController.getOrderById);
 salesOrderRoutes.get('/:id/history', requirePermission('invoicing', 'READ'), SalesOrderController.getOrderHistory);
 salesOrderRoutes.post('/', requirePermission('invoicing', 'CREATE'), SalesOrderController.createOrder);

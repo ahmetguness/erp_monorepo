@@ -328,6 +328,14 @@ export const SalesOrderController = {
     return c.json({ data: order });
   },
 
+  async getProcessWorkspace(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const orderId = requireParam(c, 'id');
+    const workspace = await salesApplication.salesProcessQueries.getWorkspace(tenantId, orderId);
+    if (!workspace) return c.json(new NotFoundError('Sipariş', orderId).toJSON(), 404);
+    return c.json({ data: workspace });
+  },
+
   async getOrderHistory(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const orderId = c.req.param('id');

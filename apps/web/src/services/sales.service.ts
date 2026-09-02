@@ -168,6 +168,22 @@ export const SalesFulfillmentResultSchema = z.object({
   }),
 });
 
+export const SalesProcessWorkspaceSchema = z.object({
+  caseId: z.string(),
+  health: z.enum(['HEALTHY', 'AT_RISK', 'BLOCKED', 'COMPLETED']),
+  progress: z.object({ deliveryPercent: z.number(), invoicedPercent: z.number(), collectedPercent: z.number() }),
+  blockers: z.array(z.string()),
+  nextAction: z.object({
+    kind: z.enum(['FULFILL', 'DELIVER', 'INVOICE', 'COLLECT', 'NONE']),
+    label: z.string(),
+    href: z.string().nullable(),
+  }),
+  timeline: z.array(z.object({
+    id: z.string(), kind: z.enum(['QUOTE', 'ORDER', 'DELIVERY', 'INVOICE', 'PAYMENT']), number: z.string(),
+    status: z.string(), occurredAt: z.string(), amount: z.number().nullable(), href: z.string(),
+  })),
+});
+
 export const InvoiceHistorySchema = z.object({
   id: z.string(),
   tenantId: z.string(),
@@ -188,6 +204,7 @@ export type SalesOrder = z.infer<typeof SalesOrderSchema>;
 export type Invoice = z.infer<typeof InvoiceSchema>;
 export type SalesOrderHistory = z.infer<typeof SalesOrderHistorySchema>;
 export type SalesFulfillmentResult = z.infer<typeof SalesFulfillmentResultSchema>;
+export type SalesProcessWorkspace = z.infer<typeof SalesProcessWorkspaceSchema>;
 export type InvoiceHistory = z.infer<typeof InvoiceHistorySchema>;
 export type InvoiceType = Invoice['type'];
 export type InvoiceStatus = Invoice['status'];
@@ -305,6 +322,11 @@ export async function getSalesOrderById(id: string): Promise<SalesOrder> {
 export async function getSalesOrderHistory(id: string): Promise<SalesOrderHistory[]> {
   const res = await apiClient.get(`/api/sales-orders/${id}/history`);
   return safeParse(SingleResponseSchema(z.array(SalesOrderHistorySchema)), res.data, 'getSalesOrderHistory').data;
+}
+
+export async function getSalesProcessWorkspace(id: string): Promise<SalesProcessWorkspace> {
+  const res = await apiClient.get(`/api/sales-orders/${id}/process-workspace`);
+  return safeParse(SingleResponseSchema(SalesProcessWorkspaceSchema), res.data, 'getSalesProcessWorkspace').data;
 }
 
 export async function createSalesOrder(data: CreateSalesOrderDTO): Promise<SalesOrder> {

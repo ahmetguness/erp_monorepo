@@ -5,7 +5,7 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
   getSalesQuotes, getSalesQuoteById, createSalesQuote, convertQuoteToOrder,
-  getSalesOrders, getSalesOrderById, getSalesOrderHistory, createSalesOrder, updateSalesOrder, cancelSalesOrder, fulfillSalesOrder,
+  getSalesOrders, getSalesOrderById, getSalesOrderHistory, getSalesProcessWorkspace, createSalesOrder, updateSalesOrder, cancelSalesOrder, fulfillSalesOrder,
   getInvoices, getInvoiceById, getInvoiceHistory, createInvoice, updateInvoice, cancelInvoice, recomputeInvoiceStatuses,
   type ListParams, type CreateSalesQuoteDTO, type CreateSalesOrderDTO,
   type CreateInvoiceDTO, type FulfillSalesOrderDTO, type OrderStatus, type InvoiceStatus,
@@ -22,6 +22,7 @@ const ORDER_KEYS = {
   list: (p: ListParams) => ['sales-orders', 'list', p] as const,
   detail: (id: string) => ['sales-orders', id] as const,
   history: (id: string) => ['sales-orders', id, 'history'] as const,
+  processWorkspace: (id: string) => ['sales-orders', id, 'process-workspace'] as const,
 };
 
 const INVOICE_KEYS = {
@@ -87,6 +88,10 @@ export function useSalesOrderHistory(id: string) {
   return useQuery({ queryKey: ORDER_KEYS.history(id), queryFn: () => getSalesOrderHistory(id), enabled: !!id });
 }
 
+export function useSalesProcessWorkspace(id: string) {
+  return useQuery({ queryKey: ORDER_KEYS.processWorkspace(id), queryFn: () => getSalesProcessWorkspace(id), enabled: Boolean(id) });
+}
+
 export function useCreateSalesOrder() {
   const qc = useQueryClient();
   const { toast } = useUIStore();
@@ -105,6 +110,7 @@ export function useUpdateSalesOrder(id: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ORDER_KEYS.all });
       qc.invalidateQueries({ queryKey: ORDER_KEYS.detail(id) });
+      qc.invalidateQueries({ queryKey: ORDER_KEYS.processWorkspace(id) });
       toast.success('Sipariş güncellendi.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
@@ -119,6 +125,7 @@ export function useCancelSalesOrder(id: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ORDER_KEYS.all });
       qc.invalidateQueries({ queryKey: ORDER_KEYS.detail(id) });
+      qc.invalidateQueries({ queryKey: ORDER_KEYS.processWorkspace(id) });
       toast.success('Sipariş iptal edildi.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
@@ -135,6 +142,7 @@ export function useFulfillSalesOrder(id: string) {
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ORDER_KEYS.all });
       qc.invalidateQueries({ queryKey: ORDER_KEYS.detail(id) });
+      qc.invalidateQueries({ queryKey: ORDER_KEYS.processWorkspace(id) });
       qc.invalidateQueries({ queryKey: INVOICE_KEYS.all });
       const createdParts = [
         result.reservation ? `${result.reservation.createdCount} rezervasyon` : null,

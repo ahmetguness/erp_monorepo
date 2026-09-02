@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Plus,
   CheckCircle,
@@ -157,7 +158,11 @@ const APPROVAL_TEMPLATES = [
 
 export function ApprovalsPage() {
   const { toast } = useUIStore();
-  const [tab, setTab] = useState<"flows" | "requests">("flows");
+  const searchParams = useSearchParams();
+  const focusedRequestId = searchParams.get("requestId")?.trim() || undefined;
+  const [tab, setTab] = useState<"flows" | "requests">(
+    focusedRequestId ? "requests" : "flows",
+  );
   const [flowPage, setFlowPage] = useState(1);
   const [reqPage, setReqPage] = useState(1);
 
@@ -194,6 +199,7 @@ export function ApprovalsPage() {
   const { data: reqsData, isLoading: reqsLoading } = useApprovalRequests({
     page: reqPage,
     limit: 20,
+    requestId: focusedRequestId,
   });
   const { data: detailFlow } = useApprovalFlow(detailFlowId ?? "");
 
