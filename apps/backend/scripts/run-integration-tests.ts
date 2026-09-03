@@ -1444,6 +1444,29 @@ async function testReplenishmentPlanningFlow(ctx: TestContext): Promise<void> {
   if (foreignAfter?.value !== foreignBefore?.value) throw new Error('Ikmal politikasi baska tenant verisini degistirdi.');
 }
 
+async function testReportDecisionInsightsFlow(ctx: TestContext): Promise<void> {
+  const now = new Date();
+  const from = new Date(now); from.setDate(from.getDate() - 30);
+  const result = await api('GET', `/api/reports/decision-insights?dateFrom=${encodeURIComponent(from.toISOString())}&dateTo=${encodeURIComponent(now.toISOString())}`, token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(result, 200, 'rapor karar merkezi yuklenebilmeli');
+  const workspace = readDataRecord(result.body);
+  if (!isRecord(workspace.summary) || typeof workspace.executiveSummary !== 'string' || !Array.isArray(workspace.insights)) {
+    throw new Error('Rapor karar merkezi contract ile uyusmuyor.');
+  }
+  for (const insight of workspace.insights.filter(isRecord)) {
+    if (!isRecord(insight.action) || typeof insight.action.href !== 'string' || !Array.isArray(insight.sources)) throw new Error('Rapor icgorusu uygulanabilir veya izlenebilir degil.');
+    for (const source of insight.sources.filter(isRecord)) {
+      if (source.entityId === ctx.productBId || source.entityId === ctx.contactBId) throw new Error('Rapor karar merkezi baska tenant kaynagini sizdirdi.');
+    }
+  }
+  const invalid = await api('GET', '/api/reports/decision-insights?dateFrom=invalid&dateTo=invalid', token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(invalid, 400, 'gecersiz rapor karar tarihi reddedilmeli');
+  const digest = await api('POST', '/api/automation-rules/scheduler/run', token(ctx.ownerAId, ctx.tenantAId), { jobKey: 'executive_insights_digest' });
+  assertStatus(digest, 200, 'rol bazli yonetici ozeti zamanlayicidan calistirilabilmeli');
+  const notification = await prisma.notification.findFirst({ where: { tenantId: ctx.tenantAId, userId: ctx.ownerAId, module: 'reporting', title: 'Günlük karar özeti' }, select: { id: true } });
+  if (!notification) throw new Error('Yonetici ozeti raporlama yetkili kullaniciya ulasmadi.');
+}
+
 async function main(): Promise<void> {
   const ctx = await withTimeout('seed', seed());
   try {
@@ -1507,6 +1530,8 @@ async function main(): Promise<void> {
     await testFinanceOperationsFlow(ctx);
     console.log('Integration: predictive replenishment planning and tenant safety');
     await testReplenishmentPlanningFlow(ctx);
+    console.log('Integration: actionable and traceable report insights');
+    await testReportDecisionInsightsFlow(ctx);
     console.log('Integration: data import partial failure plan');
     await testDataImportPartialFailurePlan(ctx);
     console.log('Integration: external API key scope and tenant isolation');

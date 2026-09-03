@@ -20,6 +20,7 @@ export type SchedulerJobKey =
   | 'batch_expiration'
   | 'lot_expiration'
   | 'bank_auto_match'
+  | 'executive_insights_digest'
   | 'accounting_integrity_check'
   | 'marketplace_sync'
   | 'automation_runner';
@@ -59,6 +60,7 @@ const JOBS: readonly SchedulerJobDefinition[] = [
   { key: 'low_stock_reorder', title: 'Low stock reorder', description: 'Dusuk stok onerilerinden satin alma talebi olusturur.', cadence: 'daily', module: 'purchasing', status: 'ACTIVE' },
   { key: 'collection_reminders', title: 'Collection reminders', description: 'Tahsilat takip gorevleri icin otomasyon kurallarini calistirir.', cadence: 'daily', module: 'workflow', status: 'ACTIVE' },
   { key: 'bank_auto_match', title: 'Bank auto match', description: 'Yuksek guvenli banka hareketlerini otomatik eslestirir.', cadence: 'hourly', module: 'accounting', status: 'ACTIVE' },
+  { key: 'executive_insights_digest', title: 'Executive insights digest', description: 'Raporlama yetkili roller icin aksiyon odakli yonetici ozeti uretir.', cadence: 'daily', module: 'reporting', status: 'ACTIVE' },
   { key: 'accounting_integrity_check', title: 'Accounting integrity check', description: 'Otomatik muhasebe posting engine calistirir.', cadence: 'daily', module: 'accounting', status: 'ACTIVE' },
   { key: 'automation_runner', title: 'Automation runner', description: 'Aktif otomasyon kurallarini tetikler.', cadence: 'hourly', module: 'workflow', status: 'ACTIVE' },
   { key: 'batch_expiration', title: 'Batch expiration', description: 'SKT yaklasan parti kayitlari icin uyari uretir.', cadence: 'daily', module: 'inventory', status: 'PLANNED' },
@@ -193,6 +195,24 @@ export class SchedulerJobEngineService {
         const minConfidence = Number.isFinite(configuredConfidence) ? Math.min(100, Math.max(75, configuredConfidence)) : 95;
         const result = await new BankTransactionMatchingService(this.db).autoProcess(tenantId, { minConfidence, limit: 50 });
         return { matched: result.processed + result.skipped, changed: result.processed, skipped: result.processed === 0, message: `${result.processed} banka hareketi otomatik islendi.` };
+      }
+      case 'executive_insights_digest': {
+        const recipients = await this.db.tenantUser.findMany({
+          where: { tenantId, isActive: true, OR: [{ isOwner: true }, { roleRef: { permissions: { some: { module: 'reporting', action: 'READ' } } } }] },
+          select: { userId: true },
+        });
+        if (recipients.length === 0) return { matched: 0, changed: 0, skipped: true, message: 'Yonetici ozeti icin uygun rol bulunamadi.' };
+        const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+        const existing = await this.db.notification.findMany({ where: { tenantId, userId: { in: recipients.map((item) => item.userId) }, module: 'reporting', title: 'Günlük karar özeti', createdAt: { gte: dayStart } }, select: { userId: true } });
+        const existingUsers = new Set(existing.map((item) => item.userId));
+        const [overdueCount, lowStockProducts] = await Promise.all([
+          this.db.invoice.count({ where: { tenantId, deletedAt: null, type: InvoiceType.SALES, status: InvoiceStatus.OVERDUE } }),
+          this.db.product.findMany({ where: { tenantId, deletedAt: null, isActive: true, minStockLevel: { gt: 0 } }, select: { minStockLevel: true, stockLevels: { select: { quantity: true } } }, take: 500 }),
+        ]);
+        const lowStockCount = lowStockProducts.filter((product) => product.stockLevels.reduce((sum, level) => sum + Number(level.quantity), 0) < Number(product.minStockLevel)).length;
+        const pending = recipients.filter((item) => !existingUsers.has(item.userId));
+        if (pending.length > 0) await this.db.notification.createMany({ data: pending.map((item) => ({ tenantId, userId: item.userId, title: 'Günlük karar özeti', message: `${overdueCount} gecikmiş fatura ve ${lowStockCount} kritik stok için önerilen aksiyonlar hazır.`, module: 'reporting', entityType: EntityType.OTHER, entityId: 'decision-insights' })) });
+        return { matched: recipients.length, changed: pending.length, skipped: pending.length === 0, message: `${pending.length} rol bazli yonetici ozeti olusturuldu.` };
       }
       case 'accounting_integrity_check': {
         const result = await new AccountingPostingEngineService(this.db).run(tenantId, { source: 'ALL', limit: 50, postImmediately: true, userId });

@@ -20,6 +20,7 @@ import {
 } from '@/services/reporting.service';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { CustomReportingLockedPanel } from './CustomReportingLockedPanel';
+import { ReportDecisionCenter } from '@/features/reporting';
 import {
   useReportsData,
   parseKpiConfig,
@@ -310,6 +311,8 @@ export function ReportsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Raporlar" subtitle="İşletmenizin finansal ve operasyonel özetleri." />
+
+      <ReportDecisionCenter dateFrom={dateFrom} dateTo={dateTo} />
 
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">

@@ -6,6 +6,7 @@ import { requireFeature } from '../middleware/requireFeature';
 import { requireModule } from '../middleware/requireModule';
 import { requirePermission } from '../middleware/requirePermission';
 import { ReportingBuilderController,ReportingController,SavedReportController } from '../modules/platform/http/controllers/index.js';
+import { ReportInsightsController } from '../modules/reporting/http/controllers/index.js';
 import { MODULE_KEYS } from '../types/module.types';
 
 const reportingRoutes = new Hono();
@@ -19,6 +20,7 @@ reportingRoutes.get('/contact-balance', requirePermission('reporting', 'READ'), 
 reportingRoutes.get('/collection-list', requirePermission('reporting', 'READ'), ReportingController.collectionList);
 reportingRoutes.get('/top-products', requirePermission('reporting', 'READ'), ReportingController.topProducts);
 reportingRoutes.get('/cashflow-forecast', requireAccess(ACCESS_POLICIES.cashflowForecast), requirePermission('reporting', 'READ'), ReportingController.cashflowForecast);
+reportingRoutes.get('/decision-insights', requirePermission('reporting', 'READ'), ReportInsightsController.workspace);
 
 reportingRoutes.get('/registry', requireFeature(FeatureKey.CUSTOM_REPORTING), requirePermission('reporting', 'READ'), ReportingBuilderController.registry);
 reportingRoutes.post('/kpi/preview', requireFeature(FeatureKey.CUSTOM_REPORTING), requirePermission('reporting', 'READ'), ReportingBuilderController.preview);

@@ -1,0 +1,19 @@
+'use client';
+import Link from 'next/link';
+import { AlertTriangle, ArrowRight, BrainCircuit, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
+import { cn, formatCurrency } from '@/lib/utils';
+import { useReportDecisionInsights } from './use-report-decision-insights';
+
+interface Props { dateFrom: string; dateTo: string }
+export function ReportDecisionCenter({ dateFrom, dateTo }: Props) {
+  const query = useReportDecisionInsights(dateFrom, dateTo);
+  if (query.isLoading) return <section className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-400"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Karar içgörüleri hazırlanıyor...</section>;
+  if (!query.data) return null;
+  const workspace = query.data;
+  return <section className="space-y-4 rounded-xl border border-violet-900/50 bg-slate-950/60 p-5">
+    <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-violet-400"><BrainCircuit className="h-4 w-4" />Karar merkezi</div><h2 className="mt-1 text-lg font-black text-white">Ne oldu ve şimdi ne yapmalıyım?</h2><p className="mt-1 text-xs text-slate-400">{workspace.executiveSummary}</p></div><div className="flex gap-2 text-xs"><span className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-slate-300">{workspace.summary.totalInsights} içgörü</span><span className="rounded-lg border border-rose-900/50 bg-rose-950/30 px-3 py-2 text-rose-300">{workspace.summary.critical} kritik</span></div></div>
+    <div className="grid gap-3 xl:grid-cols-2">{workspace.insights.map((insight) => <article key={insight.id} className="rounded-xl border border-slate-800 bg-slate-900/80 p-4"><div className="flex items-start gap-3">{insight.severity === 'CRITICAL' ? <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-400" /> : insight.severity === 'WARNING' ? <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" /> : <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />}<div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><h3 className="text-sm font-bold text-white">{insight.title}</h3><span className={cn('shrink-0 text-[10px] font-bold', insight.confidence >= 90 ? 'text-emerald-400' : 'text-amber-400')}>%{insight.confidence} güven</span></div><p className="mt-1 text-xs leading-5 text-slate-400">{insight.explanation}</p>{insight.rootCauses.length > 0 && <ul className="mt-2 space-y-1 text-[11px] text-slate-500">{insight.rootCauses.map((cause) => <li key={cause}>• {cause}</li>)}</ul>}<div className="mt-3 rounded-lg border border-violet-900/30 bg-violet-950/20 p-3"><p className="text-[11px] text-violet-200">Beklenen etki: {insight.action.expectedImpact}</p><Link href={insight.action.href} className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-violet-400 hover:text-violet-300">{insight.action.label}<ArrowRight className="h-3 w-3" /></Link></div>{insight.sources.length > 0 && <div className="mt-2 flex flex-wrap gap-1">{insight.sources.slice(0, 3).map((source) => <Link key={`${source.entityType}:${source.entityId}`} href={source.href} className="max-w-48 truncate rounded border border-slate-800 px-2 py-1 text-[10px] text-slate-500 hover:text-slate-300">{source.label}</Link>)}</div>}</div></div></article>)}</div>
+    {workspace.insights.length === 0 && <div className="rounded-lg border border-emerald-900/30 bg-emerald-950/20 p-4 text-sm text-emerald-300">Seçili dönemde aksiyon gerektiren belirgin bir sapma bulunmadı.</div>}
+    {workspace.summary.potentialCashImpact > 0 && <p className="text-right text-xs text-slate-500">Potansiyel tahsilat etkisi: <b className="text-emerald-400">{formatCurrency(workspace.summary.potentialCashImpact)}</b></p>}
+  </section>;
+}
