@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { TenantLogo } from '@/components/shared/TenantLogo';
 import { useTenantSettings } from '@/hooks/useSettings';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { normalizeDocumentQuantity, type DocumentNumericValue } from '@/features/sales';
 import {
   DEFAULT_DOCUMENT_ACCENT,
   DEFAULT_DOCUMENT_TEMPLATE,
@@ -19,7 +20,7 @@ import {
 interface PrintableLine {
   id: string;
   description: string;
-  quantity: number;
+  quantity: DocumentNumericValue;
   unitPrice: number;
   discount: number;
   taxAmount?: number;
@@ -48,10 +49,6 @@ const ACCENT_CLASS: Record<DocumentPdfAccent, { text: string; bg: string; border
   emerald: { text: 'text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/25', print: '#059669' },
   slate: { text: 'text-slate-200', bg: 'bg-slate-800/80', border: 'border-slate-600', print: '#334155' },
 };
-
-function normalizeQuantity(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(3);
-}
 
 function titleForKind(kind: DocumentPdfThemePanelProps['kind']): string {
   if (kind === 'invoice') return 'Fatura';
@@ -178,7 +175,7 @@ export function DocumentPdfThemePanel({
                   <p className="font-medium text-slate-950">{line.product?.name ?? line.description}</p>
                   {line.product?.code && <p className="text-[11px] text-slate-500">{line.product.code}</p>}
                 </td>
-                <td className="px-3 py-2 text-right">{normalizeQuantity(line.quantity)}</td>
+                <td className="px-3 py-2 text-right">{normalizeDocumentQuantity(line.quantity)}</td>
                 <td className="px-3 py-2 text-right">{formatCurrency(line.unitPrice)}</td>
                 <td className="px-3 py-2 text-right">%{line.discount}</td>
                 <td className="px-3 py-2 text-right font-semibold">{formatCurrency(line.lineTotal)}</td>
