@@ -15,8 +15,35 @@ import {
   bulkArchiveNotifications,
   bulkDeleteNotifications,
   updateSmartNotificationState,
+  getNotificationAttention,
+  updateNotificationAttentionPreferences,
+  recordNotificationAttentionEvent,
+  type AttentionEventType,
+  type NotificationAttentionPreferences,
   type SmartNotificationAction,
 } from '@/services/notification.service';
+
+export function useNotificationAttention() {
+  return useQuery({ queryKey: ['notifications', 'attention'], queryFn: getNotificationAttention, refetchInterval: 60 * 1000 });
+}
+
+export function useUpdateNotificationAttentionPreferences() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (preferences: NotificationAttentionPreferences) => updateNotificationAttentionPreferences(preferences),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['notifications'] }); toast.success('Dikkat tercihleri güncellendi.'); },
+    onError: (error: unknown) => toast.error(getErrorMessage(error)),
+  });
+}
+
+export function useRecordNotificationAttentionEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (event: AttentionEventType) => recordNotificationAttentionEvent(event),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications', 'attention'] }),
+  });
+}
 
 export function useNotifications(params?: { status?: string; limit?: number }) {
   return useQuery({

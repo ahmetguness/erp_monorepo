@@ -27,6 +27,7 @@ import {
 import type { CollectionSettlementDraft } from '@/services/financial.autonomy.service';
 import { cn, formatCurrency } from '@/lib/utils';
 import { useUIStore } from '@/store/ui.store';
+import { FinanceOperationsWorkspace } from '@/features/finance';
 
 export function FinancialAutonomyCenter() {
   const [selectedDays, setSelectedDays] = useState<30 | 60 | 90>(30);
@@ -95,6 +96,8 @@ export function FinancialAutonomyCenter() {
           </div>
         </div>
       </div>
+
+      <FinanceOperationsWorkspace />
 
       {/* Metrics Row */}
       {forecastQuery.isLoading ? (

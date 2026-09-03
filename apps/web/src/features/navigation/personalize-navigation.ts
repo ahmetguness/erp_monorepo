@@ -3,11 +3,19 @@ import type { PlanName } from '@/lib/plans';
 import { hasRequiredModule, hasRequiredPlan } from '@/lib/access-lock';
 import type { NavigationWorkspace } from './navigation-workspace.service';
 
+const TENANT_GATED_MODULES = new Set([
+  'accounting', 'approvals', 'contacts', 'documents', 'hr', 'inventory', 'invoicing', 'mail',
+  'marketplace', 'payroll', 'production', 'purchasing', 'reporting', 'sales', 'service', 'warehouse', 'workflow',
+]);
+
 function canShow(item: NavItem, workspace: NavigationWorkspace, tenantPlan: PlanName, tenantModules: readonly string[]): boolean {
   if (item.plan && !hasRequiredPlan(tenantPlan, item.plan)) return false;
   if (item.module && workspace.hiddenModules.includes(item.module)) return false;
   if (item.module && workspace.allowedModules !== '*' && !workspace.allowedModules.includes(item.module)) return false;
-  return !item.module || hasRequiredModule(tenantModules, item.module) || tenantModules.length === 0;
+  return !item.module
+    || !TENANT_GATED_MODULES.has(item.module)
+    || tenantModules.length === 0
+    || hasRequiredModule(tenantModules, item.module);
 }
 
 function score(item: NavItem, workspace: NavigationWorkspace): number {

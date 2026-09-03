@@ -240,9 +240,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Otonom Komut Ajanı', href: '/dashboard/agent/command', icon: Bot, plan: ENTERPRISE_PLAN, module: 'operations' },
       { label: 'Operasyon Sağlığı', href: '/dashboard/operations', icon: Activity, plan: PROFESSIONAL_PLAN, module: 'operations' },
       { label: 'Onay Akışları', href: '/dashboard/approvals', icon: GitBranch, plan: PROFESSIONAL_PLAN, module: 'approvals' },
-      { label: 'İş Akışı Merkezi', href: '/dashboard/workflow', icon: ClipboardCheck, plan: PROFESSIONAL_PLAN, module: 'settings' },
+      { label: 'İş Akışı Merkezi', href: '/dashboard/workflow', icon: ClipboardCheck, plan: PROFESSIONAL_PLAN, module: 'workflow' },
       { label: 'Toplu Islem Merkezi', href: '/dashboard/bulk-operations', icon: ListChecks, plan: PROFESSIONAL_PLAN, module: 'contacts' },
-      { label: 'Doküman Merkezi', href: '/dashboard/documents', icon: FolderOpen, module: 'attachments' },
+      { label: 'Doküman Merkezi', href: '/dashboard/documents', icon: FolderOpen, module: 'documents' },
       {
         label: 'İçe / Dışa Aktarma',
         href: '/dashboard/data-exchange',

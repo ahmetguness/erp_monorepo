@@ -43,9 +43,11 @@ import {
   useBulkArchive,
   useBulkDelete,
   useSmartNotificationAction,
+  useNotificationAttention,
 } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 import type { Notification, SmartNotification } from '@/services/notification.service';
+import { NotificationAttentionPanel } from '@/features/notification-attention';
 
 const CATEGORY_MAP: Record<string, { label: string; icon: ReactNode; color: string }> = {
   collection_due: { label: 'Tahsilat & Finans', icon: <DollarSign className="w-3.5 h-3.5" />, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
@@ -65,6 +67,7 @@ export default function NotificationsPage() {
   // Query hooks
   const { data: notificationsData, isLoading: isNotifLoading, refetch: refetchNotifs } = useNotifications({ limit: 100 });
   const { data: smartSummary, isLoading: isSmartLoading, refetch: refetchSmart } = useSmartNotifications();
+  const { data: attention } = useNotificationAttention();
 
   // Mutation hooks
   const markRead = useMarkAsRead();
@@ -96,19 +99,26 @@ export default function NotificationsPage() {
   // Filtered lists
   const filteredSmartItems = useMemo(() => {
     if (typeFilter === 'SYSTEM') return [];
+    if (attention && !attention.preferences.channels.inApp) return [];
+    const focused = new Set(attention?.focusSmartIds ?? []);
     return smartItems.filter((item) => {
+      if (attention?.preferences.mutedModules.includes(item.module)) return false;
       if (severityFilter !== 'ALL' && item.severity !== severityFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return item.title.toLowerCase().includes(q) || item.message.toLowerCase().includes(q);
       }
       return true;
-    });
-  }, [smartItems, typeFilter, severityFilter, searchQuery]);
+    }).sort((left, right) => Number(focused.has(right.id)) - Number(focused.has(left.id)));
+  }, [attention, smartItems, typeFilter, severityFilter, searchQuery]);
 
   const filteredNotifications = useMemo(() => {
     if (typeFilter === 'SMART') return [];
+    if (attention && !attention.preferences.channels.inApp) return [];
+    const representativeById = new Map(attention?.groupedSystemNotifications.flatMap((group) => group.notificationIds.map((id) => [id, group.notificationIds[0]] as const)) ?? []);
     return notifications.filter((n) => {
+      if (attention?.preferences.mutedModules.includes(n.module ?? '')) return false;
+      if (n.status === 'UNREAD' && representativeById.get(n.id) !== undefined && representativeById.get(n.id) !== n.id) return false;
       if (statusFilter === 'UNREAD' && n.status !== 'UNREAD') return false;
       if (statusFilter === 'READ' && n.status !== 'READ') return false;
       if (statusFilter === 'ARCHIVED' && n.status !== 'ARCHIVED') return false;
@@ -118,7 +128,11 @@ export default function NotificationsPage() {
       }
       return true;
     });
-  }, [notifications, typeFilter, statusFilter, searchQuery]);
+  }, [attention, notifications, typeFilter, statusFilter, searchQuery]);
+
+  const notificationGroupCounts = useMemo(() => new Map(
+    attention?.groupedSystemNotifications.map((group) => [group.notificationIds[0], group.count] as const) ?? [],
+  ), [attention?.groupedSystemNotifications]);
 
   // Bulk Selection Helpers
   const toggleSelectAll = () => {
@@ -212,6 +226,8 @@ export default function NotificationsPage() {
           </div>
         </div>
       </div>
+
+      <NotificationAttentionPanel />
 
       {/* Overview Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -574,6 +590,11 @@ export default function NotificationsPage() {
                           {n.module && (
                             <span className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                               {n.module}
+                            </span>
+                          )}
+                          {(notificationGroupCounts.get(n.id) ?? 1) > 1 && (
+                            <span className="rounded-md border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold text-sky-300">
+                              {notificationGroupCounts.get(n.id)} benzer olay
                             </span>
                           )}
                         </div>

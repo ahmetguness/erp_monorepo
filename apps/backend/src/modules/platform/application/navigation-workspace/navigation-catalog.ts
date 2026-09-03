@@ -3,7 +3,7 @@ import type { NavigationGoal, NavigationPersona } from './navigation-workspace.t
 export const NAVIGATION_MODULES = new Set([
   'contacts', 'sales', 'invoicing', 'purchasing', 'inventory', 'production', 'service', 'marketplace',
   'accounting', 'hr', 'payroll', 'mail', 'reporting', 'approvals', 'workflow', 'attachments', 'roles', 'settings',
-  'operations', 'api_keys', 'ai_governance', 'holding',
+  'operations', 'api_keys', 'ai_governance', 'holding', 'documents',
 ]);
 
 export function isNavigationHref(href: string): boolean {

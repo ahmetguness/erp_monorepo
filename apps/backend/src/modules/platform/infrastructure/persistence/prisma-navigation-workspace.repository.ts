@@ -59,20 +59,22 @@ export class PrismaNavigationWorkspaceRepository implements NavigationWorkspaceR
       select: { tenantId: true, userId: true, roleId: true, isOwner: true, preferences: true, roleRef: { select: { permissions: { where: { action: PermissionAction.READ }, select: { module: true } } } } },
     });
     if (!member) return null;
+    const permissionModules = member.roleRef?.permissions.map((permission) => permission.module) ?? [];
+    const navigationAliases = permissionModules.flatMap((module) => module === 'settings' ? ['settings', 'workflow'] : module === 'attachments' ? ['attachments', 'documents'] : [module]);
     return {
       tenantId: member.tenantId,
       userId: member.userId,
       roleId: member.roleId,
       isOwner: member.isOwner,
-      allowedModules: [...new Set(member.roleRef?.permissions.map((permission) => permission.module) ?? [])],
+      allowedModules: [...new Set(navigationAliases)],
       preferences: parsePreferences(member.preferences),
     };
   }
 
   async savePreferences(tenantId: string, userId: string, preferences: NavigationPreferences): Promise<void> {
-    const current = await this.db.tenantUser.findUnique({ where: { tenantId_userId: { tenantId, userId } }, select: { preferences: true } });
+    const current = await this.db.tenantUser.findFirst({ where: { tenantId, userId, isActive: true }, select: { preferences: true } });
     if (!current) return;
-    await this.db.tenantUser.update({ where: { tenantId_userId: { tenantId, userId } }, data: { preferences: mergePreferences(current.preferences, preferences) } });
+    await this.db.tenantUser.updateMany({ where: { tenantId, userId, isActive: true }, data: { preferences: mergePreferences(current.preferences, preferences) } });
   }
 
   async distributeRoleProfile(tenantId: string, roleId: string, profile: Pick<NavigationPreferences, 'persona' | 'favoriteHrefs' | 'hiddenModules'>): Promise<number | null> {
@@ -81,8 +83,8 @@ export class PrismaNavigationWorkspaceRepository implements NavigationWorkspaceR
     const members = await this.db.tenantUser.findMany({ where: { tenantId, roleId, isActive: true }, select: { id: true, preferences: true } });
     await this.db.$transaction(members.map((member) => {
       const currentNavigation = parsePreferences(member.preferences);
-      return this.db.tenantUser.update({
-        where: { id: member.id },
+      return this.db.tenantUser.updateMany({
+        where: { id: member.id, tenantId, roleId, isActive: true },
         data: { preferences: mergePreferences(member.preferences, { ...currentNavigation, ...profile }) },
       });
     }));

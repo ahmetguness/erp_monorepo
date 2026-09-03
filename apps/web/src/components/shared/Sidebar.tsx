@@ -23,6 +23,17 @@ type NavGroup = import('@/lib/nav-config').NavGroup;
 // ─────────────────────────────────────────────
 
 const EMPTY_MODULES: string[] = [];
+const NAVIGATION_MODULES = [
+  'sales', 'contacts', 'invoicing', 'inventory', 'purchasing', 'accounting', 'production', 'service',
+  'marketplace', 'hr', 'payroll', 'mail', 'reporting', 'approvals', 'workflow', 'documents', 'roles',
+  'settings', 'operations', 'api_keys', 'ai_governance', 'holding',
+] as const;
+
+function expandNavigationPermission(module: string): string[] {
+  if (module === 'settings') return [module, 'workflow'];
+  if (module === 'attachments') return [module, 'documents'];
+  return [module];
+}
 
 function isPlanName(plan: string): plan is PlanName {
   return plan in PLAN_RANK;
@@ -209,7 +220,7 @@ const PERSONA_LABELS: Record<NavigationPersona, string> = { AUTO: 'Otomatik', SA
 
 function WorkspaceSettings({ workspace }: { workspace: NavigationWorkspace }) {
   const update = useUpdateNavigationPreferences();
-  const modules = workspace.allowedModules === '*' ? ['sales', 'contacts', 'invoicing', 'inventory', 'purchasing', 'accounting', 'production', 'service', 'marketplace', 'hr', 'payroll', 'mail', 'reporting', 'approvals'] : workspace.allowedModules;
+  const modules = workspace.allowedModules === '*' ? NAVIGATION_MODULES : workspace.allowedModules;
   function save(persona: NavigationPersona, hiddenModules: string[]) {
     update.mutate({ persona, hiddenModules, favoriteHrefs: workspace.favoriteHrefs });
   }
@@ -255,7 +266,9 @@ export function Sidebar() {
     const membership = user?.tenantMembership;
     const allowedModules = membership?.isOwner
       ? '*'
-      : [...new Set((membership?.role?.permissions ?? []).filter((permission) => permission.action === 'READ').map((permission) => permission.module))];
+      : [...new Set((membership?.role?.permissions ?? [])
+        .filter((permission) => permission.action === 'READ')
+        .flatMap((permission) => expandNavigationPermission(permission.module)))];
     return { persona: 'AUTO', effectivePersona: 'MANAGEMENT', allowedModules, favoriteHrefs: [], hiddenModules: [], recentHrefs: [], usage: {}, goals: [], canDistributeProfiles: false };
   }, [user?.tenantMembership, workspace]);
   const visibleGroups = useMemo(

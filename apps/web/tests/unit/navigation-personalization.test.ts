@@ -8,6 +8,7 @@ const groups: NavGroup[] = [{ label: 'Test', items: [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Satış', href: '/dashboard/sales-orders', icon: LayoutDashboard, module: 'sales' },
   { label: 'Stok', href: '/dashboard/products', icon: LayoutDashboard, module: 'inventory' },
+  { label: 'Settings', href: '/dashboard/settings', icon: LayoutDashboard, module: 'settings' },
 ] }];
 
 function workspace(overrides: Partial<NavigationWorkspace> = {}): NavigationWorkspace {
@@ -23,5 +24,10 @@ describe('navigation personalization', () => {
   it('ranks favorites and frequently used destinations first', () => {
     const result = personalizeNavigation(groups, workspace({ allowedModules: '*', favoriteHrefs: ['/dashboard/products'], usage: { '/dashboard/sales-orders': 20 } }), 'PROFESSIONAL', []);
     expect(result[0]?.items[0]?.label).toBe('Stok');
+  });
+  it('does not treat permission-only management areas as tenant package modules', () => {
+    const result = personalizeNavigation(groups, workspace({ allowedModules: '*' }), 'PROFESSIONAL', ['sales']);
+    expect(result[0]?.items.map((item) => item.label)).toContain('Settings');
+    expect(result[0]?.items.map((item) => item.label)).not.toContain('Stok');
   });
 });

@@ -3,6 +3,7 @@ import { Context } from 'hono';
 import { NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { SmartNotificationService,type SmartNotificationAction } from '../../../../services/smart-notification.service.js';
+import { PrismaNotificationAttentionRepository } from '../../infrastructure/persistence/prisma-notification-attention.repository.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
 
 // ─────────────────────────────────────────────
@@ -41,6 +42,8 @@ export const NotificationController = {
 
     const service = new SmartNotificationService(prisma);
     const state = await service.updateState(tenantId, userId, id, action, snoozedUntil);
+    const attention = new PrismaNotificationAttentionRepository(prisma);
+    await attention.recordEvent(tenantId, userId, action === 'hide' || action === 'snooze' ? 'DISMISS' : 'ACTION');
     return c.json({ data: state });
   },
 

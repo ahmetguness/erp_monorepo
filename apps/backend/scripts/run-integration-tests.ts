@@ -1277,8 +1277,8 @@ async function testAttachmentTenantValidation(ctx: TestContext): Promise<void> {
 
 async function testNavigationWorkspaceFlow(ctx: TestContext): Promise<void> {
   const ownerToken = token(ctx.ownerAId, ctx.tenantAId);
-  await prisma.tenantUser.update({
-    where: { tenantId_userId: { tenantId: ctx.tenantAId, userId: ctx.ownerAId } },
+  await prisma.tenantUser.updateMany({
+    where: { tenantId: ctx.tenantAId, userId: ctx.ownerAId },
     data: { preferences: { unrelatedPreference: { preserved: true } } },
   });
 
@@ -1300,23 +1300,98 @@ async function testNavigationWorkspaceFlow(ctx: TestContext): Promise<void> {
 
   const activity = await api('POST', '/api/navigation-workspace/activity', ownerToken, { href: '/dashboard/payments?status=open' });
   assertStatus(activity, 204, 'navigation kullanimi kaydedilebilmeli');
-  const stored = await prisma.tenantUser.findUnique({ where: { tenantId_userId: { tenantId: ctx.tenantAId, userId: ctx.ownerAId } }, select: { preferences: true } });
+  const stored = await prisma.tenantUser.findFirst({ where: { tenantId: ctx.tenantAId, userId: ctx.ownerAId }, select: { preferences: true } });
   if (!isRecord(stored?.preferences) || !isRecord(stored.preferences.unrelatedPreference)) {
     throw new Error('Navigation kaydi diger kullanici tercihlerini ezdi.');
   }
 
-  const limitedMember = await prisma.tenantUser.findUnique({ where: { tenantId_userId: { tenantId: ctx.tenantAId, userId: ctx.limitedAId } }, select: { roleId: true } });
+  const limitedMember = await prisma.tenantUser.findFirst({ where: { tenantId: ctx.tenantAId, userId: ctx.limitedAId }, select: { roleId: true } });
   if (!limitedMember?.roleId) throw new Error('Navigation profil testi icin rol bulunamadi.');
   const denied = await api('PUT', `/api/navigation-workspace/profiles/${limitedMember.roleId}`, token(ctx.limitedAId, ctx.tenantAId), { persona: 'SALES', favoriteHrefs: [], hiddenModules: [] });
   assertStatus(denied, 403, 'tenant sahibi olmayan kullanici profil dagitamamali');
 
-  const foreignRole = await prisma.role.findFirst({ where: { tenantId: ctx.tenantBId }, select: { id: true } });
-  if (!foreignRole) throw new Error('Navigation tenant izolasyonu icin yabanci rol bulunamadi.');
+  const foreignRole = await prisma.role.create({ data: { tenantId: ctx.tenantBId, name: `Foreign navigation ${crypto.randomUUID()}` }, select: { id: true } });
   const foreign = await api('PUT', `/api/navigation-workspace/profiles/${foreignRole.id}`, ownerToken, { persona: 'SALES', favoriteHrefs: [], hiddenModules: [] });
   assertStatus(foreign, 404, 'baska tenant rolu icin navigation profili dagitilmamali');
 
   const distributed = await api('PUT', `/api/navigation-workspace/profiles/${limitedMember.roleId}`, ownerToken, { persona: 'SALES', favoriteHrefs: ['/dashboard/sales-orders'], hiddenModules: [] });
   assertStatus(distributed, 200, 'tenant sahibi rol navigation profilini dagitabilmeli');
+}
+
+async function testNotificationAttentionFlow(ctx: TestContext): Promise<void> {
+  const ownerToken = token(ctx.ownerAId, ctx.tenantAId);
+  const summary = await api('GET', '/api/notifications/attention', ownerToken);
+  assertStatus(summary, 200, 'bildirim dikkat ozeti yuklenebilmeli');
+  const summaryData = readDataRecord(summary.body);
+  if (!isRecord(summaryData.preferences) || !Array.isArray(summaryData.groupedSystemNotifications)) {
+    throw new Error('Bildirim dikkat ozeti contract ile uyusmuyor.');
+  }
+
+  const preferences = {
+    quietHours: { enabled: true, start: '21:00', end: '07:30', timezone: 'Europe/Istanbul' },
+    digest: { cadence: 'WEEKLY', hour: 10, weekday: 1 },
+    channels: { inApp: true, email: true },
+    mutedModules: ['mail'],
+    escalation: { enabled: true, afterHours: 12, targetRoleId: null },
+  };
+  const updated = await api('PUT', '/api/notifications/attention/preferences', ownerToken, preferences);
+  assertStatus(updated, 200, 'bildirim dikkat tercihleri kaydedilebilmeli');
+  const foreignRole = await prisma.role.findFirst({ where: { tenantId: ctx.tenantBId }, select: { id: true } });
+  if (!foreignRole) throw new Error('Bildirim eskalasyon tenant testi icin rol bulunamadi.');
+  const foreignEscalation = await api('PUT', '/api/notifications/attention/preferences', ownerToken, {
+    ...preferences,
+    escalation: { ...preferences.escalation, targetRoleId: foreignRole.id },
+  });
+  assertStatus(foreignEscalation, 200, 'baska tenant eskalasyon rolu guvenli bicimde reddedilmeli');
+  const foreignEscalationData = readDataRecord(foreignEscalation.body);
+  if (!isRecord(foreignEscalationData.escalation) || foreignEscalationData.escalation.targetRoleId !== null) {
+    throw new Error('Baska tenant rolu eskalasyon hedefi olarak saklandi.');
+  }
+  const event = await api('POST', '/api/notifications/attention/events', ownerToken, { event: 'ACTION' });
+  assertStatus(event, 204, 'bildirim dikkat etkinligi kaydedilebilmeli');
+
+  const stored = await prisma.tenantUser.findFirst({ where: { tenantId: ctx.tenantAId, userId: ctx.ownerAId }, select: { preferences: true } });
+  if (!isRecord(stored?.preferences) || !isRecord(stored.preferences.notificationAttention) || !isRecord(stored.preferences.navigationWorkspace)) {
+    throw new Error('Bildirim dikkat tercihleri diger kullanici tercihlerini ezdi.');
+  }
+  const metrics = stored.preferences.notificationAttention.metrics;
+  if (!isRecord(metrics) || metrics.actions !== 1) throw new Error('Bildirim dikkat etkinligi olculemedi.');
+
+  const invalid = await api('PUT', '/api/notifications/attention/preferences', ownerToken, { digest: { cadence: 'INVALID' } });
+  assertStatus(invalid, 400, 'gecersiz bildirim dikkat tercihleri reddedilmeli');
+}
+
+async function testFinanceOperationsFlow(ctx: TestContext): Promise<void> {
+  const ownerToken = token(ctx.ownerAId, ctx.tenantAId);
+  const foreignBefore = await prisma.tenantSetting.findFirst({ where: { tenantId: ctx.tenantBId, key: 'finance.operations.auto_match_confidence' }, select: { value: true } });
+  const workspace = await api('GET', '/api/financial-autonomy/operations', ownerToken);
+  assertStatus(workspace, 200, 'finans operasyon calisma alani yuklenebilmeli');
+  const workspaceData = readDataRecord(workspace.body);
+  if (!isRecord(workspaceData.summary) || !Array.isArray(workspaceData.exceptions) || !Array.isArray(workspaceData.recurringPatterns)) {
+    throw new Error('Finans operasyon calisma alani contract ile uyusmuyor.');
+  }
+
+  const updated = await api('PUT', '/api/financial-autonomy/operations/policy', ownerToken, {
+    autoProcessEnabled: false,
+    autoMatchMinConfidence: 10,
+    feedStaleHours: 0,
+    duplicateWindowDays: 200,
+  });
+  assertStatus(updated, 200, 'finans operasyon politikasi kaydedilebilmeli');
+  const updatedData = readDataRecord(updated.body);
+  if (updatedData.autoMatchMinConfidence !== 75 || updatedData.feedStaleHours !== 1 || updatedData.duplicateWindowDays !== 90) {
+    throw new Error('Finans operasyon politikasi guvenli sinirlara alinmadi.');
+  }
+
+  const run = await api('POST', '/api/financial-autonomy/operations/run', ownerToken);
+  assertStatus(run, 200, 'finans operasyon akisi calistirilabilmeli');
+  const runData = readDataRecord(run.body);
+  if (runData.scanned !== 0 || runData.processed !== 0) throw new Error('Kapali finans otomasyonu kayit isledi.');
+
+  const foreignSetting = await prisma.tenantSetting.findFirst({ where: { tenantId: ctx.tenantBId, key: 'finance.operations.auto_match_confidence' }, select: { value: true } });
+  if (foreignSetting?.value !== foreignBefore?.value) throw new Error('Finans operasyon politikasi baska tenant verisini degistirdi.');
+  const invalid = await api('PUT', '/api/financial-autonomy/operations/policy', ownerToken, { autoProcessEnabled: true });
+  assertStatus(invalid, 400, 'gecersiz finans operasyon politikasi reddedilmeli');
 }
 
 async function main(): Promise<void> {
@@ -1376,6 +1451,10 @@ async function main(): Promise<void> {
     await testAttachmentTenantValidation(ctx);
     console.log('Integration: navigation workspace personalization and tenant isolation');
     await testNavigationWorkspaceFlow(ctx);
+    console.log('Integration: notification attention preferences, grouping and metrics');
+    await testNotificationAttentionFlow(ctx);
+    console.log('Integration: finance operations exception-first workspace');
+    await testFinanceOperationsFlow(ctx);
     console.log('Integration: data import partial failure plan');
     await testDataImportPartialFailurePlan(ctx);
     console.log('Integration: external API key scope and tenant isolation');

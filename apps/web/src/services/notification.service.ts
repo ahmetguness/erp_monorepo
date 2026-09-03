@@ -55,6 +55,29 @@ export type SmartNotification = z.infer<typeof SmartNotificationSchema>;
 export type SmartNotificationSummary = z.infer<typeof SmartNotificationSummarySchema>;
 export type SmartNotificationAction = 'acknowledge' | 'complete' | 'snooze' | 'hide' | 'reopen';
 
+export const NotificationAttentionPreferencesSchema = z.object({
+  quietHours: z.object({ enabled: z.boolean(), start: z.string(), end: z.string(), timezone: z.string() }),
+  digest: z.object({ cadence: z.enum(['OFF', 'DAILY', 'WEEKLY']), hour: z.number(), weekday: z.number() }),
+  channels: z.object({ inApp: z.boolean(), email: z.boolean() }),
+  mutedModules: z.array(z.string()),
+  escalation: z.object({ enabled: z.boolean(), afterHours: z.number(), targetRoleId: z.string().nullable() }),
+});
+
+export const NotificationAttentionSummarySchema = z.object({
+  preferences: NotificationAttentionPreferencesSchema,
+  quietHoursActive: z.boolean(),
+  focusSmartIds: z.array(z.string()),
+  groupedSystemNotifications: z.array(z.object({ eventKey: z.string(), title: z.string(), module: z.string().nullable(), count: z.number(), notificationIds: z.array(z.string()), latestAt: z.string() })),
+  digestCount: z.number(),
+  suppressedCount: z.number(),
+  nextDigestAt: z.string().nullable(),
+  metrics: z.object({ impressions: z.number(), actions: z.number(), dismissals: z.number(), digestOpens: z.number() }),
+});
+
+export type NotificationAttentionPreferences = z.infer<typeof NotificationAttentionPreferencesSchema>;
+export type NotificationAttentionSummary = z.infer<typeof NotificationAttentionSummarySchema>;
+export type AttentionEventType = 'IMPRESSION' | 'ACTION' | 'DISMISS' | 'DIGEST_OPENED';
+
 const ListSchema = z.object({
   data: z.array(NotificationSchema),
   meta: z.object({ unreadCount: z.coerce.number() }),
@@ -75,6 +98,20 @@ export async function updateSmartNotificationState(id: string, action: SmartNoti
     action,
     ...(snoozedUntil && { snoozedUntil }),
   });
+}
+
+export async function getNotificationAttention(): Promise<NotificationAttentionSummary> {
+  const response = await apiClient.get('/api/notifications/attention');
+  return safeParse(SingleResponseSchema(NotificationAttentionSummarySchema), response.data, 'getNotificationAttention').data;
+}
+
+export async function updateNotificationAttentionPreferences(preferences: NotificationAttentionPreferences): Promise<NotificationAttentionPreferences> {
+  const response = await apiClient.put('/api/notifications/attention/preferences', preferences);
+  return safeParse(SingleResponseSchema(NotificationAttentionPreferencesSchema), response.data, 'updateNotificationAttentionPreferences').data;
+}
+
+export async function recordNotificationAttentionEvent(event: AttentionEventType): Promise<void> {
+  await apiClient.post('/api/notifications/attention/events', { event });
 }
 
 export async function markAsRead(id: string): Promise<Notification> {

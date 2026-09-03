@@ -2,7 +2,7 @@ import { ACCESS_POLICIES } from '@repo/types/plans';
 import { Hono } from 'hono';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { NotificationController } from '../modules/platform/http/controllers/index.js';
+import { NotificationAttentionController, NotificationController } from '../modules/platform/http/controllers/index.js';
 
 // Notifications are available from Starter, but can be disabled through feature overrides.
 const notificationRoutes = new Hono();
@@ -11,6 +11,9 @@ notificationRoutes.use('*', requireAccess(ACCESS_POLICIES.smartNotifications));
 
 notificationRoutes.get('/smart', requirePermission('notifications', 'READ'), NotificationController.smart);
 notificationRoutes.post('/smart/:id/action', requirePermission('notifications', 'UPDATE'), NotificationController.smartAction);
+notificationRoutes.get('/attention', requirePermission('notifications', 'READ'), NotificationAttentionController.summary);
+notificationRoutes.put('/attention/preferences', requirePermission('notifications', 'UPDATE'), NotificationAttentionController.preferences);
+notificationRoutes.post('/attention/events', requirePermission('notifications', 'UPDATE'), NotificationAttentionController.event);
 notificationRoutes.get('/', requirePermission('notifications', 'READ'), NotificationController.list);
 notificationRoutes.post('/read-all', requirePermission('notifications', 'UPDATE'), NotificationController.markAllAsRead);
 notificationRoutes.post('/bulk-read', requirePermission('notifications', 'UPDATE'), NotificationController.bulkMarkAsRead);
