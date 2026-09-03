@@ -31,12 +31,12 @@ export function useDispatchZeroTouchPo() {
   return useMutation({
     mutationFn: ({ productId, autoDispatch }: { productId: string; autoDispatch?: boolean }) =>
       dispatchZeroTouchPo(productId, autoDispatch),
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       qc.invalidateQueries({ queryKey: ['procurement-autonomy'] });
       qc.invalidateQueries({ queryKey: ['purchase-orders'] });
-      toast.success(
-        `Otonom Satın Alma Siparişi #${data.purchaseOrderNumber} (${data.supplierName}) başarıyla iletildi!`,
-      );
+      toast.success(variables.autoDispatch
+        ? `Satın alma siparişi #${data.purchaseOrderNumber} (${data.supplierName}) iletildi.`
+        : `Satın alma siparişi #${data.purchaseOrderNumber} (${data.supplierName}) taslak olarak oluşturuldu.`);
     },
     onError: (err: unknown) => toast.error(getErrorMessage(err)),
   });
@@ -47,13 +47,11 @@ export function useRunProcurementBatchScan() {
   const { toast } = useUIStore();
 
   return useMutation({
-    mutationFn: (autoDispatch: boolean = true) => runProcurementBatchScan(autoDispatch),
-    onSuccess: (data) => {
+    mutationFn: (autoDispatch: boolean = false) => runProcurementBatchScan(autoDispatch),
+    onSuccess: (data, autoDispatch) => {
       qc.invalidateQueries({ queryKey: ['procurement-autonomy'] });
       qc.invalidateQueries({ queryKey: ['purchase-orders'] });
-      toast.success(
-        `Otonom Tedarik Taraması Tamamlandı! ${data.scannedProducts} ürün tarandı, ${data.dispatchedOrders.length} adet Satın Alma Siparişi otomatik iletildi.`,
-      );
+      toast.success(`${data.scannedProducts} ürün tarandı, ${data.dispatchedOrders.length} satın alma siparişi ${autoDispatch ? 'iletildi' : 'taslak olarak oluşturuldu'}.`);
     },
     onError: (err: unknown) => toast.error(getErrorMessage(err)),
   });

@@ -21,6 +21,7 @@ import {
   useSupplierReliabilityScores,
 } from '@/hooks/useProcurementAutonomy';
 import { cn, formatCurrency } from '@/lib/utils';
+import { ReplenishmentPlanningWorkspace } from '@/features/procurement';
 
 export function ProcurementAutonomyCenter() {
   const projectionsQuery = useProcurementProjections();
@@ -29,11 +30,11 @@ export function ProcurementAutonomyCenter() {
   const batchScanMutation = useRunProcurementBatchScan();
 
   const handleRunBatchScan = async () => {
-    await batchScanMutation.mutateAsync(true);
+    await batchScanMutation.mutateAsync(false);
   };
 
   const handleSingleDispatch = async (productId: string) => {
-    await dispatchMutation.mutateAsync({ productId, autoDispatch: true });
+    await dispatchMutation.mutateAsync({ productId, autoDispatch: false });
   };
 
   const projections = projectionsQuery.data ?? [];
@@ -43,6 +44,7 @@ export function ProcurementAutonomyCenter() {
 
   return (
     <div className="space-y-6">
+      <ReplenishmentPlanningWorkspace />
       {/* Top Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-950/70 via-slate-900 to-slate-950 p-6 border border-blue-900/40 shadow-2xl">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -55,7 +57,7 @@ export function ProcurementAutonomyCenter() {
               Autonomous Procurement & Supply Chain Studio
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
-              Stok projeksiyonu (`OnHand - Reserved + Incoming`), günlük tüketim hızı, tedarikçi güvenilirlik skoru ve bütçe limitleri dahilinde **Sıfır Dokunuşlu Satın Alma (Zero-Touch PO Dispatch)**.
+              Stok projeksiyonu, günlük tüketim hızı, tedarikçi güvenilirliği ve bütçe limitleriyle açıklanabilir satın alma taslakları hazırlanır; gönderim kullanıcı onayında kalır.
             </p>
           </div>
 
@@ -69,7 +71,7 @@ export function ProcurementAutonomyCenter() {
             ) : (
               <>
                 <Zap className="w-4 h-4" />
-                <span>Otonom Satın Alma Taraması Çalıştır</span>
+                <span>Satın Alma Taslaklarını Hazırla</span>
               </>
             )}
           </button>
@@ -199,7 +201,7 @@ export function ProcurementAutonomyCenter() {
                           className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] transition-all inline-flex items-center gap-1 shadow-md disabled:opacity-50"
                         >
                           {dispatchMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-                          <span>Zero-Touch PO Gönder</span>
+                          <span>Sipariş Taslağı Oluştur</span>
                         </button>
                       )}
                     </td>

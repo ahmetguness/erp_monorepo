@@ -181,7 +181,17 @@ export class SchedulerJobEngineService {
         return { matched: result.matched, changed: result.tasksCreated + result.notificationsCreated, skipped: false, message: `${result.matched} eslesme islendi.` };
       }
       case 'bank_auto_match': {
-        const result = await new BankTransactionMatchingService(this.db).autoProcess(tenantId, { minConfidence: 95, limit: 50 });
+        const settings = await this.db.tenantSetting.findMany({
+          where: { tenantId, key: { in: ['finance.operations.auto_process_enabled', 'finance.operations.auto_match_confidence'] } },
+          select: { key: true, value: true },
+        });
+        const policy = Object.fromEntries(settings.map((setting) => [setting.key, setting.value]));
+        if (policy['finance.operations.auto_process_enabled'] !== 'true') {
+          return { matched: 0, changed: 0, skipped: true, message: 'Tenant finans otomatik işleme politikası kapalı.' };
+        }
+        const configuredConfidence = Number(policy['finance.operations.auto_match_confidence']);
+        const minConfidence = Number.isFinite(configuredConfidence) ? Math.min(100, Math.max(75, configuredConfidence)) : 95;
+        const result = await new BankTransactionMatchingService(this.db).autoProcess(tenantId, { minConfidence, limit: 50 });
         return { matched: result.processed + result.skipped, changed: result.processed, skipped: result.processed === 0, message: `${result.processed} banka hareketi otomatik islendi.` };
       }
       case 'accounting_integrity_check': {

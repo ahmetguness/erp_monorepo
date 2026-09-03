@@ -1387,11 +1387,61 @@ async function testFinanceOperationsFlow(ctx: TestContext): Promise<void> {
   assertStatus(run, 200, 'finans operasyon akisi calistirilabilmeli');
   const runData = readDataRecord(run.body);
   if (runData.scanned !== 0 || runData.processed !== 0) throw new Error('Kapali finans otomasyonu kayit isledi.');
+  const scheduled = await api('POST', '/api/automation-rules/scheduler/run', ownerToken, { jobKey: 'bank_auto_match' });
+  assertStatus(scheduled, 200, 'zamanlanmis banka eslestirme politikaya gore calisabilmeli');
+  const scheduledData = readDataRecord(scheduled.body);
+  const scheduledItem = Array.isArray(scheduledData.items) ? scheduledData.items[0] : null;
+  if (!isRecord(scheduledItem) || scheduledItem.status !== 'SKIPPED' || scheduledItem.changed !== 0) {
+    throw new Error('Zamanlanmis banka eslestirme kapali tenant politikasini uygulamadi.');
+  }
 
   const foreignSetting = await prisma.tenantSetting.findFirst({ where: { tenantId: ctx.tenantBId, key: 'finance.operations.auto_match_confidence' }, select: { value: true } });
   if (foreignSetting?.value !== foreignBefore?.value) throw new Error('Finans operasyon politikasi baska tenant verisini degistirdi.');
   const invalid = await api('PUT', '/api/financial-autonomy/operations/policy', ownerToken, { autoProcessEnabled: true });
   assertStatus(invalid, 400, 'gecersiz finans operasyon politikasi reddedilmeli');
+}
+
+async function testReplenishmentPlanningFlow(ctx: TestContext): Promise<void> {
+  const ownerToken = token(ctx.ownerAId, ctx.tenantAId);
+  const foreignBefore = await prisma.tenantSetting.findFirst({
+    where: { tenantId: ctx.tenantBId, key: 'procurement.planning.horizon_days' },
+    select: { value: true },
+  });
+  const workspace = await api('GET', '/api/procurement-autonomy/planning-workspace', ownerToken);
+  assertStatus(workspace, 200, 'ikmal planlama calisma alani yuklenebilmeli');
+  const workspaceData = readDataRecord(workspace.body);
+  if (!isRecord(workspaceData.summary) || !isRecord(workspaceData.policy) || !Array.isArray(workspaceData.recommendations)) {
+    throw new Error('Ikmal planlama calisma alani contract ile uyusmuyor.');
+  }
+
+  const updated = await api('PUT', '/api/procurement-autonomy/planning-policy', ownerToken, {
+    lookbackDays: 1,
+    horizonDays: 999,
+    targetServiceLevel: 20,
+    autoCreateDrafts: false,
+    maximumDraftValue: -5,
+  });
+  assertStatus(updated, 200, 'ikmal politikasi kaydedilebilmeli');
+  const policy = readDataRecord(updated.body);
+  if (policy.lookbackDays !== 30 || policy.horizonDays !== 120 || policy.targetServiceLevel !== 85 || policy.maximumDraftValue !== 0) {
+    throw new Error('Ikmal politikasi guvenli sinirlara alinmadi.');
+  }
+
+  const beforeDraftCount = await prisma.purchaseOrder.count({ where: { tenantId: ctx.tenantAId, status: PurchaseOrderStatus.DRAFT } });
+  const run = await api('POST', '/api/procurement-autonomy/planning-run', ownerToken);
+  assertStatus(run, 200, 'ikmal planlama akisi calistirilabilmeli');
+  const runData = readDataRecord(run.body);
+  if (!Array.isArray(runData.createdDrafts) || runData.createdDrafts.length !== 0) throw new Error('Kapali ikmal politikasi taslak olusturdu.');
+  const afterDraftCount = await prisma.purchaseOrder.count({ where: { tenantId: ctx.tenantAId, status: PurchaseOrderStatus.DRAFT } });
+  if (afterDraftCount !== beforeDraftCount) throw new Error('Kapali ikmal politikasi veritabanini degistirdi.');
+
+  const invalid = await api('PUT', '/api/procurement-autonomy/planning-policy', ownerToken, { autoCreateDrafts: true });
+  assertStatus(invalid, 400, 'eksik ikmal politikasi reddedilmeli');
+  const foreignAfter = await prisma.tenantSetting.findFirst({
+    where: { tenantId: ctx.tenantBId, key: 'procurement.planning.horizon_days' },
+    select: { value: true },
+  });
+  if (foreignAfter?.value !== foreignBefore?.value) throw new Error('Ikmal politikasi baska tenant verisini degistirdi.');
 }
 
 async function main(): Promise<void> {
@@ -1455,6 +1505,8 @@ async function main(): Promise<void> {
     await testNotificationAttentionFlow(ctx);
     console.log('Integration: finance operations exception-first workspace');
     await testFinanceOperationsFlow(ctx);
+    console.log('Integration: predictive replenishment planning and tenant safety');
+    await testReplenishmentPlanningFlow(ctx);
     console.log('Integration: data import partial failure plan');
     await testDataImportPartialFailurePlan(ctx);
     console.log('Integration: external API key scope and tenant isolation');

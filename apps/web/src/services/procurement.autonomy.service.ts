@@ -53,12 +53,12 @@ export async function getSupplierReliabilityScores(): Promise<SupplierReliabilit
   return res.data.data;
 }
 
-export async function dispatchZeroTouchPo(productId: string, autoDispatch = true): Promise<ZeroTouchPoDispatchResult> {
+export async function dispatchZeroTouchPo(productId: string, autoDispatch = false): Promise<ZeroTouchPoDispatchResult> {
   const res = await apiClient.post('/api/procurement-autonomy/dispatch-po', { productId, autoDispatch });
   return res.data.data;
 }
 
-export async function runProcurementBatchScan(autoDispatch = true): Promise<{ scannedProducts: number; dispatchedOrders: ZeroTouchPoDispatchResult[] }> {
+export async function runProcurementBatchScan(autoDispatch = false): Promise<{ scannedProducts: number; dispatchedOrders: ZeroTouchPoDispatchResult[] }> {
   const res = await apiClient.post('/api/procurement-autonomy/run-scan', { autoDispatch });
   return res.data.data;
 }
