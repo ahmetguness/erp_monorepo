@@ -11,6 +11,7 @@ import { masterDataEnrichmentRoutes } from '../../routes/master-data-enrichment.
 import { contextualFormRoutes } from '../../routes/contextual-form.routes.js';
 import { notificationRoutes } from '../../routes/notification.routes.js';
 import { planUsageRoutes } from '../../routes/plan-usage.routes.js';
+import { processBlueprintRoutes } from '../../routes/process-blueprint.routes.js';
 import { reportingRoutes } from '../../routes/reporting.routes.js';
 import { savedViewRoutes } from '../../routes/saved-view.routes.js';
 import { searchRoutes } from '../../routes/search.routes.js';
@@ -30,6 +31,7 @@ export const platformModule: BackendModule = {
     app.route('/starter-health', starterHealthRoutes);
     app.route('/starter-import', starterCsvImportRoutes);
     app.route('/plan-usage', planUsageRoutes);
+    app.route('/process-blueprints', processBlueprintRoutes);
     app.route('/features', featureRoutes);
     app.route('/notifications', notificationRoutes);
     app.route('/tasks', taskRoutes);

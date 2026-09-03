@@ -7,6 +7,7 @@ import { EntityActivityTimeline } from '@/components/shared/EntityActivityTimeli
 import { EntityTaskActions } from '@/components/shared/EntityTaskActions';
 import { RecommendedActionsPanel, type RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 import { RecordCollaborationPanel, useCreateCollaborationEntry } from '@/features/collaboration';
+import { RecordRecoveryPanel } from '@/features/recovery';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
@@ -242,6 +243,7 @@ export function EntityActionPanel({
       </section>
 
       <RecommendedActionsPanel actions={recommendedActions} />
+      <RecordRecoveryPanel entityType={entityType} entityId={entityId} displayName={displayName} />
       {actions.has('note') && <RecordCollaborationPanel entityType={entityType} entityId={entityId} displayName={displayName} />}
       {actions.has('task') && <EntityTaskActions entityType={entityType} entityId={entityId} entityLabel={displayName} module={module} href={href} />}
       {actions.has('attachment') && <AttachmentPanel entityType={entityType} entityId={entityId} />}

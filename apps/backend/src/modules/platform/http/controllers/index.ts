@@ -17,6 +17,7 @@ export * from './contextual-form.controller.js';
 export * from './notification.controller.js';
 export * from './notification-attention.controller.js';
 export * from './plan-usage.controller.js';
+export * from './process-blueprint.controller.js';
 export * from './quick-start.controller.js';
 export * from './reporting.controller.js';
 export * from './saved-view.controller.js';

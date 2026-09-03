@@ -23,6 +23,7 @@ import {
 import { useEntityTimeline, useOperationsHealth } from '@/hooks/useOperations';
 import { IntegrityHubCenter } from '@/components/features/integrity/IntegrityHubCenter';
 import { cn, formatDateTime } from '@/lib/utils';
+import { AutomationScorecardPanel } from '@/features/automation-scorecard';
 
 export function OperationsCenter() {
   const [searchEntityType, setSearchEntityType] = useState('SALES_ORDER');
@@ -162,6 +163,8 @@ export function OperationsCenter() {
           <p className="text-[11px] text-slate-500">Otomatik yansıtma / Yevmiye fiş denetimi.</p>
         </div>
       </div>
+
+      <AutomationScorecardPanel />
 
       {/* Entity Timeline Viewer Component */}
       <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-5">

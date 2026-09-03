@@ -568,6 +568,44 @@ async function testAutomationAssistantFlow(ctx: TestContext): Promise<void> {
   if (!serializedExecutions.includes('"decision"') || !serializedExecutions.includes('"idempotencyKey"') || !serializedExecutions.includes('"compensation"')) {
     throw new Error('Automation execution ortak karar aciklamasi contractini dondurmedi.');
   }
+
+  const ownExecution = await prisma.automationExecution.findFirst({ where: { tenantId: ctx.tenantAId, ruleId: created.id }, orderBy: { startedAt: 'desc' }, select: { id: true } });
+  if (!ownExecution) throw new Error('Scorecard testi icin automation execution bulunamadi.');
+  const foreignExecution = await prisma.automationExecution.create({ data: { tenantId: ctx.tenantBId, status: 'SUCCEEDED', completedAt: new Date() } });
+  const scorecard = await api('GET', '/api/automation-rules/scorecard?days=30', token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(scorecard, 200, 'tenant automation scorecard okunabilmeli');
+  if (JSON.stringify(scorecard.body).includes(foreignExecution.id)) throw new Error('Automation scorecard tenant B execution kaydini sizdirdi.');
+  const feedback = await api('POST', `/api/automation-rules/scorecard/feedback/${ownExecution.id}`, token(ctx.ownerAId, ctx.tenantAId), { outcome: 'ACCEPTED', reason: 'Integration accepted', estimatedMinutesSaved: 10 });
+  assertStatus(feedback, 200, 'automation sonucu geri bildirimi kaydedilebilmeli');
+  const foreignFeedback = await api('POST', `/api/automation-rules/scorecard/feedback/${foreignExecution.id}`, token(ctx.ownerAId, ctx.tenantAId), { outcome: 'REJECTED', reason: 'cross tenant' });
+  assertStatus(foreignFeedback, 404, 'baska tenant execution geri bildirimi engellenmeli');
+  const updatedScorecard = await api('GET', '/api/automation-rules/scorecard?days=30', token(ctx.ownerAId, ctx.tenantAId));
+  if (!JSON.stringify(updatedScorecard.body).includes('Integration accepted')) throw new Error('Automation scorecard geri bildirim nedenini yansitmadi.');
+}
+
+async function testProcessBlueprintFlow(ctx: TestContext): Promise<void> {
+  const bearer = token(ctx.ownerAId, ctx.tenantAId);
+  await prisma.moduleSetting.create({ data: { tenantId: ctx.tenantAId, module: 'integration', key: 'apiSecret', value: 'MUST-NOT-EXPORT' } });
+  const created = await api('POST', '/api/process-blueprints', bearer, { key: 'integration-package', name: 'Integration Package', industry: 'TEST' });
+  assertStatus(created, 201, 'process blueprint olusturulabilmeli');
+  if (JSON.stringify(created.body).includes('MUST-NOT-EXPORT')) throw new Error('Process blueprint gizli ayari disari aktardi.');
+  const secondVersion = await api('POST', '/api/process-blueprints', bearer, { key: 'integration-package', name: 'Integration Package v2', industry: 'TEST' });
+  assertStatus(secondVersion, 201, 'process blueprint yeni surumu olusturulabilmeli');
+  const exactVersion = await api('GET', '/api/process-blueprints/integration-package/export?version=1', bearer);
+  assertStatus(exactVersion, 200, 'process blueprint belirli surumu disari aktarilabilmeli');
+  if (!JSON.stringify(exactVersion.body).includes('"version":1')) throw new Error('Process blueprint istenen eski surumu dondurmedi.');
+  const invalidVersion = await api('GET', '/api/process-blueprints/integration-package/export?version=invalid', bearer);
+  assertStatus(invalidVersion, 400, 'gecersiz process blueprint surumu reddedilmeli');
+  const exported = await api('GET', '/api/process-blueprints/integration-package/export', bearer);
+  assertStatus(exported, 200, 'process blueprint disari aktarilabilmeli');
+  const exportedRecord = exported.body && typeof exported.body === 'object' && !Array.isArray(exported.body) ? exported.body as Record<string, unknown> : {};
+  const blueprint = exportedRecord.data;
+  const preview = await api('POST', '/api/process-blueprints/preview', bearer, { blueprint, sections: ['roles', 'numberSequences'] });
+  assertStatus(preview, 200, 'process blueprint dry-run calismali');
+  const applied = await api('POST', '/api/process-blueprints/apply', bearer, { blueprint, sections: ['numberSequences'] });
+  assertStatus(applied, 200, 'process blueprint secili bolumle uygulanabilmeli');
+  const foreignList = await api('GET', '/api/process-blueprints', token(ctx.ownerBId, ctx.tenantBId));
+  if (JSON.stringify(foreignList.body).includes('integration-package')) throw new Error('Process blueprint tenantlar arasinda sizdi.');
 }
 
 async function testDataExchangeTenantIsolation(ctx: TestContext): Promise<void> {
@@ -1515,6 +1553,32 @@ async function testRecordCollaborationFlow(ctx: TestContext): Promise<void> {
   assertStatus(foreignRecord, 404, 'baska tenant kaydinin isbirligi baglami gorulememeli');
 }
 
+async function testOperationRecoveryFlow(ctx: TestContext): Promise<void> {
+  const ownerToken = token(ctx.ownerAId, ctx.tenantAId);
+  const before = await prisma.contact.findFirstOrThrow({ where: { tenantId: ctx.tenantAId, id: ctx.contactAId }, select: { name: true } });
+  const changedName = `Recovery changed ${crypto.randomUUID()}`;
+  const update = await api('PATCH', `/api/contacts/${ctx.contactAId}`, ownerToken, { name: changedName });
+  assertStatus(update, 200, 'geri alinacak cari degisikligi olusturulabilmeli');
+
+  const list = await api('GET', `/api/operation-recovery/CONTACT/${ctx.contactAId}`, ownerToken);
+  assertStatus(list, 200, 'kullanici merkezli geri alma listesi yuklenebilmeli');
+  const items = readDataArray(list.body);
+  const candidate = items.find((item) => item.canExecute === true && item.mode === 'UNDO');
+  if (!candidate || typeof candidate.auditLogId !== 'string' || !Array.isArray(candidate.changes) || !Array.isArray(candidate.impacts)) {
+    throw new Error('Geri alma adayi, degisiklik karsilastirmasi veya etki analizi uretilmedi.');
+  }
+
+  const undo = await api('POST', `/api/operation-recovery/CONTACT/${ctx.contactAId}/${candidate.auditLogId}/undo`, ownerToken);
+  assertStatus(undo, 200, 'cari degisikligi guvenle geri alinabilmeli');
+  const restored = await prisma.contact.findFirstOrThrow({ where: { tenantId: ctx.tenantAId, id: ctx.contactAId }, select: { name: true } });
+  if (restored.name !== before.name) throw new Error('Geri alma onceki cari surumunu yuklemedi.');
+
+  const repeated = await api('POST', `/api/operation-recovery/CONTACT/${ctx.contactAId}/${candidate.auditLogId}/undo`, ownerToken);
+  assertStatus(repeated, 409, 'ayni degisiklik ikinci kez geri alinamamali');
+  const foreign = await api('GET', `/api/operation-recovery/CONTACT/${ctx.contactBId}`, ownerToken);
+  assertStatus(foreign, 404, 'baska tenant kaydinin geri alma gecmisi gorulememeli');
+}
+
 async function main(): Promise<void> {
   const ctx = await withTimeout('seed', seed());
   try {
@@ -1528,6 +1592,8 @@ async function main(): Promise<void> {
     await testRepositoryBackedQueries(ctx);
     console.log('Integration: automation assistant tenant-safe preview and draft');
     await testAutomationAssistantFlow(ctx);
+    console.log('Integration: versioned tenant process blueprint');
+    await testProcessBlueprintFlow(ctx);
     console.log('Integration: bulk import assistance tenant-safe analysis and learning');
     await testBulkImportAssistanceFlow(ctx);
     console.log('Integration: data deduplication merge and rollback');
@@ -1582,6 +1648,8 @@ async function main(): Promise<void> {
     await testReportDecisionInsightsFlow(ctx);
     console.log('Integration: record-context collaboration and tenant isolation');
     await testRecordCollaborationFlow(ctx);
+    console.log('Integration: user-centered operation recovery');
+    await testOperationRecoveryFlow(ctx);
     console.log('Integration: data import partial failure plan');
     await testDataImportPartialFailurePlan(ctx);
     console.log('Integration: external API key scope and tenant isolation');

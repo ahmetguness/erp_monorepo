@@ -185,6 +185,12 @@ export class NotFoundError extends BaseError {
   }
 }
 
+export class ConflictError extends BaseError {
+  constructor(message: string) {
+    super(message, 409, 'CONFLICT');
+  }
+}
+
 export class ValidationError extends BaseError {
   public readonly fields?: Record<string, string>;
 

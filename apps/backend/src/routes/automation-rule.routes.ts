@@ -2,7 +2,7 @@ import { ACCESS_POLICIES } from '@repo/types/plans';
 import { Hono } from 'hono';
 import { requireAccess } from '../middleware/requireAccess';
 import { requirePermission } from '../middleware/requirePermission';
-import { AutomationRuleController } from '../modules/automation-intelligence/http/controllers/index.js';
+import { AutomationRuleController, AutomationScorecardController } from '../modules/automation-intelligence/http/controllers/index.js';
 
 const automationRuleRoutes = new Hono();
 
@@ -13,6 +13,8 @@ automationRuleRoutes.get('/scheduler/runs', requirePermission('settings', 'READ'
 automationRuleRoutes.post('/scheduler/run', requirePermission('settings', 'UPDATE'), AutomationRuleController.runScheduler);
 automationRuleRoutes.get('/', requirePermission('settings', 'READ'), AutomationRuleController.list);
 automationRuleRoutes.get('/executions', requirePermission('settings', 'READ'), AutomationRuleController.listExecutions);
+automationRuleRoutes.get('/scorecard', requirePermission('settings', 'READ'), AutomationScorecardController.get);
+automationRuleRoutes.post('/scorecard/feedback/:executionId', requirePermission('settings', 'UPDATE'), AutomationScorecardController.feedback);
 automationRuleRoutes.get('/governance/policy', requirePermission('settings', 'READ'), AutomationRuleController.getGovernancePolicy);
 automationRuleRoutes.put('/governance/policy', requirePermission('settings', 'UPDATE'), AutomationRuleController.updateGovernancePolicy);
 automationRuleRoutes.post('/assistant/preview', requirePermission('settings', 'CREATE'), AutomationRuleController.previewAssistant);

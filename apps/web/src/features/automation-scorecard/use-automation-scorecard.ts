@@ -1,0 +1,4 @@
+'use client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'; import { toast } from '@/store/ui.store'; import { getErrorMessage } from '@/types/api.types'; import { getAutomationScorecard, sendAutomationFeedback } from './automation-scorecard.api';
+export function useAutomationScorecard(days: 7 | 30 | 90) { return useQuery({ queryKey: ['automation-scorecard', days], queryFn: () => getAutomationScorecard(days) }); }
+export function useAutomationFeedback(days: 7 | 30 | 90) { const client = useQueryClient(); return useMutation({ mutationFn: (input: { executionId: string; outcome: 'ACCEPTED' | 'REJECTED' | 'CORRECTED'; reason?: string }) => sendAutomationFeedback(input.executionId, input.outcome, input.reason), onSuccess: async () => { await client.invalidateQueries({ queryKey: ['automation-scorecard', days] }); toast.success('Süreç geri bildirimi kaydedildi.'); }, onError: (error: unknown) => toast.error(getErrorMessage(error)) }); }

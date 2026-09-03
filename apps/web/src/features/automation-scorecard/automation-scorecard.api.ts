@@ -1,0 +1,4 @@
+import { z } from 'zod';
+import { apiClient } from '@/lib/api-client'; import { safeParse } from '@/lib/safe-parse'; import { AutomationScorecardSchema } from './automation-scorecard.schemas';
+export async function getAutomationScorecard(days: 7 | 30 | 90) { const response = await apiClient.get('/api/automation-rules/scorecard', { params: { days } }); return safeParse(AutomationScorecardSchema, response.data.data, 'getAutomationScorecard'); }
+export async function sendAutomationFeedback(executionId: string, outcome: 'ACCEPTED' | 'REJECTED' | 'CORRECTED', reason?: string) { const response = await apiClient.post(`/api/automation-rules/scorecard/feedback/${encodeURIComponent(executionId)}`, { outcome, reason }); return safeParse(z.object({ recorded: z.literal(true) }), response.data.data, 'sendAutomationFeedback'); }

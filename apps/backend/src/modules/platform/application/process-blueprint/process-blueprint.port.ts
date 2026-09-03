@@ -1,0 +1,2 @@
+import type { BlueprintSection, ProcessBlueprint, ProcessBlueprintContent } from './process-blueprint.types.js';
+export interface ProcessBlueprintRepository { snapshot(tenantId: string): Promise<ProcessBlueprintContent>; list(tenantId: string): Promise<ProcessBlueprint[]>; save(tenantId: string, blueprint: ProcessBlueprint): Promise<void>; apply(tenantId: string, blueprint: ProcessBlueprint, sections: readonly BlueprintSection[]): Promise<void> }

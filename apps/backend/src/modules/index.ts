@@ -10,6 +10,7 @@ import { productionModule } from './production/index.js';
 import { salesModule } from './sales/index.js';
 import { workforceServiceModule } from './workforce-service/index.js';
 import { collaborationModule } from './collaboration/index.js';
+import { recoveryModule } from './recovery/index.js';
 
 export const tenantModules: readonly BackendModule[] = Object.freeze([
   identityModule,
@@ -22,5 +23,6 @@ export const tenantModules: readonly BackendModule[] = Object.freeze([
   marketplaceModule,
   automationIntelligenceModule,
   collaborationModule,
+  recoveryModule,
   platformModule,
 ]);

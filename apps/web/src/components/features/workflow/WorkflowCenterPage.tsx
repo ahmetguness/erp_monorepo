@@ -19,6 +19,7 @@ import { AutomationDecisionCard } from './AutomationDecisionCard';
 import { AutomationGovernancePanel } from './AutomationGovernancePanel';
 import { useCurrentUser } from '@/hooks/useAuth';
 import { createUserAccessContext, hasUserPermission } from '@/domain/access/user-access-context';
+import { ProcessBlueprintPanel } from '@/features/process-blueprints';
 
 const TYPE_LABEL: Record<WorkflowTask['type'], string> = {
   APPROVAL: 'Onay',
@@ -164,6 +165,8 @@ export function WorkflowCenterPage() {
           ) : null
         }
       />
+
+      <ProcessBlueprintPanel />
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-slate-800 pb-px">
