@@ -13,7 +13,8 @@ export type ActivitySource =
   | 'NOTIFICATION'
   | 'APPROVAL'
   | 'PAYMENT'
-  | 'SERVICE';
+  | 'SERVICE'
+  | 'COLLABORATION';
 
 /** Aktivite görsel tonu — UI'da renk/ikon seçimi için. */
 export type ActivityTone = 'neutral' | 'success' | 'danger' | 'warning' | 'info';
@@ -77,6 +78,7 @@ export interface ActivityListInput {
   entityType: EntityType;
   entityId: string;
   limit: number;
+  includeAudit: boolean;
 }
 
 /** Servis çıktı şekli. */

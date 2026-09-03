@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
-import { requirePermission } from '../middleware/requirePermission';
+import { requireRecordContextPermission } from '../middleware/requireRecordContextPermission.js';
 import { ActivityController } from '../modules/platform/http/controllers/index.js';
 
 const activityRoutes = new Hono();
 
-activityRoutes.get('/', requirePermission('audit_logs', 'READ'), ActivityController.list);
+activityRoutes.get('/', requireRecordContextPermission('READ', 'query'), ActivityController.list);
 
 export { activityRoutes };

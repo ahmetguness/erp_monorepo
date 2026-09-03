@@ -10,6 +10,7 @@ import {
   CreditCard,
   FileText,
   Mail,
+  MessageSquare,
   Paperclip,
   Wrench,
 } from 'lucide-react';
@@ -44,6 +45,7 @@ const SOURCE_LABELS: Record<ActivitySource, string> = {
   APPROVAL: 'Onay',
   PAYMENT: 'Ödeme',
   SERVICE: 'Servis',
+  COLLABORATION: 'İşbirliği',
 };
 
 const TONE_BADGE_VARIANT: Record<ActivityTone, 'neutral' | 'success' | 'danger' | 'warning' | 'info'> = {
@@ -76,6 +78,7 @@ function getActivityIcon(item: ActivityItem) {
   if (item.sourceType === 'APPROVAL') return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
   if (item.sourceType === 'PAYMENT') return <CreditCard className="h-4 w-4 text-emerald-400" />;
   if (item.sourceType === 'SERVICE') return <Wrench className="h-4 w-4 text-orange-400" />;
+  if (item.sourceType === 'COLLABORATION') return <MessageSquare className="h-4 w-4 text-violet-400" />;
   if (item.tone === 'success') return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
   if (item.tone === 'danger') return <CircleDot className="h-4 w-4 text-red-400" />;
   return <FileText className="h-4 w-4 text-slate-400" />;

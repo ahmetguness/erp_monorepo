@@ -16,6 +16,7 @@ export const ActivitySourceSchema = z.enum([
   'APPROVAL',
   'PAYMENT',
   'SERVICE',
+  'COLLABORATION',
 ]);
 
 export const ActivityToneSchema = z.enum(['neutral', 'success', 'danger', 'warning', 'info']);

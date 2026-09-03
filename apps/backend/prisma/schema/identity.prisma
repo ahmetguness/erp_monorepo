@@ -230,6 +230,8 @@ model Tenant {
   invitations              Invitation[]
   demoRequests             DemoRequest[]
   collectionReminders      CollectionReminder[]
+  collaborationEntries    RecordCollaborationEntry[]
+  recordFollowers          RecordFollower[]
 
   @@index([status])
   @@index([deletedAt])
@@ -257,6 +259,8 @@ model User {
   sentInvitations Invitation[] @relation("InvitationInviter")
   sentMailMessages MailMessage[] @relation("MailMessageSender")
   aiRequestLogs AiRequestLog[]
+  collaborationEntries RecordCollaborationEntry[] @relation("RecordCollaborationEntryCreator")
+  followedRecords RecordFollower[] @relation("RecordFollowerUser")
 
   @@index([email])
   @@index([deletedAt])

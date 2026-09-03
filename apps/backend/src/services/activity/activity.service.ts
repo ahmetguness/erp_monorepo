@@ -175,9 +175,9 @@ export class ActivityService {
   constructor(private readonly db: PrismaClient) {}
 
   async list(input: ActivityListInput): Promise<ActivityListResult> {
-    const [auditItems, attachmentItems, taskItems, notificationItems, approvalItems, paymentItems, serviceItems, mailItems] =
+    const [auditItems, attachmentItems, taskItems, notificationItems, approvalItems, paymentItems, serviceItems, mailItems, collaborationItems] =
       await Promise.all([
-        this.listAudit(input),
+        input.includeAudit ? this.listAudit(input) : Promise.resolve([]),
         this.listAttachments(input),
         this.listTasks(input),
         this.listNotifications(input),
@@ -185,6 +185,7 @@ export class ActivityService {
         this.listPayments(input),
         this.listServiceActivities(input),
         this.listMails(input),
+        this.listCollaboration(input),
       ]);
 
     const merged = [
@@ -196,6 +197,7 @@ export class ActivityService {
       ...paymentItems,
       ...serviceItems,
       ...mailItems,
+      ...collaborationItems,
     ].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
 
     const actorLabels = await resolveActorLabels(this.db, collectActorIds(merged));
@@ -626,6 +628,31 @@ export class ActivityService {
       occurredAt: mail.sentAt ?? mail.createdAt,
       href: `/dashboard/mail?mailId=${mail.id}`,
       importance: mailImportance(mail.status),
+    }));
+  }
+
+  private async listCollaboration(input: ActivityListInput): Promise<InternalActivityItem[]> {
+    const entries = await this.db.recordCollaborationEntry.findMany({
+      where: { tenantId: input.tenantId, entityType: input.entityType, entityId: input.entityId },
+      orderBy: { createdAt: 'desc' },
+      take: input.limit,
+    });
+    return entries.map((entry): InternalActivityItem => ({
+      id: `collaboration:${entry.id}`,
+      source: 'COLLABORATION',
+      sourceId: entry.id,
+      tone: entry.type === 'DECISION' ? 'success' : 'info',
+      title: entry.type === 'DECISION' ? 'karar kaydetti' : entry.type === 'EMAIL_LINK' ? 'e-postayı kayda bağladı' : 'yorum ekledi',
+      description: entry.content,
+      technicalDetails: null,
+      actorLabel: null,
+      actorId: entry.createdById,
+      module: 'collaboration',
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      occurredAt: entry.createdAt,
+      href: entry.externalId ? `/dashboard/mail?mailId=${entry.externalId}` : null,
+      importance: entry.type === 'DECISION' ? 'high' : 'medium',
     }));
   }
 }

@@ -51,6 +51,49 @@ enum TaskType {
   GENERAL
 }
 
+enum RecordCollaborationEntryType {
+  COMMENT
+  DECISION
+  EMAIL_LINK
+}
+
+model RecordCollaborationEntry {
+  id          String                       @id @default(cuid())
+  tenantId    String
+  entityType  EntityType
+  entityId    String
+  type        RecordCollaborationEntryType @default(COMMENT)
+  content     String
+  mentionIds  String[]                     @default([])
+  externalId  String?
+  createdById String
+  createdAt   DateTime                     @default(now())
+  updatedAt   DateTime                     @updatedAt
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("RecordCollaborationEntryCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, entityType, entityId, createdAt])
+  @@index([tenantId, createdById])
+  @@map("record_collaboration_entries")
+}
+
+model RecordFollower {
+  id         String     @id @default(cuid())
+  tenantId   String
+  entityType EntityType
+  entityId   String
+  userId     String
+  createdAt  DateTime   @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("RecordFollowerUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, entityType, entityId, userId])
+  @@index([tenantId, userId, createdAt])
+  @@map("record_followers")
+}
+
 enum AutomationTrigger {
   LOW_STOCK
   OVERDUE_INVOICE

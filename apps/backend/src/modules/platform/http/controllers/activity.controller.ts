@@ -4,6 +4,8 @@ import { ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { ActivityService } from '../../../../services/activity/index.js';
 import { requireTenantId,requireUserId } from '../../../../utils/context.js';
+import { hasAccessPermission } from '../../../identity/application/index.js';
+import { getAccessContext } from '../../../../middleware/access-context.js';
 
 const ENTITY_TYPES: readonly EntityType[] = Object.values(EntityType);
 
@@ -29,12 +31,14 @@ export const ActivityController = {
     }
 
     const service = new ActivityService(prisma);
+    const accessContext = getAccessContext(c);
     const result = await service.list({
       tenantId,
       userId,
       entityType,
       entityId: entityId.trim(),
       limit: parseLimit(c.req.query('limit')),
+      includeAudit: accessContext ? hasAccessPermission(accessContext, 'audit_logs', 'READ') : false,
     });
 
     return c.json(result);

@@ -429,6 +429,8 @@ async function cleanup(): Promise<void> {
   await prisma.workOrderItem.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.workOrder.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.attachment.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.recordCollaborationEntry.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
+  await prisma.recordFollower.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.notification.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.task.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
   await prisma.automationExecution.deleteMany({ where: { tenantId: { in: createdTenantIds } } });
@@ -1467,6 +1469,52 @@ async function testReportDecisionInsightsFlow(ctx: TestContext): Promise<void> {
   if (!notification) throw new Error('Yonetici ozeti raporlama yetkili kullaniciya ulasmadi.');
 }
 
+async function testRecordCollaborationFlow(ctx: TestContext): Promise<void> {
+  const ownerToken = token(ctx.ownerAId, ctx.tenantAId);
+  const basePath = `/api/record-collaboration/CONTACT/${ctx.contactAId}`;
+  const initial = await api('GET', basePath, ownerToken);
+  assertStatus(initial, 200, 'kayit isbirligi baglami yuklenebilmeli');
+
+  const followed = await api('PUT', `${basePath}/following`, ownerToken, { following: true });
+  assertStatus(followed, 200, 'kayit takip edilebilmeli');
+
+  const comment = await api('POST', `${basePath}/entries`, ownerToken, {
+    type: 'COMMENT',
+    content: 'Cari risk limiti ekip tarafindan kontrol edilecek.',
+    mentionIds: [ctx.limitedAId],
+  });
+  assertStatus(comment, 201, 'kayit baglaminda mention iceren yorum olusturulabilmeli');
+
+  const decision = await api('POST', `${basePath}/entries`, ownerToken, {
+    type: 'DECISION',
+    content: 'Risk limiti onay gelene kadar degistirilmeyecek.',
+    mentionIds: [],
+  });
+  assertStatus(decision, 201, 'kayit baglaminda karar olusturulabilmeli');
+
+  const snapshot = await api('GET', basePath, ownerToken);
+  assertStatus(snapshot, 200, 'guncel isbirligi baglami yuklenebilmeli');
+  const snapshotData = readDataRecord(snapshot.body);
+  if (!Array.isArray(snapshotData.entries) || snapshotData.entries.length < 2 || snapshotData.isFollowing !== true) {
+    throw new Error('Isbirligi yorumu, karari veya takip durumu contract ile uyusmuyor.');
+  }
+
+  const activity = await api('GET', `/api/activity?entityType=CONTACT&entityId=${ctx.contactAId}`, ownerToken);
+  assertStatus(activity, 200, 'isbirligi kayit aktivite akisinda gorulebilmeli');
+  const activityData = readDataArray(activity.body);
+  if (!activityData.some((item) => item.sourceType === 'COLLABORATION')) {
+    throw new Error('Isbirligi kaydi ortak aktivite akisina eklenmedi.');
+  }
+
+  const notification = await prisma.notification.findFirst({ where: { tenantId: ctx.tenantAId, userId: ctx.limitedAId, entityType: 'CONTACT', entityId: ctx.contactAId, module: 'collaboration' } });
+  if (!notification) throw new Error('Mention bildirimi tenant kullanicisina ulasmadi.');
+
+  const foreignMention = await api('POST', `${basePath}/entries`, ownerToken, { type: 'COMMENT', content: 'Gecersiz mention', mentionIds: [ctx.ownerBId] });
+  assertStatus(foreignMention, 400, 'baska tenant kullanicisi mention edilememeli');
+  const foreignRecord = await api('GET', `/api/record-collaboration/CONTACT/${ctx.contactBId}`, ownerToken);
+  assertStatus(foreignRecord, 404, 'baska tenant kaydinin isbirligi baglami gorulememeli');
+}
+
 async function main(): Promise<void> {
   const ctx = await withTimeout('seed', seed());
   try {
@@ -1532,6 +1580,8 @@ async function main(): Promise<void> {
     await testReplenishmentPlanningFlow(ctx);
     console.log('Integration: actionable and traceable report insights');
     await testReportDecisionInsightsFlow(ctx);
+    console.log('Integration: record-context collaboration and tenant isolation');
+    await testRecordCollaborationFlow(ctx);
     console.log('Integration: data import partial failure plan');
     await testDataImportPartialFailurePlan(ctx);
     console.log('Integration: external API key scope and tenant isolation');

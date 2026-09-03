@@ -1,18 +1,18 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle2, ClipboardEdit, Mail, Paperclip, Send, ShieldCheck, Trash2 } from 'lucide-react';
+import { CheckCircle2, Mail, Paperclip, Send, ShieldCheck, Trash2 } from 'lucide-react';
 import { AttachmentPanel } from '@/components/shared/AttachmentPanel';
 import { EntityActivityTimeline } from '@/components/shared/EntityActivityTimeline';
 import { EntityTaskActions } from '@/components/shared/EntityTaskActions';
 import { RecommendedActionsPanel, type RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
+import { RecordCollaborationPanel, useCreateCollaborationEntry } from '@/features/collaboration';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
 import { useCreateApprovalRequest, useApprovalFlows } from '@/hooks/useApprovals';
 import { useCurrentUser } from '@/hooks/useAuth';
 import { useSendMail } from '@/hooks/useMail';
-import { useCreateTask } from '@/hooks/useWorkflow';
 import type { AuditEntityType } from '@/services/audit-log.service';
 import type { ApprovalModule } from '@/services/approval.service';
 import type { SendMailDTO } from '@/services/mail.service';
@@ -119,14 +119,13 @@ export function EntityActionPanel({
   const actions = useMemo(() => new Set<EntityAction>(availableActions), [availableActions]);
   const { user } = useCurrentUser();
   const sendMail = useSendMail();
-  const createTask = useCreateTask();
+  const createCollaborationEntry = useCreateCollaborationEntry({ entityType, entityId });
   const createApprovalRequest = useCreateApprovalRequest();
   const approvalModule = APPROVAL_MODULE_BY_ENTITY[entityType] ?? 'OTHER';
   const { data: approvalFlows } = useApprovalFlows({ module: approvalModule, isActive: 'true', limit: 50 });
   const activeFlows = approvalFlows?.data ?? [];
 
   const [mailOpen, setMailOpen] = useState(false);
-  const [noteOpen, setNoteOpen] = useState(false);
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [mailTo, setMailTo] = useState(primaryEmail ?? '');
   const [mailSubject, setMailSubject] = useState(`${displayName} hakkında`);
@@ -134,7 +133,6 @@ export function EntityActionPanel({
   const [mailAttachments, setMailAttachments] = useState<MailAttachmentDraft[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isReadingFiles, setIsReadingFiles] = useState(false);
-  const [noteText, setNoteText] = useState('');
   const [selectedFlowId, setSelectedFlowId] = useState('');
   const [approvalNote, setApprovalNote] = useState('');
 
@@ -186,32 +184,22 @@ export function EntityActionPanel({
   };
 
   const handleSendMail = async () => {
-    await sendMail.mutateAsync({
+    const result = await sendMail.mutateAsync({
       to: mailRecipients.length === 1 ? mailRecipients[0] : mailRecipients,
       subject: mailSubject.trim(),
       html: textToHtml(mailBody.trim()),
       ...(user?.email && { replyTo: user.email }),
       ...(mailAttachments.length > 0 && { attachments: toMailAttachments(mailAttachments) }),
     });
+    if (result.success && result.id) {
+      await createCollaborationEntry.mutateAsync({
+        type: 'EMAIL_LINK',
+        content: `${mailSubject.trim()} başlıklı e-posta kayda bağlandı.`,
+        mentionIds: [],
+        externalId: result.id,
+      });
+    }
     resetMail();
-  };
-
-  const handleCreateNote = async () => {
-    const trimmed = noteText.trim();
-    if (!trimmed) return;
-    await createTask.mutateAsync({
-      title: `${displayName} notu`,
-      detail: trimmed,
-      type: 'GENERAL',
-      priority: 'LOW',
-      module,
-      entityType,
-      entityId,
-      href,
-      source: `note:${entityType}:${entityId}:${Date.now()}`,
-    });
-    setNoteText('');
-    setNoteOpen(false);
   };
 
   const handleApproval = async () => {
@@ -240,11 +228,6 @@ export function EntityActionPanel({
               Mail
             </Button>
           )}
-          {actions.has('note') && (
-            <Button size="sm" variant="outline" leftIcon={<ClipboardEdit className="h-3.5 w-3.5" />} onClick={() => setNoteOpen(true)}>
-              Not
-            </Button>
-          )}
           {actions.has('approval') && (
             <Button size="sm" variant="outline" leftIcon={<ShieldCheck className="h-3.5 w-3.5" />} onClick={() => setApprovalOpen(true)}>
               Onaya gönder
@@ -259,6 +242,7 @@ export function EntityActionPanel({
       </section>
 
       <RecommendedActionsPanel actions={recommendedActions} />
+      {actions.has('note') && <RecordCollaborationPanel entityType={entityType} entityId={entityId} displayName={displayName} />}
       {actions.has('task') && <EntityTaskActions entityType={entityType} entityId={entityId} entityLabel={displayName} module={module} href={href} />}
       {actions.has('attachment') && <AttachmentPanel entityType={entityType} entityId={entityId} />}
       {actions.has('activity') && <EntityActivityTimeline entityType={entityType} entityId={entityId} />}
@@ -323,21 +307,6 @@ export function EntityActionPanel({
             )}
           </div>
         </div>
-      </Modal>
-
-      <Modal
-        isOpen={noteOpen}
-        onClose={() => setNoteOpen(false)}
-        title="Not ekle"
-        description={displayName}
-        footer={(
-          <>
-            <Button variant="ghost" onClick={() => setNoteOpen(false)} disabled={createTask.isPending}>İptal</Button>
-            <Button onClick={handleCreateNote} disabled={!noteText.trim()} loading={createTask.isPending} leftIcon={<ClipboardEdit className="h-4 w-4" />}>Kaydet</Button>
-          </>
-        )}
-      >
-        <Textarea label="Not" value={noteText} onChange={(event) => setNoteText(event.target.value)} rows={6} />
       </Modal>
 
       <Modal
