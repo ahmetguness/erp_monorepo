@@ -48,7 +48,7 @@ export function HoldingCompanyPage() {
   const transferColumns: ColumnDef<IntercompanyTransferRow>[] = [
     {
       key: "product",
-      header: "Urun",
+      header: "Ürün",
       render: (row) => (
         <div>
           <span className="text-sm font-semibold text-white">{row.productName}</span>
@@ -73,7 +73,7 @@ export function HoldingCompanyPage() {
   return (
     <div>
       <PageHeader
-        title="Coklu sirket/sube"
+        title="Çoklu şirket/şube"
         subtitle="Holding yapisi, sirketler arasi stok transferleri ve konsolide raporlar."
         action={
           <Button variant="secondary" size="sm" onClick={() => void refetch()} loading={isFetching}>
@@ -84,10 +84,10 @@ export function HoldingCompanyPage() {
       />
 
       <div className="mb-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Metric icon={<Building2 className="h-4 w-4" />} label="Sirket" value={summary?.companyCount ?? 0} />
-        <Metric icon={<GitBranch className="h-4 w-4" />} label="Sube" value={summary?.branchCount ?? 0} />
+        <Metric icon={<Building2 className="h-4 w-4" />} label="Şirket" value={summary?.companyCount ?? 0} />
+        <Metric icon={<GitBranch className="h-4 w-4" />} label="Şube" value={summary?.branchCount ?? 0} />
         <Metric icon={<Warehouse className="h-4 w-4" />} label="Depo" value={summary?.warehouseCount ?? 0} />
-        <Metric icon={<TrendingUp className="h-4 w-4" />} label="Satis" value={formatCurrency(summary?.consolidatedSales ?? 0)} />
+        <Metric icon={<TrendingUp className="h-4 w-4" />} label="Satış" value={formatCurrency(summary?.consolidatedSales ?? 0)} />
         <Metric icon={<Repeat2 className="h-4 w-4" />} label="Transfer" value={summary?.intercompanyTransferCount ?? 0} />
         <Metric icon={<Warehouse className="h-4 w-4" />} label="Stok Degeri" value={formatCurrency(summary?.consolidatedStockValue ?? 0)} />
       </div>
@@ -96,17 +96,17 @@ export function HoldingCompanyPage() {
         <section>
           <h2 className="mb-3 text-sm font-semibold text-white">Holding yapisi</h2>
           <DataTable columns={organizationColumns} data={data?.organization ?? []} keyExtractor={(row) => row.id} isLoading={isLoading}
-            emptyTitle="Yapi bulunamadi" emptyDescription="Sirket ve depo bilgileri olusturuldugunda holding agaci burada gorunur." />
+            emptyTitle="Yapi bulunamadi" emptyDescription="Şirket ve depo bilgileri olusturuldugunda holding agaci burada görünür." />
         </section>
         <section>
           <h2 className="mb-3 text-sm font-semibold text-white">Sirketler arasi stok transferleri</h2>
           <DataTable columns={transferColumns} data={data?.intercompanyTransfers ?? []} keyExtractor={(row) => row.id} isLoading={isLoading}
-            emptyTitle="Transfer yok" emptyDescription="Depolar arasi transferler sirket/sube transfer akisi olarak burada izlenir." />
+            emptyTitle="Transfer yok" emptyDescription="Depolar arasi transferler şirket/şube transfer akışı olarak burada izlenir." />
         </section>
         <section>
           <h2 className="mb-3 text-sm font-semibold text-white">Konsolide raporlar</h2>
           <DataTable columns={reportColumns} data={data?.consolidatedReports ?? []} keyExtractor={(row) => row.key} isLoading={isLoading}
-            emptyTitle="Rapor verisi yok" emptyDescription="Fatura, tahsilat ve stok kayitlari konsolide ozetleri besler." />
+            emptyTitle="Rapor verisi yok" emptyDescription="Fatura, tahsilat ve stok kayıtları konsolide ozetleri besler." />
         </section>
       </div>
     </div>

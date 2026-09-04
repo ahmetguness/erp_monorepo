@@ -79,7 +79,7 @@ export default function UsersAndInvitesPage() {
     [activeUserCount, pendingInviteCount, planFeatures.maxUsers],
   );
   const inviteLimitMessage = userLimit.isFull && userLimit.maxUsers !== null
-    ? `${userLimit.maxUsers} kullanici limitine ulasildi. Yeni davet icin bir daveti iptal edin, pasif kullanicilari kontrol edin veya plani yukseltin.`
+    ? `${userLimit.maxUsers} kullanıcı limitine ulaşıldı. Yeni davet için bir daveti iptal edin, pasif kullanıcıları kontrol edin veya plani yükseltin.`
     : null;
 
   return (
@@ -119,11 +119,11 @@ export default function UsersAndInvitesPage() {
               <div>
                 <p className="text-sm font-semibold text-slate-100">Kullanıcı limiti</p>
                 <p className="text-xs text-slate-400">
-                  {userLimit.activeUsers} aktif kullanici, {userLimit.pendingInvites} bekleyen davet. Limit: {userLimit.maxUsers} kullanici.
+                  {userLimit.activeUsers} aktif kullanıcı, {userLimit.pendingInvites} bekleyen davet. Limit: {userLimit.maxUsers} kullanıcı.
                 </p>
                 {userLimit.isFull && (
                   <p className="mt-1 text-xs text-amber-200">
-                    Yeni kullanici daveti gondermeden once mevcut davetleri iptal edin veya plani yukseltin.
+                    Yeni kullanıcı daveti göndermeden önce mevcut davetleri iptal edin veya plani yükseltin.
                   </p>
                 )}
               </div>
@@ -131,7 +131,7 @@ export default function UsersAndInvitesPage() {
             <div className="min-w-40">
               <div className="mb-1 flex items-center justify-between text-[11px] text-slate-400">
                 <span>{userLimit.reservedUsers}/{userLimit.maxUsers}</span>
-                <span>{userLimit.remainingSlots} bos slot</span>
+                <span>{userLimit.remainingSlots} boş slot</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-slate-800">
                 <div
@@ -291,7 +291,7 @@ export default function UsersAndInvitesPage() {
             )}>
               {userLimit.isFull
                 ? 'Kullanıcı limiti dolu. Davet gönderimi yeni bir slot açılana kadar kapalı.'
-                : `${userLimit.remainingSlots} kullanici slotu kaldi. Bekleyen davetler limite dahil gosterilir.`}
+                : `${userLimit.remainingSlots} kullanıcı slotu kaldi. Bekleyen davetler limite dahil gösterilir.`}
             </div>
           )}
 

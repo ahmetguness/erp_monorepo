@@ -35,11 +35,11 @@ const DEFAULT_BI_SETTINGS: BiSettings = {
 };
 
 const CONNECTOR_OPTIONS: Array<{ value: BiSettings['connectorType']; label: string; description: string }> = [
-  { value: 'rest', label: 'REST/OData', description: 'Power BI, Tableau ve Qlik icin mevcut JSON endpoint.' },
+  { value: 'rest', label: 'REST/OData', description: 'Power BI, Tableau ve Qlik için mevcut JSON endpoint.' },
   { value: 'read_replica', label: 'Read replica', description: 'Analitik sorgulari operasyonel veritabanindan ayiran replica.' },
   { value: 'bigquery', label: 'BigQuery', description: 'Google BigQuery dataset veya scheduled export hedefi.' },
-  { value: 'snowflake', label: 'Snowflake', description: 'Snowflake warehouse/schema aktarim hedefi.' },
-  { value: 'postgresql', label: 'PostgreSQL', description: 'BI icin ayrilmis PostgreSQL warehouse baglantisi.' },
+  { value: 'snowflake', label: 'Snowflake', description: 'Snowflake warehouse/schema aktarım hedefi.' },
+  { value: 'postgresql', label: 'PostgreSQL', description: 'BI için ayrılmış PostgreSQL warehouse bağlantısı.' },
 ];
 
 const EXPORT_TARGET_OPTIONS: Array<{ value: BiSettings['scheduledExportTarget']; label: string }> = [
@@ -55,7 +55,7 @@ const HEALTH_LABELS: Record<BiSettings['status']['health'], string> = {
   disabled: 'Kapalı',
   needs_token: 'Token bekliyor',
   needs_destination: 'Hedef bilgisi eksik',
-  ready: 'Hazir',
+  ready: 'Hazır',
 };
 
 const CONNECTOR_LABELS: Record<BiSettings['connectorType'], string> = {
@@ -243,7 +243,7 @@ export default function BiWarehouseSettingsPage() {
               </div>
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold text-white">Enterprise Veri Ambari Connector</h3>
-                <p className="text-xs text-slate-500">Read replica, BigQuery, Snowflake veya PostgreSQL hedefini ve scheduled export politikasini yonetin.</p>
+                <p className="text-xs text-slate-500">Read replica, BigQuery, Snowflake veya PostgreSQL hedefini ve scheduled export politikasini yönetin.</p>
               </div>
             </div>
             <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${healthClassName}`}>
@@ -280,13 +280,13 @@ export default function BiWarehouseSettingsPage() {
                 <span className="text-xs text-slate-500">{CONNECTOR_LABELS[form.connectorType]}</span>
               </div>
               <div>
-                <span className="block text-xs font-semibold text-slate-200">Sonraki planli aktarim</span>
+                <span className="block text-xs font-semibold text-slate-200">Sonraki planlı aktarım</span>
                 <span className="text-xs text-slate-500">
-                  {form.status.nextRun ? new Date(form.status.nextRun).toLocaleString('tr-TR') : 'Planli zaman henuz olusmadi'}
+                  {form.status.nextRun ? new Date(form.status.nextRun).toLocaleString('tr-TR') : 'Planlı zaman henüz oluşmadı'}
                 </span>
               </div>
               <div>
-                <span className="block text-xs font-semibold text-slate-200">Hazir connectorlar</span>
+                <span className="block text-xs font-semibold text-slate-200">Hazır connectorlar</span>
                 <span className="text-xs text-slate-500">{configuredConnectors.join(', ')}</span>
               </div>
             </div>

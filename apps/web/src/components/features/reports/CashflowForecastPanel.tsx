@@ -16,7 +16,7 @@ import { useCashflowForecast } from '@/hooks/useReporting';
 import { cn, formatCurrency } from '@/lib/utils';
 
 const RISK_LABELS = {
-  LOW: 'Dusuk risk',
+  LOW: 'Düşük risk',
   MEDIUM: 'Izleme gerekli',
   HIGH: 'Kritik risk',
 } as const;
@@ -77,7 +77,7 @@ export function CashflowForecastPanel() {
     return (
       <div className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl p-4 flex items-center gap-3">
         <AlertCircle className="w-5 h-5 shrink-0" />
-        <p className="text-sm">Nakit akisi verileri yuklenirken bir hata olustu. Lutfen tekrar deneyin.</p>
+        <p className="text-sm">Nakit akışı verileri yuklenirken bir hata oluştu. Lütfen tekrar deneyin.</p>
       </div>
     );
   }
@@ -103,13 +103,13 @@ export function CashflowForecastPanel() {
             Likit bakiye
           </div>
           <p className="mt-3 text-2xl font-black text-white">{formatCurrency(data.startingBalance)}</p>
-          <p className="mt-1 text-xs text-slate-500">Kasa ve banka hareketlerinden hesaplanan baslangic bakiyesi.</p>
+          <p className="mt-1 text-xs text-slate-500">Kasa ve banka hareketlerinden hesaplanan başlangıç bakiyesi.</p>
         </div>
 
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
             <Calendar className="h-4 w-4 text-indigo-400" />
-            90 gun sonu
+            90 gün sonu
           </div>
           <p className="mt-3 text-2xl font-black text-white">{formatCurrency(data.projectedEndingBalance)}</p>
           <p className="mt-1 text-xs text-slate-500">Vadesi gelen alacak, borc ve cek/senet projeksiyonu.</p>
@@ -123,7 +123,7 @@ export function CashflowForecastPanel() {
             </span>
           </div>
           <p className="mt-3 text-2xl font-black text-white">{bestScenario ? bestScenario.label : 'Beklenen'}</p>
-          <p className="mt-1 text-xs text-slate-500">Senaryolar tahsilat ve odeme gerceklesme oranlarini degistirir.</p>
+          <p className="mt-1 text-xs text-slate-500">Senaryolar tahsilat ve ödeme gerceklesme oranlarini degistirir.</p>
         </div>
       </div>
 
@@ -131,8 +131,8 @@ export function CashflowForecastPanel() {
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
           <div className="mb-5 flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-bold text-slate-200">Nakit akisi projeksiyonu</h3>
-              <p className="mt-1 text-xs text-slate-500">30/60/90 gunluk giris, cikis ve kapanis bakiyesi.</p>
+              <h3 className="text-sm font-bold text-slate-200">Nakit akışı projeksiyonu</h3>
+              <p className="mt-1 text-xs text-slate-500">30/60/90 günlük giris, çıkış ve kapanış bakiyesi.</p>
             </div>
           </div>
           <div className="h-80">
@@ -156,8 +156,8 @@ export function CashflowForecastPanel() {
         </div>
 
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <h3 className="text-sm font-bold text-slate-200">Senaryo bazli tahmin</h3>
-          <p className="mt-1 text-xs text-slate-500">Tahsilat ve odeme oranlarina gore 90 gun sonu bakiye.</p>
+          <h3 className="text-sm font-bold text-slate-200">Senaryo bazlı tahmin</h3>
+          <p className="mt-1 text-xs text-slate-500">Tahsilat ve ödeme oranlarina göre 90 gün sonu bakiye.</p>
           <div className="mt-5 space-y-3">
             {data.scenarios.map((scenario) => {
               const isPositive = scenario.projectedEndingBalance >= 0;
@@ -167,7 +167,7 @@ export function CashflowForecastPanel() {
                     <div>
                       <p className="text-sm font-bold text-white">{scenario.label}</p>
                       <p className="mt-0.5 text-[10px] text-slate-500">
-                        Tahsilat %{scenario.collectionRatePct} - Odeme %{scenario.paymentRatePct}
+                        Tahsilat %{scenario.collectionRatePct} - Ödeme %{scenario.paymentRatePct}
                       </p>
                     </div>
                     <span className={cn('text-sm font-black', isPositive ? 'text-emerald-400' : 'text-red-400')}>

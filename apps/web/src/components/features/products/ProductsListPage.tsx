@@ -285,7 +285,7 @@ export function ProductsListPage() {
               pageSize={listState.pageSize}
               onPageSizeChange={listState.setPageSize}
               exportRows={products}
-              exportFilename="urunler.csv"
+              exportFilename="ürünler.csv"
               shareHref={listState.shareHref}
             />
           </div>

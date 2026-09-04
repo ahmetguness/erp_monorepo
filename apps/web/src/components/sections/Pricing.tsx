@@ -35,7 +35,7 @@ export default function Pricing() {
             Isletmenizin olcegine uygun<br className="hidden sm:block" /> ERP lisansi
           </h2>
           <p className="text-slate-400 text-sm leading-relaxed">
-            Tum paketlere kurulum destegi ve kullanici egitimi dahildir. Ozellik matrisi plan kaynagindan otomatik uretilir.
+            Tüm paketlere kurulum desteği ve kullanıcı eğitimi dahildir. Ozellik matrisi plan kaynağından otomatik üretilir.
           </p>
         </motion.div>
 
@@ -93,8 +93,8 @@ export default function Pricing() {
                     </>
                   ) : (
                     <>
-                      <div className="text-2xl font-black text-white leading-none">Ozel Fiyat</div>
-                      <p className="text-xs text-slate-500 mt-1.5">Kurumunuza ozel teklif hazirlanir</p>
+                      <div className="text-2xl font-black text-white leading-none">Özel Fiyat</div>
+                      <p className="text-xs text-slate-500 mt-1.5">Kurumunuza özel teklif hazırlanır</p>
                     </>
                   )}
                 </div>
@@ -142,7 +142,7 @@ export default function Pricing() {
             Fiyatlara KDV dahil degildir. Yillik odemede indirim uygulanir.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-slate-600">
-            {['Kurulum destegi dahil', 'Kullanici egitimi dahil', 'Moduler genisleme'].map((item) => (
+            {['Kurulum desteği dahil', 'Kullanıcı eğitimi dahil', 'Moduler genisleme'].map((item) => (
               <span key={item} className="flex items-center gap-1.5">
                 <svg className="w-3 h-3 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />

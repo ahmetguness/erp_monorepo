@@ -24,7 +24,7 @@ const SLA_VARIANT: Record<EdiB2BSlaStatus, 'success' | 'warning' | 'danger'> = {
 };
 
 const DOCUMENT_LABELS = {
-  sales_order: 'Satis siparisi',
+  sales_order: 'Satış siparisi',
   purchase_order: 'Satinalma siparisi',
   delivery_note: 'Irsaliye',
   invoice: 'Fatura',
@@ -34,7 +34,7 @@ const ISSUE_LABELS: Record<string, string> = {
   partner_code_missing: 'Cari kodu eksik',
   tax_number_missing: 'Vergi no eksik',
   edi_email_missing: 'EDI e-posta eksik',
-  partner_missing: 'Cari baglantisi yok',
+  partner_missing: 'Cari bağlantısı yok',
   document_draft: 'Dokuman taslak',
   document_blocked: 'Dokuman bloke',
   sla_breached: 'SLA asildi',
@@ -72,8 +72,8 @@ export function EdiB2BIntegrationsPage() {
     <FeatureGate plan="ENTERPRISE">
       <div>
         <PageHeader
-          title="EDI / B2B Entegrasyonlari"
-          subtitle="Buyuk musteri ve tedarikcilerle siparis, irsaliye ve fatura alisverisini tek noktadan izle."
+          title="EDI / B2B Entegrasyonları"
+          subtitle="Büyük müşteri ve tedarikçilerle sipariş, irsaliye ve fatura alışverişini tek noktadan izle."
           action={
             <Link
               href="/dashboard/api-keys"
@@ -91,7 +91,7 @@ export function EdiB2BIntegrationsPage() {
           </div>
         ) : !data ? (
           <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-500">
-            EDI / B2B ozeti alinamadi.
+            EDI / B2B özeti alinamadi.
           </div>
         ) : (
           <div className="space-y-5">
@@ -101,7 +101,7 @@ export function EdiB2BIntegrationsPage() {
                 <p className="mt-2 text-2xl font-semibold text-slate-100">{data.summary.partnerCount}</p>
               </div>
               <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-                <p className="text-xs text-slate-500">Hazir dokuman</p>
+                <p className="text-xs text-slate-500">Hazır doküman</p>
                 <p className="mt-2 text-2xl font-semibold text-emerald-200">{data.summary.readyDocumentCount}</p>
               </div>
               <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
@@ -119,13 +119,13 @@ export function EdiB2BIntegrationsPage() {
                 <div className="mb-4 flex items-center gap-2">
                   <Map className="h-4 w-4 text-violet-300" />
                   <div>
-                    <h2 className="text-sm font-semibold text-slate-200">Partner bazli mapping</h2>
-                    <p className="mt-1 text-xs text-slate-500">Kurumsal partnerler icin zorunlu alanlar ve desteklenen dokuman tipleri.</p>
+                    <h2 className="text-sm font-semibold text-slate-200">Partner bazlı mapping</h2>
+                    <p className="mt-1 text-xs text-slate-500">Kurumsal partnerler için zorunlu alanlar ve desteklenen doküman tipleri.</p>
                   </div>
                 </div>
                 <div className="grid gap-2 lg:grid-cols-2">
                   {data.partnerMappings.length === 0 ? (
-                    <p className="rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-500">Mapping icin partner bulunamadi.</p>
+                    <p className="rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-500">Mapping için partner bulunamadi.</p>
                   ) : data.partnerMappings.slice(0, 6).map((mapping) => (
                     <div key={mapping.contactId} className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
                       <div className="flex items-start justify-between gap-3">
@@ -159,7 +159,7 @@ export function EdiB2BIntegrationsPage() {
                   <Clock3 className="h-4 w-4 text-cyan-300" />
                   <div>
                     <h2 className="text-sm font-semibold text-slate-200">SLA takibi</h2>
-                    <p className="mt-1 text-xs text-slate-500">Acik B2B dokumanlar icin servis seviyesi.</p>
+                    <p className="mt-1 text-xs text-slate-500">Açık B2B dokümanlar için servis seviyesi.</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -188,7 +188,7 @@ export function EdiB2BIntegrationsPage() {
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-sm font-semibold text-slate-200">Dokuman akislari</h2>
-                    <p className="mt-1 text-xs text-slate-500">Siparis, irsaliye ve fatura mesajlari icin endpoint ve hazirlik durumu.</p>
+                    <p className="mt-1 text-xs text-slate-500">Sipariş, irsaliye ve fatura mesajlari için endpoint ve hazırlık durumu.</p>
                   </div>
                   <Badge variant="neutral">{formatDate(data.generatedAt)}</Badge>
                 </div>
@@ -209,7 +209,7 @@ export function EdiB2BIntegrationsPage() {
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Badge variant="info">{flow.direction}</Badge>
                         <Badge variant="neutral">{flow.scope}</Badge>
-                        <Badge variant={flow.blockedCount > 0 ? 'warning' : 'success'}>{flow.readyCount} hazir</Badge>
+                        <Badge variant={flow.blockedCount > 0 ? 'warning' : 'success'}>{flow.readyCount} hazır</Badge>
                       </div>
                     </div>
                   ))}
@@ -241,7 +241,7 @@ export function EdiB2BIntegrationsPage() {
                 <AlertTriangle className="h-4 w-4 text-amber-300" />
                 <div>
                   <h2 className="text-sm font-semibold text-slate-200">Hata kuyrugu ve yeniden deneme</h2>
-                  <p className="mt-1 text-xs text-slate-500">Mapping, taslak/blokaj ve SLA sorunlari icin operasyon kuyrugu.</p>
+                  <p className="mt-1 text-xs text-slate-500">Mapping, taslak/blokaj ve SLA sorunlari için operasyon kuyrugu.</p>
                 </div>
               </div>
               <div className="overflow-auto rounded-lg border border-slate-800">
@@ -292,7 +292,7 @@ export function EdiB2BIntegrationsPage() {
                 {data.errorQueue.length === 0 && (
                   <div className="flex items-center gap-2 p-4 text-sm text-slate-500">
                     <FileCheck className="h-4 w-4" />
-                    Hata kuyrugunda kayit yok.
+                    Hata kuyrugunda kayıt yok.
                   </div>
                 )}
               </div>
@@ -306,7 +306,7 @@ export function EdiB2BIntegrationsPage() {
                 </div>
                 <div className="space-y-2">
                   {data.partners.length === 0 ? (
-                    <p className="rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-500">Henuz B2B partner verisi yok.</p>
+                    <p className="rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-500">Henüz B2B partner verisi yok.</p>
                   ) : data.partners.map((partner) => (
                     <div key={partner.contactId} className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
                       <div className="flex items-start justify-between gap-3">
@@ -314,7 +314,7 @@ export function EdiB2BIntegrationsPage() {
                           <p className="truncate text-sm font-semibold text-slate-200">{partner.name}</p>
                           <p className="mt-1 text-xs text-slate-500">{partner.code ?? 'Kod yok'} / {partner.type}</p>
                         </div>
-                        <Badge variant={partner.status === 'active' ? 'success' : 'warning'}>{partner.documentCount} dokuman</Badge>
+                        <Badge variant={partner.status === 'active' ? 'success' : 'warning'}>{partner.documentCount} doküman</Badge>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {partner.directions.map((direction) => <Badge key={direction} variant="info">{direction}</Badge>)}
@@ -367,7 +367,7 @@ export function EdiB2BIntegrationsPage() {
                   {data.exchangeQueue.length === 0 && (
                     <div className="flex items-center gap-2 p-4 text-sm text-slate-500">
                       <FileCheck className="h-4 w-4" />
-                      Kuyrukta dokuman yok.
+                      Kuyrukta doküman yok.
                     </div>
                   )}
                 </div>

@@ -185,7 +185,7 @@ export function CollectionRemindersPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-sm font-semibold text-slate-100">Collection Automation</h2>
-            <p className="mt-1 text-xs text-slate-500">Vade -3, vade gunu, mail taslagi, takip gorevi ve eskalasyon akisini calistirir.</p>
+            <p className="mt-1 text-xs text-slate-500">Vade -3, vade gunu, mail taslağı, takip görevi ve eskalasyon akisini calistirir.</p>
           </div>
           <Button
             leftIcon={<RefreshCw className="w-4 h-4" />}
@@ -193,7 +193,7 @@ export function CollectionRemindersPage() {
             onClick={() => runAutomation.mutate(undefined, {
               onSuccess: (result) => {
                 setAutomationResult(result);
-                toast.success(`Tahsilat otomasyonu calisti. ${result.createdReminders} reminder, ${result.createdTasks} gorev.`);
+                toast.success(`Tahsilat otomasyonu çalıştı. ${result.createdReminders} reminder, ${result.createdTasks} görev.`);
               },
               onError: (err) => toast.error(getErrorMessage(err)),
             })}
@@ -212,7 +212,7 @@ export function CollectionRemindersPage() {
               <p className="mt-1 text-lg font-semibold text-slate-100">{automationResult.createdReminders}</p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
-              <p className="text-xs text-slate-500">Gorev</p>
+              <p className="text-xs text-slate-500">Görev</p>
               <p className="mt-1 text-lg font-semibold text-slate-100">{automationResult.createdTasks}</p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">

@@ -27,8 +27,8 @@ export function PlanRecommendedActionsCard({ plan }: { plan: PlanName }) {
         <div className="flex items-center gap-2.5">
           <Sparkles className="h-4 w-4 text-sky-400" />
           <div>
-            <h2 className="text-sm font-semibold text-slate-200">Plana gore onerilen aksiyonlar</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Paketinizden daha hizli deger almak icin siradaki adimlar.</p>
+            <h2 className="text-sm font-semibold text-slate-200">Plana göre önerilen aksiyonlar</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Paketinizden daha hızlı değer almak için sıradaki adımlar.</p>
           </div>
         </div>
         <span className={cn('w-fit rounded-lg border px-2.5 py-1 text-xs font-semibold', PLAN_TONE[plan])}>

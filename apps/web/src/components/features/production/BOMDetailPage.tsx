@@ -32,7 +32,7 @@ function formatPct(value: number): string {
 
 function revisionLabel(status: BomRevisionRow["status"]): { label: string; variant: "neutral" | "success" | "warning" | "info" } {
   if (status === "active") return { label: "Aktif", variant: "success" };
-  if (status === "future") return { label: "Planli", variant: "info" };
+  if (status === "future") return { label: "Planlı", variant: "info" };
   if (status === "expired") return { label: "Gecmis", variant: "neutral" };
   return { label: "Taslak", variant: "warning" };
 }
@@ -176,12 +176,12 @@ export function BOMDetailPage({ id }: { id: string }) {
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
           <div className="flex items-center justify-between gap-4 mb-4">
             <div>
-              <h3 className="text-sm font-semibold text-white">Enterprise uretim muhendisligi</h3>
+              <h3 className="text-sm font-semibold text-white">Enterprise üretim mühendisliği</h3>
               <p className="mt-1 text-xs text-slate-500">
                 BOM revizyonlari, alternatif hammadde, operasyon rotasi ve maliyet sapmasi tek bakista.
               </p>
             </div>
-            {engineeringLoading && <span className="text-xs text-slate-500">Yukleniyor...</span>}
+            {engineeringLoading && <span className="text-xs text-slate-500">Yükleniyor...</span>}
           </div>
 
           {engineering ? (
@@ -235,7 +235,7 @@ export function BOMDetailPage({ id }: { id: string }) {
               <div className="grid gap-4 xl:grid-cols-2">
                 <EngineeringPanel title="Operasyon rotalari">
                   {engineering.operationRoutes.length === 0 ? (
-                    <EmptyEngineeringText text="Operasyon rotasi tanimli degil." />
+                    <EmptyEngineeringText text="Operasyon rotasi tanımlı değil." />
                   ) : (
                     <div className="space-y-2">
                       {engineering.operationRoutes.map((row) => (
@@ -270,7 +270,7 @@ export function BOMDetailPage({ id }: { id: string }) {
               </div>
             </div>
           ) : (
-            !engineeringLoading && <EmptyEngineeringText text="Uretim muhendisligi ozeti hazirlanamadi." />
+            !engineeringLoading && <EmptyEngineeringText text="Üretim mühendisliği özeti hazırlanamadı." />
           )}
         </div>
       </div>
@@ -330,7 +330,7 @@ function CostComparisonRow({ row }: { row: ProductionCostComparisonRow }) {
         <div>
           <p className="text-sm font-semibold text-slate-100">{row.workOrderNumber}</p>
           <p className="mt-1 text-xs text-slate-500">
-            {formatNumber(row.producedQty, 3)} / {formatNumber(row.plannedQty, 3)} uretim
+            {formatNumber(row.producedQty, 3)} / {formatNumber(row.plannedQty, 3)} üretim
           </p>
         </div>
         <Badge variant={tone}>{formatPct(row.variancePct)}</Badge>

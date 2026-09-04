@@ -48,7 +48,7 @@ export function FeatureGate({ feature, plan, module, limitReached, limitLabel, c
 }
 
 function UpgradeMessage({ requiredPlan, reasons }: { requiredPlan: string; reasons: readonly AccessLockReason[] }) {
-  const featureLabel = reasons.find((reason) => reason.code === 'feature')?.description ?? reasons[0]?.label ?? 'Kilitli ozellik';
+  const featureLabel = reasons.find((reason) => reason.code === 'feature')?.description ?? reasons[0]?.label ?? 'Kilitli özellik';
 
   return (
     <div className="flex flex-col items-center justify-center py-20 px-6">
@@ -56,10 +56,10 @@ function UpgradeMessage({ requiredPlan, reasons }: { requiredPlan: string; reaso
         <Lock className="w-6 h-6 text-amber-400" />
       </div>
       <h2 className="text-lg font-semibold text-white mb-2">
-        Bu ozellik mevcut planinizda kullanilamaz
+        Bu özellik mevcut planinizda kullanilamaz
       </h2>
       <p className="text-sm text-slate-400 text-center max-w-md mb-6">
-        Bu ozellige erisim su an kilitli. Gereken plan: <span className="text-amber-400 font-medium">{requiredPlan}</span>.
+        Bu ozellige erişim su an kilitli. Gereken plan: <span className="text-amber-400 font-medium">{requiredPlan}</span>.
       </p>
       <div className="mb-6 w-full max-w-md space-y-2">
         {reasons.map((reason) => (

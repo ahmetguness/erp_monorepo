@@ -43,7 +43,7 @@ const TYPE_MAP: Record<
 };
 
 const MATCH_LABELS: Record<string, string> = {
-  PAYMENT: "Odeme",
+  PAYMENT: "Ödeme",
   INVOICE: "Fatura",
   CONTACT: "Cari",
   RECONCILIATION: "Mutabakat",
@@ -54,9 +54,9 @@ const STRENGTH_MAP: Record<
   BankTransactionMatchSuggestion["strength"],
   { label: string; variant: "success" | "warning" | "neutral" }
 > = {
-  HIGH: { label: "Yuksek", variant: "success" },
+  HIGH: { label: "Yüksek", variant: "success" },
   MEDIUM: { label: "Orta", variant: "warning" },
-  LOW: { label: "Dusuk", variant: "neutral" },
+  LOW: { label: "Düşük", variant: "neutral" },
 };
 
 export function BankTransactionsPage() {
@@ -261,12 +261,12 @@ export function BankTransactionsPage() {
                 <h3 className="text-sm font-semibold text-white">Otomatik eslestirme kurallari</h3>
               </div>
               <p className="mt-1 text-xs text-slate-400">
-                Tutar, tarih, referans, cari ve banka hesabi sinyalleri birlikte skorlanir; sadece yuksek guvenli adaylar toplu onaya girer.
+                Tutar, tarih, referans, cari ve banka hesabi sinyalleri birlikte skorlanir; sadece yüksek güvenli adaylar toplu onaya girer.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge variant="neutral">{workbench.summary.unmatched} eslesmeyen</Badge>
-              <Badge variant="success">{workbench.summary.readyForBulkApproval} toplu onaya hazir</Badge>
+              <Badge variant="success">{workbench.summary.readyForBulkApproval} toplu onaya hazır</Badge>
               <Badge variant="warning">{workbench.summary.needsReview} inceleme</Badge>
               <Badge variant="neutral">{workbench.summary.noCandidate} adaysiz</Badge>
             </div>
@@ -285,7 +285,7 @@ export function BankTransactionsPage() {
                   disabled={readyQueueIds.length === 0}
                   onClick={() => setSelectedQueueIds(readyQueueIds)}
                 >
-                  Hazir olanlari sec
+                  Hazır olanlari seç
                 </Button>
               </div>
               <div className="max-h-80 divide-y divide-slate-800 overflow-y-auto">

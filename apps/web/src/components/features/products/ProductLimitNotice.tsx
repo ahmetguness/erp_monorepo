@@ -19,11 +19,11 @@ export function ProductLimitNotice({ status, compact = false }: ProductLimitNoti
     ? "bg-red-500/10 text-red-400"
     : "bg-amber-500/10 text-amber-400";
   const title = status.isLimitReached
-    ? "Starter urun limiti doldu"
-    : "Starter urun limitine yaklasiyorsunuz";
+    ? "Starter ürün limiti doldu"
+    : "Starter ürün limitine yaklasiyorsunuz";
   const description = status.isLimitReached
-    ? "Yeni urun eklemek icin Professional plana gecerek urun kapasitesini 5000'e cikarabilirsiniz."
-    : `${status.remainingSlots ?? 0} urun hakkiniz kaldi. Limit dolmadan once yukseltme seceneklerini inceleyin.`;
+    ? "Yeni ürün eklemek için Professional plana gecerek ürün kapasitesini 5000'e cikarabilirsiniz."
+    : `${status.remainingSlots ?? 0} ürün hakkiniz kaldi. Limit dolmadan önce yukseltme seceneklerini inceleyin.`;
 
   return (
     <div className={`mb-4 rounded-xl border p-4 ${toneClass}`}>
@@ -36,7 +36,7 @@ export function ProductLimitNotice({ status, compact = false }: ProductLimitNoti
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-slate-100">{title}</h2>
               <span className="rounded-full bg-slate-950/50 px-2 py-0.5 text-[11px] font-medium text-slate-400">
-                {status.currentCount}/{status.maxProducts} urun
+                {status.currentCount}/{status.maxProducts} ürün
               </span>
             </div>
             {!compact && <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>}

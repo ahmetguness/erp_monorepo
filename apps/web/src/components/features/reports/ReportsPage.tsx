@@ -61,14 +61,14 @@ const PREPARED_REPORT_TEMPLATES: Array<{
   description: string;
   icon: LucideIcon;
 }> = [
-  { id: 'overview', label: 'Aylik satis', description: 'Secili donemdeki satis, gider ve net sonuc ozeti.', icon: BarChart3 },
+  { id: 'overview', label: 'Aylik satış', description: 'Secili donemdeki satış, gider ve net sonuc özeti.', icon: BarChart3 },
   { id: 'collections', label: 'Tahsilat listesi', description: 'Tarih araligindaki tahsilat hareketleri.', icon: Coins },
-  { id: 'stock', label: 'Stok kritik seviye', description: 'Minimum seviyenin altindaki urunler.', icon: Package },
-  { id: 'topProducts', label: 'En cok satan urunler', description: 'Satis miktarina gore ilk urunler.', icon: Trophy },
+  { id: 'stock', label: 'Stok kritik seviye', description: 'Minimum seviyenin altindaki ürünler.', icon: Package },
+  { id: 'topProducts', label: 'En çok satan ürünler', description: 'Satış miktarina göre ilk ürünler.', icon: Trophy },
 ];
 
 const REPORT_COLUMN_TEMPLATES: Array<{ name: string; label: string; columns: string[] }> = [
-  { name: 'executive', label: 'Yonetici ozeti', columns: ['dataset', 'metric', 'value', 'period'] },
+  { name: 'executive', label: 'Yönetici özeti', columns: ['dataset', 'metric', 'value', 'period'] },
   { name: 'finance', label: 'Finans detay', columns: ['dataset', 'metric', 'value', 'period', 'groupBy'] },
   { name: 'operations', label: 'Operasyon takibi', columns: ['dataset', 'metric', 'value', 'chartType', 'period'] },
 ];
@@ -135,7 +135,7 @@ export function ReportsPage() {
     },
     {
       key: 'columns',
-      header: 'Kolon sablonu',
+      header: 'Kolon şablonu',
       width: '140px',
       render: (r) => {
         const template = getColumnTemplateByName(r.columnTemplateName);
@@ -182,11 +182,11 @@ export function ReportsPage() {
           </button>
           {canRunSchedule && (
             <button
-              aria-label="Zamanlanmis raporu gonder"
+              aria-label="Zamanlanmis raporu gönder"
               disabled={runReportSchedule.isPending}
               onClick={(e) => { e.stopPropagation(); runReportSchedule.mutate(r.id); }}
               className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
-              title="Zamanlanmis raporu simdi gonder"
+              title="Zamanlanmis raporu şimdi gönder"
             >
               <Mail className="w-3.5 h-3.5" />
             </button>
@@ -247,18 +247,18 @@ export function ReportsPage() {
   ];
 
   const topProductsColumns: ColumnDef<TopProductItem>[] = [
-    { key: 'productCode', header: 'Urun Kodu', width: '120px', render: (r) => <span className="font-mono text-slate-400 text-xs">{r.productCode}</span> },
-    { key: 'productName', header: 'Urun Adi', render: (r) => <span className="text-slate-200 font-medium">{r.productName}</span> },
+    { key: 'productCode', header: 'Ürün Kodu', width: '120px', render: (r) => <span className="font-mono text-slate-400 text-xs">{r.productCode}</span> },
+    { key: 'productName', header: 'Ürün Adi', render: (r) => <span className="text-slate-200 font-medium">{r.productName}</span> },
     {
       key: 'quantity',
-      header: 'Satis Miktari',
+      header: 'Satış Miktari',
       width: '140px',
       align: 'right',
       render: (r) => <span className="font-mono font-bold text-sky-400">{r.quantity}</span>,
     },
     {
       key: 'revenue',
-      header: 'Satis Tutari',
+      header: 'Satış Tutari',
       width: '150px',
       align: 'right',
       render: (r) => <span className="font-mono font-bold text-emerald-400">{formatCurrency(r.revenue)}</span>,
@@ -305,7 +305,7 @@ export function ReportsPage() {
     { id: 'stock', label: 'Kritik Stok Raporu', icon: Package, locked: false },
     { id: 'topProducts', label: 'En Cok Satanlar', icon: Trophy, locked: false },
     { id: 'contacts', label: 'Cari Bakiye Raporu', icon: Users, locked: false },
-    { id: 'cashflow', label: 'Nakit Akis Tahmini', icon: Coins, locked: isStarter },
+    { id: 'cashflow', label: 'Nakit Akış Tahmini', icon: Coins, locked: isStarter },
   ];
 
   return (
@@ -317,8 +317,8 @@ export function ReportsPage() {
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-white">Hazir rapor sablonlari</h2>
-            <p className="text-xs text-slate-500">Starter icin duzenlenemeyen, dogrudan kullanilabilen temel raporlar.</p>
+            <h2 className="text-sm font-semibold text-white">Hazır rapor sablonlari</h2>
+            <p className="text-xs text-slate-500">Starter için duzenlenemeyen, dogrudan kullanılabilen temel raporlar.</p>
           </div>
           <span className="inline-flex w-fit items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-400">
             <Shield className="h-3.5 w-3.5" />
@@ -345,7 +345,7 @@ export function ReportsPage() {
                   <span className={cn('rounded-lg p-2', isActive ? 'bg-sky-500/15 text-sky-300' : 'bg-slate-900 text-slate-400')}>
                     <Icon className="h-4 w-4" />
                   </span>
-                  <span className="rounded-md border border-slate-700 px-2 py-0.5 text-[11px] font-medium text-slate-500">Hazir</span>
+                  <span className="rounded-md border border-slate-700 px-2 py-0.5 text-[11px] font-medium text-slate-500">Hazır</span>
                 </div>
                 <p className="text-sm font-semibold text-slate-100">{template.label}</p>
                 <p className="mt-1 text-xs leading-5 text-slate-500">{template.description}</p>
@@ -472,8 +472,8 @@ export function ReportsPage() {
             <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-5">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <h2 className="text-sm font-semibold text-white">Ozel raporlar</h2>
-                  <p className="text-xs text-slate-500">KPI Builder ve kayitli raporlar duzenlenebilir custom reporting alanidir.</p>
+                  <h2 className="text-sm font-semibold text-white">Özel raporlar</h2>
+                  <p className="text-xs text-slate-500">KPI Builder ve kayıtlı raporlar duzenlenebilir custom reporting alanidir.</p>
                 </div>
                 <span className="inline-flex w-fit items-center gap-1 rounded-lg border border-sky-500/20 bg-sky-500/10 px-2 py-1 text-xs text-sky-300">
                   <Save className="h-3.5 w-3.5" />
@@ -632,7 +632,7 @@ export function ReportsPage() {
                         }))}
                         className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
                       >
-                        <option value="DAILY">Gunluk</option>
+                        <option value="DAILY">Günlük</option>
                         <option value="WEEKLY">Haftalik</option>
                         <option value="MONTHLY">Aylik</option>
                       </select>
@@ -648,7 +648,7 @@ export function ReportsPage() {
                             recipients: event.target.value.split(',').map((item) => item.trim()).filter(Boolean),
                           },
                         }))}
-                        placeholder="finans@firma.com, yonetim@firma.com"
+                        placeholder="finans@firma.com, yönetim@firma.com"
                         className="h-10 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-sm text-white outline-none focus:border-sky-500/60"
                       />
                     </label>
@@ -746,28 +746,28 @@ export function ReportsPage() {
         <div className="space-y-6">
           <div className="flex flex-wrap items-end gap-3 bg-slate-900/40 p-4 border border-slate-800 rounded-xl">
             <FormRow cols={2} className="w-auto">
-              <DatePicker label="Baslangic" value={dateFrom} onValueChange={(value) => setDateFrom(value ?? '')} />
+              <DatePicker label="Başlangıç" value={dateFrom} onValueChange={(value) => setDateFrom(value ?? '')} />
               <DatePicker label="Bitis" value={dateTo} onValueChange={(value) => setDateTo(value ?? '')} />
             </FormRow>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <StatCard
-              label="Listelenen Urun"
+              label="Listelenen Ürün"
               value={loadingTopProducts ? '...' : String(topProducts?.summary.count ?? 0)}
-              sub="Satis miktarina gore ilk 10"
+              sub="Satış miktarina göre ilk 10"
               icon={<Trophy className="w-4 h-4 text-amber-400" />}
               accent="bg-amber-500/10"
             />
             <StatCard
-              label="Toplam Satis Miktari"
+              label="Toplam Satış Miktari"
               value={loadingTopProducts ? '...' : String(topProducts?.summary.totalQuantity ?? 0)}
               sub="Listelenen urunlerin toplam adedi"
               icon={<Package className="w-4 h-4 text-sky-400" />}
               accent="bg-sky-500/10"
             />
             <StatCard
-              label="Toplam Satis Tutari"
+              label="Toplam Satış Tutari"
               value={loadingTopProducts ? '...' : formatCurrency(topProducts?.summary.totalRevenue ?? 0)}
               sub="Listelenen urunlerden elde edilen ciro"
               icon={<TrendingUp className="w-4 h-4 text-emerald-400" />}
@@ -778,15 +778,15 @@ export function ReportsPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
             <div>
               <h3 className="text-sm font-semibold text-white">En Cok Satan Urunler</h3>
-              <p className="text-xs text-slate-500 mt-1">Secili tarih araligindaki satis faturalarina gore miktar bazli siralama.</p>
+              <p className="text-xs text-slate-500 mt-1">Seçili tarih aralığındaki satış faturalarına göre miktar bazlı sıralama.</p>
             </div>
             <DataTable
               columns={topProductsColumns}
               data={topProducts?.products ?? []}
               keyExtractor={(r) => r.productId}
               isLoading={loadingTopProducts}
-              emptyTitle="Satis verisi bulunamadi"
-              emptyDescription="Bu tarih araliginda urun satiri olan satis faturasi yok."
+              emptyTitle="Satış verisi bulunamadi"
+              emptyDescription="Bu tarih aralığında ürün satiri olan satış faturasi yok."
             />
           </div>
         </div>
@@ -946,7 +946,7 @@ export function ReportsPage() {
 
               <div className="grid gap-3 pt-2 border-t border-slate-800/60 md:grid-cols-[180px_minmax(0,1fr)]">
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-slate-400 font-medium">Kolon sablonu</span>
+                  <span className="text-xs text-slate-400 font-medium">Kolon şablonu</span>
                   <select
                     value={columnTemplateName}
                     onChange={(event) => {
@@ -957,7 +957,7 @@ export function ReportsPage() {
                     }}
                     className="h-9 rounded-lg border border-slate-700 bg-slate-900 px-2.5 text-xs text-slate-200 outline-none focus:border-sky-500/60"
                   >
-                    <option value="">Ozel kolonlar</option>
+                    <option value="">Özel kolonlar</option>
                     {REPORT_COLUMN_TEMPLATES.map((template) => (
                       <option key={template.name} value={template.name}>{template.label}</option>
                     ))}

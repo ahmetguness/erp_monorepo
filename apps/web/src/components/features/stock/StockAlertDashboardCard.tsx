@@ -16,7 +16,7 @@ function formatQuantity(value: number): string {
 
 function severityLabel(item: StockAlertItem): string {
   if (item.severity === 'OUT_OF_STOCK') return 'Stok yok';
-  if (item.severity === 'RUNNING_OUT') return 'Bitmek uzere';
+  if (item.severity === 'RUNNING_OUT') return 'Bitmek üzere';
   return 'Minimum alti';
 }
 
@@ -50,7 +50,7 @@ export function StockAlertDashboardCard({ enabled }: StockAlertDashboardCardProp
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-slate-100">Akilli stok uyarilari</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              Tek depo stoklari minimum esik, bitis riski ve satis hizina gore izlenir.
+              Tek depo stoklari minimum eşik, bitis riski ve satış hizina göre izlenir.
             </p>
             {data?.summary.singleWarehouse && data.summary.warehouseName && (
               <p className="mt-1 text-[11px] text-slate-600">Depo: {data.summary.warehouseName}</p>
@@ -125,18 +125,18 @@ export function StockAlertDashboardCard({ enabled }: StockAlertDashboardCardProp
                   <div className="flex items-center justify-between gap-2 text-[11px]">
                     <span className="inline-flex items-center gap-1 text-slate-500">
                       <TrendingUp className="h-3 w-3" />
-                      Gunluk satis
+                      Günlük satış
                     </span>
                     <span className="font-mono text-slate-300">{formatQuantity(item.dailySalesVelocity)}</span>
                   </div>
                   <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
                     <span className="text-slate-500">Tahmini bitis</span>
                     <span className="font-mono text-slate-300">
-                      {item.estimatedDaysToStockout === null ? '-' : `${item.estimatedDaysToStockout} gun`}
+                      {item.estimatedDaysToStockout === null ? '-' : `${item.estimatedDaysToStockout} gün`}
                     </span>
                   </div>
                   <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
-                    <span className="text-slate-500">Siparis onerisi</span>
+                    <span className="text-slate-500">Sipariş önerisi</span>
                     <span className="font-mono font-semibold text-emerald-300">
                       {formatQuantity(item.reorderSuggestedQuantity)}
                       {item.unitCode ? ` ${item.unitCode}` : ''}
@@ -149,7 +149,7 @@ export function StockAlertDashboardCard({ enabled }: StockAlertDashboardCardProp
         ) : (
           <div className="flex items-center gap-2 rounded-xl border border-emerald-500/10 bg-emerald-500/[0.04] px-3 py-3 text-sm text-emerald-200">
             <PackageX className="h-4 w-4" />
-            Minimum stok altinda veya bitmek uzere olan urun yok.
+            Minimum stok altında veya bitmek üzere olan ürün yok.
           </div>
         )}
       </div>

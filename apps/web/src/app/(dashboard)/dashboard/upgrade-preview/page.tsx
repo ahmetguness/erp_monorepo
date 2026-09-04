@@ -88,7 +88,7 @@ const FEATURE_MATCHES: readonly FeatureMatch[] = [
     title: 'Çoklu Depo',
     policyKey: 'stockValuations',
     flag: 'multiWarehouse',
-    aliases: ['depo', 'warehouse', 'stok hareket', 'stok degerleme'],
+    aliases: ['depo', 'warehouse', 'stok hareket', 'stok değerleme'],
     content: {
       desc: 'Stokları farklı lokasyonlarda izleyin, transferleri ve depo bazlı operasyonları yönetin.',
       metrics: [
@@ -103,11 +103,11 @@ const FEATURE_MATCHES: readonly FeatureMatch[] = [
     title: 'Üretim',
     policyKey: 'production',
     flag: 'production',
-    aliases: ['uretim', 'üretim', 'bom', 'mrp', 'kapasite', 'kalite kontrol'],
+    aliases: ['üretim', 'üretim', 'bom', 'mrp', 'kapasite', 'kalite kontrol'],
     content: {
       desc: 'BOM, iş emirleri, MRP ve kapasite planlama ile üretim süreçlerini kurumsal seviyede yönetin.',
       metrics: [
-        { label: 'Planlama Hızı', value: '+%40', description: 'Hammadde ihtiyacını ve iş emirlerini daha net planlayın.' },
+        { label: 'Planlama Hızı', value: '+%40', description: 'Hammadde ihtiyaçını ve iş emirlerini daha net planlayın.' },
         { label: 'Fire Oranı', value: '-%15', description: 'BOM standartları ile fireyi azaltın.' },
         { label: 'Maliyet Kontrolü', value: 'Tam', description: 'Üretim maliyetlerini operasyon bazında izleyin.' },
       ],

@@ -55,7 +55,7 @@ export function BulkActionBar({ selectedIds, actions, user, onClear, className }
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="rounded-lg bg-slate-950/70 px-2.5 py-1 text-xs font-semibold text-sky-200">
-            {selectedIds.length} secili
+            {selectedIds.length} seçili
           </span>
           <button
             type="button"

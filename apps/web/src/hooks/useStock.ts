@@ -205,7 +205,7 @@ export function useCleanupExpiredReservations() {
     mutationFn: cleanupExpiredReservations,
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['stock'] });
-      toast.success(`${result.releasedCount} suresi dolmus rezervasyon birakildi.`);
+      toast.success(`${result.releasedCount} süresi dolmus rezervasyon bırakıldı.`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

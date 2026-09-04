@@ -218,7 +218,7 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
           {previewData && (
             <div className="overflow-hidden rounded-lg border border-slate-800">
               <div className="grid grid-cols-[72px_1fr_110px] bg-slate-950/70 px-3 py-2 text-xs font-medium text-slate-500">
-                <span>Satir</span>
+                <span>Satır</span>
                 <span>{copy.rowLabel}</span>
                 <span className="text-right">Durum</span>
               </div>

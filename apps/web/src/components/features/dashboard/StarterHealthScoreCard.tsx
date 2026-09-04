@@ -48,7 +48,7 @@ export function StarterHealthScoreCard({ enabled = true }: StarterHealthScoreCar
     {
       key: 'missing_invoice_prefix',
       label: 'Fatura Prefixi',
-      defaultDescription: 'Otomatik fatura numarasi icin prefix ve seri ayari hazir.',
+      defaultDescription: 'Otomatik fatura numarası için prefix ve seri ayari hazır.',
       href: '/dashboard/settings/general',
       actionLabel: 'Ayarlari Gor',
     },
@@ -69,14 +69,14 @@ export function StarterHealthScoreCard({ enabled = true }: StarterHealthScoreCar
     {
       key: 'missing_min_stock',
       label: 'Minimum Stok',
-      defaultDescription: 'Aktif urunlerde minimum stok esikleri tanimli.',
+      defaultDescription: 'Aktif urunlerde minimum stok esikleri tanımlı.',
       href: '/dashboard/products',
       actionLabel: 'Urunleri Gor',
     },
     {
       key: 'missing_cash_bank_account',
       label: 'Kasa/Banka Hesabi',
-      defaultDescription: 'Aktif kasa veya banka hesabi tanimli.',
+      defaultDescription: 'Aktif kasa veya banka hesabi tanımlı.',
       href: '/dashboard/payments/cash-accounts',
       actionLabel: 'Hesaplari Gor',
     },

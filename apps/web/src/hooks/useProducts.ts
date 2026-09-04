@@ -81,7 +81,7 @@ export function useCommitProductQuickImport() {
     mutationFn: (input: ProductQuickImportInput) => commitProductQuickImport(input),
     onSuccess: (result) => {
       invalidateProductAndStockQueries(qc);
-      toast.success(`${result.createdCount} urun ice aktarildi.`);
+      toast.success(`${result.createdCount} ürün içe aktarıldı.`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

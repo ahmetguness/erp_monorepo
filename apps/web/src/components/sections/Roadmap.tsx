@@ -6,29 +6,29 @@ import { motion, AnimatePresence } from 'framer-motion';
 const steps = [
   {
     num: '01',
-    title: 'Ihtiyac Analizi',
+    title: 'İhtiyaç Analizi',
     short: 'Analiz',
-    desc: 'Mevcut sureclerinizi ve is akislarinizi inceliyor, sisteme gecis planini birlikte hazirliyoruz.',
+    desc: 'Mevcut süreçlerinizi ve is akislarinizi inceliyor, sisteme geçiş planini birlikte hazirliyoruz.',
     duration: '1-2 is gunu',
-    tag: 'Baslangic',
+    tag: 'Başlangıç',
     items: [
-      'Mevcut surec haritalama',
-      'Ihtiyac ve modul belirleme',
-      'Gecis takvimi olusturma',
+      'Mevcut süreç haritalama',
+      'İhtiyaç ve modül belirleme',
+      'Gecis takvimi oluşturma',
       'Teknik altyapi degerlendirmesi',
     ],
   },
   {
     num: '02',
-    title: 'Demo ve Yapilandirma',
+    title: 'Demo ve Yapılandırma',
     short: 'Demo',
-    desc: 'Sistemi isletmenize ozel yapilandiriyor, kullanici rolleri ve yetkilendirmeleri tanimliyoruz.',
+    desc: 'Sistemi işletmenize özel yapilandiriyor, kullanıcı rolleri ve yetkilendirmeleri tanimliyoruz.',
     duration: '2-3 is gunu',
-    tag: 'Yapilandirma',
+    tag: 'Yapılandırma',
     items: [
       'Canli sistem demosu',
-      'Kullanici rol tanimlari',
-      'Modul ozellestirme',
+      'Kullanıcı rol tanımları',
+      'Modül özelleştirme',
       'Onay akislari kurulumu',
     ],
   },
@@ -36,28 +36,28 @@ const steps = [
     num: '03',
     title: 'Kurulum ve Veri Aktarimi',
     short: 'Kurulum',
-    desc: 'Mevcut verilerinizi sisteme aktariyor, entegrasyonlari tamamliyor ve test surecini yurutuyor.',
+    desc: 'Mevcut verilerinizi sisteme aktarıyor, entegrasyonları tamamlıyor ve test sürecini yürütüyor.',
     duration: '3-5 is gunu',
     tag: 'Entegrasyon',
     items: [
-      'Veri migrasyonu ve dogrulama',
+      'Veri migrasyonu ve doğrulama',
       'Entegrasyon kurulumu',
-      'Kullanici kabul testleri',
-      'Performans ve guvenlik testleri',
+      'Kullanıcı kabul testleri',
+      'Performans ve güvenlik testleri',
     ],
   },
   {
     num: '04',
-    title: 'Egitim ve Canli Kullanim',
+    title: 'Eğitim ve Canlı Kullanım',
     short: 'Canli',
-    desc: 'Ekibinize modul bazli egitimler veriyor, canli gecis sonrasinda teknik destek sagliyoruz.',
+    desc: 'Ekibinize modül bazlı eğitimler veriyor, canlı geçiş sonrasında teknik destek sağlıyoruz.',
     duration: 'Surekli',
-    tag: 'Canli Kullanim',
+    tag: 'Canlı Kullanım',
     items: [
-      'Modul bazli kullanici egitimi',
-      'Canli gecis yonetimi',
+      'Modül bazlı kullanıcı eğitimi',
+      'Canli geçiş yönetimi',
       '7/24 teknik destek',
-      'Duzenli guncelleme ve bakim',
+      'Duzenli güncelleme ve bakim',
     ],
   },
 ];
@@ -82,11 +82,11 @@ export default function Roadmap() {
               Uygulama Süreci
             </p>
             <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">
-              Sistemden canli kullanima 4 adim
+              Sistemden canlı kullanıma 4 adım
             </h2>
             <p className="text-slate-400 text-sm leading-relaxed max-w-lg">
-              Her adimda uzman ekibimiz sureci sizin adiniza yonetir.
-              Kurulum ve gecis surecinde kesinti yasamazsiniz.
+              Her adimda uzman ekibimiz süreci sizin adiniza yonetir.
+              Kurulum ve geçiş surecinde kesinti yasamazsiniz.
             </p>
           </motion.div>
 
@@ -210,7 +210,7 @@ export default function Roadmap() {
                   </div>
 
                   <div className="flex-shrink-0 bg-slate-900 border border-slate-700 rounded px-3 py-2 text-center min-w-[80px]">
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Sure</div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Süre</div>
                     <div className="text-sm font-semibold text-slate-200 whitespace-nowrap">
                       {steps[active].duration}
                     </div>
@@ -249,7 +249,7 @@ export default function Roadmap() {
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                       </svg>
-                      Onceki
+                      Önceki
                     </button>
 
                     <span className="text-xs text-slate-600 tabular-nums">

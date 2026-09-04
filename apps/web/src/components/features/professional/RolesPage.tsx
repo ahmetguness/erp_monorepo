@@ -42,13 +42,13 @@ function toPermissionAction(value: string): PermissionAction {
 }
 
 function firstBlocker(screen: PermissionScreenPreviewItem): string {
-  return screen.blockers[0] ?? 'Erisim kapali.';
+  return screen.blockers[0] ?? 'Erisim kapalı.';
 }
 
 const ROLE_MODULES = [
-  { key: 'invoicing', label: 'Satis / Fatura' },
+  { key: 'invoicing', label: 'Satış / Fatura' },
   { key: 'accounting', label: 'Muhasebe' },
-  { key: 'inventory', label: 'Stok / Urun' },
+  { key: 'inventory', label: 'Stok / Ürün' },
   { key: 'purchasing', label: 'Satin Alma' },
   { key: 'hr', label: 'Insan Kaynaklari' },
   { key: 'payroll', label: 'Bordro' },
@@ -60,7 +60,7 @@ const ROLE_MODULES = [
   { key: 'attachments', label: 'Dosyalar' },
   { key: 'mail', label: 'Mail Merkezi' },
   { key: 'notifications', label: 'Bildirimler' },
-  { key: 'production', label: 'Uretim' },
+  { key: 'production', label: 'Üretim' },
   { key: 'marketplace', label: 'Pazaryeri' },
   { key: 'settings', label: 'Ayarlar' },
   { key: 'users', label: 'Kullanicilar' },
@@ -71,12 +71,12 @@ const ROLE_MODULES = [
 ];
 
 const ROLE_ACTIONS: { key: PermissionAction; label: string }[] = [
-  { key: 'CREATE', label: 'Olustur' },
+  { key: 'CREATE', label: 'Oluştur' },
   { key: 'READ', label: 'Oku' },
-  { key: 'UPDATE', label: 'Guncelle' },
+  { key: 'UPDATE', label: 'Güncelle' },
   { key: 'DELETE', label: 'Sil' },
   { key: 'APPROVE', label: 'Onayla' },
-  { key: 'EXPORT', label: 'Disa Aktar' },
+  { key: 'EXPORT', label: 'Dışa Aktar' },
 ];
 
 interface RolePreset {
@@ -99,8 +99,8 @@ function permissionsFor(modules: readonly string[], actions: readonly Permission
 const ROLE_PRESETS: RolePreset[] = [
   {
     key: 'sales',
-    label: 'Satis',
-    description: 'Teklif, siparis, cari takip, mail ve gorev odakli satis rolu.',
+    label: 'Satış',
+    description: 'Teklif, sipariş, cari takip, mail ve görev odakli satış rolü.',
     permissions: [
       ...permissionsFor(['contacts', 'invoicing', 'mail', 'tasks', 'notifications', 'attachments'], [READ, CREATE, UPDATE]),
       ...permissionsFor(['reporting'], [READ, EXPORT]),
@@ -109,7 +109,7 @@ const ROLE_PRESETS: RolePreset[] = [
   {
     key: 'accounting',
     label: 'Muhasebe',
-    description: 'Tahsilat, fatura, kasa/banka, rapor ve onay odakli muhasebe rolu.',
+    description: 'Tahsilat, fatura, kasa/banka, rapor ve onay odakli muhasebe rolü.',
     permissions: [
       ...permissionsFor(['accounting', 'invoicing', 'contacts', 'approvals', 'notifications', 'attachments'], [READ, CREATE, UPDATE, EXPORT]),
       ...permissionsFor(['reporting'], [READ, EXPORT]),
@@ -119,7 +119,7 @@ const ROLE_PRESETS: RolePreset[] = [
   {
     key: 'warehouse',
     label: 'Depo',
-    description: 'Stok, urun, satin alma ve sayim surecleri icin depo rolu.',
+    description: 'Stok, ürün, satin alma ve sayım surecleri için depo rolü.',
     permissions: [
       ...permissionsFor(['inventory', 'purchasing', 'notifications', 'tasks', 'attachments'], [READ, CREATE, UPDATE]),
       ...permissionsFor(['reporting'], [READ]),
@@ -128,7 +128,7 @@ const ROLE_PRESETS: RolePreset[] = [
   {
     key: 'hr',
     label: 'IK',
-    description: 'Personel, izin, evrak, bordro okuma ve gorev takip rolu.',
+    description: 'Personel, izin, evrak, bordro okuma ve görev takip rolü.',
     permissions: [
       ...permissionsFor(['hr', 'tasks', 'notifications', 'attachments', 'mail'], [READ, CREATE, UPDATE]),
       ...permissionsFor(['payroll'], [READ, CREATE, UPDATE, APPROVE, EXPORT]),
@@ -138,8 +138,8 @@ const ROLE_PRESETS: RolePreset[] = [
   },
   {
     key: 'manager',
-    label: 'Yonetici',
-    description: 'Ciro, karlilik, nakit akisi, raporlar ve onaylar icin yonetici rolu.',
+    label: 'Yönetici',
+    description: 'Ciro, kârlılık, nakit akışı, raporlar ve onaylar için yönetici rolü.',
     permissions: [
       ...permissionsFor(['accounting', 'invoicing', 'inventory', 'contacts', 'purchasing', 'service', 'hr', 'payroll', 'reporting', 'approvals', 'notifications', 'tasks', 'attachments', 'mail'], [READ, EXPORT]),
       { module: 'approvals', action: APPROVE },
@@ -453,13 +453,13 @@ export function RolesPage() {
               <div>
                 <h4 className="text-xs font-semibold text-white">Ekran gorunurlugu onizlemesi</h4>
                 <p className="text-[11px] text-slate-500">
-                  Secili kullanicinin plan, modul, feature ve rol izinlerine gore gorebilecegi ekranlar.
+                  Secili kullanıcının plan, modül, feature ve rol izinlerine göre görebileceği ekranlar.
                 </p>
               </div>
             </div>
             {screenPreview && (
               <div className="flex flex-wrap gap-1.5">
-                <Badge variant="success" dot>{screenPreview.summary.visibleCount} gorunur</Badge>
+                <Badge variant="success" dot>{screenPreview.summary.visibleCount} görünür</Badge>
                 <Badge variant="neutral" dot>{screenPreview.summary.blockedCount} kilitli</Badge>
               </div>
             )}
@@ -467,11 +467,11 @@ export function RolesPage() {
 
           {!simulatorUserId ? (
             <div className="rounded-lg border border-dashed border-slate-800 px-3 py-4 text-xs text-slate-500">
-              Onizleme icin aktif bir kullanici secin.
+              Önizleme için aktif bir kullanıcı secin.
             </div>
           ) : screenPreviewLoading ? (
             <div className="rounded-lg border border-slate-800 px-3 py-4 text-xs text-slate-500">
-              Ekran onizlemesi yukleniyor...
+              Ekran onizlemesi yükleniyor...
             </div>
           ) : screenPreview ? (
             <div className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
@@ -491,7 +491,7 @@ export function RolesPage() {
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-slate-800 px-3 py-4 text-xs text-slate-500">
-                    Bu kullanici icin gorunen ekran bulunmuyor.
+                    Bu kullanıcı için görünen ekran bulunmuyor.
                   </div>
                 )}
               </div>
@@ -570,7 +570,7 @@ export function RolesPage() {
               }}
               className="h-11 w-full rounded-xl border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none focus:border-sky-500/60"
             >
-              <option value="">Custom / bos rol</option>
+              <option value="">Custom / boş rol</option>
               {ROLE_PRESETS.map((preset) => (
                 <option key={preset.key} value={preset.key}>
                   {preset.label}
@@ -578,7 +578,7 @@ export function RolesPage() {
               ))}
             </select>
             <p className="text-xs text-slate-500">
-              Preset sadece baslangic izinlerini doldurur; rol yine ozel roldur ve sonradan degistirilebilir.
+              Preset sadece başlangıç izinlerini doldurur; rol yine özel roldur ve sonradan degistirilebilir.
             </p>
           </label>
           {selectedPreset && (

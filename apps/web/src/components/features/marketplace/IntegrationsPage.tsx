@@ -508,7 +508,7 @@ function IntegrationHealthCenter() {
                     <span>Replay: {item.webhookReplayCount}</span>
                   </div>
                   <div className="mt-2 text-[10px] text-slate-400 truncate font-mono bg-slate-900/60 px-1 py-0.5 rounded border border-slate-800/40">
-                    {item.lastErrorMessage ?? (item.lastSuccessfulSyncAt ? `Son basarili: ${formatDate(item.lastSuccessfulSyncAt)}` : "Basarili sync yok")}
+                    {item.lastErrorMessage ?? (item.lastSuccessfulSyncAt ? `Son başarılı: ${formatDate(item.lastSuccessfulSyncAt)}` : "Basarili sync yok")}
                   </div>
                 </div>
                 <div className="mt-3 pt-2 border-t border-slate-800/60 text-[10px] text-slate-500">
@@ -1179,7 +1179,7 @@ export function IntegrationsPage() {
             <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
             <div>
               <p className="text-sm text-slate-200">{deleteTarget?.name} entegrasyonu silinecek.</p>
-              <p className="text-xs text-slate-500 mt-1">Bagli listeleme, siparis ve sync gecmisi etkilenebilir. Bu islem geri alinamaz.</p>
+              <p className="text-xs text-slate-500 mt-1">Bağlı listeleme, sipariş ve sync gecmisi etkilenebilir. Bu işlem geri alınamaz.</p>
             </div>
           </div>
         </div>

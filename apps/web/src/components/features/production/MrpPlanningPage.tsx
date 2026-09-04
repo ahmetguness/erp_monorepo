@@ -125,7 +125,7 @@ export function MrpPlanningPage() {
             <Panel title="Üretim Önerileri" subtitle="Talep, stok ve açık iş emirlerine göre üretilecek mamuller." icon={<Factory className="h-4 w-4 text-sky-300" />}>
               <ProductionTable rows={productionRows} />
             </Panel>
-            <Panel title="Satın Alma Önerileri" subtitle="BOM malzemeleri ve BOM'suz mamuller için tedarik ihtiyacı." icon={<ShoppingCart className="h-4 w-4 text-amber-300" />}>
+            <Panel title="Satın Alma Önerileri" subtitle="BOM malzemeleri ve BOM'suz mamuller için tedarik ihtiyaçı." icon={<ShoppingCart className="h-4 w-4 text-amber-300" />}>
               <PurchaseTable rows={purchaseRows} />
             </Panel>
           </section>
@@ -168,7 +168,7 @@ function Panel({ title, subtitle, icon, children }: { title: string; subtitle: s
 }
 
 function ProductionTable({ rows }: { rows: MrpProductionRecommendation[] }) {
-  if (rows.length === 0) return <EmptyText title="Üretim önerisi yok" text="Seçili planlama penceresinde üretim ihtiyacı görünmüyor." />;
+  if (rows.length === 0) return <EmptyText title="Üretim önerisi yok" text="Seçili planlama penceresinde üretim ihtiyaçı görünmüyor." />;
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[900px] text-sm">

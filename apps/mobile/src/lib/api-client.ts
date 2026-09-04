@@ -26,4 +26,4 @@ apiClient.interceptors.response.use(
     // This will be handled in the component/store or by exporting a generic interceptor logic
     return Promise.reject(error);
   }
-);
+);

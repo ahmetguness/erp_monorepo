@@ -202,7 +202,7 @@ export function useRecomputeInvoiceStatuses() {
     mutationFn: recomputeInvoiceStatuses,
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: INVOICE_KEYS.all });
-      toast.success(`${result.scanned} fatura tarandi, ${result.changed} durum guncellendi.`);
+      toast.success(`${result.scanned} fatura tarandi, ${result.changed} durum güncellendi.`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

@@ -218,7 +218,7 @@ export function InvoiceFormPage() {
 
     setValue('type', 'SALES', { shouldDirty: false, shouldValidate: true });
     setValue('contactId', sourceSalesOrder.contactId, { shouldDirty: false, shouldValidate: true });
-    setValue('notes', `Siparisten olusturuldu: ${sourceSalesOrder.number}`, { shouldDirty: false });
+    setValue('notes', `Siparisten oluşturuldu: ${sourceSalesOrder.number}`, { shouldDirty: false });
     replace((sourceSalesOrder.items ?? []).map((item) => ({
       productId: item.productId,
       description: item.description ?? item.product?.name ?? sourceSalesOrder.number,

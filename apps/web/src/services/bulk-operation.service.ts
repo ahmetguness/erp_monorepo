@@ -42,7 +42,7 @@ export const BulkOperationResultSchema = z.object({
     type: 'not_required',
     available: false,
     label: 'Geri alma gerekmiyor',
-    description: 'Degisecek kayit yok.',
+    description: 'Degisecek kayıt yok.',
     auditLogId: null,
   }),
 });

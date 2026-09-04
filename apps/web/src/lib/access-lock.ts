@@ -51,16 +51,16 @@ export function getAccessLockReasons(input: AccessLockInput): AccessLockReason[]
   if (!hasRequiredModule(input.tenantModules, input.requiredModule)) {
     reasons.push({
       code: 'module',
-      label: 'Modul kapali',
-      description: `${input.requiredModule} modulu tenant icin aktif degil.`,
+      label: 'Modül kapalı',
+      description: `${input.requiredModule} modulu tenant için aktif değil.`,
     });
   }
 
   if (input.featureAllowed === false) {
     reasons.push({
       code: 'feature',
-      label: 'Feature kapali',
-      description: `${input.featureLabel ?? 'Bu feature'} plan matrisi veya tenant override ile kapali.`,
+      label: 'Feature kapalı',
+      description: `${input.featureLabel ?? 'Bu feature'} plan matrisi veya tenant override ile kapalı.`,
     });
   }
 
@@ -76,6 +76,6 @@ export function getAccessLockReasons(input: AccessLockInput): AccessLockReason[]
 }
 
 export function lockReasonSummary(reasons: readonly AccessLockReason[]): string {
-  if (reasons.length === 0) return 'Erisim acik';
+  if (reasons.length === 0) return 'Erisim açık';
   return reasons.map((reason) => reason.label).join(', ');
 }

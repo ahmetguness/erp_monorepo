@@ -32,8 +32,8 @@ function reviewVariant(status: HrReviewStatus): BadgeVariant {
 
 function reviewLabel(status: HrReviewStatus): string {
   if (status === "missing") return "Eksik";
-  if (status === "scheduled") return "Planli";
-  return "Hazir";
+  if (status === "scheduled") return "Planlı";
+  return "Hazır";
 }
 
 function trainingVariant(status: HrTrainingStatus): BadgeVariant {
@@ -44,7 +44,7 @@ function trainingVariant(status: HrTrainingStatus): BadgeVariant {
 
 function trainingLabel(status: HrTrainingStatus): string {
   if (status === "complete") return "Tamam";
-  if (status === "planned") return "Planli";
+  if (status === "planned") return "Planlı";
   return "Eksik";
 }
 
@@ -143,7 +143,7 @@ export function AdvancedHrPage() {
     },
     {
       key: "planned",
-      header: "Planli",
+      header: "Planlı",
       width: "90px",
       align: "right",
       render: (row) => <span className="font-mono text-amber-300">{row.plannedCount}</span>,
@@ -277,7 +277,7 @@ export function AdvancedHrPage() {
     <div>
       <PageHeader
         title="Gelismis IK"
-        subtitle="Performans degerlendirme, egitim matrisi, zimmet ve organizasyon semasi."
+        subtitle="Performans değerlendirme, eğitim matrisi, zimmet ve organizasyon semasi."
         action={
           <Button variant="secondary" size="sm" onClick={() => void refetch()} loading={isFetching}>
             <RefreshCw className="h-3.5 w-3.5" />
@@ -323,25 +323,25 @@ export function AdvancedHrPage() {
         <section>
           <h2 className="mb-3 text-sm font-semibold text-white">Performans Degerlendirme</h2>
           <DataTable columns={reviewColumns} data={data?.performanceReviews ?? []} keyExtractor={(row) => row.employee.id} isLoading={isLoading}
-            emptyTitle="Personel bulunamadi" emptyDescription="Performans degerlendirme icin aktif personel kaydi gerekir." />
+            emptyTitle="Personel bulunamadi" emptyDescription="Performans değerlendirme için aktif personel kaydı gerekir." />
         </section>
 
         <section>
           <h2 className="mb-3 text-sm font-semibold text-white">Egitim Matrisi</h2>
           <DataTable columns={trainingColumns} data={data?.trainingMatrix ?? []} keyExtractor={(row) => row.employee.id} isLoading={isLoading}
-            emptyTitle="Egitim matrisi bos" emptyDescription="Aktif personel veya egitim dokumani bulunmuyor." />
+            emptyTitle="Egitim matrisi boş" emptyDescription="Aktif personel veya eğitim dokumani bulunmuyor." />
         </section>
 
         <section>
           <h2 className="mb-3 text-sm font-semibold text-white">Zimmet Takibi</h2>
           <DataTable columns={assetColumns} data={data?.assetAssignments ?? []} keyExtractor={(row) => row.employee.id} isLoading={isLoading}
-            emptyTitle="Zimmet kaydi yok" emptyDescription="Personel dokumanlarina asset-assignment tagli zimmet ekleyin." />
+            emptyTitle="Zimmet kaydı yok" emptyDescription="Personel dokumanlarina asset-assignment tagli zimmet ekleyin." />
         </section>
 
         <section>
           <h2 className="mb-3 text-sm font-semibold text-white">Masraf ve Avans Takibi</h2>
           <DataTable columns={expenseAdvanceColumns} data={data?.expenseAdvances ?? []} keyExtractor={(row) => `${row.employee.id}:${row.type}`} isLoading={isLoading}
-            emptyTitle="Masraf/avans aksiyonu yok" emptyDescription="hr:expense veya hr:advance kaynakli gorevler ve ilgili dokumanlar burada izlenir." />
+            emptyTitle="Masraf/avans aksiyonu yok" emptyDescription="hr:expense veya hr:advance kaynakli gorevler ve ilgili dokümanlar burada izlenir." />
         </section>
 
         <section>

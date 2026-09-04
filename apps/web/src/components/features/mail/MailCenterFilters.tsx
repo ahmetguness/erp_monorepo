@@ -33,7 +33,7 @@ export function MailCenterFilters({
       <input
         value={search}
         onChange={(event) => onSearchChange(event.target.value)}
-        placeholder="Konu, alici veya gonderen ara"
+        placeholder="Konu, alici veya gönderen ara"
         className="h-9 min-w-64 rounded-lg border border-slate-800 bg-slate-950 px-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-500/60"
       />
       <select
@@ -41,7 +41,7 @@ export function MailCenterFilters({
         onChange={(event) => onDirectionChange(parseDirection(event.target.value))}
         className="h-9 rounded-lg border border-slate-800 bg-slate-950 px-3 text-sm text-white outline-none focus:border-sky-500/60"
       >
-        <option value="">Tum yonler</option>
+        <option value="">Tüm yonler</option>
         <option value="OUTBOUND">Giden</option>
         <option value="INBOUND">Gelen</option>
       </select>
@@ -50,9 +50,9 @@ export function MailCenterFilters({
         onChange={(event) => onStatusChange(parseStatus(event.target.value))}
         className="h-9 rounded-lg border border-slate-800 bg-slate-950 px-3 text-sm text-white outline-none focus:border-sky-500/60"
       >
-        <option value="">Tum durumlar</option>
+        <option value="">Tüm durumlar</option>
         <option value="SENT">Gonderildi</option>
-        <option value="FAILED">Hatali</option>
+        <option value="FAILED">Hatalı</option>
         <option value="PENDING">Bekliyor</option>
       </select>
     </div>

@@ -241,7 +241,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Operasyon Sağlığı', href: '/dashboard/operations', icon: Activity, plan: PROFESSIONAL_PLAN, module: 'operations' },
       { label: 'Onay Akışları', href: '/dashboard/approvals', icon: GitBranch, plan: PROFESSIONAL_PLAN, module: 'approvals' },
       { label: 'İş Akışı Merkezi', href: '/dashboard/workflow', icon: ClipboardCheck, plan: PROFESSIONAL_PLAN, module: 'workflow' },
-      { label: 'Toplu Islem Merkezi', href: '/dashboard/bulk-operations', icon: ListChecks, plan: PROFESSIONAL_PLAN, module: 'contacts' },
+      { label: 'Toplu İşlem Merkezi', href: '/dashboard/bulk-operations', icon: ListChecks, plan: PROFESSIONAL_PLAN, module: 'contacts' },
       { label: 'Doküman Merkezi', href: '/dashboard/documents', icon: FolderOpen, module: 'documents' },
       {
         label: 'İçe / Dışa Aktarma',
@@ -254,7 +254,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       { label: 'Rol Yönetimi', href: '/dashboard/roles', icon: Shield, plan: PROFESSIONAL_PLAN, module: 'roles' },
       { label: 'API Anahtarları', href: '/dashboard/api-keys', icon: Key, plan: PROFESSIONAL_PLAN, module: 'api_keys' },
-      { label: 'Coklu sirket/sube', href: '/dashboard/enterprise/holding', icon: Building2, plan: ENTERPRISE_PLAN, module: 'holding' },
+      { label: 'Çoklu şirket/şube', href: '/dashboard/enterprise/holding', icon: Building2, plan: ENTERPRISE_PLAN, module: 'holding' },
     ],
   },
   {

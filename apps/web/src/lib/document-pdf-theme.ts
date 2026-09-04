@@ -11,15 +11,15 @@ export interface DocumentThemeOption<TValue extends string> {
 }
 
 export const DOCUMENT_TEMPLATE_OPTIONS: DocumentThemeOption<DocumentPdfTemplate>[] = [
-  { value: 'classic', label: 'Klasik', description: 'Logo, firma ve musteri bilgileri dengeli klasik baslikta.' },
-  { value: 'modern', label: 'Modern', description: 'Renkli sol serit ve daha belirgin toplam alani.' },
-  { value: 'compact', label: 'Kompakt', description: 'Daha az boslukla tek sayfaya sigmaya odakli.' },
+  { value: 'classic', label: 'Klasik', description: 'Logo, firma ve müşteri bilgileri dengeli klasik baslikta.' },
+  { value: 'modern', label: 'Modern', description: 'Renkli sol şerit ve daha belirgin toplam alanı.' },
+  { value: 'compact', label: 'Kompakt', description: 'Daha az boşlukla tek sayfaya sığmaya odakli.' },
 ];
 
 export const DOCUMENT_ACCENT_OPTIONS: DocumentThemeOption<DocumentPdfAccent>[] = [
-  { value: 'sky', label: 'Mavi', description: 'Satis belgeleri icin temiz mavi vurgu.' },
-  { value: 'emerald', label: 'Yesil', description: 'Kucuk isletmeler icin canli ve pozitif vurgu.' },
-  { value: 'slate', label: 'Sade', description: 'Az renkli, resmi ve sade belge gorunumu.' },
+  { value: 'sky', label: 'Mavi', description: 'Satış belgeleri için temiz mavi vurgu.' },
+  { value: 'emerald', label: 'Yesil', description: 'Kucuk işletmeler için canlı ve pozitif vurgu.' },
+  { value: 'slate', label: 'Sade', description: 'Az renkli, resmî ve sade belge görünümü.' },
 ];
 
 export const DEFAULT_DOCUMENT_TEMPLATE: DocumentPdfTemplate = 'classic';

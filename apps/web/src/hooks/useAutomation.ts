@@ -99,7 +99,7 @@ export function useCreateAutomationRule() {
     mutationFn: (data: CreateAutomationRuleDTO) => createAutomationRule(data),
     onSuccess: (rule) => {
       qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.all });
-      toast.success(`"${rule.name}" otomasyon kurali olusturuldu.`);
+      toast.success(`"${rule.name}" otomasyon kurali oluşturuldu.`);
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -113,7 +113,7 @@ export function useUpdateAutomationRule() {
       updateAutomationRule(id, data),
     onSuccess: (rule) => {
       qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.all });
-      toast.success(`"${rule.name}" otomasyon kurali guncellendi.`);
+      toast.success(`"${rule.name}" otomasyon kurali güncellendi.`);
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -141,9 +141,9 @@ export function useRunAutomationRule() {
       void qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.executions });
       const actionCount = result.tasksCreated + result.notificationsCreated;
       if (actionCount > 0) {
-        toast.success(`Kural calistirildi. ${result.matched} eslesmeden ${actionCount} aksiyon olusturuldu.`);
+        toast.success(`Kural çalıştırıldı. ${result.matched} eşleşmeden ${actionCount} aksiyon oluşturuldu.`);
       } else {
-        toast.info(`Kural calisti; eslesen ${result.matched} kayit icin yeni aksiyon olusmadi.`);
+        toast.info(`Kural çalıştı; eşleşen ${result.matched} kayıt için yeni aksiyon oluşmadı.`);
       }
     },
     onError: (e) => toast.error(getErrorMessage(e)),
@@ -158,7 +158,7 @@ export function useRunActiveAutomationRules() {
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.executions });
       const actionCount = result.tasksCreated + result.notificationsCreated;
-      toast.success(`Aktif kurallar tetiklendi. ${result.matched} eslesmeden ${actionCount} aksiyon olusturuldu.`);
+      toast.success(`Aktif kurallar tetiklendi. ${result.matched} eşleşmeden ${actionCount} aksiyon oluşturuldu.`);
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -173,10 +173,10 @@ export function useRunSchedulerJob() {
       void qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.schedulerRuns });
       void qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.executions });
       if (result.failed > 0) {
-        toast.error(`Scheduler tamamlandi; ${result.failed} job hatali, ${result.succeeded} job basarili.`);
+        toast.error(`Scheduler tamamlandı; ${result.failed} job hatalı, ${result.succeeded} job başarılı.`);
         return;
       }
-      toast.success(`Scheduler tamamlandi. ${result.succeeded} basarili, ${result.skipped} atlandi.`);
+      toast.success(`Scheduler tamamlandı. ${result.succeeded} başarılı, ${result.skipped} atlandı.`);
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });

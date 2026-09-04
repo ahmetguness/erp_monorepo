@@ -270,7 +270,7 @@ export function EntityActionPanel({
             <input
               value={mailTo}
               onChange={(event) => setMailTo(event.target.value)}
-              placeholder="Birden fazla adres icin virgul veya yeni satir kullanin"
+              placeholder="Birden fazla adres için virgül veya yeni satır kullanın"
               className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-500/60"
             />
           </label>

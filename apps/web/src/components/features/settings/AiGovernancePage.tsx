@@ -22,7 +22,7 @@ import type { AiGovernanceInsights, AiGovernancePolicy, AiRequestLog, AiRequestS
 const STATUS_META: Record<AiRequestStatus, { label: string; variant: BadgeVariant }> = {
   STARTED: { label: 'Basladi', variant: 'info' },
   SUCCEEDED: { label: 'Basarili', variant: 'success' },
-  FAILED: { label: 'Hatali', variant: 'danger' },
+  FAILED: { label: 'Hatalı', variant: 'danger' },
   FALLBACK: { label: 'Fallback', variant: 'warning' },
 };
 
@@ -38,7 +38,7 @@ const TYPE_LABELS: Record<AiRequestType, string> = {
 const COST_STATUS_LABELS: Record<'NO_LIMIT' | 'OK' | 'NEAR_LIMIT' | 'OVER_LIMIT', { label: string; variant: BadgeVariant }> = {
   NO_LIMIT: { label: 'Limit yok', variant: 'neutral' },
   OK: { label: 'Normal', variant: 'success' },
-  NEAR_LIMIT: { label: 'Limite yakin', variant: 'warning' },
+  NEAR_LIMIT: { label: 'Limite yakın', variant: 'warning' },
   OVER_LIMIT: { label: 'Limit asildi', variant: 'danger' },
 };
 
@@ -124,7 +124,7 @@ export function AiGovernancePage() {
     },
     {
       key: 'type',
-      header: 'Akis',
+      header: 'Akış',
       width: '130px',
       render: (row) => <span className="text-xs font-medium text-slate-300">{TYPE_LABELS[row.requestType]}</span>,
     },
@@ -233,7 +233,7 @@ export function AiGovernancePage() {
             <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
               <div className="mb-3 flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-emerald-300" />
-                <h3 className="text-sm font-semibold text-slate-100">Admin security baglantisi</h3>
+                <h3 className="text-sm font-semibold text-slate-100">Admin security bağlantısı</h3>
               </div>
               <div className="grid gap-2 text-xs sm:grid-cols-2">
                 <ControlCenterFact label="Aktif oturum" value={insights.enterpriseControlCenter.security.activeSessionCount} />
@@ -312,9 +312,9 @@ export function AiGovernancePage() {
                 AI durumu
                 {policy.enabled ? <ToggleRight className="h-5 w-5 text-emerald-300" /> : <ToggleLeft className="h-5 w-5 text-slate-500" />}
               </span>
-              <p className="mt-1 text-sm font-semibold text-slate-100">{policy.enabled ? 'Acik' : 'Kapali'}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-100">{policy.enabled ? 'Açık' : 'Kapalı'}</p>
               <p className="mt-2 text-xs font-medium text-sky-300 opacity-90 group-hover:text-sky-200">
-                {policy.enabled ? 'Kapatmak icin tikla' : 'Acmak icin tikla'}
+                {policy.enabled ? 'Kapatmak için tıkla' : 'Acmak için tıkla'}
               </p>
             </button>
             <button
@@ -327,7 +327,7 @@ export function AiGovernancePage() {
             >
               <span className="text-xs text-slate-500">Veri paylasimi</span>
               <p className="mt-1 text-sm font-semibold text-slate-100">{policy.dataSharingPolicy}</p>
-              <p className="mt-2 text-xs font-medium text-sky-300 opacity-90 group-hover:text-sky-200">Degistirmek icin tikla</p>
+              <p className="mt-2 text-xs font-medium text-sky-300 opacity-90 group-hover:text-sky-200">Degistirmek için tıkla</p>
             </button>
             <button
               type="button"
@@ -336,12 +336,12 @@ export function AiGovernancePage() {
               onClick={() => savePolicy({ ...policy, logPrompts: !policy.logPrompts })}
             >
               <span className="flex items-center justify-between gap-2 text-xs text-slate-500">
-                Prompt ozeti
+                Prompt özeti
                 {policy.logPrompts ? <ToggleRight className="h-5 w-5 text-emerald-300" /> : <ToggleLeft className="h-5 w-5 text-slate-500" />}
               </span>
               <p className="mt-1 text-sm font-semibold text-slate-100">{policy.logPrompts ? 'Kaydedilir' : 'Kaydedilmez'}</p>
               <p className="mt-2 text-xs font-medium text-sky-300 opacity-90 group-hover:text-sky-200">
-                {policy.logPrompts ? 'Kapatmak icin tikla' : 'Acmak icin tikla'}
+                {policy.logPrompts ? 'Kapatmak için tıkla' : 'Acmak için tıkla'}
               </p>
             </button>
           </div>
@@ -371,7 +371,7 @@ export function AiGovernancePage() {
                   <p className="mt-1 text-lg font-semibold text-slate-100">{formatNumber(insights.costSummary.totalTokens)}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-slate-500">Kullanim</span>
+                  <span className="text-xs text-slate-500">Kullanım</span>
                   <p className="mt-1 text-lg font-semibold text-slate-100">
                     {insights.costSummary.usagePercent === null ? '-' : `%${insights.costSummary.usagePercent.toFixed(1)}`}
                   </p>
@@ -420,7 +420,7 @@ export function AiGovernancePage() {
             <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
               <div className="mb-3 flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-sky-300" />
-                <h3 className="text-sm font-semibold text-slate-100">Model bazli kullanim</h3>
+                <h3 className="text-sm font-semibold text-slate-100">Model bazlı kullanım</h3>
               </div>
               <div className="space-y-2">
                 {insights.modelUsage.slice(0, 4).map((usage) => (
@@ -462,7 +462,7 @@ export function AiGovernancePage() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-sm font-semibold text-slate-100">{item.label}</p>
-                    <p className="mt-1 text-xs text-slate-500">{item.scope === 'public' ? 'Public cikti' : 'Tum akislar'}</p>
+                    <p className="mt-1 text-xs text-slate-500">{item.scope === 'public' ? 'Public cikti' : 'Tüm akislar'}</p>
                   </div>
                   <Badge variant="info">{item.occurrences}</Badge>
                 </div>
@@ -477,18 +477,18 @@ export function AiGovernancePage() {
                 </div>
               </div>
             ))}
-            {insights.maskingReport.length === 0 && <p className="text-xs text-slate-500">Maskeleme kaydi bulunamadi.</p>}
+            {insights.maskingReport.length === 0 && <p className="text-xs text-slate-500">Maskeleme kaydı bulunamadi.</p>}
           </div>
         </section>
       )}
 
       <div className="flex flex-wrap items-center gap-3">
         <select className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300" value={requestType} onChange={(event) => { setRequestType(event.target.value as AiRequestType | ''); setPage(1); }}>
-          <option value="">Tum akislar</option>
+          <option value="">Tüm akislar</option>
           {Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
         <select className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300" value={status} onChange={(event) => { setStatus(event.target.value as AiRequestStatus | ''); setPage(1); }}>
-          <option value="">Tum durumlar</option>
+          <option value="">Tüm durumlar</option>
           {Object.entries(STATUS_META).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}
         </select>
       </div>
@@ -498,7 +498,7 @@ export function AiGovernancePage() {
         data={data?.data ?? []}
         keyExtractor={(row) => row.id}
         isLoading={isLoading}
-        emptyTitle="AI kaydi bulunamadi"
+        emptyTitle="AI kaydı bulunamadi"
         pagination={data ? { page, pageSize: 30, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
       />
 
@@ -506,7 +506,7 @@ export function AiGovernancePage() {
         {detail && (
           <div className="space-y-4">
             <div className="grid gap-3 text-xs sm:grid-cols-2">
-              <div><span className="text-slate-500">Akis</span><p className="text-slate-200">{TYPE_LABELS[detail.requestType]}</p></div>
+              <div><span className="text-slate-500">Akış</span><p className="text-slate-200">{TYPE_LABELS[detail.requestType]}</p></div>
               <div><span className="text-slate-500">Durum</span><p className="text-slate-200">{STATUS_META[detail.status].label}</p></div>
               <div><span className="text-slate-500">Model</span><p className="text-slate-200">{detail.model}</p></div>
               <div><span className="text-slate-500">Token</span><p className="text-slate-200">{detail.tokenTotal ?? '-'}</p></div>

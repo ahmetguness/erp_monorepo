@@ -55,7 +55,7 @@ export function DomainEventFailuresPage() {
         setLastReplayMessage(`${result.name}: ${result.message} (${result.beforeStatus} -> ${result.afterStatus})`);
       },
       onError: (error) => {
-        setLastReplayMessage(error instanceof Error ? error.message : 'Replay basarisiz oldu.');
+        setLastReplayMessage(error instanceof Error ? error.message : 'Replay başarısız oldu.');
       },
     });
   };
@@ -103,7 +103,7 @@ export function DomainEventFailuresPage() {
           }}
           className="max-w-xl text-left text-xs text-slate-400 transition-colors hover:text-sky-300"
         >
-          {shortText(row.lastError ?? 'Listener hatasi detayi yok.', 140)}
+          {shortText(row.lastError ?? 'Listener hatası detayi yok.', 140)}
         </button>
       ),
     },
@@ -142,7 +142,7 @@ export function DomainEventFailuresPage() {
             setNameFilter(event.target.value);
             setPage(1);
           }}
-          placeholder="Event adi filtrele"
+          placeholder="Event adı filtrele"
           className="h-9 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm text-slate-200 outline-none focus:border-sky-500 sm:max-w-xs"
         />
         <Button
@@ -167,7 +167,7 @@ export function DomainEventFailuresPage() {
         data={data?.data ?? []}
         keyExtractor={(row) => row.id}
         isLoading={isLoading}
-        emptyTitle="Domain event hatasi yok"
+        emptyTitle="Domain event hatası yok"
         pagination={data ? { page, pageSize: 30, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
         onRowClick={setSelectedEvent}
       />

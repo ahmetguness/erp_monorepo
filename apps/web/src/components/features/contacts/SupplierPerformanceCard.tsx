@@ -99,12 +99,12 @@ export function SupplierPerformanceCard({ contactId }: SupplierPerformanceCardPr
                 <div className="p-1 rounded bg-slate-800 text-slate-400 mt-0.5 shrink-0"><Clock className="w-3.5 h-3.5" /></div>
                 <div className="min-w-0">
                   <p className="font-semibold text-slate-300">Teslimat Gecikmesi</p>
-                  <p className="text-[10px] text-slate-500 truncate">Vade tarihine gore ortalama gecikme.</p>
+                  <p className="text-[10px] text-slate-500 truncate">Vade tarihine göre ortalama gecikme.</p>
                 </div>
               </div>
               <div className="text-right shrink-0">
                 <p className={cn('font-bold', data.deliveryDelayDays === 0 ? 'text-emerald-400' : 'text-amber-400')}>
-                  {data.deliveryDelayDays} gun
+                  {data.deliveryDelayDays} gün
                 </p>
                 <p className="text-[10px] text-slate-400 font-medium">Puan: {data.deliveryDelayScore}/100</p>
               </div>
@@ -163,7 +163,7 @@ export function SupplierPerformanceCard({ contactId }: SupplierPerformanceCardPr
                 <div className="p-1 rounded bg-slate-800 text-slate-400 mt-0.5 shrink-0"><Shield className="w-3.5 h-3.5" /></div>
                 <div className="min-w-0">
                   <p className="font-semibold text-slate-300">Kalite Skoru</p>
-                  <p className="text-[10px] text-slate-500 truncate">Tam kabul ve iade verisine gore.</p>
+                  <p className="text-[10px] text-slate-500 truncate">Tam kabul ve iade verisine göre.</p>
                 </div>
               </div>
               <div className="text-right shrink-0">

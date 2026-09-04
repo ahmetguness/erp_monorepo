@@ -112,8 +112,8 @@ function CardHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
 type DashboardPreset = 'executive' | 'sales' | 'accounting' | 'warehouse' | 'hr' | 'custom';
 
 const DASHBOARD_PRESET_LABEL: Record<DashboardPreset, string> = {
-  executive: 'Yonetici',
-  sales: 'Satis',
+  executive: 'Yönetici',
+  sales: 'Satış',
   accounting: 'Muhasebe',
   warehouse: 'Depo',
   hr: 'IK',
@@ -121,12 +121,12 @@ const DASHBOARD_PRESET_LABEL: Record<DashboardPreset, string> = {
 };
 
 const DASHBOARD_PRESET_DESCRIPTION: Record<DashboardPreset, string> = {
-  executive: 'Ciro, karlilik, nakit akisi ve onaylar onceliklendirildi.',
+  executive: 'Ciro, kârlılık, nakit akışı ve onaylar önceliklendirildi.',
   sales: 'Açık teklifler, müşteri takipleri ve satış aksiyonları önceliklendirildi.',
-  accounting: 'Tahsilat, geciken faturalar, kasa/banka ve raporlar onceliklendirildi.',
-  warehouse: 'Kritik stok, satin alma ihtiyaci ve sayim isleri onceliklendirildi.',
-  hr: 'Izin talepleri, personel evraklari ve IK gorevleri onceliklendirildi.',
-  custom: 'Rol izinlerine gore erisebildiginiz moduller gosteriliyor.',
+  accounting: 'Tahsilat, geciken faturalar, kasa/banka ve raporlar önceliklendirildi.',
+  warehouse: 'Kritik stok, satin alma ihtiyaçı ve sayım işleri önceliklendirildi.',
+  hr: 'Izin talepleri, personel evraklari ve IK görevleri önceliklendirildi.',
+  custom: 'Rol izinlerine göre erişebildiğiniz modüller gosteriliyor.',
 };
 
 function canReadModule(context: UserAccessContext | null, module: string): boolean {
@@ -338,8 +338,8 @@ export function DashboardOverview() {
       <Card>
         <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rol bazli dashboard</p>
-            <h2 className="mt-1 text-sm font-semibold text-white">{DASHBOARD_PRESET_LABEL[dashboardPreset]} gorunumu</h2>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rol bazlı dashboard</p>
+            <h2 className="mt-1 text-sm font-semibold text-white">{DASHBOARD_PRESET_LABEL[dashboardPreset]} görünümü</h2>
             <p className="mt-0.5 text-xs text-slate-500">{DASHBOARD_PRESET_DESCRIPTION[dashboardPreset]}</p>
           </div>
           <div className="flex flex-wrap gap-2">

@@ -152,7 +152,7 @@ export function RecommendedActionsPanel({ actions }: RecommendedActionsPanelProp
           entityType: selected.entityType,
           entityId: selected.entityId,
           summary: selected.summary,
-          resultSummary: result.success ? 'Mail gonderildi.' : result.error ?? 'Mail gonderimi tamamlanamadi.',
+          resultSummary: result.success ? 'Mail gönderildi.' : result.error ?? 'Mail gönderimi tamamlanamadi.',
           draft: {
             to: selected.draft.to,
             subject: selected.draft.subject,
@@ -174,7 +174,7 @@ export function RecommendedActionsPanel({ actions }: RecommendedActionsPanelProp
           entityType: selected.entityType,
           entityId: selected.entityId,
           summary: selected.summary,
-          resultSummary: `Gorev olusturuldu: ${result.title}`,
+          resultSummary: `Görev oluşturuldu: ${result.title}`,
           draft: {
             title: selected.draft.title,
             type: selected.draft.type,

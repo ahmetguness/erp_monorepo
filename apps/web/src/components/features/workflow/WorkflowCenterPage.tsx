@@ -29,8 +29,8 @@ const TYPE_LABEL: Record<WorkflowTask['type'], string> = {
   CHECK: 'Cek/Senet',
   AUTOMATION: 'Otomasyon',
   STOCK: 'Stok',
-  FISCAL: 'Donem',
-  GENERAL: 'Gorev',
+  FISCAL: 'Dönem',
+  GENERAL: 'Görev',
 };
 
 const PRIORITY_BADGE: Record<WorkflowTask['priority'], BadgeVariant> = {
@@ -82,14 +82,14 @@ function formatDateTime(value: string | null): string {
 }
 
 function formatConfig(value: Record<string, string | number | boolean> | null): string {
-  if (!value || Object.keys(value).length === 0) return 'Ek kosul yok';
+  if (!value || Object.keys(value).length === 0) return 'Ek koşul yok';
   return Object.entries(value).map(([key, item]) => `${key}: ${String(item)}`).join(' / ');
 }
 
 function formatRunResult(rule: AutomationRule): string {
-  if (!rule.lastRunAt) return 'Henuz calistirilmadi';
+  if (!rule.lastRunAt) return 'Henüz calistirilmadi';
   const result = rule.lastResult;
-  if (!result) return `${formatDate(rule.lastRunAt)} tarihinde calisti`;
+  if (!result) return `${formatDate(rule.lastRunAt)} tarihinde çalıştı`;
   const actionCount = result.tasksCreated + result.notificationsCreated;
   return `${formatDate(rule.lastRunAt)} - ${result.matched} eslesme, ${actionCount} aksiyon`;
 }
@@ -160,7 +160,7 @@ export function WorkflowCenterPage() {
               className="inline-flex items-center gap-2.5 h-10 px-5 rounded-xl font-medium text-sm text-white bg-gradient-to-r from-emerald-500 to-sky-600 hover:from-emerald-400 hover:to-sky-500 shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition-all duration-200 active:scale-[0.97]"
             >
               <Play className="w-4 h-4" />
-              Tum Aktif Joblari Calistir
+              Tüm Aktif Joblari Calistir
             </button>
           ) : null
         }
@@ -222,7 +222,7 @@ export function WorkflowCenterPage() {
             <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
               <AlertOctagon className="mb-3 h-5 w-5 text-red-400" />
               <p className="text-2xl font-semibold text-slate-100">{exceptions?.total ?? 0}</p>
-              <p className="text-xs text-slate-500">Acil islem bekleyen</p>
+              <p className="text-xs text-slate-500">Acil işlem bekleyen</p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
               <AlertTriangle className="mb-3 h-5 w-5 text-amber-400" />
@@ -232,7 +232,7 @@ export function WorkflowCenterPage() {
             <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
               <Clock className="mb-3 h-5 w-5 text-sky-400" />
               <p className="text-2xl font-semibold text-slate-100">{exceptions?.high ?? 0}</p>
-              <p className="text-xs text-slate-500">Yuksek oncelik</p>
+              <p className="text-xs text-slate-500">Yüksek oncelik</p>
             </div>
           </div>
 
@@ -250,7 +250,7 @@ export function WorkflowCenterPage() {
 
           <section className="rounded-lg border border-slate-800 bg-slate-900/40">
             {loadingExceptions ? (
-              <div className="p-6 text-sm text-slate-500">Exception Center yukleniyor...</div>
+              <div className="p-6 text-sm text-slate-500">Exception Center yükleniyor...</div>
             ) : exceptionError ? (
               <div className="p-6 text-sm text-red-400">Exception Center verisi alinamadi.</div>
             ) : exceptionItems.length === 0 ? (
@@ -469,7 +469,7 @@ export function WorkflowCenterPage() {
                         </div>
                         <div className="grid gap-1 pt-2 text-[11px] text-slate-500 md:grid-cols-2">
                           <p className="truncate"><span className="text-slate-400">Koşul:</span> {formatConfig(rule.conditions)}</p>
-                          <p className="truncate"><span className="text-slate-400">Son calisma:</span> {formatRunResult(rule)}</p>
+                          <p className="truncate"><span className="text-slate-400">Son çalışma:</span> {formatRunResult(rule)}</p>
                         </div>
                       </div>
 
@@ -478,7 +478,7 @@ export function WorkflowCenterPage() {
                           onClick={() => setEditingRule(rule)}
                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-colors"
                         >
-                          Duzenle
+                          Düzenle
                         </button>
                         <button
                           onClick={() => {
@@ -570,18 +570,18 @@ export function WorkflowCenterPage() {
             <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
               <Clock className="mb-3 h-5 w-5 text-slate-400" />
               <p className="text-2xl font-semibold text-slate-100">{plannedSchedulerCount}</p>
-              <p className="text-xs text-slate-500">Planli job</p>
+              <p className="text-xs text-slate-500">Planlı job</p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
               <CheckCircle2 className="mb-3 h-5 w-5 text-sky-400" />
               <p className="text-2xl font-semibold text-slate-100">{schedulerRuns.length}</p>
-              <p className="text-xs text-slate-500">Kayitli calisma</p>
+              <p className="text-xs text-slate-500">Kayıtlı çalışma</p>
             </div>
           </div>
 
           <section className="rounded-lg border border-slate-800 bg-slate-900/40">
             {loadingSchedulerJobs ? (
-              <div className="p-6 text-sm text-slate-500">Scheduler joblari yukleniyor...</div>
+              <div className="p-6 text-sm text-slate-500">Scheduler joblari yükleniyor...</div>
             ) : schedulerJobs.length === 0 ? (
               <div className="p-6 text-sm text-slate-500">Tanimli scheduler job bulunmuyor.</div>
             ) : (
@@ -614,9 +614,9 @@ export function WorkflowCenterPage() {
 
           <section className="rounded-lg border border-slate-800 bg-slate-900/40">
             {loadingSchedulerRuns ? (
-              <div className="p-6 text-sm text-slate-500">Scheduler gecmisi yukleniyor...</div>
+              <div className="p-6 text-sm text-slate-500">Scheduler gecmisi yükleniyor...</div>
             ) : schedulerRuns.length === 0 ? (
-              <div className="p-6 text-sm text-slate-500">Henuz scheduler calismasi bulunmuyor.</div>
+              <div className="p-6 text-sm text-slate-500">Henüz scheduler calismasi bulunmuyor.</div>
             ) : (
               <div className="divide-y divide-slate-800">
                 {schedulerRuns.map((execution) => (
@@ -634,7 +634,7 @@ export function WorkflowCenterPage() {
                       <p>{execution.entityType ?? '-'}</p>
                     </div>
                     <div className="text-xs text-slate-500 md:text-right">
-                      <p>Baslangic: {formatDateTime(execution.startedAt)}</p>
+                      <p>Başlangıç: {formatDateTime(execution.startedAt)}</p>
                       <p>Bitis: {formatDateTime(execution.completedAt)}</p>
                     </div>
                   </div>

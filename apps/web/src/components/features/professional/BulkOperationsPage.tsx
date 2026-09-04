@@ -24,7 +24,7 @@ interface FieldOption {
 
 const TARGET_OPTIONS: Array<{ value: BulkOperationTarget; label: string }> = [
   { value: "contacts", label: "Cari" },
-  { value: "products", label: "Urun" },
+  { value: "products", label: "Ürün" },
   { value: "invoices", label: "Fatura" },
 ];
 
@@ -33,15 +33,15 @@ const FIELD_OPTIONS: Record<BulkOperationTarget, FieldOption[]> = {
     { value: "isActive", label: "Aktiflik", kind: "boolean" },
     { value: "city", label: "Sehir", kind: "text", nullable: true },
     { value: "country", label: "Ulke", kind: "text" },
-    { value: "paymentTermDays", label: "Odeme vadesi", kind: "number", nullable: true },
+    { value: "paymentTermDays", label: "Ödeme vadesi", kind: "number", nullable: true },
     { value: "notes", label: "Not", kind: "text", nullable: true },
   ],
   products: [
     { value: "isActive", label: "Aktiflik", kind: "boolean" },
-    { value: "salesPrice", label: "Satis fiyati", kind: "number" },
-    { value: "purchasePrice", label: "Alis fiyati", kind: "number" },
+    { value: "salesPrice", label: "Satış fiyatı", kind: "number" },
+    { value: "purchasePrice", label: "Alış fiyatı", kind: "number" },
     { value: "minStockLevel", label: "Minimum stok", kind: "number" },
-    { value: "description", label: "Aciklama", kind: "text", nullable: true },
+    { value: "description", label: "Açıklama", kind: "text", nullable: true },
   ],
   invoices: [
     { value: "dueDate", label: "Vade tarihi", kind: "date", nullable: true },
@@ -64,7 +64,7 @@ function resolveValue(field: FieldOption, rawValue: string): BulkOperationValue 
 }
 
 function formatValue(value: BulkOperationValue): string {
-  if (value === null) return "Bos";
+  if (value === null) return "Boş";
   if (typeof value === "boolean") return value ? "Evet" : "Hayir";
   return String(value);
 }
@@ -103,12 +103,12 @@ function OperationDecisionPanel({ result }: { result: BulkOperationResult }) {
       <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
         <div className="mb-2 flex items-center gap-2">
           <Search className="h-4 w-4 text-sky-400" />
-          <h4 className="text-sm font-semibold text-slate-100">Islem onizleme</h4>
+          <h4 className="text-sm font-semibold text-slate-100">İşlem önizleme</h4>
         </div>
         <p className="text-xs leading-relaxed text-slate-500">
           {result.dryRun
-            ? `${actionCount} kayit degisecek. Uygula butonu calisana kadar veri yazilmaz.`
-            : `${result.changed} kayit uygulandi; sonuc audit izine baglandi.`}
+            ? `${actionCount} kayıt degisecek. Uygula butonu çalışana kadar veri yazılmaz.`
+            : `${result.changed} kayıt uygulandi; sonuc audit izine bağlandı.`}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Badge variant={result.dryRun ? "warning" : "success"}>{result.dryRun ? "Dry-run" : "Uygulandi"}</Badge>
@@ -131,7 +131,7 @@ function OperationDecisionPanel({ result }: { result: BulkOperationResult }) {
       <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
         <div className="mb-2 flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-emerald-400" />
-          <h4 className="text-sm font-semibold text-slate-100">Audit baglantisi</h4>
+          <h4 className="text-sm font-semibold text-slate-100">Audit bağlantısı</h4>
         </div>
         {result.auditHref && result.auditLogId ? (
           <Link href={result.auditHref} className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-400 hover:text-sky-300">
@@ -139,7 +139,7 @@ function OperationDecisionPanel({ result }: { result: BulkOperationResult }) {
             <ExternalLink className="h-3.5 w-3.5" />
           </Link>
         ) : (
-          <p className="text-xs leading-relaxed text-slate-500">Audit kaydi uygulama sonrasi olusur.</p>
+          <p className="text-xs leading-relaxed text-slate-500">Audit kaydı uygulama sonrasi olusur.</p>
         )}
         {result.auditLogId && <p className="mt-2 break-all text-[11px] text-slate-500">{result.auditLogId}</p>}
       </div>
@@ -198,8 +198,8 @@ export function BulkOperationsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Toplu Islem Merkezi"
-        subtitle="Cari, urun ve fatura kayitlari icin onizlemeli ve audit kayitli toplu guncelleme."
+        title="Toplu İşlem Merkezi"
+        subtitle="Cari, ürün ve fatura kayıtları için onizlemeli ve audit kayıtlı toplu güncelleme."
       />
 
       <BulkImportAssistant canManage={canManageImports} />
@@ -225,7 +225,7 @@ export function BulkOperationsPage() {
           />
           {selectedField.kind === "boolean" && (
             <Select
-              label="Yeni deger"
+              label="Yeni değer"
               value={rawValue}
               onChange={(event) => updateRawValue(event.target.value)}
               options={[
@@ -236,11 +236,11 @@ export function BulkOperationsPage() {
           )}
           {selectedField.kind !== "boolean" && (
             <Input
-              label="Yeni deger"
+              label="Yeni değer"
               type={selectedField.kind === "date" ? "date" : "text"}
               value={rawValue}
               onChange={(event) => updateRawValue(event.target.value)}
-              placeholder={selectedField.nullable ? "Bos birakilirsa null olur" : "Yeni deger"}
+              placeholder={selectedField.nullable ? "Boş bırakılırsa null olur" : "Yeni değer"}
             />
           )}
         </div>
@@ -254,11 +254,11 @@ export function BulkOperationsPage() {
               setResult(null);
             }}
             className="min-h-28 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-sky-500"
-            placeholder="Her satira bir ID veya virgulle ayrilmis ID listesi"
+            placeholder="Her satira bir ID veya virgulle ayrılmış ID listesi"
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge variant={ids.length > 100 ? "danger" : "neutral"}>{ids.length} kayit secildi</Badge>
-            <Badge variant="info">Maksimum 100 kayit</Badge>
+            <Badge variant={ids.length > 100 ? "danger" : "neutral"}>{ids.length} kayıt seçildi</Badge>
+            <Badge variant="info">Maksimum 100 kayıt</Badge>
             <Badge variant="purple">Professional</Badge>
           </div>
         </div>
@@ -279,7 +279,7 @@ export function BulkOperationsPage() {
             disabled={!result || result.mode !== "preview" || result.changed === 0 || execute.isPending}
             onClick={runExecute}
           >
-            Guvenli guncelle
+            Güvenli güncelle
           </Button>
           <Button
             type="button"
@@ -304,10 +304,10 @@ export function BulkOperationsPage() {
             <div className="flex flex-col gap-2 border-b border-slate-800 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <ClipboardList className="h-4 w-4 text-sky-400" />
-                <h3 className="text-sm font-semibold text-white">Onizleme sonucu</h3>
+                <h3 className="text-sm font-semibold text-white">Önizleme sonucu</h3>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Badge variant={result.mode === "execute" ? "success" : "warning"}>{result.mode === "execute" ? "Uygulandi" : "Onizleme"}</Badge>
+                <Badge variant={result.mode === "execute" ? "success" : "warning"}>{result.mode === "execute" ? "Uygulandi" : "Önizleme"}</Badge>
                 {result.rollbackLogId && <Badge variant="info">Rollback log: {result.rollbackLogId}</Badge>}
                 {result.missingIds.length > 0 && <Badge variant="danger">{result.missingIds.length} eksik ID</Badge>}
               </div>

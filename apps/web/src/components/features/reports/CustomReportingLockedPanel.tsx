@@ -14,14 +14,14 @@ export function CustomReportingLockedPanel() {
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold text-slate-100">Ozel raporlar Professional ile acilir</h2>
+              <h2 className="text-sm font-semibold text-slate-100">Özel raporlar Professional ile acilir</h2>
               <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
                 <Sparkles className="h-3 w-3" />
                 Custom reporting
               </span>
             </div>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              Starter plan hazir raporlari salt okunur sunar. KPI Builder, kayitli raporlar ve paylasim ayarlari ust paketlere ayrilmistir.
+              Starter plan hazır raporlari salt okunur sunar. KPI Builder, kayıtlı raporlar ve paylasim ayarlari ust paketlere ayrilmistir.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {CUSTOM_REPORTING_CAPABILITIES.map((capability) => (

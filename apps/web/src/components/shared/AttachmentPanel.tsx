@@ -172,13 +172,13 @@ export function AttachmentPanel({ entityType, entityId }: Props) {
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
                 <button onClick={() => startRename(a)}
-                  aria-label="Dosya adini degistir"
+                  aria-label="Dosya adini değiştir"
                   className="p-1 rounded text-slate-600 hover:text-emerald-400"><Pencil className="w-3 h-3" /></button>
                 <button onClick={() => handleDownload(a.id, a.fileName)}
-                  aria-label="Dosyayi indir"
+                  aria-label="Dosyayı indir"
                   className="p-1 rounded text-slate-600 hover:text-sky-400"><Download className="w-3 h-3" /></button>
                 <button onClick={() => remove.mutate(a.id)}
-                  aria-label="Dosyayi sil"
+                  aria-label="Dosyayı sil"
                   className="p-1 rounded text-slate-600 hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
               </div>
             </div>

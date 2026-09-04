@@ -105,10 +105,10 @@ function labelForConfidentiality(value: DocumentConfidentiality | null): string 
 }
 
 function labelForLifecycle(value: DocumentCenterItem['lifecycleStatus']): string {
-  if (value === 'EXPIRED') return 'Suresi doldu';
+  if (value === 'EXPIRED') return 'Süresi doldu';
   if (value === 'EXPIRING_SOON') return 'Yakinda dolacak';
-  if (value === 'ACTIVE') return 'Gecerli';
-  return 'Sure yok';
+  if (value === 'ACTIVE') return 'Geçerli';
+  return 'Süre yok';
 }
 
 function labelForOcr(value: DocumentCenterItem['ocrStatus']): string {
@@ -506,7 +506,7 @@ export function DocumentCenterPage() {
                   setVersionForm({ base: row, file: null, version: String((row.latestVersion ?? row.version ?? 1) + 1) });
                 }}
                 className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-800 hover:text-violet-300"
-                aria-label="Yeni versiyon yukle"
+                aria-label="Yeni versiyon yükle"
               >
                 <FileUp className="h-3.5 w-3.5" />
               </button>
@@ -812,7 +812,7 @@ export function DocumentCenterPage() {
         footer={(
           <>
             <Button variant="secondary" onClick={() => setVersionForm(null)}>Vazgec</Button>
-            <Button onClick={() => void submitVersion()} loading={uploadVersion.isPending} disabled={!versionForm?.file}>Versiyon yukle</Button>
+            <Button onClick={() => void submitVersion()} loading={uploadVersion.isPending} disabled={!versionForm?.file}>Versiyon yükle</Button>
           </>
         )}
       >
@@ -930,11 +930,11 @@ export function DocumentCenterPage() {
         isOpen={Boolean(accessLogId)}
         onClose={() => setAccessLogId(null)}
         title="Erisim logu"
-        description="Dosya indirme, yukleme ve metadata hareketleri"
+        description="Dosya indirme, yükleme ve metadata hareketleri"
         size="md"
       >
         <div className="space-y-2">
-          {accessLogsLoading && <p className="text-sm text-slate-500">Yukleniyor...</p>}
+          {accessLogsLoading && <p className="text-sm text-slate-500">Yükleniyor...</p>}
           {!accessLogsLoading && accessLogs.length === 0 && (
             <p className="rounded-xl border border-dashed border-slate-800 p-4 text-sm text-slate-500">Log bulunamadi.</p>
           )}

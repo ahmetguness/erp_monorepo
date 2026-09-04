@@ -63,7 +63,7 @@ export function ProductQuickImportWizard() {
   async function handleCommit() {
     try {
       const result = await commit.mutateAsync({ csv, partialImport });
-      toast.success(`${result.createdCount} urun kaydedildi, ${result.skippedCount} satir atlandi.`);
+      toast.success(`${result.createdCount} ürün kaydedildi, ${result.skippedCount} satır atlandı.`);
       setCsv('');
       preview.reset();
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -78,18 +78,18 @@ export function ProductQuickImportWizard() {
         <div>
           <div className="flex items-center gap-2">
             <FileSpreadsheet className="h-4 w-4 text-sky-300" />
-            <h2 className="text-sm font-semibold text-slate-200">Urun hizli ice aktarim</h2>
+            <h2 className="text-sm font-semibold text-slate-200">Ürün hızlı içe aktarım</h2>
           </div>
           <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
-            Excel uyumlu CSV sablonu ile 500 urun limitini asmadan dosyayi kontrol edin, hatali satirlari onceden gorun ve gecerli satirlari kaydedin.
+            Excel uyumlu CSV şablonu ile 500 ürün limitini aşmadan dosyayı kontrol edin, hatalı satirlari onceden görün ve geçerli satirlari kaydedin.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} loading={template.isPending} onClick={handleTemplate}>
-            Sablon
+            Şablon
           </Button>
           <Button variant="secondary" size="sm" leftIcon={<UploadCloud className="h-3.5 w-3.5" />} onClick={() => fileInputRef.current?.click()}>
-            Dosya Sec
+            Dosya Seç
           </Button>
           <input
             ref={fileInputRef}
@@ -110,7 +110,7 @@ export function ProductQuickImportWizard() {
               preview.reset();
             }}
             className="h-40 w-full resize-y rounded-lg border border-slate-800 bg-slate-950/60 p-3 font-mono text-xs text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-sky-500/60"
-            placeholder="CSV icerigini buraya yapistirin veya Dosya Sec ile yukleyin."
+            placeholder="CSV icerigini buraya yapistirin veya Dosya Seç ile yukleyin."
           />
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -121,7 +121,7 @@ export function ProductQuickImportWizard() {
                 onChange={(event) => setPartialImport(event.target.checked)}
                 className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-sky-500"
               />
-              Hatali satirlari atla, gecerli satirlari aktar
+              Hatalı satirlari atla, geçerli satirlari aktar
             </label>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" disabled={!hasCsv} loading={preview.isPending} onClick={handlePreview}>
@@ -136,8 +136,8 @@ export function ProductQuickImportWizard() {
           {previewData && (
             <div className="overflow-hidden rounded-lg border border-slate-800">
               <div className="grid grid-cols-[72px_1fr_110px] bg-slate-950/70 px-3 py-2 text-xs font-medium text-slate-500">
-                <span>Satir</span>
-                <span>Urun</span>
+                <span>Satır</span>
+                <span>Ürün</span>
                 <span className="text-right">Durum</span>
               </div>
               <div className="max-h-72 overflow-auto divide-y divide-slate-800">
@@ -155,7 +155,7 @@ export function ProductQuickImportWizard() {
                       )}
                     </div>
                     <div className="text-right">
-                      <Badge variant={row.valid ? 'success' : 'danger'}>{row.valid ? 'Hazir' : 'Hata'}</Badge>
+                      <Badge variant={row.valid ? 'success' : 'danger'}>{row.valid ? 'Hazır' : 'Hata'}</Badge>
                     </div>
                   </div>
                 ))}
@@ -171,7 +171,7 @@ export function ProductQuickImportWizard() {
               <p className="mt-1 text-lg font-semibold text-slate-100">{previewData?.summary.totalRows ?? '-'}</p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
-              <p className="text-[11px] text-slate-500">Hazir</p>
+              <p className="text-[11px] text-slate-500">Hazır</p>
               <p className="mt-1 text-lg font-semibold text-emerald-300">{previewData?.summary.importableRows ?? '-'}</p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
@@ -192,7 +192,7 @@ export function ProductQuickImportWizard() {
                   </div>
                 </div>
               )) : (
-                <p className="text-xs leading-5 text-slate-500">Sablonu indirip CSV yukleyince kolon, duplicate, referans ve Starter limit kontrolleri burada gorunur.</p>
+                <p className="text-xs leading-5 text-slate-500">Sablonu indirip CSV yukleyince kolon, duplicate, referans ve Starter limit kontrolleri burada görünür.</p>
               )}
             </div>
           </div>

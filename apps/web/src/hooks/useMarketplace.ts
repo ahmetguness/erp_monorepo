@@ -239,7 +239,7 @@ export function useReplayWebhookEvent() {
       qc.invalidateQueries({ queryKey: ['mp-webhook-events'] });
       qc.invalidateQueries({ queryKey: ['mp-health-center'] });
       qc.invalidateQueries({ queryKey: ['mp-orders'] });
-      toast.success(`Webhook replay tamamlandi. Islenen: ${result.replayed}, hata: ${result.failed}`);
+      toast.success(`Webhook replay tamamlandı. Islenen: ${result.replayed}, hata: ${result.failed}`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

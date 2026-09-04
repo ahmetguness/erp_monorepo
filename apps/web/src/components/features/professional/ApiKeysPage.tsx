@@ -97,7 +97,7 @@ const AVAILABLE_SCOPES: Array<{ key: ApiKeyScope; label: string; desc: string }>
   {
     key: "inventory:read",
     label: "Stok - Okuma",
-    desc: "Depo bazli stok seviyelerini goruntuleme",
+    desc: "Depo bazlı stok seviyelerini görüntüleme",
   },
   {
     key: "inventory:write",
@@ -363,7 +363,7 @@ export function ApiKeysPage() {
             {count} IP
           </span>
         ) : (
-          <span className="text-xs text-slate-600">Acik</span>
+          <span className="text-xs text-slate-600">Açık</span>
         );
       },
     },
@@ -768,7 +768,7 @@ export function ApiKeysPage() {
                 className="mt-2 w-full rounded-xl border border-slate-700/50 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
               />
               <p className="mt-1 text-[11px] text-slate-600">
-                Bos birakilirsa anahtar tum IP adreslerinden kullanilabilir.
+                Boş bırakılırsa anahtar tüm IP adreslerinden kullanilabilir.
               </p>
             </div>
 
@@ -1010,7 +1010,7 @@ export function ApiKeysPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-sm text-slate-500">Tum IP adresleri</div>
+                  <div className="text-sm text-slate-500">Tüm IP adresleri</div>
                 )}
               </div>
               <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">

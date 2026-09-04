@@ -9,7 +9,7 @@ export interface JournalEntrySourceInfo {
 const JOURNAL_TYPE_LABELS: Record<JournalEntry['type'], string> = {
   MANUAL: 'Manuel',
   AUTO_INVOICE: 'Otomatik fatura',
-  AUTO_PAYMENT: 'Otomatik odeme',
+  AUTO_PAYMENT: 'Otomatik ödeme',
   AUTO_PAYROLL: 'Otomatik bordro',
   OPENING: 'Acilis',
   CLOSING: 'Kapanis',
@@ -36,10 +36,10 @@ export function getJournalEntrySourceInfo(entry: Pick<JournalEntry, 'refType' | 
   if (!entry.refType || !entry.refId) return null;
 
   if (entry.refType === 'INVOICE') return { label: 'Fatura', href: `/dashboard/invoices/${entry.refId}` };
-  if (entry.refType === 'PAYMENT') return { label: 'Odeme', href: '/dashboard/payments' };
+  if (entry.refType === 'PAYMENT') return { label: 'Ödeme', href: '/dashboard/payments' };
   if (entry.refType === 'STOCK_COUNT') return { label: 'Stok sayimi', href: '/dashboard/stock/counts' };
   if (entry.refType === 'WORK_ORDER') return { label: 'Is emri', href: `/dashboard/production/work-orders/${entry.refId}` };
-  if (entry.refType === 'JOURNAL_REVERSAL') return { label: 'Ters kayit kaynagi', href: null };
+  if (entry.refType === 'JOURNAL_REVERSAL') return { label: 'Ters kayıt kaynağı', href: null };
 
   return { label: entry.refType, href: null };
 }

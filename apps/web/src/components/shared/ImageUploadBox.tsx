@@ -103,7 +103,7 @@ export function ImageUploadBox({
             className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-sky-500/20 bg-sky-500/10 px-2.5 text-xs font-medium text-sky-400 transition-colors hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Upload className="h-3.5 w-3.5" />
-            {hasImage ? 'Guncelle' : 'Sec'}
+            {hasImage ? 'Güncelle' : 'Seç'}
           </button>
           {canRemove ? (
             <button
@@ -113,7 +113,7 @@ export function ImageUploadBox({
               className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Kaldir
+              Kaldır
             </button>
           ) : canClearSelection ? (
             <button

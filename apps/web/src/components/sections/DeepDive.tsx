@@ -7,12 +7,12 @@ const modules = [
   {
     id: 'finance',
     title: 'Muhasebe ve Finans',
-    desc: 'Finansal sureclerinizi eksiksiz dijitalleştirin. Beyanname takibinden nakit akisina kadar tum muhasebe islemleri tek ekranda.',
+    desc: 'Finansal süreçlerinizi eksiksiz dijitalleştirin. Beyanname takibinden nakit akisina kadar tüm muhasebe işlemleri tek ekranda.',
     features: [
       'Genel muhasebe ve yevmiye defteri',
       'Beyanname hazirlama ve takibi',
-      'Nakit akis yonetimi',
-      'E-Fatura ve e-Arsiv entegrasyonu',
+      'Nakit akis yönetimi',
+      'E-Fatura ve e-Arşiv entegrasyonu',
       'Banka hesap mutabakatı',
       'Maliyet muhasebesi ve analizi',
     ],
@@ -24,38 +24,38 @@ const modules = [
   },
   {
     id: 'sales',
-    title: 'Satis ve CRM',
-    desc: 'Musteri iliskilerini ve satis sureclerini veriye dayali yonetin. Tekliften faturaya tum satis akisi tek sistemde.',
+    title: 'Satış ve CRM',
+    desc: 'Müşteri ilişkilerini ve satış sureclerini veriye dayali yönetin. Tekliften faturaya tüm satış akışı tek sistemde.',
     features: [
-      'Musteri ve potansiyel musteri takibi',
-      'Teklif hazirlama ve onay sureci',
-      'Satis firsatlari (pipeline) yonetimi',
-      'Siparis ve teslimat takibi',
-      'Satis performans raporlari',
-      'Saha satis ekibi yonetimi',
+      'Müşteri ve potansiyel müşteri takibi',
+      'Teklif hazirlama ve onay süreci',
+      'Satış firsatlari (pipeline) yönetimi',
+      'Sipariş ve teslimat takibi',
+      'Satış performans raporlari',
+      'Saha satış ekibi yönetimi',
     ],
     metrics: [
-      { label: 'Acik Teklif', value: '47', unit: 'adet', trend: '+5' },
-      { label: 'Bu Ay Satis', value: '184.200', unit: 'TL', trend: '+18%' },
-      { label: 'Musteri Sayisi', value: '312', unit: 'aktif', trend: null },
+      { label: 'Açık Teklif', value: '47', unit: 'adet', trend: '+5' },
+      { label: 'Bu Ay Satış', value: '184.200', unit: 'TL', trend: '+18%' },
+      { label: 'Müşteri Sayisi', value: '312', unit: 'aktif', trend: null },
     ],
   },
   {
     id: 'production',
-    title: 'Uretim ve Planlama',
-    desc: 'Uretim sureclerinizi planlayın, takip edin ve optimize edin. Kaynak israfini azaltin, verimliligi artirin.',
+    title: 'Üretim ve Planlama',
+    desc: 'Üretim süreçlerinizi planlayın, takip edin ve optimize edin. Kaynak israfını azaltin, verimliliği artırın.',
     features: [
-      'Malzeme ihtiyac planlamasi (MRP)',
-      'Is emirleri ve uretim takibi',
+      'Malzeme ihtiyaç planlamasi (MRP)',
+      'Is emirleri ve üretim takibi',
       'Kalite kontrol surecleri',
-      'Fason uretim takibi',
-      'Makine ve ekipman yonetimi',
-      'Uretim maliyet analizi',
+      'Fason üretim takibi',
+      'Makine ve ekipman yönetimi',
+      'Üretim maliyet analizi',
     ],
     metrics: [
       { label: 'Aktif Is Emri', value: '18', unit: 'adet', trend: null },
       { label: 'Verimlilik', value: '94', unit: '%', trend: '+3%' },
-      { label: 'Stok Donus', value: '8.2', unit: 'gun', trend: '-1.1' },
+      { label: 'Stok Donus', value: '8.2', unit: 'gün', trend: '-1.1' },
     ],
   },
 ];
@@ -80,10 +80,10 @@ export default function DeepDive() {
           className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10"
         >
           <div>
-            <div className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-3">Modul Detaylari</div>
+            <div className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-3">Modül Detayları</div>
             <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">Temel modullere yakindan bakin</h2>
             <p className="text-slate-400 text-sm leading-relaxed max-w-lg">
-              Her modul, sektorunuzun ihtiyaclarina gore yapilandirilmis kapsamli ozellikler sunar.
+              Her modül, sektorunuzun ihtiyaçlarına göre yapılandırılmış kapsamli özellikler sunar.
             </p>
           </div>
 
@@ -225,7 +225,7 @@ export default function DeepDive() {
 
               {/* Bottom link */}
               <button className="w-full bg-slate-800/40 border border-slate-700 hover:border-slate-600 rounded-lg px-4 py-3 flex items-center justify-between group transition-colors duration-150">
-                <span className="text-sm text-slate-400 group-hover:text-slate-200 transition-colors">Tum raporlari goruntule</span>
+                <span className="text-sm text-slate-400 group-hover:text-slate-200 transition-colors">Tüm raporlari görüntüle</span>
                 <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>

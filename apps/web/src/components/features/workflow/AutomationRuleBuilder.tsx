@@ -48,62 +48,62 @@ interface AutomationRuleBuilderProps {
 }
 
 const TRIGGER_OPTIONS: Array<RuleOption<AutomationRuleTrigger>> = [
-  { value: 'LOW_STOCK', label: 'Minimum stok altina dustu', detail: 'Tek depo toplam stok min seviyenin altina indiginde calisir.' },
-  { value: 'OVERDUE_INVOICE', label: 'Fatura vadesi gecti', detail: 'Satis faturasi vadesi gecmis ve kapanmamis kayitlari yakalar.' },
-  { value: 'HIGH_VALUE_INVOICE', label: 'Yuksek tutarli fatura', detail: 'Belirlenen tutar uzerindeki faturalar icin kontrol baslatir.' },
-  { value: 'LOW_MARGIN', label: 'Dusuk kar marji', detail: 'Satis fiyati maliyete yaklasan urunleri isaretler.' },
+  { value: 'LOW_STOCK', label: 'Minimum stok altina dustu', detail: 'Tek depo toplam stok min seviyenin altina indiginde çalışır.' },
+  { value: 'OVERDUE_INVOICE', label: 'Fatura vadesi geçti', detail: 'Satış faturasi vadesi geçmiş ve kapanmamış kayıtları yakalar.' },
+  { value: 'HIGH_VALUE_INVOICE', label: 'Yüksek tutarli fatura', detail: 'Belirlenen tutar üzerindeki faturalar için kontrol baslatir.' },
+  { value: 'LOW_MARGIN', label: 'Düşük kar marjı', detail: 'Satış fiyatı maliyete yaklasan urunleri işaretler.' },
   { value: 'CHECK_DUE_SOON', label: 'Cek/senet vadesi yaklasti', detail: 'Vadesi yaklasan cek ve senetleri takip listesine alir.' },
 ];
 
 const ACTION_OPTIONS: Array<RuleOption<AutomationRuleAction>> = [
-  { value: 'CREATE_TASK', label: 'Gorev olustur', detail: 'Workflow gorev listesine takip isi acar.' },
-  { value: 'CREATE_NOTIFICATION', label: 'Sistem bildirimi gonder', detail: 'Sorumlu kullaniciya ya da tenant sahibine bildirim dusurur.' },
-  { value: 'DRAFT_REMINDER_EMAIL', label: 'Mail taslagi hazirla', detail: 'Takip maili icin otomasyon gorevi olusturur.' },
-  { value: 'REQUEST_APPROVAL', label: 'Onay kontrolu baslat', detail: 'Onay akisina gidecek kontrol gorevi olusturur.' },
-  { value: 'CREATE_PURCHASE_REQUEST_DRAFT', label: 'Satin alma taslagi ac', detail: 'Kritik stok icin satin alma takip gorevi olusturur.' },
+  { value: 'CREATE_TASK', label: 'Görev oluştur', detail: 'Workflow görev listesine takip işi acar.' },
+  { value: 'CREATE_NOTIFICATION', label: 'Sistem bildirimi gönder', detail: 'Sorumlu kullanıcıya ya da tenant sahibine bildirim dusurur.' },
+  { value: 'DRAFT_REMINDER_EMAIL', label: 'Mail taslağı hazırla', detail: 'Takip maili için otomasyon görevi olusturur.' },
+  { value: 'REQUEST_APPROVAL', label: 'Onay kontrolu başlat', detail: 'Onay akisina gidecek kontrol görevi olusturur.' },
+  { value: 'CREATE_PURCHASE_REQUEST_DRAFT', label: 'Satin alma taslağı ac', detail: 'Kritik stok için satin alma takip görevi olusturur.' },
 ];
 
 const MODULE_OPTIONS = ['workflow', 'inventory', 'invoicing', 'accounting', 'approvals', 'purchasing'];
 
 const CONDITION_PRESETS: Record<AutomationRuleTrigger, ConfigPreset[]> = {
   LOW_STOCK: [
-    { label: 'Minimum stok tanimli aktif urunler', detail: 'Stok toplamı urun min seviyesinin altindaysa eslesir.', config: { minStockRequired: true, scope: 'single_warehouse_total' } },
-    { label: 'Acil stok acigi', detail: 'Stok acigi 10 adetten buyuk olan urunleri onceliklendirir.', config: { minStockRequired: true, minDeficit: 10, scope: 'single_warehouse_total' } },
+    { label: 'Minimum stok tanımlı aktif ürünler', detail: 'Stok toplamı ürün min seviyesinin altindaysa eşleşir.', config: { minStockRequired: true, scope: 'single_warehouse_total' } },
+    { label: 'Acil stok acigi', detail: 'Stok acigi 10 adetten büyük olan urunleri onceliklendirir.', config: { minStockRequired: true, minDeficit: 10, scope: 'single_warehouse_total' } },
   ],
   OVERDUE_INVOICE: [
-    { label: 'Vadesi gecen satis faturasi', detail: 'SENT, PARTIALLY_PAID veya OVERDUE durumlarini izler.', config: { invoiceType: 'SALES', statuses: 'SENT,PARTIALLY_PAID,OVERDUE' } },
+    { label: 'Vadesi gecen satış faturasi', detail: 'SENT, PARTIALLY_PAID veya OVERDUE durumlarini izler.', config: { invoiceType: 'SALES', statuses: 'SENT,PARTIALLY_PAID,OVERDUE' } },
     { label: 'Kritik tahsilat gecikmesi', detail: '7 gunden fazla geciken faturalari ayirir.', config: { invoiceType: 'SALES', overdueDays: 7 } },
   ],
   HIGH_VALUE_INVOICE: [
-    { label: '100.000 TRY ve uzeri', detail: 'Fatura toplam brut tutari limite esit veya ustundeyse calisir.', config: { minAmount: 100000, currency: 'TRY' } },
-    { label: '250.000 TRY ve uzeri', detail: 'Daha yuksek finans kontrol limiti uygular.', config: { minAmount: 250000, currency: 'TRY' } },
+    { label: '100.000 TRY ve uzeri', detail: 'Fatura toplam brüt tutarı limite eşit veya ustundeyse çalışır.', config: { minAmount: 100000, currency: 'TRY' } },
+    { label: '250.000 TRY ve uzeri', detail: 'Daha yüksek finans kontrol limiti uygular.', config: { minAmount: 250000, currency: 'TRY' } },
   ],
   LOW_MARGIN: [
-    { label: 'Marj yuzde 12 altinda', detail: 'Ortalama maliyet veya alis fiyatina gore dusuk marji yakalar.', config: { maxMarginRate: 0.12 } },
-    { label: 'Zarar riski', detail: 'Maliyet satis fiyatini asiyorsa kritik gorev olusturur.', config: { maxMarginRate: 0 } },
+    { label: 'Marj yüzde 12 altında', detail: 'Ortalama maliyet veya alış fiyatına göre düşük marjı yakalar.', config: { maxMarginRate: 0.12 } },
+    { label: 'Zarar riski', detail: 'Maliyet satış fiyatini asiyorsa kritik görev olusturur.', config: { maxMarginRate: 0 } },
   ],
   CHECK_DUE_SOON: [
-    { label: '7 gun icinde vade', detail: 'Bekleyen veya bankaya verilen cek/senetleri izler.', config: { dueInDays: 7 } },
-    { label: '3 gun icinde vade', detail: 'Daha yakin vadeler icin dar takip listesi olusturur.', config: { dueInDays: 3 } },
+    { label: '7 gün icinde vade', detail: 'Bekleyen veya bankaya verilen cek/senetleri izler.', config: { dueInDays: 7 } },
+    { label: '3 gün icinde vade', detail: 'Daha yakın vadeler için dar takip listesi olusturur.', config: { dueInDays: 3 } },
   ],
 };
 
 const ACTION_PRESETS: Record<AutomationRuleAction, ConfigPreset[]> = {
   CREATE_TASK: [
-    { label: 'Otomatik gorev', detail: 'Eslesen kayit icin tekil workflow gorevi acar.', config: { taskType: 'AUTOMATION', priorityPolicy: 'source_based' } },
-    { label: 'Acil takip gorevi', detail: 'Onceligi tetikleyici riskine gore yukseltir.', config: { taskType: 'AUTOMATION', priorityPolicy: 'risk_based' } },
+    { label: 'Otomatik görev', detail: 'Eslesen kayıt için tekil workflow görevi acar.', config: { taskType: 'AUTOMATION', priorityPolicy: 'source_based' } },
+    { label: 'Acil takip görevi', detail: 'Onceligi tetikleyici riskine göre yukseltir.', config: { taskType: 'AUTOMATION', priorityPolicy: 'risk_based' } },
   ],
   CREATE_NOTIFICATION: [
-    { label: 'Sistem ici bildirim', detail: 'Atanan kullanici yoksa tenant sahibine bildirim gonderir.', config: { channel: 'in_app', audience: 'assigned_or_owner' } },
+    { label: 'Sistem ici bildirim', detail: 'Atanan kullanıcı yoksa tenant sahibine bildirim gonderir.', config: { channel: 'in_app', audience: 'assigned_or_owner' } },
   ],
   DRAFT_REMINDER_EMAIL: [
-    { label: 'Hatirlatma mail taslagi', detail: 'Mail gonderimi yerine onaylanacak gorev taslagi acar.', config: { mailMode: 'draft_only', template: 'payment_reminder' } },
+    { label: 'Hatirlatma mail taslağı', detail: 'Mail gönderimi yerine onaylanacak görev taslağı acar.', config: { mailMode: 'draft_only', template: 'payment_reminder' } },
   ],
   REQUEST_APPROVAL: [
-    { label: 'Finans kontrol onayi', detail: 'Onay akisina tasinacak kontrol gorevi olusturur.', config: { approvalScope: 'finance_review' } },
+    { label: 'Finans kontrol onayi', detail: 'Onay akisina tasinacak kontrol görevi olusturur.', config: { approvalScope: 'finance_review' } },
   ],
   CREATE_PURCHASE_REQUEST_DRAFT: [
-    { label: 'Satin alma talebi taslagi', detail: 'Eksik stok icin satin alma hazirlik gorevi acar.', config: { draftType: 'purchase_request', quantityPolicy: 'deficit' } },
+    { label: 'Satin alma talebi taslağı', detail: 'Eksik stok için satin alma hazırlık görevi acar.', config: { draftType: 'purchase_request', quantityPolicy: 'deficit' } },
   ],
 };
 
@@ -127,7 +127,7 @@ function sameConfig(left: AutomationRuleConfig, right: AutomationRuleConfig): bo
 
 function configSummary(config: AutomationRuleConfig): string {
   const entries = Object.entries(config);
-  if (entries.length === 0) return 'Ek kosul yok';
+  if (entries.length === 0) return 'Ek koşul yok';
   return entries.map(([key, value]) => `${key}: ${String(value)}`).join(' / ');
 }
 
@@ -175,10 +175,10 @@ export function AutomationRuleBuilder({
           <h3 className="text-sm font-semibold">Kural tasarimcisi</h3>
         </div>
         <p className="text-xs leading-relaxed text-slate-500">
-          Sablondan baslayin veya tetikleyici, kosul ve aksiyonu adim adim secerek backend automation-rule yapisina uygun kural olusturun.
+          Sablondan baslayin veya tetikleyici, koşul ve aksiyonu adım adım secerek backend automation-rule yapisina uygun kural oluşturun.
         </p>
         <label className="block space-y-1.5">
-          <span className="text-xs font-medium text-slate-400">Hazir sablon</span>
+          <span className="text-xs font-medium text-slate-400">Hazır şablon</span>
           <select
             value=""
             onChange={(event) => {
@@ -197,7 +197,7 @@ export function AutomationRuleBuilder({
             }}
             className="h-9 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 text-xs text-slate-200 outline-none focus:border-sky-500"
           >
-            <option value="">Sablon sec</option>
+            <option value="">Şablon seç</option>
             {templates.map((template) => (
               <option key={template.key} value={template.key}>{template.title}</option>
             ))}
@@ -208,7 +208,7 @@ export function AutomationRuleBuilder({
       <div className="space-y-4">
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-slate-400">Kural adi</span>
+            <span className="text-xs font-medium text-slate-400">Kural adı</span>
             <input
               value={form.name}
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
@@ -217,7 +217,7 @@ export function AutomationRuleBuilder({
             />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-slate-400">Modul</span>
+            <span className="text-xs font-medium text-slate-400">Modül</span>
             <select
               value={form.module}
               onChange={(event) => setForm((current) => ({ ...current, module: event.target.value }))}
@@ -231,7 +231,7 @@ export function AutomationRuleBuilder({
         </div>
 
         <label className="block space-y-1.5">
-          <span className="text-xs font-medium text-slate-400">Aciklama</span>
+          <span className="text-xs font-medium text-slate-400">Açıklama</span>
           <textarea
             value={form.description}
             onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
@@ -279,7 +279,7 @@ export function AutomationRuleBuilder({
               {CONDITION_PRESETS[form.trigger].map((preset, index) => (
                 <option key={preset.label} value={index}>{preset.label}</option>
               ))}
-              {selectedConditionIndex < 0 && <option value="custom">Ozel kosul</option>}
+              {selectedConditionIndex < 0 && <option value="custom">Özel koşul</option>}
             </select>
             <p className="text-[11px] leading-relaxed text-slate-500">
               {selectedConditionIndex >= 0 ? CONDITION_PRESETS[form.trigger][selectedConditionIndex].detail : configSummary(form.conditions)}
@@ -314,7 +314,7 @@ export function AutomationRuleBuilder({
               {ACTION_PRESETS[form.action].map((preset, index) => (
                 <option key={preset.label} value={index}>{preset.label}</option>
               ))}
-              {selectedActionIndex < 0 && <option value="custom">Ozel aksiyon ayari</option>}
+              {selectedActionIndex < 0 && <option value="custom">Özel aksiyon ayari</option>}
             </select>
           </div>
         </div>

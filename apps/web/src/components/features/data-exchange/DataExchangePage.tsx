@@ -22,31 +22,31 @@ import { DataDeduplicationCenter } from './DataDeduplicationCenter';
 
 const ENTITIES: { value: DataExchangeEntity; label: string; description: string }[] = [
   { value: 'products', label: 'Urunler', description: 'Kod, ad, fiyat ve stok esigi' },
-  { value: 'contacts', label: 'Cariler', description: 'Musteri/tedarikci temel kartlari' },
-  { value: 'stock', label: 'Stok', description: 'Depo bazli miktar gorunumu' },
+  { value: 'contacts', label: 'Cariler', description: 'Müşteri/tedarikçi temel kartlari' },
+  { value: 'stock', label: 'Stok', description: 'Depo bazlı miktar görünümü' },
   { value: 'invoices', label: 'Faturalar', description: 'Fatura baslik bilgileri' },
 ];
 
 const ENTITY_HELP: Record<DataExchangeEntity, { required: string[]; exported: string; note: string }> = {
   products: {
     required: ['code', 'name'],
-    exported: 'Urun kodu, ad, barkod, satis fiyati, alis fiyati, minimum stok ve aktiflik bilgisi disari aktarilir.',
-    note: 'Import onizleme urun kodu ve ad alanlarini zorunlu kontrol eder.',
+    exported: 'Ürün kodu, ad, barkod, satış fiyatı, alış fiyatı, minimum stok ve aktiflik bilgisi dışarı aktarılır.',
+    note: 'Import önizleme ürün kodu ve ad alanlarini zorunlu kontrol eder.',
   },
   contacts: {
     required: ['type', 'name'],
-    exported: 'Cari tipi, kod, unvan, vergi bilgileri, e-posta, telefon, sehir, ulke ve aktiflik bilgisi disari aktarilir.',
-    note: 'type alani musteri/tedarikci ayrimini tasir; dosyada bos birakilmamalidir.',
+    exported: 'Cari tipi, kod, unvan, vergi bilgileri, e-posta, telefon, şehir, ülke ve aktiflik bilgisi dışarı aktarılır.',
+    note: 'type alanı müşteri/tedarikçi ayrimini taşır; dosyada boş bırakılmamalıdır.',
   },
   stock: {
     required: ['productCode', 'warehouseCode', 'quantity'],
-    exported: 'Urun kodu/ad, depo kodu/ad ve depo bazli miktar bilgisi disari aktarilir.',
-    note: 'Stok import onizleme urun-depo-miktar eslesmesini kontrol eder; kayit islemi henuz yapmaz.',
+    exported: 'Ürün kodu/ad, depo kodu/ad ve depo bazlı miktar bilgisi dışarı aktarılır.',
+    note: 'Stok import önizleme ürün-depo-miktar eşleşmesini kontrol eder; kayıt işlemi henüz yapmaz.',
   },
   invoices: {
     required: ['number', 'type', 'contactName', 'date'],
-    exported: 'Fatura numarasi, tip, durum, cari, tarih, vade, para birimi ve genel toplam disari aktarilir.',
-    note: 'Fatura import onizleme baslik alanlarini kontrol eder; satir kalemleri bu ekranda yazilmaz.',
+    exported: 'Fatura numarası, tip, durum, cari, tarih, vade, para birimi ve genel toplam dışarı aktarılır.',
+    note: 'Fatura import önizleme baslik alanlarini kontrol eder; satır kalemleri bu ekranda yazılmaz.',
   },
 };
 
@@ -138,12 +138,12 @@ export function DataExchangePage() {
   return (
     <div>
       <PageHeader
-        title="Ice / Disa Aktarma"
-        subtitle="CSV sablonu al, mevcut veriyi disa aktar veya import dosyasini kaydetmeden once dogrula."
+        title="Ice / Dışa Aktarma"
+        subtitle="CSV şablonu al, mevcut veriyi dışa aktar veya import dosyasini kaydetmeden önce doğrula."
         action={
           <>
             <Button variant="outline" leftIcon={<FileSpreadsheet className="h-4 w-4" />} loading={template.isPending} onClick={handleTemplate}>
-              Sablon
+              Şablon
             </Button>
             <Button variant="secondary" leftIcon={<Download className="h-4 w-4" />} loading={dataExport.isPending} onClick={handleExport}>
               Export
@@ -258,9 +258,9 @@ export function DataExchangePage() {
               Bu merkez ne yapar?
             </div>
             <div className="space-y-3 text-xs leading-5 text-slate-500">
-              <p>Sablon butonu secili veri tipi icin bos CSV basligi indirir.</p>
+              <p>Şablon butonu seçili veri tipi için boş CSV basligi indirir.</p>
               <p>Export butonu sadece yetkili oldugun tenant verisini CSV olarak indirir.</p>
-              <p>Kontrol Et islemi dosyayi kaydetmez; kolonlari ve zorunlu alanlari onceden dogrular.</p>
+              <p>Kontrol Et işlemi dosyayı kaydetmez; kolonları ve zorunlu alanları onceden doğrular.</p>
             </div>
           </section>
         </aside>
@@ -289,8 +289,8 @@ export function DataExchangePage() {
           <section className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-slate-200">Import Onizleme</h2>
-                <p className="mt-1 text-xs text-slate-500">Dosya veritabanina yazilmaz; kolon ve zorunlu alanlar kontrol edilir.</p>
+                <h2 className="text-sm font-semibold text-slate-200">Import Önizleme</h2>
+                <p className="mt-1 text-xs text-slate-500">Dosya veritabanina yazılmaz; kolon ve zorunlu alanlar kontrol edilir.</p>
               </div>
               <div className="flex gap-2">
                 <input
@@ -301,7 +301,7 @@ export function DataExchangePage() {
                   onChange={(event) => { void handleFile(event.target.files?.[0]); }}
                 />
                 <Button variant="outline" leftIcon={<UploadCloud className="h-4 w-4" />} onClick={() => fileInputRef.current?.click()}>
-                  Dosya Sec
+                  Dosya Seç
                 </Button>
                 <Button loading={preview.isPending} onClick={handlePreview} disabled={!csv.trim()}>
                   Kontrol Et
@@ -343,8 +343,8 @@ export function DataExchangePage() {
           {previewData && (
             <section className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge variant="success">Gecerli: {previewData.validRows}</Badge>
-                <Badge variant={previewData.invalidRows > 0 ? 'danger' : 'neutral'}>Hatali: {previewData.invalidRows}</Badge>
+                <Badge variant="success">Geçerli: {previewData.validRows}</Badge>
+                <Badge variant={previewData.invalidRows > 0 ? 'danger' : 'neutral'}>Hatalı: {previewData.invalidRows}</Badge>
                 <Badge variant={previewData.batchPlan.canImportValidRows ? 'success' : 'warning'}>
                   Batch: {previewData.batchPlan.canImportValidRows ? 'Hazır' : 'Bekliyor'}
                 </Badge>
@@ -369,7 +369,7 @@ export function DataExchangePage() {
                 <table className="min-w-full divide-y divide-slate-800 text-sm">
                   <thead className="bg-slate-950/60">
                     <tr>
-                      <th className="w-20 px-3 py-2 text-left text-xs font-medium text-slate-500">Satir</th>
+                      <th className="w-20 px-3 py-2 text-left text-xs font-medium text-slate-500">Satır</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-slate-500">Durum</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-slate-500">Hatalar</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-slate-500">Uyarılar</th>
@@ -380,7 +380,7 @@ export function DataExchangePage() {
                       <tr key={row.rowNumber}>
                         <td className="px-3 py-2 text-slate-400">{row.rowNumber}</td>
                         <td className="px-3 py-2">
-                          <Badge variant={row.valid ? 'success' : 'danger'}>{row.valid ? 'Gecerli' : 'Hatali'}</Badge>
+                          <Badge variant={row.valid ? 'success' : 'danger'}>{row.valid ? 'Geçerli' : 'Hatalı'}</Badge>
                         </td>
                         <td className="px-3 py-2 text-slate-400">{row.errors.join(', ') || '-'}</td>
                         <td className="px-3 py-2 text-slate-400">{row.warnings.join(', ') || '-'}</td>

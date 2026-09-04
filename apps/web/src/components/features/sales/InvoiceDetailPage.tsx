@@ -326,7 +326,7 @@ export function InvoiceDetailPage({ id }: Props) {
             '',
             `${invoice.number} numaralı ve ${formatCurrency(invoice.totalGross, invoice.currencyCode)} tutarındaki faturanız için ${formatCurrency(paid.remaining, invoice.currencyCode)} açık bakiye görünmektedir.`,
             invoice.dueDate ? `Vade tarihi: ${formatDate(invoice.dueDate)}.` : 'Faturada vade tarihi bulunmuyor.',
-            'Ödemeniz yapıldıysa bu mesajı dikkate almayabilirsiniz. Destek ihtiyacınız olursa bizimle iletişime geçebilirsiniz.',
+            'Ödemeniz yapıldıysa bu mesajı dikkate almayabilirsiniz. Destek ihtiyaçınız olursa bizimle iletişime geçebilirsiniz.',
             '',
             'İyi çalışmalar.',
           ].join('\n'),

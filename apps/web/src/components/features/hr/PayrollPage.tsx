@@ -315,11 +315,11 @@ export function PayrollPage() {
           <div>
             <h2 className="text-sm font-semibold text-white">Bordro ileri seviye</h2>
             <p className="mt-1 text-xs text-slate-500">
-              {advancedPeriod} donem kapama, muhasebe entegrasyonu, geriye donuk duzeltme ve arsiv durumu.
+              {advancedPeriod} dönem kapama, muhasebe entegrasyonu, geriye dönük düzeltme ve arşiv durumu.
             </p>
           </div>
           <Badge variant={advancedPayroll?.summary.closingReady ? "success" : "warning"}>
-            {advancedPayroll?.summary.closingReady ? "Kapanisa hazir" : "Kontrol gerekli"}
+            {advancedPayroll?.summary.closingReady ? "Kapanisa hazır" : "Kontrol gerekli"}
           </Badge>
         </div>
 
@@ -330,12 +330,12 @@ export function PayrollPage() {
         ) : (
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-              <AdvancedMetric icon={<CheckCircle2 className="h-4 w-4" />} label="Donem kapama" value={`${advancedPayroll.summary.payrollCount}/${advancedPayroll.summary.activeEmployeeCount}`} tone={advancedPayroll.summary.missingPayrollCount > 0 ? "warning" : "success"} />
+              <AdvancedMetric icon={<CheckCircle2 className="h-4 w-4" />} label="Dönem kapama" value={`${advancedPayroll.summary.payrollCount}/${advancedPayroll.summary.activeEmployeeCount}`} tone={advancedPayroll.summary.missingPayrollCount > 0 ? "warning" : "success"} />
               <AdvancedMetric icon={<BookOpen className="h-4 w-4" />} label="Muhasebe fisi" value={advancedPayroll.accounting.journalEntryNumber ?? "Eksik"} tone={advancedPayroll.summary.accountingVoucherCreated ? "success" : "warning"} />
               <AdvancedMetric icon={<ShieldCheck className="h-4 w-4" />} label="Hassas yetki" value={advancedPayroll.summary.sensitiveAccessIssueCount} tone={advancedPayroll.summary.sensitiveAccessIssueCount > 0 ? "warning" : "success"} />
               <AdvancedMetric icon={<ClipboardCheck className="h-4 w-4" />} label="Onay bekleyen" value={advancedPayroll.summary.approvalPendingCount} tone={advancedPayroll.summary.approvalPendingCount > 0 ? "warning" : "success"} />
-              <AdvancedMetric icon={<RotateCcw className="h-4 w-4" />} label="Geriye donuk duzeltme" value={advancedPayroll.summary.retroCorrectionCount} tone={advancedPayroll.summary.retroCorrectionCount > 0 ? "warning" : "info"} />
-              <AdvancedMetric icon={<Archive className="h-4 w-4" />} label="Onayli arsiv" value={advancedPayroll.summary.archiveReadyCount} tone={advancedPayroll.summary.archiveReadyCount > 0 ? "success" : "info"} />
+              <AdvancedMetric icon={<RotateCcw className="h-4 w-4" />} label="Geriye dönük düzeltme" value={advancedPayroll.summary.retroCorrectionCount} tone={advancedPayroll.summary.retroCorrectionCount > 0 ? "warning" : "info"} />
+              <AdvancedMetric icon={<Archive className="h-4 w-4" />} label="Onaylı arşiv" value={advancedPayroll.summary.archiveReadyCount} tone={advancedPayroll.summary.archiveReadyCount > 0 ? "success" : "info"} />
             </div>
 
             <div className="grid gap-4 xl:grid-cols-3">
@@ -343,9 +343,9 @@ export function PayrollPage() {
                 <h3 className="mb-2 text-xs font-semibold text-slate-200">Hassas veri yetkisi</h3>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <AccessPill label="Oku" active={advancedPayroll.sensitiveAccess.currentUser.canRead} />
-                  <AccessPill label="Guncelle" active={advancedPayroll.sensitiveAccess.currentUser.canUpdate} />
+                  <AccessPill label="Güncelle" active={advancedPayroll.sensitiveAccess.currentUser.canUpdate} />
                   <AccessPill label="Onayla" active={advancedPayroll.sensitiveAccess.currentUser.canApprove} />
-                  <AccessPill label="Disa aktar" active={advancedPayroll.sensitiveAccess.currentUser.canExport} />
+                  <AccessPill label="Dışa aktar" active={advancedPayroll.sensitiveAccess.currentUser.canExport} />
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
                   <span>Export rol: {advancedPayroll.sensitiveAccess.roleCoverage.exportRoleCount}</span>
@@ -364,16 +364,16 @@ export function PayrollPage() {
               </div>
 
               <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
-                <h3 className="mb-2 text-xs font-semibold text-slate-200">Bordro onay akisi</h3>
+                <h3 className="mb-2 text-xs font-semibold text-slate-200">Bordro onay akışı</h3>
                 <div className="mb-3 flex items-center justify-between gap-3 text-xs">
-                  <span className="text-slate-500">Aktif akis / adim</span>
+                  <span className="text-slate-500">Aktif akis / adım</span>
                   <span className="font-medium text-slate-200">
                     {advancedPayroll.approvalWorkflow.activeFlowCount}/{advancedPayroll.approvalWorkflow.approverStepCount}
                   </span>
                 </div>
                 {advancedPayroll.approvalWorkflow.latestRequests.length === 0 ? (
                   <p className="text-xs text-slate-500">
-                    {advancedPayroll.approvalWorkflow.activeFlowCount > 0 ? "Bu donem icin onay talebi yok." : "Bordro icin aktif onay akisi yok."}
+                    {advancedPayroll.approvalWorkflow.activeFlowCount > 0 ? "Bu dönem için onay talebi yok." : "Bordro için aktif onay akışı yok."}
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -393,7 +393,7 @@ export function PayrollPage() {
               </div>
 
               <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
-                <h3 className="mb-2 text-xs font-semibold text-slate-200">Muhasebe fis baglantisi</h3>
+                <h3 className="mb-2 text-xs font-semibold text-slate-200">Muhasebe fis bağlantısı</h3>
                 <div className="flex items-center justify-between gap-3 text-xs">
                   <span className="text-slate-500">Durum</span>
                   <Badge variant={advancedPayroll.accounting.integrationStatus === "posted" ? "success" : "warning"}>
@@ -402,7 +402,7 @@ export function PayrollPage() {
                 </div>
                 <div className="mt-3 space-y-2 text-xs text-slate-500">
                   <p>Fis: <span className="font-medium text-slate-200">{advancedPayroll.accounting.journalEntryNumber ?? "-"}</span></p>
-                  <p>Satir: {advancedPayroll.accounting.lineCount} / Denge farki: {formatCurrency(advancedPayroll.accounting.balanceDifference)}</p>
+                  <p>Satır: {advancedPayroll.accounting.lineCount} / Denge farki: {formatCurrency(advancedPayroll.accounting.balanceDifference)}</p>
                   <p>Post tarihi: {formatDate(advancedPayroll.accounting.postedAt)}</p>
                 </div>
               </div>
@@ -426,7 +426,7 @@ export function PayrollPage() {
                 <h3 className="mb-2 text-xs font-semibold text-slate-200">Duzeltme gecmisi</h3>
                 <div className="space-y-2">
                   {advancedPayroll.retroCorrections.length === 0 ? (
-                    <p className="text-xs text-slate-500">Bu donemde geriye donuk bordro duzeltmesi yok.</p>
+                    <p className="text-xs text-slate-500">Bu donemde geriye dönük bordro düzeltmesi yok.</p>
                   ) : advancedPayroll.retroCorrections.slice(0, 4).map((row) => (
                     <div key={`${row.payrollId}:${row.correctedAt}`} className="rounded-md border border-slate-800 bg-slate-900/60 p-2 text-xs">
                       <p className="font-medium text-slate-200">{row.employeeName}</p>
@@ -437,7 +437,7 @@ export function PayrollPage() {
               </div>
 
               <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
-                <h3 className="mb-2 text-xs font-semibold text-slate-200">Onayli bordro arsivi</h3>
+                <h3 className="mb-2 text-xs font-semibold text-slate-200">Onaylı bordro arsivi</h3>
                 <div className="space-y-2">
                   {advancedPayroll.archive.length === 0 ? (
                     <p className="text-xs text-slate-500">Arsivlenebilir odenmis bordro yok.</p>
@@ -448,7 +448,7 @@ export function PayrollPage() {
                         <p className="mt-0.5 text-slate-500">{formatDate(row.paidAt)} / {formatCurrency(row.netSalary)}</p>
                       </div>
                       <Badge variant={row.archiveStatus === "approved_archive" ? "success" : "warning"}>
-                        {row.archiveStatus === "approved_archive" ? "Arsiv hazir" : "Fis eksik"}
+                        {row.archiveStatus === "approved_archive" ? "Arşiv hazır" : "Fis eksik"}
                       </Badge>
                     </div>
                   ))}

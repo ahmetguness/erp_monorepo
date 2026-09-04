@@ -38,7 +38,7 @@ import {
 const STATUS_LABELS: Record<MailDeliveryStatus, string> = {
   PENDING: "Bekliyor",
   SENT: "Gonderildi",
-  FAILED: "Hatali",
+  FAILED: "Hatalı",
 };
 
 const DIRECTION_LABELS: Record<MailDirection, string> = {
@@ -55,11 +55,11 @@ const AI_TONE_LABELS: Record<MailDraftTone, string> = {
 const AI_TONES: readonly MailDraftTone[] = ["formal", "friendly", "short"];
 
 const TEMPLATE_VARIABLES: readonly MailTemplateVariableDefinition[] = [
-  { key: "customerName", label: "Musteri adi", required: false, example: "Acme Ltd." },
+  { key: "customerName", label: "Müşteri adı", required: false, example: "Acme Ltd." },
   { key: "invoiceNo", label: "Fatura no", required: false, example: "FTR-2026-001" },
   { key: "dueDate", label: "Vade tarihi", required: false, example: "31.05.2026" },
   { key: "amount", label: "Tutar", required: false, example: "25.000 TL" },
-  { key: "employeeName", label: "Personel adi", required: false, example: "Ayse Yilmaz" },
+  { key: "employeeName", label: "Personel adı", required: false, example: "Ayse Yilmaz" },
   { key: "quoteNo", label: "Teklif no", required: false, example: "TKL-2026-014" },
   { key: "serviceNo", label: "Servis no", required: false, example: "SRV-2026-008" },
 ];
@@ -142,16 +142,16 @@ function MailBodyPreview({ html }: { html: string }) {
         <div className="flex items-center gap-2">
           <Mail className="h-4 w-4 text-sky-400" />
           <span className="text-xs font-semibold text-slate-200">
-            Mail icerigi
+            Mail içeriği
           </span>
         </div>
         <span className="rounded-full border border-slate-800 px-2 py-1 text-[11px] text-slate-500">
-          Onizleme
+          Önizleme
         </span>
       </div>
       <div className="max-h-72 min-h-44 overflow-auto px-4 py-4">
         <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">
-          {readableBody || "Icerik bulunamadi."}
+          {readableBody || "İçerik bulunamadi."}
         </p>
       </div>
     </section>
@@ -272,12 +272,12 @@ export function MailCenterPage() {
     >
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <MailStatCard label="Giden" value={String(mailSummary?.outboundCount ?? 0)} hint="Gonderim kaydi" />
+        <MailStatCard label="Giden" value={String(mailSummary?.outboundCount ?? 0)} hint="Gonderim kaydı" />
         <MailStatCard label="Bekleyen" value={String(mailSummary?.pendingCount ?? 0)} hint="Batch kuyrugu" />
-        <MailStatCard label="Basarili" value={String(mailSummary?.sentCount ?? 0)} hint="Teslimat kaydi" />
-        <MailStatCard label="Hatali" value={String(mailSummary?.failedCount ?? 0)} hint="Delivery/reply takip" />
-        <MailStatCard label="Tenant sablon" value={String(templateLifecycle?.tenantCount ?? 0)} hint={`${templateLifecycle?.approvedTenantCount ?? 0} onayli`} />
-        <MailStatCard label="Taslak sablon" value={String(templateLifecycle?.draftTenantCount ?? 0)} hint={`Son v${templateLifecycle?.latestTenantVersion ?? 0}`} />
+        <MailStatCard label="Basarili" value={String(mailSummary?.sentCount ?? 0)} hint="Teslimat kaydı" />
+        <MailStatCard label="Hatalı" value={String(mailSummary?.failedCount ?? 0)} hint="Delivery/reply takip" />
+        <MailStatCard label="Tenant şablon" value={String(templateLifecycle?.tenantCount ?? 0)} hint={`${templateLifecycle?.approvedTenantCount ?? 0} onaylı`} />
+        <MailStatCard label="Taslak şablon" value={String(templateLifecycle?.draftTenantCount ?? 0)} hint={`Son v${templateLifecycle?.latestTenantVersion ?? 0}`} />
       </div>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900">
@@ -318,7 +318,7 @@ export function MailCenterPage() {
                     colSpan={6}
                     className="px-4 py-10 text-center text-sm text-slate-500"
                   >
-                    Yukleniyor...
+                    Yükleniyor...
                   </td>
                 </tr>
               )}
@@ -328,7 +328,7 @@ export function MailCenterPage() {
                     colSpan={6}
                     className="px-4 py-10 text-center text-sm text-slate-500"
                   >
-                    Mail kaydi bulunamadi.
+                    Mail kaydı bulunamadi.
                   </td>
                 </tr>
               )}
@@ -340,7 +340,7 @@ export function MailCenterPage() {
         </div>
 
         <div className="flex items-center justify-between border-t border-slate-800 px-4 py-3 text-xs text-slate-500">
-          <span>{data?.meta.total ?? 0} kayit</span>
+          <span>{data?.meta.total ?? 0} kayıt</span>
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -348,7 +348,7 @@ export function MailCenterPage() {
               disabled={page <= 1}
               onClick={() => setPage((prev) => Math.max(1, prev - 1))}
             >
-              Onceki
+              Önceki
             </Button>
             <span>Sayfa {page}</span>
             <Button
@@ -366,8 +366,8 @@ export function MailCenterPage() {
       <Modal
         isOpen={composeOpen}
         onClose={resetCompose}
-        title="Toplu mail gonder"
-        description="Ayni maili birden fazla aliciya ayri kayitlarla gonderir"
+        title="Toplu mail gönder"
+        description="Ayni maili birden fazla alıcıya ayri kayitlarla gonderir"
         size="lg"
         footer={
           <>
@@ -382,7 +382,7 @@ export function MailCenterPage() {
             >
               {isReadingFiles
                 ? "Dosya okunuyor"
-                : `${recipients.length || 0} aliciya gonder`}
+                : `${recipients.length || 0} alıcıya gönder`}
             </Button>
           </>
         }
@@ -394,7 +394,7 @@ export function MailCenterPage() {
                 Alicilar
               </span>
               <span className="text-[11px] text-slate-600">
-                Virgul, noktalı virgul veya yeni satir kullanin
+                Virgul, noktalı virgul veya yeni satır kullanın
               </span>
             </div>
             <textarea
@@ -445,7 +445,7 @@ export function MailCenterPage() {
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-sky-400" />
                 <span className="text-xs font-semibold text-slate-300">
-                  Sablon ve AI taslak
+                  Şablon ve AI taslak
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -458,7 +458,7 @@ export function MailCenterPage() {
                   loading={renderTemplate.isPending}
                   leftIcon={<FileText className="h-3.5 w-3.5" />}
                 >
-                  Sablondan olustur
+                  Sablondan oluştur
                 </Button>
                 <Button
                   type="button"
@@ -476,14 +476,14 @@ export function MailCenterPage() {
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
               <label className="space-y-1.5">
                 <span className="text-xs font-medium text-slate-400">
-                  Sablon kutuphanesi
+                  Şablon kutuphanesi
                 </span>
                 <select
                   value={selectedTemplateId}
                   onChange={(event) => selectTemplate(event.target.value)}
                   className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none focus:border-sky-500/60"
                 >
-                  <option value="">Sablon secin</option>
+                  <option value="">Şablon secin</option>
                   {availableMailTemplates.map((template) => (
                     <option key={template.id} value={template.id}>
                       {template.category} - {template.name}
@@ -600,7 +600,7 @@ export function MailCenterPage() {
             </label>
             <label className="mt-3 block space-y-1.5">
               <span className="text-xs font-medium text-slate-400">
-                Aciklama
+                Açıklama
               </span>
               <textarea
                 value={body}
@@ -668,7 +668,7 @@ export function MailCenterPage() {
           resetTemplateForm();
         }}
         title="Mail sablonlari"
-        description="Tenant ozel sablon, versiyon ve onay durumunu yonetin"
+        description="Tenant özel şablon, versiyon ve onay durumunu yönetin"
         size="lg"
         footer={
           <>
@@ -697,7 +697,7 @@ export function MailCenterPage() {
             <div className="max-h-[32rem] space-y-2 overflow-auto pr-1">
               {tenantTemplates.length === 0 && (
                 <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-500">
-                  Henuz tenant ozel sablon yok.
+                  Henüz tenant özel şablon yok.
                 </div>
               )}
               {tenantTemplates.map((template) => (
@@ -715,7 +715,7 @@ export function MailCenterPage() {
                       </p>
                     </div>
                     <Badge variant={template.approved ? "success" : "warning"}>
-                      {template.approved ? "Onayli" : "Taslak"}
+                      {template.approved ? "Onaylı" : "Taslak"}
                     </Badge>
                   </div>
                   <p className="mt-2 line-clamp-2 text-xs text-slate-500">
@@ -729,7 +729,7 @@ export function MailCenterPage() {
                       onClick={() => setTemplateForm(templateToForm(template))}
                       leftIcon={<Edit3 className="h-3.5 w-3.5" />}
                     >
-                      Duzenle
+                      Düzenle
                     </Button>
                     <Button
                       type="button"
@@ -744,7 +744,7 @@ export function MailCenterPage() {
                       }
                       leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
                     >
-                      {template.approved ? "Onayi kaldir" : "Onayla"}
+                      {template.approved ? "Onayi kaldır" : "Onayla"}
                     </Button>
                     <Button
                       type="button"
@@ -766,7 +766,7 @@ export function MailCenterPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="space-y-1.5">
                 <span className="text-xs font-medium text-slate-400">
-                  Sablon adi
+                  Şablon adı
                 </span>
                 <input
                   value={templateForm.name}
@@ -787,7 +787,7 @@ export function MailCenterPage() {
             </div>
             <label className="block space-y-1.5">
               <span className="text-xs font-medium text-slate-400">
-                Aciklama
+                Açıklama
               </span>
               <input
                 value={templateForm.description}
@@ -800,13 +800,13 @@ export function MailCenterPage() {
               <input
                 value={templateForm.subject}
                 onChange={(event) => updateTemplateForm("subject", event.target.value)}
-                placeholder="{{customerName}} odeme hatirlatmasi"
+                placeholder="{{customerName}} ödeme hatirlatmasi"
                 className="h-10 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-500/60"
               />
             </label>
             <label className="block space-y-1.5">
               <span className="text-xs font-medium text-slate-400">
-                Sablon metni
+                Şablon metni
               </span>
               <textarea
                 value={templateForm.body}
@@ -859,7 +859,7 @@ export function MailCenterPage() {
                 onChange={(event) => updateTemplateForm("approved", event.target.checked)}
                 className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-sky-500"
               />
-              Onayli sablon olarak kullanima ac
+              Onaylı şablon olarak kullanıma ac
             </label>
           </section>
         </div>

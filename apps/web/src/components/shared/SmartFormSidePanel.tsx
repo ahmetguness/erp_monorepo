@@ -62,7 +62,7 @@ const TONE_CLASS: Record<Tone, string> = {
 const FORM_KIND_LABEL: Record<SmartFormSidePanelProps['formKind'], string> = {
   quote: 'Teklif',
   invoice: 'Fatura',
-  order: 'Siparis',
+  order: 'Sipariş',
 };
 
 function findProduct(products: readonly Product[], id?: string): Product | undefined {
@@ -121,7 +121,7 @@ function buildInsights({
     insights.push({
       id: 'contact-required',
       title: 'Cari secimi bekleniyor',
-      detail: 'Borc, risk ve acik isler cari secilince hesaplanir.',
+      detail: 'Borc, risk ve açık isler cari secilince hesaplanir.',
       tone: 'neutral',
       icon: <Users className="h-4 w-4" />,
     });
@@ -133,8 +133,8 @@ function buildInsights({
 
     insights.push({
       id: 'contact-balance',
-      title: balance > 0 ? 'Musteri borcu var' : 'Borc riski dusuk',
-      detail: `Mevcut bakiye ${formatCurrency(Math.abs(balance))}. Islem sonrasi risk ${formatPercent(Math.max(0, riskRatio))}.`,
+      title: balance > 0 ? 'Müşteri borcu var' : 'Borc riski düşük',
+      detail: `Mevcut bakiye ${formatCurrency(Math.abs(balance))}. İşlem sonrasi risk ${formatPercent(Math.max(0, riskRatio))}.`,
       tone: riskRatio >= 100 || contact.riskLevel === 'exceeded' ? 'danger' : riskRatio >= 80 || contact.riskLevel === 'warning' ? 'warning' : 'success',
       icon: balance > 0 ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />,
       action: riskRatio >= 80 ? 'Tahsilat veya onay kontrolu onerilir' : undefined,
@@ -143,8 +143,8 @@ function buildInsights({
     if (contact.openInvoiceCount > 0 || contact.overdueInvoiceCount > 0) {
       insights.push({
         id: 'open-work',
-        title: 'Acik isler var',
-        detail: `${contact.openInvoiceCount} acik fatura, ${contact.overdueInvoiceCount} gecikmis kayit gorunuyor.`,
+        title: 'Açık isler var',
+        detail: `${contact.openInvoiceCount} açık fatura, ${contact.overdueInvoiceCount} gecikmis kayıt görünüyor.`,
         tone: contact.overdueInvoiceCount > 0 ? 'danger' : 'warning',
         icon: <ShoppingCart className="h-4 w-4" />,
         action: 'Cari hareketleri kontrol et',
@@ -154,8 +154,8 @@ function buildInsights({
     if (openQuoteCount > 0 || openOrderCount > 0) {
       insights.push({
         id: 'open-sales-flow',
-        title: 'Acik teklif / siparis var',
-        detail: `${openQuoteCount} acik teklif, ${openOrderCount} acik siparis ayni cari icin takipte.`,
+        title: 'Açık teklif / sipariş var',
+        detail: `${openQuoteCount} açık teklif, ${openOrderCount} açık sipariş ayni cari için takipte.`,
         tone: 'info',
         icon: <ShoppingCart className="h-4 w-4" />,
         action: 'Mukerrer teklif veya teslimat kontrolu yap',
@@ -166,8 +166,8 @@ function buildInsights({
   if (selectedProductLines.length === 0) {
     insights.push({
       id: 'product-required',
-      title: 'Urun secimi bekleniyor',
-      detail: 'Stok, son fiyat ve marj uyarilari urun secildikce canlanir.',
+      title: 'Ürün secimi bekleniyor',
+      detail: 'Stok, son fiyat ve marj uyarilari ürün seçildikçe canlanir.',
       tone: 'neutral',
       icon: <PackageCheck className="h-4 w-4" />,
     });
@@ -175,7 +175,7 @@ function buildInsights({
     insights.push({
       id: 'stock-loading',
       title: 'Stok kontrol ediliyor',
-      detail: 'Secili urunler icin depo miktari yukleniyor.',
+      detail: 'Secili ürünler için depo miktari yükleniyor.',
       tone: 'neutral',
       icon: <PackageCheck className="h-4 w-4" />,
     });
@@ -183,7 +183,7 @@ function buildInsights({
     insights.push({
       id: 'stock-warning',
       title: 'Stok esigi kontrol edilmeli',
-      detail: `${unavailableLines.length} kalemde miktar urun minimum stok seviyesinin ustunde.`,
+      detail: `${unavailableLines.length} kalemde miktar ürün minimum stok seviyesinin üstünde.`,
       tone: 'warning',
       icon: <PackageCheck className="h-4 w-4" />,
       action: 'Depo uygunlugunu teyit et',
@@ -201,11 +201,11 @@ function buildInsights({
   if (averageDiscount > 0) {
     insights.push({
       id: 'discount',
-      title: averageDiscount >= 15 ? 'Yuksek iskonto' : 'Iskonto uygulanmis',
-      detail: `Ortalama iskonto ${formatPercent(averageDiscount)}. Onerilen iskonto ust siniri ${formatPercent(10)}.`,
+      title: averageDiscount >= 15 ? 'Yüksek iskonto' : 'Iskonto uygulanmis',
+      detail: `Ortalama iskonto ${formatPercent(averageDiscount)}. Önerilen iskonto üst sınırı ${formatPercent(10)}.`,
       tone: averageDiscount >= 15 ? 'warning' : 'info',
       icon: <Percent className="h-4 w-4" />,
-      action: averageDiscount >= 15 ? 'Yoneticiden onay al' : undefined,
+      action: averageDiscount >= 15 ? 'Yöneticiden onay al' : undefined,
     });
   }
 
@@ -213,7 +213,7 @@ function buildInsights({
     insights.push({
       id: 'margin',
       title: minimumMargin < 10 ? 'Marj riski' : 'Marj saglikli',
-      detail: `Secili urunlerde en dusuk tahmini marj ${formatPercent(minimumMargin)}.`,
+      detail: `Secili urunlerde en düşük tahmini marj ${formatPercent(minimumMargin)}.`,
       tone: minimumMargin < 0 ? 'danger' : minimumMargin < 10 ? 'warning' : 'success',
       icon: minimumMargin < 10 ? <TrendingDown className="h-4 w-4" /> : <CircleDollarSign className="h-4 w-4" />,
       action: minimumMargin < 10 ? 'Fiyat veya iskonto revize et' : undefined,
@@ -274,7 +274,7 @@ export function SmartFormSidePanel({
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <p className="text-xs font-semibold text-slate-400">Son fiyat / stok sinyali</p>
-          <span className="text-[10px] text-slate-600">{selectedProducts.length} urun</span>
+          <span className="text-[10px] text-slate-600">{selectedProducts.length} ürün</span>
         </div>
         {selectedProducts.length > 0 ? (
           <div className="space-y-2.5">
@@ -305,7 +305,7 @@ export function SmartFormSidePanel({
             })}
           </div>
         ) : (
-          <p className="text-xs leading-5 text-slate-600">Urun secildikce katalog fiyatlari, tahmini marj ve stok sinyalleri burada gorunur.</p>
+          <p className="text-xs leading-5 text-slate-600">Ürün seçildikçe katalog fiyatları, tahmini marj ve stok sinyalleri burada görünür.</p>
         )}
       </section>
     </div>

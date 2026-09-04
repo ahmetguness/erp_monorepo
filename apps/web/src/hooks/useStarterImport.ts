@@ -41,7 +41,7 @@ export function useCommitStarterCsvImport() {
     mutationFn: (input: StarterCsvImportInput) => commitStarterCsvImport(input),
     onSuccess: (result) => {
       invalidateEntityQueries(qc, result.entity);
-      toast.success(`${result.createdCount} kayit ice aktarildi.`);
+      toast.success(`${result.createdCount} kayıt içe aktarıldı.`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

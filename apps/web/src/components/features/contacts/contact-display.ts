@@ -2,13 +2,13 @@ import type { BadgeVariant } from '@/components/ui/Badge';
 import type { ContactMissingInfoKey, ContactRiskScoreLevel, ContactType } from '@/services/contact.service';
 
 export const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
-  CUSTOMER: 'Musteri',
+  CUSTOMER: 'Müşteri',
   SUPPLIER: 'Satici',
-  BOTH: 'Musteri + Satici',
+  BOTH: 'Müşteri + Satici',
 };
 
 export const CONTACT_TYPE_SHORT_LABELS: Record<ContactType, string> = {
-  CUSTOMER: 'Musteri',
+  CUSTOMER: 'Müşteri',
   SUPPLIER: 'Satici',
   BOTH: 'Ikisi',
 };
@@ -29,9 +29,9 @@ export const CONTACT_MISSING_INFO_LABELS: Record<ContactMissingInfoKey, string> 
 };
 
 export const CONTACT_RISK_SCORE_LABELS: Record<ContactRiskScoreLevel, string> = {
-  LOW: 'Dusuk',
+  LOW: 'Düşük',
   MEDIUM: 'Orta',
-  HIGH: 'Yuksek',
+  HIGH: 'Yüksek',
 };
 
 export const CONTACT_RISK_SCORE_VARIANTS: Record<ContactRiskScoreLevel, BadgeVariant> = {

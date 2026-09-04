@@ -360,13 +360,13 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
             <div className="flex items-start gap-2.5">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-amber-300">Moduller plan matrisiyle uyumlu degil</p>
+                <p className="text-xs font-semibold text-amber-300">Moduller plan matrisiyle uyumlu değil</p>
                 <div className="mt-1 space-y-1 text-[11px] text-amber-100/80">
                   {moduleAlignment.extraModules.length > 0 && (
                     <p>Plan disi aktif: {moduleAlignment.extraModules.map(getModuleLabel).join(', ')}</p>
                   )}
                   {moduleAlignment.missingModules.length > 0 && (
-                    <p>Plana dahil ama kapali: {moduleAlignment.missingModules.map(getModuleLabel).join(', ')}</p>
+                    <p>Plana dahil ama kapalı: {moduleAlignment.missingModules.map(getModuleLabel).join(', ')}</p>
                   )}
                 </div>
               </div>
@@ -537,7 +537,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold text-violet-300">{getFeatureLabel(override.featureKey)}</span>
                         <Badge variant={override.isEnabled ? 'success' : 'neutral'}>{override.isEnabled ? 'Aktif' : 'Pasif'}</Badge>
-                        {expired && <Badge variant="danger">Suresi doldu</Badge>}
+                        {expired && <Badge variant="danger">Süresi doldu</Badge>}
                       </div>
                       <p className="mt-1 text-xs text-slate-500">
                         Override: <span className="font-medium text-slate-300">{override.value}</span>

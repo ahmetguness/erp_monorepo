@@ -66,10 +66,10 @@ interface AuditFilterPreset {
 }
 
 const FILTER_PRESETS: AuditFilterPreset[] = [
-  { key: 'today', label: 'Bugun', description: 'Son gunun kayitlari' },
+  { key: 'today', label: 'Bugun', description: 'Son gunun kayıtları' },
   { key: 'critical', label: 'Kritik', description: 'Silme, onay/red ve export' },
-  { key: 'changes', label: 'Degisiklik', description: 'Guncelleme kayitlari' },
-  { key: 'exports', label: 'Export', description: 'Disa aktarma olaylari' },
+  { key: 'changes', label: 'Degisiklik', description: 'Guncelleme kayıtları' },
+  { key: 'exports', label: 'Export', description: 'Dışa aktarma olaylari' },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -156,7 +156,7 @@ function isCriticalLog(log: AuditLog): boolean {
 }
 
 function changedValue(value: string | null): string {
-  return value ?? 'bos';
+  return value ?? 'boş';
 }
 
 function DiffTable({ log }: { log: AuditLog }) {
@@ -166,7 +166,7 @@ function DiffTable({ log }: { log: AuditLog }) {
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-950/50">
       <div className="border-b border-slate-800 px-3 py-2 text-[10px] uppercase tracking-wider text-slate-500">
-        Degisiklik Diff Gorunumu
+        Değişiklik Diff Görünümü
       </div>
       <div className="divide-y divide-slate-800">
         {changes.map((change) => (
@@ -524,7 +524,7 @@ export function AuditLogPage() {
                   <AlertTriangle className="h-3 w-3" />
                   Kritik olay
                 </p>
-                <p className="mt-1 text-sm text-red-100">{detail.criticalReason ?? 'Bu kayit kritik olay olarak isaretlendi.'}</p>
+                <p className="mt-1 text-sm text-red-100">{detail.criticalReason ?? 'Bu kayıt kritik olay olarak işaretlendi.'}</p>
               </div>
             )}
 

@@ -100,21 +100,21 @@ export function useSendBulkMail() {
 export function useRenderMailTemplate() {
   return useMailMutation<RenderMailTemplateDTO, RenderedMailTemplate>(
     renderMailTemplate,
-    'Sablon hazirlandi.',
+    'Şablon hazırlandı.',
   );
 }
 
 export function useCreateAiMailDraft() {
   return useMailMutation<CreateAiMailDraftDTO, AiMailDraft>(
     createAiMailDraft,
-    'AI taslak hazirlandi.',
+    'AI taslak hazırlandı.',
   );
 }
 
 export function useCreateMailTemplate() {
   return useMailMutation<UpsertMailTemplateDTO>(
     createMailTemplate,
-    'Sablon kaydedildi.',
+    'Şablon kaydedildi.',
   );
 }
 
@@ -124,7 +124,7 @@ export function useUpdateMailTemplate() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpsertMailTemplateDTO }) => updateMailTemplate(id, data),
     onSuccess: () => {
-      toast.success('Sablon guncellendi.');
+      toast.success('Şablon güncellendi.');
       queryClient.invalidateQueries({ queryKey: ['mail', 'templates'] });
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
@@ -137,7 +137,7 @@ export function useApproveMailTemplate() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: ApproveMailTemplateDTO }) => approveMailTemplate(id, data),
     onSuccess: () => {
-      toast.success('Sablon onay durumu guncellendi.');
+      toast.success('Şablon onay durumu güncellendi.');
       queryClient.invalidateQueries({ queryKey: ['mail', 'templates'] });
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
@@ -150,7 +150,7 @@ export function useDeleteMailTemplate() {
   return useMutation({
     mutationFn: deleteMailTemplate,
     onSuccess: () => {
-      toast.success('Sablon silindi.');
+      toast.success('Şablon silindi.');
       queryClient.invalidateQueries({ queryKey: ['mail', 'templates'] });
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),

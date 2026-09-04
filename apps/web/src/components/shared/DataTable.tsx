@@ -128,7 +128,7 @@ export function DataTable<T>({
               {selection && (
                 <th className={cn('w-10 px-4 text-center', density === 'compact' ? 'py-2.5' : 'py-3.5')}>
                   <SelectionCheckbox
-                    label="Sayfadaki kayitlari sec"
+                    label="Sayfadaki kayıtları seç"
                     checked={selection.isPageSelected}
                     indeterminate={selection.isPagePartiallySelected}
                     disabled={isLoading || data.length === 0}
@@ -176,7 +176,7 @@ export function DataTable<T>({
                   {selection && (
                     <td className={cn('px-4 text-center align-middle', density === 'compact' ? 'py-2.5' : 'py-4')}>
                       <SelectionCheckbox
-                        label="Satiri sec"
+                        label="Satiri seç"
                         checked={selection.selectedIds.has(keyExtractor(row))}
                         onChange={() => selection.onToggleRow(keyExtractor(row))}
                       />

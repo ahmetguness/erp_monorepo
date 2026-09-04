@@ -46,7 +46,7 @@ export function DocumentPdfThemeSettingsCard() {
         </div>
         <div>
           <h2 className="text-sm font-semibold text-white">Fatura / teklif PDF temasi</h2>
-          <p className="mt-1 text-xs text-slate-500">Hazir sablon, sirket logosu ve vurgu rengi PDF olarak kaydet ekranlarinda kullanilir.</p>
+          <p className="mt-1 text-xs text-slate-500">Hazır şablon, şirket logosu ve vurgu rengi PDF olarak kaydet ekranlarinda kullanilir.</p>
         </div>
       </div>
 

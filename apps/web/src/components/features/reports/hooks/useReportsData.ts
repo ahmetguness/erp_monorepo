@@ -260,7 +260,7 @@ export function useReportsData(): UseReportsDataReturn {
   const runReportSchedule = useMutation({
     mutationFn: (id: string) => runSavedReportSchedule(id),
     onSuccess: (result) => {
-      toast.success(`${result.reportName} raporu ${result.mailCount} aliciya gonderildi.`);
+      toast.success(`${result.reportName} raporu ${result.mailCount} alıcıya gönderildi.`);
       qc.invalidateQueries({ queryKey: ['notifications'] });
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),

@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 
 const stats = [
   { value: '%35', label: 'Verimlilik artisi', sub: 'ilk 6 ayda', width: '35%' },
-  { value: '%60', label: 'Manuel islem azalmasi', sub: 'fatura ve stok sureclerinde', width: '60%' },
+  { value: '%60', label: 'Manuel işlem azalmasi', sub: 'fatura ve stok sureclerinde', width: '60%' },
   { value: '%80', label: 'Raporlama hizi', sub: 'aylik kapanista', width: '80%' },
   { value: '%45', label: 'Hata payi azalmasi', sub: 'veri girisinde', width: '45%' },
 ];
@@ -12,7 +12,7 @@ const stats = [
 const benefits = [
   {
     title: 'Operasyonel verimlilik',
-    desc: 'Tekrarlayan manuel islemleri otomatiklestirerek ekibinizin zamanini daha degerli islere ayirin.',
+    desc: 'Tekrarlayan manuel işlemleri otomatiklestirerek ekibinizin zamanını daha değerli işlere ayirin.',
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -21,7 +21,7 @@ const benefits = [
   },
   {
     title: 'Veriye dayali kararlar',
-    desc: 'Gercek zamanli raporlar ve yonetim panolari ile isletmenizin durumunu anlik takip edin.',
+    desc: 'Gercek zamanlı raporlar ve yönetim panolari ile isletmenizin durumunu anlık takip edin.',
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -30,7 +30,7 @@ const benefits = [
   },
   {
     title: 'Departmanlar arasi koordinasyon',
-    desc: 'Satis, muhasebe, depo ve uretim ayni veri uzerinde calisir. Bilgi kopuklugu ortadan kalkar.',
+    desc: 'Satış, muhasebe, depo ve üretim ayni veri üzerinde çalışır. Bilgi kopuklugu ortadan kalkar.',
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -39,7 +39,7 @@ const benefits = [
   },
   {
     title: 'Maliyet kontrolu',
-    desc: 'Kaynak israfini azaltin, maliyetleri gercek zamanli izleyin ve butce sapmalarini onceden goruntuleyin.',
+    desc: 'Kaynak israfını azaltin, maliyetleri gerçek zamanlı izleyin ve bütçe sapmalarini onceden görüntüleyin.',
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -70,7 +70,7 @@ export default function ROI() {
               ERP yatiriminin geri donusu olculebilir
             </h2>
             <p className="text-slate-400 text-sm leading-relaxed max-w-sm">
-              Dijitallasme bir maliyet kalemi degil, olculebilir getirisi olan bir yatirimdir.
+              Dijitallasme bir maliyet kalemi değil, olculebilir getirisi olan bir yatirimdir.
             </p>
           </div>
         </motion.div>
@@ -136,7 +136,7 @@ export default function ROI() {
                 Analiz Talep Et
               </p>
               <p className="text-sm text-slate-300 leading-relaxed mb-6">
-                Isletmenizin mevcut sureclerini analiz ederek size ozel bir ROI raporu hazirlayabiliriz.
+                Isletmenizin mevcut sureclerini analiz ederek size özel bir ROI raporu hazirlayabiliriz.
               </p>
 
               {/* Mini checklist */}

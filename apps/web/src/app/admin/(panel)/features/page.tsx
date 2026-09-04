@@ -32,12 +32,12 @@ const FEATURE_LABELS: Record<string, string> = Object.fromEntries(
 const TYPE_LABELS: Record<PlanFeatureType, string> = {
   BOOLEAN: 'Ac/Kapat',
   LIMIT: 'Limit',
-  ENUM: 'Secenek',
+  ENUM: 'Seçenek',
 };
 
 const VALUE_LABELS: Record<string, string> = {
-  true: 'Acik',
-  false: 'Kapali',
+  true: 'Açık',
+  false: 'Kapalı',
   unlimited: 'Sinirsiz',
   basic: 'Temel',
   standard: 'Standart',
@@ -128,7 +128,7 @@ export default function AdminFeaturesPage() {
           <Sliders className="h-4 w-4 text-slate-500" />
           <h1 className="text-lg font-semibold text-white">Plan Ozellikleri</h1>
         </div>
-        <p className="mt-1 text-sm text-slate-500">Plan bazli limit ve ozellik tanimlari ortak matristen beslenir.</p>
+        <p className="mt-1 text-sm text-slate-500">Plan bazlı limit ve özellik tanımları ortak matristen beslenir.</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -156,7 +156,7 @@ export default function AdminFeaturesPage() {
       )}
 
       {isLoading ? (
-        <div className="text-sm text-slate-600">Yukleniyor...</div>
+        <div className="text-sm text-slate-600">Yükleniyor...</div>
       ) : (
         Object.entries(grouped).map(([plan, items]) => {
           const planName = isPlanName(plan) ? plan : null;
@@ -166,7 +166,7 @@ export default function AdminFeaturesPage() {
                 <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', planName ? PLAN_COLORS[planName] : 'text-slate-400 bg-slate-800')}>
                   {planName ? PLAN_LABELS[planName] : plan}
                 </span>
-                <span className="text-[10px] text-slate-600">{items.length} ozellik</span>
+                <span className="text-[10px] text-slate-600">{items.length} özellik</span>
               </div>
               <div className="divide-y divide-slate-800/40">
                 {items.map((feature) => {
@@ -191,8 +191,8 @@ export default function AdminFeaturesPage() {
                               onChange={(event) => setDraft({ ...activeDraft, value: event.target.value })}
                               className="h-9 rounded-md border border-slate-700 bg-slate-950 px-2 text-sm text-white"
                             >
-                              <option value="true">Acik</option>
-                              <option value="false">Kapali</option>
+                              <option value="true">Açık</option>
+                              <option value="false">Kapalı</option>
                             </select>
                           ) : (
                             <input
@@ -208,7 +208,7 @@ export default function AdminFeaturesPage() {
                           >
                             <option value="BOOLEAN">Ac/Kapat</option>
                             <option value="LIMIT">Limit</option>
-                            <option value="ENUM">Secenek</option>
+                            <option value="ENUM">Seçenek</option>
                           </select>
                           <div className="flex items-center justify-end gap-1">
                             <button
@@ -254,7 +254,7 @@ export default function AdminFeaturesPage() {
                               type="button"
                               onClick={() => { setEditingId(feature.id); setDraft(createDraft(feature)); }}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200"
-                              title="Duzenle"
+                              title="Düzenle"
                             >
                               <Pencil className="h-4 w-4" />
                             </button>

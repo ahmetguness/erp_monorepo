@@ -757,7 +757,7 @@ export function ApprovalsPage() {
               <Input
                 label="Belge turleri"
                 placeholder="INVOICE, PURCHASE_ORDER"
-                helperText="Bos birakilirsa tum belge turleri icin gecerli olur."
+                helperText="Boş bırakılırsa tüm belge turleri için geçerli olur."
                 value={flowForm.documentTypes}
                 onChange={(e) => setFlowForm((p) => ({ ...p, documentTypes: e.target.value }))}
               />
@@ -957,7 +957,7 @@ export function ApprovalsPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500">Bu akis kosulsuz calisir.</p>
+                <p className="text-sm text-slate-500">Bu akis koşulsuz çalışır.</p>
               )}
             </div>
 

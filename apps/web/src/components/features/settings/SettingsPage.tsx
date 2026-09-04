@@ -99,7 +99,7 @@ const NEGATIVE_STOCK_POLICY_OPTIONS = [
 ] as const;
 
 const SECURITY_STATUS_LABELS = {
-  pass: 'Guvenli',
+  pass: 'Güvenli',
   warn: 'Izleme gerekli',
   fail: 'Riskli',
 } as const;
@@ -137,7 +137,7 @@ function defaultPolicyInputType(item: DefaultPolicyValue): 'text' | 'number' {
 const SESSION_STATUS_LABELS = {
   ACTIVE: 'Aktif',
   REVOKED: 'Sonlandirildi',
-  EXPIRED: 'Suresi doldu',
+  EXPIRED: 'Süresi doldu',
 } as const;
 
 function formatSecurityDate(value: string | null): string {
@@ -526,7 +526,7 @@ export function SettingsPage() {
             <div className="p-2 rounded-lg bg-sky-500/10"><Layers className="w-4 h-4 text-sky-400" /></div>
             <div>
               <h2 className="text-sm font-semibold text-white">Default & Policy Engine</h2>
-              <p className="text-xs text-slate-500">Tenant, cari, urun ve otomasyon varsayilanlari</p>
+              <p className="text-xs text-slate-500">Tenant, cari, ürün ve otomasyon varsayılanları</p>
             </div>
           </div>
           <Button
@@ -572,7 +572,7 @@ export function SettingsPage() {
                                 : 'border-slate-700 bg-slate-800 text-slate-400',
                             )}
                           >
-                            {value === 'true' ? 'Aktif' : 'Kapali'}
+                            {value === 'true' ? 'Aktif' : 'Kapalı'}
                           </button>
                         ) : (
                           <Input
@@ -595,7 +595,7 @@ export function SettingsPage() {
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-800/60">
           <div className="p-2 rounded-lg bg-emerald-500/10"><ShieldCheck className="w-4 h-4 text-emerald-400" /></div>
           <div>
-            <h2 className="text-sm font-semibold text-white">Guvenlik Skoru</h2>
+            <h2 className="text-sm font-semibold text-white">Güvenlik Skoru</h2>
             <p className="text-xs text-slate-500">Tenant erisimleri, API key rotasyonu ve rol riskleri</p>
           </div>
           <span className={cn(
@@ -652,7 +652,7 @@ export function SettingsPage() {
             </div>
           </div>
         ) : (
-          <p className="p-5 text-sm text-slate-500">Guvenlik skoru alınamadı.</p>
+          <p className="p-5 text-sm text-slate-500">Güvenlik skoru alınamadı.</p>
         )}
 
         <div className="border-t border-slate-800/60 p-5">
@@ -688,7 +688,7 @@ export function SettingsPage() {
                   </div>
                   <div className="divide-y divide-slate-800">
                     {securityHardening.sessions.recent.length === 0 ? (
-                      <p className="px-4 py-5 text-sm text-slate-500">Kayitli oturum yok.</p>
+                      <p className="px-4 py-5 text-sm text-slate-500">Kayıtlı oturum yok.</p>
                     ) : securityHardening.sessions.recent.map((session) => (
                       <div key={session.id} className="flex items-center gap-3 px-4 py-3">
                         <div className="min-w-0 flex-1">
@@ -741,7 +741,7 @@ export function SettingsPage() {
                             <p className="mt-1 text-xs leading-5 text-slate-500">{risk.reason}</p>
                           </div>
                           <span className={cn('rounded-lg border px-2 py-0.5 text-[11px] font-medium', SECURITY_RISK_CLASSES[risk.severity])}>
-                            {risk.assignedUserCount} kullanici
+                            {risk.assignedUserCount} kullanıcı
                           </span>
                         </div>
                       </div>
@@ -773,7 +773,7 @@ export function SettingsPage() {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-slate-500">Guvenlik detaylari alinamadi.</p>
+            <p className="text-sm text-slate-500">Güvenlik detayları alınamadı.</p>
           )}
         </div>
       </div>

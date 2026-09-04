@@ -21,7 +21,7 @@ const STATUS_LABEL: Record<EDocumentStatus, string> = {
 };
 
 function creditLabel(summary: EDocumentSummary | undefined): string {
-  if (!summary || summary.creditStatus === 'not_configured') return 'Kontor tanimsiz';
+  if (!summary || summary.creditStatus === 'not_configured') return 'Kontor tanımsız';
   return `${summary.creditBalance ?? 0} kontor`;
 }
 
@@ -50,7 +50,7 @@ export function StarterEDocumentControlCard({ enabled = true }: StarterEDocument
           </div>
           <div>
             <h2 className="text-sm font-semibold text-slate-100">Starter E-Belge Kontrol Paneli</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Kontor durumu, bekleyen belgeler ve gonderim hatalari</p>
+            <p className="mt-0.5 text-xs text-slate-500">Kontor durumu, bekleyen belgeler ve gönderim hataları</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -64,7 +64,7 @@ export function StarterEDocumentControlCard({ enabled = true }: StarterEDocument
       </div>
 
       {isLoading ? (
-        <div className="px-5 py-8 text-center text-sm text-slate-500">E-belge durumu yukleniyor...</div>
+        <div className="px-5 py-8 text-center text-sm text-slate-500">E-belge durumu yükleniyor...</div>
       ) : (
         <div className="space-y-4 p-5">
           <div className="grid gap-3 md:grid-cols-4">
@@ -119,7 +119,7 @@ export function StarterEDocumentControlCard({ enabled = true }: StarterEDocument
                   <p className="line-clamp-2 text-sm text-slate-300">{data.latestError.providerMessage ?? 'Saglayici mesaji yok'}</p>
                 </div>
               ) : (
-                <p className="mt-3 text-sm text-slate-500">Aktif gonderim hatasi yok</p>
+                <p className="mt-3 text-sm text-slate-500">Aktif gönderim hatası yok</p>
               )}
             </div>
 
@@ -138,7 +138,7 @@ export function StarterEDocumentControlCard({ enabled = true }: StarterEDocument
                   ))}
                 </div>
               ) : (
-                <p className="mt-3 text-sm text-slate-500">Henuz e-belge kaydi yok</p>
+                <p className="mt-3 text-sm text-slate-500">Henüz e-belge kaydı yok</p>
               )}
             </div>
           </div>

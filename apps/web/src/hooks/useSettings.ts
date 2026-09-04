@@ -284,7 +284,7 @@ export function useRunSiemExportTest() {
     mutationFn: runSiemExportTest,
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['settings', 'siem'] });
-      toast.success(`SIEM export testi tamamlandi: ${data.eventCount} olay hazirlandi.`);
+      toast.success(`SIEM export testi tamamlandı: ${data.eventCount} olay hazırlandı.`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
@@ -337,7 +337,7 @@ export function useRunDataRetentionDryRun() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['settings', 'data-retention'] });
       qc.invalidateQueries({ queryKey: ['settings', 'data-retention-preview'] });
-      toast.success(`Retention dry-run tamamlandi: ${data.totalCandidates} aday kayit bulundu.`);
+      toast.success(`Retention dry-run tamamlandı: ${data.totalCandidates} aday kayıt bulundu.`);
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
@@ -373,7 +373,7 @@ export function useSimulateDeploymentBackup() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings', 'deployment-operations'] });
       qc.invalidateQueries({ queryKey: ['settings', 'deployment-operations-settings'] });
-      toast.success('Yedek simulasyonu tamamlandi.');
+      toast.success('Yedek simülasyonu tamamlandı.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

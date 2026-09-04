@@ -396,7 +396,7 @@ export default function CorporateSecurityPage() {
                     <UsersRound className="h-4 w-4 text-emerald-400" />
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Kullanıcı / rol senkronizasyonu</p>
-                      <p className="mt-1 text-xs text-slate-500">SCIM Groups rollere baglanir; /Groups endpointi rollerinizi provider tarafina yayinlar.</p>
+                      <p className="mt-1 text-xs text-slate-500">SCIM Groups rollere bağlanır; /Groups endpointi rollerinizi provider tarafina yayinlar.</p>
                     </div>
                   </div>
 
@@ -440,13 +440,13 @@ export default function CorporateSecurityPage() {
                         size="sm"
                         onClick={() => setScimMappings((current) => [...current, { group: '', roleId: '' }])}
                       >
-                        Satir ekle
+                        Satır ekle
                       </Button>
                     </div>
                     <div className="space-y-2">
                       {scimMappings.length === 0 ? (
                         <p className="rounded-lg border border-slate-800 bg-slate-900/50 p-3 text-xs text-slate-500">
-                          Mapping yoksa provider group adi ile Axon rol adi ayni olan kayitlar otomatik eslesir.
+                          Mapping yoksa provider group adı ile Axon rol adı ayni olan kayitlar otomatik eşleşir.
                         </p>
                       ) : (
                         scimMappings.map((mapping, index) => (
@@ -454,7 +454,7 @@ export default function CorporateSecurityPage() {
                             <input
                               value={mapping.group}
                               onChange={(event) => setScimMappings((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, group: event.target.value } : row))}
-                              placeholder="Okta/Entra group adi"
+                              placeholder="Okta/Entra group adı"
                               className="h-10 px-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-200 text-sm focus:border-emerald-500/50 focus:outline-none"
                             />
                             <select
@@ -462,7 +462,7 @@ export default function CorporateSecurityPage() {
                               onChange={(event) => setScimMappings((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, roleId: event.target.value } : row))}
                               className="h-10 px-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-200 text-sm focus:border-emerald-500/50 focus:outline-none"
                             >
-                              <option value="">Rol sec</option>
+                              <option value="">Rol seç</option>
                               {roles.map((role) => (
                                 <option key={role.id} value={role.id}>{role.name}</option>
                               ))}
@@ -509,11 +509,11 @@ export default function CorporateSecurityPage() {
                 {auditLogFullStatus?.retention.auditLogRule
                   ? auditLogFullStatus.retention.auditLogRule.retentionDays === null
                     ? 'Limitsiz'
-                    : `${auditLogFullStatus.retention.auditLogRule.retentionDays} gun`
+                    : `${auditLogFullStatus.retention.auditLogRule.retentionDays} gün`
                   : 'kural yok'}
               </p>
               <p className="mt-1 text-[11px] text-slate-500">
-                {auditLogFullStatus?.retention.auditLogRule?.legalArchive ? 'Yasal arsiv aktif' : 'Yasal arsiv kapali'}
+                {auditLogFullStatus?.retention.auditLogRule?.legalArchive ? 'Yasal arşiv aktif' : 'Yasal arşiv kapalı'}
               </p>
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
@@ -521,7 +521,7 @@ export default function CorporateSecurityPage() {
               <p className={`mt-1 text-sm font-semibold ${auditLogFullStatus?.exportApi.enabled ? 'text-emerald-300' : 'text-slate-400'}`}>
                 {auditLogFullStatus?.exportApi.enabled ? 'Aktif' : 'Kapalı'}
               </p>
-              <p className="mt-1 text-[11px] text-slate-500">Limit {auditLogFullStatus?.exportApi.maxRows ?? 10000} satir</p>
+              <p className="mt-1 text-[11px] text-slate-500">Limit {auditLogFullStatus?.exportApi.maxRows ?? 10000} satır</p>
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
               <p className="text-[10px] uppercase tracking-wide text-slate-500">SIEM push</p>
@@ -678,8 +678,8 @@ export default function CorporateSecurityPage() {
               <Archive className="w-5 h-5 text-lime-400" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white">Veri Saklama ve Arsiv Politikasi</h3>
-              <p className="text-xs text-slate-500">Modul bazli saklama suresi, yasal arsiv, anonimlestirme ve KVKK/GDPR dry-run akisini yonetin.</p>
+              <h3 className="text-sm font-semibold text-white">Veri Saklama ve Arşiv Politikasi</h3>
+              <p className="text-xs text-slate-500">Modül bazlı saklama süresi, yasal arşiv, anonimleştirme ve KVKK/GDPR dry-run akışını yönetin.</p>
             </div>
           </div>
 
@@ -701,7 +701,7 @@ export default function CorporateSecurityPage() {
                   onChange={(e) => setRetentionForm((prev) => ({ ...prev, legalArchiveEnabled: e.target.checked }))}
                   className="w-4.5 h-4.5 rounded border-slate-800 bg-slate-950 text-lime-500 focus:ring-lime-500/20"
                 />
-                <span className="text-sm text-slate-200 font-medium">Yasal arsiv</span>
+                <span className="text-sm text-slate-200 font-medium">Yasal arşiv</span>
               </label>
               <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                 <input
@@ -710,7 +710,7 @@ export default function CorporateSecurityPage() {
                   onChange={(e) => setRetentionForm((prev) => ({ ...prev, kvkkGdprEnabled: e.target.checked }))}
                   className="w-4.5 h-4.5 rounded border-slate-800 bg-slate-950 text-lime-500 focus:ring-lime-500/20"
                 />
-                <span className="text-sm text-slate-200 font-medium">KVKK/GDPR alanlari</span>
+                <span className="text-sm text-slate-200 font-medium">KVKK/GDPR alanları</span>
               </label>
             </div>
 
@@ -718,8 +718,8 @@ export default function CorporateSecurityPage() {
               <table className="min-w-[920px] w-full text-left text-xs">
                 <thead className="bg-slate-950/80 text-slate-500">
                   <tr>
-                    <th className="px-3 py-2 font-medium">Modul</th>
-                    <th className="px-3 py-2 font-medium">Sure (gun)</th>
+                    <th className="px-3 py-2 font-medium">Modül</th>
+                    <th className="px-3 py-2 font-medium">Süre (gün)</th>
                     <th className="px-3 py-2 font-medium">Aksiyon</th>
                     <th className="px-3 py-2 font-medium">Anonim alanlar</th>
                     <th className="px-3 py-2 font-medium">KVKK/GDPR dayanak</th>
@@ -792,7 +792,7 @@ export default function CorporateSecurityPage() {
 
             <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <p className="text-xs font-semibold text-slate-300">Dry-run ozeti</p>
+                <p className="text-xs font-semibold text-slate-300">Dry-run özeti</p>
                 <p className="mt-1 text-[11px] text-slate-500">
                   {retentionPreview ? `${retentionPreview.totalCandidates} aday kayıt, ${retentionPreview.items.length} modül` : 'Henüz önizleme üretilmedi.'}
                 </p>
@@ -825,7 +825,7 @@ export default function CorporateSecurityPage() {
                 {(runRetentionDryRun.data ?? retentionPreview)?.items.slice(0, 6).map((item) => (
                   <div key={item.module} className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
                     <p className="text-xs font-semibold text-slate-200">{RETENTION_MODULE_LABELS[item.module]}</p>
-                    <p className="mt-1 text-[11px] text-slate-500">{item.candidateCount} aday kayit</p>
+                    <p className="mt-1 text-[11px] text-slate-500">{item.candidateCount} aday kayıt</p>
                     <p className="mt-1 text-[11px] text-lime-300">{RETENTION_ACTION_LABELS[item.action]}</p>
                   </div>
                 ))}
@@ -843,7 +843,7 @@ export default function CorporateSecurityPage() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white">On-premise / Private Cloud Operasyon Paneli</h3>
-              <p className="text-xs text-slate-500">Ortam, versiyon, yedek, health ve migration gorunurlugunu Enterprise icin takip edin.</p>
+              <p className="text-xs text-slate-500">Ortam, versiyon, yedek, health ve migration gorunurlugunu Enterprise için takip edin.</p>
             </div>
           </div>
 
@@ -878,7 +878,7 @@ export default function CorporateSecurityPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <Input
-              label="Ortam adi"
+              label="Ortam adı"
               value={deploymentForm.environmentName}
               onChange={(e) => setDeploymentForm((prev) => ({ ...prev, environmentName: e.target.value }))}
             />
@@ -895,12 +895,12 @@ export default function CorporateSecurityPage() {
                 className="w-full h-10 px-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-200 text-sm focus:border-teal-500/50 focus:outline-none"
               >
                 <option value="hourly">Saatlik</option>
-                <option value="daily">Gunluk</option>
+                <option value="daily">Günlük</option>
                 <option value="weekly">Haftalik</option>
               </select>
             </label>
             <Input
-              label="Yedek saklama (gun)"
+              label="Yedek saklama (gün)"
               type="number"
               min={1}
               value={deploymentForm.backupRetentionDays}
@@ -926,7 +926,7 @@ export default function CorporateSecurityPage() {
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
               <p className="text-xs font-semibold text-slate-300">Son yedek</p>
               <p className="mt-1 text-[11px] text-slate-500">
-                {deploymentSnapshot?.backup.lastRunAt ?? deploymentForm.backupLastRunAt ?? 'Henuz yedek kosumu yok.'}
+                {deploymentSnapshot?.backup.lastRunAt ?? deploymentForm.backupLastRunAt ?? 'Henüz yedek koşumu yok.'}
               </p>
               <p className="mt-1 text-[11px] text-slate-600">
                 {deploymentSnapshot?.backup.lastStatus ?? deploymentForm.backupLastStatus ?? 'status bekleniyor'}

@@ -31,7 +31,7 @@ function getLoginErrorMessage(error: unknown): string {
   const errorBody = isRecord(data) ? data.error : undefined;
   const message = isRecord(errorBody) ? errorBody.message : undefined;
   if (typeof message === 'string' && message.trim()) return message;
-  return 'Giris basarisiz. Lutfen bilgilerinizi kontrol edin.';
+  return 'Giriş başarısız. Lütfen bilgilerinizi kontrol edin.';
 }
 
 export default function LoginScreen({ onBack }: ScreenProps) {
@@ -137,7 +137,7 @@ export default function LoginScreen({ onBack }: ScreenProps) {
 
           {/* Alt boşluğu doldurmak için Yardım/Destek alanı */}
           <View style={styles.supportContainer}>
-            <Text style={styles.supportText}>Yardıma mı ihtiyacınız var? </Text>
+            <Text style={styles.supportText}>Yardıma mı ihtiyaçınız var? </Text>
             <TouchableOpacity hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
               <Text style={styles.supportLink}>Destek Ekibine Ulaşın</Text>
             </TouchableOpacity>

@@ -22,40 +22,40 @@ interface BulkActionPresetTemplate {
 
 const PRESET_TEMPLATES: Record<BulkActionPresetKind, BulkActionPresetTemplate> = {
   export: {
-    label: 'Disa aktar',
+    label: 'Dışa aktar',
     icon: <Download className="h-3.5 w-3.5" />,
     permission: (module) => ({ module, action: 'EXPORT' }),
-    message: (count, entityName) => `${count} ${entityName} icin disa aktarim isi hazir.`,
+    message: (count, entityName) => `${count} ${entityName} için dışa aktarım işi hazır.`,
   },
   mail: {
     label: 'Toplu mail',
     icon: <Mail className="h-3.5 w-3.5" />,
     permission: () => ({ module: 'mail', action: 'CREATE' }),
-    message: (count, entityName) => `${count} ${entityName} icin toplu mail akisi hazir.`,
+    message: (count, entityName) => `${count} ${entityName} için toplu mail akışı hazır.`,
   },
   tag: {
     label: 'Etiketle',
     icon: <Tags className="h-3.5 w-3.5" />,
     permission: (module) => ({ module, action: 'UPDATE' }),
-    message: (count, entityName) => `${count} ${entityName} icin etiketleme isi hazir.`,
+    message: (count, entityName) => `${count} ${entityName} için etiketleme işi hazır.`,
   },
   status: {
-    label: 'Durum degistir',
+    label: 'Durum değiştir',
     icon: <ToggleRight className="h-3.5 w-3.5" />,
     permission: (module) => ({ module, action: 'UPDATE' }),
-    message: (count, entityName) => `${count} ${entityName} icin durum degistirme isi hazir.`,
+    message: (count, entityName) => `${count} ${entityName} için durum degistirme işi hazır.`,
   },
   task: {
-    label: 'Gorev olustur',
+    label: 'Görev oluştur',
     icon: <ListTodo className="h-3.5 w-3.5" />,
     permission: () => ({ module: 'tasks', action: 'CREATE' }),
-    message: (count, entityName) => `${count} ${entityName} icin gorev olusturma isi hazir.`,
+    message: (count, entityName) => `${count} ${entityName} için görev oluşturma işi hazır.`,
   },
   archive: {
     label: 'Arsivle',
     icon: <Archive className="h-3.5 w-3.5" />,
     permission: (module) => ({ module, action: 'UPDATE' }),
-    message: (count, entityName) => `${count} ${entityName} icin arsivleme isi hazir.`,
+    message: (count, entityName) => `${count} ${entityName} için arsivleme işi hazır.`,
   },
 };
 

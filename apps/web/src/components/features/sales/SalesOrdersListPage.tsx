@@ -365,7 +365,7 @@ export function SalesOrdersListPage() {
             setPage(1);
           }}
           exportRows={orders}
-          exportFilename="satis-siparisleri.csv"
+          exportFilename="satış-siparisleri.csv"
         />
         <div className="flex rounded-lg border border-slate-800 bg-slate-900/60 p-0.5">
           <button
