@@ -18,22 +18,16 @@ function canShow(item: NavItem, workspace: NavigationWorkspace, tenantPlan: Plan
     || hasRequiredModule(tenantModules, item.module);
 }
 
-function score(item: NavItem, workspace: NavigationWorkspace): number {
-  const own = (workspace.usage[item.href] ?? 0) + (workspace.favoriteHrefs.includes(item.href) ? 10_000 : 0);
-  return own + Math.max(0, ...(item.children?.map((child) => score(child, workspace)) ?? [0]));
-}
-
 function filterItem(item: NavItem, workspace: NavigationWorkspace, tenantPlan: PlanName, tenantModules: readonly string[]): NavItem | null {
   const children = item.children?.map((child) => filterItem(child, workspace, tenantPlan, tenantModules)).filter((child): child is NavItem => child !== null);
   if (!canShow(item, workspace, tenantPlan, tenantModules) && (!children || children.length === 0)) return null;
-  return children ? { ...item, children: children.sort((left, right) => score(right, workspace) - score(left, workspace)) } : item;
+  return children ? { ...item, children } : item;
 }
 
 export function personalizeNavigation(groups: readonly NavGroup[], workspace: NavigationWorkspace, tenantPlan: PlanName, tenantModules: readonly string[]): NavGroup[] {
   return groups.map((group) => ({
     ...group,
-    items: group.items.map((item) => filterItem(item, workspace, tenantPlan, tenantModules)).filter((item): item is NavItem => item !== null)
-      .sort((left, right) => score(right, workspace) - score(left, workspace)),
+    items: group.items.map((item) => filterItem(item, workspace, tenantPlan, tenantModules)).filter((item): item is NavItem => item !== null),
   })).filter((group) => group.items.length > 0);
 }
 

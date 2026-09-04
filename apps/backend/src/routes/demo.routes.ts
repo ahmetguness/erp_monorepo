@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { requireAdmin } from '../middleware/requireAdmin';
+import { requireAdmin, requireAdminPermission } from '../middleware/requireAdmin';
 import { DemoController } from '../modules/platform/http/controllers/index.js';
 
 /** Public route – JWT gerektirmez */
@@ -8,7 +8,7 @@ demoPublicRoutes.post('/demo-requests', DemoController.create);
 
 /** Admin route – admin panelinden yönetim */
 export const demoAdminRoutes = new Hono();
-demoAdminRoutes.get('/demo-requests', requireAdmin, DemoController.list);
-demoAdminRoutes.get('/demo-requests/:id', requireAdmin, DemoController.getById);
-demoAdminRoutes.post('/demo-requests/:id/approve', requireAdmin, DemoController.approve);
-demoAdminRoutes.post('/demo-requests/:id/reject', requireAdmin, DemoController.reject);
+demoAdminRoutes.get('/demo-requests', requireAdmin, requireAdminPermission('demo.read'), DemoController.list);
+demoAdminRoutes.get('/demo-requests/:id', requireAdmin, requireAdminPermission('demo.read'), DemoController.getById);
+demoAdminRoutes.post('/demo-requests/:id/approve', requireAdmin, requireAdminPermission('demo.approve'), DemoController.approve);
+demoAdminRoutes.post('/demo-requests/:id/reject', requireAdmin, requireAdminPermission('demo.reject'), DemoController.reject);

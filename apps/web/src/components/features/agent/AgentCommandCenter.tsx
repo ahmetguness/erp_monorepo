@@ -226,11 +226,18 @@ export function AgentCommandCenter() {
 
                 <button
                   onClick={() => handleAdoptSuggestion(s.suggestionId)}
-                  disabled={adoptMutation.isPending}
-                  className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] transition-all flex items-center justify-center gap-1 shadow disabled:opacity-50"
+                  disabled={s.isAdopted || adoptMutation.isPending}
+                  className={cn(
+                    'w-full py-2 rounded-lg text-white font-bold text-[11px] transition-all flex items-center justify-center gap-1 shadow disabled:cursor-not-allowed',
+                    s.isAdopted ? 'bg-emerald-700/70' : 'bg-blue-600 hover:bg-blue-500 disabled:opacity-50',
+                  )}
                 >
-                  {adoptMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-                  <span>Otomasyon Kuralı Olarak Aktifleştir</span>
+                  {s.isAdopted
+                    ? <CheckCircle2 className="w-3 h-3" />
+                    : adoptMutation.isPending
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Zap className="w-3 h-3" />}
+                  <span>{s.isAdopted ? 'Otomasyon kuralı etkin' : 'Otomasyon kuralı olarak etkinleştir'}</span>
                 </button>
               </div>
             ))}

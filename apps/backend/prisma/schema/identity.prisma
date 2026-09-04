@@ -279,7 +279,48 @@ model AdminUser {
   isActive    Boolean  @default(true)
   lastLoginAt DateTime?
 
+  roleAssignments AdminUserRole[]
+
   @@map("admin_users")
+}
+
+model AdminRole {
+  id          String @id @default(cuid())
+  key         String @unique
+  name        String
+  description String?
+  users       AdminUserRole[]
+  permissions AdminRolePermission[]
+  @@map("admin_roles")
+}
+
+model AdminPermission {
+  id          String @id @default(cuid())
+  key         String @unique
+  description String?
+  roles AdminRolePermission[]
+  @@map("admin_permissions")
+}
+
+model AdminUserRole {
+  adminUserId String
+  adminRoleId String
+  assignedAt  DateTime @default(now())
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  adminRole AdminRole @relation(fields: [adminRoleId], references: [id], onDelete: Cascade)
+  @@id([adminUserId, adminRoleId])
+  @@index([adminRoleId])
+  @@map("admin_user_roles")
+}
+
+model AdminRolePermission {
+  adminRoleId       String
+  adminPermissionId String
+  adminRole AdminRole @relation(fields: [adminRoleId], references: [id], onDelete: Cascade)
+  adminPermission AdminPermission @relation(fields: [adminPermissionId], references: [id], onDelete: Cascade)
+  @@id([adminRoleId, adminPermissionId])
+  @@index([adminPermissionId])
+  @@map("admin_role_permissions")
 }
 
 model TenantUser {

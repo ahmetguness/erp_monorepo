@@ -3,6 +3,7 @@ import {
   AutomationAction,
   AutomationTrigger,
   EntityType,
+  Prisma,
   PrismaClient,
 } from '@prisma/client';
 import { logger } from '../lib/logger.js';
@@ -152,7 +153,20 @@ export class AgentCommandAutonomyService {
       },
     ];
 
-    return suggestions;
+    const adoptedRules = await this.db.automationRule.findMany({
+      where: {
+        tenantId,
+        name: { in: suggestions.map((suggestion) => `Self-Healing Rule: ${suggestion.suggestionId}`) },
+        deletedAt: null,
+      },
+      select: { name: true },
+    });
+    const adoptedRuleNames = new Set(adoptedRules.map((rule) => rule.name));
+
+    return suggestions.map((suggestion) => ({
+      ...suggestion,
+      isAdopted: adoptedRuleNames.has(`Self-Healing Rule: ${suggestion.suggestionId}`),
+    }));
   }
 
   /**
@@ -163,17 +177,56 @@ export class AgentCommandAutonomyService {
     userId: string,
     suggestionId: string,
   ): Promise<{ success: boolean; message: string; ruleId: string }> {
-    const rule = await this.db.automationRule.create({
-      data: {
-        tenantId,
-        name: `Self-Healing Rule: ${suggestionId}`,
-        module: 'accounting',
-        trigger: AutomationTrigger.OVERDUE_INVOICE,
-        action: AutomationAction.CREATE_NOTIFICATION,
-        actionConfig: { suggestionId, autoCreatedByPhase22: true },
-        createdById: userId,
-      },
+    const ruleName = `Self-Healing Rule: ${suggestionId}`;
+    const existingRule = await this.db.automationRule.findUnique({
+      where: { tenantId_name: { tenantId, name: ruleName } },
     });
+
+    if (existingRule && existingRule.deletedAt === null && existingRule.isActive) {
+      return {
+        success: true,
+        message: `Self-Healing önerisi (${suggestionId}) zaten etkin.`,
+        ruleId: existingRule.id,
+      };
+    }
+
+    let rule;
+    try {
+      rule = existingRule
+        ? await this.db.automationRule.update({
+            where: { id: existingRule.id },
+            data: {
+              isActive: true,
+              deletedAt: null,
+              updatedById: userId,
+              actionConfig: { suggestionId, autoCreatedByPhase22: true },
+            },
+          })
+        : await this.db.automationRule.create({
+            data: {
+              tenantId,
+              name: ruleName,
+              module: 'accounting',
+              trigger: AutomationTrigger.OVERDUE_INVOICE,
+              action: AutomationAction.CREATE_NOTIFICATION,
+              actionConfig: { suggestionId, autoCreatedByPhase22: true },
+              createdById: userId,
+            },
+          });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+
+      const concurrentlyCreatedRule = await this.db.automationRule.findUnique({
+        where: { tenantId_name: { tenantId, name: ruleName } },
+      });
+      if (!concurrentlyCreatedRule) throw error;
+
+      return {
+        success: true,
+        message: `Self-Healing önerisi (${suggestionId}) zaten etkin.`,
+        ruleId: concurrentlyCreatedRule.id,
+      };
+    }
 
     logger.info(`[AgentCommandAutonomy] Adopted self-healing rule ${rule.id} from suggestion ${suggestionId}`);
 

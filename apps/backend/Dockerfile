@@ -36,7 +36,7 @@ RUN cd /app && npm ci --workspace=apps/backend --omit=dev --ignore-scripts \
   && ln -s /app/apps/backend/node_modules/zod /app/node_modules/zod \
   && npm cache clean --force
 COPY --from=builder /app/apps/backend/dist ./dist
-COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
 USER node
 EXPOSE 3001
 CMD ["node", "dist/src/index.js"]

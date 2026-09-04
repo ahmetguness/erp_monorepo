@@ -11,6 +11,8 @@ import { createTenant, getTenants, type CreateTenantInput } from '@/services/adm
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { cn } from '@/lib/utils';
+import { useAdminAuthStore } from '@/store/admin-auth.store';
+import { canAdmin } from '@/lib/admin/permissions';
 
 const STATUS_MAP: Record<string, { label: string; variant: BadgeVariant }> = {
   TRIAL: { label: 'Deneme', variant: 'warning' },
@@ -120,6 +122,7 @@ function FormSection({
 }
 
 export default function AdminTenantsPage() {
+  const canCreateTenant = useAdminAuthStore((state) => canAdmin(state.admin, 'tenant.create'));
   const router = useRouter();
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
@@ -179,15 +182,15 @@ export default function AdminTenantsPage() {
       <div>
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-lg font-semibold text-white">Tenantlar</h1>
-          <button onClick={() => { setForm(createDefaultTenantForm()); setIsCreateOpen(true); }}
+          {canCreateTenant && <button onClick={() => { setForm(createDefaultTenantForm()); setIsCreateOpen(true); }}
             className="inline-flex items-center gap-2 rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-400 transition-colors">
             <Plus className="h-4 w-4" /> Yeni Tenant
-          </button>
+          </button>}
         </div>
         <p className="text-sm text-slate-500">Tüm şirket hesaplarını yönetin.</p>
       </div>
 
-      {isCreateOpen && (
+      {canCreateTenant && isCreateOpen && (
         <form onSubmit={submitCreate} className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
           <div className="flex items-start justify-between gap-4 border-b border-slate-800 px-5 py-4">
             <div>

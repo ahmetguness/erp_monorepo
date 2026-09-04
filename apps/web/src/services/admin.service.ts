@@ -1,10 +1,11 @@
 import { adminApiClient } from '@/lib/admin-api-client';
+import type { AdminIdentity } from '@repo/types';
 
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
 
-export interface AdminUser { id: string; email: string; name: string; isActive: boolean; lastLoginAt: string | null; createdAt: string }
+export type AdminUser = AdminIdentity;
 
 export interface TenantListItem {
   id: string; slug: string; companyName: string; email: string; phone: string | null;

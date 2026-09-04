@@ -10,20 +10,27 @@ import {
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { cn } from '@/lib/utils';
 import { ToastContainer } from '@/components/ui/Toast';
+import type { AdminPermission } from '@repo/types';
+import { canAdmin } from '@/lib/admin/permissions';
 
 const NAV = [
-  { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/admin/tenants', icon: Building2, label: 'Tenantlar' },
-  { href: '/admin/features', icon: Sliders, label: 'Özellikler' },
-  { href: '/admin/observability', icon: Activity, label: 'Operasyon' },
-  { href: '/admin/audit', icon: FileText, label: 'Denetim' },
-  { href: '/admin/security', icon: ShieldCheck, label: 'Güvenlik' },
-];
+  { href: '/admin', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard.read' },
+  { href: '/admin/tenants', icon: Building2, label: 'Tenantlar', permission: 'tenant.read' },
+  { href: '/admin/features', icon: Sliders, label: 'Özellikler', permission: 'feature.read' },
+  { href: '/admin/observability', icon: Activity, label: 'Operasyon', permission: 'operations.read' },
+  { href: '/admin/audit', icon: FileText, label: 'Denetim', permission: 'audit.read' },
+  { href: '/admin/security', icon: ShieldCheck, label: 'Güvenlik', permission: 'security.read' },
+] satisfies ReadonlyArray<{ href: string; icon: typeof LayoutDashboard; label: string; permission: AdminPermission }>;
+
+function permissionForPath(pathname: string): AdminPermission | null {
+  return NAV.find((item) => item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href))?.permission ?? null;
+}
 
 function AdminNavLinks({ pathname }: { pathname: string }) {
+  const admin = useAdminAuthStore((state) => state.admin);
   return (
     <>
-      {NAV.map((item) => {
+      {NAV.filter((item) => canAdmin(admin, item.permission)).map((item) => {
         const isActive = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href);
         return (
           <Link
@@ -56,10 +63,24 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
     }
   }, [admin, fetchMe, router]);
 
+  useEffect(() => {
+    const requiredPermission = permissionForPath(pathname);
+    if (admin && requiredPermission && !canAdmin(admin, requiredPermission)) router.replace('/admin');
+  }, [admin, pathname, router]);
+
   if (!admin) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-red-500 border-t-transparent" />
+      </div>
+    );
+  }
+
+  const requiredPermission = permissionForPath(pathname);
+  if (requiredPermission && !canAdmin(admin, requiredPermission)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-sm text-slate-400">
+        Yetkili sayfaya yönlendiriliyorsunuz…
       </div>
     );
   }

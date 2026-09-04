@@ -1500,10 +1500,16 @@ async function runSeed() {
   console.log('\n🌱 Seed başlıyor...\n');
 
   // 1. Admin
-  await prisma.adminUser.upsert({
+  const platformAdmin = await prisma.adminUser.upsert({
     where: { email: 'admin@axonerp.com' },
     create: { email: 'admin@axonerp.com', name: 'Platform Admin', password: await hash('admin1234'), isActive: true },
     update: { password: await hash('admin1234') },
+  });
+  const superAdminRole = await prisma.adminRole.findUniqueOrThrow({ where: { key: 'SUPER_ADMIN' } });
+  await prisma.adminUserRole.upsert({
+    where: { adminUserId_adminRoleId: { adminUserId: platformAdmin.id, adminRoleId: superAdminRole.id } },
+    create: { adminUserId: platformAdmin.id, adminRoleId: superAdminRole.id },
+    update: {},
   });
   console.log('  ✓ Admin: admin@axonerp.com / admin1234');
 

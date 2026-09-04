@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
 import { rateLimiter } from '../../../../../lib/rateLimiter.js';
+import { resolveAdminAccess } from '../../../admin-access/admin-access.service.js';
 import { ADMIN_COOKIE_MAX_AGE,ADMIN_COOKIE_NAME,ADMIN_LOGIN_LIMIT,ADMIN_LOGIN_LOCKOUT_FAILURES,ADMIN_LOGIN_LOCKOUT_WINDOW_MS,ADMIN_LOGIN_WINDOW_MS,getAdminLoginLimitKeys,getClientIp,IS_PRODUCTION,normalizeEmail,recordAdminLoginFailure,RESOLVED_ADMIN_SECRET } from './shared.js';
 
 export const AdminAuthController = {
@@ -47,6 +48,11 @@ export const AdminAuthController = {
       return c.json({ error: 'Geçersiz kimlik bilgileri.' }, 401);
     }
 
+    const access = await resolveAdminAccess(admin.id);
+    if (!access || access.roles.length === 0) {
+      return c.json({ error: 'Bu admin hesabına aktif bir rol atanmamış.' }, 403);
+    }
+
     await prisma.adminUser.update({ where: { id: admin.id }, data: { lastLoginAt: new Date() } });
     await Promise.all([
       rateLimiter.reset(ipAttemptKey),
@@ -64,7 +70,7 @@ export const AdminAuthController = {
       maxAge: ADMIN_COOKIE_MAX_AGE,
     });
 
-    return c.json({ data: { admin: { id: admin.id, email: admin.email, name: admin.name } } });
+    return c.json({ data: { admin: access } });
   },
 
   async logout(c: Context): Promise<Response> {
@@ -78,7 +84,7 @@ export const AdminAuthController = {
 
   async me(c: Context): Promise<Response> {
     const adminId = c.get('adminId') as string;
-    const admin = await prisma.adminUser.findUnique({ where: { id: adminId }, select: { id: true, email: true, name: true, isActive: true, lastLoginAt: true, createdAt: true } });
+    const admin = await resolveAdminAccess(adminId);
     if (!admin) return c.json({ error: 'Admin bulunamadı.' }, 404);
     return c.json({ data: admin });
   },

@@ -10,6 +10,8 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { getPlanModules, getTenantModuleAlignment } from '@/lib/admin/tenant-module-alignment';
 import { cn } from '@/lib/utils';
 import { toast } from '@/store/ui.store';
+import { useAdminAuthStore } from '@/store/admin-auth.store';
+import { canAdmin } from '@/lib/admin/permissions';
 
 const PLANS = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'] as const;
 type PlanKey = typeof PLANS[number];
@@ -169,6 +171,10 @@ function getImpactScreens(featureKey: string): readonly string[] {
 }
 
 export default function AdminTenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const admin = useAdminAuthStore((state) => state.admin);
+  const canUpdatePlan = canAdmin(admin, 'tenant.plan.update');
+  const canUpdateStatus = canAdmin(admin, 'tenant.status.update');
+  const canUpdateSettings = canAdmin(admin, 'tenant.settings.update');
   const { id } = use(params);
   const router = useRouter();
   const qc = useQueryClient();
@@ -285,7 +291,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
 
       {/* Plan & Status controls */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        {canUpdatePlan && <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <p className="text-xs font-semibold text-slate-400 mb-3">Plan Değiştir</p>
           <div className="flex gap-2">
             {PLANS.map((p) => (
@@ -296,8 +302,8 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
               </button>
             ))}
           </div>
-        </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        </div>}
+        {canUpdateStatus && <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <p className="text-xs font-semibold text-slate-400 mb-3">Durum Değiştir</p>
           <div className="flex gap-2">
             {STATUSES.map((s) => (
@@ -308,7 +314,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
               </button>
             ))}
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Metrics */}
@@ -341,16 +347,17 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
       )}
 
       {/* Settings */}
-      <form onSubmit={(e) => { e.preventDefault(); saveSettings.mutate(sendNotify); }} className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+      <form onSubmit={(e) => { e.preventDefault(); if (canUpdateSettings) saveSettings.mutate(sendNotify); }} className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <fieldset disabled={!canUpdateSettings} className="contents">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-semibold text-slate-400">Tenant Ayarları</p>
-          <button
+          {canUpdateSettings && <button
             type="button"
             onClick={() => setConfirmSave(true)}
             disabled={confirmSave}
             className="rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-400 disabled:opacity-40 transition-opacity">
             Ayarları Kaydet
-          </button>
+          </button>}
         </div>
 
         {settingsError && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{settingsError}</div>}
@@ -504,6 +511,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
             </span>
           </div>
         </div>
+        </fieldset>
       </form>
 
       {/* Info */}

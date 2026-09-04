@@ -11,14 +11,14 @@ export interface DocumentThemeOption<TValue extends string> {
 }
 
 export const DOCUMENT_TEMPLATE_OPTIONS: DocumentThemeOption<DocumentPdfTemplate>[] = [
-  { value: 'classic', label: 'Klasik', description: 'Logo, firma ve müşteri bilgileri dengeli klasik baslikta.' },
+  { value: 'classic', label: 'Klasik', description: 'Logo, firma ve müşteri bilgileri dengeli klasik başlıkta.' },
   { value: 'modern', label: 'Modern', description: 'Renkli sol şerit ve daha belirgin toplam alanı.' },
-  { value: 'compact', label: 'Kompakt', description: 'Daha az boşlukla tek sayfaya sığmaya odakli.' },
+  { value: 'compact', label: 'Kompakt', description: 'Daha az boşlukla tek sayfaya sığmaya odaklı.' },
 ];
 
 export const DOCUMENT_ACCENT_OPTIONS: DocumentThemeOption<DocumentPdfAccent>[] = [
   { value: 'sky', label: 'Mavi', description: 'Satış belgeleri için temiz mavi vurgu.' },
-  { value: 'emerald', label: 'Yesil', description: 'Kucuk işletmeler için canlı ve pozitif vurgu.' },
+  { value: 'emerald', label: 'Yeşil', description: 'Küçük işletmeler için canlı ve pozitif vurgu.' },
   { value: 'slate', label: 'Sade', description: 'Az renkli, resmî ve sade belge görünümü.' },
 ];
 

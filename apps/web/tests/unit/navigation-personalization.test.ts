@@ -21,9 +21,9 @@ describe('navigation personalization', () => {
     expect(result[0]?.items.map((item) => item.label)).toEqual(['Dashboard', 'Satış']);
   });
 
-  it('ranks favorites and frequently used destinations first', () => {
+  it('keeps navigation order static when usage and favorites change', () => {
     const result = personalizeNavigation(groups, workspace({ allowedModules: '*', favoriteHrefs: ['/dashboard/products'], usage: { '/dashboard/sales-orders': 20 } }), 'PROFESSIONAL', []);
-    expect(result[0]?.items[0]?.label).toBe('Stok');
+    expect(result[0]?.items.map((item) => item.label)).toEqual(['Dashboard', 'Satış', 'Stok', 'Settings']);
   });
   it('does not treat permission-only management areas as tenant package modules', () => {
     const result = personalizeNavigation(groups, workspace({ allowedModules: '*' }), 'PROFESSIONAL', ['sales']);

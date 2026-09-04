@@ -13,6 +13,8 @@ import {
 import { PLAN_FEATURE_DEFINITIONS, PLAN_LABELS } from '@/lib/plans';
 import type { PlanName } from '@/lib/plans';
 import { cn } from '@/lib/utils';
+import { useAdminAuthStore } from '@/store/admin-auth.store';
+import { canAdmin } from '@/lib/admin/permissions';
 
 const PLANS: readonly PlanName[] = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'];
 
@@ -97,6 +99,7 @@ function buildUpdateInput(feature: PlanFeature, draft: FeatureDraft): UpdatePlan
 }
 
 export default function AdminFeaturesPage() {
+  const canUpdateFeature = useAdminAuthStore((state) => canAdmin(state.admin, 'feature.update'));
   const [planFilter, setPlanFilter] = useState<PlanName | ''>('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<FeatureDraft | null>(null);
@@ -183,7 +186,7 @@ export default function AdminFeaturesPage() {
                         )}
                       </div>
 
-                      {activeDraft ? (
+                      {activeDraft && canUpdateFeature ? (
                         <>
                           {activeDraft.type === 'BOOLEAN' ? (
                             <select
@@ -211,14 +214,14 @@ export default function AdminFeaturesPage() {
                             <option value="ENUM">Seçenek</option>
                           </select>
                           <div className="flex items-center justify-end gap-1">
-                            <button
+                            {canUpdateFeature && <button
                               type="button"
                               onClick={() => setDraft({ ...activeDraft, isEnabled: !activeDraft.isEnabled })}
                               className={cn('inline-flex h-8 w-8 items-center justify-center rounded-md border', activeDraft.isEnabled ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 text-slate-500')}
                               title={activeDraft.isEnabled ? 'Etkin' : 'Devre disi'}
                             >
                               {activeDraft.isEnabled ? <CheckCircle2 className="h-4 w-4" /> : <CircleOff className="h-4 w-4" />}
-                            </button>
+                            </button>}
                             <button
                               type="button"
                               disabled={updateMutation.isPending}
