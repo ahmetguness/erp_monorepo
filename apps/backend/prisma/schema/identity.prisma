@@ -278,12 +278,58 @@ model AdminUser {
 
   isActive    Boolean  @default(true)
   lastLoginAt DateTime?
+  passwordChangedAt DateTime @default(now())
+  mfaSecretEncrypted String?
+  mfaEnabled         Boolean @default(false)
+  mfaLastCounter     Int @default(-1)
+  mfaVerifiedAt      DateTime?
+  tokenVersion       Int     @default(0)
 
   roleAssignments AdminUserRole[]
   requestedChangeRequests AdminChangeRequest[] @relation("AdminChangeRequestRequester")
   decidedChangeRequests   AdminChangeRequest[] @relation("AdminChangeRequestDecider")
+  auditLogs               AuditLog[]
+  sessions                AdminSession[]
+  securityEvents          AdminSecurityEvent[]
 
   @@map("admin_users")
+}
+
+model AdminSession {
+  tokenVersion Int @default(0)
+  id               String   @id @default(cuid())
+  adminUserId      String
+  refreshTokenHash String   @unique
+  deviceName       String
+  ipAddress        String?
+  userAgent        String?
+  rememberMe       Boolean  @default(false)
+  mfaVerifiedAt    DateTime
+  lastSeenAt       DateTime @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime @default(now())
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId, revokedAt, expiresAt])
+  @@map("admin_sessions")
+}
+
+model AdminSecurityEvent {
+  id          String   @id @default(cuid())
+  adminUserId String
+  type        String
+  message     String
+  ipAddress   String?
+  userAgent   String?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId, createdAt])
+  @@map("admin_security_events")
 }
 
 model AdminRole {

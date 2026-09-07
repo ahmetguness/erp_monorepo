@@ -90,7 +90,7 @@ export const AdminFeatureController = {
       } : null,
       affectedTenantCount,
       affectedUserCount,
-      requestedById: c.get('adminId') as string,
+      requestedById: c.get('adminId'),
       reason: metadata.data.reason, ticketId: metadata.data.ticketId,
     });
     return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
@@ -151,7 +151,7 @@ export const AdminFeatureController = {
         } : null,
         affectedTenantCount: 1,
         affectedUserCount,
-        requestedById: c.get('adminId') as string,
+        requestedById: c.get('adminId'),
         reason: metadata.data.reason, ticketId: metadata.data.ticketId,
       });
       return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
@@ -212,7 +212,7 @@ export const AdminFeatureController = {
         },
         affectedTenantCount: 1,
         affectedUserCount,
-        requestedById: c.get('adminId') as string,
+        requestedById: c.get('adminId'),
         reason: metadata.data.reason, ticketId: metadata.data.ticketId,
       });
       return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
@@ -222,6 +222,7 @@ export const AdminFeatureController = {
 
     await createAuditLog(prisma, {
       tenantId: override.tenantId,
+      adminId: c.get('adminId'),
       module: 'admin',
       entityType: EntityType.OTHER,
       entityId: id,

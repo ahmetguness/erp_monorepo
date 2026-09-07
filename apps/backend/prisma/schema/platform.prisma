@@ -172,7 +172,8 @@ model AuditLog {
   rollbackOfId String?
   createdAt  DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  admin  AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, module])
   @@index([tenantId, entityType, entityId])

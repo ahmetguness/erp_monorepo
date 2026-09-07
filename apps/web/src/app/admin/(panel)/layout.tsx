@@ -10,6 +10,7 @@ import {
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { cn } from '@/lib/utils';
 import { ToastContainer } from '@/components/ui/Toast';
+import { AdminSecurityNotice } from '@/components/features/admin/AdminSecurityNotice';
 import type { AdminPermission } from '@repo/types';
 import { canAdmin } from '@/lib/admin/permissions';
 
@@ -31,6 +32,7 @@ function AdminNavLinks({ pathname }: { pathname: string }) {
   const admin = useAdminAuthStore((state) => state.admin);
   return (
     <>
+      <Link href="/admin/sessions" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-300">Oturumlar ve MFA</Link>
       {NAV.filter((item) => canAdmin(admin, item.permission)).map((item) => {
         const isActive = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href);
         return (
@@ -151,6 +153,7 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
         </header>
 
         <main className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+          <AdminSecurityNotice />
           {children}
         </main>
       </div>

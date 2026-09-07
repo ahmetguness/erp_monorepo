@@ -95,8 +95,11 @@ async function main(): Promise<void> {
   assert(originalAfterRollback.status === 'ROLLED_BACK', 'Original request was not marked ROLLED_BACK.');
   const rollbackAudit = await prisma.auditLog.findFirst({
     where: { tenantId: tenant.id, approvalId: rolledBack.id },
+    include: { admin: { select: { id: true, email: true } } },
   });
   assert(rollbackAudit?.adminId === checker.id, 'Rollback audit does not contain the admin identity.');
+  assert(rollbackAudit.admin?.id === checker.id, 'Rollback audit actor relation is incorrect.');
+  assert(rollbackAudit.admin.email === checker.email, 'Rollback audit actor email is incorrect.');
   assert(rollbackAudit?.rollbackOfId === request.id, 'Rollback audit relationship is missing.');
   assert(rollbackAudit?.requestId === rollbackRequestId, 'Rollback audit request identity is missing.');
 

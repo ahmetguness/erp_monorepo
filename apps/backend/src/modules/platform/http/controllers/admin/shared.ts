@@ -20,7 +20,8 @@ if (!ADMIN_JWT_SECRET) {
 export const RESOLVED_ADMIN_SECRET = ADMIN_JWT_SECRET;
 
 export const ADMIN_COOKIE_NAME = 'axon_admin_token';
-export const ADMIN_COOKIE_MAX_AGE = 24 * 60 * 60; // 24h
+export const ADMIN_REFRESH_COOKIE_NAME = 'axon_admin_refresh';
+export const ADMIN_COOKIE_MAX_AGE = 15 * 60;
 export const ADMIN_LOGIN_LIMIT = 5;
 export const ADMIN_LOGIN_WINDOW_MS = 15 * 60 * 1000;
 export const ADMIN_LOGIN_LOCKOUT_FAILURES = 10;

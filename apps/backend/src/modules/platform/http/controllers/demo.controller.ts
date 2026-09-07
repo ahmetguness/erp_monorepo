@@ -117,7 +117,7 @@ export class DemoController {
    */
   static async approve(c: Context) {
     const id = requireParam(c, 'id');
-    const adminId = (c.get('userId') as string) || 'admin';
+    const adminId = c.get('adminId');
 
     const result = await approveDemoRequest(id, adminId);
     return c.json(result, result.success ? 200 : 400);
@@ -130,7 +130,7 @@ export class DemoController {
   static async reject(c: Context) {
     const id = requireParam(c, 'id');
     const body = await c.req.json().catch(() => ({}));
-    const adminId = (c.get('userId') as string) || 'admin';
+    const adminId = c.get('adminId');
 
     const result = await rejectDemoRequest(id, adminId, body.reason);
     return c.json(result);

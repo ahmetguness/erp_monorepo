@@ -173,6 +173,7 @@ export const AdminTenantController = {
 
       await createAuditLog(tx, {
         tenantId: tenant.id,
+        adminId: c.get('adminId'),
         module: 'admin',
         entityType: EntityType.OTHER,
         entityId: tenant.id,
@@ -242,7 +243,7 @@ export const AdminTenantController = {
         previousValues: { plan: tenant.plan },
         affectedTenantCount: 1,
         affectedUserCount,
-        requestedById: c.get('adminId') as string,
+        requestedById: c.get('adminId'),
         reason: metadata.data.reason, ticketId: metadata.data.ticketId,
       });
       return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
@@ -255,6 +256,7 @@ export const AdminTenantController = {
 
     await createAuditLog(prisma, {
       tenantId: id,
+      adminId: c.get('adminId'),
       module: 'admin',
       entityType: EntityType.OTHER,
       entityId: id,
@@ -298,7 +300,7 @@ export const AdminTenantController = {
         previousValues: { status: tenant.status },
         affectedTenantCount: 1,
         affectedUserCount,
-        requestedById: c.get('adminId') as string,
+        requestedById: c.get('adminId'),
         reason: metadata.data.reason, ticketId: metadata.data.ticketId,
       });
       return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
@@ -311,6 +313,7 @@ export const AdminTenantController = {
 
     await createAuditLog(prisma, {
       tenantId: id,
+      adminId: c.get('adminId'),
       module: 'admin',
       entityType: EntityType.OTHER,
       entityId: id,
@@ -371,6 +374,7 @@ export const AdminTenantController = {
 
     await createAuditLog(prisma, {
       tenantId: id,
+      adminId: c.get('adminId'),
       module: 'admin',
       entityType: EntityType.OTHER,
       entityId: id,

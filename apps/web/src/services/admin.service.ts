@@ -1,5 +1,5 @@
 import { adminApiClient } from '@/lib/admin-api-client';
-import type { AdminChangeRequest, AdminChangeRequestStatus, AdminIdentity, PendingAdminChangeResult } from '@repo/types';
+import type { AdminAuditLog, AdminChangeRequest, AdminChangeRequestStatus, AdminIdentity, PendingAdminChangeResult } from '@repo/types';
 
 // ─────────────────────────────────────────────
 // Types
@@ -263,8 +263,8 @@ export interface CreateTenantInput {
 // Auth
 // ─────────────────────────────────────────────
 
-export async function adminLogin(email: string, password: string): Promise<{ admin: AdminUser }> {
-  const res = await adminApiClient.post('/api/admin/auth/login', { email, password });
+export async function adminLogin(email: string, password: string, otp?: string, rememberMe = false): Promise<import('@repo/types').AdminLoginResult> {
+  const res = await adminApiClient.post('/api/admin/auth/login', { email, password, otp, rememberMe });
   return res.data.data;
 }
 
@@ -398,7 +398,7 @@ export async function searchOperationalObservability(q: string): Promise<Observa
 
 export async function getAdminAuditLogs(params?: { page?: number; limit?: number; tenantId?: string; module?: string; action?: string }) {
   const res = await adminApiClient.get('/api/admin/audit-logs', { params });
-  return res.data as { data: Array<Record<string, unknown>>; meta: { total: number; page: number; pageSize: number; totalPages: number } };
+  return res.data as { data: AdminAuditLog[]; meta: { total: number; page: number; pageSize: number; totalPages: number } };
 }
 
 export async function getSecurityChecklist(): Promise<SecurityChecklist> {

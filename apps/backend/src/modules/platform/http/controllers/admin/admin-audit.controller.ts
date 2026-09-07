@@ -28,12 +28,16 @@ export const AdminAuditController = {
       prisma.auditLog.count({ where }),
       prisma.auditLog.findMany({
         where,
+        include: { admin: { select: { id: true, name: true, email: true } } },
         orderBy: { createdAt: 'desc' },
         skip: skip,
         take: limit,
       }),
     ]);
 
-    return c.json({ data: logs, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
+    return c.json({
+      data: logs.map((log) => ({ ...log, createdAt: log.createdAt.toISOString() })),
+      meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) },
+    });
   },
 };

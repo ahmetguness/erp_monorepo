@@ -98,7 +98,7 @@ export default function AdminAuditPage() {
           <div className="col-span-2">Modül</div>
           <div className="col-span-2">Kaynak</div>
           <div className="col-span-3">Tenant</div>
-          <div className="col-span-2">Kullanıcı</div>
+          <div className="col-span-2">Aktör</div>
         </div>
 
         {isLoading ? (
@@ -131,8 +131,17 @@ export default function AdminAuditPage() {
                       <span className="text-slate-600 font-mono text-[10px]">{String(log.tenantId).slice(0, 16)}…</span>
                     )}
                   </div>
-                  <div className="col-span-2 text-slate-600 font-mono text-[10px] truncate">
-                    {log.userId ? String(log.userId).slice(0, 12) + '…' : '—'}
+                  <div className="col-span-2 min-w-0 text-[10px]">
+                    {log.admin ? (
+                      <div title={`${log.admin.name} (${log.admin.email})`}>
+                        <p className="truncate text-slate-300">{log.admin.name}</p>
+                        <p className="truncate text-slate-600">Admin · {log.admin.email}</p>
+                      </div>
+                    ) : log.userId ? (
+                      <span className="font-mono text-slate-600" title={log.userId}>Kullanıcı · {log.userId.slice(0, 12)}…</span>
+                    ) : (
+                      <span className="text-slate-600">Sistem</span>
+                    )}
                   </div>
                 </div>
               );

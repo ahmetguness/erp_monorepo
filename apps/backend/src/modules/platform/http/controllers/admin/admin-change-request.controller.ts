@@ -12,8 +12,8 @@ import { getRequestMeta } from '../../../../../utils/audit.js';
 
 function adminContext(c: Context): { adminId: string; permissions: AdminPermission[] } {
   return {
-    adminId: c.get('adminId') as string,
-    permissions: c.get('adminPermissions') as AdminPermission[],
+    adminId: c.get('adminId'),
+    permissions: c.get('adminPermissions'),
   };
 }
 

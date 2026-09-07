@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
-import { requireAdmin, requireAdminPermission } from '../middleware/requireAdmin';
+import { requireAdmin, requireAdminPermission, requireRecentAdminMfa } from '../middleware/requireAdmin';
 import {
 AdminAuditController,
 AdminChangeRequestController,
 AdminAuthController,
+AdminSessionController,
 AdminFeatureController,
 AdminMetricsController,
 AdminSecurityController,
@@ -15,6 +16,23 @@ const adminRoutes = new Hono();
 // ── Public (no auth) ─────────────────────────
 adminRoutes.post('/auth/login', AdminAuthController.login);
 adminRoutes.post('/auth/logout', AdminAuthController.logout);
+adminRoutes.post('/auth/refresh', AdminAuthController.refresh);
+adminRoutes.post('/auth/reauthenticate', requireAdmin, AdminSessionController.reauthenticate);
+adminRoutes.get('/auth/sessions', requireAdmin, AdminSessionController.list);
+adminRoutes.get('/auth/security-events', requireAdmin, AdminSessionController.events);
+adminRoutes.delete('/auth/sessions/:id', requireAdmin, requireRecentAdminMfa, AdminSessionController.revoke);
+adminRoutes.post('/auth/revoke-all', requireAdmin, requireRecentAdminMfa, AdminSessionController.revokeAll);
+
+adminRoutes.use('*', async (c, next) => {
+  const isChangePreview = c.req.method === 'POST' && c.req.path === '/api/admin/change-requests/preview';
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && !isChangePreview) {
+    return requireAdmin(c, async () => {
+      const response = await requireRecentAdminMfa(c, next);
+      if (response) c.res = response;
+    });
+  }
+  await next();
+});
 
 // ── Protected routes ─────────────────────────
 // Auth
