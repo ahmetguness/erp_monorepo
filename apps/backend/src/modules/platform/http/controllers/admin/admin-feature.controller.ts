@@ -5,6 +5,7 @@ import { prisma } from '../../../../../lib/prisma.js';
 import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
 import { buildChangeLine,formatNotificationValue,isFeatureKey,isFeatureType,isPlan,normalizePlanFeatureValue,notifyTenantOwners } from './shared.js';
 import { submitAdminChange } from '../../../admin-change-request/admin-change-request.service.js';
+import { changeMetadataSchema } from '../../../admin-change-request/admin-change-request.schemas.js';
 
 export const AdminFeatureController = {
 
@@ -33,6 +34,8 @@ export const AdminFeatureController = {
       isEnabled?: boolean;
       description?: string | null;
       featureKey?: string | null;
+      reason?: string;
+      ticketId?: string;
     }>().catch(() => null);
 
     if (!body || !body.plan || !isPlan(body.plan)) {
@@ -63,6 +66,8 @@ export const AdminFeatureController = {
     }
 
     const plan = body.plan;
+    const metadata = changeMetadataSchema.safeParse({ reason: body.reason, ticketId: body.ticketId });
+    if (!metadata.success) return c.json(new ValidationError('Plan özelliği değişikliği için en az 10 karakterlik gerekçe zorunludur.').toJSON(), 400);
     const key = body.key.trim();
     const existingFeature = await prisma.planFeature.findUnique({ where: { plan_key: { plan, key } } });
     const [affectedTenantCount, affectedUserCount] = await Promise.all([
@@ -86,6 +91,7 @@ export const AdminFeatureController = {
       affectedTenantCount,
       affectedUserCount,
       requestedById: c.get('adminId') as string,
+      reason: metadata.data.reason, ticketId: metadata.data.ticketId,
     });
     return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
 
@@ -105,6 +111,7 @@ export const AdminFeatureController = {
     const body = await c.req.json<{
       tenantId: string; featureKey: string; value: string;
       isEnabled?: boolean; reason?: string; expiresAt?: string;
+      ticketId?: string;
     }>();
 
     if (!body.tenantId || !body.featureKey || body.value === undefined) {
@@ -122,6 +129,8 @@ export const AdminFeatureController = {
     });
 
     if (!body.expiresAt) {
+      const metadata = changeMetadataSchema.safeParse({ reason: body.reason, ticketId: body.ticketId });
+      if (!metadata.success) return c.json(new ValidationError('Kalıcı override için en az 10 karakterlik gerekçe zorunludur.').toJSON(), 400);
       const [tenant, affectedUserCount] = await Promise.all([
         prisma.tenant.findFirst({ where: { id: body.tenantId, deletedAt: null }, select: { companyName: true } }),
         prisma.tenantUser.count({ where: { tenantId: body.tenantId, isActive: true } }),
@@ -143,6 +152,7 @@ export const AdminFeatureController = {
         affectedTenantCount: 1,
         affectedUserCount,
         requestedById: c.get('adminId') as string,
+        reason: metadata.data.reason, ticketId: metadata.data.ticketId,
       });
       return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
     }
@@ -183,6 +193,9 @@ export const AdminFeatureController = {
     if (!override) return c.json(new NotFoundError('Feature override', id).toJSON(), 404);
 
     if (!override.expiresAt) {
+      const rawMetadata = await c.req.json<unknown>().catch(() => null);
+      const metadata = changeMetadataSchema.safeParse(rawMetadata);
+      if (!metadata.success) return c.json(new ValidationError('Kalıcı override kaldırma için en az 10 karakterlik gerekçe zorunludur.').toJSON(), 400);
       const [tenant, affectedUserCount] = await Promise.all([
         prisma.tenant.findUnique({ where: { id: override.tenantId }, select: { companyName: true } }),
         prisma.tenantUser.count({ where: { tenantId: override.tenantId, isActive: true } }),
@@ -200,6 +213,7 @@ export const AdminFeatureController = {
         affectedTenantCount: 1,
         affectedUserCount,
         requestedById: c.get('adminId') as string,
+        reason: metadata.data.reason, ticketId: metadata.data.ticketId,
       });
       return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
     }

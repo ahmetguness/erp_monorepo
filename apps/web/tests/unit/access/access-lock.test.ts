@@ -26,6 +26,6 @@ describe('access locks', () => {
     });
     expect(reasons.map((reason) => reason.code)).toEqual(['plan', 'module', 'feature', 'limit']);
     expect(lockReasonSummary(reasons)).toContain('Plan yetersiz');
-    expect(lockReasonSummary([])).toBe('Erisim acik');
+    expect(lockReasonSummary([])).toBe('Erisim açık');
   });
 });

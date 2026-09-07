@@ -134,6 +134,9 @@ model AdminChangeRequest {
   requestedById          String
   decidedById            String?
   decisionNote           String?
+  reason                 String
+  ticketId               String?
+  rollbackOfId           String?
   createdAt              DateTime                 @default(now())
   updatedAt              DateTime                 @updatedAt
   decidedAt              DateTime?
@@ -145,6 +148,7 @@ model AdminChangeRequest {
   @@index([status, createdAt])
   @@index([requestedById, status])
   @@index([type, targetId, status])
+  @@index([rollbackOfId])
   @@map("admin_change_requests")
 }
 
@@ -160,6 +164,12 @@ model AuditLog {
   newValues  Json?
   ipAddress  String?
   userAgent  String?
+  adminId     String?
+  reason      String?
+  ticketId    String?
+  requestId   String?
+  approvalId  String?
+  rollbackOfId String?
   createdAt  DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -168,6 +178,9 @@ model AuditLog {
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, userId])
   @@index([tenantId, createdAt])
+  @@index([adminId, createdAt])
+  @@index([requestId])
+  @@index([approvalId])
   @@map("audit_logs")
 }
 

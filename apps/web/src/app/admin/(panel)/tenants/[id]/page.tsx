@@ -12,10 +12,13 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/store/ui.store';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { canAdmin } from '@/lib/admin/permissions';
+import { ChangePreviewDialog, type ChangeMetadata } from '@/components/features/admin/ChangePreviewDialog';
 
 const PLANS = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'] as const;
 type PlanKey = typeof PLANS[number];
 const STATUSES = ['TRIAL', 'ACTIVE', 'SUSPENDED', 'CANCELLED'] as const;
+type StatusKey = typeof STATUSES[number];
+type CriticalProposal = { kind: 'plan'; value: PlanKey } | { kind: 'status'; value: StatusKey };
 
 type TenantSettingsForm = {
   maxUsers: string;
@@ -183,6 +186,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [confirmSave, setConfirmSave] = useState(false);
   const [sendNotify, setSendNotify] = useState(true);
+  const [criticalProposal, setCriticalProposal] = useState<CriticalProposal | null>(null);
 
   const { data: tenant, isLoading } = useQuery({ queryKey: ['admin', 'tenant', id], queryFn: () => getTenantById(id) });
   const { data: metrics } = useQuery({ queryKey: ['admin', 'tenant-metrics', id], queryFn: () => getTenantMetrics(id) });
@@ -213,27 +217,29 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
   };
 
   const changePlan = useMutation({
-    mutationFn: (plan: string) => updateTenantPlan(id, plan),
-    onSuccess: (result, plan) => {
+    mutationFn: ({ value, metadata }: { value: PlanKey; metadata: ChangeMetadata }) => updateTenantPlan(id, value, metadata.reason, metadata.ticketId),
+    onSuccess: (result, variables) => {
+      setCriticalProposal(null);
       if (isPendingAdminChange(result)) {
         toast.success('Plan değişikliği ikinci adminin onayına gönderildi.');
         return;
       }
-      if (isPlanKey(plan)) {
-        setCurrentPlanOverride(plan);
+      if (isPlanKey(variables.value)) {
+        setCurrentPlanOverride(variables.value);
         setSettings((prev) => ({
           ...prev,
-          modules: getPlanModules(plan),
+          modules: getPlanModules(variables.value),
         }));
       }
       qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] });
-      toast.success(`Plan ${plan} olarak güncellendi.`);
+      toast.success(`Plan ${variables.value} olarak güncellendi.`);
     },
   });
 
   const changeStatus = useMutation({
-    mutationFn: (status: string) => updateTenantStatus(id, status),
+    mutationFn: ({ value, metadata }: { value: StatusKey; metadata: ChangeMetadata }) => updateTenantStatus(id, value, metadata.reason, metadata.ticketId),
     onSuccess: (result) => {
+      setCriticalProposal(null);
       if (isPendingAdminChange(result)) {
         toast.success('Durum değişikliği ikinci adminin onayına gönderildi.');
         return;
@@ -305,7 +311,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
           <p className="text-xs font-semibold text-slate-400 mb-3">Plan Değiştir</p>
           <div className="flex gap-2">
             {PLANS.map((p) => (
-              <button key={p} onClick={() => changePlan.mutate(p)} disabled={tenant.plan === p}
+              <button key={p} onClick={() => setCriticalProposal({ kind: 'plan', value: p })} disabled={tenant.plan === p}
                 className={cn('flex-1 py-2 rounded-lg text-xs font-medium border transition-all',
                   tenant.plan === p ? PLAN_COLOR[p] : 'border-slate-800 text-slate-500 hover:border-slate-700 hover:text-slate-300')}>
                 {p}
@@ -317,7 +323,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
           <p className="text-xs font-semibold text-slate-400 mb-3">Durum Değiştir</p>
           <div className="flex gap-2">
             {STATUSES.map((s) => (
-              <button key={s} onClick={() => changeStatus.mutate(s)} disabled={tenant.status === s}
+              <button key={s} onClick={() => setCriticalProposal({ kind: 'status', value: s })} disabled={tenant.status === s}
                 className={cn('flex-1 py-2 rounded-lg text-xs font-medium border transition-all',
                   tenant.status === s ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'border-slate-800 text-slate-500 hover:border-slate-700 hover:text-slate-300')}>
                 {s}
@@ -605,6 +611,19 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
           </div>
         </div>
       )}
+      <ChangePreviewDialog
+        input={criticalProposal?.kind === 'plan'
+          ? { type: 'TENANT_PLAN_UPDATE', payload: { tenantId: id, plan: criticalProposal.value } }
+          : criticalProposal?.kind === 'status'
+            ? { type: 'TENANT_STATUS_UPDATE', payload: { tenantId: id, status: criticalProposal.value } }
+            : null}
+        isSubmitting={changePlan.isPending || changeStatus.isPending}
+        onClose={() => setCriticalProposal(null)}
+        onConfirm={(metadata) => {
+          if (criticalProposal?.kind === 'plan') changePlan.mutate({ value: criticalProposal.value, metadata });
+          if (criticalProposal?.kind === 'status') changeStatus.mutate({ value: criticalProposal.value, metadata });
+        }}
+      />
     </div>
   );
 }

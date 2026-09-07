@@ -37,6 +37,8 @@ export interface UpdatePlanFeatureInput {
   isEnabled: boolean;
   description?: string | null;
   featureKey?: string | null;
+  reason: string;
+  ticketId?: string;
 }
 export interface FeatureOverride { id: string; tenantId: string; featureKey: string; value: string; isEnabled: boolean; reason: string | null; expiresAt: string | null; tenant?: { id: string; companyName: string; slug: string } }
 
@@ -294,13 +296,13 @@ export async function createTenant(data: CreateTenantInput): Promise<{ id: strin
   return res.data.data;
 }
 
-export async function updateTenantPlan(id: string, plan: string): Promise<AdminMutationResult<TenantDetail>> {
-  const res = await adminApiClient.post(`/api/admin/tenants/${id}/plan`, { plan });
+export async function updateTenantPlan(id: string, plan: string, reason?: string, ticketId?: string): Promise<AdminMutationResult<TenantDetail>> {
+  const res = await adminApiClient.post(`/api/admin/tenants/${id}/plan`, { plan, reason, ticketId });
   return res.data.data;
 }
 
-export async function updateTenantStatus(id: string, status: string): Promise<AdminMutationResult<TenantDetail>> {
-  const res = await adminApiClient.post(`/api/admin/tenants/${id}/status`, { status });
+export async function updateTenantStatus(id: string, status: string, reason?: string, ticketId?: string): Promise<AdminMutationResult<TenantDetail>> {
+  const res = await adminApiClient.post(`/api/admin/tenants/${id}/status`, { status, reason, ticketId });
   return res.data.data;
 }
 
@@ -327,13 +329,13 @@ export async function getOverrides(tenantId?: string): Promise<FeatureOverride[]
   return res.data.data;
 }
 
-export async function createOverride(data: { tenantId: string; featureKey: string; value: string; isEnabled?: boolean; reason?: string; expiresAt?: string }) {
+export async function createOverride(data: { tenantId: string; featureKey: string; value: string; isEnabled?: boolean; reason?: string; ticketId?: string; expiresAt?: string }) {
   const res = await adminApiClient.post('/api/admin/overrides', data);
   return res.data.data;
 }
 
-export async function deleteOverride(id: string) {
-  await adminApiClient.delete(`/api/admin/overrides/${id}`);
+export async function deleteOverride(id: string, reason?: string, ticketId?: string) {
+  await adminApiClient.delete(`/api/admin/overrides/${id}`, { data: { reason, ticketId } });
 }
 
 export async function getAdminChangeRequests(status?: AdminChangeRequestStatus): Promise<AdminChangeRequest[]> {
@@ -348,6 +350,21 @@ export async function approveAdminChangeRequest(id: string, note?: string): Prom
 
 export async function rejectAdminChangeRequest(id: string, note?: string): Promise<AdminChangeRequest> {
   const res = await adminApiClient.post(`/api/admin/change-requests/${id}/reject`, { note });
+  return res.data.data;
+}
+
+export type AdminChangePreviewInput =
+  | { type: 'TENANT_PLAN_UPDATE'; payload: { tenantId: string; plan: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE' } }
+  | { type: 'TENANT_STATUS_UPDATE'; payload: { tenantId: string; status: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' } }
+  | { type: 'PLAN_FEATURE_UPDATE'; payload: Omit<UpdatePlanFeatureInput, 'reason' | 'ticketId'> };
+
+export async function previewAdminChange(input: AdminChangePreviewInput): Promise<import('@repo/types').ChangePreview> {
+  const res = await adminApiClient.post('/api/admin/change-requests/preview', input);
+  return res.data.data;
+}
+
+export async function rollbackAdminChangeRequest(id: string, reason: string, ticketId?: string): Promise<AdminChangeRequest> {
+  const res = await adminApiClient.post(`/api/admin/change-requests/${id}/rollback`, { reason, ticketId });
   return res.data.data;
 }
 

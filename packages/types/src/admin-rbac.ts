@@ -57,9 +57,31 @@ export interface AdminChangeRequest {
   requestedBy: AdminChangeRequestActor;
   decidedBy: AdminChangeRequestActor | null;
   decisionNote: string | null;
+  reason: string;
+  ticketId: string | null;
+  rollbackOfId: string | null;
+  canRollback: boolean;
   createdAt: string;
   decidedAt: string | null;
   appliedAt: string | null;
 }
 
 export interface PendingAdminChangeResult { requiresApproval: true; changeRequest: AdminChangeRequest }
+
+export interface ChangePreviewField {
+  field: string;
+  label: string;
+  before: unknown;
+  after: unknown;
+}
+
+export interface ChangePreview {
+  type: AdminChangeRequestType;
+  targetId: string;
+  targetLabel: string;
+  changes: ChangePreviewField[];
+  affectedTenantCount: number;
+  affectedUserCount: number;
+  warnings: string[];
+  requiresApproval: boolean;
+}

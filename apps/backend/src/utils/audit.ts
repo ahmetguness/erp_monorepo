@@ -22,6 +22,12 @@ export interface AuditLogParams {
   newValues?: Prisma.InputJsonValue;
   ipAddress?: string | null;
   userAgent?: string | null;
+  adminId?: string | null;
+  reason?: string | null;
+  ticketId?: string | null;
+  requestId?: string | null;
+  approvalId?: string | null;
+  rollbackOfId?: string | null;
 }
 
 /**
@@ -58,6 +64,12 @@ export async function createAuditLog(
         newValues: integrityValues.newValues,
         ipAddress: params.ipAddress ?? null,
         userAgent: params.userAgent ?? null,
+        adminId: params.adminId ?? null,
+        reason: params.reason ?? null,
+        ticketId: params.ticketId ?? null,
+        requestId: params.requestId ?? null,
+        approvalId: params.approvalId ?? null,
+        rollbackOfId: params.rollbackOfId ?? null,
       },
     });
     await recordAuditIntegrityHead(db, params.tenantId, log.id, integrityValues.integrity);
@@ -83,9 +95,11 @@ export async function createAuditLog(
 export function getRequestMeta(c: Context): {
   ipAddress: string | null;
   userAgent: string | null;
+  requestId: string | null;
 } {
   return {
     ipAddress: getTrustedClientIpOrNull(c),
     userAgent: c.req.header('user-agent') ?? null,
+    requestId: c.get('requestId') as string | undefined ?? c.req.header('x-request-id') ?? null,
   };
 }

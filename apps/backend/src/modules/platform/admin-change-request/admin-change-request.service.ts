@@ -32,6 +32,9 @@ export interface SubmitChangeInput {
   affectedTenantCount: number;
   affectedUserCount: number;
   requestedById: string;
+  reason: string;
+  ticketId?: string;
+  rollbackOfId?: string;
 }
 
 const actorSelect = { id: true, name: true, email: true } as const;
@@ -49,6 +52,8 @@ function toContract(request: RequestWithActors): AdminChangeRequest {
     payload: { ...payload }, previousValues: previousValues ? { ...previousValues } : null,
     affectedTenantCount: request.affectedTenantCount, affectedUserCount: request.affectedUserCount,
     requestedBy: request.requestedBy, decidedBy: request.decidedBy, decisionNote: request.decisionNote,
+    reason: request.reason, ticketId: request.ticketId, rollbackOfId: request.rollbackOfId,
+    canRollback: request.status === AdminChangeRequestStatus.APPLIED && request.previousValues !== null && request.type !== AdminChangeRequestType.FEATURE_OVERRIDE_DELETE,
     createdAt: request.createdAt.toISOString(), decidedAt: request.decidedAt?.toISOString() ?? null,
     appliedAt: request.appliedAt?.toISOString() ?? null,
   };
@@ -71,6 +76,7 @@ export async function submitAdminChange(input: SubmitChangeInput): Promise<Admin
         previousValues: input.previousValues ?? Prisma.JsonNull,
         affectedTenantCount: input.affectedTenantCount, affectedUserCount: input.affectedUserCount,
         requestedById: input.requestedById,
+        reason: input.reason, ticketId: input.ticketId, rollbackOfId: input.rollbackOfId,
       },
       include: requestInclude,
     });
@@ -85,8 +91,17 @@ export async function listAdminChanges(status?: AdminChangeRequestStatus): Promi
   return requests.map(toContract);
 }
 
-async function applyChange(tx: TransactionClient, request: RequestWithActors, approverId: string): Promise<void> {
-  const auditBase = { module: 'admin-approval', entityType: EntityType.OTHER, action: AuditAction.UPDATE, userId: approverId } as const;
+async function applyChange(
+  tx: TransactionClient,
+  request: RequestWithActors,
+  approverId: string,
+  auditRequestId?: string | null,
+): Promise<void> {
+  const auditBase = {
+    module: 'admin-approval', entityType: EntityType.OTHER, action: AuditAction.UPDATE,
+    adminId: approverId, reason: request.reason, ticketId: request.ticketId,
+    requestId: auditRequestId, approvalId: request.id, rollbackOfId: request.rollbackOfId,
+  } as const;
   switch (request.type) {
     case AdminChangeRequestType.TENANT_PLAN_UPDATE: {
       const payload = tenantPlanPayloadSchema.parse(request.payload);
@@ -152,7 +167,73 @@ async function notifyOwners(tx: TransactionClient, tenantId: string, title: stri
   })) });
 }
 
-export async function approveAdminChange(id: string, approverId: string, permissions: readonly AdminPermission[], note?: string): Promise<AdminChangeRequest> {
+function rollbackPayload(request: RequestWithActors): Prisma.InputJsonObject {
+  if (!request.previousValues || Array.isArray(request.previousValues) || typeof request.previousValues !== 'object') {
+    throw new AdminChangeRequestError('Bu değişiklik güvenli biçimde geri alınamaz.', 409);
+  }
+  if (!request.payload || Array.isArray(request.payload) || typeof request.payload !== 'object') {
+    throw new AdminChangeRequestError('Değişiklik verisi geçersiz.', 409);
+  }
+  switch (request.type) {
+    case AdminChangeRequestType.TENANT_PLAN_UPDATE:
+      return { tenantId: String(request.payload.tenantId), plan: String(request.previousValues.plan) };
+    case AdminChangeRequestType.TENANT_STATUS_UPDATE:
+      return { tenantId: String(request.payload.tenantId), status: String(request.previousValues.status) };
+    case AdminChangeRequestType.PLAN_FEATURE_UPDATE:
+      return { ...request.previousValues };
+    case AdminChangeRequestType.FEATURE_OVERRIDE_UPSERT:
+      return { ...request.previousValues, tenantId: String(request.payload.tenantId), featureKey: String(request.payload.featureKey) };
+    case AdminChangeRequestType.FEATURE_OVERRIDE_DELETE:
+      throw new AdminChangeRequestError('Silinen override otomatik geri alınamaz.', 409);
+  }
+}
+
+export async function rollbackAdminChange(
+  id: string,
+  adminId: string,
+  permissions: readonly AdminPermission[],
+  reason: string,
+  ticketId?: string,
+  auditRequestId?: string | null,
+): Promise<AdminChangeRequest> {
+  return prisma.$transaction(async (tx) => {
+    const original = await tx.adminChangeRequest.findUnique({ where: { id }, include: requestInclude });
+    if (!original) throw new AdminChangeRequestError('Değişiklik talebi bulunamadı.', 404);
+    if (original.status !== AdminChangeRequestStatus.APPLIED) throw new AdminChangeRequestError('Yalnızca uygulanmış değişiklikler geri alınabilir.', 409);
+    if (!isAdminPermission(original.requiredPermission) || !permissions.includes(original.requiredPermission)) {
+      throw new AdminChangeRequestError('Bu değişikliği geri alma yetkiniz bulunmuyor.', 403);
+    }
+    const payload = rollbackPayload(original);
+    const rollbackPayloadValues = original.payload && !Array.isArray(original.payload) && typeof original.payload === 'object'
+      ? { ...original.payload }
+      : Prisma.JsonNull;
+    const rollback: RequestWithActors = await tx.adminChangeRequest.create({
+      data: {
+        type: original.type, status: AdminChangeRequestStatus.APPROVED,
+        targetId: original.targetId, targetLabel: original.targetLabel,
+        requiredPermission: original.requiredPermission, payload,
+        previousValues: rollbackPayloadValues, affectedTenantCount: original.affectedTenantCount,
+        affectedUserCount: original.affectedUserCount, requestedById: adminId, decidedById: adminId,
+        decisionNote: 'Güvenli geri alma', reason, ticketId, rollbackOfId: original.id, decidedAt: new Date(),
+      },
+      include: requestInclude,
+    });
+    await applyChange(tx, rollback, adminId, auditRequestId);
+    const appliedRollback = await tx.adminChangeRequest.update({
+      where: { id: rollback.id }, data: { status: AdminChangeRequestStatus.APPLIED, appliedAt: new Date() }, include: requestInclude,
+    });
+    await tx.adminChangeRequest.update({ where: { id: original.id }, data: { status: AdminChangeRequestStatus.ROLLED_BACK } });
+    return toContract(appliedRollback);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function approveAdminChange(
+  id: string,
+  approverId: string,
+  permissions: readonly AdminPermission[],
+  note?: string,
+  auditRequestId?: string | null,
+): Promise<AdminChangeRequest> {
   return prisma.$transaction(async (tx) => {
     const request = await tx.adminChangeRequest.findUnique({ where: { id }, include: requestInclude });
     if (!request) throw new AdminChangeRequestError('Değişiklik talebi bulunamadı.', 404);
@@ -166,7 +247,7 @@ export async function approveAdminChange(id: string, approverId: string, permiss
       data: { status: AdminChangeRequestStatus.APPROVED, decidedById: approverId, decisionNote: note, decidedAt: new Date() },
     });
     if (claimed.count !== 1) throw new AdminChangeRequestError('Talep başka bir admin tarafından işleme alındı.', 409);
-    await applyChange(tx, request, approverId);
+    await applyChange(tx, request, approverId, auditRequestId);
     const applied = await tx.adminChangeRequest.update({
       where: { id }, data: { status: AdminChangeRequestStatus.APPLIED, decidedById: approverId, decisionNote: note, decidedAt: new Date(), appliedAt: new Date() },
       include: requestInclude,

@@ -12,6 +12,7 @@ import { getPaginationParams } from '../../../../../utils/pagination.js';
 import { modulesForPrismaPlan } from '../../../../../utils/tenant-modules.js';
 import { submitAdminChange } from '../../../admin-change-request/admin-change-request.service.js';
 import { isCriticalTenantPlanChange,isCriticalTenantStatusChange } from '../../../admin-change-request/admin-change-request.policy.js';
+import { changeMetadataSchema } from '../../../admin-change-request/admin-change-request.schemas.js';
 import { buildChangeLine,createSlug,formatNotificationValue,normalizeEmail,notifyTenantOwners,parseNullableDate,planChangeExperienceService,translateModules,VALID_PLANS,VALID_STATUSES,validateModules } from './shared.js';
 
 export const AdminTenantController = {
@@ -219,7 +220,7 @@ export const AdminTenantController = {
 
   async updatePlan(c: Context): Promise<Response> {
     const id = requireParam(c, 'id');
-    const body = await c.req.json<{ plan: Plan }>();
+    const body = await c.req.json<{ plan: Plan; reason?: string; ticketId?: string }>();
     if (!body.plan || !VALID_PLANS.includes(body.plan)) {
       return c.json(new ValidationError('Geçerli bir plan seçiniz: STARTER, PROFESSIONAL, ENTERPRISE').toJSON(), 400);
     }
@@ -229,6 +230,8 @@ export const AdminTenantController = {
     if (tenant.plan === body.plan) return c.json({ data: tenant });
 
     if (isCriticalTenantPlanChange(tenant.plan, body.plan)) {
+      const metadata = changeMetadataSchema.safeParse({ reason: body.reason, ticketId: body.ticketId });
+      if (!metadata.success) return c.json(new ValidationError('Kritik plan değişikliği için en az 10 karakterlik gerekçe zorunludur.').toJSON(), 400);
       const affectedUserCount = await prisma.tenantUser.count({ where: { tenantId: id, isActive: true } });
       const changeRequest = await submitAdminChange({
         type: AdminChangeRequestType.TENANT_PLAN_UPDATE,
@@ -240,6 +243,7 @@ export const AdminTenantController = {
         affectedTenantCount: 1,
         affectedUserCount,
         requestedById: c.get('adminId') as string,
+        reason: metadata.data.reason, ticketId: metadata.data.ticketId,
       });
       return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
     }
@@ -272,7 +276,7 @@ export const AdminTenantController = {
 
   async updateStatus(c: Context): Promise<Response> {
     const id = requireParam(c, 'id');
-    const body = await c.req.json<{ status: TenantStatus }>();
+    const body = await c.req.json<{ status: TenantStatus; reason?: string; ticketId?: string }>();
     if (!body.status || !VALID_STATUSES.includes(body.status)) {
       return c.json(new ValidationError('Geçerli bir durum seçiniz.').toJSON(), 400);
     }
@@ -282,6 +286,8 @@ export const AdminTenantController = {
     if (tenant.status === body.status) return c.json({ data: tenant });
 
     if (isCriticalTenantStatusChange(body.status)) {
+      const metadata = changeMetadataSchema.safeParse({ reason: body.reason, ticketId: body.ticketId });
+      if (!metadata.success) return c.json(new ValidationError('Kritik durum değişikliği için en az 10 karakterlik gerekçe zorunludur.').toJSON(), 400);
       const affectedUserCount = await prisma.tenantUser.count({ where: { tenantId: id, isActive: true } });
       const changeRequest = await submitAdminChange({
         type: AdminChangeRequestType.TENANT_STATUS_UPDATE,
@@ -293,6 +299,7 @@ export const AdminTenantController = {
         affectedTenantCount: 1,
         affectedUserCount,
         requestedById: c.get('adminId') as string,
+        reason: metadata.data.reason, ticketId: metadata.data.ticketId,
       });
       return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
     }

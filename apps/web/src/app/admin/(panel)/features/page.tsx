@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { canAdmin } from '@/lib/admin/permissions';
 import { toast } from '@/store/ui.store';
+import { ChangePreviewDialog } from '@/components/features/admin/ChangePreviewDialog';
 
 const PLANS: readonly PlanName[] = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'];
 
@@ -88,7 +89,9 @@ function createDraft(feature: PlanFeature): FeatureDraft {
   };
 }
 
-function buildUpdateInput(feature: PlanFeature, draft: FeatureDraft): UpdatePlanFeatureInput {
+type FeatureChangeDraft = Omit<UpdatePlanFeatureInput, 'reason' | 'ticketId'>;
+
+function buildUpdateInput(feature: PlanFeature, draft: FeatureDraft): FeatureChangeDraft {
   return {
     plan: feature.plan,
     key: feature.key,
@@ -105,6 +108,7 @@ export default function AdminFeaturesPage() {
   const [planFilter, setPlanFilter] = useState<PlanName | ''>('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<FeatureDraft | null>(null);
+  const [pendingChange, setPendingChange] = useState<FeatureChangeDraft | null>(null);
   const queryClient = useQueryClient();
 
   const { data: features = [], isLoading } = useQuery({
@@ -115,6 +119,7 @@ export default function AdminFeaturesPage() {
   const updateMutation = useMutation({
     mutationFn: updatePlanFeature,
     onSuccess: async (result) => {
+      setPendingChange(null);
       setEditingId(null);
       setDraft(null);
       if (isPendingAdminChange(result)) {
@@ -231,7 +236,7 @@ export default function AdminFeaturesPage() {
                             <button
                               type="button"
                               disabled={updateMutation.isPending}
-                              onClick={() => updateMutation.mutate(buildUpdateInput(feature, activeDraft))}
+                              onClick={() => setPendingChange(buildUpdateInput(feature, activeDraft))}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 disabled:opacity-50"
                               title="Kaydet"
                             >
@@ -278,6 +283,14 @@ export default function AdminFeaturesPage() {
           );
         })
       )}
+      <ChangePreviewDialog
+        input={pendingChange ? { type: 'PLAN_FEATURE_UPDATE', payload: pendingChange } : null}
+        isSubmitting={updateMutation.isPending}
+        onClose={() => setPendingChange(null)}
+        onConfirm={(metadata) => {
+          if (pendingChange) updateMutation.mutate({ ...pendingChange, ...metadata });
+        }}
+      />
     </div>
   );
 }

@@ -21,9 +21,11 @@ adminRoutes.post('/auth/logout', AdminAuthController.logout);
 adminRoutes.get('/auth/me', requireAdmin, AdminAuthController.me);
 
 // Two-person approval
+adminRoutes.post('/change-requests/preview', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.preview);
 adminRoutes.get('/change-requests', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.list);
 adminRoutes.post('/change-requests/:id/approve', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.approve);
 adminRoutes.post('/change-requests/:id/reject', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.reject);
+adminRoutes.post('/change-requests/:id/rollback', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.rollback);
 
 // Tenants
 adminRoutes.get('/tenants', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantController.list);

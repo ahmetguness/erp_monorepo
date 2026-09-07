@@ -16,3 +16,17 @@ export const featureOverrideDeletePayloadSchema = z.object({
 }).strict();
 
 export const decisionSchema = z.object({ note: z.string().trim().max(1000).optional() }).strict();
+export const changeMetadataSchema = z.object({
+  reason: z.string().trim().min(10).max(1000),
+  ticketId: z.string().trim().min(2).max(100).optional(),
+}).strict();
+
+export const previewRequestSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('TENANT_PLAN_UPDATE'), payload: tenantPlanPayloadSchema }).strict(),
+  z.object({ type: z.literal('TENANT_STATUS_UPDATE'), payload: tenantStatusPayloadSchema }).strict(),
+  z.object({ type: z.literal('PLAN_FEATURE_UPDATE'), payload: planFeaturePayloadSchema }).strict(),
+  z.object({ type: z.literal('FEATURE_OVERRIDE_UPSERT'), payload: featureOverridePayloadSchema }).strict(),
+  z.object({ type: z.literal('FEATURE_OVERRIDE_DELETE'), payload: featureOverrideDeletePayloadSchema }).strict(),
+]);
+
+export type PreviewRequest = z.infer<typeof previewRequestSchema>;
