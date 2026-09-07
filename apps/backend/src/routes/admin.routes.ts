@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { requireAdmin, requireAdminPermission } from '../middleware/requireAdmin';
 import {
 AdminAuditController,
+AdminChangeRequestController,
 AdminAuthController,
 AdminFeatureController,
 AdminMetricsController,
@@ -18,6 +19,11 @@ adminRoutes.post('/auth/logout', AdminAuthController.logout);
 // ── Protected routes ─────────────────────────
 // Auth
 adminRoutes.get('/auth/me', requireAdmin, AdminAuthController.me);
+
+// Two-person approval
+adminRoutes.get('/change-requests', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.list);
+adminRoutes.post('/change-requests/:id/approve', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.approve);
+adminRoutes.post('/change-requests/:id/reject', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.reject);
 
 // Tenants
 adminRoutes.get('/tenants', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantController.list);

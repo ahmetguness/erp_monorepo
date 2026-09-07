@@ -6,14 +6,16 @@ export const ADMIN_PERMISSIONS = [
   'tenant.plan.update', 'tenant.status.update', 'feature.read', 'feature.update',
   'feature.override.create', 'feature.override.delete', 'operations.read', 'audit.read',
   'security.read', 'demo.read', 'demo.approve', 'demo.reject',
+  'change-request.read', 'change-request.reject', 'tenant.plan.approve',
+  'tenant.status.approve', 'feature.approve', 'feature.override.approve',
 ] as const;
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
 
 export const ADMIN_ROLE_PERMISSIONS = {
   SUPER_ADMIN: ADMIN_PERMISSIONS,
   SUPPORT: ['dashboard.read', 'tenant.read', 'tenant.settings.update', 'feature.read', 'demo.read'],
-  FINANCE: ['dashboard.read', 'tenant.read', 'tenant.plan.update', 'audit.read', 'demo.read'],
-  OPERATIONS: ['dashboard.read', 'tenant.read', 'tenant.status.update', 'feature.read', 'operations.read', 'demo.read', 'demo.approve', 'demo.reject'],
+  FINANCE: ['dashboard.read', 'tenant.read', 'tenant.plan.update', 'tenant.plan.approve', 'change-request.read', 'change-request.reject', 'audit.read', 'demo.read'],
+  OPERATIONS: ['dashboard.read', 'tenant.read', 'tenant.status.update', 'tenant.status.approve', 'change-request.read', 'change-request.reject', 'feature.read', 'operations.read', 'demo.read', 'demo.approve', 'demo.reject'],
   SECURITY: ['dashboard.read', 'tenant.read', 'operations.read', 'audit.read', 'security.read'],
   READ_ONLY_AUDITOR: ['dashboard.read', 'tenant.read', 'feature.read', 'operations.read', 'audit.read', 'security.read', 'demo.read'],
 } as const satisfies Record<AdminRoleKey, readonly AdminPermission[]>;
@@ -31,3 +33,33 @@ export function isAdminPermission(value: string): value is AdminPermission {
 export function hasAdminPermission(permissions: readonly AdminPermission[], permission: AdminPermission): boolean {
   return permissions.includes(permission);
 }
+
+export const ADMIN_CHANGE_REQUEST_TYPES = [
+  'TENANT_PLAN_UPDATE', 'TENANT_STATUS_UPDATE', 'PLAN_FEATURE_UPDATE', 'FEATURE_OVERRIDE_UPSERT', 'FEATURE_OVERRIDE_DELETE',
+] as const;
+export type AdminChangeRequestType = (typeof ADMIN_CHANGE_REQUEST_TYPES)[number];
+
+export const ADMIN_CHANGE_REQUEST_STATUSES = ['DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'APPLIED', 'ROLLED_BACK'] as const;
+export type AdminChangeRequestStatus = (typeof ADMIN_CHANGE_REQUEST_STATUSES)[number];
+
+export interface AdminChangeRequestActor { id: string; name: string; email: string }
+export interface AdminChangeRequest {
+  id: string;
+  type: AdminChangeRequestType;
+  status: AdminChangeRequestStatus;
+  targetId: string;
+  targetLabel: string;
+  requiredPermission: AdminPermission;
+  payload: Record<string, unknown>;
+  previousValues: Record<string, unknown> | null;
+  affectedTenantCount: number;
+  affectedUserCount: number;
+  requestedBy: AdminChangeRequestActor;
+  decidedBy: AdminChangeRequestActor | null;
+  decisionNote: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+  appliedAt: string | null;
+}
+
+export interface PendingAdminChangeResult { requiresApproval: true; changeRequest: AdminChangeRequest }

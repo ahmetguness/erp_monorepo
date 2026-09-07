@@ -1,4 +1,5 @@
 export { AdminAuditController } from './admin/admin-audit.controller.js';
+export { AdminChangeRequestController } from './admin/admin-change-request.controller.js';
 export { AdminAuthController } from './admin/admin-auth.controller.js';
 export { AdminFeatureController } from './admin/admin-feature.controller.js';
 export { AdminMetricsController } from './admin/admin-metrics.controller.js';

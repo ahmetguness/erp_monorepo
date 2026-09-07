@@ -1,9 +1,10 @@
-import { AuditAction,EntityType,Plan } from '@prisma/client';
+import { AdminChangeRequestType,AuditAction,EntityType,Plan } from '@prisma/client';
 import { Context } from 'hono';
 import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
 import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
-import { buildChangeLine,formatNotificationValue,getPlanFeatureAuditTenantIds,isFeatureKey,isFeatureType,isPlan,normalizePlanFeatureValue,notifyTenantOwners,planFeatureService } from './shared.js';
+import { buildChangeLine,formatNotificationValue,isFeatureKey,isFeatureType,isPlan,normalizePlanFeatureValue,notifyTenantOwners } from './shared.js';
+import { submitAdminChange } from '../../../admin-change-request/admin-change-request.service.js';
 
 export const AdminFeatureController = {
 
@@ -64,45 +65,30 @@ export const AdminFeatureController = {
     const plan = body.plan;
     const key = body.key.trim();
     const existingFeature = await prisma.planFeature.findUnique({ where: { plan_key: { plan, key } } });
-    const updatedFeature = await planFeatureService.updatePlanFeature({
-      plan,
-      key,
-      value: normalizedValue,
-      type: body.type,
-      isEnabled: body.isEnabled,
-      description: body.description,
-      featureKey: body.featureKey ?? null,
-    });
-
-    const auditTenantIds = await getPlanFeatureAuditTenantIds(plan);
-    await Promise.all(auditTenantIds.map((tenantId) => createAuditLog(prisma, {
-      tenantId,
-      module: 'admin',
-      entityType: EntityType.OTHER,
-      entityId: updatedFeature.id,
-      action: existingFeature ? AuditAction.UPDATE : AuditAction.CREATE,
-      oldValues: existingFeature ? {
-        plan: existingFeature.plan,
-        key: existingFeature.key,
-        value: existingFeature.value,
-        type: existingFeature.type,
-        isEnabled: existingFeature.isEnabled,
-        description: existingFeature.description,
-        featureKey: existingFeature.featureKey,
-      } : undefined,
-      newValues: {
-        plan: updatedFeature.plan,
-        key: updatedFeature.key,
-        value: updatedFeature.value,
-        type: updatedFeature.type,
-        isEnabled: updatedFeature.isEnabled,
-        description: updatedFeature.description,
-        featureKey: updatedFeature.featureKey,
+    const [affectedTenantCount, affectedUserCount] = await Promise.all([
+      prisma.tenant.count({ where: { plan, deletedAt: null } }),
+      prisma.tenantUser.count({ where: { tenant: { plan, deletedAt: null }, isActive: true } }),
+    ]);
+    const changeRequest = await submitAdminChange({
+      type: AdminChangeRequestType.PLAN_FEATURE_UPDATE,
+      targetId: `${plan}:${key}`,
+      targetLabel: `${plan} / ${key}`,
+      requiredPermission: 'feature.approve',
+      payload: {
+        plan, key, value: normalizedValue, type: body.type, isEnabled: body.isEnabled,
+        description: body.description ?? null, featureKey: body.featureKey ?? null,
       },
-      ...getRequestMeta(c),
-    })));
+      previousValues: existingFeature ? {
+        plan: existingFeature.plan, key: existingFeature.key, value: existingFeature.value,
+        type: existingFeature.type, isEnabled: existingFeature.isEnabled,
+        description: existingFeature.description, featureKey: existingFeature.featureKey,
+      } : null,
+      affectedTenantCount,
+      affectedUserCount,
+      requestedById: c.get('adminId') as string,
+    });
+    return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
 
-    return c.json({ data: updatedFeature });
   },
 
   async listOverrides(c: Context): Promise<Response> {
@@ -134,6 +120,32 @@ export const AdminFeatureController = {
     const existingOverride = await prisma.tenantFeatureOverride.findUnique({
       where: { tenantId_featureKey: { tenantId: body.tenantId, featureKey } },
     });
+
+    if (!body.expiresAt) {
+      const [tenant, affectedUserCount] = await Promise.all([
+        prisma.tenant.findFirst({ where: { id: body.tenantId, deletedAt: null }, select: { companyName: true } }),
+        prisma.tenantUser.count({ where: { tenantId: body.tenantId, isActive: true } }),
+      ]);
+      if (!tenant) return c.json(new NotFoundError('Tenant', body.tenantId).toJSON(), 404);
+      const changeRequest = await submitAdminChange({
+        type: AdminChangeRequestType.FEATURE_OVERRIDE_UPSERT,
+        targetId: `${body.tenantId}:${featureKey}`,
+        targetLabel: `${tenant.companyName} / ${featureKey}`,
+        requiredPermission: 'feature.override.approve',
+        payload: {
+          tenantId: body.tenantId, featureKey, value: body.value,
+          isEnabled: body.isEnabled ?? true, reason: body.reason ?? null,
+        },
+        previousValues: existingOverride ? {
+          value: existingOverride.value, isEnabled: existingOverride.isEnabled,
+          reason: existingOverride.reason, expiresAt: existingOverride.expiresAt?.toISOString() ?? null,
+        } : null,
+        affectedTenantCount: 1,
+        affectedUserCount,
+        requestedById: c.get('adminId') as string,
+      });
+      return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
+    }
 
     const override = await prisma.tenantFeatureOverride.upsert({
       where: { tenantId_featureKey: { tenantId: body.tenantId, featureKey } },
@@ -169,6 +181,28 @@ export const AdminFeatureController = {
     if (!id) return c.json(new ValidationError('id parametresi zorunludur.').toJSON(), 400);
     const override = await prisma.tenantFeatureOverride.findUnique({ where: { id } });
     if (!override) return c.json(new NotFoundError('Feature override', id).toJSON(), 404);
+
+    if (!override.expiresAt) {
+      const [tenant, affectedUserCount] = await Promise.all([
+        prisma.tenant.findUnique({ where: { id: override.tenantId }, select: { companyName: true } }),
+        prisma.tenantUser.count({ where: { tenantId: override.tenantId, isActive: true } }),
+      ]);
+      const changeRequest = await submitAdminChange({
+        type: AdminChangeRequestType.FEATURE_OVERRIDE_DELETE,
+        targetId: `${override.tenantId}:${override.featureKey}`,
+        targetLabel: `${tenant?.companyName ?? override.tenantId} / ${override.featureKey}`,
+        requiredPermission: 'feature.override.approve',
+        payload: { overrideId: override.id, tenantId: override.tenantId, featureKey: override.featureKey },
+        previousValues: {
+          value: override.value, isEnabled: override.isEnabled, reason: override.reason,
+          expiresAt: null,
+        },
+        affectedTenantCount: 1,
+        affectedUserCount,
+        requestedById: c.get('adminId') as string,
+      });
+      return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
+    }
 
     await prisma.tenantFeatureOverride.delete({ where: { id } });
 

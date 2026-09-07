@@ -4,7 +4,7 @@ import { use, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, CalendarClock, FileWarning, MonitorCheck, Users, Package, Receipt, ShoppingCart, Truck, CreditCard, Warehouse, Layers, BookOpen, Plus, Minus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { getPlanFeatures, getTenantById, getTenantMetrics, updateTenant, updateTenantPlan, updateTenantStatus, type PlanFeature } from '@/services/admin.service';
+import { getPlanFeatures, getTenantById, getTenantMetrics, isPendingAdminChange, updateTenant, updateTenantPlan, updateTenantStatus, type PlanFeature } from '@/services/admin.service';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { getPlanModules, getTenantModuleAlignment } from '@/lib/admin/tenant-module-alignment';
@@ -214,7 +214,11 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
 
   const changePlan = useMutation({
     mutationFn: (plan: string) => updateTenantPlan(id, plan),
-    onSuccess: (_, plan) => {
+    onSuccess: (result, plan) => {
+      if (isPendingAdminChange(result)) {
+        toast.success('Plan değişikliği ikinci adminin onayına gönderildi.');
+        return;
+      }
       if (isPlanKey(plan)) {
         setCurrentPlanOverride(plan);
         setSettings((prev) => ({
@@ -229,7 +233,13 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
 
   const changeStatus = useMutation({
     mutationFn: (status: string) => updateTenantStatus(id, status),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] }),
+    onSuccess: (result) => {
+      if (isPendingAdminChange(result)) {
+        toast.success('Durum değişikliği ikinci adminin onayına gönderildi.');
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] });
+    },
   });
 
   const saveSettings = useMutation({

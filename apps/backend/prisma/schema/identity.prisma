@@ -280,6 +280,8 @@ model AdminUser {
   lastLoginAt DateTime?
 
   roleAssignments AdminUserRole[]
+  requestedChangeRequests AdminChangeRequest[] @relation("AdminChangeRequestRequester")
+  decidedChangeRequests   AdminChangeRequest[] @relation("AdminChangeRequestDecider")
 
   @@map("admin_users")
 }

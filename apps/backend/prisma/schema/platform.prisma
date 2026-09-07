@@ -103,6 +103,51 @@ model ModuleSetting {
   @@map("module_settings")
 }
 
+enum AdminChangeRequestType {
+  TENANT_PLAN_UPDATE
+  TENANT_STATUS_UPDATE
+  PLAN_FEATURE_UPDATE
+  FEATURE_OVERRIDE_UPSERT
+  FEATURE_OVERRIDE_DELETE
+}
+
+enum AdminChangeRequestStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  APPLIED
+  ROLLED_BACK
+}
+
+model AdminChangeRequest {
+  id                     String                   @id @default(cuid())
+  type                   AdminChangeRequestType
+  status                 AdminChangeRequestStatus @default(PENDING)
+  targetId               String
+  targetLabel            String
+  requiredPermission     String
+  payload                Json
+  previousValues         Json?
+  affectedTenantCount    Int                      @default(0)
+  affectedUserCount      Int                      @default(0)
+  requestedById          String
+  decidedById            String?
+  decisionNote           String?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  decidedAt              DateTime?
+  appliedAt              DateTime?
+
+  requestedBy AdminUser  @relation("AdminChangeRequestRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  decidedBy   AdminUser? @relation("AdminChangeRequestDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([requestedById, status])
+  @@index([type, targetId, status])
+  @@map("admin_change_requests")
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   tenantId   String

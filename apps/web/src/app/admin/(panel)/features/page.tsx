@@ -6,6 +6,7 @@ import { CheckCircle2, CircleOff, Pencil, RotateCcw, Save, Sliders } from 'lucid
 import {
   getPlanFeatures,
   updatePlanFeature,
+  isPendingAdminChange,
   type PlanFeature,
   type PlanFeatureType,
   type UpdatePlanFeatureInput,
@@ -15,6 +16,7 @@ import type { PlanName } from '@/lib/plans';
 import { cn } from '@/lib/utils';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { canAdmin } from '@/lib/admin/permissions';
+import { toast } from '@/store/ui.store';
 
 const PLANS: readonly PlanName[] = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'];
 
@@ -112,9 +114,13 @@ export default function AdminFeaturesPage() {
 
   const updateMutation = useMutation({
     mutationFn: updatePlanFeature,
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       setEditingId(null);
       setDraft(null);
+      if (isPendingAdminChange(result)) {
+        toast.success('Plan özelliği ikinci adminin onayına gönderildi.');
+        return;
+      }
       await queryClient.invalidateQueries({ queryKey: ['admin', 'features'] });
     },
   });

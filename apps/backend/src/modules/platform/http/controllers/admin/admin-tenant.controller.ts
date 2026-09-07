@@ -1,4 +1,4 @@
-import { AppModule,AuditAction,EntityType,Plan,TenantStatus } from '@prisma/client';
+import { AdminChangeRequestType,AppModule,AuditAction,EntityType,Plan,TenantStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { Context } from 'hono';
@@ -10,6 +10,8 @@ import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
 import { requireParam } from '../../../../../utils/context.js';
 import { getPaginationParams } from '../../../../../utils/pagination.js';
 import { modulesForPrismaPlan } from '../../../../../utils/tenant-modules.js';
+import { submitAdminChange } from '../../../admin-change-request/admin-change-request.service.js';
+import { isCriticalTenantPlanChange,isCriticalTenantStatusChange } from '../../../admin-change-request/admin-change-request.policy.js';
 import { buildChangeLine,createSlug,formatNotificationValue,normalizeEmail,notifyTenantOwners,parseNullableDate,planChangeExperienceService,translateModules,VALID_PLANS,VALID_STATUSES,validateModules } from './shared.js';
 
 export const AdminTenantController = {
@@ -224,6 +226,23 @@ export const AdminTenantController = {
 
     const tenant = await prisma.tenant.findFirst({ where: { id, deletedAt: null } });
     if (!tenant) return c.json(new NotFoundError('Tenant', id).toJSON(), 404);
+    if (tenant.plan === body.plan) return c.json({ data: tenant });
+
+    if (isCriticalTenantPlanChange(tenant.plan, body.plan)) {
+      const affectedUserCount = await prisma.tenantUser.count({ where: { tenantId: id, isActive: true } });
+      const changeRequest = await submitAdminChange({
+        type: AdminChangeRequestType.TENANT_PLAN_UPDATE,
+        targetId: id,
+        targetLabel: tenant.companyName,
+        requiredPermission: 'tenant.plan.approve',
+        payload: { tenantId: id, plan: body.plan },
+        previousValues: { plan: tenant.plan },
+        affectedTenantCount: 1,
+        affectedUserCount,
+        requestedById: c.get('adminId') as string,
+      });
+      return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
+    }
 
     const updated = await prisma.tenant.update({
       where: { id },
@@ -260,6 +279,23 @@ export const AdminTenantController = {
 
     const tenant = await prisma.tenant.findFirst({ where: { id, deletedAt: null } });
     if (!tenant) return c.json(new NotFoundError('Tenant', id).toJSON(), 404);
+    if (tenant.status === body.status) return c.json({ data: tenant });
+
+    if (isCriticalTenantStatusChange(body.status)) {
+      const affectedUserCount = await prisma.tenantUser.count({ where: { tenantId: id, isActive: true } });
+      const changeRequest = await submitAdminChange({
+        type: AdminChangeRequestType.TENANT_STATUS_UPDATE,
+        targetId: id,
+        targetLabel: tenant.companyName,
+        requiredPermission: 'tenant.status.approve',
+        payload: { tenantId: id, status: body.status },
+        previousValues: { status: tenant.status },
+        affectedTenantCount: 1,
+        affectedUserCount,
+        requestedById: c.get('adminId') as string,
+      });
+      return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
+    }
 
     const updated = await prisma.tenant.update({
       where: { id },
