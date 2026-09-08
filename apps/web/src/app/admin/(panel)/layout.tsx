@@ -15,6 +15,7 @@ import type { AdminPermission } from '@repo/types';
 import { canAdmin } from '@/lib/admin/permissions';
 
 const NAV = [
+  { href: '/admin/admin-users', icon: UserRoundCheck, label: 'Admin Kullanıcıları', permission: 'admin-user.read' },
   { href: '/admin', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard.read' },
   { href: '/admin/tenants', icon: Building2, label: 'Tenantlar', permission: 'tenant.read' },
   { href: '/admin/change-requests', icon: UserRoundCheck, label: 'Onay Talepleri', permission: 'change-request.read' },

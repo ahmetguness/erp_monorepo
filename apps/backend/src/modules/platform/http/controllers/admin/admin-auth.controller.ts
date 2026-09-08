@@ -39,6 +39,7 @@ export const AdminAuthController = {
     if (!email || !password) return c.json(new ValidationError('Email ve şifre zorunludur.').toJSON(), 400);
     const admin = await prisma.adminUser.findUnique({ where: { email } });
     if (!admin || !admin.isActive || !await bcrypt.compare(password, admin.password)) {
+      if (admin) await prisma.adminUser.update({ where: { id: admin.id }, data: { failedLoginCount: { increment: 1 }, lastFailedLoginAt: new Date() } });
       recordAdminLoginFailure(c, email, admin ? 'invalid_password' : 'invalid_admin');
       await rateLimiter.check(ipFailureKey, ADMIN_LOGIN_LOCKOUT_FAILURES - 1, ADMIN_LOGIN_LOCKOUT_WINDOW_MS);
       return c.json({ error: 'Geçersiz kimlik bilgileri.' }, 401);
@@ -57,6 +58,7 @@ export const AdminAuthController = {
     if (!otp) return c.json({ data: admin.mfaEnabled ? { status: 'MFA_REQUIRED' } : { status: 'MFA_SETUP_REQUIRED', secret, otpauthUri: buildTotpUri(admin.email, secret) } });
     const enrolled = await prisma.adminUser.findUniqueOrThrow({ where: { id: admin.id } });
     if (!enrolled.mfaSecretEncrypted || !await consumeAdminMfa(admin.id, enrolled.mfaSecretEncrypted, otp, RESOLVED_ADMIN_SECRET)) {
+      await prisma.adminUser.update({ where: { id: admin.id }, data: { failedLoginCount: { increment: 1 }, lastFailedLoginAt: new Date() } });
       await rateLimiter.check(ipFailureKey, ADMIN_LOGIN_LOCKOUT_FAILURES - 1, ADMIN_LOGIN_LOCKOUT_WINDOW_MS);
       return c.json({ error: 'Geçersiz veya kullanılmış MFA kodu.' }, 401);
     }

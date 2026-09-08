@@ -9,6 +9,8 @@ export const ADMIN_ROLE_KEYS = [
 export type AdminRoleKey = (typeof ADMIN_ROLE_KEYS)[number];
 
 export const ADMIN_PERMISSIONS = [
+  "admin-user.read",
+  "admin-user.manage",
   "dashboard.read",
   "tenant.read",
   "tenant.create",

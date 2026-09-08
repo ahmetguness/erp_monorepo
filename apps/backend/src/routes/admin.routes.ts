@@ -4,6 +4,7 @@ import {
 AdminAuditController,
 AdminChangeRequestController,
 AdminAuthController,
+AdminUserController,
 AdminSessionController,
 AdminFeatureController,
 AdminMetricsController,
@@ -15,6 +16,7 @@ const adminRoutes = new Hono();
 
 // ── Public (no auth) ─────────────────────────
 adminRoutes.post('/auth/login', AdminAuthController.login);
+adminRoutes.post('/auth/accept-invitation', AdminUserController.acceptInvitation);
 adminRoutes.post('/auth/logout', AdminAuthController.logout);
 adminRoutes.post('/auth/refresh', AdminAuthController.refresh);
 adminRoutes.post('/auth/reauthenticate', requireAdmin, AdminSessionController.reauthenticate);
@@ -37,6 +39,10 @@ adminRoutes.use('*', async (c, next) => {
 // ── Protected routes ─────────────────────────
 // Auth
 adminRoutes.get('/auth/me', requireAdmin, AdminAuthController.me);
+adminRoutes.get('/admin-users', requireAdmin, requireAdminPermission('admin-user.read'), AdminUserController.list);
+adminRoutes.post('/admin-users/invite', requireAdmin, requireAdminPermission('admin-user.manage'), AdminUserController.invite);
+adminRoutes.patch('/admin-users/:id', requireAdmin, requireAdminPermission('admin-user.manage'), AdminUserController.update);
+adminRoutes.post('/admin-users/:id/revoke-sessions', requireAdmin, requireAdminPermission('admin-user.manage'), AdminUserController.revokeSessions);
 
 // Two-person approval
 adminRoutes.post('/change-requests/preview', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.preview);

@@ -52,6 +52,9 @@ async function main(): Promise<void> {
   assert.ok(cookies.includes('axon_admin_refresh='));
   const replay = await login(currentCode());
   assert.equal(replay.status, 401, 'TOTP replay rejected');
+  const failedLogin = await prisma.adminUser.findUniqueOrThrow({ where: { id: admin.id } });
+  assert.equal(failedLogin.failedLoginCount, 1, 'Failed MFA attempt is visible in admin user management');
+  assert.ok(failedLogin.lastFailedLoginAt);
 
   const session = await createAdminSession({ adminId: admin.id, email: admin.email, tokenVersion: 0, rememberMe: false, ipAddress: null, userAgent: 'test', jwtSecret });
   const sessionId = session.refreshToken.split('.')[0];
