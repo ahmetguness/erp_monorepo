@@ -91,6 +91,7 @@ enum InvitationStatus {
 }
 
 model Tenant {
+  supportNotes TenantSupportNote[]
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -268,6 +269,7 @@ model User {
 }
 
 model AdminUser {
+  tenantSupportNotes TenantSupportNote[]
   inviteTokenHash String? @unique
   invitationExpiresAt DateTime?
   invitationAcceptedAt DateTime?

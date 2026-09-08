@@ -1,10 +1,10 @@
 export const PLAN = {
-  STARTER: 'STARTER',
-  PROFESSIONAL: 'PROFESSIONAL',
-  ENTERPRISE: 'ENTERPRISE',
+  STARTER: "STARTER",
+  PROFESSIONAL: "PROFESSIONAL",
+  ENTERPRISE: "ENTERPRISE",
 } as const;
 
-export type PlanName = typeof PLAN[keyof typeof PLAN];
+export type PlanName = (typeof PLAN)[keyof typeof PLAN];
 
 export const PLAN_RANK: Record<PlanName, number> = {
   [PLAN.STARTER]: 1,
@@ -13,62 +13,62 @@ export const PLAN_RANK: Record<PlanName, number> = {
 };
 
 export const FEATURE_KEY = {
-  MAX_USERS: 'MAX_USERS',
-  MAX_PRODUCTS: 'MAX_PRODUCTS',
-  MULTI_WAREHOUSE: 'MULTI_WAREHOUSE',
-  ROLE_MANAGEMENT: 'ROLE_MANAGEMENT',
-  APPROVALS: 'APPROVALS',
-  CRM: 'CRM',
-  SALES: 'SALES',
-  PURCHASING: 'PURCHASING',
-  PRODUCTION: 'PRODUCTION',
-  SERVICE: 'SERVICE',
-  MARKETPLACE: 'MARKETPLACE',
-  PAYROLL: 'PAYROLL',
-  HR: 'HR',
-  API_ACCESS: 'API_ACCESS',
-  AUDIT_LOG: 'AUDIT_LOG',
-  CUSTOM_REPORTING: 'CUSTOM_REPORTING',
-  DOCUMENT_CENTER: 'DOCUMENT_CENTER',
-  SMART_NOTIFICATIONS: 'SMART_NOTIFICATIONS',
-  WORKFLOW_CENTER: 'WORKFLOW_CENTER',
-  MAIL_CENTER: 'MAIL_CENTER',
-  BULK_OPERATIONS: 'BULK_OPERATIONS',
-  CASHFLOW_FORECAST: 'CASHFLOW_FORECAST',
-  BANK_RECONCILIATION: 'BANK_RECONCILIATION',
-  LOT_SERIAL_TRACKING: 'LOT_SERIAL_TRACKING',
+  MAX_USERS: "MAX_USERS",
+  MAX_PRODUCTS: "MAX_PRODUCTS",
+  MULTI_WAREHOUSE: "MULTI_WAREHOUSE",
+  ROLE_MANAGEMENT: "ROLE_MANAGEMENT",
+  APPROVALS: "APPROVALS",
+  CRM: "CRM",
+  SALES: "SALES",
+  PURCHASING: "PURCHASING",
+  PRODUCTION: "PRODUCTION",
+  SERVICE: "SERVICE",
+  MARKETPLACE: "MARKETPLACE",
+  PAYROLL: "PAYROLL",
+  HR: "HR",
+  API_ACCESS: "API_ACCESS",
+  AUDIT_LOG: "AUDIT_LOG",
+  CUSTOM_REPORTING: "CUSTOM_REPORTING",
+  DOCUMENT_CENTER: "DOCUMENT_CENTER",
+  SMART_NOTIFICATIONS: "SMART_NOTIFICATIONS",
+  WORKFLOW_CENTER: "WORKFLOW_CENTER",
+  MAIL_CENTER: "MAIL_CENTER",
+  BULK_OPERATIONS: "BULK_OPERATIONS",
+  CASHFLOW_FORECAST: "CASHFLOW_FORECAST",
+  BANK_RECONCILIATION: "BANK_RECONCILIATION",
+  LOT_SERIAL_TRACKING: "LOT_SERIAL_TRACKING",
 } as const;
 
-export type FeatureKeyName = typeof FEATURE_KEY[keyof typeof FEATURE_KEY];
+export type FeatureKeyName = (typeof FEATURE_KEY)[keyof typeof FEATURE_KEY];
 
 export const FEATURE_TYPE = {
-  BOOLEAN: 'BOOLEAN',
-  LIMIT: 'LIMIT',
-  ENUM: 'ENUM',
+  BOOLEAN: "BOOLEAN",
+  LIMIT: "LIMIT",
+  ENUM: "ENUM",
 } as const;
 
-export type FeatureTypeName = typeof FEATURE_TYPE[keyof typeof FEATURE_TYPE];
+export type FeatureTypeName = (typeof FEATURE_TYPE)[keyof typeof FEATURE_TYPE];
 
 export const MODULE_KEY = {
-  ACCOUNTING: 'accounting',
-  INVENTORY: 'inventory',
-  CONTACTS: 'contacts',
-  INVOICING: 'invoicing',
-  REPORTING: 'reporting',
-  PURCHASING: 'purchasing',
-  PRODUCTION: 'production',
-  SERVICE: 'service',
-  MARKETPLACE: 'marketplace',
-  PAYROLL: 'payroll',
-  HR: 'hr',
-  APPROVALS: 'approvals',
-  WAREHOUSE: 'warehouse',
-  MAIL: 'mail',
-  WORKFLOW: 'workflow',
-  DOCUMENTS: 'documents',
+  ACCOUNTING: "accounting",
+  INVENTORY: "inventory",
+  CONTACTS: "contacts",
+  INVOICING: "invoicing",
+  REPORTING: "reporting",
+  PURCHASING: "purchasing",
+  PRODUCTION: "production",
+  SERVICE: "service",
+  MARKETPLACE: "marketplace",
+  PAYROLL: "payroll",
+  HR: "hr",
+  APPROVALS: "approvals",
+  WAREHOUSE: "warehouse",
+  MAIL: "mail",
+  WORKFLOW: "workflow",
+  DOCUMENTS: "documents",
 } as const;
 
-export type ModuleKey = typeof MODULE_KEY[keyof typeof MODULE_KEY];
+export type ModuleKey = (typeof MODULE_KEY)[keyof typeof MODULE_KEY];
 
 export const STARTER_OPEN_MODULES: readonly ModuleKey[] = [
   MODULE_KEY.ACCOUNTING,
@@ -237,11 +237,15 @@ export interface PlanFeatureRow {
 }
 
 type BooleanPlanFeatureFlag = {
-  [Key in keyof PlanFeatureFlags]: PlanFeatureFlags[Key] extends boolean ? Key : never;
+  [Key in keyof PlanFeatureFlags]: PlanFeatureFlags[Key] extends boolean
+    ? Key
+    : never;
 }[keyof PlanFeatureFlags];
 
 type LimitPlanFeatureFlag = {
-  [Key in keyof PlanFeatureFlags]: PlanFeatureFlags[Key] extends number | null ? Key : never;
+  [Key in keyof PlanFeatureFlags]: PlanFeatureFlags[Key] extends number | null
+    ? Key
+    : never;
 }[keyof PlanFeatureFlags];
 
 export interface PlanFeatureDefinition {
@@ -254,14 +258,18 @@ export interface PlanFeatureDefinition {
   value: (features: PlanFeatureFlags, plan: PlanName) => string;
 }
 
-const PLAN_ORDER: readonly PlanName[] = [PLAN.STARTER, PLAN.PROFESSIONAL, PLAN.ENTERPRISE] as const;
+const PLAN_ORDER: readonly PlanName[] = [
+  PLAN.STARTER,
+  PLAN.PROFESSIONAL,
+  PLAN.ENTERPRISE,
+] as const;
 
 function serializeBoolean(value: boolean): string {
-  return value ? 'true' : 'false';
+  return value ? "true" : "false";
 }
 
 function serializeLimit(value: number | null): string {
-  return value === null ? 'unlimited' : String(value);
+  return value === null ? "unlimited" : String(value);
 }
 
 function booleanFeature(
@@ -301,63 +309,154 @@ function limitFeature(
 }
 
 export const PLAN_FEATURE_DEFINITIONS: readonly PlanFeatureDefinition[] = [
-  limitFeature('maxUsers', 'max_users', FEATURE_KEY.MAX_USERS, 'Maksimum kullanici'),
-  limitFeature('maxProducts', 'max_products', FEATURE_KEY.MAX_PRODUCTS, 'Maksimum urun'),
-  booleanFeature('multiWarehouse', 'multi_warehouse', FEATURE_KEY.MULTI_WAREHOUSE, 'Coklu depo'),
-  booleanFeature('roleManagement', 'role_management', FEATURE_KEY.ROLE_MANAGEMENT, 'Rol yonetimi'),
-  booleanFeature('approvals', 'approvals', FEATURE_KEY.APPROVALS, 'Onay akislari'),
-  booleanFeature('crm', 'crm', FEATURE_KEY.CRM, 'CRM'),
-  booleanFeature('sales', 'sales', FEATURE_KEY.SALES, 'Satis'),
-  booleanFeature('purchasing', 'purchasing', FEATURE_KEY.PURCHASING, 'Satin alma'),
-  booleanFeature('production', 'production', FEATURE_KEY.PRODUCTION, 'Uretim'),
-  booleanFeature('service', 'service', FEATURE_KEY.SERVICE, 'Teknik servis'),
-  booleanFeature('marketplace', 'marketplace', FEATURE_KEY.MARKETPLACE, 'Pazaryeri'),
-  booleanFeature('payroll', 'payroll', FEATURE_KEY.PAYROLL, 'Bordro'),
-  booleanFeature('hr', 'hr', FEATURE_KEY.HR, 'Insan kaynaklari'),
-  booleanFeature('apiAccess', 'api_access', FEATURE_KEY.API_ACCESS, 'API erisimi'),
+  limitFeature(
+    "maxUsers",
+    "max_users",
+    FEATURE_KEY.MAX_USERS,
+    "Maksimum kullanici",
+  ),
+  limitFeature(
+    "maxProducts",
+    "max_products",
+    FEATURE_KEY.MAX_PRODUCTS,
+    "Maksimum urun",
+  ),
+  booleanFeature(
+    "multiWarehouse",
+    "multi_warehouse",
+    FEATURE_KEY.MULTI_WAREHOUSE,
+    "Coklu depo",
+  ),
+  booleanFeature(
+    "roleManagement",
+    "role_management",
+    FEATURE_KEY.ROLE_MANAGEMENT,
+    "Rol yonetimi",
+  ),
+  booleanFeature(
+    "approvals",
+    "approvals",
+    FEATURE_KEY.APPROVALS,
+    "Onay akislari",
+  ),
+  booleanFeature("crm", "crm", FEATURE_KEY.CRM, "CRM"),
+  booleanFeature("sales", "sales", FEATURE_KEY.SALES, "Satis"),
+  booleanFeature(
+    "purchasing",
+    "purchasing",
+    FEATURE_KEY.PURCHASING,
+    "Satin alma",
+  ),
+  booleanFeature("production", "production", FEATURE_KEY.PRODUCTION, "Uretim"),
+  booleanFeature("service", "service", FEATURE_KEY.SERVICE, "Teknik servis"),
+  booleanFeature(
+    "marketplace",
+    "marketplace",
+    FEATURE_KEY.MARKETPLACE,
+    "Pazaryeri",
+  ),
+  booleanFeature("payroll", "payroll", FEATURE_KEY.PAYROLL, "Bordro"),
+  booleanFeature("hr", "hr", FEATURE_KEY.HR, "Insan kaynaklari"),
+  booleanFeature(
+    "apiAccess",
+    "api_access",
+    FEATURE_KEY.API_ACCESS,
+    "API erisimi",
+  ),
   {
-    flag: 'advancedAuditLog',
-    key: 'audit_log',
+    flag: "advancedAuditLog",
+    key: "audit_log",
     featureKey: FEATURE_KEY.AUDIT_LOG,
     type: FEATURE_TYPE.ENUM,
-    label: 'Audit log',
+    label: "Audit log",
     pricingVisible: true,
     value: (features, plan) => {
-      if (!features.advancedAuditLog) return 'basic';
-      return plan === PLAN.ENTERPRISE ? 'full' : 'standard';
+      if (!features.advancedAuditLog) return "basic";
+      return plan === PLAN.ENTERPRISE ? "full" : "standard";
     },
   },
-  booleanFeature('customReporting', 'custom_reporting', FEATURE_KEY.CUSTOM_REPORTING, 'Ozel raporlama'),
-  booleanFeature('documentCenter', 'document_center', FEATURE_KEY.DOCUMENT_CENTER, 'Dokuman merkezi'),
-  booleanFeature('smartNotifications', 'smart_notifications', FEATURE_KEY.SMART_NOTIFICATIONS, 'Akilli bildirimler'),
-  booleanFeature('workflowCenter', 'workflow_center', FEATURE_KEY.WORKFLOW_CENTER, 'Is akisi merkezi'),
-  booleanFeature('mailCenter', 'mail_center', FEATURE_KEY.MAIL_CENTER, 'Mail merkezi'),
-  booleanFeature('bulkOperations', 'bulk_operations', FEATURE_KEY.BULK_OPERATIONS, 'Toplu islemler'),
-  booleanFeature('cashflowForecast', 'cashflow_forecast', FEATURE_KEY.CASHFLOW_FORECAST, 'Nakit akisi tahmini'),
-  booleanFeature('bankReconciliation', 'bank_reconciliation', FEATURE_KEY.BANK_RECONCILIATION, 'Banka mutabakati'),
-  booleanFeature('lotSerialTracking', 'lot_serial_tracking', FEATURE_KEY.LOT_SERIAL_TRACKING, 'Lot / seri no takibi'),
+  booleanFeature(
+    "customReporting",
+    "custom_reporting",
+    FEATURE_KEY.CUSTOM_REPORTING,
+    "Ozel raporlama",
+  ),
+  booleanFeature(
+    "documentCenter",
+    "document_center",
+    FEATURE_KEY.DOCUMENT_CENTER,
+    "Dokuman merkezi",
+  ),
+  booleanFeature(
+    "smartNotifications",
+    "smart_notifications",
+    FEATURE_KEY.SMART_NOTIFICATIONS,
+    "Akilli bildirimler",
+  ),
+  booleanFeature(
+    "workflowCenter",
+    "workflow_center",
+    FEATURE_KEY.WORKFLOW_CENTER,
+    "Is akisi merkezi",
+  ),
+  booleanFeature(
+    "mailCenter",
+    "mail_center",
+    FEATURE_KEY.MAIL_CENTER,
+    "Mail merkezi",
+  ),
+  booleanFeature(
+    "bulkOperations",
+    "bulk_operations",
+    FEATURE_KEY.BULK_OPERATIONS,
+    "Toplu islemler",
+  ),
+  booleanFeature(
+    "cashflowForecast",
+    "cashflow_forecast",
+    FEATURE_KEY.CASHFLOW_FORECAST,
+    "Nakit akisi tahmini",
+  ),
+  booleanFeature(
+    "bankReconciliation",
+    "bank_reconciliation",
+    FEATURE_KEY.BANK_RECONCILIATION,
+    "Banka mutabakati",
+  ),
+  booleanFeature(
+    "lotSerialTracking",
+    "lot_serial_tracking",
+    FEATURE_KEY.LOT_SERIAL_TRACKING,
+    "Lot / seri no takibi",
+  ),
 ] as const;
 
-type DefinedPlanFeatureFlag = typeof PLAN_FEATURE_DEFINITIONS[number]['flag'];
-type MissingPlanFeatureFlag = Exclude<keyof PlanFeatureFlags, DefinedPlanFeatureFlag>;
-const PLAN_FEATURE_DEFINITION_COVERAGE: Record<MissingPlanFeatureFlag, never> = {};
+type DefinedPlanFeatureFlag = (typeof PLAN_FEATURE_DEFINITIONS)[number]["flag"];
+type MissingPlanFeatureFlag = Exclude<
+  keyof PlanFeatureFlags,
+  DefinedPlanFeatureFlag
+>;
+const PLAN_FEATURE_DEFINITION_COVERAGE: Record<MissingPlanFeatureFlag, never> =
+  {};
 void PLAN_FEATURE_DEFINITION_COVERAGE;
 
-export const PLAN_FEATURE_ROWS: readonly PlanFeatureRow[] = PLAN_ORDER.flatMap((plan) => {
-  const features = PLAN_FEATURES[plan];
-  return PLAN_FEATURE_DEFINITIONS.map((definition) => ({
-    plan,
-    key: definition.key,
-    featureKey: definition.featureKey,
-    value: definition.value(features, plan),
-    type: definition.type,
-  }));
-});
+export const PLAN_FEATURE_ROWS: readonly PlanFeatureRow[] = PLAN_ORDER.flatMap(
+  (plan) => {
+    const features = PLAN_FEATURES[plan];
+    return PLAN_FEATURE_DEFINITIONS.map((definition) => ({
+      plan,
+      key: definition.key,
+      featureKey: definition.featureKey,
+      value: definition.value(features, plan),
+      type: definition.type,
+    }));
+  },
+);
 
 export const PLAN_LABELS: Record<PlanName, string> = {
-  [PLAN.STARTER]: 'Starter',
-  [PLAN.PROFESSIONAL]: 'Professional',
-  [PLAN.ENTERPRISE]: 'Enterprise',
+  [PLAN.STARTER]: "Starter",
+  [PLAN.PROFESSIONAL]: "Professional",
+  [PLAN.ENTERPRISE]: "Enterprise",
 };
 
 export interface PlanPricingMeta {
@@ -367,7 +466,7 @@ export interface PlanPricingMeta {
   priceSub: string | null;
   description: string;
   cta: string;
-  ctaStyle: 'primary' | 'secondary' | 'outline';
+  ctaStyle: "primary" | "secondary" | "outline";
   highlight: boolean;
 }
 
@@ -375,21 +474,23 @@ export const PLAN_PRICING_META: Record<PlanName, PlanPricingMeta> = {
   [PLAN.STARTER]: {
     label: PLAN_LABELS.STARTER,
     badge: null,
-    price: '1.990',
+    price: "1.990",
     priceSub: null,
-    description: 'Temel operasyonel surecleri dijitallestirmek isteyen kucuk olcekli isletmeler icin.',
-    cta: 'Hemen Basla',
-    ctaStyle: 'secondary',
+    description:
+      "Temel operasyonel surecleri dijitallestirmek isteyen kucuk olcekli isletmeler icin.",
+    cta: "Hemen Basla",
+    ctaStyle: "secondary",
     highlight: false,
   },
   [PLAN.PROFESSIONAL]: {
     label: PLAN_LABELS.PROFESSIONAL,
-    badge: 'Onerilen',
-    price: '3.990',
-    priceSub: '+ kullanici basi 150 TL/ay',
-    description: 'Satis, finans ve operasyon sureclerini tek cati altinda yonetmek isteyen buyuyen isletmeler icin.',
-    cta: 'Lisans Satin Al',
-    ctaStyle: 'primary',
+    badge: "Onerilen",
+    price: "3.990",
+    priceSub: "+ kullanici basi 150 TL/ay",
+    description:
+      "Satis, finans ve operasyon sureclerini tek cati altinda yonetmek isteyen buyuyen isletmeler icin.",
+    cta: "Lisans Satin Al",
+    ctaStyle: "primary",
     highlight: true,
   },
   [PLAN.ENTERPRISE]: {
@@ -397,9 +498,10 @@ export const PLAN_PRICING_META: Record<PlanName, PlanPricingMeta> = {
     badge: null,
     price: null,
     priceSub: null,
-    description: 'Cok subeli, yuksek kullanicili ve ozel entegrasyon gerektiren kurumlar icin.',
-    cta: 'Satis Ekibiyle Gorus',
-    ctaStyle: 'outline',
+    description:
+      "Cok subeli, yuksek kullanicili ve ozel entegrasyon gerektiren kurumlar icin.",
+    cta: "Satis Ekibiyle Gorus",
+    ctaStyle: "outline",
     highlight: false,
   },
 };
@@ -416,26 +518,33 @@ export interface PricingPlan {
   features: readonly PricingFeatureLine[];
 }
 
-function formatPricingFeatureValue(definition: PlanFeatureDefinition, value: string): string | null {
-  if (definition.type === FEATURE_TYPE.BOOLEAN) return value === 'true' ? definition.label : null;
-  if (value === 'unlimited') return `Sinirsiz ${definition.label.toLocaleLowerCase('tr-TR')}`;
-  return `${value} ${definition.label.toLocaleLowerCase('tr-TR')}`;
+function formatPricingFeatureValue(
+  definition: PlanFeatureDefinition,
+  value: string,
+): string | null {
+  if (definition.type === FEATURE_TYPE.BOOLEAN)
+    return value === "true" ? definition.label : null;
+  if (value === "unlimited")
+    return `Sinirsiz ${definition.label.toLocaleLowerCase("tr-TR")}`;
+  return `${value} ${definition.label.toLocaleLowerCase("tr-TR")}`;
 }
 
-export const PLAN_PRICING_MATRIX: readonly PricingPlan[] = PLAN_ORDER.map((plan) => {
-  const features = PLAN_FEATURE_DEFINITIONS.flatMap((definition) => {
-    if (!definition.pricingVisible) return [];
-    const value = definition.value(PLAN_FEATURES[plan], plan);
-    const label = formatPricingFeatureValue(definition, value);
-    return label ? [{ key: definition.key, label, value }] : [];
-  });
+export const PLAN_PRICING_MATRIX: readonly PricingPlan[] = PLAN_ORDER.map(
+  (plan) => {
+    const features = PLAN_FEATURE_DEFINITIONS.flatMap((definition) => {
+      if (!definition.pricingVisible) return [];
+      const value = definition.value(PLAN_FEATURES[plan], plan);
+      const label = formatPricingFeatureValue(definition, value);
+      return label ? [{ key: definition.key, label, value }] : [];
+    });
 
-  return {
-    plan,
-    meta: PLAN_PRICING_META[plan],
-    features,
-  };
-});
+    return {
+      plan,
+      meta: PLAN_PRICING_META[plan],
+      features,
+    };
+  },
+);
 
 export interface AccessPolicy {
   minPlan?: PlanName;
@@ -444,40 +553,127 @@ export interface AccessPolicy {
 }
 
 export const ACCESS_POLICIES: Record<string, AccessPolicy> = {
-  purchasing: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.PURCHASING, module: MODULE_KEY.PURCHASING },
-  approvals: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.APPROVALS, module: MODULE_KEY.APPROVALS },
+  purchasing: {
+    minPlan: PLAN.PROFESSIONAL,
+    featureKey: FEATURE_KEY.PURCHASING,
+    module: MODULE_KEY.PURCHASING,
+  },
+  approvals: {
+    minPlan: PLAN.PROFESSIONAL,
+    featureKey: FEATURE_KEY.APPROVALS,
+    module: MODULE_KEY.APPROVALS,
+  },
   apiKeys: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.API_ACCESS },
-  roles: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.ROLE_MANAGEMENT },
+  roles: {
+    minPlan: PLAN.PROFESSIONAL,
+    featureKey: FEATURE_KEY.ROLE_MANAGEMENT,
+  },
   deliveryNotes: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVOICING },
-  documentCenter: { minPlan: PLAN.STARTER, featureKey: FEATURE_KEY.DOCUMENT_CENTER, module: MODULE_KEY.DOCUMENTS },
-  smartNotifications: { minPlan: PLAN.STARTER, featureKey: FEATURE_KEY.SMART_NOTIFICATIONS },
-  smartNotificationExternalActions: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.SMART_NOTIFICATIONS },
+  documentCenter: {
+    minPlan: PLAN.STARTER,
+    featureKey: FEATURE_KEY.DOCUMENT_CENTER,
+    module: MODULE_KEY.DOCUMENTS,
+  },
+  smartNotifications: {
+    minPlan: PLAN.STARTER,
+    featureKey: FEATURE_KEY.SMART_NOTIFICATIONS,
+  },
+  smartNotificationExternalActions: {
+    minPlan: PLAN.PROFESSIONAL,
+    featureKey: FEATURE_KEY.SMART_NOTIFICATIONS,
+  },
   eDocuments: { minPlan: PLAN.STARTER, module: MODULE_KEY.INVOICING },
-  bankTransactions: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.ACCOUNTING },
-  checkPromissory: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.ACCOUNTING },
-  reconciliations: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.BANK_RECONCILIATION, module: MODULE_KEY.ACCOUNTING },
+  bankTransactions: {
+    minPlan: PLAN.PROFESSIONAL,
+    module: MODULE_KEY.ACCOUNTING,
+  },
+  checkPromissory: {
+    minPlan: PLAN.PROFESSIONAL,
+    module: MODULE_KEY.ACCOUNTING,
+  },
+  reconciliations: {
+    minPlan: PLAN.PROFESSIONAL,
+    featureKey: FEATURE_KEY.BANK_RECONCILIATION,
+    module: MODULE_KEY.ACCOUNTING,
+  },
   stockValuations: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVENTORY },
   reservations: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVENTORY },
   productBatches: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVENTORY },
-  lotSerials: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.LOT_SERIAL_TRACKING, module: MODULE_KEY.INVENTORY },
-  bulkOperations: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.BULK_OPERATIONS },
-  advancedStockSuggestions: { minPlan: PLAN.PROFESSIONAL, module: MODULE_KEY.INVENTORY },
-  auditLogExport: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.AUDIT_LOG },
-  cashflowForecast: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.CASHFLOW_FORECAST, module: MODULE_KEY.REPORTING },
-  supplierPerformance: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.PURCHASING, module: MODULE_KEY.PURCHASING },
-  workflowAutomation: { minPlan: PLAN.PROFESSIONAL, featureKey: FEATURE_KEY.WORKFLOW_CENTER, module: MODULE_KEY.WORKFLOW },
-  production: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.PRODUCTION, module: MODULE_KEY.PRODUCTION },
-  service: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.SERVICE, module: MODULE_KEY.SERVICE },
-  marketplace: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.MARKETPLACE, module: MODULE_KEY.MARKETPLACE },
-  b2bIntegrations: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.MARKETPLACE, module: MODULE_KEY.MARKETPLACE },
-  hr: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.HR, module: MODULE_KEY.HR },
-  payroll: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.PAYROLL, module: MODULE_KEY.PAYROLL },
-  mail: { minPlan: PLAN.ENTERPRISE, featureKey: FEATURE_KEY.MAIL_CENTER, module: MODULE_KEY.MAIL },
+  lotSerials: {
+    minPlan: PLAN.PROFESSIONAL,
+    featureKey: FEATURE_KEY.LOT_SERIAL_TRACKING,
+    module: MODULE_KEY.INVENTORY,
+  },
+  bulkOperations: {
+    minPlan: PLAN.PROFESSIONAL,
+    featureKey: FEATURE_KEY.BULK_OPERATIONS,
+  },
+  advancedStockSuggestions: {
+    minPlan: PLAN.PROFESSIONAL,
+    module: MODULE_KEY.INVENTORY,
+  },
+  auditLogExport: {
+    minPlan: PLAN.PROFESSIONAL,
+    featureKey: FEATURE_KEY.AUDIT_LOG,
+  },
+  cashflowForecast: {
+    minPlan: PLAN.PROFESSIONAL,
+    featureKey: FEATURE_KEY.CASHFLOW_FORECAST,
+    module: MODULE_KEY.REPORTING,
+  },
+  supplierPerformance: {
+    minPlan: PLAN.PROFESSIONAL,
+    featureKey: FEATURE_KEY.PURCHASING,
+    module: MODULE_KEY.PURCHASING,
+  },
+  workflowAutomation: {
+    minPlan: PLAN.PROFESSIONAL,
+    featureKey: FEATURE_KEY.WORKFLOW_CENTER,
+    module: MODULE_KEY.WORKFLOW,
+  },
+  production: {
+    minPlan: PLAN.ENTERPRISE,
+    featureKey: FEATURE_KEY.PRODUCTION,
+    module: MODULE_KEY.PRODUCTION,
+  },
+  service: {
+    minPlan: PLAN.ENTERPRISE,
+    featureKey: FEATURE_KEY.SERVICE,
+    module: MODULE_KEY.SERVICE,
+  },
+  marketplace: {
+    minPlan: PLAN.ENTERPRISE,
+    featureKey: FEATURE_KEY.MARKETPLACE,
+    module: MODULE_KEY.MARKETPLACE,
+  },
+  b2bIntegrations: {
+    minPlan: PLAN.ENTERPRISE,
+    featureKey: FEATURE_KEY.MARKETPLACE,
+    module: MODULE_KEY.MARKETPLACE,
+  },
+  hr: {
+    minPlan: PLAN.ENTERPRISE,
+    featureKey: FEATURE_KEY.HR,
+    module: MODULE_KEY.HR,
+  },
+  payroll: {
+    minPlan: PLAN.ENTERPRISE,
+    featureKey: FEATURE_KEY.PAYROLL,
+    module: MODULE_KEY.PAYROLL,
+  },
+  mail: {
+    minPlan: PLAN.ENTERPRISE,
+    featureKey: FEATURE_KEY.MAIL_CENTER,
+    module: MODULE_KEY.MAIL,
+  },
   chat: { minPlan: PLAN.ENTERPRISE },
   aiGovernance: { minPlan: PLAN.ENTERPRISE },
 };
 
-export function isPlanAtLeast(currentPlan: PlanName, requiredPlan: PlanName): boolean {
+export function isPlanAtLeast(
+  currentPlan: PlanName,
+  requiredPlan: PlanName,
+): boolean {
   return PLAN_RANK[currentPlan] >= PLAN_RANK[requiredPlan];
 }
 

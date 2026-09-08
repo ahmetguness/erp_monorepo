@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import type { AdminLoginResult } from '@repo/types';
+import { AdminMfaSetup } from '@/components/features/admin/AdminMfaSetup';
 
 const LOG_LINES = [
   { time: '09:41:02', msg: 'auth-service ready on :3001', type: 'ok' },
@@ -246,11 +247,7 @@ export default function AdminLoginPage() {
             </div>
 
             {challenge && <div className="space-y-3 rounded-lg border border-blue-500/30 p-4 text-sm text-neutral-300">
-              {challenge.status === 'MFA_SETUP_REQUIRED' && <>
-                <p>Doğrulama uygulamanıza yeni bir hesap ekleyin ve aşağıdaki kurulum anahtarını girin.</p>
-                <code className="block break-all select-all">{challenge.secret}</code>
-                <a href={challenge.otpauthUri} className="text-blue-400">Doğrulama uygulamasında aç</a>
-              </>}
+              {challenge.status === 'MFA_SETUP_REQUIRED' && <AdminMfaSetup secret={challenge.secret} otpauthUri={challenge.otpauthUri} />}
               <label htmlFor="admin-otp">Altı haneli doğrulama kodu</label>
               <input id="admin-otp" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" required className={inputCls} />
               <p className="text-xs">Kodlar yalnızca bir kez kullanılabilir.</p>

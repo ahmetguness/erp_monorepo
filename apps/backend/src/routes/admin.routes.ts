@@ -10,6 +10,7 @@ AdminFeatureController,
 AdminMetricsController,
 AdminSecurityController,
 AdminTenantController,
+AdminTenant360Controller,
 } from '../modules/platform/http/controllers/index.js';
 
 const adminRoutes = new Hono();
@@ -55,6 +56,8 @@ adminRoutes.post('/change-requests/:id/rollback', requireAdmin, requireAdminPerm
 adminRoutes.get('/tenants', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantController.list);
 adminRoutes.post('/tenants', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantController.create);
 adminRoutes.get('/tenants/:id', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantController.getById);
+adminRoutes.get('/tenants/:id/360', requireAdmin, requireAdminPermission('tenant.read'), AdminTenant360Controller.get);
+adminRoutes.post('/tenants/:id/support-notes', requireAdmin, requireAdminPermission('tenant.settings.update'), AdminTenant360Controller.addNote);
 adminRoutes.patch('/tenants/:id', requireAdmin, requireAdminPermission('tenant.settings.update'), AdminTenantController.updateTenant);
 adminRoutes.post('/tenants/:id/plan', requireAdmin, requireAdminPermission('tenant.plan.update'), AdminTenantController.updatePlan);
 adminRoutes.post('/tenants/:id/status', requireAdmin, requireAdminPermission('tenant.status.update'), AdminTenantController.updateStatus);

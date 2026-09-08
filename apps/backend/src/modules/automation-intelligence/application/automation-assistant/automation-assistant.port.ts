@@ -1,4 +1,8 @@
-import type { AutomationAssistantAction, AutomationAssistantTrigger, AutomationSimulation } from './automation-assistant.types.js';
+import type {
+  AutomationAssistantAction,
+  AutomationAssistantTrigger,
+  AutomationSimulation,
+} from "./automation-assistant.types.js";
 
 export interface ExistingAutomationRule {
   id: string;
@@ -9,6 +13,9 @@ export interface ExistingAutomationRule {
 }
 
 export interface AutomationAssistantRepository {
-  simulate(tenantId: string, trigger: AutomationAssistantTrigger): Promise<AutomationSimulation>;
+  simulate(
+    tenantId: string,
+    trigger: AutomationAssistantTrigger,
+  ): Promise<AutomationSimulation>;
   listExisting(tenantId: string): Promise<ExistingAutomationRule[]>;
 }

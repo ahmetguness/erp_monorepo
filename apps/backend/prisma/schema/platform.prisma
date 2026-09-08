@@ -185,6 +185,19 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+model TenantSupportNote {
+  id String @id @default(cuid())
+  tenantId String
+  authorId String
+  body String
+  ticketId String?
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  author AdminUser @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  @@index([tenantId, createdAt])
+  @@map("tenant_support_notes")
+}
+
 model AiRequestLog {
   id                    String                  @id @default(cuid())
   tenantId              String?

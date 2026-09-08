@@ -2,10 +2,9 @@ import type { AdminPermission } from '@repo/types';
 import type { Context, MiddlewareHandler, Next } from 'hono';
 import { deleteCookie, getCookie } from 'hono/cookie';
 import jwt from 'jsonwebtoken';
-import { resolveAdminAccess } from '../modules/platform/admin-access/admin-access.service.js';
-import type { AdminAccessContext, AdminJwtPayload } from '../modules/platform/admin-access/admin-access.types.js';
+import { resolveAdminAccess, ADMIN_RECENT_MFA_SECONDS } from '../modules/platform/application/index.js';
+import type { AdminAccessContext, AdminJwtPayload } from '../modules/platform/application/index.js';
 import { prisma } from '../lib/prisma.js';
-import { ADMIN_RECENT_MFA_SECONDS } from '../modules/platform/admin-auth/admin-session.service.js';
 
 const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';

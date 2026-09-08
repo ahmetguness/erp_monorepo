@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useState } from 'react';
+import { Tenant360Workspace } from '@/components/features/admin/tenant-360/Tenant360Workspace';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, CalendarClock, FileWarning, MonitorCheck, Users, Package, Receipt, ShoppingCart, Truck, CreditCard, Warehouse, Layers, BookOpen, Plus, Minus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -233,10 +234,12 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
       }
       qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] });
       toast.success(`Plan ${variables.value} olarak güncellendi.`);
+      qc.invalidateQueries({ queryKey: ['admin', 'tenant-360', id] });
     },
   });
 
   const changeStatus = useMutation({
+    onSettled: () => { void qc.invalidateQueries({ queryKey: ['admin', 'tenant-360', id] }); },
     mutationFn: ({ value, metadata }: { value: StatusKey; metadata: ChangeMetadata }) => updateTenantStatus(id, value, metadata.reason, metadata.ticketId),
     onSuccess: (result) => {
       setCriticalProposal(null);
@@ -249,6 +252,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
   });
 
   const saveSettings = useMutation({
+    onSettled: () => { void qc.invalidateQueries({ queryKey: ['admin', 'tenant-360', id] }); },
     mutationFn: (notify: boolean) => updateTenant(id, {
       maxUsers: settings.maxUsers ? Number(settings.maxUsers) : null,
       modules: settings.modules,
@@ -289,6 +293,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
   const expectedModuleSet = new Set<string>(moduleAlignment.expectedModules);
 
   return (
+    <Tenant360Workspace tenantId={id}>
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
@@ -625,5 +630,6 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
         }}
       />
     </div>
+    </Tenant360Workspace>
   );
 }
