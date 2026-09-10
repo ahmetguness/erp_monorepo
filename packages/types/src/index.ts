@@ -744,3 +744,4 @@ export * from "./admin-users.js";
 export * from "./tenant-360.js";
 export * from "./support-session.js";
 export * from "./tenant-lifecycle.js";
+export * from './tenant-provisioning.js';

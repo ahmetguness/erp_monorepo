@@ -11,6 +11,7 @@ AdminMetricsController,
 AdminSecurityController,
 AdminTenantController,
 AdminTenantLifecycleController,
+AdminTenantProvisioningController,
 AdminTenant360Controller,
 AdminSupportSessionController,
 } from '../modules/platform/http/controllers/index.js';
@@ -57,6 +58,10 @@ adminRoutes.post('/change-requests/:id/reject', requireAdmin, requireAdminPermis
 adminRoutes.post('/change-requests/:id/rollback', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.rollback);
 
 // Tenants
+adminRoutes.post('/tenants/preview', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantProvisioningController.preview);
+adminRoutes.get('/tenant-provisioning', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantProvisioningController.list);
+adminRoutes.get('/tenant-provisioning/:jobId', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantProvisioningController.get);
+adminRoutes.post('/tenant-provisioning/:jobId/retry', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantProvisioningController.retry);
 adminRoutes.get('/tenants/:id/lifecycle', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantLifecycleController.get);
 adminRoutes.post('/tenants/:id/lifecycle/requests', requireAdmin, requireAdminPermission('tenant.status.update'), AdminTenantLifecycleController.request);
 adminRoutes.post('/tenants/:id/lifecycle/requests/:requestId/decision', requireAdmin, requireAdminPermission('tenant.status.approve'), AdminTenantLifecycleController.decide);
@@ -66,7 +71,7 @@ adminRoutes.get('/tenants/:id/support-sessions', requireAdmin, requireAdminPermi
 adminRoutes.post('/support-sessions', requireAdmin, requireAdminPermission('support-session.manage'), AdminSupportSessionController.request);
 adminRoutes.post('/tenants/:id/support-sessions/:sessionId/revoke', requireAdmin, requireAdminPermission('support-session.manage'), AdminSupportSessionController.revoke);
 adminRoutes.get('/tenants', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantController.list);
-adminRoutes.post('/tenants', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantController.create);
+adminRoutes.post('/tenants', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantProvisioningController.create);
 adminRoutes.get('/tenants/:id', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantController.getById);
 adminRoutes.get('/tenants/:id/360', requireAdmin, requireAdminPermission('tenant.read'), AdminTenant360Controller.get);
 adminRoutes.post('/tenants/:id/support-notes', requireAdmin, requireAdminPermission('tenant.settings.update'), AdminTenant360Controller.addNote);

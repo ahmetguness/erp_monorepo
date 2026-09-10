@@ -253,6 +253,36 @@ model TenantLifecycleExport {
   @@map("tenant_lifecycle_exports")
 }
 
+model TenantProvisioningJob {
+  id String @id @default(cuid())
+  provisionedTenantId String? @map("tenantId")
+  idempotencyKey String @unique
+  requestHash String
+  input Json
+  status String @default("PENDING")
+  error String?
+  createdById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant? @relation(fields: [provisionedTenantId], references: [id], onDelete: SetNull)
+  steps TenantProvisioningStep[]
+  @@index([provisionedTenantId, createdAt])
+  @@map("tenant_provisioning_jobs")
+}
+
+model TenantProvisioningStep {
+  id String @id @default(cuid())
+  jobId String
+  key String
+  status String @default("PENDING")
+  attempts Int @default(0)
+  error String?
+  updatedAt DateTime @updatedAt
+  job TenantProvisioningJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  @@unique([jobId, key])
+  @@map("tenant_provisioning_steps")
+}
+
 model AiRequestLog {
   id                    String                  @id @default(cuid())
   tenantId              String?

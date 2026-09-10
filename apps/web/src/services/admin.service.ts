@@ -240,24 +240,7 @@ export interface SecurityChecklist {
   checks: SecurityChecklistItem[];
 }
 
-export interface CreateTenantInput {
-  companyName: string;
-  email: string;
-  ownerName: string;
-  slug?: string;
-  phone?: string;
-  city?: string;
-  sector?: string;
-  plan?: string;
-  status?: string;
-  maxUsers?: number | null;
-  modules?: string[];
-  notes?: string;
-  isCustomPricing?: boolean;
-  trialEndsAt?: string | null;
-  subscriptionStart?: string | null;
-  subscriptionEnd?: string | null;
-}
+export type CreateTenantInput = import('@repo/types').TenantProvisioningInput;
 
 // ─────────────────────────────────────────────
 // Auth
@@ -291,8 +274,23 @@ export async function getTenantById(id: string): Promise<TenantDetail> {
   return res.data.data;
 }
 
-export async function createTenant(data: CreateTenantInput): Promise<{ id: string }> {
-  const res = await adminApiClient.post('/api/admin/tenants', data);
+export async function previewTenant(data: CreateTenantInput): Promise<import('@repo/types').TenantProvisioningPreview> {
+  const res = await adminApiClient.post('/api/admin/tenants/preview', data);
+  return res.data.data;
+}
+
+export async function createTenant(data: CreateTenantInput, idempotencyKey: string): Promise<import('@repo/types').TenantProvisioningJob> {
+  const res = await adminApiClient.post('/api/admin/tenants', data, { headers: { 'Idempotency-Key': idempotencyKey } });
+  return res.data.data;
+}
+
+export async function retryTenantProvisioning(jobId: string): Promise<import('@repo/types').TenantProvisioningJob> {
+  const res = await adminApiClient.post(`/api/admin/tenant-provisioning/${encodeURIComponent(jobId)}/retry`);
+  return res.data.data;
+}
+
+export async function getTenantProvisioningJobs(): Promise<import('@repo/types').TenantProvisioningJob[]> {
+  const res = await adminApiClient.get('/api/admin/tenant-provisioning');
   return res.data.data;
 }
 

@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation';
 import {
   Building2, CalendarDays, Layers3, Plus, Search, X,
 } from 'lucide-react';
-import { createTenant, getTenants, type CreateTenantInput } from '@/services/admin.service';
+import { createTenant, getTenantProvisioningJobs, getTenants, previewTenant, retryTenantProvisioning, type CreateTenantInput } from '@/services/admin.service';
+import type { ModuleKey, TenantProvisioningInput, TenantProvisioningJob, TenantProvisioningPreview } from '@repo/types';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { cn } from '@/lib/utils';
@@ -135,28 +136,32 @@ export default function AdminTenantsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState<CreateTenantInput>(() => createDefaultTenantForm());
   const [formError, setFormError] = useState<string | null>(null);
+  const [proposal, setProposal] = useState<{ input: TenantProvisioningInput; preview: TenantProvisioningPreview } | null>(null);
+  const [job, setJob] = useState<TenantProvisioningJob | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'tenants', page, search, statusFilter, planFilter],
     queryFn: () => getTenants({ page, limit: 20, search: search || undefined, status: statusFilter || undefined, plan: planFilter || undefined }),
   });
 
+  const preview = useMutation({ mutationFn: previewTenant, onSuccess: (result, input) => setProposal({ input, preview: result }) });
   const create = useMutation({
-    mutationFn: createTenant,
-    onSuccess: (tenant) => {
-      qc.invalidateQueries({ queryKey: ['admin', 'tenants'] });
-      setForm(createDefaultTenantForm());
+    mutationFn: ({ input, key }: { input: TenantProvisioningInput; key: string }) => createTenant(input, key),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'tenants'] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'tenant-provisioning'] });
+      setJob(result);
       setFormError(null);
-      setIsCreateOpen(false);
-      router.push(`/admin/tenants/${tenant.id}`);
     },
     onError: (error: { response?: { data?: { error?: { message?: string } } } }) => {
       setFormError(error.response?.data?.error?.message ?? 'Tenant oluşturulamadı.');
     },
   });
+  const jobs = useQuery({ queryKey: ['admin', 'tenant-provisioning'], queryFn: getTenantProvisioningJobs, enabled: canCreateTenant });
+  const retry = useMutation({ mutationFn: retryTenantProvisioning, onSuccess: (result) => { setJob(result); void qc.invalidateQueries({ queryKey: ['admin', 'tenant-provisioning'] }); } });
 
-  const toggleModule = (module: string) => {
-    const current = form.modules ?? [];
+  const toggleModule = (module: ModuleKey) => {
+    const current = form.modules;
     setForm({
       ...form,
       modules: current.includes(module) ? current.filter((item) => item !== module) : [...current, module],
@@ -166,7 +171,8 @@ export default function AdminTenantsPage() {
   const submitCreate = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
-    create.mutate({
+    const toIso = (value: string | null | undefined) => value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null;
+    preview.mutate({
       ...form,
       slug: form.slug?.trim() || undefined,
       phone: form.phone?.trim() || undefined,
@@ -174,9 +180,9 @@ export default function AdminTenantsPage() {
       sector: form.sector?.trim() || undefined,
       notes: form.notes?.trim() || undefined,
       maxUsers: form.maxUsers || null,
-      trialEndsAt: form.trialEndsAt || null,
-      subscriptionStart: form.subscriptionStart || null,
-      subscriptionEnd: form.subscriptionEnd || null,
+      trialEndsAt: toIso(form.trialEndsAt),
+      subscriptionStart: toIso(form.subscriptionStart),
+      subscriptionEnd: toIso(form.subscriptionEnd),
     });
   };
 
@@ -185,7 +191,7 @@ export default function AdminTenantsPage() {
       <div>
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-lg font-semibold text-white">Tenantlar</h1>
-          {canCreateTenant && <button onClick={() => { setForm(createDefaultTenantForm()); setIsCreateOpen(true); }}
+          {canCreateTenant && <button onClick={() => { setForm(createDefaultTenantForm()); setProposal(null); setJob(null); setFormError(null); setIsCreateOpen(true); }}
             className="inline-flex items-center gap-2 rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-400 transition-colors">
             <Plus className="h-4 w-4" /> Yeni Tenant
           </button>}
@@ -193,8 +199,13 @@ export default function AdminTenantsPage() {
         <p className="text-sm text-slate-500">Tüm şirket hesaplarını yönetin.</p>
       </div>
 
+      {canCreateTenant && jobs.data && jobs.data.length > 0 && <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <h2 className="mb-3 text-sm font-semibold text-white">Son kurulum işleri</h2>
+        <div className="space-y-2">{jobs.data.slice(0, 5).map(item => <div key={item.id} className="flex items-center justify-between rounded-lg bg-slate-950 px-3 py-2 text-xs"><span>{item.id} · {item.status}{item.error ? ` · ${item.error}` : ''}</span><div className="flex gap-2">{item.status === 'FAILED' && <button disabled={retry.isPending} onClick={() => retry.mutate(item.id)} className="text-amber-300">Yeniden dene</button>}{item.tenantId && <button onClick={() => router.push(`/admin/tenants/${item.tenantId}`)} className="text-blue-300">Tenantı aç</button>}</div></div>)}</div>
+      </section>}
+
       {canCreateTenant && isCreateOpen && (
-        <form onSubmit={submitCreate} className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+        <form onSubmit={submitCreate} onChange={() => { setProposal(null); setJob(null); }} className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
           <div className="flex items-start justify-between gap-4 border-b border-slate-800 px-5 py-4">
             <div>
               <p className="text-sm font-semibold text-white">Yeni Tenant Oluştur</p>
@@ -229,7 +240,7 @@ export default function AdminTenantsPage() {
               <option value="PROFESSIONAL">Professional</option>
               <option value="ENTERPRISE">Enterprise</option>
             </select>
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="bg-slate-950 border border-slate-800 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/50">
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value === 'ACTIVE' ? 'ACTIVE' : 'TRIAL' })} className="bg-slate-950 border border-slate-800 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/50">
               <option value="TRIAL">Deneme</option>
               <option value="ACTIVE">Aktif</option>
             </select>
@@ -286,12 +297,28 @@ export default function AdminTenantsPage() {
 
           <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Notlar" rows={2} className="w-full bg-slate-950 border border-slate-800 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/50" />
 
+          {proposal && <section className="space-y-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">
+            <h3 className="font-semibold text-white">Kurulum önizlemesi</h3>
+            {proposal.preview.checks.map(check => <p key={check.key} className={check.valid ? 'text-emerald-300' : 'text-red-300'}>{check.valid ? '✓' : '✕'} {check.message}</p>)}
+            <p>Slug: <strong>{proposal.preview.normalizedSlug}</strong> · Owner: {proposal.preview.normalizedEmail}</p>
+            {proposal.preview.ownerExistingTenantNames.length > 0 && <p>Mevcut üyelikler: {proposal.preview.ownerExistingTenantNames.join(', ')}</p>}
+            <p>E-posta: “{proposal.preview.emailPreview.subject}” · bağlantı {proposal.preview.emailPreview.passwordLinkExpiresInMinutes} dakika geçerli</p>
+            <button type="button" disabled={!proposal.preview.valid || create.isPending} onClick={() => create.mutate({ input: proposal.input, key: crypto.randomUUID() })} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Kurulumu başlat</button>
+          </section>}
+
+          {job && <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-950 p-4">
+            <h3 className="font-semibold text-white">Provisioning · {job.status}</h3>
+            {job.steps.map(step => <p key={step.key}>{step.key}: <strong>{step.status}</strong> · Deneme {step.attempts}{step.error ? ` · ${step.error}` : ''}</p>)}
+            {job.error && <p className="text-red-300">{job.error}</p>}
+            <div className="flex gap-2">{job.status === 'FAILED' && <button type="button" disabled={retry.isPending} onClick={() => retry.mutate(job.id)} className="rounded-lg border border-amber-500 px-3 py-2 text-xs text-amber-300">Başarısız adımı yeniden dene</button>}{job.tenantId && <button type="button" onClick={() => router.push(`/admin/tenants/${job.tenantId}`)} className="rounded-lg border border-slate-700 px-3 py-2 text-xs">Tenantı aç</button>}</div>
+          </section>}
+
           </div>
 
           <div className="flex flex-col-reverse gap-2 border-t border-slate-800 bg-slate-950/40 px-5 py-4 sm:flex-row sm:justify-end">
             <button type="button" onClick={() => setIsCreateOpen(false)} className="rounded-lg border border-slate-800 px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200">Vazgeç</button>
-            <button type="submit" disabled={create.isPending} className="rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-400 disabled:opacity-60">
-              {create.isPending ? 'Oluşturuluyor...' : 'Tenant Oluştur'}
+            <button type="submit" disabled={preview.isPending || create.isPending} className="rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-400 disabled:opacity-60">
+              {preview.isPending ? 'Kontrol ediliyor...' : 'Ön doğrula ve önizle'}
             </button>
           </div>
         </form>

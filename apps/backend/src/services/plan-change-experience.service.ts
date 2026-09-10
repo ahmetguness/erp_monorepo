@@ -78,6 +78,8 @@ const FEATURE_LABELS: Record<BooleanFeatureFlag, string> = {
 const MODULE_LABELS: Record<ModuleKey, string> = {
   accounting: 'Muhasebe',
   inventory: 'Stok ve depo',
+  crm: 'CRM',
+  sales: 'Satış',
   contacts: 'Cari hesaplar',
   invoicing: 'Fatura',
   reporting: 'Raporlama',

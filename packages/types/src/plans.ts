@@ -52,6 +52,8 @@ export type FeatureTypeName = (typeof FEATURE_TYPE)[keyof typeof FEATURE_TYPE];
 export const MODULE_KEY = {
   ACCOUNTING: "accounting",
   INVENTORY: "inventory",
+  CRM: "crm",
+  SALES: "sales",
   CONTACTS: "contacts",
   INVOICING: "invoicing",
   REPORTING: "reporting",
@@ -73,6 +75,8 @@ export type ModuleKey = (typeof MODULE_KEY)[keyof typeof MODULE_KEY];
 export const STARTER_OPEN_MODULES: readonly ModuleKey[] = [
   MODULE_KEY.ACCOUNTING,
   MODULE_KEY.INVENTORY,
+  MODULE_KEY.CRM,
+  MODULE_KEY.SALES,
   MODULE_KEY.CONTACTS,
   MODULE_KEY.INVOICING,
   MODULE_KEY.REPORTING,
@@ -191,6 +195,8 @@ export const PLAN_MODULES: Record<PlanName, readonly ModuleKey[]> = {
   [PLAN.STARTER]: [
     MODULE_KEY.ACCOUNTING,
     MODULE_KEY.INVENTORY,
+    MODULE_KEY.CRM,
+    MODULE_KEY.SALES,
     MODULE_KEY.CONTACTS,
     MODULE_KEY.INVOICING,
     MODULE_KEY.REPORTING,
@@ -199,6 +205,8 @@ export const PLAN_MODULES: Record<PlanName, readonly ModuleKey[]> = {
   [PLAN.PROFESSIONAL]: [
     MODULE_KEY.ACCOUNTING,
     MODULE_KEY.INVENTORY,
+    MODULE_KEY.CRM,
+    MODULE_KEY.SALES,
     MODULE_KEY.CONTACTS,
     MODULE_KEY.INVOICING,
     MODULE_KEY.REPORTING,

@@ -5,6 +5,8 @@ import { isModuleInList } from './feature-helpers';
 export const MODULE_TO_APP_MODULE: Record<ModuleKey, AppModule> = {
   accounting: AppModule.ACCOUNTING,
   inventory: AppModule.INVENTORY,
+  crm: AppModule.CRM,
+  sales: AppModule.SALES,
   contacts: AppModule.CONTACTS,
   invoicing: AppModule.INVOICING,
   reporting: AppModule.REPORTING,
