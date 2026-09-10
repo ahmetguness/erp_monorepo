@@ -1,4 +1,5 @@
 import type { BackendModule } from '../shared/index.js';
+import { supportSessionRoutes } from '../../routes/support-session.routes.js';
 import { activityRoutes } from '../../routes/activity.routes.js';
 import { approvalRoutes } from '../../routes/approval.routes.js';
 import { auditLogRoutes } from '../../routes/audit-log.routes.js';
@@ -26,6 +27,7 @@ export { MetricsController } from './http/controllers/metrics.controller.js';
 export const platformModule: BackendModule = {
   name: 'platform',
   register(app) {
+    app.route('/support-sessions', supportSessionRoutes);
     app.route('/reports', reportingRoutes);
     app.route('/settings', settingsRoutes);
     app.route('/starter-health', starterHealthRoutes);

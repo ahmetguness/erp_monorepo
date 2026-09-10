@@ -198,6 +198,31 @@ model TenantSupportNote {
   @@map("tenant_support_notes")
 }
 
+model SupportSession {
+  id String @id @default(cuid())
+  tenantId String
+  adminId String
+  adminSessionId String
+  targetUserId String
+  reason String
+  ticketId String
+  scopes String[]
+  expiresAt DateTime
+  approvedAt DateTime?
+  approvedById String?
+  revokedAt DateTime?
+  writeRequested Boolean @default(false)
+  writeApprovedAt DateTime?
+  writeApprovedById String?
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
+  targetUser User @relation(fields: [targetUserId], references: [id], onDelete: Restrict)
+  @@index([tenantId, createdAt])
+  @@index([adminId, expiresAt])
+  @@map("support_sessions")
+}
+
 model AiRequestLog {
   id                    String                  @id @default(cuid())
   tenantId              String?

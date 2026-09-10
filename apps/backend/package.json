@@ -26,6 +26,7 @@
     "test:admin-auth": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-admin-auth-sessions.ts",
     "test:admin-users": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-admin-user-management.ts",
     "test:tenant-360": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-tenant-360.ts",
+    "test:support-sessions": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-support-sessions.ts",
     "test:prisma-architecture": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-prisma-architecture.ts && prisma validate --schema=prisma/schema",
     "test:quality": "npm run test:typecheck && npm run test:prisma-architecture && npm run test:unit:coverage && npm run test:code-quality && npm run test:module-boundaries && npm run test:contracts && npm run test:tenant-isolation && npm run test:tenant-runtime && npm run test:permission-gating && npm run test:e2e && npm run test:integration && npm run db:health",
     "ci:artifacts": "tsx scripts/generate-ci-artifacts.ts",

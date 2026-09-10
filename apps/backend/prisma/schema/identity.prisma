@@ -91,6 +91,7 @@ enum InvitationStatus {
 }
 
 model Tenant {
+  supportSessions SupportSession[]
   supportNotes TenantSupportNote[]
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -240,6 +241,7 @@ model Tenant {
 }
 
 model User {
+  supportSessions SupportSession[]
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -269,6 +271,7 @@ model User {
 }
 
 model AdminUser {
+  supportSessions SupportSession[]
   tenantSupportNotes TenantSupportNote[]
   inviteTokenHash String? @unique
   invitationExpiresAt DateTime?

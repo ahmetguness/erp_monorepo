@@ -11,6 +11,7 @@ AdminMetricsController,
 AdminSecurityController,
 AdminTenantController,
 AdminTenant360Controller,
+AdminSupportSessionController,
 } from '../modules/platform/http/controllers/index.js';
 
 const adminRoutes = new Hono();
@@ -28,7 +29,9 @@ adminRoutes.post('/auth/revoke-all', requireAdmin, requireRecentAdminMfa, AdminS
 
 adminRoutes.use('*', async (c, next) => {
   const isChangePreview = c.req.method === 'POST' && c.req.path === '/api/admin/change-requests/preview';
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && !isChangePreview) {
+  // Ending an owned support session only removes access; do not block emergency exit on step-up MFA.
+  const isSupportExit = c.req.method === 'POST' && /^\/api\/admin\/tenants\/[^/]+\/support-sessions\/[^/]+\/revoke$/.test(c.req.path);
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && !isChangePreview && !isSupportExit) {
     return requireAdmin(c, async () => {
       const response = await requireRecentAdminMfa(c, next);
       if (response) c.res = response;
@@ -53,6 +56,10 @@ adminRoutes.post('/change-requests/:id/reject', requireAdmin, requireAdminPermis
 adminRoutes.post('/change-requests/:id/rollback', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.rollback);
 
 // Tenants
+adminRoutes.get('/tenants/:id/support-targets', requireAdmin, requireAdminPermission('support-session.manage'), AdminSupportSessionController.targets);
+adminRoutes.get('/tenants/:id/support-sessions', requireAdmin, requireAdminPermission('support-session.manage'), AdminSupportSessionController.list);
+adminRoutes.post('/support-sessions', requireAdmin, requireAdminPermission('support-session.manage'), AdminSupportSessionController.request);
+adminRoutes.post('/tenants/:id/support-sessions/:sessionId/revoke', requireAdmin, requireAdminPermission('support-session.manage'), AdminSupportSessionController.revoke);
 adminRoutes.get('/tenants', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantController.list);
 adminRoutes.post('/tenants', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantController.create);
 adminRoutes.get('/tenants/:id', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantController.getById);

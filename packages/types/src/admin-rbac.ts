@@ -11,6 +11,7 @@ export type AdminRoleKey = (typeof ADMIN_ROLE_KEYS)[number];
 export const ADMIN_PERMISSIONS = [
   "admin-user.read",
   "admin-user.manage",
+  "support-session.manage",
   "dashboard.read",
   "tenant.read",
   "tenant.create",
@@ -39,6 +40,7 @@ export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
 export const ADMIN_ROLE_PERMISSIONS = {
   SUPER_ADMIN: ADMIN_PERMISSIONS,
   SUPPORT: [
+    "support-session.manage",
     "dashboard.read",
     "tenant.read",
     "tenant.settings.update",

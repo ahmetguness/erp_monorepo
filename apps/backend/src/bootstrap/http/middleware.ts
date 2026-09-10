@@ -36,7 +36,7 @@ export function registerPreRoutingMiddleware(app: Hono, config: RuntimeConfig): 
       return !config.isProduction && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ? origin : '';
     },
     allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-request-id', 'x-correlation-id'],
+    allowHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-request-id', 'x-correlation-id', 'X-Support-Session', 'X-Support-Tenant'],
     exposeHeaders: ['Content-Length', 'x-request-id', 'x-correlation-id'],
     maxAge: 86400,
     credentials: true,

@@ -40,6 +40,7 @@ const GROUPS: SettingsGroup[] = [
   {
     title: 'Sistem',
     items: [
+      { href: '/dashboard/settings/support-access', icon: Shield, label: 'Destek Erişimi', description: 'Süreli destek taleplerini onaylayın veya iptal edin (tenant sahibi)', color: 'text-amber-400', bg: 'bg-amber-500/10', ring: 'group-hover:ring-amber-500/20' },
       { href: '/dashboard/settings/general', icon: Settings, label: 'Genel Ayarlar', description: 'Şirket bilgileri ve yapılandırma', color: 'text-slate-300', bg: 'bg-slate-700/40', ring: 'group-hover:ring-slate-600/30' },
       { href: '/dashboard/settings/security', icon: Shield, label: 'Kurumsal Güvenlik', description: 'SSO, SCIM, IP kısıtı ve oturum politikaları', color: 'text-rose-400', bg: 'bg-rose-500/10', ring: 'group-hover:ring-rose-500/20' },
       { href: '/dashboard/settings/bi', icon: Database, label: 'Veri Ambarı / BI Entegrasyonu', description: 'Planlı veri setleri ve dış BI araçlarına connector', color: 'text-emerald-400', bg: 'bg-emerald-500/10', ring: 'group-hover:ring-emerald-500/20' },

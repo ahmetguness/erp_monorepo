@@ -96,8 +96,13 @@ export function getRequestMeta(c: Context): {
   ipAddress: string | null;
   userAgent: string | null;
   requestId: string | null;
+  adminId?: string;
+  reason?: string;
+  ticketId?: string;
 } {
+  const supportAudit: { adminId: string; reason: string; ticketId: string } | undefined = c.get('supportAudit');
   return {
+    ...supportAudit,
     ipAddress: getTrustedClientIpOrNull(c),
     userAgent: c.req.header('user-agent') ?? null,
     requestId: c.get('requestId') as string | undefined ?? c.req.header('x-request-id') ?? null,

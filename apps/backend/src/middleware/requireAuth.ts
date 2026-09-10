@@ -11,6 +11,7 @@ import { runWithTenantScope } from '../lib/tenant-isolation-context.js';
 import { resolveAccessContext } from '../modules/identity/index.js';
 import { recordAuthorizationResolution } from '../services/observability.service.js';
 import { setAccessContext } from './access-context.js';
+import { runSupportRequest } from './support-request.js';
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
@@ -33,6 +34,9 @@ function isJwtPayload(value: string | JsonWebTokenPayload): value is JwtPayload 
  * tenantId her zaman JWT payload'dan alınır — header override yapılamaz.
  */
 export async function requireAuth(c: Context, next: Next) {
+  if (c.req.header('X-Support-Session') !== undefined || c.req.header('X-Support-Tenant') !== undefined) {
+    return runSupportRequest(c, next, authenticateTenantRequest);
+  }
   const auth = c.req.header('Authorization');
   const cookieToken = getCookie(c, 'axon_token');
   const token = auth?.startsWith('Bearer ') ? auth.slice(7) : cookieToken;
@@ -57,6 +61,10 @@ export async function requireAuth(c: Context, next: Next) {
     return c.json(new ForbiddenError('Geçersiz veya süresi dolmuş token.').toJSON(), 401);
   }
 
+  return authenticateTenantRequest(c, next, payload);
+}
+
+async function authenticateTenantRequest(c: Context, next: Next, payload: JwtPayload): Promise<Response | void> {
   return runWithTenantScope(payload.tenantId, async () => {
     c.set('userId', payload.userId);
     c.set('tenantId', payload.tenantId);
