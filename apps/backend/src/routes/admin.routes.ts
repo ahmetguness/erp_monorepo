@@ -10,6 +10,7 @@ AdminFeatureController,
 AdminMetricsController,
 AdminSecurityController,
 AdminTenantController,
+AdminTenantLifecycleController,
 AdminTenant360Controller,
 AdminSupportSessionController,
 } from '../modules/platform/http/controllers/index.js';
@@ -56,6 +57,10 @@ adminRoutes.post('/change-requests/:id/reject', requireAdmin, requireAdminPermis
 adminRoutes.post('/change-requests/:id/rollback', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.rollback);
 
 // Tenants
+adminRoutes.get('/tenants/:id/lifecycle', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantLifecycleController.get);
+adminRoutes.post('/tenants/:id/lifecycle/requests', requireAdmin, requireAdminPermission('tenant.status.update'), AdminTenantLifecycleController.request);
+adminRoutes.post('/tenants/:id/lifecycle/requests/:requestId/decision', requireAdmin, requireAdminPermission('tenant.status.approve'), AdminTenantLifecycleController.decide);
+adminRoutes.post('/tenants/:id/lifecycle/export', requireAdmin, requireAdminPermission('tenant.export'), AdminTenantLifecycleController.export);
 adminRoutes.get('/tenants/:id/support-targets', requireAdmin, requireAdminPermission('support-session.manage'), AdminSupportSessionController.targets);
 adminRoutes.get('/tenants/:id/support-sessions', requireAdmin, requireAdminPermission('support-session.manage'), AdminSupportSessionController.list);
 adminRoutes.post('/support-sessions', requireAdmin, requireAdminPermission('support-session.manage'), AdminSupportSessionController.request);

@@ -6,5 +6,6 @@ export { AdminSessionController } from './admin/admin-session.controller.js';
 export { AdminFeatureController } from './admin/admin-feature.controller.js';
 export { AdminMetricsController } from './admin/admin-metrics.controller.js';
 export { AdminTenantController } from './admin/admin-tenant.controller.js';
+export { AdminTenantLifecycleController } from './admin/admin-tenant-lifecycle.controller.js';
 export { AdminTenant360Controller } from './admin/admin-tenant-360.controller.js';
 export { AdminSupportSessionController } from './admin/admin-support-session.controller.js';

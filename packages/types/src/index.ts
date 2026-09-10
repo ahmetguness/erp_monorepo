@@ -6,7 +6,7 @@ export type {
   ApiError as ApiErrorBody,
   ApiResponse,
   PaginatedResponse,
-} from './contracts/common.js';
+} from "./contracts/common.js";
 
 // ─────────────────────────────────────────────
 // ENUMS
@@ -23,6 +23,9 @@ export enum TenantStatus {
   ACTIVE = "ACTIVE",
   SUSPENDED = "SUSPENDED",
   CANCELLED = "CANCELLED",
+  ARCHIVED = "ARCHIVED",
+  DELETION_SCHEDULED = "DELETION_SCHEDULED",
+  DELETED = "DELETED",
 }
 
 export enum DeploymentType {
@@ -288,10 +291,10 @@ export interface StockLevel {
   locationId: string;
   quantity: number;
   updatedAt: string;
-  product?: Pick<Product, 'id' | 'code' | 'name' | 'minStockLevel'> & {
-    unit?: Pick<Unit, 'code'>;
+  product?: Pick<Product, "id" | "code" | "name" | "minStockLevel"> & {
+    unit?: Pick<Unit, "code">;
   };
-  warehouse?: Pick<Warehouse, 'id' | 'name' | 'code'>;
+  warehouse?: Pick<Warehouse, "id" | "name" | "code">;
 }
 
 export interface StockMovement {
@@ -305,9 +308,9 @@ export interface StockMovement {
   toWarehouseId: string | null;
   notes: string | null;
   createdAt: string;
-  product?: Pick<Product, 'id' | 'code' | 'name'>;
-  fromWarehouse?: Pick<Warehouse, 'id' | 'name'>;
-  toWarehouse?: Pick<Warehouse, 'id' | 'name'>;
+  product?: Pick<Product, "id" | "code" | "name">;
+  fromWarehouse?: Pick<Warehouse, "id" | "name">;
+  toWarehouse?: Pick<Warehouse, "id" | "name">;
 }
 
 export interface StockCount {
@@ -321,7 +324,7 @@ export interface StockCount {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
-  warehouse?: Pick<Warehouse, 'id' | 'name'>;
+  warehouse?: Pick<Warehouse, "id" | "name">;
   items?: StockCountItem[];
   _count?: { items: number };
 }
@@ -335,7 +338,7 @@ export interface StockCountItem {
   expectedQty: number;
   countedQty: number;
   difference: number;
-  product?: Pick<Product, 'id' | 'code' | 'name'>;
+  product?: Pick<Product, "id" | "code" | "name">;
 }
 
 // ─────────────────────────────────────────────
@@ -356,7 +359,7 @@ export interface SalesQuote {
   totalGross: number;
   createdAt: string;
   updatedAt: string;
-  contact?: Pick<Contact, 'id' | 'name'>;
+  contact?: Pick<Contact, "id" | "name">;
   items?: SalesOrderItem[];
 }
 
@@ -376,9 +379,9 @@ export interface SalesOrder {
   invoicedAmount: number;
   createdAt: string;
   updatedAt: string;
-  contact?: Pick<Contact, 'id' | 'name'>;
+  contact?: Pick<Contact, "id" | "name">;
   items?: SalesOrderItem[];
-  invoices?: Pick<Invoice, 'id' | 'number' | 'status' | 'totalGross'>[];
+  invoices?: Pick<Invoice, "id" | "number" | "status" | "totalGross">[];
 }
 
 export interface SalesOrderItem {
@@ -394,7 +397,7 @@ export interface SalesOrderItem {
   taxAmount: number;
   lineTotal: number;
   sortOrder: number;
-  product?: Pick<Product, 'id' | 'code' | 'name'>;
+  product?: Pick<Product, "id" | "code" | "name">;
 }
 
 // ─────────────────────────────────────────────
@@ -419,7 +422,7 @@ export interface Invoice {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
-  contact?: Pick<Contact, 'id' | 'name' | 'taxNumber'>;
+  contact?: Pick<Contact, "id" | "name" | "taxNumber">;
   lines?: InvoiceLine[];
 }
 
@@ -436,8 +439,8 @@ export interface InvoiceLine {
   taxAmount: number;
   lineTotal: number;
   sortOrder: number;
-  product?: Pick<Product, 'id' | 'code' | 'name'>;
-  taxRate?: Pick<TaxRate, 'id' | 'name' | 'rate'>;
+  product?: Pick<Product, "id" | "code" | "name">;
+  taxRate?: Pick<TaxRate, "id" | "name" | "rate">;
 }
 
 // ─────────────────────────────────────────────
@@ -452,8 +455,8 @@ export interface LedgerAccount {
   accountType: AccountType;
   parentId: string | null;
   isActive: boolean;
-  parent?: Pick<LedgerAccount, 'id' | 'code' | 'name'>;
-  children?: Pick<LedgerAccount, 'id' | 'code' | 'name'>[];
+  parent?: Pick<LedgerAccount, "id" | "code" | "name">;
+  children?: Pick<LedgerAccount, "id" | "code" | "name">[];
 }
 
 export interface FiscalPeriod {
@@ -481,7 +484,7 @@ export interface JournalEntry {
   createdAt: string;
   updatedAt: string;
   lines?: JournalEntryLine[];
-  fiscalPeriod?: Pick<FiscalPeriod, 'id' | 'name' | 'status'>;
+  fiscalPeriod?: Pick<FiscalPeriod, "id" | "name" | "status">;
 }
 
 export interface JournalEntryLine {
@@ -493,7 +496,7 @@ export interface JournalEntryLine {
   credit: number;
   description: string | null;
   sortOrder: number;
-  account?: Pick<LedgerAccount, 'id' | 'code' | 'name'>;
+  account?: Pick<LedgerAccount, "id" | "code" | "name">;
 }
 
 // ─────────────────────────────────────────────
@@ -538,9 +541,9 @@ export interface Payment {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
-  contact?: Pick<Contact, 'id' | 'name'>;
-  bankAccount?: Pick<BankAccount, 'id' | 'name'>;
-  cashAccount?: Pick<CashAccount, 'id' | 'name'>;
+  contact?: Pick<Contact, "id" | "name">;
+  bankAccount?: Pick<BankAccount, "id" | "name">;
+  cashAccount?: Pick<CashAccount, "id" | "name">;
   allocations?: PaymentAllocation[];
 }
 
@@ -551,7 +554,7 @@ export interface PaymentAllocation {
   invoiceId: string;
   amount: number;
   createdAt: string;
-  invoice?: Pick<Invoice, 'id' | 'number' | 'totalGross'>;
+  invoice?: Pick<Invoice, "id" | "number" | "totalGross">;
 }
 
 // ─────────────────────────────────────────────
@@ -651,7 +654,7 @@ export interface SupplierReliabilityItem {
   averageLeadTimeDays: number;
   threeWayMatchPassRate: number;
   reliabilityScore: number;
-  riskCategory: 'LOW' | 'MEDIUM' | 'HIGH';
+  riskCategory: "LOW" | "MEDIUM" | "HIGH";
 }
 
 export interface CashFlowForecastPeriod {
@@ -695,7 +698,7 @@ export interface RepricingAnalysisItem {
   currentMarginPct: number;
   recommendedPrice: number;
   targetMarginPct: number;
-  status: 'OPTIMAL' | 'REPRICE_NEEDED' | 'MARGIN_RISK';
+  status: "OPTIMAL" | "REPRICE_NEEDED" | "MARGIN_RISK";
 }
 
 export interface ParsedCommandStep {
@@ -703,14 +706,14 @@ export interface ParsedCommandStep {
   intent: string;
   actionDescription: string;
   targetEntity: string;
-  status: 'PENDING' | 'EXECUTED' | 'FAILED';
+  status: "PENDING" | "EXECUTED" | "FAILED";
 }
 
 export interface ParsedCommandPlan {
   planId: string;
   prompt: string;
   intentCategory: string;
-  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  riskLevel: "LOW" | "MEDIUM" | "HIGH";
   steps: ParsedCommandStep[];
   requiresApproval: boolean;
   createdAt: string;
@@ -729,14 +732,15 @@ export interface IntegrityCheckRuleItem {
   ruleCode: string;
   ruleTitle: string;
   category: string;
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   mismatchCount: number;
   canAutoHeal: boolean;
-  status: 'CLEAN' | 'MISMATCH_DETECTED';
+  status: "CLEAN" | "MISMATCH_DETECTED";
 }
 
-export * from './plans.js';
-export * from './admin-rbac.js';
-export * from './admin-users.js';
-export * from './tenant-360.js';
-export * from './support-session.js';
+export * from "./plans.js";
+export * from "./admin-rbac.js";
+export * from "./admin-users.js";
+export * from "./tenant-360.js";
+export * from "./support-session.js";
+export * from "./tenant-lifecycle.js";

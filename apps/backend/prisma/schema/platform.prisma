@@ -223,6 +223,36 @@ model SupportSession {
   @@map("support_sessions")
 }
 
+model TenantLifecycleRequest {
+  id String @id @default(cuid())
+  tenantId String
+  fromStatus TenantStatus
+  version Int
+  input Json
+  state String @default("PENDING")
+  requestedById String
+  requestedByName String
+  decidedById String?
+  createdAt DateTime @default(now())
+  decidedAt DateTime?
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId, createdAt])
+  @@map("tenant_lifecycle_requests")
+}
+
+model TenantLifecycleExport {
+  id String @id @default(cuid())
+  tenantId String
+  version Int
+  digest String
+  data Json
+  createdById String
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId, createdAt])
+  @@map("tenant_lifecycle_exports")
+}
+
 model AiRequestLog {
   id                    String                  @id @default(cuid())
   tenantId              String?

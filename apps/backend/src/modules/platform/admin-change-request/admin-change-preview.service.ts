@@ -5,6 +5,7 @@ import { prisma } from '../../../lib/prisma.js';
 import { modulesForPrismaPlan } from '../../../utils/tenant-modules.js';
 import type { PreviewRequest } from './admin-change-request.schemas.js';
 import { isCriticalTenantPlanChange, isCriticalTenantStatusChange } from './admin-change-request.policy.js';
+import { assertLegacyTenantTransition } from '../tenant-lifecycle/tenant-lifecycle.policy.js';
 
 function change(field: string, label: string, before: unknown, after: unknown): ChangePreviewField {
   return { field, label, before, after };
@@ -32,6 +33,7 @@ export async function previewAdminChange(input: PreviewRequest): Promise<ChangeP
     case AdminChangeRequestType.TENANT_STATUS_UPDATE: {
       const tenant = await prisma.tenant.findFirst({ where: { id: input.payload.tenantId, deletedAt: null } });
       if (!tenant) throw new NotFoundError('Tenant', input.payload.tenantId);
+      assertLegacyTenantTransition(tenant.status, input.payload.status);
       return {
         type: input.type, targetId: tenant.id, targetLabel: tenant.companyName,
         changes: [change('status', 'Durum', tenant.status, input.payload.status)],

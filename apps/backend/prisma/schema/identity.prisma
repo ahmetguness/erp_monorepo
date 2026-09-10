@@ -12,6 +12,9 @@ enum TenantStatus {
   ACTIVE
   SUSPENDED
   CANCELLED
+  ARCHIVED
+  DELETION_SCHEDULED
+  DELETED
 }
 
 enum DeploymentType {
@@ -91,6 +94,12 @@ enum InvitationStatus {
 }
 
 model Tenant {
+  lifecycleVersion Int @default(0)
+  legalHold Boolean @default(false)
+  retentionUntil DateTime?
+  deletionNotBefore DateTime?
+  lifecycleRequests TenantLifecycleRequest[]
+  lifecycleExports TenantLifecycleExport[]
   supportSessions SupportSession[]
   supportNotes TenantSupportNote[]
   id        String   @id @default(cuid())

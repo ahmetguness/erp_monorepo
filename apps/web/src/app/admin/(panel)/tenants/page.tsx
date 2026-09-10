@@ -19,6 +19,9 @@ const STATUS_MAP: Record<string, { label: string; variant: BadgeVariant }> = {
   ACTIVE: { label: 'Aktif', variant: 'success' },
   SUSPENDED: { label: 'Askıda', variant: 'danger' },
   CANCELLED: { label: 'İptal', variant: 'neutral' },
+  ARCHIVED: { label: 'Arşivlendi', variant: 'neutral' },
+  DELETION_SCHEDULED: { label: 'Silme Planlandı', variant: 'danger' },
+  DELETED: { label: 'Silindi', variant: 'danger' },
 };
 
 const PLAN_MAP: Record<string, { label: string; color: string }> = {
@@ -229,8 +232,6 @@ export default function AdminTenantsPage() {
             <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="bg-slate-950 border border-slate-800 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/50">
               <option value="TRIAL">Deneme</option>
               <option value="ACTIVE">Aktif</option>
-              <option value="SUSPENDED">Askıda</option>
-              <option value="CANCELLED">İptal</option>
             </select>
             <input type="number" min={1} value={form.maxUsers ?? ''} onChange={(e) => setForm({ ...form, maxUsers: e.target.value ? Number(e.target.value) : null })} placeholder="Max kullanıcı" className="bg-slate-950 border border-slate-800 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/50" />
             <label className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-300">
@@ -311,6 +312,9 @@ export default function AdminTenantsPage() {
           <option value="ACTIVE">Aktif</option>
           <option value="SUSPENDED">Askıda</option>
           <option value="CANCELLED">İptal</option>
+          <option value="ARCHIVED">Arşivlendi</option>
+          <option value="DELETION_SCHEDULED">Silme Planlandı</option>
+          <option value="DELETED">Silindi</option>
         </select>
         <select value={planFilter} onChange={(e) => { setPlanFilter(e.target.value); setPage(1); }}
           className="bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/50">
@@ -343,7 +347,7 @@ export default function AdminTenantsPage() {
               const plan = PLAN_MAP[t.plan];
               const status = STATUS_MAP[t.status];
               return (
-                <div key={t.id} onClick={() => router.push(`/admin/tenants/${t.id}`)}
+                <div key={t.id} onClick={() => router.push(t.status === 'DELETED' ? `/admin/tenants/${t.id}/lifecycle` : `/admin/tenants/${t.id}`)}
                   className="grid grid-cols-12 gap-2 px-5 py-3 items-center hover:bg-slate-800/20 transition-colors cursor-pointer">
                   <div className="col-span-3 min-w-0">
                     <p className="text-sm font-medium text-slate-200 truncate">{t.companyName}</p>

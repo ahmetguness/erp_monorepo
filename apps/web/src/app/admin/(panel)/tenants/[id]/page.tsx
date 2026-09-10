@@ -5,6 +5,7 @@ import { Tenant360Workspace } from '@/components/features/admin/tenant-360/Tenan
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, CalendarClock, FileWarning, MonitorCheck, Users, Package, Receipt, ShoppingCart, Truck, CreditCard, Warehouse, Layers, BookOpen, Plus, Minus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { getPlanFeatures, getTenantById, getTenantMetrics, isPendingAdminChange, updateTenant, updateTenantPlan, updateTenantStatus, type PlanFeature } from '@/services/admin.service';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { DatePicker } from '@/components/ui/DatePicker';
@@ -305,6 +306,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
           <p className="text-xs text-slate-500">{tenant.slug} · {tenant.email}</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <Link href={`/admin/tenants/${id}/lifecycle`} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-300 hover:text-white">Yaşam döngüsü</Link>
           <Badge variant={STATUS_VARIANT[tenant.status] ?? 'neutral'}>{tenant.status}</Badge>
           <span className={cn('text-xs font-medium px-2.5 py-1 rounded-full border', PLAN_COLOR[tenant.plan])}>{tenant.plan}</span>
         </div>

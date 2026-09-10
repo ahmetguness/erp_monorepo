@@ -7,6 +7,7 @@ import { createAuditLog } from '../../../utils/audit.js';
 import { modulesForPrismaPlan } from '../../../utils/tenant-modules.js';
 import { PlanChangeExperienceService } from '../../../services/plan-change-experience.service.js';
 import { BaseError } from '../../../errors/index.js';
+import { assertLegacyTenantTransition } from '../tenant-lifecycle/tenant-lifecycle.policy.js';
 import {
   featureOverrideDeletePayloadSchema, featureOverridePayloadSchema, planFeaturePayloadSchema, tenantPlanPayloadSchema, tenantStatusPayloadSchema,
 } from './admin-change-request.schemas.js';
@@ -116,11 +117,17 @@ async function applyChange(
     }
     case AdminChangeRequestType.TENANT_STATUS_UPDATE: {
       const payload = tenantStatusPayloadSchema.parse(request.payload);
-      const current = await tx.tenant.findUniqueOrThrow({ where: { id: payload.tenantId }, select: { status: true } });
+      const current = await tx.tenant.findUniqueOrThrow({ where: { id: payload.tenantId }, select: { status: true, lifecycleVersion: true } });
+      if (!request.rollbackOfId) assertLegacyTenantTransition(current.status, payload.status);
       const previousStatus = request.previousValues && typeof request.previousValues === 'object' && !Array.isArray(request.previousValues)
         ? request.previousValues.status : null;
       if (current.status !== previousStatus) throw new AdminChangeRequestError('Tenant durumu talep oluşturulduktan sonra değişmiş.', 409);
-      await tx.tenant.update({ where: { id: payload.tenantId }, data: { status: payload.status } });
+      const previousVersion = request.previousValues && typeof request.previousValues === 'object' && !Array.isArray(request.previousValues)
+        ? request.previousValues.lifecycleVersion : null;
+      if (typeof previousVersion === 'number' && current.lifecycleVersion !== previousVersion) {
+        throw new AdminChangeRequestError('Tenant yaşam döngüsü talep oluşturulduktan sonra değişmiş.', 409);
+      }
+      await tx.tenant.update({ where: { id: payload.tenantId }, data: { status: payload.status, lifecycleVersion: { increment: 1 } } });
       await createAuditLog(tx, { ...auditBase, tenantId: payload.tenantId, entityId: payload.tenantId, oldValues: request.previousValues ?? undefined, newValues: payload });
       await notifyOwners(tx, payload.tenantId, 'Tenant durumunuz onaylı admin işlemiyle değiştirildi', `Durum: ${current.status} → ${payload.status}`);
       return;
@@ -151,7 +158,12 @@ async function applyChange(
       if (!override || override.tenantId !== payload.tenantId || override.featureKey !== payload.featureKey) {
         throw new AdminChangeRequestError('Kalıcı override talep oluşturulduktan sonra değişmiş veya kaldırılmış.', 409);
       }
-      await tx.tenantFeatureOverride.delete({ where: { id: payload.overrideId } });
+      const deleted = await tx.tenantFeatureOverride.deleteMany({
+        where: { id: payload.overrideId, tenantId: payload.tenantId, featureKey: payload.featureKey },
+      });
+      if (deleted.count !== 1) {
+        throw new AdminChangeRequestError('Kalıcı override eşzamanlı olarak değişmiş veya kaldırılmış.', 409);
+      }
       await createAuditLog(tx, { ...auditBase, tenantId: payload.tenantId, entityId: payload.overrideId, oldValues: request.previousValues ?? undefined, newValues: { deleted: true, featureKey: payload.featureKey } });
       await notifyOwners(tx, payload.tenantId, 'Tenant özellik ayarınız onaylı admin işlemiyle kaldırıldı', `Özellik: ${payload.featureKey}`);
       return;
@@ -204,9 +216,15 @@ export async function rollbackAdminChange(
       throw new AdminChangeRequestError('Bu değişikliği geri alma yetkiniz bulunmuyor.', 403);
     }
     const payload = rollbackPayload(original);
-    const rollbackPayloadValues = original.payload && !Array.isArray(original.payload) && typeof original.payload === 'object'
+    let rollbackPayloadValues: Prisma.InputJsonValue | typeof Prisma.JsonNull = original.payload && !Array.isArray(original.payload) && typeof original.payload === 'object'
       ? { ...original.payload }
       : Prisma.JsonNull;
+    if (original.type === AdminChangeRequestType.TENANT_STATUS_UPDATE) {
+      const tenantId = String(payload.tenantId);
+      const current = await tx.tenant.findUnique({ where: { id: tenantId }, select: { status: true, lifecycleVersion: true } });
+      if (!current) throw new AdminChangeRequestError('Tenant bulunamadı.', 404);
+      rollbackPayloadValues = { status: current.status, lifecycleVersion: current.lifecycleVersion };
+    }
     const rollback: RequestWithActors = await tx.adminChangeRequest.create({
       data: {
         type: original.type, status: AdminChangeRequestStatus.APPROVED,

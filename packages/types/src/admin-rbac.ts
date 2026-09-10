@@ -14,6 +14,7 @@ export const ADMIN_PERMISSIONS = [
   "support-session.manage",
   "dashboard.read",
   "tenant.read",
+  "tenant.export",
   "tenant.create",
   "tenant.settings.update",
   "tenant.plan.update",

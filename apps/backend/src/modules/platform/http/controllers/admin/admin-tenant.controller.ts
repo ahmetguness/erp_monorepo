@@ -13,6 +13,7 @@ import { modulesForPrismaPlan } from '../../../../../utils/tenant-modules.js';
 import { submitAdminChange } from '../../../admin-change-request/admin-change-request.service.js';
 import { isCriticalTenantPlanChange,isCriticalTenantStatusChange } from '../../../admin-change-request/admin-change-request.policy.js';
 import { changeMetadataSchema } from '../../../admin-change-request/admin-change-request.schemas.js';
+import { assertLegacyTenantTransition } from '../../../tenant-lifecycle/tenant-lifecycle.policy.js';
 import { buildChangeLine,createSlug,formatNotificationValue,normalizeEmail,notifyTenantOwners,parseNullableDate,planChangeExperienceService,translateModules,VALID_PLANS,VALID_STATUSES,validateModules } from './shared.js';
 
 export const AdminTenantController = {
@@ -31,7 +32,7 @@ export const AdminTenantController = {
     }
 
     const where = {
-      deletedAt: null,
+      deletedAt: status === 'DELETED' ? undefined : null,
       ...(status && { status }),
       ...(plan && { plan }),
       ...(search && {
@@ -80,6 +81,7 @@ export const AdminTenantController = {
     const email = normalizeEmail(body.email);
     const plan = body.plan ?? Plan.STARTER;
     const status = body.status ?? TenantStatus.TRIAL;
+    if (status !== 'TRIAL' && status !== 'ACTIVE') return c.json(new ValidationError('Yeni tenant yalnızca TRIAL veya ACTIVE olabilir.').toJSON(), 400);
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return c.json(new ValidationError('Geçerli bir e-posta adresi giriniz.').toJSON(), 400);
@@ -286,6 +288,7 @@ export const AdminTenantController = {
     const tenant = await prisma.tenant.findFirst({ where: { id, deletedAt: null } });
     if (!tenant) return c.json(new NotFoundError('Tenant', id).toJSON(), 404);
     if (tenant.status === body.status) return c.json({ data: tenant });
+    assertLegacyTenantTransition(tenant.status, body.status);
 
     if (isCriticalTenantStatusChange(body.status)) {
       const metadata = changeMetadataSchema.safeParse({ reason: body.reason, ticketId: body.ticketId });
@@ -297,7 +300,7 @@ export const AdminTenantController = {
         targetLabel: tenant.companyName,
         requiredPermission: 'tenant.status.approve',
         payload: { tenantId: id, status: body.status },
-        previousValues: { status: tenant.status },
+        previousValues: { status: tenant.status, lifecycleVersion: tenant.lifecycleVersion },
         affectedTenantCount: 1,
         affectedUserCount,
         requestedById: c.get('adminId'),
@@ -308,7 +311,7 @@ export const AdminTenantController = {
 
     const updated = await prisma.tenant.update({
       where: { id },
-      data: { status: body.status },
+      data: { status: body.status, lifecycleVersion: { increment: 1 } },
     });
 
     await createAuditLog(prisma, {
