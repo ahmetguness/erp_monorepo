@@ -52,6 +52,7 @@ import {
   Bot,
   ListChecks,
   Tag,
+  LifeBuoy,
   type LucideIcon,
 } from 'lucide-react';
 import { ACCESS_POLICIES, type PlanName } from './plans';
@@ -270,6 +271,12 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: 'AI Governance', href: '/dashboard/settings/ai-governance', icon: Bot, plan: ENTERPRISE_PLAN, module: 'ai_governance' },
         ],
       },
+    ],
+  },
+  {
+    label: 'Destek',
+    items: [
+      { label: 'Destek Talepleri', href: '/dashboard/tickets', icon: LifeBuoy },
     ],
   },
 ];

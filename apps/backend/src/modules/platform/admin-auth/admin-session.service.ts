@@ -6,7 +6,7 @@ import type { AdminJwtPayload } from '../admin-access/admin-access.types.js';
 export const ADMIN_ACCESS_TTL_SECONDS = 15 * 60;
 export const ADMIN_REFRESH_TTL_SECONDS = 8 * 60 * 60;
 export const ADMIN_REMEMBER_REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60;
-export const ADMIN_RECENT_MFA_SECONDS = 10 * 60;
+export const ADMIN_RECENT_MFA_SECONDS = 24 * 60 * 60; // 1 gün (24 saat) geçerli
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');

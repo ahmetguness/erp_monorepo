@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requireAdmin, requireAdminPermission, requireRecentAdminMfa } from '../middleware/requireAdmin';
+import { platformAdminAuditMiddleware } from '../middleware/platform-admin-audit.js';
 import {
 AdminAuditController,
 AdminChangeRequestController,
@@ -16,13 +17,16 @@ AdminSubscriptionOperationsController,
 AdminFeatureRolloutController,
 AdminOperationInterventionController,
 AdminPersistentObservabilityController,
+AdminIncidentController,
 AdminTenant360Controller,
 AdminSupportSessionController,
+AdminSupportTicketController,
+AdminDisasterRecoveryController,
 } from '../modules/platform/http/controllers/index.js';
 
 const adminRoutes = new Hono();
 
-// ── Public (no auth) ─────────────────────────
+// â”€â”€ Public (no auth) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 adminRoutes.post('/auth/login', AdminAuthController.login);
 adminRoutes.post('/auth/accept-invitation', AdminUserController.acceptInvitation);
 adminRoutes.post('/auth/logout', AdminAuthController.logout);
@@ -45,8 +49,9 @@ adminRoutes.use('*', async (c, next) => {
   }
   await next();
 });
+adminRoutes.use('*', platformAdminAuditMiddleware);
 
-// ── Protected routes ─────────────────────────
+// â”€â”€ Protected routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Auth
 adminRoutes.get('/auth/me', requireAdmin, AdminAuthController.me);
 adminRoutes.get('/admin-users', requireAdmin, requireAdminPermission('admin-user.read'), AdminUserController.list);
@@ -85,6 +90,10 @@ adminRoutes.get('/tenants/:id/support-targets', requireAdmin, requireAdminPermis
 adminRoutes.get('/tenants/:id/support-sessions', requireAdmin, requireAdminPermission('support-session.manage'), AdminSupportSessionController.list);
 adminRoutes.post('/support-sessions', requireAdmin, requireAdminPermission('support-session.manage'), AdminSupportSessionController.request);
 adminRoutes.post('/tenants/:id/support-sessions/:sessionId/revoke', requireAdmin, requireAdminPermission('support-session.manage'), AdminSupportSessionController.revoke);
+adminRoutes.get('/support-tickets', requireAdmin, requireAdminPermission('support-ticket.read'), AdminSupportTicketController.list);
+adminRoutes.get('/support-tickets/:id', requireAdmin, requireAdminPermission('support-ticket.read'), AdminSupportTicketController.get);
+adminRoutes.post('/support-tickets/:id/messages', requireAdmin, requireAdminPermission('support-ticket.manage'), AdminSupportTicketController.addMessage);
+adminRoutes.patch('/support-tickets/:id', requireAdmin, requireAdminPermission('support-ticket.manage'), AdminSupportTicketController.update);
 adminRoutes.get('/tenants', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantController.list);
 adminRoutes.post('/tenants', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantProvisioningController.create);
 adminRoutes.get('/tenants/:id', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantController.getById);
@@ -118,12 +127,31 @@ adminRoutes.put('/observability/slos', requireAdmin, requireAdminPermission('ope
 adminRoutes.put('/observability/alerts/:id/ownership', requireAdmin, requireAdminPermission('operations.manage'), AdminPersistentObservabilityController.ownership);
 adminRoutes.post('/observability/alerts/:id/silence', requireAdmin, requireAdminPermission('operations.manage'), AdminPersistentObservabilityController.silence);
 adminRoutes.post('/observability/deployments', requireAdmin, requireAdminPermission('operations.manage'), AdminPersistentObservabilityController.deployment);
+adminRoutes.get('/incidents', requireAdmin, requireAdminPermission('operations.read'), AdminIncidentController.list);
+adminRoutes.post('/incidents', requireAdmin, requireAdminPermission('operations.manage'), AdminIncidentController.create);
+adminRoutes.patch('/incidents/:id', requireAdmin, requireAdminPermission('operations.manage'), AdminIncidentController.update);
+adminRoutes.post('/incidents/:id/timeline', requireAdmin, requireAdminPermission('operations.manage'), AdminIncidentController.timeline);
+adminRoutes.post('/incidents/:id/communications', requireAdmin, requireAdminPermission('operations.manage'), AdminIncidentController.communication);
+adminRoutes.post('/incident-communications/:communicationId/decision', requireAdmin, requireAdminPermission('operations.manage'), AdminIncidentController.decision);
 
 // Audit
 adminRoutes.get('/audit-logs', requireAdmin, requireAdminPermission('audit.read'), AdminAuditController.list);
+adminRoutes.get('/audit-logs/export', requireAdmin, requireAdminPermission('audit.read'), AdminAuditController.export);
+adminRoutes.get('/audit-logs/integrity', requireAdmin, requireAdminPermission('audit.read'), AdminAuditController.integrity);
+adminRoutes.put('/audit-logs/retention', requireAdmin, requireAdminPermission('audit.manage'), AdminAuditController.retention);
+adminRoutes.get('/audit-logs/:id', requireAdmin, requireAdminPermission('audit.read'), AdminAuditController.detail);
 
 // Security checklist
 adminRoutes.get('/security/runtime-health', requireAdmin, requireAdminPermission('security.read'), AdminSecurityController.runtimeHealth);
 adminRoutes.get('/security/checklist', requireAdmin, requireAdminPermission('security.read'), AdminSecurityController.checklist);
+adminRoutes.get('/security/findings', requireAdmin, requireAdminPermission('security.read'), AdminSecurityController.findings);
+adminRoutes.post('/security/scan', requireAdmin, requireAdminPermission('security.manage'), AdminSecurityController.scan);
+adminRoutes.patch('/security/findings/:id', requireAdmin, requireAdminPermission('security.manage'), AdminSecurityController.updateFinding);
+adminRoutes.post('/security/findings/:id/ticket', requireAdmin, requireAdminPermission('security.manage'), AdminSecurityController.createTicket);
+adminRoutes.get('/disaster-recovery', requireAdmin, requireAdminPermission('operations.read'), AdminDisasterRecoveryController.overview);
+adminRoutes.post('/disaster-recovery/backups', requireAdmin, requireAdminPermission('operations.manage'), AdminDisasterRecoveryController.recordBackup);
+adminRoutes.post('/disaster-recovery/restore-drills', requireAdmin, requireAdminPermission('operations.manage'), AdminDisasterRecoveryController.createDrill);
+adminRoutes.patch('/disaster-recovery/restore-drills/:id', requireAdmin, requireAdminPermission('operations.manage'), AdminDisasterRecoveryController.completeDrill);
+adminRoutes.put('/disaster-recovery/policy', requireAdmin, requireAdminPermission('operations.manage'), AdminDisasterRecoveryController.updatePolicy);
 
 export { adminRoutes };

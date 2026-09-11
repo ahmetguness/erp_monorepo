@@ -1,5 +1,6 @@
 export * from './activity.controller.js';
 export * from './support-session.controller.js';
+export * from './support-ticket.controller.js';
 export * from './adaptive-defaults.controller.js';
 export * from './admin-security.controller.js';
 export * from './admin.controller.js';

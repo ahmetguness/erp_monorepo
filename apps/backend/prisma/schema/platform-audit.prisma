@@ -1,0 +1,37 @@
+model PlatformAdminAuditLog {
+  id             String   @id @default(cuid())
+  actorId        String?
+  action         String
+  module         String
+  targetType     String
+  targetId       String?
+  outcome        String
+  reason         String?
+  approvalId     String?
+  ipAddress      String?
+  device         String?
+  requestId      String?
+  correlationId  String?
+  beforeValues   Json?
+  afterValues    Json?
+  changedFields  Json
+  previousHash   String?
+  hash           String   @unique
+  retentionUntil DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([module, outcome, createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@map("platform_admin_audit_logs")
+}
+
+model PlatformAuditPolicy {
+  id            String   @id @default("default")
+  retentionDays Int      @default(2555)
+  updatedById   String?
+  updatedAt     DateTime @updatedAt
+
+  @@map("platform_audit_policies")
+}

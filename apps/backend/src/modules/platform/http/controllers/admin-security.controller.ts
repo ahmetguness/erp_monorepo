@@ -7,6 +7,14 @@ type RuntimeConfigStatus,
 } from '../../../../config/env.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { getStorageStatus } from '../../../../services/storage.service.js';
+import {
+  createSecurityTicket,
+  createSecurityTicketSchema,
+  getSecurityCenter,
+  scanSecurityCenter,
+  updateSecurityFinding,
+  updateSecurityFindingSchema,
+} from '../../security-center/index.js';
 
 type SecurityStatus = 'pass' | 'warn' | 'fail';
 
@@ -221,5 +229,25 @@ export const AdminSecurityController = {
     const summary: SecurityStatus = hasFail ? 'fail' : hasWarn ? 'warn' : 'pass';
 
     return c.json({ data: { summary, checks } });
+  },
+
+  async findings(c: Context): Promise<Response> {
+    return c.json({ data: await getSecurityCenter() });
+  },
+
+  async scan(c: Context): Promise<Response> {
+    return c.json({ data: await scanSecurityCenter() });
+  },
+
+  async updateFinding(c: Context): Promise<Response> {
+    const parsed = updateSecurityFindingSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? 'Geçersiz bulgu güncellemesi.' } }, 400);
+    return c.json({ data: await updateSecurityFinding(c.req.param('id') ?? '', parsed.data) });
+  },
+
+  async createTicket(c: Context): Promise<Response> {
+    const parsed = createSecurityTicketSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? 'Geçersiz ticket bilgisi.' } }, 400);
+    return c.json({ data: await createSecurityTicket(c.req.param('id') ?? '', parsed.data.ticketId) }, 201);
   },
 };

@@ -113,14 +113,20 @@ export async function upsertSlo(input: Omit<SloDefinition, "id">): Promise<SloDe
   }));
 }
 export async function updateAlertOwnership(id: string, adminId: string, input: { owner: string; runbookUrl: string; notificationChannel: string }): Promise<AlertHistoryItem> {
-  const alert = await prisma.observabilityAlertHistory.update({ where: { id }, data: input });
-  await prisma.$executeRaw`UPDATE "observability_alert_history" SET "lastModifiedById" = ${adminId} WHERE "id" = ${id}`;
+  const alert = await prisma.$transaction(async (tx) => {
+    const updated = await tx.observabilityAlertHistory.update({ where: { id }, data: input });
+    await tx.$executeRaw`UPDATE "observability_alert_history" SET "lastModifiedById" = ${adminId} WHERE "id" = ${id}`;
+    return updated;
+  });
   return mapAlert(alert);
 }
 export async function silenceAlert(id: string, adminId: string, until: Date, reason: string): Promise<AlertHistoryItem> {
   if (until <= new Date()) throw new Error("Susturma bitişi gelecekte olmalıdır.");
-  const alert = await prisma.observabilityAlertHistory.update({ where: { id }, data: { silencedUntil: until } });
-  await prisma.$executeRaw`UPDATE "observability_alert_history" SET "lastModifiedById" = ${adminId}, "silenceReason" = ${reason} WHERE "id" = ${id}`;
+  const alert = await prisma.$transaction(async (tx) => {
+    const updated = await tx.observabilityAlertHistory.update({ where: { id }, data: { silencedUntil: until } });
+    await tx.$executeRaw`UPDATE "observability_alert_history" SET "lastModifiedById" = ${adminId}, "silenceReason" = ${reason} WHERE "id" = ${id}`;
+    return updated;
+  });
   return mapAlert(alert);
 }
 export async function createDeployment(input: { service: string; version: string; environment: string; description?: string | null; deployedAt: Date }, adminId: string): Promise<DeploymentMarker> {

@@ -26,7 +26,9 @@ export const ADMIN_PERMISSIONS = [
   "operations.read",
   "operations.manage",
   "audit.read",
+  "audit.manage",
   "security.read",
+  "security.manage",
   "demo.read",
   "demo.approve",
   "demo.reject",
@@ -36,6 +38,8 @@ export const ADMIN_PERMISSIONS = [
   "tenant.status.approve",
   "feature.approve",
   "feature.override.approve",
+  "support-ticket.read",
+  "support-ticket.manage",
 ] as const;
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
 
@@ -43,6 +47,8 @@ export const ADMIN_ROLE_PERMISSIONS = {
   SUPER_ADMIN: ADMIN_PERMISSIONS,
   SUPPORT: [
     "support-session.manage",
+    "support-ticket.read",
+    "support-ticket.manage",
     "dashboard.read",
     "tenant.read",
     "tenant.settings.update",
@@ -78,7 +84,9 @@ export const ADMIN_ROLE_PERMISSIONS = {
     "tenant.read",
     "operations.read",
     "audit.read",
+    "audit.manage",
     "security.read",
+    "security.manage",
   ],
   READ_ONLY_AUDITOR: [
     "dashboard.read",

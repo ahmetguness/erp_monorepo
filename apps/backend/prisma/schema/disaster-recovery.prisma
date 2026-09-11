@@ -1,0 +1,52 @@
+model PlatformBackupEvidence {
+  id                    String   @id @default(cuid())
+  providerRef           String   @unique
+  status                String
+  sizeBytes             BigInt
+  encrypted             Boolean
+  encryptionKeyRef      String?
+  region                String
+  replicaRegion         String?
+  replicationLagSeconds Int?
+  startedAt             DateTime
+  completedAt           DateTime
+  recordedById          String
+  recordedAt            DateTime @default(now())
+  restoreDrills         PlatformRestoreDrill[]
+
+  @@index([status, completedAt])
+  @@map("platform_backup_evidence")
+}
+
+model PlatformRestoreDrill {
+  id               String   @id @default(cuid())
+  backupId         String
+  status           String   @default("PLANNED")
+  environment      String
+  runbookUrl       String
+  approvalId       String
+  requestedById    String
+  startedAt        DateTime?
+  completedAt      DateTime?
+  recoveryPointAt  DateTime?
+  actualRpoMinutes Int?
+  actualRtoMinutes Int?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  backup           PlatformBackupEvidence @relation(fields: [backupId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([backupId, createdAt])
+  @@map("platform_restore_drills")
+}
+
+model PlatformDisasterRecoveryPolicy {
+  id                       String   @id @default("default")
+  targetRpoMinutes         Int      @default(60)
+  targetRtoMinutes         Int      @default(240)
+  maxReplicationLagSeconds Int      @default(300)
+  updatedById              String?
+  updatedAt                DateTime @updatedAt
+  @@map("platform_disaster_recovery_policies")
+}

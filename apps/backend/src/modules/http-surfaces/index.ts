@@ -1,5 +1,6 @@
-import type { Hono } from 'hono';
+﻿import type { Hono } from 'hono';
 import { adminRoutes } from '../../routes/admin.routes.js';
+import { statusRoutes } from '../../routes/status.routes.js';
 import { authRoutes } from '../../routes/auth.routes.js';
 import { biRoutes } from '../../routes/bi.routes.js';
 import { demoAdminRoutes,demoPublicRoutes } from '../../routes/demo.routes.js';
@@ -32,6 +33,7 @@ export function registerPublicHttpSurface(app: Hono): void {
 
 export function registerAdminHttpSurface(app: Hono): void {
   app.route('/api/admin', adminRoutes);
+  app.route('/api/status', statusRoutes);
   app.route('/api/admin', demoAdminRoutes);
 }
 

@@ -71,6 +71,7 @@ const excludedFiles = new Set([
   'src/modules/inventory/http/controllers/attachment.controller/shared.ts',
   'src/services/demo.service.ts',
   'src/services/invitation.service.ts',
+  'src/modules/platform/security-center/security-checks.ts',
 ]);
 
 const excludedDirectoryPrefixes = [

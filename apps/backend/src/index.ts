@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createApp } from './bootstrap/http/create-app.js';
 import { readRuntimeConfig } from './bootstrap/runtime-config.js';
 import { assertValidStartupEnv } from './config/env.js';

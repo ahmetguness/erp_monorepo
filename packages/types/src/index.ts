@@ -749,3 +749,8 @@ export * from "./subscription-operations.js";
 export * from "./feature-rollout.js";
 export * from "./operation-intervention.js";
 export * from "./persistent-observability.js";
+export * from "./incident-management.js";
+export * from "./platform-audit.js";
+export * from "./security-center.js";
+export * from "./disaster-recovery.js";
+export * from "./support-ticket.js";

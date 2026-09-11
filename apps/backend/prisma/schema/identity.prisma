@@ -107,6 +107,7 @@ model Tenant {
   customPriceRequests CustomPriceRequest[]
   supportSessions SupportSession[]
   supportNotes TenantSupportNote[]
+  platformTickets PlatformSupportTicket[]
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -256,6 +257,8 @@ model Tenant {
 
 model User {
   supportSessions SupportSession[]
+  platformTickets PlatformSupportTicket[]
+  ticketMessages PlatformTicketMessage[]
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -287,6 +290,8 @@ model User {
 model AdminUser {
   supportSessions SupportSession[]
   tenantSupportNotes TenantSupportNote[]
+  assignedTickets PlatformSupportTicket[]
+  adminTicketMessages PlatformTicketMessage[]
   inviteTokenHash String? @unique
   invitationExpiresAt DateTime?
   invitationAcceptedAt DateTime?

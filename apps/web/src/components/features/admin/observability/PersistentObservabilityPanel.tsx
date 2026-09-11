@@ -17,6 +17,7 @@ import {
   silenceAlert,
 } from "@/services/persistent-observability.service";
 import { toast } from "@/store/ui.store";
+import { IncidentManagementPanel } from "@/components/features/admin/incidents/IncidentManagementPanel";
 
 const field =
   "rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200";
@@ -378,6 +379,7 @@ export function PersistentObservabilityPanel() {
           </button>
         </div>
       )}
+      <IncidentManagementPanel alerts={query.data?.alerts ?? []} />
     </section>
   );
 }

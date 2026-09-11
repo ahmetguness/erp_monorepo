@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { getTenant360 } from '@/services/tenant-360.service';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
@@ -8,7 +9,25 @@ import { TENANT_360_TABS, Tenant360Panels, type Tenant360Tab } from './Tenant360
 import { TenantSupportPanel } from './TenantSupportPanel';
 
 export function Tenant360Workspace({ tenantId, children }: { tenantId: string; children: ReactNode }) {
-  const [tab, setTab] = useState<Tenant360Tab>('Genel Bakış');
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+
+  const [tab, setTab] = useState<Tenant360Tab>(() => {
+    if (!tabParam) return 'Genel Bakış';
+    if (tabParam.toLowerCase() === 'destek' || tabParam.toLowerCase() === 'support') return 'Destek';
+    const match = TENANT_360_TABS.find((t) => t.toLowerCase() === tabParam.toLowerCase());
+    return match ?? 'Genel Bakış';
+  });
+
+  useEffect(() => {
+    if (!tabParam) return;
+    if (tabParam.toLowerCase() === 'destek' || tabParam.toLowerCase() === 'support') {
+      setTab('Destek');
+      return;
+    }
+    const match = TENANT_360_TABS.find((t) => t.toLowerCase() === tabParam.toLowerCase());
+    if (match) setTab(match);
+  }, [tabParam]);
   const admin = useAdminAuthStore(state => state.admin);
   const query = useQuery({ queryKey: ['admin', 'tenant-360', tenantId, admin?.id, admin?.permissions], queryFn: () => getTenant360(tenantId), enabled: admin !== null, staleTime: 0 });
   return <div className="space-y-5">

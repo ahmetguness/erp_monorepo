@@ -18,6 +18,8 @@ import {
   ChevronRight,
   ExternalLink,
   Ticket,
+  LifeBuoy,
+  DatabaseBackup,
 } from 'lucide-react';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { cn } from '@/lib/utils';
@@ -26,13 +28,14 @@ import { AdminSecurityNotice } from '@/components/features/admin/AdminSecurityNo
 import type { AdminPermission } from '@repo/types';
 import { canAdmin } from '@/lib/admin/permissions';
 import { getAdminChangeRequests } from '@/services/admin.service';
+import { listAdminTickets } from '@/services/support-ticket.service';
 
 interface NavItemConfig {
   href: string;
   icon: typeof LayoutDashboard;
   label: string;
   permission: AdminPermission;
-  badgeKey?: 'changeRequests';
+  badgeKey?: 'changeRequests' | 'supportTickets';
 }
 
 const NAV_GROUPS: Array<{
@@ -44,6 +47,14 @@ const NAV_GROUPS: Array<{
     items: [
       { href: '/admin', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard.read' },
       { href: '/admin/tenants', icon: Building2, label: 'Tenantlar', permission: 'tenant.read' },
+      {
+        href: '/admin/tickets',
+        icon: LifeBuoy,
+        label: 'Destek Talepleri',
+        permission: 'support-ticket.read',
+        badgeKey: 'supportTickets',
+      },
+      { href: '/admin/support', icon: KeyRound, label: 'Destek Oturumları', permission: 'support-session.manage' },
       {
         href: '/admin/change-requests',
         icon: UserRoundCheck,
@@ -59,6 +70,7 @@ const NAV_GROUPS: Array<{
       { href: '/admin/features', icon: Sliders, label: 'Özellikler & Plan', permission: 'feature.read' },
       { href: '/admin/coupons', icon: Ticket, label: 'Kupon Yönetimi', permission: 'tenant.plan.update' },
       { href: '/admin/observability', icon: Activity, label: 'Operasyon & Telemetri', permission: 'operations.read' },
+      { href: '/admin/disaster-recovery', icon: DatabaseBackup, label: 'Yedekleme & Kurtarma', permission: 'operations.read' },
       { href: '/admin/audit', icon: FileText, label: 'Denetim Günlüğü', permission: 'audit.read' },
     ],
   },
@@ -89,6 +101,14 @@ function AdminNavLinks({ pathname }: { pathname: string }) {
     refetchInterval: 30_000,
   });
 
+  const canReadTickets = canAdmin(admin, 'support-ticket.read');
+  const { data: openTickets = [] } = useQuery({
+    queryKey: ['admin-tickets', 'open-badge'],
+    queryFn: () => listAdminTickets({ status: 'OPEN' }),
+    enabled: Boolean(admin && canReadTickets),
+    refetchInterval: 15_000,
+  });
+
   return (
     <div className="space-y-4">
       {NAV_GROUPS.map((group, gIdx) => {
@@ -106,6 +126,7 @@ function AdminNavLinks({ pathname }: { pathname: string }) {
               {visibleItems.map((item) => {
                 const isActive = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href);
                 const pendingCount = item.badgeKey === 'changeRequests' ? pendingRequests.length : 0;
+                const openTicketsCount = item.badgeKey === 'supportTickets' ? openTickets.length : 0;
 
                 return (
                   <Link
@@ -119,18 +140,41 @@ function AdminNavLinks({ pathname }: { pathname: string }) {
                     )}
                   >
                     <div className="flex items-center gap-2.5">
-                      <item.icon
-                        className={cn(
-                          'h-4 w-4 shrink-0 transition-colors',
-                          isActive ? 'text-red-400' : 'text-slate-400 group-hover:text-slate-200',
+                      <div className="relative">
+                        <item.icon
+                          className={cn(
+                            'h-4 w-4 shrink-0 transition-colors',
+                            isActive ? 'text-red-400' : 'text-slate-400 group-hover:text-slate-200',
+                          )}
+                        />
+                        {item.badgeKey === 'supportTickets' && openTicketsCount > 0 && (
+                          <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-500 ring-1 ring-slate-950" />
+                          </span>
                         )}
-                      />
+                      </div>
                       <span>{item.label}</span>
                     </div>
 
                     {pendingCount > 0 && (
                       <span className="flex h-5 items-center justify-center rounded-full bg-amber-500/20 px-1.5 text-[10px] font-bold text-amber-300 ring-1 ring-amber-500/30">
                         {pendingCount}
+                      </span>
+                    )}
+
+                    {item.badgeKey === 'supportTickets' && openTicketsCount > 0 && (
+                      <span
+                        className="flex items-center gap-1.5"
+                        title={`${openTicketsCount} yeni/açık destek talebi`}
+                      >
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-500 shadow-sm shadow-sky-500/50" />
+                        </span>
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-500/20 px-1.5 text-[10px] font-bold text-sky-300 ring-1 ring-sky-500/30">
+                          {openTicketsCount}
+                        </span>
                       </span>
                     )}
                   </Link>

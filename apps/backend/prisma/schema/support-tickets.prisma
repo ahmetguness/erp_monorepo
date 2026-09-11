@@ -1,0 +1,75 @@
+// Domain: platform support tickets
+// Tenant users creating tickets for platform admins, with two-way messaging and internal notes.
+
+enum PlatformTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_TENANT
+  RESOLVED
+  CLOSED
+}
+
+enum PlatformTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum PlatformTicketCategory {
+  TECHNICAL
+  BILLING
+  ACCOUNT
+  FEATURE_REQUEST
+  OTHER
+}
+
+enum PlatformTicketSender {
+  TENANT_USER
+  ADMIN_USER
+}
+
+model PlatformSupportTicket {
+  id              String                 @id @default(cuid())
+  ticketNumber    String                 @unique
+  tenantId        String
+  createdById     String
+  title           String
+  description     String
+  category        PlatformTicketCategory @default(TECHNICAL)
+  priority        PlatformTicketPriority @default(MEDIUM)
+  status          PlatformTicketStatus   @default(OPEN)
+  assignedAdminId String?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy       User                   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  assignedAdmin   AdminUser?             @relation(fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  messages        PlatformTicketMessage[]
+
+  @@index([tenantId, status, createdAt])
+  @@index([status, priority, createdAt])
+  @@index([assignedAdminId, status])
+  @@map("platform_support_tickets")
+}
+
+model PlatformTicketMessage {
+  id            String               @id @default(cuid())
+  ticketId      String
+  senderType    PlatformTicketSender
+  authorUserId  String?
+  authorAdminId String?
+  message       String
+  isInternal    Boolean              @default(false)
+  createdAt     DateTime             @default(now())
+
+  ticket        PlatformSupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorUser    User?                 @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  authorAdmin   AdminUser?            @relation(fields: [authorAdminId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+  @@map("platform_ticket_messages")
+}

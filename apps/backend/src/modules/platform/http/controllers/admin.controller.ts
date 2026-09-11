@@ -12,5 +12,8 @@ export { AdminSubscriptionOperationsController } from './admin/admin-subscriptio
 export { AdminFeatureRolloutController } from './admin/admin-feature-rollout.controller.js';
 export { AdminOperationInterventionController } from './admin/admin-operation-intervention.controller.js';
 export { AdminPersistentObservabilityController } from './admin/admin-persistent-observability.controller.js';
+export { AdminIncidentController } from './admin/admin-incident.controller.js';
 export { AdminTenant360Controller } from './admin/admin-tenant-360.controller.js';
 export { AdminSupportSessionController } from './admin/admin-support-session.controller.js';
+export { AdminSupportTicketController } from './admin/admin-support-ticket.controller.js';
+export { AdminDisasterRecoveryController } from './admin/admin-disaster-recovery.controller.js';

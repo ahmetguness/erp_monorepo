@@ -1,0 +1,23 @@
+model PlatformSecurityFinding {
+  id                 String   @id @default(cuid())
+  key                String   @unique
+  title              String
+  category           String
+  severity           String
+  status             String   @default("OPEN")
+  verificationStatus String
+  owner              String?
+  remediation        String
+  evidence           Json
+  ticketId           String?
+  firstSeenAt        DateTime @default(now())
+  lastSeenAt         DateTime @default(now())
+  verifiedAt         DateTime?
+  resolvedAt         DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status, severity, lastSeenAt])
+  @@index([category, verificationStatus])
+  @@map("platform_security_findings")
+}

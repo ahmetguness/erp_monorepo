@@ -123,10 +123,10 @@ export default function AdminSessionsPage() {
     onSuccess: () => {
       setPassword('');
       setOtp('');
-      const validUntil = new Date(Date.now() + 10 * 60 * 1000);
+      const validUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
       setReauthSuccessUntil(validUntil);
       toast.success(
-        'Kimliğiniz başarıyla doğrulandı! 10 dakika boyunca hassas işlemleri gerçekleştirebilirsiniz.',
+        'Kimliğiniz başarıyla doğrulandı! 1 gün boyunca hassas işlemleri gerçekleştirebilirsiniz.',
       );
     },
     onError: (error: unknown) => {
@@ -309,7 +309,7 @@ export default function AdminSessionsPage() {
                 isReauthenticated ? 'text-emerald-400' : 'text-slate-300',
               )}
             >
-              {isReauthenticated ? 'Yetkilendirildi (10 dk)' : 'Standart Seviye'}
+              {isReauthenticated ? 'Yetkilendirildi (1 Gün)' : 'Standart Seviye'}
             </span>
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400">
@@ -571,7 +571,7 @@ export default function AdminSessionsPage() {
                 <div>
                   <p className="font-semibold text-emerald-200">Kimliğiniz Başarıyla Doğrulandı</p>
                   <p className="text-emerald-300/80">
-                    10 dakika süreyle kritik operasyonları ve yetki güncellemelerini gerçekleştirebilirsiniz.
+                    1 gün süreyle kritik operasyonları ve yetki güncellemelerini gerçekleştirebilirsiniz.
                   </p>
                 </div>
               </div>
@@ -582,7 +582,7 @@ export default function AdminSessionsPage() {
                 <div className="flex items-start gap-2">
                   <Info className="h-4 w-4 text-sky-400 shrink-0 mt-0.5" />
                   <p>
-                    Doğrulama <strong>10 dakika</strong> geçerlidir. Girişte kullandığınız MFA kodunun süresinin dolup yeni 6 haneli kodun oluşmasını bekleyin.
+                    Doğrulama <strong>1 gün</strong> geçerlidir. Girişte kullandığınız MFA kodunun süresinin dolup yeni 6 haneli kodun oluşmasını bekleyin.
                   </p>
                 </div>
               </div>

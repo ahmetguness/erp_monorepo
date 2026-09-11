@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, Suspense } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Building2,
   CalendarDays,
@@ -181,16 +181,30 @@ function FormSection({
   );
 }
 
-export default function AdminTenantsPage() {
+function AdminTenantsContent() {
   const canCreateTenant = useAdminAuthStore((state) => canAdmin(state.admin, 'tenant.create'));
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialSearch = searchParams.get('search') ?? '';
+  const initialStatus = searchParams.get('status') ?? '';
+  const initialPlan = searchParams.get('plan') ?? '';
+
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [planFilter, setPlanFilter] = useState('');
+  const [search, setSearch] = useState(initialSearch);
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
+  const [planFilter, setPlanFilter] = useState(initialPlan);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const s = searchParams.get('search');
+    if (s !== null) setSearch(s);
+    const st = searchParams.get('status');
+    if (st !== null) setStatusFilter(st);
+    const p = searchParams.get('plan');
+    if (p !== null) setPlanFilter(p);
+  }, [searchParams]);
 
   const [form, setForm] = useState<CreateTenantInput>(() => createDefaultTenantForm());
   const [formError, setFormError] = useState<string | null>(null);
@@ -950,5 +964,13 @@ export default function AdminTenantsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminTenantsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400">Yükleniyor…</div>}>
+      <AdminTenantsContent />
+    </Suspense>
   );
 }

@@ -1,5 +1,6 @@
 import type { BackendModule } from '../shared/index.js';
 import { supportSessionRoutes } from '../../routes/support-session.routes.js';
+import { supportTicketRoutes } from '../../routes/support-ticket.routes.js';
 import { activityRoutes } from '../../routes/activity.routes.js';
 import { approvalRoutes } from '../../routes/approval.routes.js';
 import { auditLogRoutes } from '../../routes/audit-log.routes.js';
@@ -23,11 +24,15 @@ import { starterHealthRoutes } from '../../routes/starter-health.routes.js';
 import { taskRoutes } from '../../routes/task.routes.js';
 import { currencyRatesRoutes } from './http/currency-rates.routes.js';
 export { MetricsController } from './http/controllers/metrics.controller.js';
+export { PersistentObservabilityWorker } from './persistent-observability/persistent-observability.worker.js';
+export { getPublicStatusIncidents } from './incident-management/incident-management.service.js';
+export { createPlatformAudit } from './platform-audit/platform-audit.service.js';
 
 export const platformModule: BackendModule = {
   name: 'platform',
   register(app) {
     app.route('/support-sessions', supportSessionRoutes);
+    app.route('/support-tickets', supportTicketRoutes);
     app.route('/reports', reportingRoutes);
     app.route('/settings', settingsRoutes);
     app.route('/starter-health', starterHealthRoutes);

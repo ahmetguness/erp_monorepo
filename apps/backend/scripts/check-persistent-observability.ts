@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   recordUnhandledError({
     method: "GET",
     path: "/integration-observability",
-    message: "persistent log integration",
+    message: "persistent log integration for admin@example.com",
     requestId: `request-${suffix}`,
     correlationId: `correlation-${suffix}`,
   });
@@ -69,6 +69,10 @@ async function main(): Promise<void> {
     }),
     1,
   );
+  const storedLog = await prisma.observabilityLogEntry.findFirstOrThrow({
+    where: { service: serviceId, requestId: `request-${suffix}` },
+  });
+  assert.equal(storedLog.message.includes("admin@example.com"), false);
   assert.equal(
     await prisma.observabilityMetricPoint.count({
       where: {
@@ -111,6 +115,13 @@ async function main(): Promise<void> {
     "Integration test maintenance silence",
   );
   assert.ok(silenced.silencedUntil);
+  const [alertMutation] = await prisma.$queryRaw<Array<{ lastModifiedById: string | null; silenceReason: string | null }>>`
+    SELECT "lastModifiedById", "silenceReason"
+    FROM "observability_alert_history"
+    WHERE "id" = ${alert.id}
+  `;
+  assert.equal(alertMutation?.lastModifiedById, adminId);
+  assert.equal(alertMutation?.silenceReason, "Integration test maintenance silence");
   const marker = await createDeployment(
     {
       service: serviceId,
@@ -140,7 +151,7 @@ async function main(): Promise<void> {
   for (const range of ["1h", "24h", "7d", "30d"] as const)
     assert.equal((await getPersistentDashboard(range)).range, range);
   console.log(
-    "Persistent observability integration: OK (service/tenant points, ranges, SLO budget, central log, alert lifecycle/ownership/silence, deploy marker)",
+    "Persistent observability integration: OK (service/tenant points, ranges, SLO budget, masked central log, alert lifecycle/actor/ownership/silence, deploy marker)",
   );
 }
 
