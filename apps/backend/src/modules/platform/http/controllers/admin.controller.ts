@@ -9,5 +9,6 @@ export { AdminTenantController } from './admin/admin-tenant.controller.js';
 export { AdminTenantLifecycleController } from './admin/admin-tenant-lifecycle.controller.js';
 export { AdminTenantProvisioningController } from './admin/admin-tenant-provisioning.controller.js';
 export { AdminSubscriptionOperationsController } from './admin/admin-subscription-operations.controller.js';
+export { AdminFeatureRolloutController } from './admin/admin-feature-rollout.controller.js';
 export { AdminTenant360Controller } from './admin/admin-tenant-360.controller.js';
 export { AdminSupportSessionController } from './admin/admin-support-session.controller.js';

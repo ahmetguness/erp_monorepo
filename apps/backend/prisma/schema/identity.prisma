@@ -493,6 +493,40 @@ model TenantFeatureOverride {
   @@map("tenant_feature_overrides")
 }
 
+model FeatureRollout {
+  id                   String   @id @default(cuid())
+  plan                 Plan
+  featureKey           FeatureKey
+  version              Int
+  environment          String
+  stage                String
+  status               String   @default("DRAFT")
+  value                String
+  isEnabled            Boolean  @default(true)
+  rolloutPercentage    Int      @default(0)
+  targetTenantIds      String[] @default([])
+  dependencies         String[] @default([])
+  conflicts            String[] @default([])
+  startsAt             DateTime
+  endsAt               DateTime?
+  errorThresholdPct    Decimal  @db.Decimal(5, 2)
+  observedErrorRatePct Decimal? @db.Decimal(5, 2)
+  killSwitch           Boolean  @default(false)
+  reason               String
+  ticketId             String?
+  createdById          String
+  activatedById        String?
+  activatedAt          DateTime?
+  pausedAt             DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([plan, featureKey, environment, version])
+  @@index([plan, featureKey, environment, status])
+  @@index([status, startsAt, endsAt])
+  @@map("feature_rollouts")
+}
+
 model ApiKey {
   id          String    @id @default(cuid())
   tenantId    String

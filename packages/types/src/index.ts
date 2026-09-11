@@ -746,3 +746,4 @@ export * from "./support-session.js";
 export * from "./tenant-lifecycle.js";
 export * from "./tenant-provisioning.js";
 export * from "./subscription-operations.js";
+export * from "./feature-rollout.js";

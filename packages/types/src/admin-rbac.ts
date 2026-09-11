@@ -140,6 +140,7 @@ export const ADMIN_CHANGE_REQUEST_TYPES = [
   "PLAN_FEATURE_UPDATE",
   "FEATURE_OVERRIDE_UPSERT",
   "FEATURE_OVERRIDE_DELETE",
+  "FEATURE_ROLLOUT_ACTIVATE",
 ] as const;
 export type AdminChangeRequestType =
   (typeof ADMIN_CHANGE_REQUEST_TYPES)[number];

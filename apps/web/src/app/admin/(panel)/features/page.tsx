@@ -18,6 +18,7 @@ import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { canAdmin } from '@/lib/admin/permissions';
 import { toast } from '@/store/ui.store';
 import { ChangePreviewDialog } from '@/components/features/admin/ChangePreviewDialog';
+import { FeatureRolloutPanel } from '@/components/features/admin/feature-rollout/FeatureRolloutPanel';
 
 const PLANS: readonly PlanName[] = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'];
 
@@ -291,6 +292,7 @@ export default function AdminFeaturesPage() {
           if (pendingChange) updateMutation.mutate({ ...pendingChange, ...metadata });
         }}
       />
+      <FeatureRolloutPanel />
     </div>
   );
 }

@@ -14,6 +14,7 @@ const TYPE_LABELS: Record<AdminChangeRequestType, string> = {
   PLAN_FEATURE_UPDATE: 'Plan özelliği değişikliği',
   FEATURE_OVERRIDE_UPSERT: 'Kalıcı özellik override değişikliği',
   FEATURE_OVERRIDE_DELETE: 'Kalıcı özellik override kaldırma',
+  FEATURE_ROLLOUT_ACTIVATE: 'Feature rollout aktivasyonu',
 };
 
 function ChangeRequestCard({ request }: { request: AdminChangeRequest }) {

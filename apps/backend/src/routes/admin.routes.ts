@@ -13,6 +13,7 @@ AdminTenantController,
 AdminTenantLifecycleController,
 AdminTenantProvisioningController,
 AdminSubscriptionOperationsController,
+AdminFeatureRolloutController,
 AdminTenant360Controller,
 AdminSupportSessionController,
 } from '../modules/platform/http/controllers/index.js';
@@ -95,6 +96,11 @@ adminRoutes.put('/features', requireAdmin, requireAdminPermission('feature.updat
 adminRoutes.get('/overrides', requireAdmin, requireAdminPermission('feature.read'), AdminFeatureController.listOverrides);
 adminRoutes.post('/overrides', requireAdmin, requireAdminPermission('feature.override.create'), AdminFeatureController.createOverride);
 adminRoutes.delete('/overrides/:id', requireAdmin, requireAdminPermission('feature.override.delete'), AdminFeatureController.deleteOverride);
+adminRoutes.get('/feature-rollouts', requireAdmin, requireAdminPermission('feature.read'), AdminFeatureRolloutController.list);
+adminRoutes.post('/feature-rollouts', requireAdmin, requireAdminPermission('feature.update'), AdminFeatureRolloutController.create);
+adminRoutes.post('/feature-rollouts/:id/activate', requireAdmin, requireAdminPermission('feature.update'), AdminFeatureRolloutController.activate);
+adminRoutes.post('/feature-rollouts/:id/stop', requireAdmin, requireAdminPermission('feature.update'), AdminFeatureRolloutController.stop);
+adminRoutes.post('/feature-rollouts/:id/metrics', requireAdmin, requireAdminPermission('feature.update'), AdminFeatureRolloutController.metric);
 
 // Metrics
 adminRoutes.get('/metrics', requireAdmin, requireAdminPermission('dashboard.read'), AdminMetricsController.dashboard);

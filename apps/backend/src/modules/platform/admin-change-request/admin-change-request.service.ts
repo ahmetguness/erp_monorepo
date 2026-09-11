@@ -20,6 +20,7 @@ import { syncSubscriptionForPlan } from "../subscription-operations/subscription
 import {
   featureOverrideDeletePayloadSchema,
   featureOverridePayloadSchema,
+  featureRolloutActivationPayloadSchema,
   planFeaturePayloadSchema,
   tenantPlanPayloadSchema,
   tenantStatusPayloadSchema,
@@ -92,7 +93,8 @@ function toContract(request: RequestWithActors): AdminChangeRequest {
     canRollback:
       request.status === AdminChangeRequestStatus.APPLIED &&
       request.previousValues !== null &&
-      request.type !== AdminChangeRequestType.FEATURE_OVERRIDE_DELETE,
+      request.type !== AdminChangeRequestType.FEATURE_OVERRIDE_DELETE &&
+      request.type !== AdminChangeRequestType.FEATURE_ROLLOUT_ACTIVATE,
     createdAt: request.createdAt.toISOString(),
     decidedAt: request.decidedAt?.toISOString() ?? null,
     appliedAt: request.appliedAt?.toISOString() ?? null,
@@ -355,6 +357,57 @@ async function applyChange(
       );
       return;
     }
+    case AdminChangeRequestType.FEATURE_ROLLOUT_ACTIVATE: {
+      const payload = featureRolloutActivationPayloadSchema.parse(
+        request.payload,
+      );
+      const rollout = await tx.featureRollout.findUnique({
+        where: { id: payload.rolloutId },
+      });
+      if (!rollout || rollout.status !== "PENDING_APPROVAL") {
+        throw new AdminChangeRequestError(
+          "Rollout artık aktivasyona uygun değil.",
+          409,
+        );
+      }
+      await tx.featureRollout.updateMany({
+        where: {
+          plan: rollout.plan,
+          featureKey: rollout.featureKey,
+          environment: rollout.environment,
+          status: "ACTIVE",
+          id: { not: rollout.id },
+        },
+        data: { status: "ROLLED_BACK" },
+      });
+      const activated = await tx.featureRollout.update({
+        where: { id: rollout.id },
+        data: {
+          status: "ACTIVE",
+          activatedById: approverId,
+          activatedAt: new Date(),
+          killSwitch: false,
+        },
+      });
+      const tenants = await tx.tenant.findMany({
+        where: { plan: rollout.plan, deletedAt: null },
+        select: { id: true },
+      });
+      for (const tenant of tenants)
+        await createAuditLog(tx, {
+          ...auditBase,
+          tenantId: tenant.id,
+          entityId: activated.id,
+          oldValues: request.previousValues ?? undefined,
+          newValues: {
+            status: "ACTIVE",
+            version: activated.version,
+            stage: activated.stage,
+            percentage: activated.rolloutPercentage,
+          },
+        });
+      return;
+    }
   }
 }
 
@@ -422,6 +475,11 @@ function rollbackPayload(request: RequestWithActors): Prisma.InputJsonObject {
     case AdminChangeRequestType.FEATURE_OVERRIDE_DELETE:
       throw new AdminChangeRequestError(
         "Silinen override otomatik geri alınamaz.",
+        409,
+      );
+    case AdminChangeRequestType.FEATURE_ROLLOUT_ACTIVATE:
+      throw new AdminChangeRequestError(
+        "Rollout aktivasyonu acil durdurma veya yeni sürümle geri alınmalıdır.",
         409,
       );
   }

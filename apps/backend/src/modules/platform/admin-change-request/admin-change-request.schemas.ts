@@ -14,6 +14,7 @@ export const featureOverridePayloadSchema = z.object({
 export const featureOverrideDeletePayloadSchema = z.object({
   overrideId: z.string().min(1), tenantId: z.string().min(1), featureKey: z.nativeEnum(FeatureKey),
 }).strict();
+export const featureRolloutActivationPayloadSchema = z.object({ rolloutId: z.string().min(1) }).strict();
 
 export const decisionSchema = z.object({ note: z.string().trim().max(1000).optional() }).strict();
 export const changeMetadataSchema = z.object({
@@ -27,6 +28,7 @@ export const previewRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('PLAN_FEATURE_UPDATE'), payload: planFeaturePayloadSchema }).strict(),
   z.object({ type: z.literal('FEATURE_OVERRIDE_UPSERT'), payload: featureOverridePayloadSchema }).strict(),
   z.object({ type: z.literal('FEATURE_OVERRIDE_DELETE'), payload: featureOverrideDeletePayloadSchema }).strict(),
+  z.object({ type: z.literal('FEATURE_ROLLOUT_ACTIVATE'), payload: featureRolloutActivationPayloadSchema }).strict(),
 ]);
 
 export type PreviewRequest = z.infer<typeof previewRequestSchema>;

@@ -76,5 +76,19 @@ export async function previewAdminChange(input: PreviewRequest): Promise<ChangeP
         affectedTenantCount: 1, affectedUserCount: await tenantImpact(current.tenantId), warnings: ['Tenant plan varsayılanlarına geri dönecektir.'], requiresApproval: true,
       };
     }
+    case AdminChangeRequestType.FEATURE_ROLLOUT_ACTIVATE: {
+      const rollout = await prisma.featureRollout.findUnique({ where: { id: input.payload.rolloutId } });
+      if (!rollout) throw new NotFoundError('Feature rollout', input.payload.rolloutId);
+      return {
+        type: input.type,
+        targetId: rollout.id,
+        targetLabel: `${rollout.plan} / ${rollout.featureKey} / v${rollout.version}`,
+        changes: [change('status', 'Durum', rollout.status, 'ACTIVE')],
+        affectedTenantCount: rollout.targetTenantIds.length,
+        affectedUserCount: 0,
+        warnings: ['Aktivasyon hedef tenantların çalışma zamanındaki feature çözümünü değiştirecektir.'],
+        requiresApproval: true,
+      };
+    }
   }
 }
