@@ -149,6 +149,11 @@ model MarketplaceSyncJob {
   params        Json?
   /// Sonuç özeti (JSON): created, updated, skipped, batchIds vb.
   result        Json?
+  quarantinedAt   DateTime?
+  quarantinedById String?
+  resolvedAt      DateTime?
+  resolvedById    String?
+  resolutionNote  String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -160,6 +165,7 @@ model MarketplaceSyncJob {
   @@index([createdAt])
   @@index([status, nextRetryAt, createdAt])
   @@index([status, leaseExpiresAt])
+  @@index([tenantId, resolvedAt, updatedAt])
   @@map("marketplace_sync_jobs")
 }
 

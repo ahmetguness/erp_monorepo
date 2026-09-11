@@ -159,6 +159,7 @@ export interface RecentWorkerJobSnapshot {
   integrationId: string;
   jobType: string;
   status: SyncJobStatus;
+  attempts: number;
   processedCount: number;
   errorCount: number;
   errorMessage: string | null;
@@ -417,9 +418,9 @@ function resolveTelemetry() {
     ?? null;
   return {
     persistence: {
-      mode: 'in-memory' as const,
-      durable: false,
-      detail: 'Runtime metrikleri process belleğinde tutulur; restart sonrası kalıcı geçmiş için database/OTLP metric store adaptörü bağlanmalıdır.',
+      mode: 'persistent' as const,
+      durable: true,
+      detail: 'Dakikalık metrik örnekleri PostgreSQL üzerinde kalıcı tutulur; Prometheus ve OTLP çıkışları ayrıca desteklenir.',
     },
     sentry: { enabled: Boolean(process.env.SENTRY_DSN) },
     openTelemetry: { enabled: Boolean(otelExporter), exporter: otelExporter },
@@ -459,10 +460,10 @@ export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<Ob
   const [pendingEvents, processingEvents, failedCount, deadLetterCount, recentFailures, pendingJobs, runningJobs, doneJobs, failedJobs, deadLetterJobs, retryScheduledJobs, recentProblemJobs] = await prisma.$transaction([
     prisma.domainEventOutbox.count({ where: { tenantId: { not: '' }, status: DomainEventOutboxStatus.PENDING } }),
     prisma.domainEventOutbox.count({ where: { tenantId: { not: '' }, status: DomainEventOutboxStatus.PROCESSING } }),
-    prisma.domainEventOutbox.count({ where: { tenantId: { not: '' }, status: DomainEventOutboxStatus.FAILED } }),
-    prisma.domainEventOutbox.count({ where: { tenantId: { not: '' }, status: DomainEventOutboxStatus.DEAD_LETTER } }),
+    prisma.domainEventOutbox.count({ where: { tenantId: { not: '' }, resolvedAt: null, status: DomainEventOutboxStatus.FAILED } }),
+    prisma.domainEventOutbox.count({ where: { tenantId: { not: '' }, resolvedAt: null, status: DomainEventOutboxStatus.DEAD_LETTER } }),
     prisma.domainEventOutbox.findMany({
-      where: { tenantId: { not: '' }, status: { in: [DomainEventOutboxStatus.FAILED, DomainEventOutboxStatus.DEAD_LETTER] } },
+      where: { tenantId: { not: '' }, resolvedAt: null, status: { in: [DomainEventOutboxStatus.FAILED, DomainEventOutboxStatus.DEAD_LETTER] } },
       select: {
         id: true,
         tenantId: true,
@@ -480,17 +481,18 @@ export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<Ob
     prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, status: SyncJobStatus.PENDING } }),
     prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, status: SyncJobStatus.RUNNING } }),
     prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, status: SyncJobStatus.DONE } }),
-    prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, status: SyncJobStatus.FAILED } }),
-    prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, status: SyncJobStatus.DEAD_LETTER } }),
-    prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, status: SyncJobStatus.FAILED, nextRetryAt: { not: null } } }),
+    prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, resolvedAt: null, status: SyncJobStatus.FAILED } }),
+    prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, resolvedAt: null, status: SyncJobStatus.DEAD_LETTER } }),
+    prisma.marketplaceSyncJob.count({ where: { tenantId: { not: '' }, resolvedAt: null, status: SyncJobStatus.FAILED, nextRetryAt: { not: null } } }),
     prisma.marketplaceSyncJob.findMany({
-      where: { tenantId: { not: '' }, status: { in: [SyncJobStatus.PENDING, SyncJobStatus.RUNNING, SyncJobStatus.FAILED, SyncJobStatus.DEAD_LETTER] } },
+      where: { tenantId: { not: '' }, resolvedAt: null, status: { in: [SyncJobStatus.PENDING, SyncJobStatus.RUNNING, SyncJobStatus.FAILED, SyncJobStatus.DEAD_LETTER] } },
       select: {
         id: true,
         tenantId: true,
         integrationId: true,
         jobType: true,
         status: true,
+        attempts: true,
         processedCount: true,
         errorCount: true,
         errorMessage: true,
@@ -610,6 +612,7 @@ export async function getObservabilitySnapshot(prisma: PrismaClient): Promise<Ob
         integrationId: job.integrationId,
         jobType: job.jobType,
         status: job.status,
+        attempts: job.attempts,
         processedCount: job.processedCount,
         errorCount: job.errorCount,
         errorMessage: job.errorMessage,

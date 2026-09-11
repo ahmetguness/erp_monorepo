@@ -153,6 +153,99 @@ model AdminChangeRequest {
   @@map("admin_change_requests")
 }
 
+model ObservabilityMetricPoint {
+  id        String   @id @default(cuid())
+  metricKey String
+  scope     String
+  scopeId   String
+  value     Decimal  @db.Decimal(18, 4)
+  bucketAt  DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([metricKey, scope, scopeId, bucketAt])
+  @@index([scope, scopeId, bucketAt])
+  @@index([metricKey, bucketAt])
+  @@map("observability_metric_points")
+}
+
+model ObservabilitySlo {
+  id                  String   @id @default(cuid())
+  name                String
+  scope               String
+  scopeId             String
+  metricKey           String
+  targetPercentage    Decimal  @db.Decimal(6, 3)
+  windowDays          Int
+  owner               String
+  runbookUrl          String
+  notificationChannel String
+  isEnabled           Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([scope, scopeId, metricKey])
+  @@index([isEnabled, scope, scopeId])
+  @@map("observability_slos")
+}
+
+model ObservabilityAlertHistory {
+  id                  String   @id @default(cuid())
+  fingerprint         String
+  metricKey           String
+  scope               String
+  scopeId             String
+  severity            String
+  status              String   @default("OPEN")
+  value               Decimal  @db.Decimal(18, 4)
+  threshold           Decimal  @db.Decimal(18, 4)
+  owner               String
+  runbookUrl          String
+  notificationChannel String
+  silencedUntil       DateTime?
+  silenceReason       String?
+  lastModifiedById    String?
+  openedAt            DateTime @default(now())
+  resolvedAt          DateTime?
+  updatedAt           DateTime @updatedAt
+
+  @@index([fingerprint, status])
+  @@index([scope, scopeId, openedAt])
+  @@index([status, silencedUntil])
+  @@map("observability_alert_history")
+}
+
+model DeploymentMarker {
+  id          String   @id @default(cuid())
+  service     String
+  version     String
+  environment String
+  description String?
+  deployedAt  DateTime
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@unique([service, version, environment])
+  @@index([deployedAt])
+  @@map("deployment_markers")
+}
+
+model ObservabilityLogEntry {
+  id            String   @id @default(cuid())
+  fingerprint   String   @unique
+  level         String
+  service       String
+  message       String
+  requestId     String?
+  correlationId String?
+  occurredAt    DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([service, occurredAt])
+  @@index([requestId])
+  @@index([correlationId])
+  @@map("observability_log_entries")
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   tenantId   String

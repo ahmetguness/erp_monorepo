@@ -124,6 +124,7 @@ export interface RecentWorkerJobSnapshot {
   integrationId: string;
   jobType: string;
   status: SyncJobStatus;
+  attempts: number;
   processedCount: number;
   errorCount: number;
   errorMessage: string | null;

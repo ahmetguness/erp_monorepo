@@ -10,5 +10,7 @@ export { AdminTenantLifecycleController } from './admin/admin-tenant-lifecycle.c
 export { AdminTenantProvisioningController } from './admin/admin-tenant-provisioning.controller.js';
 export { AdminSubscriptionOperationsController } from './admin/admin-subscription-operations.controller.js';
 export { AdminFeatureRolloutController } from './admin/admin-feature-rollout.controller.js';
+export { AdminOperationInterventionController } from './admin/admin-operation-intervention.controller.js';
+export { AdminPersistentObservabilityController } from './admin/admin-persistent-observability.controller.js';
 export { AdminTenant360Controller } from './admin/admin-tenant-360.controller.js';
 export { AdminSupportSessionController } from './admin/admin-support-session.controller.js';

@@ -4,6 +4,7 @@ import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
 import { getObservabilitySnapshot } from '../../../../../services/observability.service.js';
 import { requireParam } from '../../../../../utils/context.js';
+import { capturePersistentSnapshot } from '../../../persistent-observability/persistent-observability.service.js';
 
 export const AdminMetricsController = {
 
@@ -63,6 +64,7 @@ export const AdminMetricsController = {
 
   async observability(c: Context): Promise<Response> {
     const snapshot = await getObservabilitySnapshot(prisma);
+    await capturePersistentSnapshot(snapshot);
     return c.json({ data: snapshot });
   },
 

@@ -4,6 +4,7 @@ import { DomainEventOutboxWorker } from '../services/domain-event-outbox-worker.
 import { TrendyolWorker } from '../services/trendyol-worker.service.js';
 import type { AppRole } from './runtime-config.js';
 import { prisma } from '../lib/prisma.js';
+import { PersistentObservabilityWorker } from '../modules/platform/persistent-observability/persistent-observability.worker.js';
 
 let shutdownRegistered = false;
 let shuttingDown = false;
@@ -15,6 +16,7 @@ function isEnabled(explicitValue: string | undefined, role: AppRole): boolean {
 }
 
 export function startWorkers(role: AppRole, env: NodeJS.ProcessEnv = process.env): void {
+  if (role !== 'worker' && env.PERSISTENT_OBSERVABILITY_ENABLED !== 'false') PersistentObservabilityWorker.start();
   if (isEnabled(env.DOMAIN_EVENT_OUTBOX_WORKER_ENABLED, role)) DomainEventOutboxWorker.start();
   else logger.info('[DomainEventOutboxWorker] Disabled. Set DOMAIN_EVENT_OUTBOX_WORKER_ENABLED=true or APP_ROLE=worker/all to enable.');
 
@@ -26,7 +28,7 @@ export function startWorkers(role: AppRole, env: NodeJS.ProcessEnv = process.env
 }
 
 export async function stopWorkers(): Promise<void> {
-  await Promise.all([DomainEventOutboxWorker.stop(), TrendyolWorker.stop()]);
+  await Promise.all([DomainEventOutboxWorker.stop(), TrendyolWorker.stop(), PersistentObservabilityWorker.stop()]);
   stopAllMocks();
 }
 

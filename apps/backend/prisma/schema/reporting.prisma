@@ -81,6 +81,11 @@ model DomainEventOutbox {
   leaseOwner      String?
   leaseExpiresAt  DateTime?
   processedAt     DateTime?
+  quarantinedAt   DateTime?
+  quarantinedById String?
+  resolvedAt      DateTime?
+  resolvedById    String?
+  resolutionNote  String?
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
 
@@ -92,6 +97,7 @@ model DomainEventOutbox {
   @@index([tenantId, entityType, entityId])
   @@index([status, nextRetryAt, createdAt])
   @@index([status, leaseExpiresAt])
+  @@index([tenantId, resolvedAt, updatedAt])
   @@map("domain_event_outbox")
 }
 

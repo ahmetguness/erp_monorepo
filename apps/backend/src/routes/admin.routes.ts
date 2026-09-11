@@ -14,6 +14,8 @@ AdminTenantLifecycleController,
 AdminTenantProvisioningController,
 AdminSubscriptionOperationsController,
 AdminFeatureRolloutController,
+AdminOperationInterventionController,
+AdminPersistentObservabilityController,
 AdminTenant360Controller,
 AdminSupportSessionController,
 } from '../modules/platform/http/controllers/index.js';
@@ -107,6 +109,13 @@ adminRoutes.get('/metrics', requireAdmin, requireAdminPermission('dashboard.read
 adminRoutes.get('/metrics/tenants/:id', requireAdmin, requireAdminPermission('tenant.read'), AdminMetricsController.tenantMetrics);
 adminRoutes.get('/observability/search', requireAdmin, requireAdminPermission('operations.read'), AdminMetricsController.observabilitySearch);
 adminRoutes.get('/observability', requireAdmin, requireAdminPermission('operations.read'), AdminMetricsController.observability);
+adminRoutes.get('/operation-items/:id', requireAdmin, requireAdminPermission('operations.read'), AdminOperationInterventionController.detail);
+adminRoutes.post('/operation-interventions', requireAdmin, requireAdminPermission('operations.manage'), AdminOperationInterventionController.intervene);
+adminRoutes.get('/observability/history', requireAdmin, requireAdminPermission('operations.read'), AdminPersistentObservabilityController.dashboard);
+adminRoutes.put('/observability/slos', requireAdmin, requireAdminPermission('operations.manage'), AdminPersistentObservabilityController.slo);
+adminRoutes.put('/observability/alerts/:id/ownership', requireAdmin, requireAdminPermission('operations.manage'), AdminPersistentObservabilityController.ownership);
+adminRoutes.post('/observability/alerts/:id/silence', requireAdmin, requireAdminPermission('operations.manage'), AdminPersistentObservabilityController.silence);
+adminRoutes.post('/observability/deployments', requireAdmin, requireAdminPermission('operations.manage'), AdminPersistentObservabilityController.deployment);
 
 // Audit
 adminRoutes.get('/audit-logs', requireAdmin, requireAdminPermission('audit.read'), AdminAuditController.list);

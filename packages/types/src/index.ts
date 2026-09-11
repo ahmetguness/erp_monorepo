@@ -747,3 +747,5 @@ export * from "./tenant-lifecycle.js";
 export * from "./tenant-provisioning.js";
 export * from "./subscription-operations.js";
 export * from "./feature-rollout.js";
+export * from "./operation-intervention.js";
+export * from "./persistent-observability.js";
