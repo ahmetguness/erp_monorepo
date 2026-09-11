@@ -22,6 +22,7 @@ AdminTenant360Controller,
 AdminSupportSessionController,
 AdminSupportTicketController,
 AdminDisasterRecoveryController,
+AdminPrivacyController,
 } from '../modules/platform/http/controllers/index.js';
 
 const adminRoutes = new Hono();
@@ -153,5 +154,13 @@ adminRoutes.post('/disaster-recovery/backups', requireAdmin, requireAdminPermiss
 adminRoutes.post('/disaster-recovery/restore-drills', requireAdmin, requireAdminPermission('operations.manage'), AdminDisasterRecoveryController.createDrill);
 adminRoutes.patch('/disaster-recovery/restore-drills/:id', requireAdmin, requireAdminPermission('operations.manage'), AdminDisasterRecoveryController.completeDrill);
 adminRoutes.put('/disaster-recovery/policy', requireAdmin, requireAdminPermission('operations.manage'), AdminDisasterRecoveryController.updatePolicy);
+adminRoutes.get('/privacy/requests', requireAdmin, requireAdminPermission('privacy.read'), AdminPrivacyController.list);
+adminRoutes.post('/privacy/requests', requireAdmin, requireAdminPermission('privacy.manage'), AdminPrivacyController.create);
+adminRoutes.post('/privacy/requests/:id/verify', requireAdmin, requireAdminPermission('privacy.manage'), AdminPrivacyController.verify);
+adminRoutes.post('/privacy/requests/:id/decision', requireAdmin, requireAdminPermission('privacy.manage'), AdminPrivacyController.decide);
+adminRoutes.post('/privacy/requests/:id/execute', requireAdmin, requireAdminPermission('privacy.manage'), AdminPrivacyController.execute);
+adminRoutes.post('/privacy/requests/:id/download-grant', requireAdmin, requireAdminPermission('privacy.manage'), AdminPrivacyController.grant);
+adminRoutes.get('/privacy/download/:token', requireAdmin, requireAdminPermission('privacy.read'), AdminPrivacyController.download);
+adminRoutes.post('/privacy/legal-holds', requireAdmin, requireAdminPermission('privacy.manage'), AdminPrivacyController.hold);
 
 export { adminRoutes };

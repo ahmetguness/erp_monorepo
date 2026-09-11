@@ -29,6 +29,8 @@ export const ADMIN_PERMISSIONS = [
   "audit.manage",
   "security.read",
   "security.manage",
+  "privacy.read",
+  "privacy.manage",
   "demo.read",
   "demo.approve",
   "demo.reject",
@@ -87,6 +89,8 @@ export const ADMIN_ROLE_PERMISSIONS = {
     "audit.manage",
     "security.read",
     "security.manage",
+    "privacy.read",
+    "privacy.manage",
   ],
   READ_ONLY_AUDITOR: [
     "dashboard.read",
@@ -95,6 +99,7 @@ export const ADMIN_ROLE_PERMISSIONS = {
     "operations.read",
     "audit.read",
     "security.read",
+    "privacy.read",
     "demo.read",
   ],
 } as const satisfies Record<AdminRoleKey, readonly AdminPermission[]>;

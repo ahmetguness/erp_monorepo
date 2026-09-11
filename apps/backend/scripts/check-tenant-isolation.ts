@@ -72,6 +72,9 @@ const excludedFiles = new Set([
   'src/services/demo.service.ts',
   'src/services/invitation.service.ts',
   'src/modules/platform/security-center/security-checks.ts',
+  // Privacy operations are platform-admin workflows that deliberately cross
+  // tenant boundaries and enforce their selected tenant inside the service.
+  'src/modules/platform/privacy-operations/privacy.service.ts',
 ]);
 
 const excludedDirectoryPrefixes = [

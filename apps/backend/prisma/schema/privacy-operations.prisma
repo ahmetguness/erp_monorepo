@@ -1,0 +1,45 @@
+model DataSubjectRequest {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  subjectEmail       String
+  type               String
+  status             String   @default("PENDING_VERIFICATION")
+  scope              Json
+  reason             String
+  ticketId           String
+  requestedById      String
+  verifiedById       String?
+  approvedById       String?
+  identityVerifiedAt DateTime?
+  approvedAt         DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  @@index([tenantId, status, createdAt])
+  @@index([subjectEmail, createdAt])
+  @@map("data_subject_requests")
+}
+model PrivacyLegalHold {
+  id           String   @id @default(cuid())
+  tenantId     String
+  subjectEmail String?
+  reason       String
+  active       Boolean  @default(true)
+  createdById  String
+  releasedById String?
+  createdAt    DateTime @default(now())
+  releasedAt   DateTime?
+  @@index([tenantId, subjectEmail, active])
+  @@map("privacy_legal_holds")
+}
+model PrivacyDownloadGrant {
+  id          String   @id @default(cuid())
+  requestId   String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdById String
+  createdAt   DateTime @default(now())
+  @@index([requestId, expiresAt])
+  @@map("privacy_download_grants")
+}

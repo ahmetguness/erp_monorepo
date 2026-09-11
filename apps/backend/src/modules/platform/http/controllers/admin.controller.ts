@@ -17,3 +17,4 @@ export { AdminTenant360Controller } from './admin/admin-tenant-360.controller.js
 export { AdminSupportSessionController } from './admin/admin-support-session.controller.js';
 export { AdminSupportTicketController } from './admin/admin-support-ticket.controller.js';
 export { AdminDisasterRecoveryController } from './admin/admin-disaster-recovery.controller.js';
+export { AdminPrivacyController } from './admin/admin-privacy.controller.js';

@@ -753,4 +753,5 @@ export * from "./incident-management.js";
 export * from "./platform-audit.js";
 export * from "./security-center.js";
 export * from "./disaster-recovery.js";
+export * from "./privacy-operations.js";
 export * from "./support-ticket.js";

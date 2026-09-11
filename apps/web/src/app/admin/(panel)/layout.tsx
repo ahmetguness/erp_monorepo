@@ -79,6 +79,7 @@ const NAV_GROUPS: Array<{
     items: [
       { href: '/admin/admin-users', icon: UserRoundCheck, label: 'Admin Kullanıcıları', permission: 'admin-user.read' },
       { href: '/admin/security', icon: ShieldCheck, label: 'Güvenlik & Checklist', permission: 'security.read' },
+      { href: '/admin/privacy', icon: Shield, label: 'Gizlilik & KVKK', permission: 'privacy.read' },
     ],
   },
 ];

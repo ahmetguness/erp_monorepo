@@ -38,6 +38,7 @@
     "test:platform-audit": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-platform-audit.ts",
     "test:security-center": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-security-center.ts",
     "test:disaster-recovery": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-disaster-recovery.ts",
+    "test:privacy-operations": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-privacy-operations.ts",
     "test:prisma-architecture": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-prisma-architecture.ts && prisma validate --schema=prisma/schema",
     "test:quality": "npm run test:typecheck && npm run test:prisma-architecture && npm run test:unit:coverage && npm run test:code-quality && npm run test:module-boundaries && npm run test:contracts && npm run test:tenant-isolation && npm run test:tenant-runtime && npm run test:permission-gating && npm run test:e2e && npm run test:integration && npm run db:health",
     "ci:artifacts": "tsx scripts/generate-ci-artifacts.ts",
