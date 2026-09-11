@@ -29,12 +29,14 @@ import {
   type PlanFeatureType,
   type UpdatePlanFeatureInput,
 } from '@/services/admin.service';
+import { extractAdminError } from '@/lib/admin/errors';
 import { PLAN_FEATURE_DEFINITIONS, PLAN_LABELS } from '@/lib/plans';
 import type { PlanName } from '@/lib/plans';
 import { cn } from '@/lib/utils';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { canAdmin } from '@/lib/admin/permissions';
 import { toast } from '@/store/ui.store';
+import { toastAdminError } from '@/lib/admin/errors';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ChangePreviewDialog } from '@/components/features/admin/ChangePreviewDialog';
@@ -173,8 +175,8 @@ export default function AdminFeaturesPage() {
       toast.success('Plan özelliği başarıyla güncellendi.');
       await queryClient.invalidateQueries({ queryKey: ['admin', 'features'] });
     },
-    onError: () => {
-      toast.error('Plan özelliği güncellenirken bir sorun oluştu.');
+    onError: (error: unknown) => {
+      toastAdminError(error, 'Plan özelliği güncellenirken bir sorun oluştu.');
     },
   });
 

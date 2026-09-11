@@ -64,7 +64,9 @@ adminRoutes.post('/change-requests/:id/rollback', requireAdmin, requireAdminPerm
 // Tenants
 adminRoutes.get('/revenue', requireAdmin, requireAdminPermission('tenant.read'), AdminSubscriptionOperationsController.overview);
 adminRoutes.post('/billing/provider-events', requireAdmin, requireAdminPermission('tenant.plan.update'), AdminSubscriptionOperationsController.event);
+adminRoutes.get('/billing/coupons', requireAdmin, requireAdminPermission('tenant.read'), AdminSubscriptionOperationsController.listCoupons);
 adminRoutes.post('/billing/coupons', requireAdmin, requireAdminPermission('tenant.plan.update'), AdminSubscriptionOperationsController.coupon);
+adminRoutes.delete('/billing/coupons/:id', requireAdmin, requireAdminPermission('tenant.plan.update'), AdminSubscriptionOperationsController.deactivateCoupon);
 adminRoutes.get('/tenants/:id/subscription', requireAdmin, requireAdminPermission('tenant.read'), AdminSubscriptionOperationsController.get);
 adminRoutes.post('/tenants/:id/subscription/quote', requireAdmin, requireAdminPermission('tenant.plan.update'), AdminSubscriptionOperationsController.quote);
 adminRoutes.post('/tenants/:id/subscription/coupon', requireAdmin, requireAdminPermission('tenant.plan.update'), AdminSubscriptionOperationsController.applyCoupon);

@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { decideTenantLifecycle, exportTenantLifecycle, getTenantLifecycle } from '@/services/tenant-lifecycle.service';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { canAdmin } from '@/lib/admin/permissions';
+import { toast } from '@/store/ui.store';
+import { toastAdminError } from '@/lib/admin/errors';
 import { TenantLifecycleForm } from './TenantLifecycleForm';
 
 const button = 'rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-40';
@@ -20,13 +22,21 @@ export function TenantLifecyclePage({ tenantId }: { tenantId: string }) {
       client.invalidateQueries({ queryKey: ['admin', 'tenants'] }),
     ]);
   };
-  const decision = useMutation({ mutationFn: ({ id, value }: { id: string; value: 'approve' | 'reject' }) => decideTenantLifecycle(tenantId, id, value), onSuccess: invalidate });
-  const exportData = useMutation({ mutationFn: () => exportTenantLifecycle(tenantId), onSuccess: async exported => {
-    const url = URL.createObjectURL(new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' }));
-    const anchor = document.createElement('a'); anchor.href = url; anchor.download = `tenant-export-${exported.id}.json`; anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    await invalidate();
-  } });
+  const decision = useMutation({
+    mutationFn: ({ id, value }: { id: string; value: 'approve' | 'reject' }) => decideTenantLifecycle(tenantId, id, value),
+    onSuccess: invalidate,
+    onError: (err: unknown) => toastAdminError(err, 'Yaşam döngüsü kararı uygulanamadı.'),
+  });
+  const exportData = useMutation({
+    mutationFn: () => exportTenantLifecycle(tenantId),
+    onSuccess: async exported => {
+      const url = URL.createObjectURL(new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' }));
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = `tenant-export-${exported.id}.json`; anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      await invalidate();
+    },
+    onError: (err: unknown) => toastAdminError(err, 'Export alınamadı.'),
+  });
   const snapshot = query.data;
   return <div className="space-y-5 text-sm text-slate-300">
     <Link className="text-blue-400" href="/admin/tenants">← Tenant listesi</Link>

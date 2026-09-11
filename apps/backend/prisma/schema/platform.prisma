@@ -427,10 +427,12 @@ model BillingCoupon {
   id String @id @default(cuid())
   code String @unique
   percent Int
+  plan String? // null = tüm planlar geçerli; "STARTER" | "PROFESSIONAL" | "ENTERPRISE"
   expiresAt DateTime
   maxRedemptions Int?
   redemptionCount Int @default(0)
   isActive Boolean @default(true)
+  description String? // Admin notları / kampanya açıklaması
   createdAt DateTime @default(now())
   discounts SubscriptionDiscount[]
   @@map("billing_coupons")

@@ -12,6 +12,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { getPlanModules, getTenantModuleAlignment } from '@/lib/admin/tenant-module-alignment';
 import { cn } from '@/lib/utils';
 import { toast } from '@/store/ui.store';
+import { extractAdminError, toastAdminError } from '@/lib/admin/errors';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { canAdmin } from '@/lib/admin/permissions';
 import { ChangePreviewDialog, type ChangeMetadata } from '@/components/features/admin/ChangePreviewDialog';
@@ -237,6 +238,9 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
       toast.success(`Plan ${variables.value} olarak güncellendi.`);
       qc.invalidateQueries({ queryKey: ['admin', 'tenant-360', id] });
     },
+    onError: (err: unknown) => {
+      toastAdminError(err, 'Plan güncellenirken bir sorun oluştu.');
+    },
   });
 
   const changeStatus = useMutation({
@@ -249,6 +253,9 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
         return;
       }
       qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] });
+    },
+    onError: (err: unknown) => {
+      toastAdminError(err, 'Durum güncellenirken bir sorun oluştu.');
     },
   });
 
@@ -273,8 +280,10 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
       qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] });
       toast.success('Tenant ayarları kaydedildi.');
     },
-    onError: (error: { response?: { data?: { error?: { message?: string } } } }) => {
-      setSettingsError(error.response?.data?.error?.message ?? 'Tenant ayarları kaydedilemedi.');
+    onError: (err: unknown) => {
+      const msg = extractAdminError(err, 'Tenant ayarları kaydedilemedi.');
+      setSettingsError(msg);
+      toastAdminError(err, 'Tenant ayarları kaydedilemedi.');
     },
   });
 

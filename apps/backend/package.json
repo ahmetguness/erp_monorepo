@@ -39,7 +39,7 @@
     "start": "node dist/src/index.js",
     "db:health": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-db-health.ts",
     "db:generate": "prisma generate --schema=prisma/schema",
-    "db:diagram": "npm run db:generate && node scripts/generate-dbdiagram.mjs",
+    "db:diagram": "node scripts/generate-dbdiagram.mjs",
     "db:migrate": "prisma migrate dev --schema=prisma/schema",
     "db:migrate:dry-run": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/migration-dry-run.ts",
     "db:migrate:review": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-migration-safety.ts",

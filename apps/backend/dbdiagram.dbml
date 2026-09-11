@@ -164,6 +164,9 @@ Enum TenantStatus {
   ACTIVE
   SUSPENDED
   CANCELLED
+  ARCHIVED
+  DELETION_SCHEDULED
+  DELETED
 }
 
 Enum DeploymentType {
@@ -362,6 +365,24 @@ Enum AiPermissionCheckResult {
   ALLOWED
   DENIED
   PARTIAL
+}
+
+Enum AdminChangeRequestType {
+  TENANT_PLAN_UPDATE
+  TENANT_STATUS_UPDATE
+  PLAN_FEATURE_UPDATE
+  FEATURE_OVERRIDE_UPSERT
+  FEATURE_OVERRIDE_DELETE
+  FEATURE_ROLLOUT_ACTIVATE
+}
+
+Enum AdminChangeRequestStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  APPLIED
+  ROLLED_BACK
 }
 
 Enum PurchaseRequestStatus {
@@ -1141,6 +1162,10 @@ Table payroll_items {
 }
 
 Table tenants {
+  lifecycleVersion integer [default: 0]
+  legalHold boolean [default: false]
+  retentionUntil timestamp [null]
+  deletionNotBefore timestamp [null]
   id varchar [pk, default: `cuid(1)`]
   createdAt timestamp [default: `now()`]
   updatedAt timestamp [note: "Automatically updated timestamp"]
@@ -1196,6 +1221,11 @@ Table users {
 }
 
 Table admin_users {
+  inviteTokenHash varchar [unique, null]
+  invitationExpiresAt timestamp [null]
+  invitationAcceptedAt timestamp [null]
+  failedLoginCount integer [default: 0]
+  lastFailedLoginAt timestamp [null]
   id varchar [pk, default: `cuid(1)`]
   createdAt timestamp [default: `now()`]
   updatedAt timestamp [note: "Automatically updated timestamp"]
@@ -1204,6 +1234,81 @@ Table admin_users {
   password varchar
   isActive boolean [default: true]
   lastLoginAt timestamp [null]
+  passwordChangedAt timestamp [default: `now()`]
+  mfaSecretEncrypted varchar [null]
+  mfaEnabled boolean [default: false]
+  mfaLastCounter integer [default: -1]
+  mfaVerifiedAt timestamp [null]
+  tokenVersion integer [default: 0]
+}
+
+Table admin_sessions {
+  tokenVersion integer [default: 0]
+  id varchar [pk, default: `cuid(1)`]
+  adminUserId varchar
+  refreshTokenHash varchar [unique]
+  deviceName varchar
+  ipAddress varchar [null]
+  userAgent varchar [null]
+  rememberMe boolean [default: false]
+  mfaVerifiedAt timestamp
+  lastSeenAt timestamp [default: `now()`]
+  expiresAt timestamp
+  revokedAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (adminUserId, revokedAt, expiresAt)
+  }
+}
+
+Table admin_security_events {
+  id varchar [pk, default: `cuid(1)`]
+  adminUserId varchar
+  type varchar
+  message varchar
+  ipAddress varchar [null]
+  userAgent varchar [null]
+  readAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (adminUserId, createdAt)
+  }
+}
+
+Table admin_roles {
+  id varchar [pk, default: `cuid(1)`]
+  key varchar [unique]
+  name varchar
+  description varchar [null]
+}
+
+Table admin_permissions {
+  id varchar [pk, default: `cuid(1)`]
+  key varchar [unique]
+  description varchar [null]
+}
+
+Table admin_user_roles {
+  adminUserId varchar
+  adminRoleId varchar
+  assignedAt timestamp [default: `now()`]
+
+  indexes {
+    (adminUserId, adminRoleId) [pk]
+    (adminRoleId)
+  }
+}
+
+Table admin_role_permissions {
+  adminRoleId varchar
+  adminPermissionId varchar
+
+  indexes {
+    (adminRoleId, adminPermissionId) [pk]
+    (adminPermissionId)
+  }
 }
 
 Table tenant_users {
@@ -1283,6 +1388,41 @@ Table tenant_feature_overrides {
   indexes {
     (tenantId, featureKey) [unique]
     (tenantId)
+  }
+}
+
+Table feature_rollouts {
+  id varchar [pk, default: `cuid(1)`]
+  plan Plan
+  featureKey FeatureKey
+  version integer
+  environment varchar
+  stage varchar
+  status varchar [default: 'DRAFT']
+  value varchar
+  isEnabled boolean [default: true]
+  rolloutPercentage integer [default: 0]
+  targetTenantIds varchar[] [default: `ARRAY[]`]
+  dependencies varchar[] [default: `ARRAY[]`]
+  conflicts varchar[] [default: `ARRAY[]`]
+  startsAt timestamp
+  endsAt timestamp [null]
+  errorThresholdPct decimal
+  observedErrorRatePct decimal [null]
+  killSwitch boolean [default: false]
+  reason varchar
+  ticketId varchar [null]
+  createdById varchar
+  activatedById varchar [null]
+  activatedAt timestamp [null]
+  pausedAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: "Automatically updated timestamp"]
+
+  indexes {
+    (plan, featureKey, environment, version) [unique]
+    (plan, featureKey, environment, status)
+    (status, startsAt, endsAt)
   }
 }
 
@@ -1611,6 +1751,11 @@ Table marketplace_sync_jobs {
   leaseExpiresAt timestamp [null]
   params jsonb [null]
   result jsonb [null]
+  quarantinedAt timestamp [null]
+  quarantinedById varchar [null]
+  resolvedAt timestamp [null]
+  resolvedById varchar [null]
+  resolutionNote varchar [null]
   createdAt timestamp [default: `now()`]
   updatedAt timestamp [note: "Automatically updated timestamp"]
 
@@ -1620,6 +1765,7 @@ Table marketplace_sync_jobs {
     (createdAt)
     (status, nextRetryAt, createdAt)
     (status, leaseExpiresAt)
+    (tenantId, resolvedAt, updatedAt)
   }
 }
 
@@ -1697,6 +1843,134 @@ Table module_settings {
   }
 }
 
+Table admin_change_requests {
+  id varchar [pk, default: `cuid(1)`]
+  type AdminChangeRequestType
+  status AdminChangeRequestStatus [default: 'PENDING']
+  targetId varchar
+  targetLabel varchar
+  requiredPermission varchar
+  payload jsonb
+  previousValues jsonb [null]
+  affectedTenantCount integer [default: 0]
+  affectedUserCount integer [default: 0]
+  requestedById varchar
+  decidedById varchar [null]
+  decisionNote varchar [null]
+  reason varchar
+  ticketId varchar [null]
+  rollbackOfId varchar [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: "Automatically updated timestamp"]
+  decidedAt timestamp [null]
+  appliedAt timestamp [null]
+
+  indexes {
+    (status, createdAt)
+    (requestedById, status)
+    (type, targetId, status)
+    (rollbackOfId)
+  }
+}
+
+Table observability_metric_points {
+  id varchar [pk, default: `cuid(1)`]
+  metricKey varchar
+  scope varchar
+  scopeId varchar
+  value decimal
+  bucketAt timestamp
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (metricKey, scope, scopeId, bucketAt) [unique]
+    (scope, scopeId, bucketAt)
+    (metricKey, bucketAt)
+  }
+}
+
+Table observability_slos {
+  id varchar [pk, default: `cuid(1)`]
+  name varchar
+  scope varchar
+  scopeId varchar
+  metricKey varchar
+  targetPercentage decimal
+  windowDays integer
+  owner varchar
+  runbookUrl varchar
+  notificationChannel varchar
+  isEnabled boolean [default: true]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: "Automatically updated timestamp"]
+
+  indexes {
+    (scope, scopeId, metricKey) [unique]
+    (isEnabled, scope, scopeId)
+  }
+}
+
+Table observability_alert_history {
+  id varchar [pk, default: `cuid(1)`]
+  fingerprint varchar
+  metricKey varchar
+  scope varchar
+  scopeId varchar
+  severity varchar
+  status varchar [default: 'OPEN']
+  value decimal
+  threshold decimal
+  owner varchar
+  runbookUrl varchar
+  notificationChannel varchar
+  silencedUntil timestamp [null]
+  silenceReason varchar [null]
+  lastModifiedById varchar [null]
+  openedAt timestamp [default: `now()`]
+  resolvedAt timestamp [null]
+  updatedAt timestamp [note: "Automatically updated timestamp"]
+
+  indexes {
+    (fingerprint, status)
+    (scope, scopeId, openedAt)
+    (status, silencedUntil)
+  }
+}
+
+Table deployment_markers {
+  id varchar [pk, default: `cuid(1)`]
+  service varchar
+  version varchar
+  environment varchar
+  description varchar [null]
+  deployedAt timestamp
+  createdById varchar
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (service, version, environment) [unique]
+    (deployedAt)
+  }
+}
+
+Table observability_log_entries {
+  id varchar [pk, default: `cuid(1)`]
+  fingerprint varchar [unique]
+  level varchar
+  service varchar
+  message varchar
+  requestId varchar [null]
+  correlationId varchar [null]
+  occurredAt timestamp
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (service, occurredAt)
+    (requestId)
+    (correlationId)
+  }
+}
+
 Table audit_logs {
   id varchar [pk, default: `cuid(1)`]
   tenantId varchar
@@ -1709,12 +1983,212 @@ Table audit_logs {
   newValues jsonb [null]
   ipAddress varchar [null]
   userAgent varchar [null]
+  adminId varchar [null]
+  reason varchar [null]
+  ticketId varchar [null]
+  requestId varchar [null]
+  approvalId varchar [null]
+  rollbackOfId varchar [null]
   createdAt timestamp [default: `now()`]
 
   indexes {
     (tenantId, module)
     (tenantId, entityType, entityId)
     (tenantId, userId)
+    (tenantId, createdAt)
+    (adminId, createdAt)
+    (requestId)
+    (approvalId)
+  }
+}
+
+Table tenant_support_notes {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  authorId varchar
+  body varchar
+  ticketId varchar [null]
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (tenantId, createdAt)
+  }
+}
+
+Table support_sessions {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  adminId varchar
+  adminSessionId varchar
+  targetUserId varchar
+  reason varchar
+  ticketId varchar
+  scopes varchar[]
+  expiresAt timestamp
+  approvedAt timestamp [null]
+  approvedById varchar [null]
+  revokedAt timestamp [null]
+  writeRequested boolean [default: false]
+  writeApprovedAt timestamp [null]
+  writeApprovedById varchar [null]
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (tenantId, createdAt)
+    (adminId, expiresAt)
+  }
+}
+
+Table tenant_lifecycle_requests {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  fromStatus TenantStatus
+  version integer
+  input jsonb
+  state varchar [default: 'PENDING']
+  requestedById varchar
+  requestedByName varchar
+  decidedById varchar [null]
+  createdAt timestamp [default: `now()`]
+  decidedAt timestamp [null]
+
+  indexes {
+    (tenantId, createdAt)
+  }
+}
+
+Table tenant_lifecycle_exports {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  version integer
+  digest varchar
+  data jsonb
+  createdById varchar
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (tenantId, createdAt)
+  }
+}
+
+Table tenant_provisioning_jobs {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar [null]
+  idempotencyKey varchar [unique]
+  requestHash varchar
+  input jsonb
+  status varchar [default: 'PENDING']
+  error varchar [null]
+  createdById varchar
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: "Automatically updated timestamp"]
+
+  indexes {
+    (tenantId, createdAt)
+  }
+}
+
+Table tenant_provisioning_steps {
+  id varchar [pk, default: `cuid(1)`]
+  jobId varchar
+  key varchar
+  status varchar [default: 'PENDING']
+  attempts integer [default: 0]
+  error varchar [null]
+  updatedAt timestamp [note: "Automatically updated timestamp"]
+
+  indexes {
+    (jobId, key) [unique]
+  }
+}
+
+Table billing_subscriptions {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar [unique]
+  provider varchar [default: 'MANUAL']
+  providerCustomerId varchar [null]
+  state varchar [default: 'TRIALING']
+  monthlyAmount decimal [default: 0]
+  currency varchar [default: 'TRY']
+  dunningAttempt integer [default: 0]
+  nextRetryAt timestamp [null]
+  customUnitPrice decimal [null]
+  customPricingExpiresAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: "Automatically updated timestamp"]
+}
+
+Table billing_invoices {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  providerInvoiceId varchar [null]
+  amount decimal
+  currency varchar [default: 'TRY']
+  status varchar [default: 'OPEN']
+  dueAt timestamp
+  paidAt timestamp [null]
+  failureReason varchar [null]
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (tenantId, providerInvoiceId) [unique]
+    (tenantId, createdAt)
+  }
+}
+
+Table billing_provider_events {
+  id varchar [pk, default: `cuid(1)`]
+  provider varchar
+  providerEventId varchar
+  type varchar
+  payload jsonb
+  processedAt timestamp [default: `now()`]
+
+  indexes {
+    (provider, providerEventId) [unique]
+  }
+}
+
+Table billing_coupons {
+  id varchar [pk, default: `cuid(1)`]
+  code varchar [unique]
+  percent integer
+  plan varchar [null]
+  expiresAt timestamp
+  maxRedemptions integer [null]
+  redemptionCount integer [default: 0]
+  isActive boolean [default: true]
+  description varchar [null]
+  createdAt timestamp [default: `now()`]
+}
+
+Table subscription_discounts {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  couponId varchar
+  expiresAt timestamp
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (tenantId, couponId) [unique]
+    (tenantId, expiresAt)
+  }
+}
+
+Table custom_price_requests {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  monthlyAmount decimal
+  unitPrice decimal [null]
+  expiresAt timestamp
+  reason varchar
+  state varchar [default: 'PENDING']
+  requestedById varchar
+  decidedById varchar [null]
+  createdAt timestamp [default: `now()`]
+  decidedAt timestamp [null]
+
+  indexes {
     (tenantId, createdAt)
   }
 }
@@ -2168,6 +2642,11 @@ Table domain_event_outbox {
   leaseOwner varchar [null]
   leaseExpiresAt timestamp [null]
   processedAt timestamp [null]
+  quarantinedAt timestamp [null]
+  quarantinedById varchar [null]
+  resolvedAt timestamp [null]
+  resolvedById varchar [null]
+  resolutionNote varchar [null]
   createdAt timestamp [default: `now()`]
   updatedAt timestamp [note: "Automatically updated timestamp"]
 
@@ -2178,6 +2657,7 @@ Table domain_event_outbox {
     (tenantId, entityType, entityId)
     (status, nextRetryAt, createdAt)
     (status, leaseExpiresAt)
+    (tenantId, resolvedAt, updatedAt)
   }
 }
 
@@ -2736,6 +3216,12 @@ Ref: payrolls.employeeId > employees.id [delete: cascade]
 Ref: payrolls.tenantId > tenants.id [delete: cascade]
 Ref: payroll_items.payrollId > payrolls.id [delete: cascade]
 Ref: payroll_items.tenantId > tenants.id [delete: cascade]
+Ref: admin_sessions.adminUserId > admin_users.id [delete: cascade]
+Ref: admin_security_events.adminUserId > admin_users.id [delete: cascade]
+Ref: admin_user_roles.adminUserId > admin_users.id [delete: cascade]
+Ref: admin_user_roles.adminRoleId > admin_roles.id [delete: cascade]
+Ref: admin_role_permissions.adminRoleId > admin_roles.id [delete: cascade]
+Ref: admin_role_permissions.adminPermissionId > admin_permissions.id [delete: cascade]
 Ref: tenant_users.tenantId > tenants.id [delete: cascade]
 Ref: tenant_users.userId > users.id [delete: cascade]
 Ref: tenant_users.roleId > roles.id
@@ -2792,7 +3278,24 @@ Ref: marketplace_listing_snapshots.tenantId > tenants.id [delete: cascade]
 Ref: number_sequences.tenantId > tenants.id [delete: cascade]
 Ref: tenant_settings.tenantId > tenants.id [delete: cascade]
 Ref: module_settings.tenantId > tenants.id [delete: cascade]
+Ref: admin_change_requests.requestedById > admin_users.id [delete: restrict]
+Ref: admin_change_requests.decidedById > admin_users.id [delete: restrict]
 Ref: audit_logs.tenantId > tenants.id [delete: cascade]
+Ref: audit_logs.adminId > admin_users.id [delete: set null]
+Ref: tenant_support_notes.tenantId > tenants.id [delete: cascade]
+Ref: tenant_support_notes.authorId > admin_users.id [delete: restrict]
+Ref: support_sessions.tenantId > tenants.id [delete: cascade]
+Ref: support_sessions.adminId > admin_users.id [delete: restrict]
+Ref: support_sessions.targetUserId > users.id [delete: restrict]
+Ref: tenant_lifecycle_requests.tenantId > tenants.id [delete: cascade]
+Ref: tenant_lifecycle_exports.tenantId > tenants.id [delete: cascade]
+Ref: tenant_provisioning_jobs.tenantId > tenants.id [delete: set null]
+Ref: tenant_provisioning_steps.jobId > tenant_provisioning_jobs.id [delete: cascade]
+Ref: billing_subscriptions.tenantId - tenants.id [delete: cascade]
+Ref: billing_invoices.tenantId > tenants.id [delete: cascade]
+Ref: subscription_discounts.tenantId > tenants.id [delete: cascade]
+Ref: subscription_discounts.couponId > billing_coupons.id [delete: restrict]
+Ref: custom_price_requests.tenantId > tenants.id [delete: cascade]
 Ref: ai_request_logs.tenantId > tenants.id [delete: set null]
 Ref: ai_request_logs.userId > users.id [delete: set null]
 Ref: attachments.tenantId > tenants.id [delete: cascade]

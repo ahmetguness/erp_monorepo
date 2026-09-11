@@ -39,6 +39,8 @@ export const couponSchema = z
     percent: z.number().int().min(1).max(100),
     expiresAt: z.string().datetime(),
     maxRedemptions: z.number().int().positive().optional(),
+    plan: z.enum(['STARTER', 'PROFESSIONAL', 'ENTERPRISE']).nullable().optional(),
+    description: z.string().trim().max(500).optional(),
   })
   .strict();
 export const applyCouponSchema = z

@@ -6,11 +6,18 @@ import { create } from 'zustand';
 
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
 
+export interface ToastAction {
+  label: string;
+  href?: string;
+  onClick?: () => void;
+}
+
 export interface Toast {
   id: string;
   variant: ToastVariant;
   message: string;
   duration?: number;
+  action?: ToastAction;
 }
 
 // ─────────────────────────────────────────────
@@ -29,10 +36,10 @@ interface UIActions {
   removeToast: (id: string) => void;
   // Convenience helpers
   toast: {
-    success: (message: string) => void;
-    error: (message: string) => void;
-    warning: (message: string) => void;
-    info: (message: string) => void;
+    success: (message: string, action?: ToastAction, duration?: number) => void;
+    error: (message: string, action?: ToastAction, duration?: number) => void;
+    warning: (message: string, action?: ToastAction, duration?: number) => void;
+    info: (message: string, action?: ToastAction, duration?: number) => void;
   };
 }
 
@@ -49,7 +56,7 @@ export const useUIStore = create<UIStore>()((set, get) => ({
 
   addToast: (toast) => {
     const id = `toast-${++toastCounter}`;
-    const duration = toast.duration ?? 4000;
+    const duration = toast.duration ?? (toast.action ? 8000 : 4000);
     set((s) => ({ toasts: [...s.toasts, { ...toast, id }] }));
     setTimeout(() => get().removeToast(id), duration);
   },
@@ -58,21 +65,21 @@ export const useUIStore = create<UIStore>()((set, get) => ({
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   toast: {
-    success: (message) => get().addToast({ variant: 'success', message }),
-    error: (message) => get().addToast({ variant: 'error', message }),
-    warning: (message) => get().addToast({ variant: 'warning', message }),
-    info: (message) => get().addToast({ variant: 'info', message }),
+    success: (message, action, duration) => get().addToast({ variant: 'success', message, action, duration }),
+    error: (message, action, duration) => get().addToast({ variant: 'error', message, action, duration }),
+    warning: (message, action, duration) => get().addToast({ variant: 'warning', message, action, duration }),
+    info: (message, action, duration) => get().addToast({ variant: 'info', message, action, duration }),
   },
 }));
 
 // Standalone toast helper — usable outside React components
 export const toast = {
-  success: (message: string) =>
-    useUIStore.getState().addToast({ variant: 'success', message }),
-  error: (message: string) =>
-    useUIStore.getState().addToast({ variant: 'error', message }),
-  warning: (message: string) =>
-    useUIStore.getState().addToast({ variant: 'warning', message }),
-  info: (message: string) =>
-    useUIStore.getState().addToast({ variant: 'info', message }),
+  success: (message: string, action?: ToastAction, duration?: number) =>
+    useUIStore.getState().addToast({ variant: 'success', message, action, duration }),
+  error: (message: string, action?: ToastAction, duration?: number) =>
+    useUIStore.getState().addToast({ variant: 'error', message, action, duration }),
+  warning: (message: string, action?: ToastAction, duration?: number) =>
+    useUIStore.getState().addToast({ variant: 'warning', message, action, duration }),
+  info: (message: string, action?: ToastAction, duration?: number) =>
+    useUIStore.getState().addToast({ variant: 'info', message, action, duration }),
 };

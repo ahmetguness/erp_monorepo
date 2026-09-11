@@ -20,10 +20,6 @@ adminApiClient.interceptors.response.use((response) => response, async (error: u
     await refreshPromise;
     return adminApiClient.request(config);
   }
-  const data = error.response?.data;
-  if (typeof data === 'object' && data !== null && 'code' in data && data.code === 'ADMIN_REAUTH_REQUIRED' && typeof window !== 'undefined') {
-    window.location.assign('/admin/sessions?reauth=1');
-  }
   return Promise.reject(error);
 });
 installApiErrorInterceptor(adminApiClient);

@@ -60,7 +60,7 @@ export async function requireAdmin(c: Context, next: Next): Promise<Response | v
 export const requireRecentAdminMfa: MiddlewareHandler = async (c, next) => {
   const verifiedAt = new Date(c.get('adminMfaVerifiedAt')).getTime();
   if (!Number.isFinite(verifiedAt) || Date.now() - verifiedAt > ADMIN_RECENT_MFA_SECONDS * 1000) {
-    return c.json({ error: 'Bu kritik işlem için MFA ile yeniden doğrulama gerekli.', code: 'ADMIN_REAUTH_REQUIRED' }, 403);
+    return c.json({ error: { code: 'ADMIN_REAUTH_REQUIRED', message: 'Bu kritik işlem için MFA ile yeniden doğrulama gerekli.' } }, 403);
   }
   await next();
 };

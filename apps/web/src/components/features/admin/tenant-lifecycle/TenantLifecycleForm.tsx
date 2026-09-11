@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ClosureChecklist, TenantLifecycleInput, TenantLifecycleSnapshot, TenantLifecycleStatus } from '@repo/types';
 import { requestTenantLifecycle } from '@/services/tenant-lifecycle.service';
+import { toast } from '@/store/ui.store';
+import { toastAdminError } from '@/lib/admin/errors';
 
 const inputStyle = 'mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500';
 const button = 'rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-40';
@@ -15,19 +17,27 @@ const checklistLabels: Record<keyof ClosureChecklist, string> = {
 export function TenantLifecycleForm({ snapshot }: { snapshot: TenantLifecycleSnapshot }) {
   const [action, setAction] = useState<'TRANSITION' | 'LEGAL_HOLD'>('TRANSITION');
   const [targetStatus, setTarget] = useState<TenantLifecycleStatus | undefined>(snapshot.transitions[0]);
-  const [legalHold, setHold] = useState(!snapshot.legalHold);
+  const [legalHold, setHold] = useState(snapshot.legalHold);
   const [reason, setReason] = useState('');
   const [impact, setImpact] = useState('');
   const [ticketId, setTicket] = useState('');
-  const [retentionUntil, setRetention] = useState(snapshot.retentionUntil?.slice(0, 10) ?? '');
+  const [retentionUntil, setRetention] = useState('');
   const [deletionNotBefore, setDeletion] = useState('');
-  const [exportId, setExport] = useState('');
+  const [exportId, setExport] = useState(snapshot.exports[0]?.id ?? '');
   const [checklist, setChecklist] = useState<ClosureChecklist>({ ownerNotified: false, balancesReviewed: false, externalBackupVerified: false, retentionReviewed: false });
   const [proposal, setProposal] = useState<TenantLifecycleInput | null>(null);
   const client = useQueryClient();
-  const mutation = useMutation({ mutationFn: (input: TenantLifecycleInput) => requestTenantLifecycle(snapshot.tenantId, input), onSuccess: async () => {
-    setProposal(null); await client.invalidateQueries({ queryKey: ['tenant-lifecycle', snapshot.tenantId] });
-  } });
+  const mutation = useMutation({
+    mutationFn: (input: TenantLifecycleInput) => requestTenantLifecycle(snapshot.tenantId, input),
+    onSuccess: async () => {
+      toast.success('Yaşam döngüsü talebi ikinci admin onayına iletildi.');
+      setProposal(null);
+      await client.invalidateQueries({ queryKey: ['tenant-lifecycle', snapshot.tenantId] });
+    },
+    onError: (err: unknown) => {
+      toastAdminError(err, 'Talep oluşturulamadı. Tarihleri ve kuralları kontrol edin.');
+    },
+  });
   const deleting = action === 'TRANSITION' && (targetStatus === 'DELETION_SCHEDULED' || targetStatus === 'DELETED');
   return <form className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4" onSubmit={event => {
     event.preventDefault();

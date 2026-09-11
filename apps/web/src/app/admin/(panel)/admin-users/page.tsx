@@ -11,6 +11,7 @@ import {
 } from '@/services/admin-users.service';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { canAdmin } from '@/lib/admin/permissions';
+import { extractAdminError, toastAdminError } from '@/lib/admin/errors';
 import { toast } from '@/store/ui.store';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -34,21 +35,6 @@ import {
   Laptop,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-function getErrorMessage(error: unknown): string {
-  if (typeof error === 'object' && error !== null && 'error' in error) {
-    const detail = error.error;
-    if (
-      typeof detail === 'object' &&
-      detail !== null &&
-      'message' in detail &&
-      typeof detail.message === 'string'
-    ) {
-      return detail.message;
-    }
-  }
-  return 'İşlem gerçekleştirilemedi. Lütfen tekrar deneyin.';
-}
 
 function formatDateTime(value: string | null): string {
   if (!value) return '—';
@@ -107,8 +93,8 @@ export default function AdminUsersPage() {
       toast.success('Davet e-postası başarıyla gönderildi.');
       await refreshList();
     },
-    onError: (error) => {
-      toast.error(getErrorMessage(error));
+    onError: (error: unknown) => {
+      toastAdminError(error, 'Yönetici davet edilemedi.');
     },
   });
 
@@ -125,8 +111,8 @@ export default function AdminUsersPage() {
         await refreshList();
       }
     },
-    onError: (error) => {
-      toast.error(getErrorMessage(error));
+    onError: (error: unknown) => {
+      toastAdminError(error, 'Yönetici güncellenemedi.');
     },
   });
 
@@ -142,8 +128,8 @@ export default function AdminUsersPage() {
         await refreshList();
       }
     },
-    onError: (error) => {
-      toast.error(getErrorMessage(error));
+    onError: (error: unknown) => {
+      toastAdminError(error, 'Oturumlar kapatılamadı.');
     },
   });
 
@@ -159,8 +145,8 @@ export default function AdminUsersPage() {
       toast.success('Davet e-postası tekrar gönderildi.');
       await refreshList();
     },
-    onError: (error) => {
-      toast.error(getErrorMessage(error));
+    onError: (error: unknown) => {
+      toastAdminError(error, 'Davet tekrar gönderilemedi.');
     },
   });
 

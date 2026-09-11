@@ -11,6 +11,7 @@ import {
   reauthenticateAdmin,
 } from '@/services/admin-session.service';
 import { toast } from '@/store/ui.store';
+import { extractAdminError, toastAdminError } from '@/lib/admin/errors';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
@@ -129,12 +130,7 @@ export default function AdminSessionsPage() {
       );
     },
     onError: (error: unknown) => {
-      let msg = 'Doğrulama başarısız. Lütfen şifrenizi ve 6 haneli yeni MFA kodunuzu kontrol edin.';
-      if (typeof error === 'object' && error !== null && 'error' in error) {
-        const detail = (error as { error: { message?: string } }).error;
-        if (detail?.message) msg = detail.message;
-      }
-      toast.error(msg);
+      toast.error(extractAdminError(error, 'Doğrulama başarısız. Lütfen şifrenizi ve 6 haneli yeni MFA kodunuzu kontrol edin.'));
     },
   });
 
@@ -152,8 +148,8 @@ export default function AdminSessionsPage() {
         await queryClient.invalidateQueries({ queryKey: ['admin', 'sessions'] });
       }
     },
-    onError: () => {
-      toast.error('Oturum kapatılamadı. Lütfen tekrar deneyin.');
+    onError: (err: unknown) => {
+      toastAdminError(err, 'Oturum kapatılamadı. Lütfen tekrar deneyin.');
     },
   });
 
@@ -165,8 +161,8 @@ export default function AdminSessionsPage() {
       toast.info('Tüm oturumlar kapatıldı. Giriş sayfasına yönlendiriliyorsunuz…');
       setTimeout(() => window.location.assign('/admin/login'), 800);
     },
-    onError: () => {
-      toast.error('Oturumlar kapatılırken bir sorun oluştu.');
+    onError: (err: unknown) => {
+      toastAdminError(err, 'Oturumlar kapatılırken bir sorun oluştu.');
     },
   });
 

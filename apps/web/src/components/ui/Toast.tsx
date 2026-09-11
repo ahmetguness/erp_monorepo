@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 import { useUIStore, type Toast, type ToastVariant } from '@/store/ui.store';
 import { cn } from '@/lib/utils';
@@ -16,10 +17,10 @@ const VARIANT_STYLES: Record<ToastVariant, string> = {
 };
 
 const VARIANT_ICONS: Record<ToastVariant, React.ReactNode> = {
-  success: <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />,
-  error:   <XCircle className="w-4 h-4 text-red-400 shrink-0" />,
-  warning: <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />,
-  info:    <Info className="w-4 h-4 text-sky-400 shrink-0" />,
+  success: <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />,
+  error:   <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />,
+  warning: <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />,
+  info:    <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />,
 };
 
 // ─────────────────────────────────────────────
@@ -36,17 +37,43 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
     <div
       role="alert"
       className={cn(
-        'flex items-start gap-3 px-4 py-3 rounded-lg border text-sm shadow-lg',
+        'flex items-start gap-3 px-4 py-3 rounded-xl border text-sm shadow-xl backdrop-blur-md',
         'animate-in slide-in-from-right-5 fade-in duration-200',
         VARIANT_STYLES[toast.variant],
       )}
     >
       {VARIANT_ICONS[toast.variant]}
-      <span className="flex-1 leading-snug">{toast.message}</span>
+      <div className="flex-1 min-w-0">
+        <p className="leading-snug whitespace-pre-line text-xs sm:text-sm">{toast.message}</p>
+        {toast.action && (
+          <div className="mt-2">
+            {toast.action.href ? (
+              <Link
+                href={toast.action.href}
+                onClick={() => onRemove(toast.id)}
+                className="inline-flex items-center gap-1 rounded-lg bg-white/15 px-2.5 py-1 text-xs font-semibold text-white shadow-sm ring-1 ring-inset ring-white/25 transition hover:bg-white/25 active:scale-95"
+              >
+                {toast.action.label}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  toast.action?.onClick?.();
+                  onRemove(toast.id);
+                }}
+                className="inline-flex items-center gap-1 rounded-lg bg-white/15 px-2.5 py-1 text-xs font-semibold text-white shadow-sm ring-1 ring-inset ring-white/25 transition hover:bg-white/25 active:scale-95"
+              >
+                {toast.action.label}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
       <button
         onClick={() => onRemove(toast.id)}
         aria-label="Bildirimi kapat"
-        className="opacity-60 hover:opacity-100 transition-opacity ml-1 shrink-0"
+        className="opacity-60 hover:opacity-100 transition-opacity ml-1 shrink-0 p-0.5"
       >
         <X className="w-3.5 h-3.5" />
       </button>

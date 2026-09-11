@@ -309,6 +309,7 @@ export async function updateTenant(id: string, data: Record<string, unknown>) {
   const res = await adminApiClient.patch(`/api/admin/tenants/${id}`, data);
   return res.data.data;
 }
+
 // ─────────────────────────────────────────────
 // Features
 // ─────────────────────────────────────────────
@@ -403,4 +404,68 @@ export async function getAdminAuditLogs(params?: { page?: number; limit?: number
 export async function getSecurityChecklist(): Promise<SecurityChecklist> {
   const res = await adminApiClient.get('/api/admin/security/checklist');
   return res.data.data;
+}
+
+// ─────────────────────────────────────────────
+// Billing Coupons
+// ─────────────────────────────────────────────
+
+export type CouponPlan = 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
+
+export interface CouponDiscountTenant {
+  id: string;
+  companyName: string;
+  slug: string;
+  plan: string;
+  status: string;
+}
+
+export interface CouponDiscount {
+  id: string;
+  tenantId: string;
+  couponId: string;
+  createdAt: string;
+  expiresAt: string;
+  tenant: CouponDiscountTenant;
+}
+
+export interface BillingCoupon {
+  id: string;
+  code: string;
+  percent: number;
+  plan: CouponPlan | null; // null = tüm planlar
+  description: string | null;
+  expiresAt: string;
+  maxRedemptions: number | null;
+  redemptionCount: number;
+  isActive: boolean;
+  createdAt: string;
+  _count: { discounts: number };
+  discounts?: CouponDiscount[];
+}
+
+export interface CreateCouponInput {
+  code: string;
+  percent: number;
+  expiresAt: string; // ISO datetime
+  maxRedemptions?: number;
+  plan?: CouponPlan | null;
+  description?: string;
+}
+
+export async function getCoupons(params?: { plan?: string; isActive?: boolean }): Promise<BillingCoupon[]> {
+  const query: Record<string, string> = {};
+  if (params?.plan) query.plan = params.plan;
+  if (params?.isActive !== undefined) query.isActive = String(params.isActive);
+  const res = await adminApiClient.get('/api/admin/billing/coupons', { params: query });
+  return res.data.data;
+}
+
+export async function createAdminCoupon(data: CreateCouponInput): Promise<BillingCoupon> {
+  const res = await adminApiClient.post('/api/admin/billing/coupons', data);
+  return res.data.data;
+}
+
+export async function deactivateAdminCoupon(id: string): Promise<void> {
+  await adminApiClient.delete(`/api/admin/billing/coupons/${id}`);
 }

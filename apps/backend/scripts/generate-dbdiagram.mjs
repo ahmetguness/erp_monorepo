@@ -1,12 +1,49 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { Prisma } from '@prisma/client';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execSync } from 'node:child_process';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
-const outputPath = path.resolve(scriptDirectory, '../dbdiagram.dbml');
-const schemaDirectory = path.resolve(scriptDirectory, '../prisma/schema');
-const datamodel = Prisma.dmmf.datamodel;
+const rootBackend = path.resolve(scriptDirectory, '..');
+const outputPath = path.resolve(rootBackend, 'dbdiagram.dbml');
+const schemaDirectory = path.resolve(rootBackend, 'prisma/schema');
+
+// Prepare temp schema with custom client output to avoid Windows DLL locks
+const tempSchemaDir = path.resolve(rootBackend, '.temp_prisma_schema');
+const tempClientDir = path.resolve(rootBackend, '.temp_prisma_client');
+
+if (!fs.existsSync(tempSchemaDir)) fs.mkdirSync(tempSchemaDir, { recursive: true });
+
+for (const file of fs.readdirSync(schemaDirectory).filter((name) => name.endsWith('.prisma'))) {
+  let source = fs.readFileSync(path.join(schemaDirectory, file), 'utf8');
+  if (file === 'schema.prisma') {
+    source = `generator client {\n  provider = "prisma-client-js"\n  output   = "../.temp_prisma_client"\n}\n\ndatasource db {\n  provider = "postgresql"\n  url      = env("DATABASE_URL")\n}\n`;
+  }
+  fs.writeFileSync(path.join(tempSchemaDir, file), source, 'utf8');
+}
+
+let datamodel;
+try {
+  console.log('Generating fresh DMMF from all prisma/schema files...');
+  execSync(`npx prisma generate --schema="${tempSchemaDir}"`, {
+    cwd: rootBackend,
+    stdio: 'pipe',
+  });
+  const clientUrl = pathToFileURL(path.join(tempClientDir, 'index.js')).href;
+  const tempClient = await import(clientUrl);
+  datamodel = tempClient.Prisma.dmmf.datamodel;
+  console.log(`Loaded fresh DMMF: ${datamodel.models.length} models, ${datamodel.enums.length} enums.`);
+  console.log('Coupon models:', datamodel.models.filter(m => m.name.toLowerCase().includes('coupon')).map(m => m.name));
+} catch (err) {
+  console.error('Failed to generate from temp schema, falling back to @prisma/client:', err.message);
+  const fallback = await import('@prisma/client');
+  datamodel = fallback.Prisma.dmmf.datamodel;
+} finally {
+  try {
+    fs.rmSync(tempSchemaDir, { recursive: true, force: true });
+    fs.rmSync(tempClientDir, { recursive: true, force: true });
+  } catch {}
+}
 
 const schemaIndexes = new Map();
 for (const file of fs.readdirSync(schemaDirectory).filter((name) => name.endsWith('.prisma'))) {

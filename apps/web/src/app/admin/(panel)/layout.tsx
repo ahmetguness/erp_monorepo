@@ -3,9 +3,21 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import {
-  Shield, LayoutDashboard, Building2, Sliders,
-  Activity, FileText, LogOut, ShieldCheck, UserRoundCheck,
+  Shield,
+  LayoutDashboard,
+  Building2,
+  Sliders,
+  Activity,
+  FileText,
+  LogOut,
+  ShieldCheck,
+  UserRoundCheck,
+  KeyRound,
+  ChevronRight,
+  ExternalLink,
+  Ticket,
 } from 'lucide-react';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { cn } from '@/lib/utils';
@@ -13,46 +25,140 @@ import { ToastContainer } from '@/components/ui/Toast';
 import { AdminSecurityNotice } from '@/components/features/admin/AdminSecurityNotice';
 import type { AdminPermission } from '@repo/types';
 import { canAdmin } from '@/lib/admin/permissions';
+import { getAdminChangeRequests } from '@/services/admin.service';
 
-const NAV = [
-  { href: '/admin/admin-users', icon: UserRoundCheck, label: 'Admin Kullanıcıları', permission: 'admin-user.read' },
-  { href: '/admin', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard.read' },
-  { href: '/admin/tenants', icon: Building2, label: 'Tenantlar', permission: 'tenant.read' },
-  { href: '/admin/change-requests', icon: UserRoundCheck, label: 'Onay Talepleri', permission: 'change-request.read' },
-  { href: '/admin/features', icon: Sliders, label: 'Özellikler', permission: 'feature.read' },
-  { href: '/admin/observability', icon: Activity, label: 'Operasyon', permission: 'operations.read' },
-  { href: '/admin/audit', icon: FileText, label: 'Denetim', permission: 'audit.read' },
-  { href: '/admin/security', icon: ShieldCheck, label: 'Güvenlik', permission: 'security.read' },
-] satisfies ReadonlyArray<{ href: string; icon: typeof LayoutDashboard; label: string; permission: AdminPermission }>;
+interface NavItemConfig {
+  href: string;
+  icon: typeof LayoutDashboard;
+  label: string;
+  permission: AdminPermission;
+  badgeKey?: 'changeRequests';
+}
+
+const NAV_GROUPS: Array<{
+  groupLabel?: string;
+  items: NavItemConfig[];
+}> = [
+  {
+    groupLabel: 'Genel',
+    items: [
+      { href: '/admin', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard.read' },
+      { href: '/admin/tenants', icon: Building2, label: 'Tenantlar', permission: 'tenant.read' },
+      {
+        href: '/admin/change-requests',
+        icon: UserRoundCheck,
+        label: 'Onay Talepleri',
+        permission: 'change-request.read',
+        badgeKey: 'changeRequests',
+      },
+    ],
+  },
+  {
+    groupLabel: 'Konfigürasyon & Sistem',
+    items: [
+      { href: '/admin/features', icon: Sliders, label: 'Özellikler & Plan', permission: 'feature.read' },
+      { href: '/admin/coupons', icon: Ticket, label: 'Kupon Yönetimi', permission: 'tenant.plan.update' },
+      { href: '/admin/observability', icon: Activity, label: 'Operasyon & Telemetri', permission: 'operations.read' },
+      { href: '/admin/audit', icon: FileText, label: 'Denetim Günlüğü', permission: 'audit.read' },
+    ],
+  },
+  {
+    groupLabel: 'Erişim & Güvenlik',
+    items: [
+      { href: '/admin/admin-users', icon: UserRoundCheck, label: 'Admin Kullanıcıları', permission: 'admin-user.read' },
+      { href: '/admin/security', icon: ShieldCheck, label: 'Güvenlik & Checklist', permission: 'security.read' },
+    ],
+  },
+];
+
+const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
 
 function permissionForPath(pathname: string): AdminPermission | null {
-  return NAV.find((item) => item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href))?.permission ?? null;
+  return (
+    ALL_NAV_ITEMS.find((item) => (item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)))
+      ?.permission ?? null
+  );
 }
 
 function AdminNavLinks({ pathname }: { pathname: string }) {
   const admin = useAdminAuthStore((state) => state.admin);
+
+  const { data: pendingRequests = [] } = useQuery({
+    queryKey: ['admin', 'change-requests', 'pending'],
+    queryFn: () => getAdminChangeRequests('PENDING'),
+    refetchInterval: 30_000,
+  });
+
   return (
-    <>
-      <Link href="/admin/sessions" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-300">Oturumlar ve MFA</Link>
-      {NAV.filter((item) => canAdmin(admin, item.permission)).map((item) => {
-        const isActive = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href);
+    <div className="space-y-4">
+      {NAV_GROUPS.map((group, gIdx) => {
+        const visibleItems = group.items.filter((item) => canAdmin(admin, item.permission));
+        if (visibleItems.length === 0) return null;
+
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              isActive
-                ? 'bg-red-500/10 text-red-300 ring-1 ring-red-500/20'
-                : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-100',
+          <div key={gIdx} className="space-y-1">
+            {group.groupLabel && (
+              <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                {group.groupLabel}
+              </p>
             )}
-          >
-            <item.icon className="h-4 w-4 shrink-0" />
-            <span>{item.label}</span>
-          </Link>
+            <div className="space-y-0.5">
+              {visibleItems.map((item) => {
+                const isActive = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href);
+                const pendingCount = item.badgeKey === 'changeRequests' ? pendingRequests.length : 0;
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'group relative flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition-all duration-150',
+                      isActive
+                        ? 'bg-red-500/10 text-white ring-1 ring-red-500/30 font-bold'
+                        : 'text-slate-400 hover:bg-slate-900 hover:text-slate-100',
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <item.icon
+                        className={cn(
+                          'h-4 w-4 shrink-0 transition-colors',
+                          isActive ? 'text-red-400' : 'text-slate-400 group-hover:text-slate-200',
+                        )}
+                      />
+                      <span>{item.label}</span>
+                    </div>
+
+                    {pendingCount > 0 && (
+                      <span className="flex h-5 items-center justify-center rounded-full bg-amber-500/20 px-1.5 text-[10px] font-bold text-amber-300 ring-1 ring-amber-500/30">
+                        {pendingCount}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         );
       })}
-    </>
+
+      {/* Sessions & MFA shortcut */}
+      <div className="pt-2">
+        <Link
+          href="/admin/sessions"
+          className={cn(
+            'flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition-colors',
+            pathname.startsWith('/admin/sessions')
+              ? 'bg-slate-800 text-white ring-1 ring-slate-700'
+              : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200',
+          )}
+        >
+          <div className="flex items-center gap-2.5">
+            <KeyRound className="h-4 w-4 text-slate-400" />
+            <span>Oturumlar & MFA</span>
+          </div>
+        </Link>
+      </div>
+    </div>
   );
 }
 
@@ -69,13 +175,18 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
 
   useEffect(() => {
     const requiredPermission = permissionForPath(pathname);
-    if (admin && requiredPermission && !canAdmin(admin, requiredPermission)) router.replace('/admin');
+    if (admin && requiredPermission && !canAdmin(admin, requiredPermission)) {
+      router.replace('/admin');
+    }
   }, [admin, pathname, router]);
 
   if (!admin) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-red-500 border-t-transparent" />
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-red-500 border-t-transparent" />
+          <p className="text-xs font-medium text-slate-400">Yönetim Oturumu Doğrulanıyor…</p>
+        </div>
       </div>
     );
   }
@@ -89,54 +200,82 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
     );
   }
 
+  // Get current page title for breadcrumb
+  const currentNav = ALL_NAV_ITEMS.find((n) =>
+    n.href === '/admin' ? pathname === '/admin' : pathname.startsWith(n.href),
+  );
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 lg:flex">
-      <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-slate-800 bg-slate-950/95 lg:sticky lg:top-0 lg:flex">
-        <div className="flex h-16 items-center gap-3 border-b border-slate-800 px-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500/10 text-red-300 ring-1 ring-red-500/20">
+    <div className="min-h-screen bg-slate-950 text-slate-100 lg:flex selection:bg-red-500/30 selection:text-white">
+      {/* Desktop Sidebar */}
+      <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-slate-800/80 bg-slate-950/95 lg:sticky lg:top-0 lg:flex backdrop-blur-xl">
+        {/* Logo & Brand */}
+        <div className="flex h-16 items-center gap-3 border-b border-slate-800/80 px-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/10 text-red-400 ring-1 ring-red-500/30 shadow-inner">
             <Shield className="h-4 w-4" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white">Axon Admin</p>
-            <p className="text-[11px] text-slate-500">Platform yönetimi</p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-bold text-white tracking-tight">Axon Admin</span>
+              <span className="rounded bg-red-500/20 px-1 py-0.2 text-[9px] font-bold uppercase tracking-wider text-red-400">
+                PRO
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400">Merkezi Platform Yönetimi</p>
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        {/* Navigation list */}
+        <nav className="flex-1 overflow-y-auto px-3.5 py-4 scrollbar-thin scrollbar-thumb-slate-800">
           <AdminNavLinks pathname={pathname} />
         </nav>
 
-        <div className="border-t border-slate-800 p-3">
-          <div className="mb-3 flex items-center gap-2.5 rounded-lg bg-slate-900/70 px-3 py-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-xs font-bold text-slate-200">
-              {admin.name.charAt(0)}
+        {/* User Card & Logout Footer */}
+        <div className="border-t border-slate-800/80 p-3.5 bg-slate-950/60">
+          <div className="mb-2.5 flex items-center gap-2.5 rounded-xl border border-slate-800/80 bg-slate-900/80 p-2.5 shadow-inner">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-xs font-bold text-red-300 ring-1 ring-red-500/20">
+              {admin.name ? admin.name.charAt(0).toUpperCase() : 'A'}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium text-slate-200">{admin.name}</p>
-              <p className="truncate text-[10px] text-slate-500">{admin.email}</p>
+              <p className="truncate text-xs font-semibold text-white">{admin.name}</p>
+              <p className="truncate text-[10px] text-slate-400">{admin.email}</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={logout}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-800 px-3 py-2 text-xs font-medium text-slate-400 transition-colors hover:border-red-500/30 hover:bg-red-500/5 hover:text-red-300"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            Çıkış Yap
-          </button>
+
+          <div className="flex gap-1.5">
+            <Link
+              href="/"
+              target="_blank"
+              title="Ana Uygulamayı Aç"
+              className="flex items-center justify-center rounded-xl border border-slate-800 bg-slate-900/50 p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-xs font-medium text-slate-400 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Çıkış Yap</span>
+            </button>
+          </div>
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur lg:hidden">
+      {/* Main Content Area */}
+      <div className="min-w-0 flex-1 flex flex-col">
+        {/* Mobile Header */}
+        <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/95 px-4 py-3 backdrop-blur-xl lg:hidden">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500/10 text-red-300 ring-1 ring-red-500/20">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10 text-red-300 ring-1 ring-red-500/20">
                 <Shield className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">Axon Admin</p>
-                <p className="text-[11px] text-slate-500">{admin.name}</p>
+                <p className="text-sm font-bold text-white">Axon Admin</p>
+                <p className="text-[10px] text-slate-400">{admin.name}</p>
               </div>
             </div>
             <button
@@ -148,16 +287,36 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
               <LogOut className="h-4 w-4" />
             </button>
           </div>
-          <nav className="flex gap-2 overflow-x-auto pb-1">
+          <nav className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
             <AdminNavLinks pathname={pathname} />
           </nav>
         </header>
 
-        <main className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+        {/* Desktop Topbar Header for Breadcrumbs and System Indicator */}
+        <header className="hidden lg:flex h-14 items-center justify-between border-b border-slate-800/80 bg-slate-950/40 px-8 backdrop-blur-md sticky top-0 z-20">
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <Link href="/admin" className="text-slate-400 hover:text-slate-200 transition-colors">
+              Axon Admin
+            </Link>
+            <ChevronRight className="h-3 w-3 text-slate-600" />
+            <span className="font-semibold text-slate-200">{currentNav?.label ?? 'Panel'}</span>
+          </div>
+
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-400 font-medium">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Sistem Aktif & Sağlıklı</span>
+            </div>
+          </div>
+        </header>
+
+        {/* Content Container */}
+        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8 flex-1">
           <AdminSecurityNotice />
           {children}
         </main>
       </div>
+
       <ToastContainer />
     </div>
   );
