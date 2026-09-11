@@ -12,6 +12,7 @@ AdminSecurityController,
 AdminTenantController,
 AdminTenantLifecycleController,
 AdminTenantProvisioningController,
+AdminSubscriptionOperationsController,
 AdminTenant360Controller,
 AdminSupportSessionController,
 } from '../modules/platform/http/controllers/index.js';
@@ -58,6 +59,15 @@ adminRoutes.post('/change-requests/:id/reject', requireAdmin, requireAdminPermis
 adminRoutes.post('/change-requests/:id/rollback', requireAdmin, requireAdminPermission('change-request.read'), AdminChangeRequestController.rollback);
 
 // Tenants
+adminRoutes.get('/revenue', requireAdmin, requireAdminPermission('tenant.read'), AdminSubscriptionOperationsController.overview);
+adminRoutes.post('/billing/provider-events', requireAdmin, requireAdminPermission('tenant.plan.update'), AdminSubscriptionOperationsController.event);
+adminRoutes.post('/billing/coupons', requireAdmin, requireAdminPermission('tenant.plan.update'), AdminSubscriptionOperationsController.coupon);
+adminRoutes.get('/tenants/:id/subscription', requireAdmin, requireAdminPermission('tenant.read'), AdminSubscriptionOperationsController.get);
+adminRoutes.post('/tenants/:id/subscription/quote', requireAdmin, requireAdminPermission('tenant.plan.update'), AdminSubscriptionOperationsController.quote);
+adminRoutes.post('/tenants/:id/subscription/coupon', requireAdmin, requireAdminPermission('tenant.plan.update'), AdminSubscriptionOperationsController.applyCoupon);
+adminRoutes.post('/tenants/:id/subscription/reconcile', requireAdmin, requireAdminPermission('tenant.settings.update'), AdminSubscriptionOperationsController.reconcile);
+adminRoutes.post('/tenants/:id/subscription/custom-prices', requireAdmin, requireAdminPermission('tenant.plan.update'), AdminSubscriptionOperationsController.requestPrice);
+adminRoutes.post('/tenants/:id/subscription/custom-prices/:requestId/decision', requireAdmin, requireAdminPermission('tenant.plan.approve'), AdminSubscriptionOperationsController.decidePrice);
 adminRoutes.post('/tenants/preview', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantProvisioningController.preview);
 adminRoutes.get('/tenant-provisioning', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantProvisioningController.list);
 adminRoutes.get('/tenant-provisioning/:jobId', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantProvisioningController.get);

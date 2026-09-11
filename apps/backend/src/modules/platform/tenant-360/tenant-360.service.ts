@@ -6,6 +6,7 @@ import { PlanUsageService } from '../../../services/plan-usage.service.js';
 export async function getTenant360(tenantId: string, permissions: readonly AdminPermission[]): Promise<Tenant360Snapshot> {
   const tenant = await prisma.tenant.findFirst({ where: { id: tenantId, deletedAt: null } });
   if (!tenant) throw new NotFoundError('Tenant bulunamadı');
+  const billingSubscription = await prisma.billingSubscription.findFirst({ where: { tenantId }, select: { provider: true, state: true, monthlyAmount: true, currency: true } });
   const operationsAllowed = permissions.includes('operations.read');
   const since = new Date();
   since.setUTCHours(0, 0, 0, 0);
@@ -32,6 +33,7 @@ export async function getTenant360(tenantId: string, permissions: readonly Admin
   if (usage.metrics.some(metric => metric.status === 'full' && (metric.used > 0 || (metric.limit ?? 0) > 0))) reasons.push('En az bir kota dolu.');
   if (failedJobs.length || failedEvents.length) reasons.push('Başarısız operasyon kayıtları var.');
   if (integrations?.some(integration => integration.syncErrors > 0)) reasons.push('Entegrasyon hataları var.');
+  if (billingSubscription?.state === 'PAST_DUE') reasons.push('Abonelik tahsilatı gecikmiş durumda.');
   return {
     tenantId, companyName: tenant.companyName, generatedAt: new Date().toISOString(),
     health: { status: reasons.length ? 'ATTENTION' : 'OK', reasons },
@@ -40,7 +42,7 @@ export async function getTenant360(tenantId: string, permissions: readonly Admin
       const key = date.toISOString().slice(0, 10);
       return activity.find(row => row.date === key) ?? { date: key, actions: 0, users: 0 };
     }) },
-    subscription: { plan: tenant.plan, status: tenant.status, trialEndsAt: tenant.trialEndsAt?.toISOString() ?? null, start: tenant.subscriptionStart?.toISOString() ?? null, end: tenant.subscriptionEnd?.toISOString() ?? null, userPrice: tenant.userPrice?.toString() ?? null, customPricing: tenant.isCustomPricing, billingNote: 'Platform tahsilat/fatura sağlayıcısı bağlı değil; bunlar abonelik yapılandırma bilgileridir.' },
+    subscription: { plan: tenant.plan, status: tenant.status, trialEndsAt: tenant.trialEndsAt?.toISOString() ?? null, start: tenant.subscriptionStart?.toISOString() ?? null, end: tenant.subscriptionEnd?.toISOString() ?? null, userPrice: tenant.userPrice?.toString() ?? null, customPricing: tenant.isCustomPricing, billingNote: billingSubscription ? `${billingSubscription.provider} · ${billingSubscription.state} · ${billingSubscription.monthlyAmount.toFixed(2)} ${billingSubscription.currency}/ay` : 'Abonelik kaydı henüz oluşturulmadı.' },
     integrations: integrations?.map(row => ({ ...row, lastSyncAt: row.lastSyncAt?.toISOString() ?? null })) ?? null,
     operations: operationsAllowed ? {
       queue: [...jobs.map(row => ({ source: 'Marketplace', status: row.status, count: row._count })), ...events.map(row => ({ source: 'Domain event', status: row.status, count: row._count }))],

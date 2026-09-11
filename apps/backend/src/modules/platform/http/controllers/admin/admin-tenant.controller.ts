@@ -14,6 +14,7 @@ import { submitAdminChange } from '../../../admin-change-request/admin-change-re
 import { isCriticalTenantPlanChange,isCriticalTenantStatusChange } from '../../../admin-change-request/admin-change-request.policy.js';
 import { changeMetadataSchema } from '../../../admin-change-request/admin-change-request.schemas.js';
 import { assertLegacyTenantTransition } from '../../../tenant-lifecycle/tenant-lifecycle.policy.js';
+import { syncSubscriptionForPlan } from '../../../subscription-operations/subscription-operations.service.js';
 import { buildChangeLine,createSlug,formatNotificationValue,normalizeEmail,notifyTenantOwners,parseNullableDate,planChangeExperienceService,translateModules,VALID_PLANS,VALID_STATUSES,validateModules } from './shared.js';
 
 export const AdminTenantController = {
@@ -251,9 +252,10 @@ export const AdminTenantController = {
       return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
     }
 
-    const updated = await prisma.tenant.update({
-      where: { id },
-      data: { plan: body.plan, modules: modulesForPrismaPlan(body.plan), planChangedAt: new Date() },
+    const updated = await prisma.$transaction(async tx => {
+      const changed = await tx.tenant.update({ where: { id }, data: { plan: body.plan, modules: modulesForPrismaPlan(body.plan), planChangedAt: new Date() } });
+      await syncSubscriptionForPlan(tx, id, body.plan);
+      return changed;
     });
 
     await createAuditLog(prisma, {

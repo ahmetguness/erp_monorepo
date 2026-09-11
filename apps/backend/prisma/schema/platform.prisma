@@ -283,6 +283,95 @@ model TenantProvisioningStep {
   @@map("tenant_provisioning_steps")
 }
 
+model BillingSubscription {
+  id String @id @default(cuid())
+  tenantId String @unique
+  provider String @default("MANUAL")
+  providerCustomerId String?
+  state String @default("TRIALING")
+  monthlyAmount Decimal @default(0) @db.Decimal(12, 2)
+  currency String @default("TRY")
+  dunningAttempt Int @default(0)
+  nextRetryAt DateTime?
+  customUnitPrice Decimal? @db.Decimal(12, 2)
+  customPricingExpiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@map("billing_subscriptions")
+}
+
+model BillingInvoice {
+  id String @id @default(cuid())
+  tenantId String
+  providerInvoiceId String?
+  amount Decimal @db.Decimal(12, 2)
+  currency String @default("TRY")
+  status String @default("OPEN")
+  dueAt DateTime
+  paidAt DateTime?
+  failureReason String?
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId, createdAt])
+  @@unique([tenantId, providerInvoiceId])
+  @@map("billing_invoices")
+}
+
+model BillingProviderEvent {
+  id String @id @default(cuid())
+  provider String
+  providerEventId String
+  type String
+  payload Json
+  processedAt DateTime @default(now())
+  @@unique([provider, providerEventId])
+  @@map("billing_provider_events")
+}
+
+model BillingCoupon {
+  id String @id @default(cuid())
+  code String @unique
+  percent Int
+  expiresAt DateTime
+  maxRedemptions Int?
+  redemptionCount Int @default(0)
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  discounts SubscriptionDiscount[]
+  @@map("billing_coupons")
+}
+
+model SubscriptionDiscount {
+  id String @id @default(cuid())
+  tenantId String
+  couponId String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  coupon BillingCoupon @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  @@unique([tenantId, couponId])
+  @@index([tenantId, expiresAt])
+  @@map("subscription_discounts")
+}
+
+model CustomPriceRequest {
+  id String @id @default(cuid())
+  tenantId String
+  monthlyAmount Decimal @db.Decimal(12, 2)
+  unitPrice Decimal? @db.Decimal(12, 2)
+  expiresAt DateTime
+  reason String
+  state String @default("PENDING")
+  requestedById String
+  decidedById String?
+  createdAt DateTime @default(now())
+  decidedAt DateTime?
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId, createdAt])
+  @@map("custom_price_requests")
+}
+
 model AiRequestLog {
   id                    String                  @id @default(cuid())
   tenantId              String?

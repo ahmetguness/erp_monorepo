@@ -101,6 +101,10 @@ model Tenant {
   lifecycleRequests TenantLifecycleRequest[]
   lifecycleExports TenantLifecycleExport[]
   provisioningJobs TenantProvisioningJob[]
+  billingSubscription BillingSubscription?
+  billingInvoices BillingInvoice[]
+  subscriptionDiscounts SubscriptionDiscount[]
+  customPriceRequests CustomPriceRequest[]
   supportSessions SupportSession[]
   supportNotes TenantSupportNote[]
   id        String   @id @default(cuid())

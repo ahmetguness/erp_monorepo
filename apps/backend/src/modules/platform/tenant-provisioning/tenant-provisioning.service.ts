@@ -91,6 +91,7 @@ async function executeProvisioning(jobId: string, input: TenantProvisioningInput
         city: input.city || null, sector: input.sector || null, plan: input.plan as Plan, status: input.status as TenantStatus, maxUsers: input.maxUsers ?? null,
         modules: toAppModules(input.modules), notes: input.notes || null, isCustomPricing: input.isCustomPricing ?? false, trialEndsAt: date(input.trialEndsAt),
         subscriptionStart: date(input.subscriptionStart), subscriptionEnd: date(input.subscriptionEnd), planChangedAt: new Date() } });
+      await tx.billingSubscription.create({ data: { tenantId: tenant.id, state: input.status === 'TRIAL' ? 'TRIALING' : 'ACTIVE', monthlyAmount: input.plan === 'STARTER' ? 1990 : input.plan === 'PROFESSIONAL' ? 3990 : 0 } });
       let user = await tx.user.findUnique({ where: { email: input.email.toLowerCase() } });
       if (!user) user = await tx.user.create({ data: { email: input.email.toLowerCase(), name: input.ownerName, phone: input.phone || null, password } });
       await tx.tenantUser.create({ data: { tenantId: tenant.id, userId: user.id, isOwner: true, isActive: true } });
