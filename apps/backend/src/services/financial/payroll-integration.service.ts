@@ -1,4 +1,4 @@
-import { AccountType, FiscalPeriodStatus, JournalEntryType, Priority, TaskStatus } from '@prisma/client';
+import { AccountType, FiscalPeriodStatus, JournalEntryType } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
 import { ValidationError } from '../../errors/index.js';
 import { resolveOpenFiscalPeriodId } from './period-guard.js';

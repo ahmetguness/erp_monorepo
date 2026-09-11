@@ -23,15 +23,12 @@ import {
   Activity,
   Layers,
   ChevronRight,
-  Eye,
   FilterX,
-  ExternalLink,
   Code,
-  Sparkles,
 } from 'lucide-react';
 import { getAdminAuditLogs, getTenants } from '@/services/admin.service';
 import type { AdminAuditLog } from '@repo/types';
-import { Badge, type BadgeVariant } from '@/components/ui/Badge';
+import type { BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';

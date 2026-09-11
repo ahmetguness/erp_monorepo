@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { AuditAction, EntityType, PermissionAction, Plan, Prisma, TenantStatus } from '@prisma/client';
-import { PLAN_MODULES, type ModuleKey, type TenantProvisioningInput, type TenantProvisioningJob, type TenantProvisioningPreview, type TenantProvisioningStepKey } from '@repo/types';
+import { PLAN_MODULES, type TenantProvisioningInput, type TenantProvisioningJob, type TenantProvisioningPreview, type TenantProvisioningStepKey } from '@repo/types';
 import { BaseError } from '../../../errors/index.js';
 import { prisma } from '../../../lib/prisma.js';
 import { tenantReadyEmail } from '../../../services/mail-templates.service.js';

@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 import { useUIStore, type Toast, type ToastVariant } from '@/store/ui.store';
 import { cn } from '@/lib/utils';

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import {
   Ruler, Tag, Percent, DollarSign, ChevronRight, Settings, Shield, UserPlus,
-  Database, Sparkles,
+  Database,
 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { SetupChecklistCard } from '@/components/features/settings/SetupChecklistCard';

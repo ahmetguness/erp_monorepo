@@ -24,15 +24,12 @@ import type {
   MailDirection,
   MailMessageListItem,
   MailTemplateVariableDefinition,
-  MailTemplateVariableKey,
 } from "@/services/mail.service";
 import {
   useMailCenter,
   htmlToReadableText,
   formatFileSize,
   templateToForm,
-  type MailAttachmentDraft,
-  type TemplateFormState,
 } from "./hooks/useMailCenter";
 
 const STATUS_LABELS: Record<MailDeliveryStatus, string> = {
@@ -180,7 +177,6 @@ export function MailCenterPage() {
     availableMailTemplates,
     selectedTemplate,
     tenantTemplates,
-    mailTemplates,
     sendBulkMail,
     renderTemplate,
     createAiDraft,
@@ -231,7 +227,6 @@ export function MailCenterPage() {
     canSend,
     resetCompose,
     resetTemplateForm,
-    updateTemplateFormField,
     updateTemplateForm,
     toggleTemplateVariable,
     toggleRequiredVariable,

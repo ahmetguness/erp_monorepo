@@ -1,8 +1,9 @@
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { sendMail } from './mail.service';
-import { demoReadyEmail, demoEnterpriseNotifyEmail } from './mail-templates.service';
+import { demoReadyEmail } from './mail-templates.service';
 import bcrypt from 'bcryptjs';
+
 import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { modulesForPlan } from '../utils/tenant-modules';
@@ -391,7 +392,7 @@ async function seedDemoData(tx: Prisma.TransactionClient, tenantId: string) {
   await tx.currency.create({ data: { tenantId, code: 'EUR', name: 'Euro', symbol: '€', defaultRate: 42.1 } });
 
   // Depo
-  const warehouse = await tx.warehouse.create({
+  await tx.warehouse.create({
     data: { tenantId, name: 'Ana Depo', code: 'WH-01', isActive: true },
   });
 

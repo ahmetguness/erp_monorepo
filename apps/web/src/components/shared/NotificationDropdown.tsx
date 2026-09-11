@@ -16,7 +16,6 @@ import {
   ExternalLink,
   Sparkles,
   Inbox,
-  Filter,
 } from 'lucide-react';
 import {
   useNotifications,

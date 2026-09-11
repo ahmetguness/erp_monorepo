@@ -97,7 +97,6 @@ function ValidityBadge({ quote }: { quote: SalesQuote }) {
 
 function QuoteKpiCards({ quotes, total }: { quotes: SalesQuote[]; total: number }) {
   const sent = quotes.filter((quote) => quote.status === 'SENT').length;
-  const accepted = quotes.filter((quote) => quote.status === 'ACCEPTED').length;
   const attention = quotes.filter((quote) => {
     const days = daysUntil(quote.validUntil);
     return quote.status === 'SENT' && days !== null && days <= 7;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Play, CheckCircle, Clock, User, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 import { EntityImageManager } from '@/components/shared/EntityImageManager';

@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useRef, type ReactNode } from "react";
 import {
-  Play,
   Copy,
   Check,
   Clock,

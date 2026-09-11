@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { 
   View, 
   Text, 
@@ -8,7 +8,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
-  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +18,7 @@ import { ScreenProps } from '../types';
 import { login } from '../services/auth.service';
 import { useAuthStore } from '../store/auth.store';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;

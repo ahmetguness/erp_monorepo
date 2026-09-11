@@ -1,8 +1,7 @@
-﻿"use client";
+"use client";
 "use no memo";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -71,7 +70,6 @@ import {
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function JournalEntriesPage() {
-  const router = useRouter();
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const { data, isLoading } = useJournalEntries({ page, limit: 20 });

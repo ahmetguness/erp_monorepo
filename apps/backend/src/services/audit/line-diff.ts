@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import type { AuditChange, AuditFieldValueLabels } from './types.js';
 import {
   formatJsonValue,
@@ -8,7 +8,6 @@ import {
   labelFromKey,
   valuesEqual,
 } from './field-value-formatter.js';
-import { IMPORTANT_FIELDS } from './field-registry.js';
 
 // ─────────────────────────────────────────────
 // Audit Line Diff

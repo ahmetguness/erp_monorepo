@@ -1,6 +1,4 @@
-import { prisma } from '../../lib/prisma';
-import { InvoiceStatus, InvoiceType, PaymentStatus, Prisma, PurchaseRequestStatus } from '@prisma/client';
-import { generateDocumentNumber } from '../../utils/generate-number.js';
+import { Prisma } from '@prisma/client';
 
 export interface LowStockPurchaseAdjustment {
   productCode: string;

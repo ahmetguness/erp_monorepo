@@ -25,7 +25,6 @@ import {
 import {
   useTenantSettings,
   useUpsertTenantSetting,
-  useDeleteTenantSetting,
   useModuleSettings,
   useUpsertModuleSetting,
   useTenantLogo,
@@ -41,7 +40,7 @@ import {
   useUpdateDefaultPolicies,
 } from '@/hooks/useSettings';
 import { cn } from '@/lib/utils';
-import type { TenantSetting, ModuleSetting, BusinessRule, DefaultPolicyScope, DefaultPolicyValue } from '@/services/settings.service';
+import type { ModuleSetting, BusinessRule, DefaultPolicyScope, DefaultPolicyValue } from '@/services/settings.service';
 
 // ─────────────────────────────────────────────
 // Turkish label maps
@@ -372,7 +371,6 @@ export function SettingsPage() {
   const { data: securityHardening, isLoading: loadingSecurityHardening } = useSecurityHardeningSnapshot();
   const { data: logoBlob } = useTenantLogo();
   const upsertTenant = useUpsertTenantSetting();
-  const deleteTenant = useDeleteTenantSetting();
   const upsertModule = useUpsertModuleSetting();
   const uploadLogo = useUploadTenantLogo();
   const deleteLogo = useDeleteTenantLogo();

@@ -17,7 +17,6 @@ const suffix = `${Date.now()}-${process.pid}`;
 const serviceId = `backend-test-${suffix}`;
 let adminId = "";
 let tenantId = "";
-let alertId = "";
 
 async function main(): Promise<void> {
   const role = await prisma.adminRole.findFirstOrThrow({
@@ -99,7 +98,6 @@ async function main(): Promise<void> {
   const alert = await prisma.observabilityAlertHistory.findFirstOrThrow({
     where: { scopeId: serviceId, status: "OPEN" },
   });
-  alertId = alert.id;
   const owned = await updateAlertOwnership(alert.id, adminId, {
     owner: "sre-team",
     runbookUrl: "https://runbooks.local/sre",

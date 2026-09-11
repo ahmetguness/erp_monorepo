@@ -134,12 +134,6 @@ const SCOPE_MODULES = [
   },
 ];
 
-const ACTION_LABELS: Record<string, string> = {
-  read: "Okuma",
-  write: "Yazma",
-  delete: "Silme",
-};
-
 type ActivityField = "method" | "path" | "scope" | "status";
 
 interface CreateApiKeyFormState {

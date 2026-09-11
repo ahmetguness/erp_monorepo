@@ -1,14 +1,6 @@
-import { openai } from '../../lib/openai';
-import { ChatDataService } from '../chat-data.service';
-import { ChatContextService, type ChatPageContext, type LoadedChatEntityContext } from '../chat-context.service';
 import { logger } from '../../lib/logger';
-import { AI_MODELS, AI_PROMPT_VERSIONS, type AiTokenUsage } from '../ai-governance.service';
-import type {
-  ChatCompletion,
-  ChatCompletionMessageParam,
-  ChatCompletionTool,
-  ChatCompletionMessageFunctionToolCall,
-} from 'openai/resources/chat/completions';
+import { ChatDataService } from '../chat-data.service';
+import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { getMonthStart, getToday, parseDate } from './date-utils.js';
 
 // ─────────────────────────────────────────────

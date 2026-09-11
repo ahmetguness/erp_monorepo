@@ -16,14 +16,8 @@ const KEYS = {
   service: "procurement.planning.target_service_level",
   drafts: "procurement.planning.auto_create_drafts",
   limit: "procurement.planning.maximum_draft_value",
-} as const;
-const DEFAULT_POLICY: ReplenishmentPolicy = {
-  lookbackDays: 90,
-  horizonDays: 30,
-  targetServiceLevel: 95,
-  autoCreateDrafts: false,
-  maximumDraftValue: 50_000,
 };
+
 const numeric = (value: string | undefined, fallback: number): number =>
   Number.isFinite(Number(value)) ? Number(value) : fallback;
 

@@ -10,7 +10,6 @@ import {
   Clock,
   FileText,
   Building2,
-  Sparkles,
 } from 'lucide-react';
 import { useEDocumentExceptions, useRetryEDocument } from '@/hooks/useEDocumentAutomation';
 import { cn } from '@/lib/utils';

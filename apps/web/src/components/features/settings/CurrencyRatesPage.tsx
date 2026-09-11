@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import {
-  TrendingUp, TrendingDown, Search, RefreshCw,
+  Search, RefreshCw,
   DollarSign, Euro, PoundSterling, Banknote,
   ArrowLeftRight, Building2, Clock, Shield,
   Copy, Check, Repeat2,
@@ -290,7 +290,6 @@ export function CurrencyRatesPage() {
               const icon = CURRENCY_ICONS[cur.code];
               const isTop3 = POPULAR.slice(0, 3).includes(cur.code);
               const isCopied = copiedCode === cur.code;
-              const spread = cur.forexSelling - cur.forexBuying;
 
               return (
                 <div key={cur.code} className={cn(

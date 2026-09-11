@@ -6,7 +6,6 @@ import {
   InvoiceStatus,
   InvoiceType,
   NotificationStatus,
-  PaymentStatus,
   Priority,
   TaskType,
 } from '@prisma/client';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { FileSearch, FilterX, Hash, Package, Plus, Search } from 'lucide-react';
+import { FileSearch, FilterX, Hash, Plus, Search } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { ProductBatchSelect, ProductSelect } from '@/components/shared/EntitySelect';
 import { Badge } from '@/components/ui/Badge';

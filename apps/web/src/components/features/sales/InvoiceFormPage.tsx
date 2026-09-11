@@ -10,9 +10,7 @@ import {
   Hash, DollarSign, Percent, ShoppingCart,
   FileText, ArrowDownToLine, ArrowUpFromLine, Copy,
 } from 'lucide-react';
-import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { FormRow } from '@/components/shared/FormField';

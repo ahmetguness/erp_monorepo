@@ -5,16 +5,11 @@ import {
   Banknote,
   TrendingUp,
   TrendingDown,
-  AlertTriangle,
   Zap,
   Sparkles,
   Link,
   Copy,
-  CheckCircle2,
-  Calendar,
   Percent,
-  CreditCard,
-  Building,
   Loader2,
   ShieldCheck,
 } from 'lucide-react';
@@ -28,7 +23,6 @@ import type { CollectionSettlementDraft } from '@/services/financial.autonomy.se
 import { cn, formatCurrency } from '@/lib/utils';
 import { useUIStore } from '@/store/ui.store';
 import { FinanceOperationsWorkspace } from '@/features/finance';
-
 export function FinancialAutonomyCenter() {
   const [selectedDays, setSelectedDays] = useState<30 | 60 | 90>(30);
   const [sampleInvoiceId, setSampleInvoiceId] = useState('');

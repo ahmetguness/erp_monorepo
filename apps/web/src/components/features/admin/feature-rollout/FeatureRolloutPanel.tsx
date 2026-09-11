@@ -6,11 +6,10 @@ import type {
   CreateFeatureRolloutInput,
   FeatureEnvironment,
   FeatureKeyName,
-  FeatureRollout,
   FeatureRolloutStage,
   PlanName,
 } from '@repo/types';
-import { PLAN_FEATURE_DEFINITIONS, PLAN_LABELS } from '@/lib/plans';
+import { PLAN_FEATURE_DEFINITIONS } from '@/lib/plans';
 import { canAdmin } from '@/lib/admin/permissions';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import {
@@ -25,22 +24,10 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   Sparkles,
-  Layers,
-  Play,
-  Pause,
-  AlertOctagon,
-  ShieldAlert,
   Send,
   Plus,
   RefreshCw,
-  Clock,
-  Building2,
-  GitBranch,
-  AlertTriangle,
   Sliders,
-  CheckCircle2,
-  XCircle,
-  Activity,
   Flame,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';

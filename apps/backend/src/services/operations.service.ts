@@ -7,7 +7,6 @@ import {
   ReservationRefType,
   SyncJobStatus,
 } from '@prisma/client';
-import { logger } from '../lib/logger.js';
 
 export interface OperationsHealthSnapshot {
   generatedAt: string;
@@ -76,7 +75,7 @@ export class OperationsService {
     const now = new Date();
 
     const [
-      autoRunning,
+      _autoRunning,
       autoSucceeded,
       autoFailed,
       totalEvents,

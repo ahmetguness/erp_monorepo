@@ -104,13 +104,6 @@ function labelForConfidentiality(value: DocumentConfidentiality | null): string 
   return CONFIDENTIALITIES.find((item) => item.value === value)?.label ?? value;
 }
 
-function labelForLifecycle(value: DocumentCenterItem['lifecycleStatus']): string {
-  if (value === 'EXPIRED') return 'Süresi doldu';
-  if (value === 'EXPIRING_SOON') return 'Yakinda dolacak';
-  if (value === 'ACTIVE') return 'Geçerli';
-  return 'Süre yok';
-}
-
 function labelForOcr(value: DocumentCenterItem['ocrStatus']): string {
   if (value === 'TEXT_READY') return 'Metin okunabilir';
   if (value === 'PROVIDER_REQUIRED') return 'OCR saglayici gerekli';
@@ -554,9 +547,9 @@ export function DocumentCenterPage() {
 
   return (
     <FeaturePageShell
-        title="Doküman Merkezi"
-        subtitle="Müşteri, personel, satış, servis ve mail eklerini tek merkezden takip edin."
-        action={<Button leftIcon={<Upload className="h-4 w-4" />} onClick={() => setIsUploadOpen(true)}>Yeni dosya yükle</Button>}
+      title="Doküman Merkezi"
+      subtitle="Müşteri, personel, satış, servis ve mail eklerini tek merkezden takip edin."
+      action={<Button leftIcon={<Upload className="h-4 w-4" />} onClick={() => setIsUploadOpen(true)}>Yeni dosya yükle</Button>}
     >
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">

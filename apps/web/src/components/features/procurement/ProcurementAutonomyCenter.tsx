@@ -3,15 +3,9 @@
 import {
   Bot,
   Truck,
-  ShieldCheck,
-  AlertTriangle,
   Zap,
   Loader2,
-  PackageCheck,
   Building2,
-  Calendar,
-  CheckCircle2,
-  RefreshCcw,
   Boxes,
 } from 'lucide-react';
 import {
@@ -20,7 +14,7 @@ import {
   useRunProcurementBatchScan,
   useSupplierReliabilityScores,
 } from '@/hooks/useProcurementAutonomy';
-import { cn, formatCurrency } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { ReplenishmentPlanningWorkspace } from '@/features/procurement';
 
 export function ProcurementAutonomyCenter() {
@@ -182,15 +176,15 @@ export function ProcurementAutonomyCenter() {
                           item.reorderStatus === 'OK'
                             ? 'bg-emerald-500/10 text-emerald-400'
                             : item.reorderStatus === 'CRITICAL_REORDER'
-                            ? 'bg-rose-500/20 text-rose-300'
-                            : 'bg-amber-500/20 text-amber-300',
+                              ? 'bg-rose-500/20 text-rose-300'
+                              : 'bg-amber-500/20 text-amber-300',
                         )}
                       >
                         {item.reorderStatus === 'OK'
                           ? 'Yeterli'
                           : item.reorderStatus === 'CRITICAL_REORDER'
-                          ? 'Kritik Stok'
-                          : 'Sipariş Gerekli'}
+                            ? 'Kritik Stok'
+                            : 'Sipariş Gerekli'}
                       </span>
                     </td>
                     <td className="p-3 text-right">

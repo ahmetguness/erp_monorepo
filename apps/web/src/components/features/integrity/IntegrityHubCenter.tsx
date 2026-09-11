@@ -6,13 +6,8 @@ import {
   Wrench,
   CheckCircle2,
   AlertTriangle,
-  Play,
   Loader2,
-  RefreshCcw,
-  Sparkles,
   ShieldCheck,
-  Building2,
-  FileCheck,
 } from 'lucide-react';
 import { useResolveExceptionItem, useRunIntegrityScan } from '@/hooks/useIntegrityAutomation';
 import type { IntegrityScanResult } from '@/services/integrity.automation.service';

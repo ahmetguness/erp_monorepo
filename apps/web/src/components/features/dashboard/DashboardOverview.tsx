@@ -16,7 +16,6 @@ import { useCurrentUser } from "@/hooks/useAuth";
 import { useSmartNotifications } from "@/hooks/useNotifications";
 import { usePlanFeatures } from "@/hooks/usePlanFeatures";
 import {
-  useCompleteDashboardTask,
   useDashboardApprovals,
   useDashboardInvoices,
   useDashboardNotifications,
@@ -210,7 +209,6 @@ export function DashboardOverview() {
   const { data: recommendations = [] } = useDashboardRecommendations();
   const { data: pinnedKpis = [] } = usePinnedKpiPreviews({ enabled: canReadReporting });
   const { data: smartNotifications } = useSmartNotifications();
-  const completeTask = useCompleteDashboardTask();
 
   /* ── Derived ── */
   const profit = (rev?.totalGross ?? 0) - (exp?.totalGross ?? 0);

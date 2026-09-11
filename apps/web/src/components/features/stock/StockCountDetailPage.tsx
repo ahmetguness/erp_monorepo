@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowLeft, CheckCircle, ClipboardCheck, Equal,
+  AlertTriangle, ArrowLeft, CheckCircle, ClipboardCheck,
   Package, ToggleLeft, ToggleRight, TrendingDown, TrendingUp, Warehouse, X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';

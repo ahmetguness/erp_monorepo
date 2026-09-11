@@ -32,8 +32,6 @@ const DEFAULT_BACKEND_URL = 'http://localhost:3001';
 // In-memory state
 // ─────────────────────────────────────────────
 
-let orderPage = 0; // cycles through mock order pages
-
 const MOCK_ORDERS = Array.from({ length: 5 }, (_, i) => ({
   shipmentPackageId: 1000000 + i,
   orderNumber: `TY-ORDER-${1000 + i}`,

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   AlertTriangle, ArrowLeft, Ban, CheckCircle2, CircleDashed, ExternalLink, FileText,
   Mail, PackageCheck, Printer, ReceiptText, Scale, Send, Truck, XCircle,
@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { usePurchaseOrder, useSendPurchaseOrder, useReceivePurchaseOrder, useCancelPurchaseOrder, usePurchaseOrderThreeWayMatch } from '@/hooks/usePurchase';
-import { cn, formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import type { PurchaseOrder, PurchaseOrderItem, PurchaseTraceStage, ThreeWayMatchLine, ThreeWayMatchResult, ThreeWayMatchStatus } from '@/services/purchase.service';
 import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 

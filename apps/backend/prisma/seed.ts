@@ -18,97 +18,6 @@ async function hash(pw: string): Promise<string> {
 }
 
 // ─────────────────────────────────────────────
-// MAIN
-// ─────────────────────────────────────────────
-
-async function main() {
-  console.log('\n🌱 Seed başlıyor...\n');
-
-  // ── 1. Admin User ────────────────────────────
-  await prisma.adminUser.upsert({
-    where: { email: 'admin@axonerp.com' },
-    create: {
-      email: 'admin@axonerp.com',
-      name: 'Platform Admin',
-      password: await hash('admin1234'),
-      isActive: true,
-    },
-    update: { password: await hash('admin1234') },
-  });
-  console.log('  ✓ Admin: admin@axonerp.com / admin1234');
-
-  // ── 2. Plan Features ─────────────────────────
-  await seedPlanFeatures();
-  console.log('  ✓ Plan features (Starter / Professional / Enterprise)');
-
-  // ── 3. Demo Tenant (Enterprise) ──────────────
-  const { tenant, users, planAccounts } = await seedTenant();
-  console.log(`  ✓ Tenant: ${tenant.companyName} (Enterprise)`);
-  console.log(`  ✓ Kullanıcılar: ${users.map(u => u.email).join(', ')}`);
-  console.log(`  ✓ Plan demo hesapları: ${planAccounts.map(({ user }) => user.email).join(', ')}`);
-
-  // ── 4. Master Data ───────────────────────────
-  const master = await seedMasterData(tenant.id);
-  console.log('  ✓ Master data (birim, kategori, KDV, döviz, hesap planı)');
-
-  // ── 5. Warehouse & Locations ─────────────────
-  const { warehouse, warehouse2, locations } = await seedWarehouses(tenant.id);
-  console.log('  ✓ Depolar ve lokasyonlar');
-
-  // ── 6. Products & Stock ──────────────────────
-  const products = await seedProducts(tenant.id, master, warehouse, warehouse2, locations);
-  console.log(`  ✓ ${products.length} ürün ve stok seviyeleri`);
-
-  // ── 7. Contacts ──────────────────────────────
-  const contacts = await seedContacts(tenant.id);
-  console.log(`  ✓ ${contacts.length} cari hesap`);
-
-  // ── 8. Sales ─────────────────────────────────
-  const { invoices, payments } = await seedSales(tenant.id, contacts, products, master, warehouse);
-  console.log(`  ✓ Satış: ${invoices.length} fatura, ${payments.length} ödeme`);
-
-  // ── 9. Purchasing ────────────────────────────
-  await seedPurchasing(tenant.id, contacts, products, master, warehouse);
-  console.log('  ✓ Satın alma: talepler ve siparişler');
-
-  // ── 10. Accounting ───────────────────────────
-  await seedAccounting(tenant.id, master.accounts, invoices);
-  console.log('  ✓ Muhasebe: yevmiye fişleri, mali dönem');
-
-  // ── 11. HR & Payroll ─────────────────────────
-  await seedHR(tenant.id);
-  console.log('  ✓ İK: personel, izin, puantaj, bordro');
-
-  // ── 12. Production ───────────────────────────
-  await seedProduction(tenant.id, products, master, warehouse, warehouse2);
-  console.log('  ✓ Üretim: iş merkezleri, BOM, iş emirleri');
-
-  // ── 13. Service ──────────────────────────────
-  await seedService(tenant.id, contacts, products);
-  console.log('  ✓ Servis: müşteri varlıkları, servis talepleri');
-
-  // ── 14. Marketplace ──────────────────────────
-  await seedMarketplace(tenant.id, products);
-  console.log('  ✓ Pazaryeri: Trendyol entegrasyonu');
-
-  // ── 15. Roles & Permissions ──────────────────
-  await seedRoles(tenant.id, users);
-  console.log('  ✓ Roller ve izinler');
-
-  // ── 16. Notifications ────────────────────────
-  await seedNotifications(tenant.id, users[0].id);
-  console.log('  ✓ Bildirimler');
-
-  // ── 17. Settings ─────────────────────────────
-  await seedSettings(tenant.id);
-  console.log('  ✓ Tenant ayarları');
-
-  console.log('\n✅ Seed tamamlandı!\n');
-  console.log('  Giriş: admin@axondemo.com / demo1234');
-  console.log('  Admin: admin@axonerp.com / admin1234\n');
-}
-
-// ─────────────────────────────────────────────
 // PLAN FEATURES
 // ─────────────────────────────────────────────
 
@@ -529,7 +438,7 @@ async function seedSales(
   master: Awaited<ReturnType<typeof seedMasterData>>,
   warehouse: { id: string },
 ) {
-  const { kdv20, kdv10 } = master;
+  const { kdv20 } = master;
   const [c1, c2, c3, c4, c5] = contacts;
 
   // ── Sales Quotes ─────────────────────────────
@@ -597,7 +506,7 @@ async function seedSales(
     },
   });
 
-  const order4 = await prisma.salesOrder.create({
+  await prisma.salesOrder.create({
     data: {
       tenantId, contactId: c5.id, number: 'SIP-000004',
       date: d('2026-04-15'), dueDate: d('2026-07-15'), status: 'DRAFT',
@@ -610,7 +519,7 @@ async function seedSales(
   });
 
   // ── Delivery Notes ────────────────────────────
-  const dn1 = await prisma.deliveryNote.create({
+  await prisma.deliveryNote.create({
     data: {
       tenantId, number: 'DN-000001', type: 'OUTBOUND', status: 'DELIVERED',
       salesOrderId: order1.id, contactId: c1.id, warehouseId: warehouse.id,
@@ -833,7 +742,7 @@ async function seedAccounting(
   accounts: { id: string }[],
   invoices: { id: string }[],
 ) {
-  const [accKasa, accBanka, accAlici, accMal, accIndKdv, accSatici, accHesKdv, , accSatis, , accMaliyet] = accounts;
+  const [, accBanka, accAlici, accMal, accIndKdv, accSatici, accHesKdv, , accSatis] = accounts;
 
   // Fiscal Period Q1
   const fp1 = await prisma.fiscalPeriod.create({
@@ -1001,8 +910,6 @@ async function seedHR(tenantId: string) {
 async function seedProduction(
   tenantId: string,
   products: { id: string }[],
-  master: Awaited<ReturnType<typeof seedMasterData>>,
-  warehouse: { id: string },
   warehouse2: { id: string },
 ) {
   // Work Centers
@@ -1493,9 +1400,6 @@ async function seedInventoryExtras(tenantId: string, products: { id: string }[],
 // MAIN — update to call new functions
 // ─────────────────────────────────────────────
 
-// Update main to include stock count and inventory extras
-const _originalMain = main;
-
 async function runSeed() {
   console.log('\n🌱 Seed başlıyor...\n');
 
@@ -1556,7 +1460,7 @@ async function runSeed() {
   console.log('  ✓ İK: personel, izin, puantaj, bordro');
 
   // 12. Production
-  await seedProduction(tenant.id, products, master, warehouse, warehouse2);
+  await seedProduction(tenant.id, products, warehouse2);
   console.log('  ✓ Üretim: iş merkezleri, BOM, iş emirleri');
 
   // 13. Service

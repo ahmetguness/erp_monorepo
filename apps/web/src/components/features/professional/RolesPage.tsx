@@ -17,17 +17,6 @@ import { formatDate } from '@/lib/utils';
 import type { Role, Permission, PermissionAction, PermissionMatrixEntry, PermissionScreenPreviewItem } from '@/services/role.service';
 import { RoleNavigationProfileDistributor } from '@/features/navigation';
 
-const MODULES = [
-  { key: 'accounting', label: 'Muhasebe' },
-  { key: 'inventory', label: 'Stok' },
-  { key: 'contacts', label: 'Cari Hesap' },
-  { key: 'invoicing', label: 'Fatura' },
-  { key: 'reporting', label: 'Raporlama' },
-  { key: 'crm', label: 'CRM' },
-  { key: 'purchasing', label: 'Satın Alma' },
-  { key: 'warehouse', label: 'Depo' },
-];
-
 const ACTIONS: { key: PermissionAction; label: string }[] = [
   { key: 'CREATE', label: 'Oluştur' },
   { key: 'READ', label: 'Oku' },

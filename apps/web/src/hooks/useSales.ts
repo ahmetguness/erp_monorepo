@@ -6,9 +6,9 @@ import { getErrorMessage } from '@/types/api.types';
 import {
   getSalesQuotes, getSalesQuoteById, createSalesQuote, convertQuoteToOrder,
   getSalesOrders, getSalesOrderById, getSalesOrderHistory, getSalesProcessWorkspace, createSalesOrder, updateSalesOrder, cancelSalesOrder, fulfillSalesOrder,
-  getInvoices, getInvoiceById, getInvoiceHistory, createInvoice, updateInvoice, cancelInvoice, recomputeInvoiceStatuses,
+  getInvoices, getInvoiceById, getInvoiceHistory, createInvoice, cancelInvoice, recomputeInvoiceStatuses,
   type ListParams, type CreateSalesQuoteDTO, type CreateSalesOrderDTO,
-  type CreateInvoiceDTO, type FulfillSalesOrderDTO, type OrderStatus, type InvoiceStatus,
+  type CreateInvoiceDTO, type FulfillSalesOrderDTO, type OrderStatus,
 } from '@/features/sales/api';
 
 const QUOTE_KEYS = {

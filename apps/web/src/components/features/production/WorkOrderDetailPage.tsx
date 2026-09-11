@@ -6,7 +6,6 @@ import {
   Play,
   Pause,
   CheckCircle,
-  XCircle,
   Package,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";

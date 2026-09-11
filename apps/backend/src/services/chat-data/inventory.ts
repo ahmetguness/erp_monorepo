@@ -1,8 +1,7 @@
 import { prisma } from '../../lib/prisma';
-import { InvoiceStatus, InvoiceType, PaymentStatus, Prisma, PurchaseRequestStatus } from '@prisma/client';
+import { PurchaseRequestStatus } from '@prisma/client';
 import { generateDocumentNumber } from '../../utils/generate-number.js';
-import { getCurrentPeriod, getMonthStartDate, groupByDepartment } from './shared.js';
-import type { LowStockPurchaseAdjustment, LowStockPurchaseRequestOptions } from './shared.js';
+import type { LowStockPurchaseRequestOptions } from './shared.js';
 
 export const inventoryChatDataService = {
   async getStock(tenantId: string) {

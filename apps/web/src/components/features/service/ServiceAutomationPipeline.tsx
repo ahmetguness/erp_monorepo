@@ -7,9 +7,7 @@ import {
   PackageCheck,
   CheckCircle2,
   FileSpreadsheet,
-  ArrowRight,
   Sparkles,
-  RotateCcw,
   Loader2,
 } from 'lucide-react';
 import {

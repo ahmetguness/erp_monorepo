@@ -9,24 +9,18 @@ import {
   AlertTriangle,
   FileText,
   Mail,
-  CreditCard,
   Zap,
-  ArrowRight,
   ShieldCheck,
   Loader2,
-  Building2,
-  TrendingUp,
 } from 'lucide-react';
 import {
   useProcessInvoiceOcr,
   useExtractOrderFromEmail,
-  useMatchPaymentDescription,
   useNlErpQuery,
   useExecuteAiSuggestion,
   useAiAnomalies,
 } from '@/hooks/useAiAutomation';
 import type { AiSuggestion } from '@/services/ai.automation.service';
-import { cn } from '@/lib/utils';
 
 interface AnomalyItem {
   type?: string;

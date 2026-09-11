@@ -17,7 +17,6 @@ import {
   CalendarDays,
   Hash,
   StickyNote,
-  Users,
   DollarSign,
 } from "lucide-react";
 import Link from "next/link";
@@ -29,7 +28,6 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { DatePicker } from "@/components/ui/DatePicker";
-import { Select } from "@/components/ui/Select";
 import { FormRow } from "@/components/shared/FormField";
 import {
   usePayments,
@@ -39,15 +37,6 @@ import { useContacts } from "@/hooks/useContacts";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { createClientIdempotencyKey } from "@/lib/idempotency";
 import type { Payment } from "@/services/accounting.service";
-
-const METHOD_LABELS: Record<string, string> = {
-  CASH: "Nakit",
-  BANK_TRANSFER: "Havale/EFT",
-  CREDIT_CARD: "Kredi Kartı",
-  CHECK: "Çek",
-  PROMISSORY_NOTE: "Senet",
-  OTHER: "Diğer",
-};
 
 // ─────────────────────────────────────────────
 // Payment method visual config

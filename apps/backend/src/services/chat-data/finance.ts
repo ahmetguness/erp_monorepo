@@ -1,8 +1,6 @@
 import { prisma } from '../../lib/prisma';
-import { InvoiceStatus, InvoiceType, PaymentStatus, Prisma, PurchaseRequestStatus } from '@prisma/client';
-import { generateDocumentNumber } from '../../utils/generate-number.js';
-import { getCurrentPeriod, getMonthStartDate, groupByDepartment } from './shared.js';
-import type { LowStockPurchaseAdjustment, LowStockPurchaseRequestOptions } from './shared.js';
+import { InvoiceStatus, InvoiceType, PaymentStatus } from '@prisma/client';
+import { getMonthStartDate } from './shared.js';
 
 export const financeChatDataService = {
   async getInvoices(tenantId: string, limit = 20) {

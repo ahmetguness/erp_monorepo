@@ -1,4 +1,4 @@
-import { Prisma, CostingMethod, JournalEntryType } from '@prisma/client';
+import { Prisma, JournalEntryType } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
 import { ValidationError } from '../errors/index.js';
 import { generateDocumentNumber } from '../utils/generate-number.js';

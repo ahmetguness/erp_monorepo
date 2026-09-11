@@ -8,7 +8,6 @@ import {
   Zap,
   Loader2,
   CheckCircle2,
-  AlertTriangle,
   Play,
   ShieldCheck,
   Sparkles,

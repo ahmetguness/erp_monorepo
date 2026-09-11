@@ -107,7 +107,7 @@ function applyResolvedFeatures(
 }
 
 function resolveFeatureFlagValue(
-  flag: PlanFeatureFlag,
+  _flag: PlanFeatureFlag,
   feature: ResolvedFeature,
   fallbackValue: PlanFeatureFlags[PlanFeatureFlag],
 ): PlanFeatureFlags[PlanFeatureFlag] {

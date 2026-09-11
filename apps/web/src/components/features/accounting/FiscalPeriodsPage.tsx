@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useMemo, type ReactNode } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -24,7 +24,6 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { FeatureGate } from "@/components/shared/FeatureGate";
 import { FiscalPeriodStatusBadge } from "@/components/shared/StatusBadge";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";

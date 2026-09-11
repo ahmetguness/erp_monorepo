@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Download, Pin, Save, Trash2, TrendingDown, TrendingUp, Package, Users, Coins, BarChart3, Lock, Share2, Mail, Calendar, Shield, Trophy, type LucideIcon } from 'lucide-react';
+import { Download, Pin, Save, Trash2, TrendingDown, TrendingUp, Package, Users, Coins, BarChart3, Lock, Share2, Mail, Shield, Trophy, type LucideIcon } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { CashflowForecastPanel } from './CashflowForecastPanel';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';

@@ -3,8 +3,6 @@
 import { useState } from 'react';
 import {
   Activity,
-  AlertTriangle,
-  CheckCircle2,
   Clock,
   FileSpreadsheet,
   FileText,
@@ -13,9 +11,7 @@ import {
   Zap,
   ShoppingBag,
   AlertOctagon,
-  ArrowRight,
   UserCheck,
-  Building2,
   RefreshCw,
   Loader2,
   Layers,
@@ -238,10 +234,10 @@ export function OperationsCenter() {
                       event.type === 'SUCCESS'
                         ? 'border-emerald-500 text-emerald-400'
                         : event.type === 'WARNING'
-                        ? 'border-amber-500 text-amber-400'
-                        : event.type === 'ERROR'
-                        ? 'border-rose-500 text-rose-400'
-                        : 'border-indigo-500 text-indigo-400',
+                          ? 'border-amber-500 text-amber-400'
+                          : event.type === 'ERROR'
+                            ? 'border-rose-500 text-rose-400'
+                            : 'border-indigo-500 text-indigo-400',
                     )}
                   >
                     ✓

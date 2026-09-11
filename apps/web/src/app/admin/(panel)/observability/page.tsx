@@ -1,11 +1,10 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
   AlertTriangle,
-  Clock,
   Database,
   Radio,
   Search,
@@ -13,22 +12,12 @@ import {
   ShieldCheck,
   Timer,
   RefreshCw,
-  Gauge,
-  Layers,
-  ArrowUpRight,
-  TrendingDown,
-  TrendingUp,
   Cpu,
   Globe,
-  Sliders,
-  Sparkles,
-  ExternalLink,
-  ShieldAlert,
   Flame,
   CheckCircle2,
   XCircle,
   BarChart3,
-  Terminal,
   Zap,
 } from 'lucide-react';
 import {
@@ -36,7 +25,6 @@ import {
   searchOperationalObservability,
   type EndpointLatencySnapshot,
   type ErrorRateTrendSnapshot,
-  type OperationalObservability,
 } from '@/services/admin.service';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';

@@ -1,12 +1,10 @@
 import { openai } from '../lib/openai';
-import { ChatDataService } from './chat-data.service';
 import { ChatContextService, type ChatPageContext, type LoadedChatEntityContext } from './chat-context.service';
 import { logger } from '../lib/logger';
 import { AI_MODELS, AI_PROMPT_VERSIONS, type AiTokenUsage } from './ai-governance.service';
 import type {
   ChatCompletion,
   ChatCompletionMessageParam,
-  ChatCompletionTool,
   ChatCompletionMessageFunctionToolCall,
 } from 'openai/resources/chat/completions';
 
@@ -20,7 +18,6 @@ export type { UserPermissions } from './ai-chat/tool-runtime.js';
 // ─────────────────────────────────────────────
 
 const CHAT_MODEL = AI_MODELS.CHAT;
-const purchaseRequestPreviewSessions = new Set<string>();
 // OpenAI Function Definitions — ERP veri araçları
 // Üç katmanlı erişim: Plan + Modül + Kullanıcı Rolü
 // ─────────────────────────────────────────────
@@ -641,24 +638,4 @@ export async function handlePrivateChatStream(
     const errMsg = err instanceof Error ? err.message : String(err);
     await callbacks.onError(errMsg);
   }
-}
-
-// ─────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────
-
-function getMonthStart(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-}
-
-function getToday(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
-/** Tarih string'ini validate et — geçersizse null döner */
-function parseDate(str: string): string | null {
-  const d = new Date(str);
-  if (isNaN(d.getTime())) return null;
-  return d.toISOString().split('T')[0];
 }

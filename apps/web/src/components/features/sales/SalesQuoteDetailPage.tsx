@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   ArrowRight,
   ClipboardEdit,
-  FileText,
   Mail,
   PackageCheck,
   Percent,

@@ -5,7 +5,7 @@ import type { AdminRoleKey, InviteAdminInput } from '@repo/types';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { AdminRoleSelector } from './AdminRoleSelector';
-import { UserPlus, User, Mail, ShieldAlert, Sparkles, Clock, KeyRound } from 'lucide-react';
+import { UserPlus, User, Mail, Clock } from 'lucide-react';
 
 export function InviteAdminModal({
   isOpen,

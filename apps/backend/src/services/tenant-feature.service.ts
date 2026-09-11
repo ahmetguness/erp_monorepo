@@ -1,5 +1,6 @@
 import { FeatureKey, FeatureType, Plan, Prisma, PrismaClient } from '@prisma/client';
-import { ResolvedFeature, STARTER_FEATURE_DEFAULTS } from '../types/feature.types';
+import { ResolvedFeature } from '../types/feature.types';
+
 import { parseBooleanValue } from '../utils/feature-parser';
 import { PlanFeatureService } from './plan-feature.service';
 

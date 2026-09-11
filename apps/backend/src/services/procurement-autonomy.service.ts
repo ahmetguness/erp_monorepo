@@ -2,7 +2,6 @@ import {
   AuditAction,
   ContactType,
   EntityType,
-  Prisma,
   PrismaClient,
   PurchaseOrderStatus,
 } from '@prisma/client';

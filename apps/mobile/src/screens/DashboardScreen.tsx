@@ -14,7 +14,6 @@ import { useAuthStore } from '../store/auth.store';
 import { StatCard } from '../components/StatCard';
 import { SectionCard } from '../components/SectionCard';
 import { ChatBot } from '../components/ChatBot';
-import { Logo } from '../components/Logo';
 import { formatCurrency, initials, formatDate } from '../lib/utils';
 import {
   getRevenueSummary,

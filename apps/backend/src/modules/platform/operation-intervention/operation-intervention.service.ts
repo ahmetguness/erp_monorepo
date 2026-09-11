@@ -1,4 +1,4 @@
-import { AuditAction, EntityType, Prisma } from "@prisma/client";
+import { AuditAction, EntityType } from "@prisma/client";
 import type {
   OperationInterventionAction,
   OperationInterventionPreview,

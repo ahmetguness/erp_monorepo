@@ -21,7 +21,6 @@ import { RowActions, type RowAction } from '@/components/shared/RowActions';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { OrderStatusBadge } from '@/components/shared/StatusBadge';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { useSalesOrders } from '@/hooks/useSales';
 import { createListSavedViewState, getSavedViewPageSize, getVisibleColumns, normalizeColumnKeys } from '@/lib/list-standard';

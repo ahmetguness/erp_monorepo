@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AdminSecurityEventSummary, AdminSessionSummary } from '@repo/types';
+import type { AdminSessionSummary } from '@repo/types';
 import {
   closeAdminSession,
   closeAllAdminSessions,
@@ -14,7 +14,6 @@ import { toast } from '@/store/ui.store';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
-  Shield,
   ShieldAlert,
   ShieldCheck,
   KeyRound,
@@ -32,7 +31,6 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
-  HelpCircle,
   Sparkles,
   Info,
   Radio,

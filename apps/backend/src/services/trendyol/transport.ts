@@ -1,30 +1,11 @@
 /**
  * Trendyol Partner API — Production-grade Integration Service
- *
- * Improvements applied:
- *  1. waitRateLimit — throws replaced with async wait
- *  2. waitRateLimit called before every retry attempt
- *  3. computeBackoff() — single backoff/Retry-After function
- *  4. maskResponseBody() — response body log masking
- *  5. summarizeBatch() — item.status-based (SUCCESS vs others)
- *  6. normalizeOrderStatus() — canonical status map
- *  7. Duplicate payload guard moved to worker (DB layer)
- *  8. All sync runs through TrendyolWorker queue
- *  9. paginateOrders() — page-based order pagination (renamed from streamOrders)
- * 10. Redis-based rate limiter when REDIS_URL is set
  */
 
 import { logger } from '../../lib/logger';
-import { decrypt } from '../../utils/encryption.js';
 import { isMarketplaceMockChannelEnabled } from '../../config/env';
 import { observedFetch } from '../../modules/shared/index.js';
-
-// ─────────────────────────────────────────────
-
-import type { TrendyolCredentials, TrendyolAddress, TrendyolOrderLine, TrendyolOrder, TrendyolOrdersResponse, TrendyolVariant, TrendyolProduct, TrendyolProductsResponse, TrendyolProductAttributeInput, TrendyolProductImageInput, TrendyolProductItemInput, TrendyolProductDeleteItem, TrendyolLookupOption, TrendyolCategoryAttributeValue, TrendyolCategoryAttribute, TrendyolPriceInventoryItem, TrendyolBatchResponse, TrendyolBatchStatus, BatchSummary, TrendyolSupplierAddress } from './types.js';
-
-// Constants
-// ─────────────────────────────────────────────
+import type { TrendyolCredentials } from './types.js';
 
 function isTrendyolMockEnabled(): boolean {
   return isMarketplaceMockChannelEnabled('trendyol');
@@ -59,10 +40,6 @@ const RATE_WINDOW_MS = 10_000;
 const RATE_LIMIT = 48; // 50/10s — 2 buffer
 const MASK = '***';
 
-// ─────────────────────────────────────────────
-// Types — Credentials
-// ─────────────────────────────────────────────
-
 export class TrendyolApiError extends Error {
   constructor(
     message: string,
@@ -76,10 +53,6 @@ export class TrendyolApiError extends Error {
   get isServerError() { return this.statusCode >= 500; }
   get isRetryable() { return this.isRateLimit || this.isServerError; }
 }
-
-// ─────────────────────────────────────────────
-// Log masking
-// ─────────────────────────────────────────────
 
 export function maskCredentials(creds: TrendyolCredentials): Record<string, string> {
   return {
@@ -99,10 +72,6 @@ export function maskSensitiveString(value: string): string {
   return MASK + value.slice(-4);
 }
 
-/**
- * Mask sensitive fields in a response body string before logging.
- * Redacts: phone, email, identityNumber, taxNumber, apiKey, apiSecret.
- */
 function maskResponseBody(body: string): string {
   return body
     .replace(/"phone"\s*:\s*"[^"]+"/g, '"phone":"***"')
@@ -113,15 +82,9 @@ function maskResponseBody(body: string): string {
     .replace(/"apiSecret"\s*:\s*"[^"]+"/g, '"apiSecret":"***"');
 }
 
-// ─────────────────────────────────────────────
-// Rate Limiter — in-process (single process)
-// Falls back to Redis when REDIS_URL is set (multi-process safe).
-// ─────────────────────────────────────────────
-
 interface RateBucket { count: number; windowStart: number }
 const rateBuckets = new Map<string, RateBucket>();
 
-// Redis singleton — created once, reused across all calls
 type RedisClient = { incr(k: string): Promise<number>; expire(k: string, s: number): Promise<number>; on(event: string, cb: (err: Error) => void): void };
 let _redisClient: RedisClient | null = null;
 
@@ -134,7 +97,7 @@ function getRedisClient(): RedisClient | null {
     _redisClient = new Redis(process.env.REDIS_URL);
     _redisClient.on('error', (err: Error) => {
       logger.warn(`[Trendyol] Redis error: ${err.message} — falling back to in-process rate limiter`);
-      _redisClient = null; // reset so next call retries
+      _redisClient = null;
     });
     return _redisClient;
   } catch {
@@ -142,10 +105,6 @@ function getRedisClient(): RedisClient | null {
   }
 }
 
-/**
- * Wait until there is capacity in the rate window.
- * Unlike the old checkRateLimit (which threw), this async-waits.
- */
 async function waitRateLimit(endpoint: string): Promise<void> {
   if (process.env.REDIS_URL) {
     await waitRateLimitRedis(endpoint);
@@ -175,14 +134,9 @@ async function waitRateLimitInProcess(endpoint: string): Promise<void> {
   bucket.count++;
 }
 
-/**
- * Redis-based rate limiter using INCR + EXPIRE (sliding window approximation).
- * Uses module-level singleton client — no new connection per call.
- */
 async function waitRateLimitRedis(endpoint: string): Promise<void> {
   const redis = getRedisClient();
   if (!redis) {
-    // Redis unavailable — fall back to in-process
     await waitRateLimitInProcess(endpoint);
     return;
   }
@@ -199,26 +153,14 @@ async function waitRateLimitRedis(endpoint: string): Promise<void> {
     await waitRateLimitInProcess(endpoint);
   }
 }
-// ─────────────────────────────────────────────
-// Backoff — single function for retry delay
-// ─────────────────────────────────────────────
 
-/**
- * Compute how long to wait before the next retry attempt.
- * Respects Retry-After header (429), otherwise exponential backoff.
- */
 function computeBackoff(attempt: number, retryAfterHeader: string | null): number {
   if (retryAfterHeader) {
     const seconds = parseInt(retryAfterHeader, 10);
     if (!isNaN(seconds) && seconds > 0) return seconds * 1000;
   }
-  // Exponential: 1s, 2s, 4s (capped at 8s)
   return Math.min(1000 * Math.pow(2, attempt - 1), 8_000);
 }
-
-// ─────────────────────────────────────────────
-// HTTP Client
-// ─────────────────────────────────────────────
 
 function buildHeaders(creds: TrendyolCredentials): Record<string, string> {
   const token = Buffer.from(`${creds.apiKey}:${creds.apiSecret}`).toString('base64');
@@ -242,10 +184,8 @@ export async function trendyolFetch<T>(
   let lastError: TrendyolApiError | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    // 1. Wait for rate limit capacity BEFORE every attempt (including first)
     await waitRateLimit(path);
 
-    // 2. Backoff delay for retries
     if (attempt > 0) {
       const backoffMs = computeBackoff(attempt, null);
       logger.warn(`[Trendyol] Retry ${attempt}/${MAX_RETRIES} for ${path} in ${backoffMs}ms`);
@@ -275,7 +215,6 @@ export async function trendyolFetch<T>(
 
         if (err.isRetryable && attempt < MAX_RETRIES) {
           lastError = err;
-          // Use Retry-After header for backoff computation on next iteration
           const retryAfter = res.headers.get('Retry-After');
           if (retryAfter) {
             const waitMs = computeBackoff(attempt + 1, retryAfter);
@@ -307,10 +246,6 @@ export async function trendyolFetch<T>(
 
   throw lastError ?? new TrendyolApiError('Max retries exceeded', 0, path);
 }
-
-// ─────────────────────────────────────────────
-// Trendyol Service
-// ─────────────────────────────────────────────
 
 export function readRateLimitSnapshot(): { remaining: number; resetAt: string } {
   const now = Date.now();

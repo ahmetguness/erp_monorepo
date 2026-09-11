@@ -1,4 +1,4 @@
-import { FeatureKey, FeatureType, Plan } from '@prisma/client';
+import { FeatureKey, FeatureType } from '@prisma/client';
 import { STARTER_OPEN_MODULES as SHARED_STARTER_OPEN_MODULES } from '@repo/types/plans';
 
 // ─────────────────────────────────────────────

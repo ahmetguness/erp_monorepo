@@ -11,7 +11,6 @@ import {
   ClipboardList,
   FileClock,
   Image as ImageIcon,
-  PackageCheck,
   Pencil,
   ReceiptText,
   ShoppingCart,

@@ -1,4 +1,4 @@
-import { InvoiceStatus, InvoiceType, PermissionAction, Prisma, type PrismaClient } from '@prisma/client';
+import { InvoiceStatus, InvoiceType, PermissionAction, type PrismaClient } from '@prisma/client';
 import { ValidationError } from '../errors';
 
 export type ReportingDatasetKey = 'invoices' | 'payments' | 'stock' | 'contacts';

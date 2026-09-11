@@ -13,7 +13,6 @@ import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { canAdmin } from '@/lib/admin/permissions';
 import { toast } from '@/store/ui.store';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AdminUserEditor } from '@/components/features/admin/AdminUserEditor';
 import { InviteAdminModal } from '@/components/features/admin/InviteAdminModal';
@@ -26,18 +25,12 @@ import {
   RefreshCw,
   Search,
   X,
-  Lock,
-  Unlock,
   Users,
-  KeyRound,
   LogOut,
   Mail,
   Clock,
   AlertTriangle,
-  Sparkles,
-  CheckCircle2,
   FilterX,
-  ExternalLink,
   Laptop,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';

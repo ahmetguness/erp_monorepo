@@ -3,14 +3,10 @@
 import {
   Store,
   DollarSign,
-  TrendingUp,
-  Percent,
   Zap,
   Loader2,
   Boxes,
   ArrowRightLeft,
-  ShieldAlert,
-  CheckCircle2,
   Tag,
 } from 'lucide-react';
 import {

@@ -3,15 +3,10 @@
 import {
   Factory,
   Cog,
-  AlertTriangle,
   Zap,
   Loader2,
   Wrench,
   Gauge,
-  Calendar,
-  CheckCircle2,
-  Activity,
-  Layers,
   ShieldAlert,
 } from 'lucide-react';
 import {

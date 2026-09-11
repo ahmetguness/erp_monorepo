@@ -5,7 +5,7 @@ import type { AdminRoleKey, AdminUserSummary, UpdateAdminInput } from '@repo/typ
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { AdminRoleSelector } from './AdminRoleSelector';
-import { Shield, ShieldAlert, AlertTriangle, UserCheck, Lock, Unlock } from 'lucide-react';
+import { Shield, AlertTriangle, Lock, Unlock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function AdminUserEditor({

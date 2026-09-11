@@ -36,13 +36,6 @@ interface StockLevelForInsight {
   };
 }
 
-interface LocationForInsight {
-  id: string;
-  warehouseId: string;
-  code: string;
-  name: string;
-}
-
 function numberValue(value: Prisma.Decimal | number | null | undefined): number {
   return Number(value ?? 0);
 }

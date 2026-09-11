@@ -9,7 +9,7 @@ import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { getUserLimitState } from '@/components/features/settings/users/user-limit';
-import { getInvitations, createInvitation, cancelInvitation, type Invitation } from '@/services/invitation.service';
+import { getInvitations, createInvitation, cancelInvitation } from '@/services/invitation.service';
 import { useTenantUsers, useUpdateUserRole } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
@@ -37,7 +37,7 @@ export default function UsersAndInvitesPage() {
   const { data: rolesData } = useRoles({ page: 1, limit: 50 });
   const roles = rolesData?.data ?? [];
   const updateUserRole = useUpdateUserRole();
-  const { data: invitations = [], isLoading: invitesLoading } = useQuery({
+  const { data: invitations = [] } = useQuery({
     queryKey: ['invitations'],
     queryFn: getInvitations,
   });

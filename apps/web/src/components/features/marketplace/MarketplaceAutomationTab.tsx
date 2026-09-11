@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Sparkles,
   Bot,
   RefreshCw,
   Users,
@@ -11,9 +10,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Play,
-  FileCheck,
   PackageCheck,
-  ShieldCheck,
   Settings2,
 } from 'lucide-react';
 import {

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-  AlertTriangle, BriefcaseBusiness, CalendarClock, FilterX, PackageCheck,
+  AlertTriangle, BriefcaseBusiness, FilterX,
   Plus, Search, ShoppingCart, Unlock,
 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';

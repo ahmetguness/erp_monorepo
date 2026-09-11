@@ -6,7 +6,7 @@ import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
-  ArrowRight, CheckCircle2, ChevronRight, ClipboardCheck, FilterX, Hash,
+  ArrowRight, ChevronRight, ClipboardCheck, FilterX,
   Package, Plus, Save, Search, Warehouse as WarehouseIcon, X,
 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';

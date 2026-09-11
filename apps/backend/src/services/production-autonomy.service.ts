@@ -1,7 +1,6 @@
 import {
   AuditAction,
   EntityType,
-  Prisma,
   PrismaClient,
   ReservationRefType,
   WorkOrderStatus,

@@ -6,8 +6,6 @@ import Link from 'next/link';
 import {
   Bell,
   AlertTriangle,
-  Info,
-  CheckCircle2,
   CheckCheck,
   Check,
   Clock3,
@@ -15,13 +13,11 @@ import {
   Trash2,
   Archive,
   Search,
-  Filter,
   RefreshCw,
   Sparkles,
   ExternalLink,
   ShieldAlert,
   Inbox,
-  ArrowUpDown,
   CheckSquare,
   Square,
   DollarSign,
@@ -37,7 +33,6 @@ import {
   useMarkAsRead,
   useMarkAllAsRead,
   useDeleteNotification,
-  useDeleteAllNotifications,
   useArchiveNotification,
   useBulkMarkAsRead,
   useBulkArchive,
@@ -46,7 +41,6 @@ import {
   useNotificationAttention,
 } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
-import type { Notification, SmartNotification } from '@/services/notification.service';
 import { NotificationAttentionPanel } from '@/features/notification-attention';
 
 const CATEGORY_MAP: Record<string, { label: string; icon: ReactNode; color: string }> = {
@@ -68,12 +62,9 @@ export default function NotificationsPage() {
   const { data: notificationsData, isLoading: isNotifLoading, refetch: refetchNotifs } = useNotifications({ limit: 100 });
   const { data: smartSummary, isLoading: isSmartLoading, refetch: refetchSmart } = useSmartNotifications();
   const { data: attention } = useNotificationAttention();
-
-  // Mutation hooks
   const markRead = useMarkAsRead();
   const markAllRead = useMarkAllAsRead();
   const deleteNotif = useDeleteNotification();
-  const deleteAll = useDeleteAllNotifications();
   const archiveNotif = useArchiveNotification();
   const bulkMarkRead = useBulkMarkAsRead();
   const bulkArchive = useBulkArchive();

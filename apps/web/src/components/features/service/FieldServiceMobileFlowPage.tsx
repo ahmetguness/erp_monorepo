@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { Camera, CheckCircle2, ClipboardCheck, CloudOff, MapPinned, RefreshCw, Route, Signature, UserCheck } from "lucide-react";
+import { Camera, CheckCircle2, ClipboardCheck, CloudOff, MapPinned, RefreshCw, Route, Signature } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";

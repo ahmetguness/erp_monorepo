@@ -1,8 +1,5 @@
 import { prisma } from '../../lib/prisma';
-import { InvoiceStatus, InvoiceType, PaymentStatus, Prisma, PurchaseRequestStatus } from '@prisma/client';
-import { generateDocumentNumber } from '../../utils/generate-number.js';
 import { getCurrentPeriod, getMonthStartDate, groupByDepartment } from './shared.js';
-import type { LowStockPurchaseAdjustment, LowStockPurchaseRequestOptions } from './shared.js';
 
 export const workforceChatDataService = {
   async getPendingLeaves(tenantId: string) {

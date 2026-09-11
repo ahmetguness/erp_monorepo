@@ -42,12 +42,10 @@ import {
   type BusinessRule,
   type DefaultPolicyUpdate,
   type QuickStartDTO,
-  type CorporateSecuritySettings,
   type SiemSettings,
   type AuditLogFullStatus,
   type DataRetentionSettings,
   type DeploymentOperationsSettings,
-  type BiSettings,
 } from '@/services/settings.service';
 
 function invalidateSetupData(qc: ReturnType<typeof useQueryClient>) {
