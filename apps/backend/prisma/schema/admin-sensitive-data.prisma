@@ -1,0 +1,15 @@
+model AdminSensitiveAccessGrant {
+  id        String   @id @default(cuid())
+  adminId   String
+  tenantId  String
+  fields    String[]
+  purpose   String
+  reason    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  admin     AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([adminId, tenantId, expiresAt])
+  @@index([expiresAt])
+  @@map("admin_sensitive_access_grants")
+}

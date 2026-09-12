@@ -9,6 +9,8 @@ import { BaseError } from "../../../errors/index.js";
 import { prisma } from "../../../lib/prisma.js";
 import { createAuditLog } from "../../../utils/audit.js";
 import { maskOperationPayload } from "./pii-masker.js";
+import { redactSensitiveText } from "../../../lib/sensitive-redaction.js";
+import { canRevealError } from "../sensitive-data/sensitive-data.service.js";
 
 const EVENT_MAX_ATTEMPTS = 5;
 type ItemRef = { id: string; kind: OperationItemKind };
@@ -128,12 +130,15 @@ function eligibility(item: LoadedItem, action: OperationInterventionAction) {
 
 export async function getOperationItem(
   ref: ItemRef,
+  adminId?: string,
 ): Promise<OperationItemDetail> {
   const item = await loadItem(ref);
+  const revealError = adminId ? await canRevealError(adminId, item.tenantId) : false;
   return {
     ...item,
     payload: maskOperationPayload(item.payload),
     context: maskOperationPayload(item.context),
+    lastError: item.lastError ? revealError ? redactSensitiveText(item.lastError) : "Hata ayrıntısı maskelendi." : null,
     nextRetryAt: item.nextRetryAt?.toISOString() ?? null,
     quarantinedAt: item.quarantinedAt?.toISOString() ?? null,
     resolvedAt: item.resolvedAt?.toISOString() ?? null,

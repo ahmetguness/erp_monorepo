@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -33,16 +33,37 @@ const SIZE_STYLES: Record<ModalSize, string> = {
 
 export function Modal({ isOpen, onClose, title, description, size = 'md', children, footer }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+  const closeModal = useEffectEvent(onClose);
 
   // Close on Escape
   useEffect(() => {
     if (!isOpen) return;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    queueMicrotask(() => {
+      const first = panelRef.current?.querySelector<HTMLElement>(focusableSelector);
+      (first ?? panelRef.current)?.focus();
+    });
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(focusableSelector));
+      if (focusable.length === 0) { e.preventDefault(); panelRef.current.focus(); return; }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
     };
     document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [isOpen, onClose]);
+    return () => {
+      document.removeEventListener('keydown', handler);
+      previousFocusRef.current?.focus();
+    };
+  }, [isOpen]);
 
   // Lock body scroll
   useEffect(() => {
@@ -61,7 +82,8 @@ export function Modal({ isOpen, onClose, title, description, size = 'md', childr
       ref={overlayRef}
       role="dialog"
       aria-modal="true"
-      aria-labelledby="modal-title"
+      aria-labelledby={titleId}
+      aria-describedby={description ? descriptionId : undefined}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
@@ -70,6 +92,8 @@ export function Modal({ isOpen, onClose, title, description, size = 'md', childr
 
       {/* Panel */}
       <div
+        ref={panelRef}
+        tabIndex={-1}
         className={cn(
           'relative w-full rounded-2xl border border-slate-800/90 bg-slate-950/95 shadow-2xl shadow-black/35',
           'ring-1 ring-white/[0.04]',
@@ -80,11 +104,11 @@ export function Modal({ isOpen, onClose, title, description, size = 'md', childr
         {/* Header */}
         <div className="flex items-start justify-between border-b border-slate-800/80 bg-slate-900/50 px-6 pt-5 pb-4 shrink-0">
           <div>
-            <h2 id="modal-title" className="text-base font-semibold text-white">
+            <h2 id={titleId} className="text-base font-semibold text-white">
               {title}
             </h2>
             {description && (
-              <p className="text-sm text-slate-400 mt-0.5">{description}</p>
+              <p id={descriptionId} className="text-sm text-slate-400 mt-0.5">{description}</p>
             )}
           </div>
           <button

@@ -13,8 +13,12 @@ export interface PaginationParams {
  * @param maxLimit Maksimum limit değeri (default: 100)
  */
 export function getPaginationParams(c: Context, defaultLimit = 10, maxLimit = 100): PaginationParams {
-  const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-  const limit = Math.min(maxLimit, Math.max(1, parseInt(c.req.query('limit') ?? String(defaultLimit), 10)));
+  const requestedPage = Number.parseInt(c.req.query('page') ?? '1', 10);
+  const requestedLimit = Number.parseInt(c.req.query('limit') ?? String(defaultLimit), 10);
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const limit = Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+    ? Math.min(maxLimit, requestedLimit)
+    : defaultLimit;
   const skip = (page - 1) * limit;
   return { page, limit, skip };
 }

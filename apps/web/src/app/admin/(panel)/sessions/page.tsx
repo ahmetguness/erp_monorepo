@@ -14,6 +14,7 @@ import { toast } from '@/store/ui.store';
 import { extractAdminError, toastAdminError } from '@/lib/admin/errors';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { AdminPageHeader, AdminKpiCard, AdminKpiGrid } from '@/components/features/admin/ui';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -182,145 +183,102 @@ export default function AdminSessionsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 pb-10">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/20 to-sky-600/20 text-violet-400 ring-1 ring-violet-500/30">
-            <Radio className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
-              Oturumlar ve Güvenlik Doğrulaması
-            </h1>
-            <p className="text-xs text-slate-400">
-              Aktif cihaz oturumlarınızı yönetin, güvenlik bildirimlerini inceleyin ve kritik işlemler için yeniden doğrulama yapın.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <Button
-            variant="outline"
-            size="md"
-            onClick={refreshAll}
-            loading={sessionsQuery.isFetching || eventsQuery.isFetching}
-            leftIcon={
-              <RefreshCw
-                className={cn(
-                  'h-4 w-4',
-                  (sessionsQuery.isFetching || eventsQuery.isFetching) && 'animate-spin',
-                )}
-              />
-            }
-          >
-            Yenile
-          </Button>
-
-          {sessions.length > 1 && (
+      <AdminPageHeader
+        title="Oturumlar ve Güvenlik Doğrulaması"
+        description="Aktif cihaz oturumlarınızı yönetin, güvenlik bildirimlerini inceleyin ve kritik işlemler için yeniden doğrulama yapın."
+        icon={Radio}
+        iconTone="purple"
+        badge={
+          <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+            {sessions.length} Cihaz
+          </span>
+        }
+        actions={
+          <>
             <Button
-              variant="danger"
-              size="md"
-              onClick={() => setIsCloseAllDialogOpen(true)}
-              leftIcon={<LogOut className="h-4 w-4" />}
+              variant="outline"
+              size="sm"
+              onClick={refreshAll}
+              loading={sessionsQuery.isFetching || eventsQuery.isFetching}
+              leftIcon={
+                <RefreshCw
+                  className={cn(
+                    'h-3.5 w-3.5',
+                    (sessionsQuery.isFetching || eventsQuery.isFetching) && 'animate-spin',
+                  )}
+                />
+              }
             >
-              Tüm Cihazlardan Çıkış Yap
+              Yenile
             </Button>
-          )}
-        </div>
-      </div>
+
+            {sessions.length > 1 && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setIsCloseAllDialogOpen(true)}
+                leftIcon={<LogOut className="h-3.5 w-3.5" />}
+              >
+                Tüm Cihazlardan Çıkış
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* KPI & Security Summary Strip */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Metric 1: Active Sessions */}
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-sm backdrop-blur">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Aktif Cihaz Oturumları</span>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/10 text-sky-400">
-              <Laptop className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-white">{sessions.length}</span>
-            <span className="text-xs text-slate-400">Cihaz bağlı</span>
-          </div>
-          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>1 tanesi şu anki oturumunuz</span>
-          </div>
-        </div>
+      <AdminKpiGrid columns={4}>
+        <AdminKpiCard
+          label="Aktif Cihaz Oturumları"
+          value={sessions.length}
+          icon={Laptop}
+          iconTone="sky"
+          subtext={
+            <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              1 tanesi şu anki oturumunuz
+            </span>
+          }
+        />
 
-        {/* Metric 2: Current Device Status */}
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-sm backdrop-blur">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Mevcut Bağlantı</span>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-              <Globe className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 truncate text-sm font-semibold text-white" title={currentSession?.deviceName}>
-            {currentSession?.deviceName || 'Bu Cihaz'}
-          </div>
-          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span>IP: {currentSession?.ipAddress || 'Yerel Ağ'}</span>
-          </div>
-        </div>
+        <AdminKpiCard
+          label="Mevcut Bağlantı"
+          value={currentSession?.deviceName || 'Bu Cihaz'}
+          icon={Globe}
+          iconTone="emerald"
+          subtext={`IP: ${currentSession?.ipAddress || 'Yerel Ağ'}`}
+        />
 
-        {/* Metric 3: Security Events Count */}
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-sm backdrop-blur">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Güvenlik Bildirimleri</span>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400">
-              <ShieldAlert className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-white">{securityEvents.length}</span>
-            <span className="text-xs text-slate-400">Kayıt</span>
-          </div>
-          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-400">
-            {securityEvents.length === 0 ? (
+        <AdminKpiCard
+          label="Güvenlik Bildirimleri"
+          value={securityEvents.length}
+          icon={ShieldAlert}
+          iconTone="amber"
+          subtext={
+            securityEvents.length === 0 ? (
               <span className="text-emerald-400 font-medium">Olağandışı aktivite yok</span>
             ) : (
               <span className="text-amber-400 font-medium">İncelenmesi gereken kayıtlar var</span>
-            )}
-          </div>
-        </div>
+            )
+          }
+        />
 
-        {/* Metric 4: Step-Up Reauth Status */}
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-sm backdrop-blur">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Kritik İşlem Yetkisi</span>
-            <div
-              className={cn(
-                'flex h-7 w-7 items-center justify-center rounded-lg',
-                isReauthenticated
-                  ? 'bg-emerald-500/10 text-emerald-400'
-                  : 'bg-slate-800 text-slate-400',
-              )}
-            >
-              {isReauthenticated ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span
-              className={cn(
-                'text-sm font-semibold',
-                isReauthenticated ? 'text-emerald-400' : 'text-slate-300',
-              )}
-            >
-              {isReauthenticated ? 'Yetkilendirildi (1 Gün)' : 'Standart Seviye'}
-            </span>
-          </div>
-          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400">
-            {isReauthenticated ? (
-              <span className="text-emerald-400/90">Hassas işlemler yapılabilir</span>
+        <AdminKpiCard
+          label="Kritik İşlem Yetkisi"
+          value={isReauthenticated ? 'Yetkili' : 'Standart'}
+          icon={isReauthenticated ? Unlock : Lock}
+          iconTone={isReauthenticated ? 'emerald' : 'slate'}
+          subtext={
+            isReauthenticated ? (
+              <span className="text-emerald-400 font-medium">Hassas işlemler yapılabilir (1 Gün)</span>
             ) : (
               <span>Yüksek güvenlikli işlemler için doğrulayın</span>
-            )}
-          </div>
-        </div>
-      </div>
+            )
+          }
+        />
+      </AdminKpiGrid>
 
       {/* Main Content Grid: Left (Sessions & Events) / Right (Step-up Auth & Best Practices) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">

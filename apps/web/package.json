@@ -12,7 +12,10 @@
     "test:typecheck": "tsc --noEmit",
     "test:unit": "vitest run --config vitest.config.mts",
     "test:unit:coverage": "vitest run --coverage --config vitest.config.mts",
-    "test:e2e": "npm --workspace=@repo/backend run test:web-smoke"
+    "test:smoke": "npm --workspace=@repo/backend run test:web-smoke",
+    "test:e2e": "node scripts/run-admin-e2e.mjs",
+    "test:e2e:headed": "node scripts/run-admin-e2e.mjs --headed",
+    "test:admin-accessibility": "node scripts/check-admin-accessibility.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -36,6 +39,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@playwright/test": "^1.51.1",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/lodash": "^4.17.24",
     "@types/node": "^25.5.0",

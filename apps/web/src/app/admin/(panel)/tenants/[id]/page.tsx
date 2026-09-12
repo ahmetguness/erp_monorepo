@@ -3,7 +3,7 @@
 import { use, useState } from 'react';
 import { Tenant360Workspace } from '@/components/features/admin/tenant-360/Tenant360Workspace';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, CalendarClock, FileWarning, MonitorCheck, Users, Package, Receipt, ShoppingCart, Truck, CreditCard, Warehouse, Layers, BookOpen, Plus, Minus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CalendarClock, FileWarning, MonitorCheck, Users, Package, Receipt, ShoppingCart, Truck, CreditCard, Warehouse, Layers, BookOpen, Plus, Minus, Building2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getPlanFeatures, getTenantById, getTenantMetrics, isPendingAdminChange, updateTenant, updateTenantPlan, updateTenantStatus, type PlanFeature } from '@/services/admin.service';
@@ -12,10 +12,12 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { getPlanModules, getTenantModuleAlignment } from '@/lib/admin/tenant-module-alignment';
 import { cn } from '@/lib/utils';
 import { toast } from '@/store/ui.store';
-import { extractAdminError, toastAdminError } from '@/lib/admin/errors';
+import { extractAdminError, isAdminErrorCode, toastAdminError } from '@/lib/admin/errors';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { canAdmin } from '@/lib/admin/permissions';
 import { ChangePreviewDialog, type ChangeMetadata } from '@/components/features/admin/ChangePreviewDialog';
+import { AdminPageHeader } from '@/components/features/admin/ui';
+import { SensitiveDataRevealButton } from '@/components/features/admin/sensitive-data/SensitiveDataRevealButton';
 
 const PLANS = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'] as const;
 type PlanKey = typeof PLANS[number];
@@ -181,6 +183,7 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
   const canUpdatePlan = canAdmin(admin, 'tenant.plan.update');
   const canUpdateStatus = canAdmin(admin, 'tenant.status.update');
   const canUpdateSettings = canAdmin(admin, 'tenant.settings.update');
+  const canRevealSensitiveData = canAdmin(admin, 'sensitive-data.reveal');
   const { id } = use(params);
   const router = useRouter();
   const qc = useQueryClient();
@@ -244,7 +247,10 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
   });
 
   const changeStatus = useMutation({
-    onSettled: () => { void qc.invalidateQueries({ queryKey: ['admin', 'tenant-360', id] }); },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'tenant-360', id] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] });
+    },
     mutationFn: ({ value, metadata }: { value: StatusKey; metadata: ChangeMetadata }) => updateTenantStatus(id, value, metadata.reason, metadata.ticketId),
     onSuccess: (result) => {
       setCriticalProposal(null);
@@ -260,17 +266,24 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
   });
 
   const saveSettings = useMutation({
-    onSettled: () => { void qc.invalidateQueries({ queryKey: ['admin', 'tenant-360', id] }); },
-    mutationFn: (notify: boolean) => updateTenant(id, {
-      maxUsers: settings.maxUsers ? Number(settings.maxUsers) : null,
-      modules: settings.modules,
-      notes: settings.notes,
-      isCustomPricing: settings.isCustomPricing,
-      trialEndsAt: settings.trialEndsAt || null,
-      subscriptionStart: settings.subscriptionStart || null,
-      subscriptionEnd: settings.subscriptionEnd || null,
-      notify,
-    }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'tenant-360', id] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] });
+    },
+    mutationFn: (notify: boolean) => {
+      if (!tenant) throw new Error('Tenant verisi henüz yüklenmedi.');
+      return updateTenant(id, {
+        expectedUpdatedAt: tenant.updatedAt,
+        maxUsers: settings.maxUsers ? Number(settings.maxUsers) : null,
+        modules: settings.modules,
+        notes: settings.notes,
+        isCustomPricing: settings.isCustomPricing,
+        trialEndsAt: settings.trialEndsAt || null,
+        subscriptionStart: settings.subscriptionStart || null,
+        subscriptionEnd: settings.subscriptionEnd || null,
+        notify,
+      });
+    },
     onSuccess: () => {
       setSettingsDraft(null);
       setCurrentPlanOverride(null);
@@ -281,6 +294,11 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
       toast.success('Tenant ayarları kaydedildi.');
     },
     onError: (err: unknown) => {
+      if (isAdminErrorCode(err, 'CONFLICT')) {
+        setSettingsDraft(null);
+        setCurrentPlanOverride(null);
+        setConfirmSave(false);
+      }
       const msg = extractAdminError(err, 'Tenant ayarları kaydedilemedi.');
       setSettingsError(msg);
       toastAdminError(err, 'Tenant ayarları kaydedilemedi.');
@@ -306,21 +324,56 @@ export default function AdminTenantDetailPage({ params }: { params: Promise<{ id
     <Tenant360Workspace tenantId={id}>
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => router.back()} className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-white transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <div>
-          <h1 className="text-lg font-semibold text-white">{tenant.companyName}</h1>
-          <p className="text-xs text-slate-500">{tenant.slug} · {tenant.email}</p>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <Link href={`/admin/tenants/${id}/lifecycle`} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-300 hover:text-white">Yaşam döngüsü</Link>
-          <Link href={`/admin/tenants/${id}/subscription`} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-300 hover:text-white">Abonelik ve gelir</Link>
-          <Badge variant={STATUS_VARIANT[tenant.status] ?? 'neutral'}>{tenant.status}</Badge>
-          <span className={cn('text-xs font-medium px-2.5 py-1 rounded-full border', PLAN_COLOR[tenant.plan])}>{tenant.plan}</span>
-        </div>
-      </div>
+      <AdminPageHeader
+        title={tenant.companyName}
+        description={`${tenant.slug} · ${tenant.email}`}
+        icon={Building2}
+        iconTone="indigo"
+        badge={
+          <span
+            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold ring-1 ${
+              tenant.status === 'ACTIVE'
+                ? 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/20'
+                : tenant.status === 'TRIAL'
+                ? 'bg-sky-500/10 text-sky-400 ring-sky-500/20'
+                : 'bg-rose-500/10 text-rose-400 ring-rose-500/20'
+            }`}
+          >
+            {tenant.plan} · {tenant.status}
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Geri Dön</span>
+            </button>
+            <Link
+              href={`/admin/tenants/${id}/lifecycle`}
+              className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+            >
+              Yaşam Döngüsü
+            </Link>
+            <Link
+              href={`/admin/tenants/${id}/subscription`}
+              className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+            >
+              Abonelik ve Gelir
+            </Link>
+            {canRevealSensitiveData && tenant.sensitiveAccess?.maskedFields.some((field) => field === 'email' || field === 'phone') && (
+              <SensitiveDataRevealButton tenantId={id} fields={['email', 'phone']} onGranted={() => {
+                void qc.invalidateQueries({ queryKey: ['admin', 'tenant', id] });
+                void qc.invalidateQueries({ queryKey: ['admin', 'tenant-360', id] });
+                void qc.invalidateQueries({ queryKey: ['admin', 'tenants'] });
+              }} />
+            )}
+          </div>
+        }
+      />
 
       {/* Plan & Status controls */}
       <div className="grid grid-cols-2 gap-4">

@@ -2,10 +2,12 @@ import type { AdminPermission, Tenant360Snapshot } from '@repo/types';
 import { prisma } from '../../../lib/prisma.js';
 import { NotFoundError } from '../../../errors/index.js';
 import { PlanUsageService } from '../../../services/plan-usage.service.js';
+import { getSensitiveAccessState,maskEmail } from '../sensitive-data/sensitive-data.service.js';
 
-export async function getTenant360(tenantId: string, permissions: readonly AdminPermission[]): Promise<Tenant360Snapshot> {
+export async function getTenant360(tenantId: string, permissions: readonly AdminPermission[], adminId: string): Promise<Tenant360Snapshot> {
   const tenant = await prisma.tenant.findFirst({ where: { id: tenantId, deletedAt: null } });
   if (!tenant) throw new NotFoundError('Tenant bulunamadı');
+  const sensitiveAccess = await getSensitiveAccessState(adminId, tenantId);
   const billingSubscription = await prisma.billingSubscription.findFirst({ where: { tenantId }, select: { provider: true, state: true, monthlyAmount: true, currency: true } });
   const operationsAllowed = permissions.includes('operations.read');
   const since = new Date();
@@ -48,7 +50,7 @@ export async function getTenant360(tenantId: string, permissions: readonly Admin
       queue: [...jobs.map(row => ({ source: 'Marketplace', status: row.status, count: row._count })), ...events.map(row => ({ source: 'Domain event', status: row.status, count: row._count }))],
       recentFailures: [...failedJobs.map(row => ({ id: row.id, source: 'Marketplace', name: row.jobType, status: row.status, attempts: row.attempts, updatedAt: row.updatedAt.toISOString() })), ...failedEvents.map(row => ({ ...row, source: 'Domain event', updatedAt: row.updatedAt.toISOString() }))].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 20),
     } : null,
-    security: members ? { members: members.map(row => ({ id: row.user.id, name: row.user.name, email: row.user.email, isActive: row.isActive && row.user.isActive && row.user.deletedAt === null, isOwner: row.isOwner, role: row.roleRef?.name ?? null, lastTenantActivityAt: lastActivity.find(item => item.userId === row.user.id)?._max.createdAt?.toISOString() ?? null })) } : null,
+    security: members ? { members: members.map(row => ({ id: row.user.id, name: row.user.name, email: sensitiveAccess.revealedFields.includes('email') ? row.user.email : maskEmail(row.user.email), isActive: row.isActive && row.user.isActive && row.user.deletedAt === null, isOwner: row.isOwner, role: row.roleRef?.name ?? null, lastTenantActivityAt: lastActivity.find(item => item.userId === row.user.id)?._max.createdAt?.toISOString() ?? null })) } : null,
     changes: changes?.map(row => ({ ...row, createdAt: row.createdAt.toISOString() })) ?? null,
     support: support.map(row => ({ ...row, createdAt: row.createdAt.toISOString() })),
   };

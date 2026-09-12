@@ -20,15 +20,19 @@ import {
   Ticket,
   LifeBuoy,
   DatabaseBackup,
+  MonitorCheck,
+  Inbox,
 } from 'lucide-react';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { cn } from '@/lib/utils';
-import { ToastContainer } from '@/components/ui/Toast';
 import { AdminSecurityNotice } from '@/components/features/admin/AdminSecurityNotice';
 import type { AdminPermission } from '@repo/types';
 import { canAdmin } from '@/lib/admin/permissions';
 import { getAdminChangeRequests } from '@/services/admin.service';
 import { listAdminTickets } from '@/services/support-ticket.service';
+import { AdminCommandPalette } from '@/components/features/admin/global-search/AdminCommandPalette';
+import { AdminAccessibilityPreferences } from '@/components/features/admin/accessibility/AdminAccessibilityPreferences';
+import { adminCopy } from '@/lib/admin/admin-copy';
 
 interface NavItemConfig {
   href: string;
@@ -43,10 +47,12 @@ const NAV_GROUPS: Array<{
   items: NavItemConfig[];
 }> = [
   {
-    groupLabel: 'Genel',
+    groupLabel: adminCopy.navigation.general,
     items: [
-      { href: '/admin', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard.read' },
-      { href: '/admin/tenants', icon: Building2, label: 'Tenantlar', permission: 'tenant.read' },
+      { href: '/admin', icon: LayoutDashboard, label: adminCopy.product.dashboard, permission: 'dashboard.read' },
+      { href: '/admin/tenants', icon: Building2, label: adminCopy.product.tenants, permission: 'tenant.read' },
+      { href: '/admin/demo-requests', icon: MonitorCheck, label: 'Demo Talepleri', permission: 'demo.read' },
+      { href: '/admin/inbox', icon: Inbox, label: adminCopy.navigation.inbox, permission: 'inbox.read' },
       {
         href: '/admin/tickets',
         icon: LifeBuoy,
@@ -65,7 +71,7 @@ const NAV_GROUPS: Array<{
     ],
   },
   {
-    groupLabel: 'Konfigürasyon & Sistem',
+    groupLabel: adminCopy.navigation.configuration,
     items: [
       { href: '/admin/features', icon: Sliders, label: 'Özellikler & Plan', permission: 'feature.read' },
       { href: '/admin/coupons', icon: Ticket, label: 'Kupon Yönetimi', permission: 'tenant.plan.update' },
@@ -75,10 +81,10 @@ const NAV_GROUPS: Array<{
     ],
   },
   {
-    groupLabel: 'Erişim & Güvenlik',
+    groupLabel: adminCopy.navigation.access,
     items: [
       { href: '/admin/admin-users', icon: UserRoundCheck, label: 'Admin Kullanıcıları', permission: 'admin-user.read' },
-      { href: '/admin/security', icon: ShieldCheck, label: 'Güvenlik & Checklist', permission: 'security.read' },
+      { href: '/admin/security', icon: ShieldCheck, label: adminCopy.navigation.security, permission: 'security.read' },
       { href: '/admin/privacy', icon: Shield, label: 'Gizlilik & KVKK', permission: 'privacy.read' },
     ],
   },
@@ -95,10 +101,12 @@ function permissionForPath(pathname: string): AdminPermission | null {
 
 function AdminNavLinks({ pathname }: { pathname: string }) {
   const admin = useAdminAuthStore((state) => state.admin);
+  const canReadChangeRequests = canAdmin(admin, 'change-request.read');
 
   const { data: pendingRequests = [] } = useQuery({
     queryKey: ['admin', 'change-requests', 'pending'],
     queryFn: () => getAdminChangeRequests('PENDING'),
+    enabled: canReadChangeRequests,
     refetchInterval: 30_000,
   });
 
@@ -356,13 +364,14 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
         </header>
 
         {/* Content Container */}
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8 flex-1">
+        <section aria-label="Yönetim paneli içeriği" className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8 flex-1">
           <AdminSecurityNotice />
           {children}
-        </main>
+        </section>
       </div>
 
-      <ToastContainer />
+      <AdminCommandPalette />
+      <AdminAccessibilityPreferences />
     </div>
   );
 }

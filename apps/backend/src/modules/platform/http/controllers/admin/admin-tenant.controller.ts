@@ -2,7 +2,7 @@ import { AdminChangeRequestType,AppModule,AuditAction,EntityType,Plan,TenantStat
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
+import { ConflictError,NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
 import { tenantReadyEmail } from '../../../../../services/mail-templates.service.js';
 import { sendMail } from '../../../../../services/mail.service.js';
@@ -14,6 +14,9 @@ import { submitAdminChange } from '../../../admin-change-request/admin-change-re
 import { isCriticalTenantPlanChange,isCriticalTenantStatusChange } from '../../../admin-change-request/admin-change-request.policy.js';
 import { changeMetadataSchema } from '../../../admin-change-request/admin-change-request.schemas.js';
 import { assertLegacyTenantTransition } from '../../../tenant-lifecycle/tenant-lifecycle.policy.js';
+import { tenantListQuerySchema } from '../../../admin-list-operations/index.js';
+import { tenantSettingsUpdateSchema } from '../../../admin-api-safety/index.js';
+import { maskTenantForAdmin,maskTenantsForAdmin } from '../../../sensitive-data/index.js';
 import { syncSubscriptionForPlan } from '../../../subscription-operations/subscription-operations.service.js';
 import { buildChangeLine,createSlug,formatNotificationValue,normalizeEmail,notifyTenantOwners,parseNullableDate,planChangeExperienceService,translateModules,VALID_PLANS,VALID_STATUSES,validateModules } from './shared.js';
 
@@ -24,6 +27,10 @@ export const AdminTenantController = {
     const status = c.req.query('status') as TenantStatus | undefined;
     const plan = c.req.query('plan') as Plan | undefined;
     const search = c.req.query('search');
+    const listOptions = tenantListQuerySchema.safeParse({ from: c.req.query('from'), to: c.req.query('to'), sortBy: c.req.query('sortBy'), sortDirection: c.req.query('sortDirection') });
+    if (!listOptions.success) return c.json(new ValidationError('Geçersiz tarih veya sıralama filtresi.').toJSON(), 400);
+    const from = listOptions.data.from ? new Date(`${listOptions.data.from}T00:00:00.000Z`) : undefined;
+    const to = listOptions.data.to ? new Date(`${listOptions.data.to}T23:59:59.999Z`) : undefined;
 
     if (status && !VALID_STATUSES.includes(status)) {
       return c.json(new ValidationError('Geçerli bir durum seçiniz.').toJSON(), 400);
@@ -36,6 +43,7 @@ export const AdminTenantController = {
       deletedAt: status === 'DELETED' ? undefined : null,
       ...(status && { status }),
       ...(plan && { plan }),
+      ...((from || to) && { createdAt: { ...(from && { gte: from }), ...(to && { lte: to }) } }),
       ...(search && {
         OR: [
           { companyName: { contains: search, mode: 'insensitive' as const } },
@@ -57,13 +65,13 @@ export const AdminTenantController = {
           createdAt: true, updatedAt: true,
           _count: { select: { users: true, products: true, invoices: true, contacts: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [listOptions.data.sortBy]: listOptions.data.sortDirection },
         skip: skip,
         take: limit,
       }),
     ]);
 
-    return c.json({ data: tenants, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
+    return c.json({ data: await maskTenantsForAdmin(c.get('adminId'), tenants), meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
   },
 
   async create(c: Context): Promise<Response> {
@@ -200,7 +208,7 @@ export const AdminTenantController = {
     const template = tenantReadyEmail(body.ownerName.trim(), result.companyName, result.plan, setPasswordUrl);
     await sendMail({ to: email, ...template });
 
-    return c.json({ data: result }, 201);
+    return c.json({ data: await maskTenantForAdmin(c.get('adminId'), result) }, 201);
   },
 
   async getById(c: Context): Promise<Response> {
@@ -219,7 +227,7 @@ export const AdminTenantController = {
       },
     });
     if (!tenant) return c.json(new NotFoundError('Tenant', id).toJSON(), 404);
-    return c.json({ data: tenant });
+    return c.json({ data: await maskTenantForAdmin(c.get('adminId'), tenant) });
   },
 
   async updatePlan(c: Context): Promise<Response> {
@@ -231,7 +239,7 @@ export const AdminTenantController = {
 
     const tenant = await prisma.tenant.findFirst({ where: { id, deletedAt: null } });
     if (!tenant) return c.json(new NotFoundError('Tenant', id).toJSON(), 404);
-    if (tenant.plan === body.plan) return c.json({ data: tenant });
+    if (tenant.plan === body.plan) return c.json({ data: await maskTenantForAdmin(c.get('adminId'), tenant) });
 
     if (isCriticalTenantPlanChange(tenant.plan, body.plan)) {
       const metadata = changeMetadataSchema.safeParse({ reason: body.reason, ticketId: body.ticketId });
@@ -277,7 +285,7 @@ export const AdminTenantController = {
       changedByUserId: null,
     });
 
-    return c.json({ data: updated });
+    return c.json({ data: await maskTenantForAdmin(c.get('adminId'), updated) });
   },
 
   async updateStatus(c: Context): Promise<Response> {
@@ -289,7 +297,7 @@ export const AdminTenantController = {
 
     const tenant = await prisma.tenant.findFirst({ where: { id, deletedAt: null } });
     if (!tenant) return c.json(new NotFoundError('Tenant', id).toJSON(), 404);
-    if (tenant.status === body.status) return c.json({ data: tenant });
+    if (tenant.status === body.status) return c.json({ data: await maskTenantForAdmin(c.get('adminId'), tenant) });
     assertLegacyTenantTransition(tenant.status, body.status);
 
     if (isCriticalTenantStatusChange(body.status)) {
@@ -332,17 +340,14 @@ export const AdminTenantController = {
       `Durum: ${tenant.status} → ${updated.status}`,
     ]);
 
-    return c.json({ data: updated });
+    return c.json({ data: await maskTenantForAdmin(c.get('adminId'), updated) });
   },
 
   async updateTenant(c: Context): Promise<Response> {
     const id = requireParam(c, 'id');
-    const body = await c.req.json<{
-      maxUsers?: number | null; modules?: string[]; notes?: string;
-      isCustomPricing?: boolean; trialEndsAt?: string | null;
-      subscriptionStart?: string | null; subscriptionEnd?: string | null;
-      notify?: boolean;
-    }>();
+    const parsed = tenantSettingsUpdateSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json(new ValidationError('Tenant ayarları geçersiz.', Object.fromEntries(parsed.error.issues.map((issue) => [issue.path.join('.') || 'body', issue.message]))).toJSON(), 400);
+    const body = parsed.data;
 
     const tenant = await prisma.tenant.findFirst({ where: { id, deletedAt: null } });
     if (!tenant) return c.json(new NotFoundError('Tenant', id).toJSON(), 404);
@@ -364,8 +369,8 @@ export const AdminTenantController = {
       return c.json(new ValidationError('maxUsers pozitif bir tam sayı veya boş olmalıdır.').toJSON(), 400);
     }
 
-    const updated = await prisma.tenant.update({
-      where: { id },
+    const changed = await prisma.tenant.updateMany({
+      where: { id, deletedAt: null, updatedAt: new Date(body.expectedUpdatedAt) },
       data: {
         ...(body.maxUsers !== undefined && { maxUsers: body.maxUsers }),
         ...(modules !== undefined && { modules }),
@@ -376,6 +381,8 @@ export const AdminTenantController = {
         ...(subscriptionEnd !== undefined && { subscriptionEnd }),
       },
     });
+    if (changed.count !== 1) return c.json(new ConflictError('Kayıt başka bir admin tarafından değiştirildi. Güncel veriyi yükleyip değişikliklerinizi yeniden uygulayın.').toJSON(), 409);
+    const updated = await prisma.tenant.findUniqueOrThrow({ where: { id } });
 
     await createAuditLog(prisma, {
       tenantId: id,
@@ -418,7 +425,7 @@ export const AdminTenantController = {
       ].filter((line): line is string => Boolean(line)));
     }
 
-    return c.json({ data: updated });
+    return c.json({ data: await maskTenantForAdmin(c.get('adminId'), updated) });
   },
 };
 

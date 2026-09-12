@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { requireAdmin, requireAdminPermission, requireRecentAdminMfa } from '../middleware/requireAdmin';
 import { platformAdminAuditMiddleware } from '../middleware/platform-admin-audit.js';
+import { adminIdempotency } from '../middleware/admin-idempotency.js';
+import { adminApiOpenApi } from '../modules/platform/admin-api-safety/index.js';
 import {
 AdminAuditController,
 AdminChangeRequestController,
@@ -23,6 +25,12 @@ AdminSupportSessionController,
 AdminSupportTicketController,
 AdminDisasterRecoveryController,
 AdminPrivacyController,
+AdminGlobalSearchController,
+AdminInboxController,
+AdminDecisionDashboardController,
+AdminUiPreferencesController,
+AdminListOperationsController,
+AdminSensitiveDataController,
 } from '../modules/platform/http/controllers/index.js';
 
 const adminRoutes = new Hono();
@@ -35,25 +43,38 @@ adminRoutes.post('/auth/refresh', AdminAuthController.refresh);
 adminRoutes.post('/auth/reauthenticate', requireAdmin, AdminSessionController.reauthenticate);
 adminRoutes.get('/auth/sessions', requireAdmin, AdminSessionController.list);
 adminRoutes.get('/auth/security-events', requireAdmin, AdminSessionController.events);
-adminRoutes.delete('/auth/sessions/:id', requireAdmin, requireRecentAdminMfa, AdminSessionController.revoke);
-adminRoutes.post('/auth/revoke-all', requireAdmin, requireRecentAdminMfa, AdminSessionController.revokeAll);
+adminRoutes.delete('/auth/sessions/:id', requireAdmin, requireRecentAdminMfa, adminIdempotency, AdminSessionController.revoke);
+adminRoutes.post('/auth/revoke-all', requireAdmin, requireRecentAdminMfa, adminIdempotency, AdminSessionController.revokeAll);
 
 adminRoutes.use('*', async (c, next) => {
   const isChangePreview = c.req.method === 'POST' && c.req.path === '/api/admin/change-requests/preview';
   // Ending an owned support session only removes access; do not block emergency exit on step-up MFA.
   const isSupportExit = c.req.method === 'POST' && /^\/api\/admin\/tenants\/[^/]+\/support-sessions\/[^/]+\/revoke$/.test(c.req.path);
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && !isChangePreview && !isSupportExit) {
+  const isUiPreferenceUpdate = c.req.method === 'PUT' && c.req.path === '/api/admin/ui-preferences';
+  const isListPreferenceUpdate = ['POST', 'DELETE'].includes(c.req.method) && /^\/api\/admin\/tenant-list-views(?:\/[^/]+)?$/.test(c.req.path);
+  const isBulkPreview = c.req.method === 'POST' && c.req.path === '/api/admin/tenants/bulk-note/preview';
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
     return requireAdmin(c, async () => {
-      const response = await requireRecentAdminMfa(c, next);
-      if (response) c.res = response;
+      if (isChangePreview || isSupportExit || isUiPreferenceUpdate || isListPreferenceUpdate || isBulkPreview) await next();
+      else {
+        const response = await requireRecentAdminMfa(c, next);
+        if (response) c.res = response;
+      }
     });
   }
   await next();
 });
+adminRoutes.use('*', adminIdempotency);
 adminRoutes.use('*', platformAdminAuditMiddleware);
 
 // â”€â”€ Protected routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Auth
+adminRoutes.get('/contracts/openapi.json', requireAdmin, (c) => c.json(adminApiOpenApi));
+adminRoutes.post('/sensitive-data/access-grants', requireAdmin, requireAdminPermission('sensitive-data.reveal'), AdminSensitiveDataController.create);
+adminRoutes.get('/global-search', requireAdmin, requireAdminPermission('search.read'), AdminGlobalSearchController.search);
+adminRoutes.get('/inbox', requireAdmin, requireAdminPermission('inbox.read'), AdminInboxController.list);
+adminRoutes.post('/inbox/actions', requireAdmin, requireAdminPermission('inbox.read'), AdminInboxController.action);
+adminRoutes.put('/inbox/preferences', requireAdmin, requireAdminPermission('inbox.read'), AdminInboxController.preferences);
 adminRoutes.get('/auth/me', requireAdmin, AdminAuthController.me);
 adminRoutes.get('/admin-users', requireAdmin, requireAdminPermission('admin-user.read'), AdminUserController.list);
 adminRoutes.post('/admin-users/invite', requireAdmin, requireAdminPermission('admin-user.manage'), AdminUserController.invite);
@@ -96,6 +117,12 @@ adminRoutes.get('/support-tickets/:id', requireAdmin, requireAdminPermission('su
 adminRoutes.post('/support-tickets/:id/messages', requireAdmin, requireAdminPermission('support-ticket.manage'), AdminSupportTicketController.addMessage);
 adminRoutes.patch('/support-tickets/:id', requireAdmin, requireAdminPermission('support-ticket.manage'), AdminSupportTicketController.update);
 adminRoutes.get('/tenants', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantController.list);
+adminRoutes.get('/tenant-list-views', requireAdmin, requireAdminPermission('tenant.read'), AdminListOperationsController.views);
+adminRoutes.get('/tenants/export', requireAdmin, requireAdminPermission('tenant.export'), AdminListOperationsController.export);
+adminRoutes.post('/tenant-list-views', requireAdmin, requireAdminPermission('tenant.read'), AdminListOperationsController.saveView);
+adminRoutes.delete('/tenant-list-views/:id', requireAdmin, requireAdminPermission('tenant.read'), AdminListOperationsController.deleteView);
+adminRoutes.post('/tenants/bulk-note/preview', requireAdmin, requireAdminPermission('tenant.settings.update'), AdminListOperationsController.preview);
+adminRoutes.post('/tenants/bulk-note', requireAdmin, requireAdminPermission('tenant.settings.update'), AdminListOperationsController.execute);
 adminRoutes.post('/tenants', requireAdmin, requireAdminPermission('tenant.create'), AdminTenantProvisioningController.create);
 adminRoutes.get('/tenants/:id', requireAdmin, requireAdminPermission('tenant.read'), AdminTenantController.getById);
 adminRoutes.get('/tenants/:id/360', requireAdmin, requireAdminPermission('tenant.read'), AdminTenant360Controller.get);
@@ -118,6 +145,9 @@ adminRoutes.post('/feature-rollouts/:id/metrics', requireAdmin, requireAdminPerm
 
 // Metrics
 adminRoutes.get('/metrics', requireAdmin, requireAdminPermission('dashboard.read'), AdminMetricsController.dashboard);
+adminRoutes.get('/decision-dashboard', requireAdmin, requireAdminPermission('dashboard.read'), AdminDecisionDashboardController.get);
+adminRoutes.get('/ui-preferences', requireAdmin, requireAdminPermission('dashboard.read'), AdminUiPreferencesController.get);
+adminRoutes.put('/ui-preferences', requireAdmin, requireAdminPermission('dashboard.read'), AdminUiPreferencesController.update);
 adminRoutes.get('/metrics/tenants/:id', requireAdmin, requireAdminPermission('tenant.read'), AdminMetricsController.tenantMetrics);
 adminRoutes.get('/observability/search', requireAdmin, requireAdminPermission('operations.read'), AdminMetricsController.observabilitySearch);
 adminRoutes.get('/observability', requireAdmin, requireAdminPermission('operations.read'), AdminMetricsController.observability);

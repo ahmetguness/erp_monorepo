@@ -31,6 +31,10 @@ export const ADMIN_PERMISSIONS = [
   "security.manage",
   "privacy.read",
   "privacy.manage",
+  "sensitive-data.reveal",
+  "search.read",
+  "inbox.read",
+  "inbox.manage",
   "demo.read",
   "demo.approve",
   "demo.reject",
@@ -56,6 +60,9 @@ export const ADMIN_ROLE_PERMISSIONS = {
     "tenant.settings.update",
     "feature.read",
     "demo.read",
+    "search.read",
+    "inbox.read",
+    "sensitive-data.reveal",
   ],
   FINANCE: [
     "dashboard.read",
@@ -66,6 +73,8 @@ export const ADMIN_ROLE_PERMISSIONS = {
     "change-request.reject",
     "audit.read",
     "demo.read",
+    "search.read",
+    "inbox.read",
   ],
   OPERATIONS: [
     "dashboard.read",
@@ -80,6 +89,10 @@ export const ADMIN_ROLE_PERMISSIONS = {
     "demo.read",
     "demo.approve",
     "demo.reject",
+    "search.read",
+    "inbox.read",
+    "inbox.manage",
+    "sensitive-data.reveal",
   ],
   SECURITY: [
     "dashboard.read",
@@ -91,6 +104,10 @@ export const ADMIN_ROLE_PERMISSIONS = {
     "security.manage",
     "privacy.read",
     "privacy.manage",
+    "search.read",
+    "inbox.read",
+    "inbox.manage",
+    "sensitive-data.reveal",
   ],
   READ_ONLY_AUDITOR: [
     "dashboard.read",
@@ -101,6 +118,8 @@ export const ADMIN_ROLE_PERMISSIONS = {
     "security.read",
     "privacy.read",
     "demo.read",
+    "search.read",
+    "inbox.read",
   ],
 } as const satisfies Record<AdminRoleKey, readonly AdminPermission[]>;
 

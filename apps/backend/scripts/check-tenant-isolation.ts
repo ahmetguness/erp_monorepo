@@ -70,11 +70,22 @@ const excludedFiles = new Set([
   // handlers; the public attachment controller remains in high-risk coverage.
   'src/modules/inventory/http/controllers/attachment.controller/shared.ts',
   'src/services/demo.service.ts',
+  // Demo requests are platform-level leads and have no tenant until provisioning.
+  'src/modules/platform/demo-operations/demo-operations.service.ts',
   'src/services/invitation.service.ts',
   'src/modules/platform/security-center/security-checks.ts',
   // Privacy operations are platform-admin workflows that deliberately cross
   // tenant boundaries and enforce their selected tenant inside the service.
   'src/modules/platform/privacy-operations/privacy.service.ts',
+  // Permission-gated platform search deliberately queries across tenant boundaries.
+  'src/modules/platform/global-search/global-search.service.ts',
+  // Unified admin inbox aggregates permitted platform and tenant lifecycle signals.
+  'src/modules/platform/admin-inbox/admin-inbox.service.ts',
+  'src/modules/platform/decision-dashboard/decision-dashboard.service.ts',
+  'src/modules/platform/admin-ui-preferences/admin-ui-preferences.service.ts',
+  'src/modules/platform/admin-list-operations/admin-list-operations.service.ts',
+  // Platform-admin sensitive-data grants are explicitly scoped by admin and tenant.
+  'src/modules/platform/sensitive-data/sensitive-data.service.ts',
 ]);
 
 const excludedDirectoryPrefixes = [

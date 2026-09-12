@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import {
   Activity,
   AlertTriangle,
@@ -209,9 +210,15 @@ function OperationalList({
 }
 
 export default function AdminObservabilityPage() {
-  const [activeTab, setActiveTab] = useState<'live' | 'intervention' | 'historical'>('live');
-  const [searchInput, setSearchInput] = useState('');
-  const [query, setQuery] = useState('');
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get('query')?.trim() ?? '';
+  const requestedTab = searchParams.get('tab');
+  const initialTab = requestedTab === 'intervention' || requestedTab === 'historical'
+    ? requestedTab
+    : 'live';
+  const [activeTab, setActiveTab] = useState<'live' | 'intervention' | 'historical'>(initialTab);
+  const [searchInput, setSearchInput] = useState(initialQuery);
+  const [query, setQuery] = useState(initialQuery);
 
   const observability = useQuery({
     queryKey: ['admin', 'observability', 'detail'],

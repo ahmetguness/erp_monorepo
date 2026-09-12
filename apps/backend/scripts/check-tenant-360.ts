@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   }
   await addTenantSupportNote(tenantId, adminIds[0]!, { body: 'Only tenant one support note', ticketId: 'T-360' });
   await addTenantSupportNote(otherId, adminIds[0]!, { body: 'Other tenant private support note' });
-  const snapshot = await getTenant360(tenantId, ADMIN_PERMISSIONS);
+  const snapshot = await getTenant360(tenantId, ADMIN_PERMISSIONS, adminIds[0]!);
   assert.equal(snapshot.support.length, 1);
   assert.equal(snapshot.support[0]?.author.id, adminIds[0]);
   assert.equal(snapshot.changes?.[0]?.admin?.id, adminIds[0]);
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   await prisma.marketplaceIntegration.create({ data: { tenantId: otherId, name: 'Other private integration', channel: 'OTHER' } });
   await prisma.marketplaceSyncJob.create({ data: { tenantId, integrationId: integration.id, jobType: 'SYNC_ORDERS', status: 'FAILED', errorMessage: 'must-not-leak', attempts: 2 } });
   await prisma.domainEventOutbox.create({ data: { tenantId, name: 'test.event', source: 'test', idempotencyKey: suffix, entityType: 'OTHER', entityId: tenantId, payload: {}, context: {}, status: 'DEAD_LETTER' } });
-  const populated = await getTenant360(tenantId, ADMIN_PERMISSIONS);
+  const populated = await getTenant360(tenantId, ADMIN_PERMISSIONS, adminIds[0]!);
   assert.equal(populated.health.status, 'ATTENTION');
   assert.equal(populated.integrations?.length, 1);
   assert.equal(populated.operations?.recentFailures.length, 2);
@@ -54,15 +54,15 @@ async function main(): Promise<void> {
   assert.ok(populated.security?.members[0]?.lastTenantActivityAt);
   assert.ok(!JSON.stringify(populated).includes('must-not-leak'));
   await prisma.user.update({ where: { id: user.id }, data: { isActive: false } });
-  assert.equal((await getTenant360(tenantId, ADMIN_PERMISSIONS)).security?.members[0]?.isActive, false, 'Disabled global users must not appear active');
+  assert.equal((await getTenant360(tenantId, ADMIN_PERMISSIONS, adminIds[0]!)).security?.members[0]?.isActive, false, 'Disabled global users must not appear active');
   await prisma.user.update({ where: { id: user.id }, data: { isActive: true, deletedAt: new Date() } });
-  assert.equal((await getTenant360(tenantId, ADMIN_PERMISSIONS)).security?.members[0]?.isActive, false, 'Deleted users must not appear active');
+  assert.equal((await getTenant360(tenantId, ADMIN_PERMISSIONS, adminIds[0]!)).security?.members[0]?.isActive, false, 'Deleted users must not appear active');
   await prisma.user.update({ where: { id: user.id }, data: { deletedAt: null } });
-  const limited = await getTenant360(tenantId, ['tenant.read']);
+  const limited = await getTenant360(tenantId, ['tenant.read'], adminIds[0]!);
   for (const section of ['operations', 'integrations', 'security', 'changes'] as const) assert.equal(limited[section], null);
-  await assert.rejects(getTenant360(`missing-${suffix}`, ADMIN_PERMISSIONS));
+  await assert.rejects(getTenant360(`missing-${suffix}`, ADMIN_PERMISSIONS, adminIds[0]!));
   await prisma.tenant.update({ where: { id: otherId }, data: { deletedAt: new Date() } });
-  await assert.rejects(getTenant360(otherId, ADMIN_PERMISSIONS));
+  await assert.rejects(getTenant360(otherId, ADMIN_PERMISSIONS, adminIds[0]!));
   await assert.rejects(addTenantSupportNote(otherId, adminIds[0]!, { body: 'Deleted tenant must reject this note' }));
   assert.equal(await prisma.tenantSupportNote.count({ where: { tenantId: otherId } }), 1);
   const app = new Hono(); app.route('/api/admin', adminRoutes);
@@ -78,13 +78,13 @@ async function main(): Promise<void> {
     const text = await response.text();
     assert.ok(!text.includes('Other tenant private'));
     for (const sensitive of ['apiSecret', 'apiKey', 'password', 'mfaSecretEncrypted']) assert.ok(!text.includes(`"${sensitive}"`));
-    const posted = await app.request(`/api/admin/tenants/${tenantId}/support-notes`, { method: 'POST', headers, body: JSON.stringify({ body: 'HTTP support note test' }) });
+    const posted = await app.request(`/api/admin/tenants/${tenantId}/support-notes`, { method: 'POST', headers: { ...headers, 'Idempotency-Key': `tenant360-note-${suffix}-${index}` }, body: JSON.stringify({ body: 'HTTP support note test' }) });
     assert.equal(posted.status, index === 2 ? 403 : 201);
     if (index !== 2) {
-      const invalid = await app.request(`/api/admin/tenants/${tenantId}/support-notes`, { method: 'POST', headers, body: JSON.stringify({ body: 'short' }) });
+      const invalid = await app.request(`/api/admin/tenants/${tenantId}/support-notes`, { method: 'POST', headers: { ...headers, 'Idempotency-Key': `tenant360-invalid-${suffix}-${index}` }, body: JSON.stringify({ body: 'short' }) });
       assert.equal(invalid.status, 400);
       await prisma.adminSession.updateMany({ where: { adminUserId: adminId }, data: { mfaVerifiedAt: new Date(0) } });
-      const stale = await app.request(`/api/admin/tenants/${tenantId}/support-notes`, { method: 'POST', headers, body: JSON.stringify({ body: 'Must require fresh MFA' }) });
+      const stale = await app.request(`/api/admin/tenants/${tenantId}/support-notes`, { method: 'POST', headers: { ...headers, 'Idempotency-Key': `tenant360-stale-${suffix}-${index}` }, body: JSON.stringify({ body: 'Must require fresh MFA' }) });
       assert.equal(stale.status, 403);
     }
   }

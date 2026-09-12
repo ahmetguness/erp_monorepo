@@ -41,6 +41,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from '@/store/ui.store';
 import { extractAdminError, isReauthRequired, toastAdminError } from '@/lib/admin/errors';
+import { AdminPageHeader, AdminKpiCard, AdminKpiGrid } from '@/components/features/admin/ui';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -175,14 +176,14 @@ function StatusBadge({ coupon }: { coupon: BillingCoupon }) {
 
 function CreateCouponModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState<CreateCouponInput>({
+  const [form, setForm] = useState<CreateCouponInput>(() => ({
     code: '',
     percent: 10,
     expiresAt: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 16),
     maxRedemptions: undefined,
     plan: null,
     description: '',
-  });
+  }));
   const [error, setError] = useState<string | null>(null);
   const [mfaRequired, setMfaRequired] = useState(false);
 
@@ -715,50 +716,64 @@ export default function CouponsPage() {
     );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 pb-10">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-500/10 ring-1 ring-red-500/30">
-              <Ticket className="h-4 w-4 text-red-400" />
-            </div>
-            <h1 className="text-xl font-bold text-white">Kupon Yönetimi</h1>
-          </div>
-          <p className="text-xs text-slate-400 ml-10.5">
-            Plan bazlı indirim kuponları oluştur, izle ve yönet
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-red-500/20 transition hover:bg-red-400"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Yeni Kupon
-        </button>
-      </div>
+      <AdminPageHeader
+        title="Kupon Yönetimi"
+        description="Plan bazlı indirim kuponları oluştur, izle ve yönet."
+        icon={Ticket}
+        iconTone="red"
+        badge={
+          <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+            {stats.total} Kupon
+          </span>
+        }
+        actions={
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow transition hover:bg-red-500"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>Yeni Kupon</span>
+          </button>
+        }
+      />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { icon: Ticket, label: 'Toplam Kupon', value: stats.total, color: 'text-slate-300', iconColor: 'text-slate-400' },
-          { icon: CheckCircle2, label: 'Aktif Kupon', value: stats.active, color: 'text-emerald-400', iconColor: 'text-emerald-400' },
-          { icon: Users, label: 'Toplam Kullanım', value: stats.totalRedemptions, color: 'text-sky-400', iconColor: 'text-sky-400' },
-          { icon: AlertTriangle, label: '7 Günde Bitiyor', value: stats.expiringSoon, color: 'text-amber-400', iconColor: 'text-amber-400' },
-        ].map((s) => (
-          <div
-            key={s.label}
-            className="flex items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/60 px-4 py-3.5"
-          >
-            <s.icon className={cn('h-5 w-5 shrink-0', s.iconColor)} />
-            <div>
-              <div className={cn('text-xl font-black leading-none', s.color)}>{s.value}</div>
-              <div className="mt-0.5 text-[10px] text-slate-500">{s.label}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+      <AdminKpiGrid columns={4}>
+        <AdminKpiCard
+          label="Toplam Kupon"
+          value={stats.total}
+          icon={Ticket}
+          iconTone="slate"
+          subtext="Sistemdeki tüm kuponlar"
+        />
+
+        <AdminKpiCard
+          label="Aktif Kupon"
+          value={stats.active}
+          icon={CheckCircle2}
+          iconTone="emerald"
+          subtext={<span className="text-emerald-400 font-medium">Kullanıma açık kuponlar</span>}
+        />
+
+        <AdminKpiCard
+          label="Toplam Kullanım"
+          value={stats.totalRedemptions}
+          icon={Users}
+          iconTone="sky"
+          subtext="Uygulanan indirim sayısı"
+        />
+
+        <AdminKpiCard
+          label="7 Günde Bitiyor"
+          value={stats.expiringSoon}
+          icon={AlertTriangle}
+          iconTone="amber"
+          subtext={<span className={stats.expiringSoon > 0 ? 'text-amber-400 font-medium' : 'text-slate-400'}>Süresi dolmak üzere</span>}
+        />
+      </AdminKpiGrid>
 
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-700/50 bg-slate-900/40 px-4 py-3">

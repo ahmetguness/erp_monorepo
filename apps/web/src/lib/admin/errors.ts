@@ -88,6 +88,10 @@ export function isReauthRequired(err: unknown): boolean {
   return code === 'ADMIN_REAUTH_REQUIRED';
 }
 
+export function isAdminErrorCode(err: unknown, code: string): boolean {
+  return (err as NormalizedApiError | null | undefined)?.error?.code === code;
+}
+
 /**
  * Hata bildirimini toast olarak gösterir.
  * Eğer MFA gerekiyorsa otomatik olarak [MFA Doğrula →] eylem butonu ekler;

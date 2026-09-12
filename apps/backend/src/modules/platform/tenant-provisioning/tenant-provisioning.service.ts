@@ -4,6 +4,7 @@ import { AuditAction, EntityType, PermissionAction, Plan, Prisma, TenantStatus }
 import { PLAN_MODULES, type TenantProvisioningInput, type TenantProvisioningJob, type TenantProvisioningPreview, type TenantProvisioningStepKey } from '@repo/types';
 import { BaseError } from '../../../errors/index.js';
 import { prisma } from '../../../lib/prisma.js';
+import { redactSensitiveText } from '../../../lib/sensitive-redaction.js';
 import { tenantReadyEmail } from '../../../services/mail-templates.service.js';
 import { sendMail } from '../../../services/mail.service.js';
 import { createAuditLog } from '../../../utils/audit.js';
@@ -108,7 +109,7 @@ async function executeProvisioning(jobId: string, input: TenantProvisioningInput
     await Promise.all(['TENANT_CREATED', 'OWNER_CREATED', 'DEFAULT_ROLES_CREATED'].map(key => markStep(jobId, key as TenantProvisioningStepKey, 'SUCCEEDED')));
     await deliverOwnerEmail(jobId, result, input);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Provisioning başarısız.';
+    const message = redactSensitiveText(error instanceof Error ? error.message : 'Provisioning başarısız.');
     await prisma.tenantProvisioningJob.update({ where: { id: jobId }, data: { status: 'FAILED', error: message } });
     await prisma.tenantProvisioningStep.updateMany({ where: { jobId, status: 'RUNNING' }, data: { status: 'FAILED', error: message } });
   }

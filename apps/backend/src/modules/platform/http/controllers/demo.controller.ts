@@ -1,138 +1,107 @@
-import { DemoRequestStatus } from '@prisma/client';
-import { Context } from 'hono';
-import { prisma } from '../../../../lib/prisma.js';
+import type { Context } from "hono";
+import { rateLimiter } from "../../../../lib/rateLimiter.js";
 import {
-approveDemoRequest,
-createDemoRequest,
-rejectDemoRequest,
-} from '../../../../services/demo.service.js';
-import { requireParam } from '../../../../utils/context.js';
-import { getPaginationParams } from '../../../../utils/pagination.js';
-import { getTrustedClientIp } from '../../../../utils/request-ip.js';
-
-import { rateLimiter } from '../../../../lib/rateLimiter.js';
+  approveDemoRequest,
+  createDemoRequest,
+  rejectDemoRequest,
+} from "../../../../services/demo.service.js";
+import { requireParam } from "../../../../utils/context.js";
+import { getTrustedClientIp } from "../../../../utils/request-ip.js";
+import {
+  addDemoRequestNote,
+  assignDemoRequest,
+  demoNoteSchema,
+  demoOwnerSchema,
+  demoRejectSchema,
+  demoRequestListSchema,
+  getDemoRequest,
+  listDemoRequests,
+  previewDemoProvisioning,
+  publicDemoRequestSchema,
+} from "../../demo-operations/index.js";
 
 export class DemoController {
-  private static readonly RATE_LIMIT = 5; // 15 dakikada max 5 talep
-  private static readonly RATE_WINDOW = 15 * 60 * 1000; // 15 dakika
+  private static readonly RATE_LIMIT = 5;
+  private static readonly RATE_WINDOW = 15 * 60 * 1000;
 
-  /**
-   * POST /public/demo-requests
-   * Herkese açık – demo talebi oluşturur.
-   */
   static async create(c: Context) {
-    // Rate limit kontrolü
     const ip = getTrustedClientIp(c);
-    if (await rateLimiter.check(`demo:${ip}`, DemoController.RATE_LIMIT, DemoController.RATE_WINDOW)) {
-      return c.json({ success: false, code: 'RATE_LIMITED', message: 'Çok fazla talep gönderdiniz. Lütfen 15 dakika sonra tekrar deneyin.' }, 429);
+    if (
+      await rateLimiter.check(
+        `demo:${ip}`,
+        DemoController.RATE_LIMIT,
+        DemoController.RATE_WINDOW,
+      )
+    ) {
+      return c.json(
+        {
+          success: false,
+          code: "RATE_LIMITED",
+          message: "Çok fazla talep gönderdiniz. Lütfen 15 dakika sonra tekrar deneyin.",
+        },
+        429,
+      );
     }
+    const body = publicDemoRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success)
+      return c.json(
+        { error: body.error.issues[0]?.message ?? "Geçersiz demo talebi." },
+        400,
+      );
 
-    const body = await c.req.json();
-
-    if (!body.fullName || !body.companyName || !body.email) {
-      return c.json({ error: 'fullName, companyName ve email zorunludur.' }, 400);
-    }
-
-    // Input uzunluk limitleri
-    if (body.fullName.length > 100 || body.companyName.length > 100) {
-      return c.json({ error: 'Ad ve şirket adı en fazla 100 karakter olabilir.' }, 400);
-    }
-
-    if (body.phone && body.phone.length > 20) {
-      return c.json({ error: 'Telefon numarası en fazla 20 karakter olabilir.' }, 400);
-    }
-
-    // HTML tag temizleme (XSS koruması — mail template'lerine gidiyor)
-    const stripHtml = (s: string) => s.replace(/<[^>]*>/g, '').trim();
-
-    // Basit email validasyonu
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(body.email)) {
-      return c.json({ error: 'Geçerli bir e-posta adresi giriniz.' }, 400);
-    }
-
-    // Plan validasyonu
-    const validPlans = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'];
-    if (body.plan && !validPlans.includes(body.plan)) {
-      return c.json({ error: 'Geçersiz plan. STARTER, PROFESSIONAL veya ENTERPRISE olmalıdır.' }, 400);
-    }
-
-    const result = await createDemoRequest({
-      fullName: stripHtml(body.fullName),
-      companyName: stripHtml(body.companyName),
-      email: body.email,
-      phone: body.phone ? stripHtml(body.phone) : undefined,
-      plan: body.plan,
-    });
-
-    if (!result.success && 'code' in result) {
-      return c.json(result, 409);
-    }
-
-    const status = result.success ? 201 : 500;
-    return c.json(result, status);
+    const result = await createDemoRequest(body.data);
+    if (!result.success && "code" in result) return c.json(result, 409);
+    return c.json(result, result.success ? 201 : 500);
   }
 
-  /**
-   * GET /api/admin/demo-requests
-   * Admin – tüm demo taleplerini listeler.
-   */
   static async list(c: Context) {
-    const status = c.req.query('status');
-    const { page, limit, skip } = getPaginationParams(c, 20);
-
-    const where = status ? { status: status as DemoRequestStatus } : {};
-
-    const [data, total] = await Promise.all([
-      prisma.demoRequest.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: skip,
-        take: limit,
-      }),
-      prisma.demoRequest.count({ where }),
-    ]);
-
-    return c.json({ data, total, page, limit });
+    const parsed = demoRequestListSchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json({ error: "Geçersiz liste filtresi." }, 400);
+    return c.json(await listDemoRequests(parsed.data));
   }
 
-  /**
-   * GET /api/admin/demo-requests/:id
-   * Admin – tek demo talebi detayı.
-   */
   static async getById(c: Context) {
-    const id = c.req.param('id');
-    const demoRequest = await prisma.demoRequest.findUnique({ where: { id } });
-
-    if (!demoRequest) {
-      return c.json({ error: 'Demo talebi bulunamadı.' }, 404);
-    }
-
-    return c.json({ data: demoRequest });
+    const request = await getDemoRequest(requireParam(c, "id"));
+    if (!request) return c.json({ error: "Demo talebi bulunamadı." }, 404);
+    return c.json({ data: request });
   }
 
-  /**
-   * POST /api/admin/demo-requests/:id/approve
-   * Admin – Enterprise demo talebini onayla ve provision et.
-   */
-  static async approve(c: Context) {
-    const id = requireParam(c, 'id');
-    const adminId = c.get('adminId');
+  static async preview(c: Context) {
+    return c.json({ data: await previewDemoProvisioning(requireParam(c, "id")) });
+  }
 
-    const result = await approveDemoRequest(id, adminId);
+  static async approve(c: Context) {
+    const result = await approveDemoRequest(requireParam(c, "id"), c.get("adminId"));
     return c.json(result, result.success ? 200 : 400);
   }
 
-  /**
-   * POST /api/admin/demo-requests/:id/reject
-   * Admin – demo talebini reddet.
-   */
   static async reject(c: Context) {
-    const id = requireParam(c, 'id');
-    const body = await c.req.json().catch(() => ({}));
-    const adminId = c.get('adminId');
+    const body = demoRejectSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success)
+      return c.json({ error: "En az 10 karakter red nedeni zorunludur." }, 400);
+    const result = await rejectDemoRequest(
+      requireParam(c, "id"),
+      c.get("adminId"),
+      body.data.reason,
+    );
+    return c.json(result, result.success ? 200 : 400);
+  }
 
-    const result = await rejectDemoRequest(id, adminId, body.reason);
-    return c.json(result);
+  static async assign(c: Context) {
+    const body = demoOwnerSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "Geçerli sahip zorunludur." }, 400);
+    await assignDemoRequest(
+      requireParam(c, "id"),
+      body.data.ownerId,
+      c.get("adminId"),
+    );
+    return c.json({ success: true });
+  }
+
+  static async addNote(c: Context) {
+    const body = demoNoteSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "Not en az 2 karakter olmalıdır." }, 400);
+    await addDemoRequestNote(requireParam(c, "id"), body.data.note, c.get("adminId"));
+    return c.json({ success: true });
   }
 }

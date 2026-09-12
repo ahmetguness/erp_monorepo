@@ -18,3 +18,9 @@ export { AdminSupportSessionController } from './admin/admin-support-session.con
 export { AdminSupportTicketController } from './admin/admin-support-ticket.controller.js';
 export { AdminDisasterRecoveryController } from './admin/admin-disaster-recovery.controller.js';
 export { AdminPrivacyController } from './admin/admin-privacy.controller.js';
+export { AdminGlobalSearchController } from './admin/admin-global-search.controller.js';
+export { AdminInboxController } from './admin/admin-inbox.controller.js';
+export { AdminDecisionDashboardController } from './admin/admin-decision-dashboard.controller.js';
+export { AdminUiPreferencesController } from './admin/admin-ui-preferences.controller.js';
+export { AdminListOperationsController } from './admin/admin-list-operations.controller.js';
+export { AdminSensitiveDataController } from './admin/admin-sensitive-data.controller.js';

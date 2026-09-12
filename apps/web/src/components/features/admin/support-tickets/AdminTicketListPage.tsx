@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { AdminPageHeader, AdminKpiCard, AdminKpiGrid } from '@/components/features/admin/ui';
 import { listAdminTickets } from '@/services/support-ticket.service';
 import type { PlatformSupportTicketSummaryDto } from '@repo/types';
 import { formatDateTime } from '@/lib/utils';
@@ -62,22 +63,21 @@ export function AdminTicketListPage() {
   const isFiltered = search || selectedStatus !== 'ALL' || selectedPriority !== 'ALL' || selectedCategory !== 'ALL';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 pb-10">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-extrabold text-white flex items-center gap-2.5 tracking-tight">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 shadow-sm">
-              <LifeBuoy className="h-5 w-5" />
-            </div>
-            Destek Biletleri Masası
-          </h1>
-          <p className="mt-1 text-xs text-slate-400">
-            Tüm tenant işletmelerinden gelen teknik, operasyonel ve fatura taleplerini merkezi kuyruktan yönetin.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
+      <AdminPageHeader
+        title="Destek Biletleri Masası"
+        description="Tüm tenant işletmelerinden gelen teknik, operasyonel ve fatura taleplerini merkezi kuyruktan yönetin."
+        icon={LifeBuoy}
+        iconTone="sky"
+        badge={
+          stats.open > 0 ? (
+            <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold text-sky-300 ring-1 ring-sky-500/30">
+              {stats.open} Açık Talep
+            </span>
+          ) : undefined
+        }
+        actions={
           <Button
             variant="outline"
             size="sm"
@@ -87,55 +87,43 @@ export function AdminTicketListPage() {
           >
             Yenile
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="group relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900/80 to-slate-950/80 p-4 transition-all hover:border-slate-700">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-medium">Kuyruktaki Toplam</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800 text-slate-400">
-              <FolderOpen className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="mt-2 text-3xl font-extrabold text-white tracking-tight">{stats.total}</p>
-          <p className="mt-1 text-[11px] text-slate-500">Tüm talepler</p>
-        </div>
+      <AdminKpiGrid columns={4}>
+        <AdminKpiCard
+          label="Kuyruktaki Toplam"
+          value={stats.total}
+          icon={FolderOpen}
+          iconTone="slate"
+          subtext="Tüm destek talepleri"
+        />
 
-        <div className="group relative overflow-hidden rounded-2xl border border-sky-900/30 bg-gradient-to-b from-sky-950/20 via-slate-900/80 to-slate-950/80 p-4 transition-all hover:border-sky-700/50">
-          <div className="flex items-center justify-between text-xs text-sky-400">
-            <span className="font-medium">Açık / Yeni Bilet</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20">
-              <Clock className="h-4 w-4 animate-pulse" />
-            </div>
-          </div>
-          <p className="mt-2 text-3xl font-extrabold text-sky-400 tracking-tight">{stats.open}</p>
-          <p className="mt-1 text-[11px] text-slate-500">Müdahale sırasını bekliyor</p>
-        </div>
+        <AdminKpiCard
+          label="Açık / Yeni Bilet"
+          value={stats.open}
+          icon={Clock}
+          iconTone="sky"
+          subtext={<span className="text-sky-400">Müdahale sırasını bekliyor</span>}
+        />
 
-        <div className="group relative overflow-hidden rounded-2xl border border-amber-900/30 bg-gradient-to-b from-amber-950/20 via-slate-900/80 to-slate-950/80 p-4 transition-all hover:border-amber-700/50">
-          <div className="flex items-center justify-between text-xs text-amber-400">
-            <span className="font-medium">Müşteri Bekleniyor</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              <MessageSquare className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="mt-2 text-3xl font-extrabold text-amber-400 tracking-tight">{stats.waitingTenant}</p>
-          <p className="mt-1 text-[11px] text-slate-500">Tenant kullanıcısından dönüş bekleniyor</p>
-        </div>
+        <AdminKpiCard
+          label="Müşteri Bekleniyor"
+          value={stats.waitingTenant}
+          icon={MessageSquare}
+          iconTone="amber"
+          subtext="Tenant kullanıcısından dönüş bekleniyor"
+        />
 
-        <div className="group relative overflow-hidden rounded-2xl border border-rose-900/40 bg-gradient-to-b from-rose-950/20 via-slate-900/80 to-slate-950/80 p-4 transition-all hover:border-rose-700/50">
-          <div className="flex items-center justify-between text-xs text-rose-400">
-            <span className="font-medium">Kritik / Acil Talepler</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">
-              <AlertTriangle className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="mt-2 text-3xl font-extrabold text-rose-400 tracking-tight">{stats.urgentOrHigh}</p>
-          <p className="mt-1 text-[11px] text-rose-400/80">Yüksek öncelikli aktif bilet</p>
-        </div>
-      </div>
+        <AdminKpiCard
+          label="Kritik / Acil Talepler"
+          value={stats.urgentOrHigh}
+          icon={AlertTriangle}
+          iconTone="red"
+          subtext={<span className={stats.urgentOrHigh > 0 ? 'text-rose-400 font-semibold' : 'text-slate-400'}>Yüksek öncelikli aktif bilet</span>}
+        />
+      </AdminKpiGrid>
 
       {/* Filters Bar */}
       <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-3.5 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">

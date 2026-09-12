@@ -1,5 +1,5 @@
 import { adminApiClient } from '@/lib/admin-api-client';
-import type { AdminAuditLog, AdminChangeRequest, AdminChangeRequestStatus, AdminIdentity, PendingAdminChangeResult } from '@repo/types';
+import type { AdminAuditLog, AdminChangeRequest, AdminChangeRequestStatus, AdminIdentity, AdminSensitiveAccessState, AdminTenantSettingsUpdate, PendingAdminChangeResult } from '@repo/types';
 
 // ─────────────────────────────────────────────
 // Types
@@ -19,6 +19,7 @@ export interface TenantListItem {
   planChangedAt: string | null; isCustomPricing: boolean;
   modules: string[]; notes: string | null;
   createdAt: string; updatedAt: string;
+  sensitiveAccess?: AdminSensitiveAccessState;
   _count: { users: number; products: number; invoices: number; contacts: number };
 }
 
@@ -265,7 +266,7 @@ export async function adminMe(): Promise<AdminUser> {
 // Tenants
 // ─────────────────────────────────────────────
 
-export async function getTenants(params?: { page?: number; limit?: number; status?: string; plan?: string; search?: string }) {
+export async function getTenants(params?: { page?: number; limit?: number; status?: string; plan?: string; search?: string; from?: string; to?: string; sortBy?: string; sortDirection?: string }) {
   const res = await adminApiClient.get('/api/admin/tenants', { params });
   return res.data as { data: TenantListItem[]; meta: { total: number; page: number; pageSize: number; totalPages: number } };
 }
@@ -305,7 +306,7 @@ export async function updateTenantStatus(id: string, status: string, reason?: st
   return res.data.data;
 }
 
-export async function updateTenant(id: string, data: Record<string, unknown>) {
+export async function updateTenant(id: string, data: AdminTenantSettingsUpdate): Promise<TenantDetail> {
   const res = await adminApiClient.patch(`/api/admin/tenants/${id}`, data);
   return res.data.data;
 }

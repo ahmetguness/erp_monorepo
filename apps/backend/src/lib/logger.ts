@@ -1,4 +1,6 @@
 // ─────────────────────────────────────────────
+import { redactSensitiveText, redactSensitiveValue } from './sensitive-redaction.js';
+
 // ANSI helpers
 // ─────────────────────────────────────────────
 const r = '\x1b[0m';
@@ -64,12 +66,10 @@ export interface StructuredLogFields {
 
 type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'http';
 
-const SENSITIVE_FIELD_PATTERN = /(authorization|cookie|password|secret|token|api[-_]?key|dsn)/i;
-
 function sanitizeFields(fields: StructuredLogFields | undefined): StructuredLogFields {
   if (!fields) return {};
   return Object.fromEntries(
-    Object.entries(fields).map(([key, value]) => [key, SENSITIVE_FIELD_PATTERN.test(key) ? '[REDACTED]' : value]),
+    Object.entries(fields).map(([key, value]) => [key, redactSensitiveValue(value, key) as string | number | boolean | null | undefined]),
   );
 }
 
@@ -83,7 +83,7 @@ function writeJson(level: LogLevel, message: string, fields?: StructuredLogField
     level,
     service: process.env.OTEL_SERVICE_NAME ?? '@repo/backend',
     environment: process.env.NODE_ENV ?? 'development',
-    message,
+    message: redactSensitiveText(message),
     ...sanitizeFields(fields),
   }));
 }
@@ -103,26 +103,26 @@ function formatFields(fields: StructuredLogFields | undefined): string {
 export const logger = {
   info: (msg: string, fields?: StructuredLogFields) => useJsonLogs()
     ? writeJson('info', msg, fields)
-    : console.log(`${time()} ${badge('INFO', bg.blue, fg.white)}  ${fg.white}${msg}${r}${formatFields(sanitizeFields(fields))}`),
+    : console.log(`${time()} ${badge('INFO', bg.blue, fg.white)}  ${fg.white}${redactSensitiveText(msg)}${r}${formatFields(sanitizeFields(fields))}`),
 
   success: (msg: string, fields?: StructuredLogFields) => useJsonLogs()
     ? writeJson('success', msg, fields)
-    : console.log(`${time()} ${badge(' OK ', bg.green, fg.white)}  ${fg.white}${msg}${r}${formatFields(sanitizeFields(fields))}`),
+    : console.log(`${time()} ${badge(' OK ', bg.green, fg.white)}  ${fg.white}${redactSensitiveText(msg)}${r}${formatFields(sanitizeFields(fields))}`),
 
   warn: (msg: string, fields?: StructuredLogFields) => useJsonLogs()
     ? writeJson('warn', msg, fields)
-    : console.log(`${time()} ${badge('WARN', bg.yellow, fg.black)}  ${fg.yellow}${msg}${r}${formatFields(sanitizeFields(fields))}`),
+    : console.log(`${time()} ${badge('WARN', bg.yellow, fg.black)}  ${fg.yellow}${redactSensitiveText(msg)}${r}${formatFields(sanitizeFields(fields))}`),
 
   error: (msg: string, fields?: StructuredLogFields) => useJsonLogs()
     ? writeJson('error', msg, fields)
-    : console.log(`${time()} ${badge('ERR ', bg.red, fg.white)}  ${fg.red}${msg}${r}${formatFields(sanitizeFields(fields))}`),
+    : console.log(`${time()} ${badge('ERR ', bg.red, fg.white)}  ${fg.red}${redactSensitiveText(msg)}${r}${formatFields(sanitizeFields(fields))}`),
 
   http: (method: string, path: string, status: number, ms: number, fields?: StructuredLogFields) => {
     if (useJsonLogs()) {
       writeJson('http', 'HTTP request completed', { method, path, status, durationMs: ms, ...fields });
       return;
     }
-    const pathStr = `${fg.white}${path}${r}`;
+    const pathStr = `${fg.white}${redactSensitiveText(path)}${r}`;
     const msStr   = ms > 500
       ? `${fg.red}${bold}${ms}ms${r}`
       : ms > 200

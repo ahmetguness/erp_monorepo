@@ -1,0 +1,14 @@
+model AdminSavedListView {
+  id        String   @id @default(cuid())
+  adminId   String
+  name      String
+  resource  String
+  config    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  admin     AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@unique([adminId, resource, name])
+  @@index([adminId, resource, createdAt])
+  @@map("admin_saved_list_views")
+}

@@ -1,0 +1,11 @@
+model AdminUiPreference {
+  adminId      String   @id
+  locale       String   @default("tr-TR")
+  highContrast Boolean  @default(false)
+  reduceMotion Boolean  @default(false)
+  density      String   @default("COMFORTABLE")
+  updatedAt    DateTime @updatedAt
+  admin        AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@map("admin_ui_preferences")
+}

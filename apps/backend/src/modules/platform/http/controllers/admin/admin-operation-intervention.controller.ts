@@ -22,7 +22,7 @@ export const AdminOperationInterventionController = {
         ).toJSON(),
         400,
       );
-    return c.json({ data: await getOperationItem(parsed.data) });
+    return c.json({ data: await getOperationItem(parsed.data, c.get("adminId")) });
   },
   async intervene(c: Context): Promise<Response> {
     const parsed = operationInterventionSchema.safeParse(

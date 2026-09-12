@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PlatformAuditEntry, PlatformAuditFilters, PlatformAuditOutcome } from "@repo/types";
 import { canAdmin } from "@/lib/admin/permissions";
 import { downloadPlatformAudit, getPlatformAudit, setPlatformAuditRetention } from "@/services/platform-audit.service";
 import { useAdminAuthStore } from "@/store/admin-auth.store";
 import { toast } from "@/store/ui.store";
+import { FileText, ShieldCheck, Clock, Download } from "lucide-react";
+import { AdminPageHeader, AdminKpiCard, AdminKpiGrid } from "@/components/features/admin/ui";
 
 const fieldClass = "rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200";
 const buttonClass = "rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-200 disabled:opacity-40";
@@ -14,13 +17,26 @@ const outcomes: Array<PlatformAuditOutcome | ""> = ["", "SUCCESS", "DENIED", "FA
 type AuditFilterState = Omit<PlatformAuditFilters, "page" | "limit">;
 
 export function PlatformAuditPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const admin = useAdminAuthStore((state) => state.admin);
   const queryClient = useQueryClient();
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => { const value = Number(searchParams.get("page") ?? 1); return Number.isInteger(value) && value > 0 ? value : 1; });
   const [selected, setSelected] = useState<PlatformAuditEntry | null>(null);
-  const [filters, setFilters] = useState<AuditFilterState>({});
+  const [filters, setFilters] = useState<AuditFilterState>(() => ({
+    from: searchParams.get("from") ?? undefined, to: searchParams.get("to") ?? undefined,
+    module: searchParams.get("module") ?? undefined, actorId: searchParams.get("actorId") ?? undefined,
+    target: searchParams.get("target") ?? undefined,
+    outcome: (["SUCCESS", "DENIED", "FAILED"] as const).find((value) => value === searchParams.get("outcome")),
+  }));
   const [retentionOverride, setRetentionOverride] = useState<number | null>(null);
   const request = useMemo(() => ({ ...filters, page, limit: 50 }), [filters, page]);
+  useEffect(() => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, String(value)); });
+    if (page > 1) params.set("page", String(page));
+    router.replace(`/admin/audit?${params.toString()}`, { scroll: false });
+  }, [filters, page, router]);
   const query = useQuery({ queryKey: ["platform-audit", request], queryFn: () => getPlatformAudit(request) });
   const retentionDays = retentionOverride ?? query.data?.retentionDays ?? 2555;
   const retentionMutation = useMutation({
@@ -52,23 +68,68 @@ export function PlatformAuditPage() {
   };
 
   return (
-    <div className="space-y-5 pb-12">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">Platform Denetim Kayıtları</h1>
-          <p className="mt-1 text-xs text-slate-400">Tenant denetiminden bağımsız, yalnızca eklenebilir ve hash zincirli admin işlem geçmişi</p>
-        </div>
-        <div className="flex gap-2">
-          <button className={buttonClass} onClick={() => exportMutation.mutate("csv")}>CSV</button>
-          <button className={buttonClass} onClick={() => exportMutation.mutate("json")}>JSON</button>
-        </div>
-      </header>
+    <div className="space-y-4 pb-10">
+      <AdminPageHeader
+        title="Platform Denetim Kayıtları"
+        description="Tenant denetiminden bağımsız, yalnızca eklenebilir ve hash zincirli admin işlem geçmişi."
+        icon={FileText}
+        iconTone="indigo"
+        badge={
+          <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+            {query.data?.meta.total ?? 0} Kayıt
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950/80 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:border-slate-700 hover:text-white transition-colors"
+              onClick={() => exportMutation.mutate("csv")}
+            >
+              <Download className="h-3 w-3" />
+              <span>CSV İndir</span>
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950/80 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:border-slate-700 hover:text-white transition-colors"
+              onClick={() => exportMutation.mutate("json")}
+            >
+              <Download className="h-3 w-3" />
+              <span>JSON İndir</span>
+            </button>
+          </div>
+        }
+      />
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <Metric label="Toplam kayıt" value={query.data?.meta.total ?? 0} />
-        <Metric label="Zincir bütünlüğü" value={integrityValue} tone={integrityTone} />
-        <Metric label="Saklama" value={`${query.data?.retentionDays ?? 0} gün`} />
-      </div>
+      <AdminKpiGrid columns={3}>
+        <AdminKpiCard
+          label="Toplam Denetim Kaydı"
+          value={query.data?.meta.total ?? 0}
+          icon={FileText}
+          iconTone="sky"
+          subtext="Admin operasyon geçmişi"
+        />
+        <AdminKpiCard
+          label="Zincir Bütünlüğü"
+          value={integrityValue}
+          icon={ShieldCheck}
+          iconTone={query.data?.integrity.valid ? "emerald" : "red"}
+          subtext={
+            query.data?.integrity.valid ? (
+              <span className="text-emerald-400 font-medium">Kriptografik zincir sağlam</span>
+            ) : (
+              <span className="text-rose-400 font-medium">Bozulma tespit edildi</span>
+            )
+          }
+        />
+        <AdminKpiCard
+          label="Saklama Politikası"
+          value={`${query.data?.retentionDays ?? 0} gün`}
+          icon={Clock}
+          iconTone="purple"
+          subtext="Yasal saklama süresi"
+        />
+      </AdminKpiGrid>
 
       <section className="grid gap-2 rounded-xl border border-slate-800 bg-slate-900 p-4 md:grid-cols-4">
         <input className={fieldClass} type="date" value={filters.from ?? ""} onChange={(event) => updateFilter("from", event.target.value)} aria-label="Başlangıç tarihi" />

@@ -107,6 +107,7 @@ model Tenant {
   customPriceRequests CustomPriceRequest[]
   supportSessions SupportSession[]
   supportNotes TenantSupportNote[]
+  sensitiveAccessGrants AdminSensitiveAccessGrant[]
   platformTickets PlatformSupportTicket[]
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -288,6 +289,10 @@ model User {
 }
 
 model AdminUser {
+  uiPreference AdminUiPreference?
+  savedListViews AdminSavedListView[]
+  idempotencyRecords AdminIdempotencyRecord[]
+  sensitiveAccessGrants AdminSensitiveAccessGrant[]
   supportSessions SupportSession[]
   tenantSupportNotes TenantSupportNote[]
   assignedTickets PlatformSupportTicket[]

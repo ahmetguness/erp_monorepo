@@ -23,9 +23,16 @@ const prismaLogLevels: Prisma.PrismaClientOptions['log'] =
 
 const basePrisma = globalThis.prismaClient ?? new PrismaClient({ log: prismaLogLevels });
 
+const platformModelsWithOptionalTenantReference: ReadonlySet<Prisma.ModelName> =
+  new Set(["DemoRequest"]);
+
 export const tenantScopedModels: ReadonlySet<Prisma.ModelName> = new Set(
   Prisma.dmmf.datamodel.models
-    .filter((model) => model.fields.some((field) => field.name === 'tenantId'))
+    .filter(
+      (model) =>
+        model.fields.some((field) => field.name === 'tenantId') &&
+        !platformModelsWithOptionalTenantReference.has(model.name as Prisma.ModelName),
+    )
     .map((model) => model.name as Prisma.ModelName),
 );
 

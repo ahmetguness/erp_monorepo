@@ -41,6 +41,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ChangePreviewDialog } from '@/components/features/admin/ChangePreviewDialog';
 import { FeatureRolloutPanel } from '@/components/features/admin/feature-rollout/FeatureRolloutPanel';
+import { AdminPageHeader, AdminKpiGrid, AdminKpiCard } from '@/components/features/admin/ui';
 
 const PLANS: readonly PlanName[] = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'];
 
@@ -230,51 +231,46 @@ export default function AdminFeaturesPage() {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 pb-10">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 text-amber-400 ring-1 ring-amber-500/30">
-            <Sliders className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
-              Özellikler & Feature Flags
-            </h1>
-            <p className="text-xs text-slate-400">
-              Abonelik plan limitlerini, özellik matrislerini ve kademeli (rollout) dağıtımları yönetin.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
+      <AdminPageHeader
+        title="Özellikler & Feature Flags"
+        description="Abonelik plan limitlerini, özellik matrislerini ve kademeli (rollout) dağıtımları yönetin."
+        icon={Sliders}
+        iconTone="amber"
+        badge={
+          <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+            {features.length} Kural
+          </span>
+        }
+        actions={
           <Button
             variant="outline"
-            size="md"
+            size="sm"
             onClick={() => refetch()}
             loading={isFetching}
-            leftIcon={<RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />}
+            leftIcon={<RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />}
           >
             Yenile
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Primary Tab Switcher */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-1">
+      <nav aria-label="Özellik yönetimi sekmeleri" className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/60 p-1">
         <button
           type="button"
           onClick={() => setActiveTab('matrix')}
           className={cn(
-            'flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors',
+            'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all',
             activeTab === 'matrix'
-              ? 'border-amber-400 text-amber-400'
-              : 'border-transparent text-slate-400 hover:border-slate-700 hover:text-slate-200',
+              ? 'bg-slate-800 text-white shadow-sm ring-1 ring-slate-700'
+              : 'text-slate-400 hover:text-slate-200',
           )}
         >
-          <Layers className="h-4 w-4" />
+          <Layers className="h-3.5 w-3.5 text-amber-400" />
           <span>Plan Özellikleri Matrisi</span>
-          <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300">
+          <span className="ml-1 rounded-full bg-slate-700/60 px-1.5 py-0.2 text-[10px] text-slate-300">
             {features.length}
           </span>
         </button>
@@ -283,91 +279,54 @@ export default function AdminFeaturesPage() {
           type="button"
           onClick={() => setActiveTab('rollout')}
           className={cn(
-            'flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors',
+            'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all',
             activeTab === 'rollout'
-              ? 'border-amber-400 text-amber-400'
-              : 'border-transparent text-slate-400 hover:border-slate-700 hover:text-slate-200',
+              ? 'bg-slate-800 text-white shadow-sm ring-1 ring-slate-700'
+              : 'text-slate-400 hover:text-slate-200',
           )}
         >
-          <Sparkles className="h-4 w-4" />
+          <Sparkles className="h-3.5 w-3.5 text-sky-400" />
           <span>Kademeli Dağıtım (Rollouts)</span>
         </button>
-      </div>
+      </nav>
 
       {/* Tab 1: Plan Features Matrix */}
       {activeTab === 'matrix' && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* KPI Strip */}
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Metric 1 */}
-            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-sm backdrop-blur">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">Toplam Özellik</span>
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/10 text-sky-400">
-                  <Layers className="h-4 w-4" />
-                </div>
-              </div>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-white">{metrics.total}</span>
-                <span className="text-xs text-slate-400">Tanımlı Kural</span>
-              </div>
-              <div className="mt-2 text-[11px] text-slate-400">
-                3 farklı plan genelinde paylaşılan matris
-              </div>
-            </div>
+          <AdminKpiGrid columns={4}>
+            <AdminKpiCard
+              label="Toplam Özellik"
+              value={metrics.total}
+              icon={Layers}
+              iconTone="sky"
+              subtext="3 farklı plan genelinde paylaşılan matris"
+            />
 
-            {/* Metric 2 */}
-            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-sm backdrop-blur">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">Etkin Özellikler</span>
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-                  <CheckCircle2 className="h-4 w-4" />
-                </div>
-              </div>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-white">{metrics.active}</span>
-                <span className="text-xs text-slate-400">/ {metrics.total} Aktif</span>
-              </div>
-              <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                <span>Tenantlar için kullanılabilir</span>
-              </div>
-            </div>
+            <AdminKpiCard
+              label="Etkin Özellikler"
+              value={metrics.active}
+              icon={CheckCircle2}
+              iconTone="emerald"
+              subtext={<span className="text-emerald-400 font-medium">Tenantlar için kullanılabilir</span>}
+            />
 
-            {/* Metric 3 */}
-            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-sm backdrop-blur">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">Limit & Kota Kuralları</span>
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400">
-                  <Gauge className="h-4 w-4" />
-                </div>
-              </div>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-white">{metrics.limits}</span>
-                <span className="text-xs text-slate-400">Sayısal Kural</span>
-              </div>
-              <div className="mt-2 text-[11px] text-slate-400">
-                Kullanıcı, depolama ve fatura limitleri
-              </div>
-            </div>
+            <AdminKpiCard
+              label="Limit & Kota Kuralları"
+              value={metrics.limits}
+              icon={Gauge}
+              iconTone="amber"
+              subtext="Kullanıcı, depolama ve fatura limitleri"
+            />
 
-            {/* Metric 4 */}
-            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-sm backdrop-blur">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">Aç / Kapat & Seçenekler</span>
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
-                  <ToggleRight className="h-4 w-4" />
-                </div>
-              </div>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-white">{metrics.booleans + metrics.enums}</span>
-                <span className="text-xs text-slate-400">Modül Kuralı</span>
-              </div>
-              <div className="mt-2 text-[11px] text-slate-400">
-                {metrics.booleans} Toggle · {metrics.enums} Paket Seçeneği
-              </div>
-            </div>
-          </div>
+            <AdminKpiCard
+              label="Aç / Kapat & Seçenekler"
+              value={metrics.booleans + metrics.enums}
+              icon={ToggleRight}
+              iconTone="purple"
+              subtext="Modül ve seçenek kuralları"
+            />
+          </AdminKpiGrid>
 
           {/* Search & Filter Toolbar */}
           <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-4 backdrop-blur space-y-3">

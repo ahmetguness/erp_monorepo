@@ -183,15 +183,24 @@ export async function createDemoRequest(dto: CreateDemoRequestDTO) {
       email,
       phone: dto.phone,
       plan,
-      status: 'APPROVED',
+      status: 'PENDING',
+      history: {
+        create: {
+          action: 'CREATED',
+          note: 'Demo talebi operasyon kuyruğuna alındı.',
+        },
+      },
     },
   });
 
   logger.info(`Demo talebi oluşturuldu: ${demoRequest.id} (${plan})`);
 
   // Tüm planlar → otomatik provisioning
-  const result = await provisionDemoTenant(demoRequest.id);
-  return result;
+  return {
+    success: true,
+    demoRequestId: demoRequest.id,
+    status: demoRequest.status,
+  };
 }
 
 // ── Demo tenant provisioning ─────────────────
@@ -205,14 +214,17 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
     return { success: false, demoRequestId, error: 'Demo talebi bulunamadı.' };
   }
 
-  if (demoRequest.status !== 'APPROVED' && demoRequest.status !== 'PENDING') {
+  if (demoRequest.status !== 'APPROVED') {
     return { success: false, demoRequestId, error: `Geçersiz durum: ${demoRequest.status}` };
   }
 
   // Status → PROVISIONING
   await prisma.demoRequest.update({
     where: { id: demoRequestId },
-    data: { status: 'PROVISIONING' },
+    data: {
+      status: 'PROVISIONING',
+      history: { create: { action: 'PROVISIONING_STARTED', actorId: demoRequest.processedBy } },
+    },
   });
 
   try {
@@ -308,6 +320,13 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
         setPasswordToken,
         setPasswordExpiry,
         processedAt: new Date(),
+        history: {
+          create: {
+            action: 'PROVISIONED',
+            actorId: demoRequest.processedBy,
+            note: `Tenant: ${result.tenant.id}`,
+          },
+        },
       },
     });
 
@@ -321,7 +340,20 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
       setPasswordUrl,
       trialEndsAt,
     );
-    await sendMail({ to: demoRequest.email, ...template });
+    try {
+      await sendMail({ to: demoRequest.email, ...template });
+    } catch (mailError: unknown) {
+      const mailMessage = mailError instanceof Error ? mailError.message : String(mailError);
+      logger.error(`Demo hazır e-postası gönderilemedi: ${mailMessage}`);
+      await prisma.demoRequestHistory.create({
+        data: {
+          demoRequestId,
+          action: 'EMAIL_DELIVERY_FAILED',
+          actorId: demoRequest.processedBy,
+          note: mailMessage,
+        },
+      });
+    }
 
     logger.info(`Demo tenant oluşturuldu: ${slug} (request: ${demoRequestId})`);
 
@@ -336,7 +368,16 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
     // Rollback status
     await prisma.demoRequest.update({
       where: { id: demoRequestId },
-      data: { status: 'APPROVED' },
+      data: {
+        status: 'APPROVED',
+        history: {
+          create: {
+            action: 'PROVISIONING_FAILED',
+            actorId: demoRequest.processedBy,
+            note: err instanceof Error ? err.message : String(err),
+          },
+        },
+      },
     });
 
     const message = err instanceof Error ? err.message : String(err);
@@ -347,26 +388,46 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
 // ── Enterprise onay ──────────────────────────
 
 export async function approveDemoRequest(demoRequestId: string, approvedBy: string) {
-  const demoRequest = await prisma.demoRequest.update({
-    where: { id: demoRequestId },
-    data: { status: 'APPROVED', processedBy: approvedBy },
+  const claimed = await prisma.$transaction(async (tx) => {
+    const result = await tx.demoRequest.updateMany({
+      where: { id: demoRequestId, status: 'PENDING' },
+      data: { status: 'APPROVED', processedBy: approvedBy },
+    });
+    if (result.count === 1) {
+      await tx.demoRequestHistory.create({
+        data: { demoRequestId, action: 'APPROVED', actorId: approvedBy },
+      });
+    }
+    return result;
   });
-
+  if (claimed.count !== 1) {
+    return { success: false, demoRequestId, error: 'Yalnızca bekleyen demo talepleri onaylanabilir.' };
+  }
   // Onay sonrası otomatik provisioning
-  return provisionDemoTenant(demoRequest.id);
+  return provisionDemoTenant(demoRequestId);
 }
 
-export async function rejectDemoRequest(demoRequestId: string, rejectedBy: string, reason?: string) {
-  await prisma.demoRequest.update({
-    where: { id: demoRequestId },
-    data: {
-      status: 'REJECTED',
-      processedBy: rejectedBy,
-      rejectedReason: reason,
-      processedAt: new Date(),
-    },
+export async function rejectDemoRequest(demoRequestId: string, rejectedBy: string, reason: string) {
+  const rejected = await prisma.$transaction(async (tx) => {
+    const result = await tx.demoRequest.updateMany({
+      where: { id: demoRequestId, status: 'PENDING' },
+      data: {
+        status: 'REJECTED',
+        processedBy: rejectedBy,
+        rejectedReason: reason,
+        processedAt: new Date(),
+      },
+    });
+    if (result.count === 1) {
+      await tx.demoRequestHistory.create({
+        data: { demoRequestId, action: 'REJECTED', actorId: rejectedBy, note: reason },
+      });
+    }
+    return result;
   });
-
+  if (rejected.count !== 1) {
+    return { success: false, error: 'Yalnızca bekleyen demo talepleri reddedilebilir.' };
+  }
   return { success: true };
 }
 

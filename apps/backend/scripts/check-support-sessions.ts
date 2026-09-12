@@ -58,6 +58,7 @@ async function main(): Promise<void> {
   app.route('/api/products', productRoutes);
   app.route('/api/support-sessions', supportSessionRoutes);
   const adminHeaders = { Authorization: `Bearer ${adminSession.accessToken}`, 'Content-Type': 'application/json', Origin: origin };
+  const adminMutationHeaders = (key: string) => ({ ...adminHeaders, 'Idempotency-Key': `support-${suffix}-${key}` });
   const ownerHeaders = { Authorization: `Bearer ${jwt.sign({ userId: ownerId, tenantId }, userSecret)}`, 'Content-Type': 'application/json', Origin: origin };
   const outsiderHeaders = { Authorization: `Bearer ${jwt.sign({ userId: userIds[2], tenantId: otherTenantId }, userSecret)}`, 'Content-Type': 'application/json', Origin: origin };
   const preflight = await app.request('/api/contacts', { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'x-support-session,x-support-tenant' } });
@@ -65,9 +66,9 @@ async function main(): Promise<void> {
   assert.ok(preflight.headers.get('access-control-allow-headers')?.toLowerCase().includes('x-support-session'));
   assert.ok(preflight.headers.get('access-control-allow-headers')?.toLowerCase().includes('x-support-tenant'));
   const input = { tenantId, targetUserId: targetId, reason: 'Investigate support issue', ticketId: 'SUP-123', scopes: ['CONTACTS'], durationMinutes: 30, writeRequested: true };
-  assert.equal((await app.request('/api/admin/support-sessions', { method: 'POST', headers: adminHeaders, body: JSON.stringify({ ...input, durationMinutes: 61 }) })).status, 400);
-  assert.equal((await app.request('/api/admin/support-sessions', { method: 'POST', headers: adminHeaders, body: JSON.stringify({ ...input, targetUserId: userIds[2] }) })).status, 404);
-  assert.equal((await app.request('/api/admin/support-sessions', { method: 'POST', headers: adminHeaders, body: JSON.stringify(input) })).status, 201);
+  assert.equal((await app.request('/api/admin/support-sessions', { method: 'POST', headers: adminMutationHeaders('invalid-duration'), body: JSON.stringify({ ...input, durationMinutes: 61 }) })).status, 400);
+  assert.equal((await app.request('/api/admin/support-sessions', { method: 'POST', headers: adminMutationHeaders('wrong-tenant'), body: JSON.stringify({ ...input, targetUserId: userIds[2] }) })).status, 404);
+  assert.equal((await app.request('/api/admin/support-sessions', { method: 'POST', headers: adminMutationHeaders('create'), body: JSON.stringify(input) })).status, 201);
   const session = await prisma.supportSession.findFirstOrThrow({ where: { tenantId, adminId: admin.id } });
   const headers = { ...adminHeaders, 'X-Support-Session': session.id, 'X-Support-Tenant': tenantId };
   const decision = (action: string, authHeaders = ownerHeaders) => app.request(`/api/support-sessions/${session.id}/decision`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ action }) });
@@ -114,7 +115,7 @@ async function main(): Promise<void> {
   await prisma.adminUserRole.create({ data: { adminUserId: admin.id, adminRoleId: role.id } });
   await prisma.adminSession.updateMany({ where: { adminUserId: admin.id }, data: { mfaVerifiedAt: new Date(0) } });
   assert.equal((await write({ notes: 'Stale MFA' })).status, 403);
-  const ended = await app.request(`/api/admin/tenants/${tenantId}/support-sessions/${session.id}/revoke`, { method: 'POST', headers: adminHeaders });
+  const ended = await app.request(`/api/admin/tenants/${tenantId}/support-sessions/${session.id}/revoke`, { method: 'POST', headers: adminMutationHeaders('revoke') });
   assert.equal(ended.status, 200, 'Stale step-up MFA must not prevent access revocation');
   assert.equal((await read()).status, 403);
   // Restore only this synthetic fixture to continue testing other terminal states.

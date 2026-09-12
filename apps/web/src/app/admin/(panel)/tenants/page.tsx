@@ -38,7 +38,10 @@ import type {
   TenantProvisioningInput,
   TenantProvisioningJob,
   TenantProvisioningPreview,
+  AdminTenantColumn,
+  AdminTenantListConfig,
 } from '@repo/types';
+import { TenantListOperations } from '@/components/features/admin/list-operations/TenantListOperations';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Button } from '@/components/ui/Button';
@@ -48,6 +51,7 @@ import { useAdminAuthStore } from '@/store/admin-auth.store';
 import { canAdmin } from '@/lib/admin/permissions';
 import { toast } from '@/store/ui.store';
 import { extractAdminError, toastAdminError } from '@/lib/admin/errors';
+import { AdminPageHeader, AdminKpiCard, AdminKpiGrid } from '@/components/features/admin/ui';
 
 const STATUS_MAP: Record<string, { label: string; variant: BadgeVariant }> = {
   TRIAL: { label: 'Deneme', variant: 'warning' },
@@ -183,28 +187,28 @@ function FormSection({
 
 function AdminTenantsContent() {
   const canCreateTenant = useAdminAuthStore((state) => canAdmin(state.admin, 'tenant.create'));
+  const canBulkManage = useAdminAuthStore((state) => canAdmin(state.admin, 'tenant.settings.update'));
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialSearch = searchParams.get('search') ?? '';
   const initialStatus = searchParams.get('status') ?? '';
   const initialPlan = searchParams.get('plan') ?? '';
+  const initialColumns = searchParams.get('columns')?.split(',').filter((value): value is AdminTenantColumn => ['companyName', 'status', 'plan', 'email', 'city', 'users', 'createdAt'].includes(value as AdminTenantColumn));
 
   const qc = useQueryClient();
-  const [page, setPage] = useState(1);
+  const initialPage = Number(searchParams.get('page'));
+  const [page, setPage] = useState(Number.isSafeInteger(initialPage) && initialPage > 0 ? initialPage : 1);
   const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [planFilter, setPlanFilter] = useState(initialPlan);
+  const [from, setFrom] = useState(searchParams.get('from') ?? '');
+  const [to, setTo] = useState(searchParams.get('to') ?? '');
+  const [sortBy, setSortBy] = useState<AdminTenantListConfig['sortBy']>((['createdAt', 'companyName', 'status', 'plan'] as const).includes(searchParams.get('sortBy') as AdminTenantListConfig['sortBy']) ? searchParams.get('sortBy') as AdminTenantListConfig['sortBy'] : 'createdAt');
+  const [sortDirection, setSortDirection] = useState<AdminTenantListConfig['sortDirection']>(searchParams.get('sortDirection') === 'asc' ? 'asc' : 'desc');
+  const [columns, setColumns] = useState<AdminTenantColumn[]>(initialColumns?.length ? initialColumns : ['companyName', 'status', 'plan', 'email', 'users', 'createdAt']);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const s = searchParams.get('search');
-    if (s !== null) setSearch(s);
-    const st = searchParams.get('status');
-    if (st !== null) setStatusFilter(st);
-    const p = searchParams.get('plan');
-    if (p !== null) setPlanFilter(p);
-  }, [searchParams]);
 
   const [form, setForm] = useState<CreateTenantInput>(() => createDefaultTenantForm());
   const [formError, setFormError] = useState<string | null>(null);
@@ -215,7 +219,7 @@ function AdminTenantsContent() {
   const [job, setJob] = useState<TenantProvisioningJob | null>(null);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['admin', 'tenants', page, search, statusFilter, planFilter],
+    queryKey: ['admin', 'tenants', page, search, statusFilter, planFilter, from, to, sortBy, sortDirection],
     queryFn: () =>
       getTenants({
         page,
@@ -223,8 +227,21 @@ function AdminTenantsContent() {
         search: search || undefined,
         status: statusFilter || undefined,
         plan: planFilter || undefined,
+        from: from || undefined,
+        to: to || undefined,
+        sortBy,
+        sortDirection,
       }),
   });
+
+  const listConfig = useMemo<AdminTenantListConfig>(() => ({ search: search || undefined, status: statusFilter || undefined, plan: planFilter || undefined, from: from || undefined, to: to || undefined, sortBy, sortDirection, columns }), [search, statusFilter, planFilter, from, to, sortBy, sortDirection, columns]);
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search); if (statusFilter) params.set('status', statusFilter); if (planFilter) params.set('plan', planFilter);
+    if (from) params.set('from', from); if (to) params.set('to', to); if (page > 1) params.set('page', String(page)); params.set('sortBy', sortBy); params.set('sortDirection', sortDirection); params.set('columns', columns.join(','));
+    router.replace(`/admin/tenants?${params.toString()}`, { scroll: false });
+  }, [search, statusFilter, planFilter, from, to, page, sortBy, sortDirection, columns, router]);
+  const applyListConfig = (value: AdminTenantListConfig) => { setSearch(value.search ?? ''); setStatusFilter(value.status ?? ''); setPlanFilter(value.plan ?? ''); setFrom(value.from ?? ''); setTo(value.to ?? ''); setSortBy(value.sortBy); setSortDirection(value.sortDirection); setColumns(value.columns); setPage(1); };
 
   const preview = useMutation({
     mutationFn: previewTenant,
@@ -242,12 +259,12 @@ function AdminTenantsContent() {
       void qc.invalidateQueries({ queryKey: ['admin', 'tenant-provisioning'] });
       setJob(result);
       setFormError(null);
-      toast.success('Tenant kurulum süreci başlatıldı.');
+      toast.success('Müşteri hesabı kurulum süreci başlatıldı.');
     },
     onError: (err: unknown) => {
-      const msg = extractAdminError(err, 'Tenant oluşturulamadı.');
+      const msg = extractAdminError(err, 'Müşteri hesabı oluşturulamadı.');
       setFormError(msg);
-      toastAdminError(err, 'Tenant oluşturulamadı.');
+      toastAdminError(err, 'Müşteri hesabı oluşturulamadı.');
     },
   });
 
@@ -306,12 +323,14 @@ function AdminTenantsContent() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const hasActiveFilters = Boolean(search) || Boolean(statusFilter) || Boolean(planFilter);
+  const hasActiveFilters = Boolean(search) || Boolean(statusFilter) || Boolean(planFilter) || Boolean(from) || Boolean(to);
 
   const resetFilters = () => {
     setSearch('');
     setStatusFilter('');
     setPlanFilter('');
+    setFrom('');
+    setTo('');
     setPage(1);
   };
 
@@ -319,106 +338,84 @@ function AdminTenantsContent() {
   const meta = data?.meta ?? { total: 0, totalPages: 1, page: 1, pageSize: 20 };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 pb-10">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-red-500/20 to-rose-600/20 text-rose-400 ring-1 ring-rose-500/30">
-            <Building2 className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
-              Tenant Yönetimi & Şirketler
-            </h1>
-            <p className="text-xs text-slate-400">
-              Platformdaki tüm müşteri şirket hesaplarını, abonelik planlarını ve provizyon süreçlerini yönetin.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <Button
-            variant="outline"
-            size="md"
-            onClick={() => qc.invalidateQueries({ queryKey: ['admin', 'tenants'] })}
-            loading={isFetching}
-            leftIcon={<RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />}
-          >
-            Yenile
-          </Button>
-
-          {canCreateTenant && (
+      <AdminPageHeader
+        title="Müşteri Hesapları ve Şirketler"
+        description="Platformdaki tüm müşteri şirket hesaplarını, abonelik planlarını ve provizyon süreçlerini yönetin."
+        icon={Building2}
+        iconTone="red"
+        badge={
+          <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+            {meta.total} Şirket
+          </span>
+        }
+        actions={
+          <>
             <Button
-              variant="primary"
-              size="md"
-              onClick={() => {
-                setForm(createDefaultTenantForm());
-                setProposal(null);
-                setJob(null);
-                setFormError(null);
-                setIsCreateOpen(true);
-              }}
-              leftIcon={<Plus className="h-4 w-4" />}
+              variant="outline"
+              size="sm"
+              onClick={() => qc.invalidateQueries({ queryKey: ['admin', 'tenants'] })}
+              loading={isFetching}
+              leftIcon={<RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />}
             >
-              Yeni Tenant Ekle
+              Yenile
             </Button>
-          )}
-        </div>
-      </div>
+
+            {canCreateTenant && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setForm(createDefaultTenantForm());
+                  setProposal(null);
+                  setJob(null);
+                  setFormError(null);
+                  setIsCreateOpen(true);
+                }}
+                leftIcon={<Plus className="h-3.5 w-3.5" />}
+              >
+                Yeni Müşteri Hesabı
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* KPI & Metric Strip */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-sm backdrop-blur">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Kayıtlı Şirketler</span>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/10 text-sky-400">
-              <Building2 className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-bold text-white tracking-tight">{meta.total}</div>
-          <div className="mt-1 text-[11px] text-slate-400">Sistemdeki tüm şirket hesapları</div>
-        </div>
+      <AdminKpiGrid columns={4}>
+        <AdminKpiCard
+          label="Kayıtlı Şirketler"
+          value={meta.total}
+          icon={Building2}
+          iconTone="sky"
+          subtext="Sistemdeki tüm şirket hesapları"
+        />
 
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-sm backdrop-blur">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Aktif Şirketler</span>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-              <TrendingUp className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-bold text-white tracking-tight">
-            {tenantList.filter((t) => t.status === 'ACTIVE').length}
-            <span className="text-xs font-normal text-slate-400"> / Sayfada</span>
-          </div>
-          <div className="mt-1 text-[11px] text-emerald-400 font-medium">Canlı üretim yapan hesaplar</div>
-        </div>
+        <AdminKpiCard
+          label="Aktif Şirketler"
+          value={tenantList.filter((t) => t.status === 'ACTIVE').length}
+          icon={TrendingUp}
+          iconTone="emerald"
+          subtext={<span className="text-emerald-400 font-medium">Canlı üretim yapan hesaplar</span>}
+        />
 
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-sm backdrop-blur">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Deneme Sürecinde</span>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400">
-              <Zap className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-bold text-white tracking-tight">
-            {tenantList.filter((t) => t.status === 'TRIAL').length}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-400">Satış takibindeki hesaplar</div>
-        </div>
+        <AdminKpiCard
+          label="Deneme Sürecinde"
+          value={tenantList.filter((t) => t.status === 'TRIAL').length}
+          icon={Zap}
+          iconTone="amber"
+          subtext="Satış takibindeki hesaplar"
+        />
 
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 shadow-sm backdrop-blur">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Askıda / Riskli</span>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400">
-              <Activity className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-bold text-white tracking-tight">
-            {tenantList.filter((t) => t.status === 'SUSPENDED').length}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-400">İnceleme gereken tenantlar</div>
-        </div>
-      </div>
+        <AdminKpiCard
+          label="Askıda / Riskli"
+          value={tenantList.filter((t) => t.status === 'SUSPENDED').length}
+          icon={Activity}
+          iconTone="red"
+          subtext="İnceleme gereken müşteri hesapları"
+        />
+      </AdminKpiGrid>
 
       {/* Provisioning Jobs Alert Strip (if any active/recent) */}
       {canCreateTenant && jobs.data && jobs.data.length > 0 && (
@@ -466,7 +463,7 @@ function AdminTenantsContent() {
                       onClick={() => router.push(`/admin/tenants/${item.tenantId}`)}
                       className="text-xs font-semibold text-sky-400 hover:text-sky-300"
                     >
-                      Tenantı Aç →
+                      Müşteri Hesabını Aç →
                     </button>
                   )}
                 </div>
@@ -488,7 +485,7 @@ function AdminTenantsContent() {
         >
           <div className="flex items-start justify-between gap-4 border-b border-slate-800 px-6 py-4">
             <div>
-              <h2 className="text-base font-bold text-white">Yeni Tenant Oluştur</h2>
+              <h2 className="text-base font-bold text-white">Yeni Müşteri Hesabı Oluştur</h2>
               <p className="mt-0.5 text-xs text-slate-400">
                 Şirket veritabanı, yetkili yönetici hesabı ve modül lisansları anında provizyonlanır.
               </p>
@@ -524,7 +521,8 @@ function AdminTenantsContent() {
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="Yönetici (Owner) E-Posta *"
+                  aria-label="Hesap sorumlusu e-posta adresi"
+                  placeholder="Hesap sorumlusu e-posta adresi *"
                   className="bg-slate-950 border border-slate-800 rounded-xl text-xs text-white px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-red-500/50"
                 />
                 <input
@@ -716,7 +714,7 @@ function AdminTenantsContent() {
                       size="sm"
                       onClick={() => router.push(`/admin/tenants/${job.tenantId}`)}
                     >
-                      Tenantı Aç
+                      Müşteri Hesabını Aç
                     </Button>
                   )}
                 </div>
@@ -815,12 +813,13 @@ function AdminTenantsContent() {
       </div>
 
       {/* Tenants Table */}
+      <TenantListOperations config={listConfig} selectedIds={selectedIds} canBulk={canBulkManage} onConfig={applyListConfig} onCompleted={() => { setSelectedIds([]); void qc.invalidateQueries({ queryKey: ['admin', 'tenant-360'] }); }} />
       <div className="overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/50 shadow-sm backdrop-blur">
         <div className="grid grid-cols-12 gap-3 border-b border-slate-800/80 bg-slate-950/60 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-          <div className="col-span-4 sm:col-span-3">Şirket / Slug</div>
-          <div className="col-span-2">Paket Planı</div>
-          <div className="col-span-2">Durum</div>
-          <div className="col-span-2 sm:col-span-3">Hacim (Kul. / Ürün / Fat.)</div>
+          <div className="col-span-4 sm:col-span-3"><input aria-label="Sayfadaki tüm kayıtları seç" className="mr-2" type="checkbox" checked={tenantList.length > 0 && tenantList.every((item) => selectedIds.includes(item.id))} onChange={(event) => setSelectedIds(event.target.checked ? tenantList.map((item) => item.id) : [])} />Şirket / Slug</div>
+          <div className={`col-span-2 ${columns.includes('plan') ? '' : 'hidden'}`}>Paket Planı</div>
+          <div className={`col-span-2 ${columns.includes('status') ? '' : 'hidden'}`}>Durum</div>
+          <div className={`col-span-2 sm:col-span-3 ${columns.includes('users') ? '' : 'hidden'}`}>Hacim (Kul. / Ürün / Fat.)</div>
           <div className="col-span-2 text-right">Kayıt / Aksiyon</div>
         </div>
 
@@ -841,11 +840,11 @@ function AdminTenantsContent() {
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-800/70 text-slate-400">
               <Building2 className="h-6 w-6" />
             </div>
-            <h3 className="mt-4 text-base font-semibold text-slate-200">Tenant bulunamadı</h3>
+            <h3 className="mt-4 text-base font-semibold text-slate-200">Müşteri hesabı bulunamadı</h3>
             <p className="mt-1 text-xs text-slate-400 max-w-sm">
               {hasActiveFilters
                 ? 'Arama kriterlerinizi veya filtrelerinizi sıfırlayarak tekrar deneyin.'
-                : 'Sistemde henüz kayıtlı tenant bulunmuyor.'}
+                : 'Sistemde henüz kayıtlı müşteri hesabı bulunmuyor.'}
             </p>
           </div>
         ) : (
@@ -861,6 +860,7 @@ function AdminTenantsContent() {
                 >
                   {/* Company info */}
                   <div className="col-span-4 sm:col-span-3 min-w-0 flex items-center gap-3">
+                    <input aria-label={`${t.companyName} seç`} type="checkbox" checked={selectedIds.includes(t.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...new Set([...current, t.id])] : current.filter((id) => id !== t.id))} />
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 text-xs font-bold text-slate-200 ring-1 ring-slate-700">
                       {t.companyName ? t.companyName.charAt(0).toUpperCase() : 'T'}
                     </div>
@@ -879,25 +879,25 @@ function AdminTenantsContent() {
                         {t.companyName}
                       </button>
                       <p className="truncate text-[11px] text-slate-500 font-mono">
-                        {t.slug} • {t.email}
+                        {t.slug}{columns.includes('email') ? ` • ${t.email}` : ''}{columns.includes('city') && t.city ? ` • ${t.city}` : ''}
                       </p>
                     </div>
                   </div>
 
                   {/* Plan */}
-                  <div className="col-span-2">
+                  <div className={`col-span-2 ${columns.includes('plan') ? '' : 'hidden'}`}>
                     <span className={cn('rounded-lg border px-2.5 py-0.5 text-xs font-semibold', plan.badgeClass)}>
                       {plan.label}
                     </span>
                   </div>
 
                   {/* Status */}
-                  <div className="col-span-2">
+                  <div className={`col-span-2 ${columns.includes('status') ? '' : 'hidden'}`}>
                     <Badge variant={status.variant}>{status.label}</Badge>
                   </div>
 
                   {/* Counters */}
-                  <div className="col-span-2 sm:col-span-3 flex items-center gap-3 text-slate-300 text-xs">
+                  <div className={`col-span-2 sm:col-span-3 items-center gap-3 text-slate-300 text-xs ${columns.includes('users') ? 'flex' : 'hidden'}`}>
                     <span className="flex items-center gap-1 font-medium" title="Kullanıcı Sayısı">
                       <Users className="h-3 w-3 text-slate-500" />
                       {t._count.users}
@@ -916,10 +916,11 @@ function AdminTenantsContent() {
 
                   {/* Actions */}
                   <div className="col-span-2 text-right flex items-center justify-end gap-1.5">
+                    {columns.includes('createdAt') && <time className="hidden text-[10px] text-slate-500 xl:inline" dateTime={t.createdAt}>{new Date(t.createdAt).toLocaleDateString('tr-TR')}</time>}
                     <button
                       type="button"
                       onClick={() => handleCopyId(t.id, t.companyName)}
-                      title="Tenant ID Kopyala"
+                      title="Müşteri hesabı kimliğini kopyala"
                       className="rounded-lg border border-slate-800 bg-slate-950 p-1.5 text-slate-400 hover:text-white transition-colors"
                     >
                       {copiedId === t.id ? (

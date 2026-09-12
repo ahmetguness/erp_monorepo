@@ -7,7 +7,7 @@ import { addTenantSupportNote, supportNoteSchema } from '../../../tenant-360/ten
 export const AdminTenant360Controller = {
   async get(c: Context): Promise<Response> {
     const permissions: AdminPermission[] = c.get('adminPermissions') ?? [];
-    return c.json({ data: await getTenant360(requireParam(c, 'id'), permissions) });
+    return c.json({ data: await getTenant360(requireParam(c, 'id'), permissions, c.get('adminId')) });
   },
   async addNote(c: Context): Promise<Response> {
     const input = supportNoteSchema.safeParse(await c.req.json<unknown>().catch(() => null));

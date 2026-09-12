@@ -1,12 +1,14 @@
 import { Prisma } from "@prisma/client";
 import type { MiddlewareHandler } from "hono";
 import { createPlatformAudit } from "../modules/platform/index.js";
+import { redactSensitiveText } from "../lib/sensitive-redaction.js";
 import { getTrustedClientIpOrNull } from "../utils/request-ip.js";
 
-const sensitiveKey = /(password|secret|token|authorization|api[-_]?key|otp|code)/i;
+const sensitiveKey = /(password|secret|token|authorization|api[-_]?key|otp|code|email|phone|address|iban|tax[-_]?number|identity[-_]?number)/i;
 function safeJson(value: unknown, key = ""): Prisma.InputJsonValue | null {
   if (sensitiveKey.test(key)) return "***MASKED***";
-  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (value === null || typeof value === "boolean") return value;
+  if (typeof value === "string") return redactSensitiveText(value);
   if (typeof value === "number") return Number.isFinite(value) ? value : String(value);
   if (Array.isArray(value)) return value.map((item) => safeJson(item, key));
   if (typeof value === "object") return Object.fromEntries(Object.entries(value).map(([childKey, item]) => [childKey, safeJson(item, childKey)]));

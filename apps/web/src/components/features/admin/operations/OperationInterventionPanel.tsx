@@ -17,6 +17,7 @@ import {
   interveneOperations,
 } from "@/services/operation-intervention.service";
 import { toast } from "@/store/ui.store";
+import { SensitiveDataRevealButton } from "@/components/features/admin/sensitive-data/SensitiveDataRevealButton";
 
 type ItemRef = {
   id: string;
@@ -98,6 +99,7 @@ export function OperationInterventionPanel({
     },
   });
   const canManage = canAdmin(admin, "operations.manage");
+  const canRevealSensitiveData = canAdmin(admin, "sensitive-data.reveal");
 
   return (
     <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
@@ -226,6 +228,9 @@ export function OperationInterventionPanel({
           <p className="mt-2 text-xs text-red-300">
             {detail.data.lastError ?? "Hata mesajı yok"}
           </p>
+          {canRevealSensitiveData && detail.data.lastError === "Hata ayrıntısı maskelendi." && (
+            <div className="mt-2"><SensitiveDataRevealButton tenantId={detail.data.tenantId} fields={["errorDetails"]} onGranted={() => { void detail.refetch(); }} /></div>
+          )}
           <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-slate-900 p-3 text-xs text-slate-300">
             {JSON.stringify(
               { payload: detail.data.payload, context: detail.data.context },

@@ -1,0 +1,41 @@
+model AdminInboxItemState {
+  id         String   @id @default(cuid())
+  adminId    String
+  sourceType String
+  sourceId   String
+  ownerId    String?
+  readAt     DateTime?
+  resolvedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([adminId, sourceType, sourceId])
+  @@index([adminId, resolvedAt, updatedAt])
+  @@index([ownerId, resolvedAt])
+  @@map("admin_inbox_item_states")
+}
+
+model AdminInboxPreference {
+  adminId     String   @id
+  approvals   Boolean  @default(true)
+  security    Boolean  @default(true)
+  incidents   Boolean  @default(true)
+  expirations Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+
+  @@map("admin_inbox_preferences")
+}
+
+model AdminInboxTaskState {
+  id         String   @id @default(cuid())
+  sourceType String
+  sourceId   String
+  ownerId    String?
+  resolvedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([sourceType, sourceId])
+  @@index([ownerId, resolvedAt])
+  @@map("admin_inbox_task_states")
+}

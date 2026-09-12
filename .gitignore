@@ -10,6 +10,9 @@ packages/types/dist
 ci-artifacts
 apps/backend/ci-artifacts
 /coverage
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/.next-e2e/
 .github
 rapor.md
 rapor2.md
@@ -17,6 +20,7 @@ rapor3.md
 a.txt
 a.md
 b.md
+c.md
 backend-schema.dbml
 
 # Node.js dependencies

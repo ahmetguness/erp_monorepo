@@ -1,0 +1,20 @@
+model AdminIdempotencyRecord {
+  id           String   @id @default(cuid())
+  adminId      String
+  method       String
+  path         String
+  key          String
+  requestHash  String
+  state        String   @default("PROCESSING")
+  statusCode   Int?
+  contentType  String?
+  responseBody String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  admin        AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@unique([adminId, method, path, key])
+  @@index([expiresAt])
+  @@map("admin_idempotency_records")
+}

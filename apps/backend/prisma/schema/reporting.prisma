@@ -133,6 +133,9 @@ model DemoRequest {
   rejectedReason String?
   processedAt DateTime?
   processedBy String?
+  ownerId     String?
+  slaDueAt    DateTime @default(dbgenerated("(now() + '04:00:00'::interval)"))
+  history     DemoRequestHistory[]
 
   tenant Tenant? @relation(fields: [tenantId], references: [id])
 
@@ -141,4 +144,17 @@ model DemoRequest {
   @@index([tenantId])
   @@index([createdAt])
   @@map("demo_requests")
+}
+
+model DemoRequestHistory {
+  id            String   @id @default(cuid())
+  demoRequestId String
+  action        String
+  note          String?
+  actorId       String?
+  createdAt     DateTime @default(now())
+  demoRequest   DemoRequest @relation(fields: [demoRequestId], references: [id], onDelete: Cascade)
+
+  @@index([demoRequestId, createdAt])
+  @@map("demo_request_history")
 }
