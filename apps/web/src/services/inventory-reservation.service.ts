@@ -3,6 +3,7 @@ import { apiClient } from '@/lib/api-client';
 import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
 import type { PaginationParams } from '@/types/api.types';
+import type { ReserveStockCommand } from '@repo/types';
 
 const ProductRef = z.object({ id: z.string(), code: z.string(), name: z.string() });
 const WarehouseRef = z.object({ id: z.string(), name: z.string() });
@@ -80,10 +81,7 @@ export type SalesOrderReservationResult = z.infer<typeof SalesOrderReservationRe
 export type ReservationReport = z.infer<typeof ReservationReportSchema>;
 export type ExpiredReservationReleaseResult = z.infer<typeof ExpiredReservationReleaseResultSchema>;
 
-export interface CreateReservationDTO {
-  productId: string; warehouseId: string; quantity: number;
-  refType: ReservationRefType; refId: string; notes?: string; expiresAt?: string; allowPartial?: boolean;
-}
+export type CreateReservationDTO = ReserveStockCommand;
 
 export interface CreateSalesOrderReservationDTO {
   orderId: string;

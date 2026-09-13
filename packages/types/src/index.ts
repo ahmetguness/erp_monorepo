@@ -765,3 +765,4 @@ export * from "./admin-sensitive-data.js";
 export * from "./support-ticket.js";
 export * from "./pilot-readiness.js";
 export * from "./production-operations.js";
+export * from "./inventory-operations.js";

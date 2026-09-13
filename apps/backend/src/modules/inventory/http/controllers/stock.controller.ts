@@ -24,6 +24,7 @@ import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
 import { generateDocumentNumber } from '../../../../utils/generate-number.js';
 import { inventoryApplication } from '../../composition.js';
+import { parseRecordStockMovement } from '../../application/operations/index.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -157,42 +158,35 @@ export const StockController = {
       );
     }
 
-    const result = await inventoryApplication.createManualStockMovement.execute({
-      tenantId,
-      productId: body.productId,
-      warehouseId: body.warehouseId,
-      type: body.type,
-      quantity: body.quantity,
-      ...(body.unitCost !== undefined ? { unitCost: body.unitCost } : {}),
-      ...(body.lotId ? { lotId: body.lotId } : {}),
-      ...(body.batchId ? { batchId: body.batchId } : {}),
-      ...(body.notes ? { notes: body.notes } : {}),
-    });
+    const command = parseRecordStockMovement(body);
+    const result = await inventoryApplication.recordStockMovement.execute({ tenantId, userId }, command);
     const { movement } = result;
 
-    await createAuditLog(prisma, {
-      tenantId,
-      userId,
-      module: 'inventory',
-      entityType: EntityType.PRODUCT,
-      entityId: body.productId,
-      action: AuditAction.CREATE,
-      newValues: {
-        movementId: movement.id,
-        type: movement.type,
-        quantity: movement.quantity,
-        warehouseId: body.warehouseId,
-        unitCost: movement.unitCost,
-      },
-      ...getRequestMeta(c),
-    });
-
-    if (result.lowStockSignal) {
-      await domainEvents.publish({
-        name: 'stock.low',
-        context: createEventContext({ tenantId, userId }),
-        payload: result.lowStockSignal,
+    if (!result.replayed) {
+      await createAuditLog(prisma, {
+        tenantId,
+        userId,
+        module: 'inventory',
+        entityType: EntityType.PRODUCT,
+        entityId: body.productId,
+        action: AuditAction.CREATE,
+        newValues: {
+          movementId: movement.id,
+          type: movement.type,
+          quantity: movement.quantity,
+          warehouseId: body.warehouseId,
+          unitCost: movement.unitCost,
+        },
+        ...getRequestMeta(c),
       });
+
+      if (result.lowStockSignal) {
+        await domainEvents.publish({
+          name: 'stock.low',
+          context: createEventContext({ tenantId, userId }),
+          payload: result.lowStockSignal,
+        });
+      }
     }
 
     return c.json({

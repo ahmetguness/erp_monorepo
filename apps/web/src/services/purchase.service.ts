@@ -3,6 +3,7 @@ import { apiClient } from '@/lib/api-client';
 import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
 import type { PaginationParams, DateRangeParams } from '@/types/api.types';
+import type { ConfirmGoodsReceiptCommand } from '@repo/types';
 
 // ─────────────────────────────────────────────
 // Schemas
@@ -236,10 +237,9 @@ export interface CreatePurchaseOrderDTO {
   items: Array<{ productId: string; description?: string; quantity: number; unitPrice: number; discount?: number; taxRate?: number }>;
 }
 
-export interface ReceiveOrderDTO {
-  warehouseId: string;
-  items: Array<{ itemId: string; receivedQty: number }>;
-}
+export type ReceiveOrderDTO = Omit<ConfirmGoodsReceiptCommand, 'purchaseOrderId' | 'idempotencyKey'> & {
+  idempotencyKey?: string;
+};
 
 export interface ListParams extends PaginationParams, DateRangeParams {
   search?: string;
@@ -319,7 +319,11 @@ export async function sendPurchaseOrder(id: string): Promise<PurchaseOrder> {
 }
 
 export async function receivePurchaseOrder(id: string, data: ReceiveOrderDTO): Promise<PurchaseOrder> {
-  const res = await apiClient.post(`/api/purchase-orders/${id}/receive`, data);
+  const command: Omit<ConfirmGoodsReceiptCommand, 'purchaseOrderId'> = {
+    ...data,
+    idempotencyKey: data.idempotencyKey ?? crypto.randomUUID(),
+  };
+  const res = await apiClient.post(`/api/purchase-orders/${id}/receive`, command);
   return safeParse(SingleResponseSchema(PurchaseOrderSchema), res.data, 'receivePurchaseOrder').data;
 }
 

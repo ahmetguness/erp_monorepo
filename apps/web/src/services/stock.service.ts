@@ -3,6 +3,7 @@ import { apiClient } from '@/lib/api-client';
 import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
 import type { PaginationParams } from '@/types/api.types';
+import type { RecordStockMovementCommand } from '@repo/types';
 
 // ─────────────────────────────────────────────
 // Schemas
@@ -194,11 +195,9 @@ export interface StockMovementParams extends PaginationParams {
   productId?: string; warehouseId?: string; type?: StockMovementType;
   dateFrom?: string; dateTo?: string;
 }
-export interface CreateManualMovementDTO {
-  productId: string; type: StockMovementType;
-  quantity: number; warehouseId: string;
-  unitCost?: number; lotId?: string; batchId?: string; notes?: string;
-}
+export type CreateManualMovementDTO = Omit<RecordStockMovementCommand, 'idempotencyKey'> & {
+  idempotencyKey?: string;
+};
 export interface CreateStockCountDTO {
   warehouseId: string; date: string; notes?: string;
   items: Array<{ productId: string; locationId?: string; expectedQty: number; countedQty: number }>;
@@ -296,7 +295,11 @@ export async function getStockMovements(params: StockMovementParams) {
 }
 
 export async function createManualMovement(data: CreateManualMovementDTO): Promise<z.infer<typeof StockMovementCreateSchema>> {
-  const res = await apiClient.post('/api/stock/movements', data);
+  const command: RecordStockMovementCommand = {
+    ...data,
+    idempotencyKey: data.idempotencyKey ?? crypto.randomUUID(),
+  };
+  const res = await apiClient.post('/api/stock/movements', command);
   return safeParse(StockMovementCreateSchema, res.data, 'createManualMovement');
 }
 

@@ -80,6 +80,7 @@ export const cancelReasonBodySchema = z.object({
 }).strict();
 
 export const createStockMovementBodySchema = z.object({
+  idempotencyKey: nonEmptyString,
   productId: nonEmptyString,
   type: z.nativeEnum(MovementType),
   quantity: positiveNumber,

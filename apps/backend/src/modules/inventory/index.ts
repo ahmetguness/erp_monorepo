@@ -8,6 +8,14 @@ import { productRoutes } from '../../routes/product.routes.js';
 import { stockRoutes } from '../../routes/stock.routes.js';
 import { warehouseRoutes } from '../../routes/warehouse.routes.js';
 
+export { inventoryApplication } from './composition.js';
+export {
+  parseConfirmGoodsReceipt,
+  parseRecordStockMovement,
+  parseReleaseReservation,
+  parseReserveStock,
+} from './application/operations/index.js';
+
 export const inventoryModule: BackendModule = {
   name: 'inventory',
   register(app) {

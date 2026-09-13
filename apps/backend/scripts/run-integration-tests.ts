@@ -981,11 +981,50 @@ async function testPurchaseOrderReceiptInvoiceChain(ctx: TestContext): Promise<v
   const sendResult = await api('POST', `/api/purchase-orders/${orderId}/send`, token(ctx.ownerAId, ctx.tenantAId));
   assertStatus(sendResult, 200, 'satinalma siparisi gonderilebilmeli');
 
+  const firstReceiptKey = `receipt-${crypto.randomUUID()}`;
   const receiveResult = await api('POST', `/api/purchase-orders/${orderId}/receive`, token(ctx.ownerAId, ctx.tenantAId), {
+    idempotencyKey: firstReceiptKey,
     warehouseId: ctx.warehouseAId,
-    items: [{ itemId: orderItem.id, receivedQty: 3 }],
+    items: [{ itemId: orderItem.id, receivedQty: 2 }],
   });
   assertStatus(receiveResult, 200, 'satinalma siparisi teslim alinabilmeli');
+
+  const retryReceipt = await api('POST', `/api/purchase-orders/${orderId}/receive`, token(ctx.ownerAId, ctx.tenantAId), {
+    idempotencyKey: firstReceiptKey,
+    warehouseId: ctx.warehouseAId,
+    items: [{ itemId: orderItem.id, receivedQty: 2 }],
+  });
+  assertStatus(retryReceipt, 200, 'mal kabul retry idempotent olmali');
+  const partialOrder = await prisma.purchaseOrder.findFirstOrThrow({
+    where: { id: orderId, tenantId: ctx.tenantAId },
+    select: { status: true, items: { select: { received: true } } },
+  });
+  if (partialOrder.status !== PurchaseOrderStatus.PARTIALLY_RECEIVED || Number(partialOrder.items[0]?.received ?? 0) !== 2) {
+    throw new Error('Kismi mal kabul siparis durumunu ve teslim miktarini dogru guncellemedi.');
+  }
+  const receiptMovementCount = await prisma.stockMovement.count({
+    where: { tenantId: ctx.tenantAId, refType: 'PURCHASE_ORDER', refId: orderId },
+  });
+  if (receiptMovementCount !== 1) throw new Error('Mal kabul retry cift stok hareketi olusturdu.');
+
+  const rollbackReceipt = await api('POST', `/api/purchase-orders/${orderId}/receive`, token(ctx.ownerAId, ctx.tenantAId), {
+    idempotencyKey: `receipt-${crypto.randomUUID()}`,
+    warehouseId: ctx.warehouseAId,
+    items: [{ itemId: orderItem.id, receivedQty: 1 }, { itemId: 'missing-item', receivedQty: 1 }],
+  });
+  assertStatus(rollbackReceipt, 400, 'gecersiz teslim kalemi tum mal kabulu geri almali');
+  const afterRollbackItem = await prisma.purchaseOrderItem.findFirstOrThrow({
+    where: { id: orderItem.id, tenantId: ctx.tenantAId },
+    select: { received: true },
+  });
+  if (Number(afterRollbackItem.received) !== 2) throw new Error('Basarisiz mal kabul kismi teslim kaydi birakti.');
+
+  const finalReceipt = await api('POST', `/api/purchase-orders/${orderId}/receive`, token(ctx.ownerAId, ctx.tenantAId), {
+    idempotencyKey: `receipt-${crypto.randomUUID()}`,
+    warehouseId: ctx.warehouseAId,
+    items: [{ itemId: orderItem.id, receivedQty: 1 }],
+  });
+  assertStatus(finalReceipt, 200, 'kismi mal kabul tamamlanabilmeli');
 
   const receivedOrder = await prisma.purchaseOrder.findFirst({
     where: { tenantId: ctx.tenantAId, id: orderId },
@@ -1231,7 +1270,9 @@ async function testAtomicMarketplaceClaim(ctx: TestContext): Promise<void> {
 }
 
 async function testStockMovementUpdatesLevel(ctx: TestContext): Promise<void> {
+  const idempotencyKey = `movement-${crypto.randomUUID()}`;
   const result = await api('POST', '/api/stock/movements', token(ctx.ownerAId, ctx.tenantAId), {
+    idempotencyKey,
     productId: ctx.productAId,
     warehouseId: ctx.warehouseAId,
     type: MovementType.IN,
@@ -1239,6 +1280,17 @@ async function testStockMovementUpdatesLevel(ctx: TestContext): Promise<void> {
     unitCost: 10,
   });
   assertStatus(result, 201, 'stok hareketi olusturulabilmeli');
+  const firstMovementId = readDataId(result.body);
+  const replay = await api('POST', '/api/stock/movements', token(ctx.ownerAId, ctx.tenantAId), {
+    idempotencyKey,
+    productId: ctx.productAId,
+    warehouseId: ctx.warehouseAId,
+    type: MovementType.IN,
+    quantity: 7,
+    unitCost: 10,
+  });
+  assertStatus(replay, 201, 'ayni stok hareketi anahtari idempotent olmali');
+  if (readDataId(replay.body) !== firstMovementId) throw new Error('Stok hareketi retry ayni kaydi dondurmedi.');
   const stockLevel = await prisma.stockLevel.findFirst({
     where: { tenantId: ctx.tenantAId, productId: ctx.productAId, warehouseId: ctx.warehouseAId },
   });
@@ -1259,6 +1311,26 @@ async function testStockMovementUpdatesLevel(ctx: TestContext): Promise<void> {
   if (!product || Number(product.averageCost) !== 10) {
     throw new Error('Stok hareketi hareketli ortalama maliyeti guncellemedi.');
   }
+
+  const reservationResult = await api('POST', '/api/inventory-reservations', token(ctx.ownerAId, ctx.tenantAId), {
+    productId: ctx.productAId,
+    warehouseId: ctx.warehouseAId,
+    quantity: 2,
+    refType: 'OTHER',
+    refId: `integration-${crypto.randomUUID()}`,
+  });
+  assertStatus(reservationResult, 201, 'stok rezervasyonu olusturulabilmeli');
+  const reservationId = readDataId(reservationResult.body);
+  const activeReservation = await prisma.inventoryReservation.findFirst({
+    where: { id: reservationId, tenantId: ctx.tenantAId, releasedAt: null },
+  });
+  if (!activeReservation || Number(activeReservation.quantity) !== 2) {
+    throw new Error('Rezervasyon kullanilabilir stogu azaltmadi.');
+  }
+  const releaseResult = await api('POST', `/api/inventory-reservations/${reservationId}/release`, token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(releaseResult, 200, 'stok rezervasyonu serbest birakilabilmeli');
+  const releaseRetry = await api('POST', `/api/inventory-reservations/${reservationId}/release`, token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(releaseRetry, 200, 'rezervasyon serbest birakma retry idempotent olmali');
 }
 
 async function testProductionExecutionFlow(ctx: TestContext): Promise<void> {

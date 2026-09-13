@@ -2,13 +2,13 @@ import { AuditAction,EntityType,PurchaseOrderStatus,PurchaseRequestStatus } from
 import { Context } from 'hono';
 import { NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
-import { recordInventoryCosting,resolveStockLevelLocationId } from '../../../../services/inventory-rules.service.js';
 import { PurchaseAutomationService } from '../../../../services/purchase-automation.service.js';
 import { PurchaseThreeWayMatchService } from '../../../../services/purchase-three-way-match.service.js';
 import { PurchaseTraceService } from '../../../../services/purchase-trace.service.js';
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
-import { requireParam,requireTenantId } from '../../../../utils/context.js';
+import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
 import { generateDocumentNumber } from '../../../../utils/generate-number.js';
+import { inventoryApplication,parseConfirmGoodsReceipt } from '../../../inventory/index.js';
 
 // ---------------------------------------------
 // DTOs
@@ -443,113 +443,16 @@ export const PurchaseOrderController = {
 
   async receiveOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = requireParam(c, 'id');
 
-    const body = await c.req.json<{
-      warehouseId: string;
-      items: Array<{ itemId: string; receivedQty: number }>;
-    }>();
+    const command = parseConfirmGoodsReceipt(id, await c.req.json<unknown>());
+    const receivedOrder = await inventoryApplication.confirmGoodsReceipt.execute(
+      { tenantId, userId },
+      command,
+    );
+    return c.json({ data: receivedOrder });
 
-    if (!body.warehouseId || !body.items?.length) {
-      return c.json(new ValidationError('warehouseId ve items zorunludur.').toJSON(), 400);
-    }
-
-    const order = await prisma.purchaseOrder.findFirst({
-      where: { id, tenantId, deletedAt: null },
-      include: { items: true },
-    });
-    if (!order) return c.json(new NotFoundError('Satin alma siparisi', id).toJSON(), 404);
-
-    if (order.status !== PurchaseOrderStatus.SENT && order.status !== PurchaseOrderStatus.PARTIALLY_RECEIVED) {
-      return c.json(new ValidationError('Sadece gonderilmis veya kismi teslim alinmis siparisler teslim alinabilir.').toJSON(), 400);
-    }
-
-    const updated = await prisma.$transaction(async (tx) => {
-      for (const recv of body.items) {
-        const orderItem = order.items.find((i) => i.id === recv.itemId);
-        if (!orderItem) continue;
-
-        // Update received quantity
-        await tx.purchaseOrderItem.updateMany({
-          where: { id: recv.itemId, tenantId, orderId: id },
-          data: { received: { increment: recv.receivedQty } },
-        });
-
-        // Create stock movement (IN)
-        const stockMovement = await tx.stockMovement.create({
-          data: {
-            tenantId, productId: orderItem.productId,
-            type: 'IN', quantity: recv.receivedQty,
-            unitCost: orderItem.unitPrice,
-            toWarehouseId: body.warehouseId,
-            notes: `Satin alma teslimi: ${order.number}`,
-          },
-        });
-
-        // Update stock level - find existing to match locationId
-        const existingLevel = await tx.stockLevel.findFirst({
-          where: { tenantId, productId: orderItem.productId, warehouseId: body.warehouseId },
-        });
-        const locId = await resolveStockLevelLocationId(tx, tenantId, body.warehouseId, existingLevel?.locationId);
-
-        await tx.stockLevel.upsert({
-          where: {
-            productId_warehouseId_locationId: {
-              productId: orderItem.productId,
-              warehouseId: body.warehouseId,
-              locationId: locId,
-            },
-          },
-          create: {
-            tenantId, productId: orderItem.productId,
-            warehouseId: body.warehouseId, locationId: locId,
-            quantity: recv.receivedQty,
-          },
-          update: { quantity: { increment: recv.receivedQty } },
-        });
-
-        await recordInventoryCosting(tx, tenantId, {
-          movementId: stockMovement.id,
-          productId: orderItem.productId,
-          warehouseId: body.warehouseId,
-          type: 'IN',
-          quantity: recv.receivedQty,
-          previousQuantity: Number(existingLevel?.quantity ?? 0),
-          quantityChange: recv.receivedQty,
-          resultingQuantity: Number(existingLevel?.quantity ?? 0) + recv.receivedQty,
-          unitCost: Number(orderItem.unitPrice),
-          date: stockMovement.createdAt,
-        });
-      }
-
-      // Check if fully received
-      const updatedItems = await tx.purchaseOrderItem.findMany({ where: { tenantId, orderId: id } });
-      const allReceived = updatedItems.every((i) => Number(i.received) >= Number(i.quantity));
-      const newStatus = allReceived ? PurchaseOrderStatus.RECEIVED : PurchaseOrderStatus.PARTIALLY_RECEIVED;
-
-      await tx.purchaseOrder.updateMany({
-        where: { id, tenantId },
-        data: { status: newStatus },
-      });
-
-      const po = await tx.purchaseOrder.findFirst({
-        where: { id, tenantId },
-        include: { contact: { select: { id: true, name: true } }, items: true },
-      });
-      if (!po) throw new NotFoundError('Satın alma siparişi', id);
-
-      await tx.purchaseOrderHistory.create({
-        data: {
-          tenantId, orderId: id,
-          fromStatus: order.status, toStatus: newStatus,
-          notes: `${body.items.length} kalem teslim alindi`,
-        },
-      });
-
-      return po;
-    });
-
-    return c.json({ data: updated });
   },
 
   async cancelOrder(c: Context): Promise<Response> {
