@@ -1,25 +1,25 @@
-import { AuditAction,EntityType,InvoiceStatus,InvoiceType } from '@prisma/client';
+import { AuditAction, EntityType, InvoiceStatus, InvoiceType } from '@prisma/client';
 import { Context } from 'hono';
-import { createEventContext,domainEvents } from '../../../../domain-events/index.js';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
+import { createEventContext, domainEvents } from '../../../../domain-events/index.js';
+import { NotFoundError, ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { getValidatedBody } from '../../../../middleware/validateBody.js';
 import {
-createInvoiceBodySchema,
-updateInvoiceBodySchema,
-type CreateInvoiceBody,
+  createInvoiceBodySchema,
+  updateInvoiceBodySchema,
+  type CreateInvoiceBody,
 } from '../../../../schemas/request-body.schemas.js';
 import { BusinessRulesService } from '../../../../services/business-rules.service.js';
 import { EDocumentAutomationService } from '../../../../services/edocument-automation.service.js';
 import {
-assertAccountingPeriodOpen,
-assertInvoiceCancelable,
-readRequiredReason
+  assertAccountingPeriodOpen,
+  assertInvoiceCancelable,
+  readRequiredReason
 } from '../../../../services/financial/index.js';
 import { scanAndRecomputeInvoiceStatuses } from '../../../../services/financial/invoice-status.service.js';
-import { assertInvoiceStatusTransition,isComputedInvoiceStatus } from '../../../../services/financial/status-transition.service.js';
-import { reverseInvoiceAccountEntry,writeInvoiceAccountEntry } from '../../../../utils/account-entry.js';
-import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
+import { assertInvoiceStatusTransition, isComputedInvoiceStatus } from '../../../../services/financial/status-transition.service.js';
+import { reverseInvoiceAccountEntry, writeInvoiceAccountEntry } from '../../../../utils/account-entry.js';
+import { createAuditLog, getRequestMeta } from '../../../../utils/audit.js';
 
 type InvoiceLineDTO = CreateInvoiceBody['lines'][number];
 import { requireTenantId } from '../../../../utils/context.js';
@@ -196,11 +196,11 @@ export const InvoiceController = {
       }),
       ...(query.dateFrom || query.dateTo
         ? {
-            date: {
-              ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
-              ...(query.dateTo && { lte: new Date(query.dateTo) }),
-            },
-          }
+          date: {
+            ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
+            ...(query.dateTo && { lte: new Date(query.dateTo) }),
+          },
+        }
         : {}),
     };
 
@@ -238,7 +238,11 @@ export const InvoiceController = {
             withholdingRate: { select: { id: true, name: true, rate: true } },
           },
         },
-        payments: true,
+        payments: {
+          include: {
+            payment: true,
+          },
+        },
         eDocuments: true,
       },
     });
@@ -247,7 +251,22 @@ export const InvoiceController = {
       return c.json(new NotFoundError('Fatura', invoiceId).toJSON(), 404);
     }
 
-    return c.json({ data: invoice });
+    const formattedInvoice = {
+      ...invoice,
+      payments: invoice.payments.map((alloc) => ({
+        id: alloc.id,
+        paymentId: alloc.paymentId,
+        amount: Number(alloc.amount),
+        date: alloc.payment?.date ? alloc.payment.date.toISOString() : alloc.createdAt.toISOString(),
+        method: alloc.payment?.method ?? 'CASH',
+        direction: alloc.payment?.direction ?? 'RECEIVE',
+        reference: alloc.payment?.reference ?? null,
+        status: alloc.payment?.status ?? 'COMPLETED',
+        notes: alloc.payment?.notes ?? null,
+      })),
+    };
+
+    return c.json({ data: formattedInvoice });
   },
 
   async getHistory(c: Context): Promise<Response> {
@@ -381,7 +400,7 @@ export const InvoiceController = {
     });
 
     const eDocAutomation = new EDocumentAutomationService(prisma);
-    eDocAutomation.autoCreateAndSendEDocument(tenantId, invoice.id).catch(() => {});
+    eDocAutomation.autoCreateAndSendEDocument(tenantId, invoice.id).catch(() => { });
 
     return c.json({ data: invoice }, 201);
   },

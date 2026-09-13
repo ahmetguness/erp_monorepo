@@ -117,14 +117,18 @@ export function NotificationDropdown() {
         className="relative p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500/50"
       >
         <Bell className="w-4.5 h-4.5" />
-        {totalAlertCount > 0 && (
+        {unreadCount > 0 ? (
           <>
             <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-ping" />
             <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-gradient-to-r from-red-500 to-rose-600 text-[9px] font-bold text-white flex items-center justify-center shadow-lg shadow-red-500/30">
-              {totalAlertCount > 9 ? '9+' : totalAlertCount}
+              {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           </>
-        )}
+        ) : smartItems.length > 0 ? (
+          <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-[9px] font-bold text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/30">
+            {smartItems.length > 9 ? '9+' : smartItems.length}
+          </span>
+        ) : null}
       </button>
 
       {open && (

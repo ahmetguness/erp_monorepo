@@ -89,7 +89,9 @@ function paymentSummary(invoice: Invoice): { paid: number; remaining: number; pe
     .reduce((sum, payment) => sum + payment.amount, 0);
   const remaining = Math.max(invoice.totalGross - paid, 0);
   const percent = invoice.totalGross > 0 ? Math.min(100, Math.round((paid / invoice.totalGross) * 100)) : 0;
-  const lastPayment = [...(invoice.payments ?? [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  const lastPayment = [...(invoice.payments ?? [])]
+    .filter((payment) => Boolean(payment.date))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
   return { paid, remaining, percent, lastPayment };
 }
 
@@ -190,7 +192,7 @@ function PaymentCard({ invoice, paid }: { invoice: Invoice; paid: ReturnType<typ
         <div><p className="text-xs text-slate-500">Kalan</p><p className="font-medium text-slate-100">{formatCurrency(paid.remaining, invoice.currencyCode)}</p></div>
       </div>
       {paid.lastPayment ? (
-        <p className="mt-3 text-xs text-slate-500">Son ödeme: {formatDate(paid.lastPayment.date)} · {formatCurrency(paid.lastPayment.amount, invoice.currencyCode)} · {paid.lastPayment.method}</p>
+        <p className="mt-3 text-xs text-slate-500">Son ödeme: {paid.lastPayment.date ? formatDate(paid.lastPayment.date) : '-'} · {formatCurrency(paid.lastPayment.amount, invoice.currencyCode)} · {paid.lastPayment.method ?? 'CASH'}</p>
       ) : (
         <p className="mt-3 text-xs text-slate-500">Bu faturaya bağlı ödeme kaydı yok.</p>
       )}

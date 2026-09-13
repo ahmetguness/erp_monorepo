@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, ArrowRight, Sparkles, ExternalLink, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth.store';
+import { useTenantSettings } from '@/hooks/useSettings';
 import { cn } from '@/lib/utils';
 
 // ─────────────────────────────────────────────
@@ -157,17 +158,23 @@ const STORAGE_KEY_PREFIX = 'axon_onboarding_done_';
 
 export function OnboardingTooltip() {
   const user = useAuthStore((s) => s.user);
+  const { data: settings = [], isLoading: isSettingsLoading } = useTenantSettings();
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState(0);
   const [tipsOpen, setTipsOpen] = useState(true);
 
+  const wizardCompleted = settings.some((s) => s.key === 'wizard_completed' && s.value === 'true');
+
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || isSettingsLoading) return;
+    // Do not show onboarding tooltip if QuickStartWizard is not completed yet
+    if (!wizardCompleted) return;
+
     const done = localStorage.getItem(`${STORAGE_KEY_PREFIX}${user.id}`);
     if (done) return;
-    const timeout = window.setTimeout(() => setVisible(true), 0);
+    const timeout = window.setTimeout(() => setVisible(true), 800);
     return () => window.clearTimeout(timeout);
-  }, [user?.id]);
+  }, [user?.id, isSettingsLoading, wizardCompleted]);
 
   function dismiss() {
     if (!user?.id) return;

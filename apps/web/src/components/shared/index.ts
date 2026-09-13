@@ -37,3 +37,6 @@ export {
 } from './StatusBadge';
 
 export { FeatureGate } from './FeatureGate';
+
+export { Breadcrumb } from './Breadcrumb';
+export type { BreadcrumbItem } from './Breadcrumb';

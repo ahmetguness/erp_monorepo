@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useEffectEvent, useId, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,7 +37,11 @@ export function Modal({ isOpen, onClose, title, description, size = 'md', childr
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
-  const closeModal = useEffectEvent(onClose);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   // Close on Escape
   useEffect(() => {
@@ -49,7 +53,7 @@ export function Modal({ isOpen, onClose, title, description, size = 'md', childr
       (first ?? panelRef.current)?.focus();
     });
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); onCloseRef.current(); return; }
       if (e.key !== 'Tab' || !panelRef.current) return;
       const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(focusableSelector));
       if (focusable.length === 0) { e.preventDefault(); panelRef.current.focus(); return; }

@@ -522,11 +522,14 @@ export function ChatBot() {
   // ── Kapalı durum ──
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-500 to-sky-600 text-white shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 hover:scale-105 transition-all flex items-center justify-center group"
-        aria-label="Chatbot aç">
-        <MessageCircle className="w-6 h-6 group-hover:scale-110 transition-transform" />
-        <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-950 animate-pulse" />
+      <button
+        onClick={() => setOpen(true)}
+        className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-40 h-12 w-12 rounded-xl bg-gradient-to-br from-sky-500 to-sky-600 text-white shadow-lg shadow-sky-500/20 hover:shadow-sky-500/35 hover:scale-105 active:scale-95 transition-all flex items-center justify-center group"
+        aria-label="Axon Asistanı aç"
+        title="Axon AI Asistan"
+      >
+        <MessageCircle className="w-5 h-5 group-hover:scale-110 transition-transform" />
+        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
       </button>
     );
   }

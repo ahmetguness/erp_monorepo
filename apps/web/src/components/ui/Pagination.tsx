@@ -11,8 +11,21 @@ export interface PaginationProps {
   onChange: (page: number) => void;
 }
 
-export function Pagination({ page, total, totalPages, onChange }: PaginationProps) {
-  if (totalPages <= 1) return null;
+export function Pagination({ page, pageSize, total, totalPages, onChange }: PaginationProps) {
+  if (total <= 0) return null;
+
+  if (totalPages <= 1) {
+    return (
+      <div className="flex items-center justify-between py-1 text-xs text-slate-400">
+        <p>
+          Toplam <span className="font-semibold text-slate-200">{total}</span> kayıt gösteriliyor
+        </p>
+      </div>
+    );
+  }
+
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
 
   const pages: (number | '...')[] = [];
   if (totalPages <= 7) {
@@ -26,9 +39,10 @@ export function Pagination({ page, total, totalPages, onChange }: PaginationProp
   }
 
   return (
-    <div className="flex items-center justify-between gap-4">
-      <p className="text-xs text-slate-500">
-        <span className="font-semibold text-slate-300">{total}</span> kayıt
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <p className="text-xs text-slate-400">
+        Toplam <span className="font-semibold text-slate-200">{total}</span> kayıttan{' '}
+        <span className="font-medium text-slate-300">{start}–{end}</span> arası gösteriliyor
       </p>
       <div className="flex items-center gap-0.5">
         <button

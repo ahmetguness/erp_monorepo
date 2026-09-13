@@ -28,3 +28,6 @@ export { Pagination } from './Pagination';
 export type { PaginationProps } from './Pagination';
 
 export { ToastContainer } from './Toast';
+
+export { Tooltip } from './Tooltip';
+export type { TooltipProps, TooltipPlacement } from './Tooltip';
