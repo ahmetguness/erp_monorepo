@@ -290,7 +290,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'flex flex-col bg-slate-900 border-r border-slate-800 transition-all duration-200 shrink-0',
+        'flex flex-col h-full bg-slate-900 border-r border-slate-800 transition-all duration-200 shrink-0',
         sidebarOpen ? 'w-56' : 'w-0 overflow-hidden',
       )}
     >
