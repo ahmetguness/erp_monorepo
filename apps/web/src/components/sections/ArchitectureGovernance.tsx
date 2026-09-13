@@ -3,113 +3,106 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-type PillarId = 'maker-checker' | 'multi-tenant' | 'outbox' | 'api-hub';
+type GovernancePillarId = 'rbac' | 'approvals' | 'audit' | 'isolation';
 
-interface Pillar {
-  id: PillarId;
+interface GovernancePillar {
+  id: GovernancePillarId;
   title: string;
   badge: string;
   badgeColor: string;
-  summary: string;
-  description: string;
-  specs: { label: string; value: string }[];
+  businessSummary: string;
+  businessDesc: string;
+  outcomes: string[];
+  techSpec: string;
 }
 
-const PILLARS: Pillar[] = [
+const PILLARS: GovernancePillar[] = [
   {
-    id: 'maker-checker',
-    title: 'Maker-Checker: Çift Kişi Onay Güvencesi',
-    badge: 'Hata & Yetki Aşımı Koruması',
-    badgeColor: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
-    summary: 'Büyük tutarlı harcamalar ve kritik sistem değişikliklerinde ikinci bir bağımsız yetkilinin onayı zorunludur.',
-    description: 'Yüksek tutarlı satınalmalar (Örn: ₺500.000 üzeri), tedarikçi kredi limitleri veya hesap planı değişikliklerinde değişiklik talebi açılır. Talebi açan yönetici kendi işlemini onaylayamaz. İkinci bağımsız yetkili etki analizini inceleyerek onaylar veya revize ister.',
-    specs: [
-      { label: 'Onay Modeli', value: 'Bağımsız Çift Kontrol (Maker-Checker)' },
-      { label: 'Önizleme Desteği', value: 'Etki Simülasyonu & Kilitlenen Siparişler' },
-      { label: 'Geri Alma (Rollback)', value: 'Tek Tıkla Telafi / Ters Kayıt' },
-      { label: 'Denetim Damgası', value: 'Kullanıcı, Tarih-Saat ve IP Damgası' },
-    ],
-  },
-  {
-    id: 'multi-tenant',
-    title: 'Şubeler ve Şirketler Arası Veri İzolasyonu',
-    badge: 'ISO 27001 & KVKK Uyumlu',
+    id: 'rbac',
+    title: 'Rol Bazlı Yetkilendirme',
+    badge: 'Erişim Kontrolü',
     badgeColor: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-    summary: 'Grup şirketleri, fabrikalar ve şubeler tek sistemde çalışır ancak hiçbiri diğerinin gizli maliyetini veya cari bakiyesini göremez.',
-    description: 'PostgreSQL Row-Level Security (RLS) ve TenantGuard seviyesinde mutlak mantıksal ayrım sağlanır. Kullanıcılar yalnızca atanmış oldukları rollerin (Örn: depocu sadece sevk fişini görür, satış kâr marjını göremez) izin verdiği ekranlara erişebilir.',
-    specs: [
-      { label: 'Veritabanı İzolasyonu', value: 'PostgreSQL Row-Level Security (RLS)' },
-      { label: 'Rol Hassasiyeti', value: 'Ekran ve Alan Bazlı Granüler RBAC' },
-      { label: 'İki Aşamalı Güvenlik', value: 'TOTP (Google Authenticator) & WebAuthn' },
-      { label: 'Denetim İzi (Audit)', value: 'Her Değişiklikte Eski/Yeni Değer Kaydı' },
+    businessSummary: 'Her çalışan yalnızca yetkili olduğu ekran ve verilere erişir.',
+    businessDesc: 'Depo personeli kâr marjlarını göremez, satış ekibi muhasebe yevmiye kayıtlarına müdahale edemez. Departman ve unvan bazında net yetki ayrımı yapılır.',
+    outcomes: [
+      'Ekran ve aksiyon bazında detaylı yetki matrisi',
+      'Kullanıcı unvanına göre otomatik rol ataması',
+      'Hassas finansal ve ticari bilgilerin gizliliği',
     ],
+    techSpec: 'Granüler RBAC, yetki kontrolleri ve oturum güvenliği',
   },
   {
-    id: 'outbox',
-    title: 'İnternet Kopsa Bile Sıfır Veri Kaybı (Outbox)',
-    badge: 'Garantili Mesaj Kuyruğu',
+    id: 'approvals',
+    title: 'Onay Mekanizmaları & Çift Kontrol',
+    badge: 'Yetki Aşımı Koruması',
+    badgeColor: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
+    businessSummary: 'Kritik işlemleri kontrollü onay süreçlerinden geçirin.',
+    businessDesc: 'Belirlenen limitleri aşan satınalma siparişleri veya yüksek iskonto oranlarında sistem otomatik olarak ikinci bir bağımsız yetkilinin onayını talep eder.',
+    outcomes: [
+      'Belirlenen bütçe limitlerinde çok kademeli onay',
+      'Kendi açtığı talebi kendi onaylayamama güvencesi',
+      'Onay bekleyen görevlerin anlık yönetici bildirimleri',
+    ],
+    techSpec: 'Maker-Checker bağımsız çift kontrol akışları',
+  },
+  {
+    id: 'audit',
+    title: 'İşlem Geçmişi & Denetim İzi',
+    badge: 'Kayıt Güvencesi',
+    badgeColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+    businessSummary: 'Kimin, ne zaman, hangi işlemi yaptığını şeffaf biçimde takip edin.',
+    businessDesc: 'Sistemdeki her stok hareketi, fiyat değişikliği, fatura düzenlemesi veya iptal işlemi; kullanıcı, tarih, saat ve eski/yeni değerleriyle kayıt altına alınır.',
+    outcomes: [
+      'Değiştirilen tüm kayıtlarda eski ve yeni değer takibi',
+      'Yetkisiz denemelerin ve hatalı işlemlerin tespiti',
+      'Kurumsal denetim ve incelemelere tam hazırlık',
+    ],
+    techSpec: 'Kapsamlı Audit Log ve değişmez işlem tarihi damgalaması',
+  },
+  {
+    id: 'isolation',
+    title: 'Şube & Şirket Veri İzolasyonu',
+    badge: 'Organizasyon Güvenliği',
     badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-    summary: 'Pazaryeri siparişleri, stok düşüşleri ve e-faturalar asenkron kuyruklarla korunur; bağlantı kesintilerinde kayıtlar asla kaybolmaz.',
-    description: 'Sipariş veritabanına yazıldığı anda ilgili bildirim aynı ACID veritabanı transaction’ında outbox tablosuna işlenir. Dış pazaryeri veya GİB sunucusu o an yanıt vermese bile, Redis BullMQ worker hattı sistem ayağa kalktığında işlemi kaldığı yerden tamamlar.',
-    specs: [
-      { label: 'İşlem Güvencesi', value: 'ACID Transactional Outbox' },
-      { label: 'Kuyruk Motoru', value: 'Redis 7 & BullMQ Asenkron Hattı' },
-      { label: 'Hata Toleransı', value: 'Dead-Letter Queue & Exponential Backoff' },
-      { label: 'Mükerrerlik Önleme', value: 'Idempotency Key ile %100 Tekil İşlem' },
+    businessSummary: 'Organizasyonlar arasında kontrollü veri erişimi sağlayın.',
+    businessDesc: 'Grup şirketleri, fabrikalar veya farklı şubeler tek sistemde çalışırken; her şube yalnızca kendi operasyonunu görür. Merkez yönetim ise tüm verileri konsolide inceler.',
+    outcomes: [
+      'Şubeler arasında bağımsız ticari ve finansal görünüm',
+      'Merkez için konsolide bilanço ve stok raporları',
+      'Grup şirketleri arası düzenli yetki ayrımı',
     ],
-  },
-  {
-    id: 'api-hub',
-    title: 'REST API & Güvenli Webhook Entegrasyonu',
-    badge: 'Açık Standartlar',
-    badgeColor: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
-    summary: 'Kendi mobil uygulamalarınızı, e-ticaret sitenizi (Shopify, WooCommerce vb.) ve kargo firmalarınızı çift yönlü bağlayın.',
-    description: 'Axon ERP, modern OpenAPI 3.1 standartlarında REST API sunar. İzin kapsamına (scope) göre sınırlandırılmış API anahtarları oluşturabilir, hız limitleri koyabilir ve giden webhook bildirimlerini HMAC-SHA256 imzasıyla doğrulayabilirsiniz.',
-    specs: [
-      { label: 'API Standardı', value: 'RESTful JSON API (OpenAPI 3.1)' },
-      { label: 'Anahtar Kapsamı', value: 'Granüler Scopes (products:read, orders:write)' },
-      { label: 'Webhook Koruması', value: 'HMAC-SHA256 İmza Doğrulaması' },
-      { label: 'Kota & Hız Sınırı', value: 'Tenant Bazlı Dağıtık Rate-Limiting' },
-    ],
+    techSpec: 'PostgreSQL Row-Level Security (RLS) ile veritabanı seviyesinde izolasyon',
   },
 ];
 
 export default function ArchitectureGovernance() {
-  const [activePillarId, setActivePillarId] = useState<PillarId>('maker-checker');
+  const [activePillarId, setActivePillarId] = useState<GovernancePillarId>('rbac');
   const [makerApproved, setMakerApproved] = useState<boolean>(false);
-  const [selectedRole, setSelectedRole] = useState<'admin' | 'staff'>('staff');
+  const [selectedRole, setSelectedRole] = useState<'branch' | 'cfo'>('branch');
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState<boolean>(false);
 
   const activePillar = PILLARS.find((p) => p.id === activePillarId) || PILLARS[0];
 
   return (
-    <section id="architecture" className="py-20 lg:py-28 relative bg-[#0F172A] border-t border-slate-800 text-slate-100 overflow-hidden">
-      <div className="section-container relative z-10">
+    <section id="security" className="py-20 lg:py-28 bg-[#080F1E] border-t border-slate-800 text-slate-100 overflow-hidden">
+      <div className="section-container">
         
-        {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.45 }}
-          className="max-w-3xl mb-12"
-        >
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-slate-400 mb-4">
+        {/* Section Header: Business Language First */}
+        <div className="max-w-3xl mb-12">
+          <div className="section-label">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-            <span>KURUMSAL GÜVENLİK & DENETİM</span>
+            <span>KURUMSAL GÜVENLİK & KONTROL</span>
           </div>
 
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-[-0.02em] leading-tight mb-4">
-            Yetki aşımı, veri sızıntısı ve kesintiye<br />
-            <span className="text-slate-400 font-normal">
-              sıfır toleranslı kurumsal altyapı.
-            </span>
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-4">
+            Doğru bilgi, doğru kişide.
           </h2>
           <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
-            Tek bir personelin hatasıyla yüz binlerce liralık harcama onaylanamaz, şubeler birbirinin mali tablolarını göremez, internet kopsa bile kuyruktaki işlemler kaybolmaz.
+            Kurumsal işletmelerde güvenlik, sadece şifre koruması değil; yetki aşımını önleyen onay mekanizmaları, şube veri izolasyonu ve geriye dönük eksiksiz işlem geçmişidir.
           </p>
-        </motion.div>
+        </div>
 
-        {/* 4 Pillars Navigation Tabs */}
+        {/* 4 Pillars Tab Buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           {PILLARS.map((pillar) => {
             const isActive = pillar.id === activePillarId;
@@ -117,10 +110,10 @@ export default function ArchitectureGovernance() {
               <button
                 key={pillar.id}
                 onClick={() => setActivePillarId(pillar.id)}
-                className={`p-4 rounded-xl text-left transition-all duration-200 cursor-pointer border flex flex-col justify-between ${
+                className={`p-4 rounded-xl text-left transition-all duration-150 cursor-pointer border flex flex-col justify-between ${
                   isActive
-                    ? 'bg-slate-800/90 border-blue-500/60 shadow-lg shadow-blue-500/10'
-                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-800/40'
+                    ? 'bg-[#0B1424] border-blue-500/60 shadow-md shadow-blue-500/10'
+                    : 'bg-[#060B15]/40 border-slate-800 hover:border-slate-700'
                 }`}
               >
                 <div>
@@ -132,86 +125,83 @@ export default function ArchitectureGovernance() {
                   </h3>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-2 line-clamp-2">
-                  {pillar.summary}
+                  {pillar.businessSummary}
                 </p>
               </button>
             );
           })}
         </div>
 
-        {/* Detailed Pillar Showcase Card */}
+        {/* Pillar Showcase Card */}
         <AnimatePresence mode="wait">
           <motion.div
             key={activePillar.id}
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.25 }}
-            className="grid grid-cols-1 lg:grid-cols-12 gap-8 bg-slate-900/80 border border-slate-800 rounded-2xl p-6 sm:p-8 backdrop-blur-sm shadow-xl"
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="grid grid-cols-1 lg:grid-cols-12 gap-8 bg-[#0B1424] border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl"
           >
-            {/* Left Content */}
+            {/* Left Content: Business Value & Outcomes */}
             <div className="lg:col-span-7 flex flex-col justify-between space-y-6">
               <div>
-                <div className="inline-block mb-2">
-                  <span className={`text-xs font-semibold px-2.5 py-1 rounded border ${activePillar.badgeColor}`}>
-                    {activePillar.badge}
-                  </span>
-                </div>
+                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded border inline-block mb-3 ${activePillar.badgeColor}`}>
+                  {activePillar.badge}
+                </span>
                 <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">
                   {activePillar.title}
                 </h3>
-                <p className="text-sm text-slate-300 leading-relaxed">
-                  {activePillar.description}
+                <p className="text-sm text-slate-300 leading-relaxed mb-5">
+                  {activePillar.businessDesc}
                 </p>
+
+                {/* Outcomes */}
+                <div className="space-y-2.5">
+                  {activePillar.outcomes.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2.5 text-xs sm:text-sm text-slate-200">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {/* Technical Specifications Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                {activePillar.specs.map((spec, i) => (
-                  <div key={i} className="p-3 bg-slate-950/70 border border-slate-800/80 rounded-lg">
-                    <span className="text-[10px] text-slate-400 block mb-1">
-                      {spec.label}
-                    </span>
-                    <span className="text-xs font-semibold text-slate-200">
-                      {spec.value}
-                    </span>
-                  </div>
-                ))}
+              {/* Technical Spec Footnote */}
+              <div className="pt-4 border-t border-slate-800 text-xs text-slate-400 flex items-center gap-2">
+                <span className="text-slate-500 font-mono">Altyapı Güvencesi:</span>
+                <span className="text-slate-300">{activePillar.techSpec}</span>
               </div>
             </div>
 
-            {/* Right Interactive Visual Simulation Card */}
-            <div className="lg:col-span-5 flex flex-col justify-between bg-slate-950/90 border border-slate-800 rounded-xl p-5 shadow-inner">
-              {activePillar.id === 'maker-checker' && (
+            {/* Right Interactive Business Simulator Card */}
+            <div className="lg:col-span-5 flex flex-col justify-between bg-[#080F1E] border border-slate-800 rounded-xl p-5 shadow-inner">
+              {activePillar.id === 'approvals' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                    <span className="text-xs font-bold text-white">Maker-Checker Canlı Simülasyonu</span>
+                    <span className="text-xs font-bold text-white">Çift Kişi Onay Akışı (Örnek)</span>
                     <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 font-medium">
                       Çift Kontrol
                     </span>
                   </div>
 
-                  {/* Maker Request */}
-                  <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 space-y-1.5">
+                  {/* Step 1: Requester */}
+                  <div className="p-3 bg-[#0B1424] rounded-lg border border-slate-800 space-y-1 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-slate-300">1. Adım: Maker (Talep Eden)</span>
-                      <span className="text-[10px] text-slate-400">Ahmet Y. • Satınalma Müdürü</span>
+                      <span className="font-semibold text-slate-300">1. Talep Oluşturan:</span>
+                      <span className="text-[10px] text-slate-400">Satınalma Yöneticisi</span>
                     </div>
-                    <p className="text-xs text-slate-300">
-                      Tedarikçi Kredi Limiti Artışı: <span className="font-semibold text-white">₺1.200.000</span>
+                    <p className="text-slate-300">
+                      Hammadde Satınalma Talebi: <strong className="text-white">₺350.000</strong>
                     </p>
-                    <div className="text-[10px] text-emerald-400">✓ Talep oluşturuldu, kendi kendini onaylayamaz.</div>
+                    <span className="text-[10px] text-emerald-400 block">✓ Talep açıldı, yönetici onayına sunuldu</span>
                   </div>
 
-                  {/* Checker Approval */}
-                  <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 space-y-2">
+                  {/* Step 2: Approver */}
+                  <div className="p-3 bg-[#0B1424] rounded-lg border border-slate-800 space-y-2 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-slate-300">2. Adım: Checker (Onaylayan)</span>
-                      <span className="text-[10px] text-slate-400">Zeynep K. • Finans Direktörü</span>
+                      <span className="font-semibold text-slate-300">2. Bağımsız Onaylayan:</span>
+                      <span className="text-[10px] text-slate-400">Finans Direktörü</span>
                     </div>
-                    <p className="text-xs text-slate-300">
-                      Etki Analizi: 3 bekleyen hammadde siparişi otomatik onaylanacak.
-                    </p>
                     <div className="flex items-center justify-between pt-1">
                       <button
                         onClick={() => setMakerApproved(!makerApproved)}
@@ -224,138 +214,152 @@ export default function ArchitectureGovernance() {
                         {makerApproved ? '✓ Onaylandı (Geri Al)' : 'Talebi Onayla (Simüle Et)'}
                       </button>
                       <span className={`text-[11px] font-medium ${makerApproved ? 'text-emerald-400' : 'text-amber-400'}`}>
-                        {makerApproved ? 'Değişiklik Yürürlükte' : 'Onay Bekliyor'}
+                        {makerApproved ? 'Yürürlükte' : 'Onay Bekliyor'}
                       </span>
                     </div>
                   </div>
 
                   <div className="text-[10px] text-slate-400 pt-1">
-                    Denetim İzi: Zorunlu onay gerekçesi, tarih-saat ve IP damgası loglandı.
+                    Denetim İzi: Onaylayan kullanıcı, tarih ve saat sistemde değişmez olarak kaydedilir.
                   </div>
                 </div>
               )}
 
-              {activePillar.id === 'multi-tenant' && (
+              {(activePillar.id === 'rbac' || activePillar.id === 'isolation') && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                    <span className="text-xs font-bold text-white">Rol & İzolasyon Simülatörü</span>
-                    <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded border border-slate-800">
+                    <span className="text-xs font-bold text-white">Rol & İzolasyon Kontrolü</span>
+                    <div className="flex items-center gap-1 bg-[#060B15] p-0.5 rounded border border-slate-800">
                       <button
-                        onClick={() => setSelectedRole('staff')}
+                        onClick={() => setSelectedRole('branch')}
                         className={`text-[10px] px-2 py-0.5 rounded transition-colors cursor-pointer ${
-                          selectedRole === 'staff' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400'
+                          selectedRole === 'branch' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400'
                         }`}
                       >
                         Şube Satış
                       </button>
                       <button
-                        onClick={() => setSelectedRole('admin')}
+                        onClick={() => setSelectedRole('cfo')}
                         className={`text-[10px] px-2 py-0.5 rounded transition-colors cursor-pointer ${
-                          selectedRole === 'admin' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400'
+                          selectedRole === 'cfo' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400'
                         }`}
                       >
-                        Holding CFO
+                        Merkez CFO
                       </button>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
-                      <span className="text-slate-300">Kendi Şube Stoklarını Görme</span>
-                      <span className="text-emerald-400 font-semibold">✓ İzin Verildi</span>
+                  <div className="space-y-2 text-xs">
+                    <div className="p-2.5 bg-[#0B1424] rounded-lg border border-slate-800 flex items-center justify-between">
+                      <span className="text-slate-300">Kendi Şube Siparişlerini Görme</span>
+                      <span className="text-emerald-400 font-semibold">✓ İzinli</span>
                     </div>
-                    <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
-                      <span className="text-slate-300">Tüm Grup Şirket Finans Raporları</span>
-                      <span className={selectedRole === 'admin' ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
-                        {selectedRole === 'admin' ? '✓ İzin Verildi' : '✕ Yetki Yok (Korumalı)'}
+                    <div className="p-2.5 bg-[#0B1424] rounded-lg border border-slate-800 flex items-center justify-between">
+                      <span className="text-slate-300">Tüm Grup Konsolide Bilanço</span>
+                      <span className={selectedRole === 'cfo' ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
+                        {selectedRole === 'cfo' ? '✓ İzinli' : '✕ Yetki Yok'}
                       </span>
                     </div>
-                    <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
-                      <span className="text-slate-300">Yevmiye Defteri Ters Kayıt</span>
-                      <span className={selectedRole === 'admin' ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
-                        {selectedRole === 'admin' ? '✓ Çift Onay Şartıyla' : '✕ Yetki Yok (Korumalı)'}
+                    <div className="p-2.5 bg-[#0B1424] rounded-lg border border-slate-800 flex items-center justify-between">
+                      <span className="text-slate-300">İskonto Tanımlama & Onay</span>
+                      <span className={selectedRole === 'cfo' ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
+                        {selectedRole === 'cfo' ? '✓ İzinli' : '✕ Yetki Sınırı Dışında'}
                       </span>
                     </div>
                   </div>
 
                   <div className="text-[10px] text-slate-400 pt-1">
-                    PostgreSQL Row-Level Security (RLS) ve TenantGuard ile veritabanı seviyesinde izolasyon.
+                    Veritabanı seviyesinde izolasyon ile personeller yalnızca kendi yetki alanındaki kayıtları görebilir.
                   </div>
                 </div>
               )}
 
-              {activePillar.id === 'outbox' && (
+              {activePillar.id === 'audit' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                    <span className="text-xs font-bold text-white">Domain Event Outbox Hattı</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium">
-                      %100 Güvenilirlik
+                    <span className="text-xs font-bold text-white">Denetim İzi Kayıt Örneği</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium">
+                      Değişmez Kayıt
                     </span>
                   </div>
 
-                  <div className="space-y-2.5">
-                    <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                        <span className="text-slate-200">1. Veritabanı ACID Kaydı</span>
+                  <div className="space-y-2 text-xs">
+                    <div className="p-2.5 bg-[#0B1424] rounded-lg border border-slate-800 space-y-1">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span>Fiyat Listesi Güncellemesi</span>
+                        <span>14:32</span>
                       </div>
-                      <span className="text-[11px] text-slate-400 font-mono">0.4ms</span>
+                      <div className="text-[11px] text-slate-300">
+                        Pompa Birim Fiyatı: ₺950 → ₺1.050 (Ahmet Y.)
+                      </div>
                     </div>
-
-                    <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                        <span className="text-slate-200">2. Outbox Kuyruk İşleme (Redis)</span>
+                    <div className="p-2.5 bg-[#0B1424] rounded-lg border border-slate-800 space-y-1">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span>İrsaliye İptal Talebi</span>
+                        <span>11:15</span>
                       </div>
-                      <span className="text-[11px] text-emerald-400 font-medium">Kuyrukta Sıfır Kayıp</span>
-                    </div>
-
-                    <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-purple-400" />
-                        <span className="text-slate-200">3. Pazaryeri & GİB İletimi</span>
+                      <div className="text-[11px] text-slate-300">
+                        IRS-0182: İptal gerekçesi sisteme işlendi
                       </div>
-                      <span className="text-[11px] text-emerald-400 font-medium">Garantili İletim</span>
                     </div>
                   </div>
 
                   <div className="text-[10px] text-slate-400 pt-1">
-                    Dış servis kesintilerinde exponential backoff ile otomatik tekrar denenir.
-                  </div>
-                </div>
-              )}
-
-              {activePillar.id === 'api-hub' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                    <span className="text-xs font-bold text-white">Webhook & REST Güvenliği</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 font-medium">
-                      HMAC-SHA256
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 space-y-2 text-xs">
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
-                      <span>Olay: order.created</span>
-                      <span className="text-emerald-400">200 OK (38ms)</span>
-                    </div>
-                    <div className="p-2 bg-slate-950 rounded border border-slate-800 text-[11px] text-slate-300 font-mono">
-                      X-Axon-Signature: sha256=9f8a2...3b4
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
-                      <span>Kapsam: products:read, orders:write</span>
-                      <span className="text-slate-300">Rate Limit: 1200/dk</span>
-                    </div>
-                  </div>
-
-                  <div className="text-[10px] text-slate-400 pt-1">
-                    E-ticaret siteleriniz, lojistik depolarınız ve mobil uygulamalarınızla çift yönlü güvenli entegrasyon.
+                    Tüm işlemler kullanıcı kimliği ve zaman damgasıyla saklanır; geriye dönük silinemez.
                   </div>
                 </div>
               )}
             </div>
           </motion.div>
         </AnimatePresence>
+
+        {/* Expandable Technical Details Drawer */}
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+            className="text-xs font-medium text-slate-400 hover:text-white transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>{showTechnicalDetails ? 'Teknik altyapı detaylarını gizle' : 'Teknik güvenlik ve altyapı detaylarını inceleyin'}</span>
+            <svg
+              className={`w-3.5 h-3.5 transition-transform duration-150 ${showTechnicalDetails ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          <AnimatePresence>
+            {showTechnicalDetails && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden mt-4 text-left"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-5 rounded-xl bg-[#0B1424] border border-slate-800 text-xs text-slate-400">
+                  <div className="p-3 bg-[#080F1E] rounded-lg border border-slate-800">
+                    <span className="font-semibold text-slate-200 block mb-1">PostgreSQL RLS</span>
+                    Şube ve organizasyon bazlı veritabanı satır seviyesi izolasyonu (Row-Level Security).
+                  </div>
+                  <div className="p-3 bg-[#080F1E] rounded-lg border border-slate-800">
+                    <span className="font-semibold text-slate-200 block mb-1">Maker-Checker</span>
+                    Hassas finansal ve idari işlemlerde iki bağımsız yetkili zorunluluğu.
+                  </div>
+                  <div className="p-3 bg-[#080F1E] rounded-lg border border-slate-800">
+                    <span className="font-semibold text-slate-200 block mb-1">Transactional Outbox</span>
+                    Pazaryeri ve harici entegrasyonlarda kesintiye dayanıklı asenkron kuyruk yapısı.
+                  </div>
+                  <div className="p-3 bg-[#080F1E] rounded-lg border border-slate-800">
+                    <span className="font-semibold text-slate-200 block mb-1">OpenAPI 3.1 & HMAC</span>
+                    Yetkilendirilmiş API anahtarları ve HMAC-SHA256 imzalı güvenli webhook iletişimi.
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
       </div>
     </section>

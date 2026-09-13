@@ -472,6 +472,11 @@ export interface PlanPricingMeta {
   badge: string | null;
   price: string | null;
   priceSub: string | null;
+  monthlyPrice: string | null;
+  annualPrice: string | null;
+  monthlyPriceSub: string | null;
+  annualPriceSub: string | null;
+  annualBilledTotal: string | null;
   description: string;
   cta: string;
   ctaStyle: "primary" | "secondary" | "outline";
@@ -482,33 +487,48 @@ export const PLAN_PRICING_META: Record<PlanName, PlanPricingMeta> = {
   [PLAN.STARTER]: {
     label: PLAN_LABELS.STARTER,
     badge: null,
-    price: "1.990",
-    priceSub: null,
+    price: "1.950",
+    priceSub: "+ ek kullanıcı ₺140/ay",
+    monthlyPrice: "2.450",
+    annualPrice: "1.950",
+    monthlyPriceSub: "+ ek kullanıcı ₺175/ay",
+    annualPriceSub: "+ ek kullanıcı ₺140/ay",
+    annualBilledTotal: "₺23.400 / yıl",
     description:
-      "Temel operasyonel surecleri dijitallestirmek isteyen kucuk olcekli isletmeler icin.",
-    cta: "Hemen Basla",
+      "Temel operasyonel ve ön muhasebe süreçlerini dijitalleştirmek isteyen küçük ölçekli işletmeler için.",
+    cta: "Hemen Başla",
     ctaStyle: "secondary",
     highlight: false,
   },
   [PLAN.PROFESSIONAL]: {
     label: PLAN_LABELS.PROFESSIONAL,
-    badge: "Onerilen",
-    price: "3.990",
-    priceSub: "+ kullanici basi 150 TL/ay",
+    badge: "En Çok Tercih Edilen",
+    price: "4.750",
+    priceSub: "+ kullanıcı başı ₺175/ay",
+    monthlyPrice: "5.950",
+    annualPrice: "4.750",
+    monthlyPriceSub: "+ kullanıcı başı ₺220/ay",
+    annualPriceSub: "+ kullanıcı başı ₺175/ay",
+    annualBilledTotal: "₺57.000 / yıl",
     description:
-      "Satis, finans ve operasyon sureclerini tek cati altinda yonetmek isteyen buyuyen isletmeler icin.",
-    cta: "Lisans Satin Al",
+      "Satış, çoklu depo, satın alma ve finans süreçlerini tek çatı altında yönetmek isteyen büyüyen işletmeler için.",
+    cta: "Canlı Demo İsteyin",
     ctaStyle: "primary",
     highlight: true,
   },
   [PLAN.ENTERPRISE]: {
     label: PLAN_LABELS.ENTERPRISE,
-    badge: null,
-    price: null,
-    priceSub: null,
+    badge: "Üretim & Kurumsal",
+    price: "11.900",
+    priceSub: "'den başlayan",
+    monthlyPrice: "14.900",
+    annualPrice: "11.900",
+    monthlyPriceSub: "'den başlayan",
+    annualPriceSub: "'den başlayan",
+    annualBilledTotal: "₺142.800 / yıl'dan başlayan",
     description:
-      "Cok subeli, yuksek kullanicili ve ozel entegrasyon gerektiren kurumlar icin.",
-    cta: "Satis Ekibiyle Gorus",
+      "Çok şubeli, üretim (MRP), teknik servis ve pazar yeri entegrasyonu gerektiren fabrikalar ve holdingler için.",
+    cta: "Satış Ekibiyle Görüş",
     ctaStyle: "outline",
     highlight: false,
   },

@@ -1,5 +1,5 @@
 export const PUBLIC_PATHS: ReadonlySet<string> = new Set([
-  '/', '/login', '/register', '/admin/login', '/set-password', '/invite', '/api-docs',
+  '/', '/login', '/register', '/admin/login', '/set-password', '/invite', '/api-docs', '/checkout',
 ]);
 
 export type RouteAccessDecision =
@@ -18,6 +18,7 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.has(pathname)
     || pathname.startsWith('/_next')
     || pathname.startsWith('/api')
+    || pathname.startsWith('/checkout')
     || pathname.includes('.');
 }
 

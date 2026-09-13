@@ -3,61 +3,57 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const steps = [
+const STEPS = [
   {
     num: '01',
     title: 'İhtiyaç & Süreç Analizi',
-    short: 'Analiz',
-    desc: 'Mevcut süreçlerinizi ve iş akışlarınızı inceliyor, sisteme geçiş planını birlikte hazırlıyoruz.',
-    duration: '1-2 iş günü',
-    tag: 'Başlangıç',
+    short: '1. Analiz',
+    desc: 'Mevcut operasyonel süreçlerinizi, departman iş akışlarınızı ve raporlama ihtiyaçlarınızı uzman ekibimizle birlikte haritalandırıyoruz.',
+    scope: 'Analiz & Kapsam',
     items: [
-      'Mevcut süreç haritalama',
-      'İhtiyaç ve modül belirleme',
-      'Geçiş takvimi oluşturma',
-      'Teknik altyapı değerlendirmesi',
+      'Mevcut departman süreçlerinin haritalanması',
+      'Kullanılacak modüllerin ve yetki matrisinin belirlenmesi',
+      'Geçiş takviminin ve paydaşların netleştirilmesi',
+      'Entegrasyon gereksinimlerinin tespiti',
     ],
   },
   {
     num: '02',
-    title: 'Demo ve Yapılandırma',
-    short: 'Demo',
-    desc: 'Sistemi işletmenize özel yapılandırıyor, kullanıcı rolleri ve yetkilendirmeleri tanımlıyoruz.',
-    duration: '2-3 iş günü',
-    tag: 'Yapılandırma',
+    title: 'Sistem Yapılandırması',
+    short: '2. Yapılandırma',
+    desc: 'Sistemi işletmenizin organizasyon şemasına, depo yapısına, onay sınırlarına ve hesap planına göre yapılandırıyoruz.',
+    scope: 'Özelleştirme',
     items: [
-      'Canlı sistem demosu',
-      'Kullanıcı rol tanımları',
-      'Modül özelleştirme',
-      'Onay akışları kurulumu',
+      'Kullanıcı rolleri ve yetkilendirmelerin tanımlanması',
+      'Şube, depo, raf ve istasyon yapısının kurulması',
+      'Teklif, sipariş ve onay hiyerarşisi kuralları',
+      'e-Fatura ve e-İrsaliye parametrelerinin eşlenmesi',
     ],
   },
   {
     num: '03',
-    title: 'Kurulum ve Veri Aktarımı',
-    short: 'Kurulum',
-    desc: 'Mevcut verilerinizi sisteme aktarıyor, entegrasyonları tamamlıyor ve test sürecini yürütüyoruz.',
-    duration: '3-5 iş günü',
-    tag: 'Entegrasyon',
+    title: 'Veri Aktarımı & Kontrol',
+    short: '3. Veri Aktarımı',
+    desc: 'Mevcut carileriniz, stok kartlarınız, açık bakiyeleriniz ve geçmiş verileriniz kontrollü biçimde sisteme aktarılır ve doğrulanır.',
+    scope: 'Migrasyon',
     items: [
-      'Veri migrasyonu ve doğrulama',
-      'Entegrasyon kurulumu',
-      'Kullanıcı kabul testleri',
-      'Performans ve güvenlik testleri',
+      'Mevcut cari ve stok kayıtlarının şablonlarla aktarımı',
+      'Açık sipariş ve bakiye mutabakatı',
+      'Kullanıcı kabul testleri ve süreç denemeleri',
+      'Çift yönlü entegrasyon testlerinin yürütülmesi',
     ],
   },
   {
     num: '04',
-    title: 'Eğitim ve Canlı Kullanım',
-    short: 'Canlı',
-    desc: 'Ekibinize modül bazlı eğitimler veriyor, canlı geçiş sonrasında kesintisiz teknik destek sağlıyoruz.',
-    duration: 'Sürekli',
-    tag: 'Canlı Kullanım',
+    title: 'Eğitim & Canlı Kullanım',
+    short: '4. Canlı Kullanım',
+    desc: 'Departman bazlı uygulamalı kullanıcı eğitimleri verilir, canlı kullanıma geçiş esnasında ve sonrasında teknik destek sağlanır.',
+    scope: 'Devreye Alma',
     items: [
-      'Modül bazlı kullanıcı eğitimi',
-      'Canlı geçiş yönetimi',
-      '7/24 teknik destek',
-      'Düzenli güncelleme ve bakım',
+      'Rol ve modül bazlı uygulamalı kullanıcı eğitimleri',
+      'Canlı geçiş sürecinde doğrudan uzman rehberliği',
+      'Kullanıcı geri bildirimlerine göre ince ayarlar',
+      'Kesintisiz teknik destek ve sürüm güncellemeleri',
     ],
   },
 ];
@@ -66,212 +62,133 @@ export default function Roadmap() {
   const [active, setActive] = useState(0);
 
   return (
-    <section className="section-spacing relative bg-[#0F172A] border-t border-slate-800 overflow-hidden">
-      <div className="section-container relative z-10">
-
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-12">
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4 }}
-          >
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-400 mb-4">
+    <section className="py-20 lg:py-28 bg-[#080F1E] border-t border-slate-800 text-slate-100 overflow-hidden">
+      <div className="section-container">
+        
+        {/* Section Header */}
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-12">
+          <div>
+            <div className="section-label">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-              <span>Geçiş ve Devreye Alma Süreci</span>
+              <span>DEVREYE ALMA SÜRECİ</span>
             </div>
-            <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">
-              Sistemden canlı kullanıma 4 adım
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-3">
+              Sistemden canlı kullanıma 4 adım.
             </h2>
-            <p className="text-slate-400 text-sm leading-relaxed max-w-lg">
-              Her adımda uzman ekibimiz süreci sizin adınıza yönetir.
-              Kurulum ve geçiş sürecinde iş kesintisi yaşamazsınız.
+            <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl">
+              İşletmenizin mevcut operasyonunu kesintiye uğratmadan, planlı ve kontrollü bir geçiş süreci yürütüyoruz.
             </p>
-          </motion.div>
+          </div>
 
-          {/* Progress pills */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {steps.map((_, i) => (
+          <div className="flex items-center gap-1.5 self-start lg:self-auto">
+            {STEPS.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setActive(i)}
-                className={
-                  'transition-all duration-300 rounded-full cursor-pointer ' +
-                  (i === active
+                className={`transition-all duration-200 rounded-full cursor-pointer ${
+                  i === active
                     ? 'w-8 h-1.5 bg-blue-500'
-                    : i < active
-                    ? 'w-2 h-1.5 bg-blue-800'
-                    : 'w-2 h-1.5 bg-slate-700 hover:bg-slate-500')
-                }
+                    : 'w-2 h-1.5 bg-slate-700 hover:bg-slate-500'
+                }`}
+                aria-label={`Adım ${i + 1}`}
               />
             ))}
           </div>
         </div>
 
         {/* Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-
-          {/* Left: step list */}
-          <div className="lg:col-span-4 flex flex-col gap-1.5">
-            {steps.map((s, idx) => (
-              <motion.button
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* Left Column: Steps Navigation */}
+          <div className="lg:col-span-4 flex flex-col gap-2">
+            {STEPS.map((s, idx) => (
+              <button
                 key={idx}
-                initial={{ opacity: 0, x: -12 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.3, delay: idx * 0.07 }}
                 onClick={() => setActive(idx)}
-                className={
-                  'group relative text-left rounded-lg border transition-all duration-200 overflow-hidden ' +
-                  (active === idx
-                    ? 'bg-slate-800 border-slate-600'
-                    : 'bg-slate-800/30 border-slate-800 hover:border-slate-700 hover:bg-slate-800/60')
-                }
+                className={`p-4 rounded-xl text-left transition-all duration-150 cursor-pointer border flex items-center justify-between ${
+                  active === idx
+                    ? 'bg-[#0B1424] border-blue-500/60 shadow-md shadow-blue-500/10'
+                    : 'bg-[#0B1424]/40 border-slate-800 hover:border-slate-700'
+                }`}
               >
-                {active === idx && (
-                  <motion.div
-                    layoutId="step-accent"
-                    className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-500"
-                  />
-                )}
-
-                <div className="px-5 py-4 flex items-center gap-4">
-                  <span className={
-                    'text-2xl font-black leading-none tabular-nums select-none transition-colors ' +
-                    (active === idx ? 'text-slate-500' : 'text-slate-700 group-hover:text-slate-600')
-                  }>
+                <div className="flex items-center gap-3.5">
+                  <span className={`text-xl font-mono font-bold ${active === idx ? 'text-blue-400' : 'text-slate-600'}`}>
                     {s.num}
                   </span>
-
-                  <div className="flex-1 min-w-0">
-                    <div className={
-                      'text-sm font-medium leading-tight transition-colors ' +
-                      (active === idx ? 'text-white' : 'text-slate-400 group-hover:text-slate-200')
-                    }>
+                  <div>
+                    <div className={`text-xs sm:text-sm font-semibold ${active === idx ? 'text-white' : 'text-slate-300'}`}>
                       {s.title}
                     </div>
-                    <div className="text-xs mt-0.5 text-slate-500">{s.duration}</div>
-                  </div>
-
-                  <div className={
-                    'w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-all ' +
-                    (active > idx
-                      ? 'bg-blue-600'
-                      : active === idx
-                      ? 'bg-blue-600'
-                      : 'bg-slate-700')
-                  }>
-                    {active > idx ? (
-                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      <span className={
-                        'text-[10px] font-bold ' +
-                        (active === idx ? 'text-white' : 'text-slate-500')
-                      }>
-                        {idx + 1}
-                      </span>
-                    )}
+                    <div className="text-[11px] text-slate-500 mt-0.5">{s.scope}</div>
                   </div>
                 </div>
-              </motion.button>
+
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                  active === idx ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {idx + 1}
+                </div>
+              </button>
             ))}
           </div>
 
-          {/* Right: detail card */}
+          {/* Right Column: Step Detail Checklist */}
           <div className="lg:col-span-8">
             <AnimatePresence mode="wait">
               <motion.div
                 key={active}
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25 }}
-                className="bg-slate-800/50 border border-slate-700 rounded-lg overflow-hidden h-full"
+                transition={{ duration: 0.2 }}
+                className="bg-[#0B1424] border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6 shadow-xl"
               >
-                {/* Card header */}
-                <div className="px-8 py-6 border-b border-slate-700 flex items-start justify-between gap-6">
+                <div className="pb-4 border-b border-slate-800 flex items-center justify-between">
                   <div>
-                    <div className="flex items-center gap-2 mb-2.5">
-                      <span className="text-xs font-medium text-blue-400">
-                        Adım {steps[active].num}
-                      </span>
-                      <span className="w-px h-3 bg-slate-600" />
-                      <span className="text-xs text-slate-500">{steps[active].tag}</span>
-                    </div>
-                    <h3 className="text-lg font-semibold text-white mb-2">
-                      {steps[active].title}
+                    <span className="text-xs font-semibold text-blue-400 mb-1 block">
+                      Adım {STEPS[active].num} — {STEPS[active].scope}
+                    </span>
+                    <h3 className="text-xl font-bold text-white">
+                      {STEPS[active].title}
                     </h3>
-                    <p className="text-slate-400 text-sm leading-relaxed max-w-md">
-                      {steps[active].desc}
-                    </p>
                   </div>
+                  <span className="text-[11px] text-slate-400 bg-white/[0.04] px-2.5 py-1 rounded border border-white/[0.08]">
+                    Planlı İlerleme
+                  </span>
+                </div>
 
-                  <div className="flex-shrink-0 bg-slate-900 border border-slate-700 rounded px-3 py-2 text-center min-w-[80px]">
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Süre</div>
-                    <div className="text-sm font-semibold text-slate-200 whitespace-nowrap">
-                      {steps[active].duration}
-                    </div>
+                <p className="text-sm text-slate-300 leading-relaxed">
+                  {STEPS[active].desc}
+                </p>
+
+                {/* Checklist */}
+                <div>
+                  <div className="text-xs font-semibold text-slate-400 mb-3">
+                    Bu Aşamada Yürütülen Temel Faaliyetler:
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {STEPS[active].items.map((item, i) => (
+                      <div
+                        key={i}
+                        className="p-3 rounded-lg bg-[#080F1E] border border-slate-800 flex items-start gap-2.5 text-xs text-slate-200"
+                      >
+                        <span className="text-blue-400 font-bold mt-0.5">✓</span>
+                        <span>{item}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                {/* Checklist */}
-                <div className="px-8 py-6">
-                  <p className="text-xs text-slate-500 font-medium mb-4">
-                    Bu adımda yapılacaklar
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {steps[active].items.map((item, i) => (
-                      <motion.div
-                        key={item}
-                        initial={{ opacity: 0, x: -6 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.06 }}
-                        className="flex items-center gap-3 bg-slate-900/60 border border-slate-700/60 rounded px-4 py-3 hover:border-slate-600 hover:bg-slate-900/80 transition-colors duration-150"
-                      >
-                        <svg className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span className="text-sm text-slate-300">{item}</span>
-                      </motion.div>
-                    ))}
-                  </div>
-
-                  {/* Footer nav */}
-                  <div className="flex items-center justify-between mt-8 pt-5 border-t border-slate-700">
-                    <button
-                      onClick={() => setActive(Math.max(0, active - 1))}
-                      disabled={active === 0}
-                      className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-200 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                      Önceki
-                    </button>
-
-                    <span className="text-xs text-slate-600 tabular-nums">
-                      {active + 1} / {steps.length}
-                    </span>
-
-                    <button
-                      onClick={() => setActive(Math.min(steps.length - 1, active + 1))}
-                      disabled={active === steps.length - 1}
-                      className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Sonraki
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
+                {/* Realistic Note (No False Day Guarantees) */}
+                <div className="pt-4 border-t border-slate-800 text-xs text-slate-400">
+                  Kurulum ve geçiş süresi; işletmenizin organizasyon kapsamına, veri hacmine ve seçilen modüllere göre karşılıklı mutabakatla belirlenir.
                 </div>
               </motion.div>
             </AnimatePresence>
           </div>
+
         </div>
+
       </div>
     </section>
   );

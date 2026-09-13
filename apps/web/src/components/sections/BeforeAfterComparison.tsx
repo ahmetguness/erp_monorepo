@@ -27,32 +27,32 @@ const SCENARIOS: Scenario[] = [
     label: '1. Satış & Sipariş',
     dept: 'Satış ve Müşteri İlişkileri',
     before: {
-      title: 'WhatsApp mesajları, Excel listeleri ve belirsiz stok',
+      title: 'WhatsApp mesajları, dağınık listeler ve belirsiz stok',
       chatLog: [
-        { from: 'Satış (Ahmet)', text: 'Abi depoda bu vanadan 350 tane var mı acil teklif geçmem lazım?', time: '11:04' },
-        { from: 'Depo (Mehmet)', text: 'Raflara bi bakayım abi var galiba akşama doğru net söylerim.', time: '12:15' },
-        { from: 'Müşteri (Atlas Makine)', text: 'Teklifi onayladık ama ürün gelmedi, başka yerden mi alalım?', time: '16:40' },
+        { from: 'Satış', text: 'Depoda bu vanadan 350 adet var mı acil teklif geçmem lazım?', time: '11:04' },
+        { from: 'Depo', text: 'Raflara bi bakayım, akşama doğru net söylerim.', time: '12:15' },
+        { from: 'Müşteri', text: 'Teklifi onayladık ama ürün gelmedi, ne zaman sevk edilecek?', time: '16:40' },
       ],
       painPoints: [
-        'Depocunun WhatsApp yanıtı beklenirken müşteri telefonda bekletilir',
-        'Stok aynı anda iki müşteriye satılır (çift satış krizi çıkar)',
+        'Depo yanıtı beklenirken müşteri telefonda bekletilir',
+        'Stok aynı anda iki müşteriye teklif edilerek çift satış riski doğar',
         'Müşteri özel iskontoları ve vadeleri kişilerin hafızasındadır',
       ],
-      consequence: 'Sonuç: Müşteri güveni sarsılır, iptal edilen siparişler ve ciro kaybı.',
+      consequence: 'Sonuç: Müşteri memnuniyetsizliği, geciken teklifler ve satış kaybı.',
     },
     after: {
-      title: 'Teklif onaylandığı an depodan kilitlenen kesin stok',
+      title: 'Teklif onaylandığı an depodan rezerve edilen kesin stok',
       actionLog: [
-        { step: '11:04 • Teklif Hazırlandı', detail: 'Müşteri özel iskonto (%12) ve 45 gün vade otomatik bağlandı', status: 'Doğrulandı' },
-        { step: '11:05 • Dijital Onay Alındı', detail: 'Tuzla depodan 300 ad., Kadıköy depodan 50 ad. anında rezerve edildi', status: 'Kilitlendi' },
-        { step: '11:06 • Sevk Emri Çıktı', detail: 'Çift satış engellendi, depo el terminaline çeki listesi iletildi', status: 'Aktif' },
+        { step: '11:04 • Teklif Hazırlandı', detail: 'Müşteri cari koşulları ve tanımlı iskonto otomatik uygulandı', status: 'Onaylandı' },
+        { step: '11:05 • Dijital Onay', detail: 'Tuzla depodan 350 adet anında rezerve edildi, çift satış engellendi', status: 'Kilitlendi' },
+        { step: '11:06 • Sevk Emri Çıktı', detail: 'Depo personeline otomatik hazırlama ve toplama görevi düştü', status: 'Hazırlıkta' },
       ],
       benefits: [
-        'Serbest ve kilitli stok ayrımı sayesinde çift satış riski %0',
-        'Cari risk limiti aşıldığında yöneticiye anlık onay düşer',
+        'Serbest ve rezerve stok ayrımı sayesinde çift satış riski kalkar',
+        'Müşteriye özel fiyat ve iskonto kuralları sistemsel korunur',
         'Kabul edilen teklif tek tıkla resmi sipariş ve sevk fişine dönüşür',
       ],
-      gain: 'Kazanım: Sıfır sipariş iptali ve dakikalar içinde tamamlanan profesyonel satış.',
+      gain: 'Kazanım: Dakikalar içinde tamamlanan profesyonel ve güvenilir satış akışı.',
     },
   },
   {
@@ -60,32 +60,32 @@ const SCENARIOS: Scenario[] = [
     label: '2. Depo & Sevkiyat',
     dept: 'Lojistik ve Mal Kabul',
     before: {
-      title: 'Kağıt fişler, el yazısıyla koli üstü notlar ve geciken irsaliyeler',
+      title: 'Kağıt fişler, el yazısı notlar ve geciken irsaliyeler',
       chatLog: [
-        { from: 'Şoför (Kemal)', text: 'Kamyonu yükledik ama irsaliye kağıdı muhasebede çıkmamış bekliyorum.', time: '14:20' },
-        { from: 'Muhasebe (Banu)', text: 'Hangi partiden kaç koli yüklendi fişi bulamadım, yeniden sayın.', time: '15:10' },
-        { from: 'Yol Denetimi', text: 'Resmi e-İrsaliye GİB sistemine zamanında iletilmemiş, ceza riski.', time: '16:30' },
+        { from: 'Şoför', text: 'Aracı yükledik ama irsaliye kağıdı muhasebeden henüz çıkmadı.', time: '14:20' },
+        { from: 'Muhasebe', text: 'Hangi partiden kaç koli yüklendi fişi bulamadım, yeniden kontrol edin.', time: '15:10' },
+        { from: 'Sevkiyat', text: 'Karekodlu resmi irsaliye yetişmedi, araç kapıda bekliyor.', time: '16:00' },
       ],
       painPoints: [
-        'Yanlış parti/lot veya yanlış ürün yükleme riski çok yüksektir',
-        'Hangi rafta ne kadar sağlam mal kaldığı sadece sayım günü anlaşılır',
-        'Kamyon kapıdan çıktıktan sonra kağıt fiş muhasebeye 3 gün sonra ulaşır',
+        'Hatalı parti/lot veya yanlış ürün yükleme riski yüksektir',
+        'Hangi rafta ne kadar mal kaldığı sadece sayım günlerinde netleşir',
+        'Kağıt sevk fişleri muhasebeye günler sonra ulaşır',
       ],
-      consequence: 'Sonuç: Hatalı sevkiyatlar, yol denetimi cezaları ve müşteri iade maliyeti.',
+      consequence: 'Sonuç: Hatalı sevkiyatlar, zaman kayıpları ve ek lojistik maliyetleri.',
     },
     after: {
-      title: 'El terminaliyle barkod tarama ve anlık GİB e-İrsaliye',
+      title: 'Barkod doğrulama ve anlık e-İrsaliye düzenleme',
       actionLog: [
-        { step: '14:20 • Barkod Doğrulandı', detail: 'LOT-2026-HYD partisi el terminaliyle okutuldu, yanlış ürün engellendi', status: 'Doğrulandı' },
-        { step: '14:21 • Koli Etiketi Basıldı', detail: '12 Koli için ağırlık ve karekod içeren sevk etiketleri basıldı', status: 'Basıldı' },
-        { step: '14:22 • GİB İletildi', detail: 'Plaka 34 ARS 190 ile UBL-TR e-İrsaliye resmi mühürle imzalandı', status: 'GİB 1300' },
+        { step: '14:20 • Barkod Doğrulandı', detail: 'Ürün partisi okutuldu, siparişle eşleştiği doğrulandı', status: 'Doğrulandı' },
+        { step: '14:21 • Koli Etiketi Basıldı', detail: 'Sevkiyat için çeki listesi ve koli bilgileri hazırlandı', status: 'Basıldı' },
+        { step: '14:22 • e-İrsaliye İletildi', detail: 'Resmi e-İrsaliye Gelir İdaresi standartlarında düzenlendi', status: 'Hazır' },
       ],
       benefits: [
-        'Barkodlu çeki listesi (picking list) ile %100 doğru ürün toplama',
-        'Karekodlu resmi GİB e-İrsaliye şoför kapıdan çıkmadan onaylanır',
-        'Parti, lot ve son kullanma tarihi (SKT) geriye dönük tam izlenir',
+        'Barkodlu çeki listesi ile doğru ürün toplama ve kontrol',
+        'Resmi e-İrsaliye araç yola çıkmadan dijital olarak onaylanır',
+        'Parti, lot ve son kullanma tarihleri geriye dönük izlenebilir',
       ],
-      gain: 'Kazanım: Hatalı sevkiyatlar sıfırlanır, kamyonlar beklemeden yola çıkar.',
+      gain: 'Kazanım: Hatalı sevkiyatlar engellenir, araçlar beklemeden yola çıkar.',
     },
   },
   {
@@ -93,32 +93,32 @@ const SCENARIOS: Scenario[] = [
     label: '3. Üretim & Reçete',
     dept: 'Fabrika ve Üretim Planlama',
     before: {
-      title: 'Eksik hammadde yüzünden duran tezgâhlar ve tahminî maliyet',
+      title: 'Eksik hammadde yüzünden duran işler ve belirsiz maliyet',
       chatLog: [
-        { from: 'Usta (Ali)', text: 'Pompa gövdesi tezgâha bağlandı ama rulman kalmamış hat durdu.', time: '09:30' },
-        { from: 'Satınalma (Cem)', text: 'Bize kimse rulmanın bittiğini söylemedi, sipariş geçsek 10 güne gelir.', time: '10:15' },
-        { from: 'Müşteri', text: 'Termin süresi 2 hafta gecikti, gecikme cezasını keseceğiz.', time: '11:00' },
+        { from: 'Üretim', text: 'İş tezgâha alındı ama bağlantı parçası bitmiş, hat durdu.', time: '09:30' },
+        { from: 'Satınalma', text: 'Parçanın bittiğinden haberimiz yoktu, sipariş geçsek temini zaman alır.', time: '10:15' },
+        { from: 'Yönetim', text: 'Bu siparişte kâr mı ettik zarar mı net göremiyoruz.', time: '11:00' },
       ],
       painPoints: [
-        'Reçeteler ustaların aklındadır, revizyon geçmişi tutulamaz',
-        'Fiili maliyet bilinmez, ürünün kâr mı zarar mı getirdiği tahmin edilir',
-        'Hammadde son dakikaya kaldığı için piyasadan fahiş fiyata temin edilir',
+        'Ürün reçeteleri kişilerin aklındadır, revizyonlar kayıt altına alınamaz',
+        'Fiili maliyet tam bilinmez, ürün kârlılığı tahminle yürütülür',
+        'Eksik hammadde son anda fark edilerek teslimatlar aksar',
       ],
-      consequence: 'Sonuç: Tezgâh duruş maliyetleri, kaçan teslimatlar ve eriyen kâr marjı.',
+      consequence: 'Sonuç: Üretim duruşları, kaçan teslim tarihleri ve belirsiz kâr marjı.',
     },
     after: {
-      title: 'Çok seviyeli ürün ağacı (BOM) ve otomatik satın alma önerisi',
+      title: 'Çok seviyeli ürün reçeteleri ve planlı malzeme ihtiyacı',
       actionLog: [
-        { step: 'İş Emri Açıldı', detail: '350 Adet pompa için 3 kademeli reçete patlatıldı', status: 'Hesaplandı' },
-        { step: 'Kritik Eşik Kontrolü', detail: '120 adet rulman eksiği tespit edilerek tedarikçiye PO önerildi', status: 'Satınalma Emri' },
-        { step: 'Gerçek Maliyetleme', detail: 'Fiili hammadde + elektrik + işçilik ile net birim maliyet çıktı', status: '₺420,50/Ad.' },
+        { step: 'İş Emri Açıldı', detail: 'Sipariş için tanımlı ürün reçetesi otomatik patlatıldı', status: 'Planlandı' },
+        { step: 'Eksik Kontrolü', detail: 'Kritik stok seviyesindeki malzeme için satınalma talebi önerildi', status: 'Talep Açıldı' },
+        { step: 'Maliyet Çıkarıldı', detail: 'Fiili hammadde ve işçilikle gerçek üretim maliyeti oluştu', status: 'Hesaplandı' },
       ],
       benefits: [
         'Çok aşamalı montaj reçeteleri, fire oranları ve rota süreleri net',
-        'Tezgâh ve istasyon kapasiteleri canlı izlenir, darboğazlar önceden görülür',
-        'Hammadde, fason işçilik ve giderlerle gerçek ürün kârlılığı ölçülür',
+        'Tezgâh ve istasyon kapasiteleri izlenerek darboğazlar öngörülür',
+        'Hammadde ve operasyon giderleriyle gerçek ürün kârlılığı ölçülür',
       ],
-      gain: 'Kazanım: Sıfır tezgâh duruşu, planlı tedarik ve net kârlılık kontrolü.',
+      gain: 'Kazanım: Planlı hammadde tedariği, zamanında üretim ve net kâr hesabı.',
     },
   },
   {
@@ -126,32 +126,32 @@ const SCENARIOS: Scenario[] = [
     label: '4. Fatura & Banka',
     dept: 'Finans ve Muhasebe',
     before: {
-      title: 'Elle kesilen faturalar, uyuşmayan banka ekstreleri ve açık hesaplar',
+      title: 'Elle yazılan faturalar ve uyuşmayan banka ekstreleri',
       chatLog: [
-        { from: 'Muhasebe (Sevgi)', text: 'İrsaliye fişindeki tutarla faturadaki KDV uyuşmuyor, müşteri reddetti.', time: '16:00' },
-        { from: 'CFO (Kemal)', text: 'Bankaya 400 bin TL para gelmiş ama kimin havalesi olduğunu çözen yok.', time: '17:30' },
-        { from: 'Patron', text: 'Ay bitti, bu ay ne kadar kâr ettik kasada ne var neden göremiyorum?', time: '18:15' },
+        { from: 'Muhasebe', text: 'İrsaliyedeki tutarla faturadaki KDV tutmadı, müşteri faturayı reddetti.', time: '16:00' },
+        { from: 'Finans', text: 'Bankaya ödeme gelmiş ama açıklama olmadığı için hangi carinin çözemedik.', time: '17:30' },
+        { from: 'Yönetim', text: 'Haftalık nakit durumumuz ve vadesi gelen alacaklar ne durumda?', time: '18:15' },
       ],
       painPoints: [
-        'İrsaliye elle faturaya yazılırken matrah veya tevkifat hatası yapılır',
-        'Havale açıklaması eksikse hangi müşterinin bakiyesi kapandı bilinemez',
-        'Ay sonunda mizan bağlamak ve BA/BS mutabakatı yapmak günler sürer',
+        'İrsaliye elle faturaya aktarılırken matrah veya tevkifat hatası yapılır',
+        'Havale açıklaması eksik olduğunda açık cariler günlerce kapanmaz',
+        'Ay sonunda mizan ve mutabakat süreçleri yoğun mesai gerektirir',
       ],
-      consequence: 'Sonuç: Fazla mesailer, ceza riskleri ve kontrolsüz nakit açıkları.',
+      consequence: 'Sonuç: Mükerrer yazımlar, ceza riskleri ve geciken finansal tablolar.',
     },
     after: {
-      title: 'Tek tıkla e-Fatura dönüşümü ve otomatik banka mutabakatı',
+      title: 'Tek tıkla e-Fatura dönüşümü ve otomatik banka eşleşmesi',
       actionLog: [
-        { step: 'Tek Tıkla e-Fatura', detail: 'İrsaliye satırları ve tevkifat kodu sıfır hatayla resmi faturaya dönüştü', status: 'GİB 200' },
-        { step: 'Banka Ekstre Eşleşti', detail: 'Garanti BBVA hesabına gelen ₺408.000 havale faturayı kapattı', status: 'Bakiye: ₺0' },
-        { step: 'Yevmiye Yazıldı', detail: '102 Bankalar (Borç) / 120 Alıcılar (Alacak) fişi anında deftere işlendi', status: 'Dengeli' },
+        { step: 'e-Fatura Dönüşümü', detail: 'İrsaliye satırları hatasız biçimde resmi faturaya dönüştü', status: 'Onaylandı' },
+        { step: 'Banka Ekstre Eşleşti', detail: 'Gelen havale fatura tutarıyla eşleşerek cari bakiyeyi kapattı', status: 'Eşleşti' },
+        { step: 'Deftere İşlendi', detail: 'Yevmiye kaydı sistem tarafından otomatik oluşturuldu', status: 'Kaydedildi' },
       ],
       benefits: [
-        'İrsaliyeden faturaya sıfır veri tekrarı, %100 yasal UBL-TR uyumu',
-        'Gelen havaleler fatura tutarıyla eşleşir, açık cari anında sıfırlanır',
-        'Ay sonu mizanı için 15 gün beklenmez, anlık bilanço ve gelir tablosu hazırdır',
+        'İrsaliyeden faturaya sıfır veri tekrarı, hatasız belge üretimi',
+        'Gelen havaleler açık faturalarla eşleşerek cariyi anında kapatır',
+        'Mizan, bilanço ve nakit akışı tabloları anlık olarak güncellenir',
       ],
-      gain: 'Kazanım: Ay sonu kapanışları 15 günden 1 güne iner, nakit akışı nettir.',
+      gain: 'Kazanım: Hızlı ay sonu kapanışları, hatasız cari hesaplar ve şeffaf nakit yönetimi.',
     },
   },
 ];
@@ -161,34 +161,34 @@ export default function BeforeAfterComparison() {
   const active = SCENARIOS.find((s) => s.id === activeScenarioId) || SCENARIOS[0];
 
   return (
-    <section className="py-20 lg:py-28 relative bg-[#0B1120] border-t border-slate-800 text-slate-100 overflow-hidden">
-      <div className="section-container relative z-10">
+    <section className="py-20 lg:py-28 bg-[#0B1424] border-t border-slate-800 text-slate-100 overflow-hidden">
+      <div className="section-container">
         
-        {/* Section Header: Crisp, High-Contrast Typography */}
+        {/* Section Header */}
         <div className="max-w-3xl mb-12">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-slate-400 mb-4">
+          <div className="section-label">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
             <span>OPERASYONEL KARŞILAŞTIRMA</span>
           </div>
 
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-[-0.02em] leading-tight mb-4">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-4">
             Eski usul karmaşa mı, <span className="text-slate-400 font-normal">yoksa tıkır tıkır işleyen bir operasyon mu?</span>
           </h2>
           <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
-            Bir işletmeyi yavaşlatan şey çalışanlar değildir; birbiriyle konuşmayan Excel dosyaları, WhatsApp grupları ve kopuk programlardır.
+            Bir işletmeyi yavaşlatan şey çalışanlar değil; birbiriyle konuşmayan Excel dosyaları, WhatsApp yazışmaları ve kopuk programlardır.
           </p>
         </div>
 
         {/* Scenario Selector Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8">
-          <div className="inline-flex p-1 bg-slate-900/80 border border-slate-800 rounded-lg">
+        <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-8">
+          <div className="inline-flex p-1 bg-[#080F1E] border border-slate-800 rounded-xl">
             {SCENARIOS.map((sc) => {
               const isActive = sc.id === activeScenarioId;
               return (
                 <button
                   key={sc.id}
                   onClick={() => setActiveScenarioId(sc.id)}
-                  className={`px-4 py-2 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
@@ -201,34 +201,34 @@ export default function BeforeAfterComparison() {
           </div>
         </div>
 
-        {/* Comparison Showcase Container */}
+        {/* Side-by-Side Comparison Container */}
         <AnimatePresence mode="wait">
           <motion.div
             key={active.id}
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.22 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
             className="grid grid-cols-1 lg:grid-cols-2 gap-6"
           >
-            {/* Left Box: Eski Usul (Simulated WhatsApp & Chaos) */}
-            <div className="p-6 rounded-xl bg-slate-900/85 border border-rose-900/40 shadow-xl shadow-slate-950/40 flex flex-col justify-between">
+            {/* Left Box: Eski Yöntem (Kopuk Düzen) */}
+            <div className="p-6 sm:p-7 rounded-2xl bg-[#080F1E] border border-rose-900/30 flex flex-col justify-between shadow-xl">
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-rose-900/20">
                   <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5 font-mono">
-                    <span>✕</span> ESKİ USUL & KOPUK DÜZEN
+                    <span>✕</span> ESKİ YÖNTEM & KOPUK DÜZEN
                   </span>
                   <span className="text-[11px] text-slate-400">{active.dept}</span>
                 </div>
 
-                <h3 className="text-base font-bold text-white">
+                <h3 className="text-base font-bold text-white leading-snug">
                   {active.before.title}
                 </h3>
 
-                {/* Simulated Real WhatsApp/Chat Messages */}
-                <div className="space-y-2 p-3 rounded-lg bg-slate-950/70 border border-rose-950/60 text-xs">
+                {/* Simulated Communication Trail */}
+                <div className="space-y-2 p-3.5 rounded-xl bg-[#060B15] border border-rose-950/50 text-xs">
                   <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block mb-1">
-                    Günlük İletişim Trafiği:
+                    Örnek İletişim Trafiği:
                   </span>
                   {active.before.chatLog.map((msg, i) => (
                     <div key={i} className="p-2 rounded bg-white/[0.02] border border-white/[0.04] flex items-start justify-between gap-3">
@@ -240,6 +240,16 @@ export default function BeforeAfterComparison() {
                     </div>
                   ))}
                 </div>
+
+                {/* Pain Points */}
+                <div className="space-y-1.5 pt-1">
+                  {active.before.painPoints.map((point, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-xs text-slate-400">
+                      <span className="text-rose-500 font-bold">•</span>
+                      <span>{point}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="pt-4 mt-5 border-t border-rose-900/20 text-xs font-semibold text-rose-400">
@@ -247,22 +257,22 @@ export default function BeforeAfterComparison() {
               </div>
             </div>
 
-            {/* Right Box: Axon ERP (Automated Pipeline) */}
-            <div className="p-6 rounded-xl bg-slate-900/85 border border-blue-500/30 shadow-xl shadow-blue-950/20 flex flex-col justify-between">
+            {/* Right Box: Axon ERP İle (Entegre Düzen) */}
+            <div className="p-6 sm:p-7 rounded-2xl bg-[#080F1E] border border-blue-500/30 flex flex-col justify-between shadow-xl">
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-blue-500/20">
                   <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 font-mono">
                     <span>✓</span> AXON ERP İLE DİJİTAL SİSTEM
                   </span>
-                  <span className="text-[11px] text-blue-300 font-medium font-mono">Otomatik Doğrulama</span>
+                  <span className="text-[11px] text-blue-300 font-medium">Tek Veri Kaynağı</span>
                 </div>
 
-                <h3 className="text-base font-bold text-white">
+                <h3 className="text-base font-bold text-white leading-snug">
                   {active.after.title}
                 </h3>
 
-                {/* Simulated Real Action Pipeline */}
-                <div className="space-y-2 p-3 rounded-lg bg-slate-950/70 border border-blue-950/60 text-xs">
+                {/* Simulated Pipeline Steps */}
+                <div className="space-y-2 p-3.5 rounded-xl bg-[#060B15] border border-blue-950/40 text-xs">
                   <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block mb-1">
                     Sistemik İşlem Kaydı:
                   </span>
@@ -275,6 +285,16 @@ export default function BeforeAfterComparison() {
                       <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 flex-shrink-0">
                         {log.status}
                       </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Benefits */}
+                <div className="space-y-1.5 pt-1">
+                  {active.after.benefits.map((point, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-xs text-slate-300">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>{point}</span>
                     </div>
                   ))}
                 </div>

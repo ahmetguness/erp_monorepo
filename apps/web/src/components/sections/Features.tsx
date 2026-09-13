@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-type ModuleCategory = 'supply' | 'manufacturing' | 'sales' | 'finance' | 'ai' | 'governance';
+type ModuleCategory = 'supply' | 'manufacturing' | 'sales' | 'finance';
 
 interface ErpModule {
   id: string;
@@ -12,9 +12,8 @@ interface ErpModule {
   badge: string;
   badgeColor: string;
   role: string;
-  desc: string;
-  detail: string;
-  highlights: string[];
+  businessValue: string;
+  capabilities: string[];
   mockData: {
     label1: string;
     val1: string;
@@ -26,27 +25,29 @@ interface ErpModule {
   };
 }
 
-const CATEGORIES: { id: ModuleCategory; label: string; icon: string }[] = [
-  { id: 'supply', label: 'Tedarik & Depo', icon: '📦' },
-  { id: 'manufacturing', label: 'Üretim & MRP', icon: '⚙️' },
-  { id: 'sales', label: 'Satış & Pazaryeri', icon: '🛒' },
-  { id: 'finance', label: 'Finans & GİB', icon: '💰' },
-  { id: 'ai', label: 'Yapay Zeka & Otomasyon', icon: '⚡' },
-  { id: 'governance', label: 'Yönetişim & Güvenlik', icon: '🛡️' },
+const CATEGORIES: { id: ModuleCategory; label: string }[] = [
+  { id: 'supply', label: 'Tedarik & Stok' },
+  { id: 'manufacturing', label: 'Üretim & MRP' },
+  { id: 'sales', label: 'Satış & Pazaryeri' },
+  { id: 'finance', label: 'Finans & Muhasebe' },
 ];
 
 const MODULES: ErpModule[] = [
-  // Supply Chain & Warehouse
+  // Supply & Warehouse
   {
     id: 'multi-warehouse',
     category: 'supply',
     title: 'Çok Depolu Stok Yönetimi',
-    badge: 'Çoklu Depo',
+    badge: 'Stok Kontrolü',
     badgeColor: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-    role: 'Depo & Lojistik Yöneticisi',
-    desc: 'Merkez, şube ve fason depoları tek ekrandan yönetin. Minimum stok seviyeleri ve depolar arası transfer fişleri.',
-    detail: 'Depolar arası transfer emirleri, raf/koridor lokasyon takibi, kritik stok eşiklerinde otomatik satın alma talebi tetikleme ve canlı stok konsolidasyonu.',
-    highlights: ['Çok depolu transfer fişleri', 'Raf & koridor lokasyon takibi', 'Kritik stok erken alarmları'],
+    role: 'Depo & Lojistik Sorumlusu',
+    businessValue: 'Fiziksel stok, rezerve stok ve satışa hazır serbest stok miktarını tüm depolarınızda anlık olarak tek ekrandan izleyin.',
+    capabilities: [
+      'Merkez, şube ve fason depoları arası transfer fişleri',
+      'Kritik stok seviyesine inen ürünlerde erken uyarı',
+      'Raf, koridor ve lokasyon bazında düzenli stok takibi',
+      'Dönemsel sayım ve fire/hurda mutabakat fişleri',
+    ],
     mockData: {
       label1: 'Tuzla Merkez Depo',
       val1: '850 Adet Serbest',
@@ -54,7 +55,7 @@ const MODULES: ErpModule[] = [
       val2: '420 Adet Rezerve',
       label3: 'Ankara Dağıtım',
       val3: '310 Adet Sevkte',
-      statusText: 'Depolar arası canlı senkronizasyon devrede',
+      statusText: 'Depolar arası anlık stok konsolidasyonu aktif',
     },
   },
   {
@@ -64,139 +65,114 @@ const MODULES: ErpModule[] = [
     badge: 'İzlenebilirlik',
     badgeColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
     role: 'Kalite & Mal Kabul',
-    desc: 'Hammadde girişinden son kullanıcıya kadar parti, lot ve seri numarası bazında geriye dönük tam izlenebilirlik.',
-    detail: 'Son kullanma tarihi (SKT) uyarıları, karantina yönetimi, parti bazlı geri çağırma (recall) raporu ve seri no ile garanti doğrulaması.',
-    highlights: ['SKT & garanti takibi', 'Karantina stok kilitleme', 'Tam geriye dönük iz'],
+    businessValue: 'Hammadde girişinden müşteriye teslimata kadar her partiyi ve seri numarasını geriye dönük eksiksiz izleyin.',
+    capabilities: [
+      'Son kullanma tarihi (SKT) yaklaşan partilerde otomatik bildirim',
+      'Uygunsuz partiler için karantina kilitleme ve sevkiyat engeli',
+      'Müşteri iadesi ve garanti takiplerinde seri numarası doğrulaması',
+    ],
     mockData: {
-      label1: 'Parti / Lot Kodu',
-      val1: 'LOT-2026-HYD-04',
-      label2: 'Son Kullanma Tarihi',
-      val2: '12/2028 (Geçerli)',
-      label3: 'Karantina Miktarı',
-      val3: '0 Adet (Onaylı)',
-      statusText: 'Barkod taramasıyla partiye anında erişim',
+      label1: 'Parti Kodu',
+      val1: 'LOT-2026-04',
+      label2: 'Durum',
+      val2: 'Karantina: 0 (Onaylı)',
+      label3: 'İzlenebilirlik',
+      val3: 'Geriye Dönük Bağlı',
+      statusText: 'Barkod okutularak parti geçmişine anında erişim',
     },
   },
   {
-    id: 'costing',
+    id: 'stock-reservations',
     category: 'supply',
-    title: 'Stok Maliyetleme (FIFO/AOF)',
-    badge: 'Maliyet Motoru',
-    badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-    role: 'Maliyet Muhasebesi',
-    desc: 'FIFO, LIFO ve Ağırlıklı Ortalama yöntemleriyle satılan malın maliyetini (SMM) anlık ve hatasız hesaplayın.',
-    detail: 'Navlun, gümrük ve ek masrafları ürün maliyetine dağıtma (landed cost), fiili maliyet ile standart maliyet sapma analizi.',
-    highlights: ['FIFO & Ağırlıklı Ortalama', 'Gümrük/navlun dağıtımı', 'SMM anlık hesaplama'],
-    mockData: {
-      label1: 'Maliyet Yöntemi',
-      val1: 'FIFO (İlk Giren İlk Çıkar)',
-      label2: 'Birim Net Maliyet',
-      val2: '₺420,50 / Adet',
-      label3: 'Navlun & Masraf Dağıtımı',
-      val3: '+%8.5 Dahil Edildi',
-      statusText: 'Satış faturasında anlık kâr marjı hesabı',
-    },
-  },
-  {
-    id: 'reservations',
-    category: 'supply',
-    title: 'Akıllı Stok Rezervasyonu',
+    title: 'Sipariş Stok Rezervasyonu',
     badge: 'Çift Satış Önleme',
     badgeColor: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
-    role: 'Satış Operasyon',
-    desc: 'Gelen siparişlerde stoğu anında rezerve eder, fiziksel stok ile serbest kullanılabilir stoğu net biçimde ayırır.',
-    detail: 'Süresi dolan rezervasyonları otomatik serbest bırakma, öncelikli müşteri kotası ve kısmi sipariş karşılama politikaları.',
-    highlights: ['Serbest vs. Rezerve stok', 'Otomatik rezervasyon çözme', 'Sipariş önceliklendirme'],
+    role: 'Satış & Müşteri Hizmetleri',
+    businessValue: 'Onaylanan siparişlerin stoğunu otomatik kilitleyerek aynı ürünün başka müşteriye mükerrer satılmasını engelleyin.',
+    capabilities: [
+      'Sipariş onaylandığı an depodan fiziksel stok ayırma',
+      'İptal edilen siparişlerde rezervasyonu tek tıkla çözme',
+      'Pazaryerlerine sadece serbest kullanılabilir stok miktarını açma',
+    ],
     mockData: {
-      label1: 'Toplam Fiziksel Stok',
+      label1: 'Toplam Stok',
       val1: '1.270 Adet',
       label2: 'Kilitli Rezervasyon',
-      val2: '450 Adet (4 Sipariş)',
-      label3: 'Satışa Hazır Serbest',
+      val2: '450 Adet (Onaylı Sipariş)',
+      label3: 'Serbest Satılabilir',
       val3: '820 Adet',
-      statusText: 'Pazaryerleri serbest stok kadar satışa açılır',
+      statusText: 'Satış kanalları yalnızca serbest stok kadar sipariş kabul eder',
     },
   },
 
   // Manufacturing & MRP
   {
-    id: 'mrp-engine',
+    id: 'mrp-planning',
     category: 'manufacturing',
     title: 'Malzeme İhtiyaç Planlaması (MRP)',
-    badge: 'MRP Motoru',
+    badge: 'Planlama Motoru',
     badgeColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-    role: 'Üretim Planlama Şefi',
-    desc: 'Siparişler ve satış tahminlerine göre hangi hammaddeden ne zaman, ne kadar temin edilmesi gerektiğini hesaplar.',
-    detail: 'Tedarik süreleri (lead-time), emniyet stoğu ve açık siparişleri harmanlayarak satın alma talepleri ve iş emirleri önerir.',
-    highlights: ['Net hammadde ihtiyacı', 'Tedarik süresi optimizasyonu', 'Otomatik satınalma önerisi'],
+    role: 'Üretim Planlama Müdürü',
+    businessValue: 'Gelen siparişlere göre hangi hammaddeden ne kadar temin edilmesi gerektiğini otomatik hesaplayarak tezgâh duruşlarını önleyin.',
+    capabilities: [
+      'Açık siparişler ve emniyet stoğuna göre net ihtiyaç analizi',
+      'Tedarik süresi göz önüne alınarak otomatik satınalma önerisi',
+      'İş emrine bağlı hammadde rezervasyonu',
+    ],
     mockData: {
       label1: 'Planlanan İş Emri',
-      val1: '350 Adet Hidrolik Valf',
-      label2: 'Eksik Hammadde',
-      val2: '120 Adet Rulman',
-      label3: 'Tedarik Önerisi',
-      val3: 'Satınalma Emri Açıldı',
-      statusText: 'Eksik parça yüzünden tezgâh duruşu yaşanmaz',
+      val1: '350 Adet Pompa',
+      label2: 'Eksik Parça',
+      val2: '120 Adet Bağlantı Kiti',
+      label3: 'Sistem Önerisi',
+      val3: 'Satınalma Talebi Açıldı',
+      statusText: 'Eksik malzeme tespiti tezgâh duruşu yaşanmadan yapılır',
     },
   },
   {
-    id: 'bom',
+    id: 'bom-recipes',
     category: 'manufacturing',
     title: 'Ürün Ağaçları (BOM) & Reçeteler',
-    badge: 'Çok Kademeli',
+    badge: 'Ürün Reçetesi',
     badgeColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-    role: 'Ürün Mühendisliği',
-    desc: 'Çok seviyeli montaj/yarı-mamul reçeteleri, fire oranları, operasyon süreleri ve alternatif malzeme tanımları.',
-    detail: 'Reçete revizyon geçmişi, fason işçilik kalemleri, mühendislik değişiklik emirleri (ECO) ve reçete maliyet simülasyonu.',
-    highlights: ['Çok seviyeli montaj', 'Fire & hurda yönetimi', 'Reçete revizyon takibi'],
+    role: 'Üretim Şefi & Mühendislik',
+    businessValue: 'Çok seviyeli montaj reçeteleri, fire oranları ve operasyon sürelerini tanımlayarak standart üretim disiplini oluşturun.',
+    capabilities: [
+      'Çok kademeli yarı-mamul ve montaj ağaçları',
+      'Standart fire oranları ve alternatif malzeme tanımları',
+      'Reçete revizyon geçmişi ve geçmiş üretim kayıtları koruması',
+    ],
     mockData: {
-      label1: 'Reçete Seviyesi',
+      label1: 'Montaj Seviyesi',
       val1: '3 Kademeli Yarı-Mamul',
-      label2: 'Öngörülen Fire',
-      val2: '%2.4 Standart Fire',
-      label3: 'Revizyon Kodu',
+      label2: 'Standart Fire',
+      val2: '%2.0 Tanımlı',
+      label3: 'Reçete Sürümü',
       val3: 'v2.1 (Onaylı)',
-      statusText: 'Reçete değişikliği geçmiş emirleri etkilemez',
+      statusText: 'Reçete değişiklikleri geçmiş kayıtları bozmaz',
     },
   },
   {
     id: 'work-orders',
     category: 'manufacturing',
-    title: 'İş Emirleri & İstasyon Kapasitesi',
+    title: 'İş Emirleri & Tezgâh Kapasitesi',
     badge: 'Üretim Sahası',
     badgeColor: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
     role: 'Fabrika Müdürü',
-    desc: 'İş merkezlerinin kapasite yük dağılımı, rota operasyonları, duruş nedenleri ve OEE verimlilik takibi.',
-    detail: 'Operatör bazlı iş başlatma/bitirme, makine arıza-bakım kayıtları, darboğaz istasyon tespiti ve fason üretim takibi.',
-    highlights: ['İstasyon kapasite analizi', 'OEE & duruş takibi', 'Fason operasyon yönetimi'],
+    businessValue: 'İş merkezlerinin yük durumunu, hat operasyonlarını ve duruş nedenlerini canlı izleyerek darboğazları giderin.',
+    capabilities: [
+      'İstasyon ve tezgâh bazlı iş planlama ve iş emri başlatma',
+      'Operatör iş tamamlama ve fire miktarı girişi',
+      'Fason operasyon ve dış işlem takibi',
+    ],
     mockData: {
-      label1: 'Aktif İş Emri',
+      label1: 'Aktif İstasyon',
       val1: '12 İstasyon Devrede',
-      label2: 'OEE Verimliliği',
-      val2: '%94.2 (Hedef Üstü)',
+      label2: 'Hat Durumu',
+      val2: 'Plan Dahilinde İşliyor',
       label3: 'Darboğaz Uyarısı',
-      val3: 'CNC Torna İstasyonu',
-      statusText: 'İş emri barkodla tezgâhta anlık başlatılır',
-    },
-  },
-  {
-    id: 'quality',
-    category: 'manufacturing',
-    title: 'Kalite Kontrol & Karantina',
-    badge: 'Kalite Standartları',
-    badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-    role: 'Kalite Güvence',
-    desc: 'Mal kabul, proses içi ve final kalite kontrolleri. Tolerans dışı partileri otomatik karantinaya alma.',
-    detail: 'Uygunsuzluk formları (NCR), tedarikçi kalite puanlama matrisi ve parti bazında kalite onay sertifikalandırma süreci.',
-    highlights: ['Girdi/proses kontrolü', 'Tedarikçi kalite skoru', 'Otomatik karantina kilidi'],
-    mockData: {
-      label1: 'Giriş Kontrolü',
-      val1: '150 Adet Parça Test Edildi',
-      label2: 'Kabul Oranı',
-      val2: '%99.3 Uygun',
-      label3: 'NCR Uygunsuzluk',
-      val3: '0 Açık Kayıt',
-      statusText: 'Onay verilmeyen parti üretime verilemez',
+      val3: 'Torna Hattı (Planlı)',
+      statusText: 'İş emirleri barkod okutularak hatta başlatılır',
     },
   },
 
@@ -204,207 +180,95 @@ const MODULES: ErpModule[] = [
   {
     id: 'marketplaces',
     category: 'sales',
-    title: '5 Pazaryeri Canlı Entegrasyonu',
-    badge: 'Trendyol, HB, Amazon',
+    title: 'Pazaryeri & E-Ticaret Entegrasyonu',
+    badge: 'Kanal Yönetimi',
     badgeColor: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
     role: 'E-Ticaret Yöneticisi',
-    desc: 'Trendyol, Hepsiburada, Amazon, N11 ve Çiçeksepeti ile çift yönlü stok, fiyat ve sipariş senkronizasyonu.',
-    detail: 'Kuyruk korumalı garantili sipariş çekme, pazaryeri komisyon muhasebeleşmesi ve otomatik kargo barkodu.',
-    highlights: ['Çift yönlü anlık sync', 'Komisyon takibi', 'Otomatik kargo fişi'],
+    businessValue: 'Trendyol, Hepsiburada, Amazon ve Shopify siparişlerinizi tek ekranda toplayın; stokları tüm kanallarda senkronize tutun.',
+    capabilities: [
+      'Pazaryerlerinden gelen siparişlerin tek tıkla iş emrine dönüşmesi',
+      'Depodaki stok değişiminin tüm satış kanallarına anlık yansıması',
+      'Kargo barkodu ve müşteri faturalandırma otomasyonu',
+    ],
     mockData: {
-      label1: 'Bağlı Pazaryeri',
-      val1: '5 Kanal Aktif',
-      label2: 'Gelen Yeni Sipariş',
-      val2: '29 Sipariş (Bugün)',
+      label1: 'Bağlı Kanallar',
+      val1: 'Pazaryerleri & Web',
+      label2: 'Gelen Sipariş',
+      val2: 'Tek Merkezde Konsolide',
       label3: 'Stok Güncelleme',
-      val3: 'Anlık Senkronize',
-      statusText: 'Pazaryerinde satılan ürün depodan anında düşer',
+      val3: 'Çift Yönlü Senkron',
+      statusText: 'Satılan ürünün stoğu diğer tüm kanallarda anında güncellenir',
     },
   },
   {
-    id: 'sales-pipeline',
+    id: 'sales-quotes',
     category: 'sales',
-    title: 'Tekliften Siparişe Satış Süreci',
-    badge: 'Uçtan Uca Satış',
+    title: 'Teklif & Müşteri Sipariş Yönetimi',
+    badge: 'Satış Süreci',
     badgeColor: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-    role: 'Satış Direktörü',
-    desc: 'Dinamik teklif hazırlama, müşteri kredi limiti kontrolü, iskonto onay hiyerarşisi ve tek tıkla sipariş dönüşümü.',
-    detail: 'Müşteri bazlı özel fiyat listesi, dövizli teklifler ve teklif geçerlilik süresi takibi.',
-    highlights: ['Müşteri risk analizi', 'Onay akış hiyerarşisi', 'Dövizli teklif yönetimi'],
+    role: 'Satış Müdürü',
+    businessValue: 'Müşteri cari koşullarına uygun dinamik teklifler hazırlayın, iskonto onay sınırlarını koruyun ve tek tıkla siparişe dönüştürün.',
+    capabilities: [
+      'Müşteri özel fiyat listesi ve geçmiş sipariş şartları',
+      'Yetki aşan iskontolarda yönetici onay akışı',
+      'Onaylanan teklifin tek tıkla sevk emrine dönüşmesi',
+    ],
     mockData: {
-      label1: 'Hazırlanan Teklif',
-      val1: 'TKL-2026-089 (₺340.000)',
-      label2: 'Müşteri Risk Skoru',
-      val2: 'A+ (Limit Uygun)',
-      label3: 'Onay Durumu',
-      val3: 'Müşteri Onayladı',
-      statusText: 'Tek tıkla sipariş ve sevk emrine dönüşür',
-    },
-  },
-  {
-    id: 'procurement',
-    category: 'sales',
-    title: 'Satın Alma & Teklif Karşılaştırma',
-    badge: 'Tedarik Yönetimi',
-    badgeColor: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
-    role: 'Satınalma Sorumlusu',
-    desc: 'Satın alma talepleri, teklif toplama (RFQ), tedarikçi fiyat karşılaştırma tablosu ve mal kabul entegrasyonu.',
-    detail: 'Bütçe kontrol kuralları, tedarikçi teslimat performansı ve sipariş-irsaliye-fatura 3’lü eşleştirme (3-way match).',
-    highlights: ['Tedarikçi teklif matrisi', '3-Way Match kontrolü', 'Bütçe onay mekanizması'],
-    mockData: {
-      label1: 'Gelen Tedarikçi Teklifi',
-      val1: '3 Farklı Fiyat Alındı',
-      label2: 'En Avantajlı Teklif',
-      val2: 'Demir Çelik A.Ş. (₺120.000)',
-      label3: '3-Way Match',
-      val3: 'Doğrulandı',
-      statusText: 'İrsaliye ve fatura tutarı birebir denetlenir',
+      label1: 'Açık Teklifler',
+      val1: 'TKL-2026-089',
+      label2: 'Cari Risk Durumu',
+      val2: 'Limit Dahilinde',
+      label3: 'Dönüşüm',
+      val3: 'Tek Tıkla Sipariş',
+      statusText: 'Teklif içeriği mükerrer veri girişi olmadan siparişe aktarılır',
     },
   },
 
-  // Finance & GİB E-Transformation
+  // Finance & Accounting
   {
     id: 'e-invoicing',
     category: 'finance',
-    title: 'GİB e-Fatura, e-Arşiv & e-İrsaliye',
-    badge: 'GİB UBL-TR Tam Uyum',
+    title: 'e-Fatura, e-İrsaliye & e-Arşiv',
+    badge: 'Resmi Mevzuat',
     badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-    role: 'Mali Müşavir / Muhasebe',
-    desc: 'Gelir İdaresi Başkanlığı standartlarında e-Fatura, e-Arşiv, e-İrsaliye gönderimi, alımı ve yasal saklama.',
-    detail: 'Tevkifatlı faturalar, istisna kodları, iptal/itiraz yaşam döngüsü ve entegratör bağımsız esnek mimari.',
-    highlights: ['UBL-TR 1.2.1 formatı', 'Tevkifat & istisna motoru', '8 günlük itiraz takibi'],
+    role: 'Mali Müşavir & Muhasebe',
+    businessValue: 'Gelir İdaresi Başkanlığı standartlarında e-Fatura ve e-İrsaliyelerinizi doğrudan ERP içerisinden düzenleyin ve arşivleyin.',
+    capabilities: [
+      'Sevkiyatı onaylanan irsaliyeden tek tıkla e-Fatura üretimi',
+      'Tevkifatlı ve istisnalı fatura hesaplama kuralları',
+      'İptal ve itiraz süreçlerinin yasal takvimde izlenmesi',
+    ],
     mockData: {
-      label1: 'Son Düzenlenen Belge',
-      val1: 'GIB2026000004128',
-      label2: 'GİB Zarf Durumu',
-      val2: '1300 (Başarıyla İletildi)',
-      label3: 'ETTN Kodu',
-      val3: 'e8c4-9a21-419b',
-      statusText: 'İrsaliyesi onaylanan sipariş tek tıkla faturalaşır',
+      label1: 'Düzenlenen Belge',
+      val1: 'e-Fatura & e-İrsaliye',
+      label2: 'Mevzuat Formatı',
+      val2: 'Resmi UBL Standardı',
+      label3: 'İletim Durumu',
+      val3: 'Başarıyla İletildi',
+      statusText: 'İrsaliye satırları hatasız biçimde resmi faturaya aktarılır',
     },
   },
   {
     id: 'general-ledger',
     category: 'finance',
-    title: 'Tekdüzen Genel Muhasebe',
-    badge: 'Otomatik Defter',
-    badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-    role: 'Genel Muhasebe Şefi',
-    desc: 'Fatura, irsaliye ve banka hareketlerinden otomatik yevmiye fişi üretimi. Mizan, bilanço ve gelir tablosu.',
-    detail: 'Mali dönem kapatma, döviz kur farkı değerleme fişleri ve resmi yevmiye/kebir defter kayıtları.',
-    highlights: ['Otomatik yevmiye fişi', 'Anlık mizan & bilanço', 'Döviz kur farkı motoru'],
-    mockData: {
-      label1: 'Yevmiye Fişi',
-      val1: 'YVM-2026-904 (Dengeli)',
-      label2: '102 Bankalar / 120 Alıcı',
-      val2: '₺408.000 (Borç/Alacak)',
-      label3: 'Mizan Durumu',
-      val3: 'Kuruş Sapmasız Dengeli',
-      statusText: 'Elle defter fişi yazma gereği tamamen kalkar',
-    },
-  },
-  {
-    id: 'bank-reconciliation',
-    category: 'finance',
-    title: 'Banka Ekstre Otomasyonu',
-    badge: '%99 Güvenli Eşleşme',
+    title: 'Genel Muhasebe & Tekdüzen Defter',
+    badge: 'Defter Kayıtları',
     badgeColor: 'text-teal-400 bg-teal-500/10 border-teal-500/20',
-    role: 'Finans Müdürü',
-    desc: 'Garanti BBVA, İş Bankası, Akbank ve diğer banka ekstrelerinin otomatik okunması ve açık faturalarla eşleştirilmesi.',
-    detail: 'Havale, EFT, POS ve komisyon kesintilerinin kural tabanlı ayrıştırılması, cari bakiye kapatma ve tahsil fişi.',
-    highlights: ['Çoklu banka ekstre okuma', 'Otomatik fatura eşleme', 'POS komisyon ayrıştırma'],
+    role: 'Genel Muhasebe Şefi',
+    businessValue: 'Fatura, irsaliye ve banka hareketlerinden otomatik yevmiye fişi üreterek mizan, bilanço ve nakit durumunuzu anlık izleyin.',
+    capabilities: [
+      'Ticari operasyonlardan otomatik tekdüzen hesap fişi üretimi',
+      'Banka ekstrelerinin okunarak açık carilerle eşleştirilmesi',
+      'Anlık mizan, bilanço ve gelir tablosu raporlaması',
+    ],
     mockData: {
-      label1: 'Okunan Banka Ekstresi',
-      val1: 'Garanti BBVA • Gelen Havale',
-      label2: 'Eşleşen Cari & Fatura',
-      val2: 'Atlas Endüstriyel (#4128)',
-      label3: 'Kalan Cari Bakiye',
-      val3: '₺0,00 (Fatura Kapandı)',
-      statusText: 'Akşamları saatlerce ekstre arama zahmeti biter',
-    },
-  },
-
-  // AI & Automation
-  {
-    id: 'today-workbench',
-    category: 'ai',
-    title: '"Bugün" Akıllı Operasyon Masası',
-    badge: 'Otonom Asistan',
-    badgeColor: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-    role: 'Şirket Yöneticisi / CEO',
-    desc: 'Sabah bakılan tek ekran: Geciken teslimatlar, finansal riskler, onay bekleyen talepler ve anomaliler.',
-    detail: 'Görevleri parasal etki ve önceliğe göre sıralayan, tek tıkla aksiyon almayı sağlayan canlı iş kuyruğu.',
-    highlights: ['Parasal etki sıralaması', 'Anomali & risk tespiti', 'Tek tıkla aksiyon alma'],
-    mockData: {
-      label1: 'Kritik Uyarılar',
-      val1: '2 Geciken Sevkiyat Tespiti',
-      label2: 'Onay Bekleyenler',
-      val2: '1 Maker-Checker PO Onayı',
-      label3: 'Finansal Fırsat',
-      val3: 'Erken Ödeme İskonto Önerisi',
-      statusText: 'Kullanıcının sabah açtığı ilk ve tek kontrol masası',
-    },
-  },
-  {
-    id: 'ocr-extraction',
-    category: 'ai',
-    title: 'OCR Belge & Fatura Çıkarıcı',
-    badge: 'Otomatik Okuma',
-    badgeColor: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
-    role: 'Operasyon & Muhasebe',
-    desc: 'Sürükleyip bırakılan PDF veya fotoğraflardaki fatura, fiş ve siparişleri okuyarak doğrulanacak taslak oluşturur.',
-    detail: 'Tedarikçi VKN, fatura no, matrah, KDV ve satır kalemlerini yüksek doğrulukla ayrıştırır, elle yazmaya son verir.',
-    highlights: ['PDF/Fiş anlık tarama', 'Satır kalemi ayrıştırma', 'Güven skorlu taslak onay'],
-    mockData: {
-      label1: 'Taranan Doküman',
-      val1: 'Tedarikçi Fatura PDF (12 Kalem)',
-      label2: 'Ayrıştırılan Matrah & KDV',
-      val2: '₺84.500 + %20 KDV',
-      label3: 'Doğruluk Skoru',
-      val3: '%99.2 Yüksek Güven',
-      statusText: 'Kağıt faturayı elle sisteme girmeye son verir',
-    },
-  },
-
-  // Governance & Security
-  {
-    id: 'maker-checker',
-    category: 'governance',
-    title: 'Maker-Checker Çift Kişi Onayı',
-    badge: 'Kurumsal Güvence',
-    badgeColor: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
-    role: 'CFO / Genel Müdür',
-    desc: 'Kritik finansal ve idari işlemlerde bir yöneticinin önerdiği değişikliği ikinci bir bağımsız yetkili onaylamadan uygulanmaz.',
-    detail: 'Yüksek limitli satınalmalar, plan değişiklikleri ve sistem parametrelerinde kurumsal hata önleme kalkanı.',
-    highlights: ['İki bağımsız yetkili mutabakatı', 'Hatalı harcama engelleme', 'Zorunlu denetim gerekçesi'],
-    mockData: {
-      label1: 'İşlem Türü',
-      val1: 'Tedarikçi Limit Artışı (₺1.2M)',
-      label2: 'Talep Eden (Maker)',
-      val2: 'Ahmet Y. (Satınalma Md.)',
-      label3: 'Onaylayan (Checker)',
-      val3: 'Zeynep K. (Finans Direktörü)',
-      statusText: 'Tek kişinin inisiyatifiyle şirket riske atılamaz',
-    },
-  },
-  {
-    id: 'rbac-security',
-    category: 'governance',
-    title: 'Granüler RBAC & MFA Güvenlik',
-    badge: 'ISO 27001 & KVKK',
-    badgeColor: 'text-violet-400 bg-violet-500/10 border-violet-500/20',
-    role: 'Bilgi Güvenliği / IT',
-    desc: 'Ekran ve aksiyon seviyesinde detaylı rol yönetimi, TOTP / WebAuthn iki aşamalı doğrulama (MFA) ve oturum kontrolü.',
-    detail: 'Şubeler arası veri izolasyonu, süreli destek oturumları ve KVKK uyumlu işlem loglama.',
-    highlights: ['Ekran & aksiyon yetkisi', 'TOTP / WebAuthn MFA', 'Şube veri izolasyonu'],
-    mockData: {
-      label1: 'Veritabanı İzolasyonu',
-      val1: 'PostgreSQL Row-Level Security',
-      label2: 'İki Aşamalı Güvenlik',
-      val2: 'TOTP (Google Authenticator)',
-      label3: 'Erişim Kısıtı',
-      val3: 'Şube bazlı izole yetkilendirme',
-      statusText: 'Şube personeli diğer şubenin finansal verisini göremez',
+      label1: 'Yevmiye Kaydı',
+      val1: 'Otomatik Üretildi',
+      label2: 'Banka Eşleşmesi',
+      val2: 'Havale Cariyle Eşleşti',
+      label3: 'Mizan Durumu',
+      val3: 'Anlık Dengeli',
+      statusText: 'Elle defter kaydı yazma ihtiyacı tamamen ortadan kalkar',
     },
   },
 ];
@@ -424,25 +288,15 @@ export default function Features() {
   const activeModule = MODULES.find((m) => m.id === activeModuleId) || categoryModules[0] || MODULES[0];
 
   return (
-    <section id="features" className="py-20 lg:py-28 relative bg-[#0B1120] border-t border-slate-800 text-slate-100 overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute top-0 left-1/3 w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[140px] pointer-events-none" />
-      <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-indigo-600/5 rounded-full blur-[120px] pointer-events-none" />
-
-      <div className="section-container relative z-10">
+    <section id="features" className="py-20 lg:py-28 bg-[#0B1424] border-t border-slate-800 text-slate-100 overflow-hidden">
+      <div className="section-container">
         
         {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.45 }}
-          className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10"
-        >
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-400 mb-4">
+            <div className="section-label">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-              <span>Modül & Yetenek Kataloğu</span>
+              <span>MODÜL KATALOĞU</span>
             </div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-3">
               İhtiyacınız olan tüm modüller,<br />
@@ -451,43 +305,42 @@ export default function Features() {
               </span>
             </h2>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-              Kaybolmadan inceleyin. Departmanınızı seçin, ilgili modülün kurumsal yeteneklerini ve canlı çalışma biçimini tek bakışta keşfedin.
+              Departmanınızı seçin; ilgili modülün işletmenize sağladığı faydayı, temel yeteneklerini ve gerçek çalışma mantığını inceleyin.
             </p>
           </div>
 
-          <div className="text-xs text-slate-400 bg-slate-800/80 px-3.5 py-2 rounded-lg border border-slate-700/80 self-start lg:self-auto font-medium">
-            Toplam <span className="text-white font-bold">{MODULES.length}</span> Modül Kullanıma Hazır
+          <div className="text-xs text-slate-400 bg-[#080F1E] px-4 py-2 rounded-lg border border-slate-800 self-start lg:self-auto font-medium">
+            Modüler Mimari: İhtiyacınıza göre genişletilebilir
           </div>
-        </motion.div>
+        </div>
 
-        {/* Category Switcher Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-8 scrollbar-none">
+        {/* Category Tabs */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-8">
           {CATEGORIES.map((cat) => {
             const isActive = selectedCategory === cat.id;
             return (
               <button
                 key={cat.id}
                 onClick={() => handleCategoryChange(cat.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer ${
+                className={`px-4 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-150 cursor-pointer ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                    : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700/60'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                    : 'bg-[#080F1E] text-slate-400 hover:text-white border border-slate-800'
                 }`}
               >
-                <span>{cat.icon}</span>
-                <span>{cat.label}</span>
+                {cat.label}
               </button>
             );
           })}
         </div>
 
-        {/* Master-Detail Studio Layout (Zero Endless Scroll) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 sm:p-7 shadow-2xl backdrop-blur-xl">
+        {/* Master-Detail Layout: Business Value First */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-[#080F1E] border border-slate-800/80 rounded-2xl p-5 sm:p-7 shadow-xl">
           
-          {/* Left Column: Module Directory List for the Selected Category */}
+          {/* Left Column: Modules List */}
           <div className="lg:col-span-4 flex flex-col gap-2.5">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 px-1">
-              Kategorideki Modüller ({categoryModules.length})
+              Modül Seçin ({categoryModules.length})
             </div>
 
             {categoryModules.map((m) => {
@@ -496,10 +349,10 @@ export default function Features() {
                 <button
                   key={m.id}
                   onClick={() => setActiveModuleId(m.id)}
-                  className={`p-4 rounded-xl text-left transition-all duration-200 cursor-pointer border flex flex-col justify-between ${
+                  className={`p-4 rounded-xl text-left transition-all duration-150 cursor-pointer border flex flex-col justify-between ${
                     isSelected
-                      ? 'bg-slate-800 border-blue-500/60 shadow-lg shadow-blue-500/10'
-                      : 'bg-slate-900/50 border-slate-800 hover:border-slate-700 hover:bg-slate-800/40'
+                      ? 'bg-[#0B1424] border-blue-500/60 shadow-md shadow-blue-500/10'
+                      : 'bg-[#060B15]/40 border-slate-800 hover:border-slate-700'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
@@ -510,32 +363,32 @@ export default function Features() {
                       <span className="text-blue-400 font-bold text-xs">→</span>
                     )}
                   </div>
-                  <h4 className={`text-xs sm:text-sm font-bold leading-tight ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                  <h3 className={`text-xs sm:text-sm font-bold leading-tight ${isSelected ? 'text-white' : 'text-slate-300'}`}>
                     {m.title}
-                  </h4>
+                  </h3>
                   <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
-                    {m.desc}
+                    {m.businessValue}
                   </p>
                 </button>
               );
             })}
           </div>
 
-          {/* Right Column: Deep-Dive Interactive Showcase Panel */}
-          <div className="lg:col-span-8 bg-slate-950/80 border border-slate-800 rounded-xl p-6 flex flex-col justify-between shadow-inner">
+          {/* Right Column: Business Value, Capabilities & Real Data Snapshot */}
+          <div className="lg:col-span-8 bg-[#0B1424] border border-slate-800 rounded-xl p-6 flex flex-col justify-between shadow-inner">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeModule.id}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.22 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
                 className="space-y-6"
               >
-                {/* Module Title & Role Tag */}
+                {/* 1. Header with Role Tag */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
                   <div>
-                    <div className="flex items-center gap-2.5 mb-1.5">
+                    <div className="flex items-center gap-2 mb-1.5">
                       <span className={`text-xs font-semibold px-2.5 py-0.5 rounded border ${activeModule.badgeColor}`}>
                         {activeModule.badge}
                       </span>
@@ -548,51 +401,56 @@ export default function Features() {
                     </h3>
                   </div>
 
-                  <span className="text-[11px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 font-medium self-start sm:self-auto">
-                    ✓ Aktif Modül
+                  <span className="text-[11px] text-slate-400 bg-white/[0.04] px-2.5 py-1 rounded border border-white/[0.08] self-start sm:self-auto">
+                    Kullanıma Hazır
                   </span>
                 </div>
 
-                {/* Module Narrative & Detail */}
-                <div className="space-y-2">
+                {/* 2. Business Value First (What does it deliver?) */}
+                <div className="p-4 rounded-xl bg-[#080F1E] border border-slate-800">
+                  <div className="text-[10px] font-mono text-blue-400 font-semibold uppercase tracking-wider mb-1">
+                    İşletmeye Sağladığı Temel Değer:
+                  </div>
                   <p className="text-sm text-slate-200 leading-relaxed font-medium">
-                    {activeModule.desc}
-                  </p>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    {activeModule.detail}
+                    {activeModule.businessValue}
                   </p>
                 </div>
 
-                {/* 3 Core Capability Highlights */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                  {activeModule.highlights.map((h, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800/80 flex items-center gap-2 text-xs text-slate-300"
-                    >
-                      <span className="text-emerald-400 font-bold">✓</span>
-                      <span className="font-medium">{h}</span>
-                    </div>
-                  ))}
+                {/* 3. Capabilities Checklist */}
+                <div>
+                  <div className="text-xs font-semibold text-slate-400 mb-2.5">
+                    Modül Yetenekleri:
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {activeModule.capabilities.map((cap, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2.5 rounded-lg bg-[#080F1E] border border-slate-800 flex items-start gap-2 text-xs text-slate-300"
+                      >
+                        <span className="text-emerald-400 font-bold mt-0.5">✓</span>
+                        <span>{cap}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Live Mock / Operational Snapshot Card */}
-                <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
+                {/* 4. Live Data Snapshot */}
+                <div className="p-4 rounded-xl bg-[#080F1E] border border-slate-800 space-y-3">
                   <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300 pb-2 border-b border-slate-800">
-                    <span>Modülün Canlı Çalışma Ekranından Örnek Veri:</span>
-                    <span className="text-emerald-400 font-mono text-[10px]">● Canlı Bağlantı</span>
+                    <span>Örnek Çalışma Ekranı Verisi:</span>
+                    <span className="text-slate-400 font-mono text-[10px]">Örnek Konsol</span>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div className="p-2 rounded bg-slate-950/80 border border-slate-800">
+                    <div className="p-2.5 rounded bg-[#060B15] border border-slate-800">
                       <span className="text-[10px] text-slate-400 block">{activeModule.mockData.label1}</span>
                       <span className="text-xs font-bold text-white font-mono mt-0.5 block">{activeModule.mockData.val1}</span>
                     </div>
-                    <div className="p-2 rounded bg-slate-950/80 border border-slate-800">
+                    <div className="p-2.5 rounded bg-[#060B15] border border-slate-800">
                       <span className="text-[10px] text-slate-400 block">{activeModule.mockData.label2}</span>
                       <span className="text-xs font-bold text-white font-mono mt-0.5 block">{activeModule.mockData.val2}</span>
                     </div>
-                    <div className="p-2 rounded bg-slate-950/80 border border-slate-800">
+                    <div className="p-2.5 rounded bg-[#060B15] border border-slate-800">
                       <span className="text-[10px] text-slate-400 block">{activeModule.mockData.label3}</span>
                       <span className="text-xs font-bold text-white font-mono mt-0.5 block">{activeModule.mockData.val3}</span>
                     </div>
@@ -606,14 +464,14 @@ export default function Features() {
               </motion.div>
             </AnimatePresence>
 
-            {/* Bottom Connect Info */}
-            <div className="pt-4 mt-4 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
-              <span>Şirketinizin organizasyon şemasına ve yetki matrisine göre yapılandırılabilir.</span>
+            {/* Bottom Demo Trigger */}
+            <div className="pt-4 mt-4 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
+              <span>Şirketinizin organizasyon ve yetki yapısına göre uyarlanabilir.</span>
               <button
                 onClick={() => {
                   window.dispatchEvent(
                     new CustomEvent('openChatWithMessage', {
-                      detail: `${activeModule.title} modülü hakkında detaylı bilgi ve uyarlama desteği almak istiyorum.`,
+                      detail: `${activeModule.title} modülü hakkında demo ve kurumsal uyarlama bilgisi almak istiyorum.`,
                     })
                   );
                 }}
