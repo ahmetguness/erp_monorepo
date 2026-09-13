@@ -1,46 +1,46 @@
-import { Hono } from 'hono';
-import { requireModule } from '../middleware/requireModule.js';
-import { requirePermission } from '../middleware/requirePermission.js';
-import { StarterCsvImportController } from '../modules/platform/http/controllers/index.js';
-import { MODULE_KEYS } from '../types/module.types.js';
+import { Hono } from "hono";
+import { requireModule } from "../middleware/requireModule.js";
+import { requirePermission } from "../middleware/requirePermission.js";
+import { StarterCsvImportController } from "../modules/platform/http/controllers/index.js";
+import { MODULE_KEYS } from "../types/module.types.js";
 
 const starterCsvImportRoutes = new Hono();
 
 starterCsvImportRoutes.get(
-  '/products/template',
+  "/products/template",
   requireModule(MODULE_KEYS.INVENTORY),
-  requirePermission('inventory', 'READ'),
+  requirePermission("inventory", "READ"),
   StarterCsvImportController.template,
 );
 starterCsvImportRoutes.post(
-  '/products/preview',
+  "/products/preview",
   requireModule(MODULE_KEYS.INVENTORY),
-  requirePermission('inventory', 'CREATE'),
+  requirePermission("inventory", "CREATE"),
   StarterCsvImportController.preview,
 );
 starterCsvImportRoutes.post(
-  '/products/commit',
+  "/products/commit",
   requireModule(MODULE_KEYS.INVENTORY),
-  requirePermission('inventory', 'CREATE'),
+  requirePermission("inventory", "CREATE"),
   StarterCsvImportController.commit,
 );
 
 starterCsvImportRoutes.get(
-  '/contacts/template',
+  "/contacts/template",
   requireModule(MODULE_KEYS.CONTACTS),
-  requirePermission('contacts', 'READ'),
+  requirePermission("contacts", "READ"),
   StarterCsvImportController.template,
 );
 starterCsvImportRoutes.post(
-  '/contacts/preview',
+  "/contacts/preview",
   requireModule(MODULE_KEYS.CONTACTS),
-  requirePermission('contacts', 'CREATE'),
+  requirePermission("contacts", "CREATE"),
   StarterCsvImportController.preview,
 );
 starterCsvImportRoutes.post(
-  '/contacts/commit',
+  "/contacts/commit",
   requireModule(MODULE_KEYS.CONTACTS),
-  requirePermission('contacts', 'CREATE'),
+  requirePermission("contacts", "CREATE"),
   StarterCsvImportController.commit,
 );
 

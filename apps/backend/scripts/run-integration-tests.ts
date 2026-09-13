@@ -14,6 +14,7 @@ import {
   AppModule,
   ContactType,
   DeliveryNoteType,
+  EDocumentType,
   DomainEventOutboxStatus,
   EntityType,
   FiscalPeriodStatus,
@@ -284,6 +285,12 @@ async function seedTenant(runId: string, suffix: 'a' | 'b') {
       { tenantId: tenant.id, code: '720', name: 'Direct Labor', accountType: 'EXPENSE' },
       { tenantId: tenant.id, code: '730', name: 'Production Overhead', accountType: 'EXPENSE' },
       { tenantId: tenant.id, code: '689', name: 'Scrap Expenses', accountType: 'EXPENSE' },
+      { tenantId: tenant.id, code: '120', name: 'Trade Receivables', accountType: 'ASSET' },
+      { tenantId: tenant.id, code: '320', name: 'Trade Payables', accountType: 'LIABILITY' },
+      { tenantId: tenant.id, code: '600', name: 'Domestic Sales', accountType: 'REVENUE' },
+      { tenantId: tenant.id, code: '391', name: 'VAT Payable', accountType: 'LIABILITY' },
+      { tenantId: tenant.id, code: '153', name: 'Merchandise Inventory', accountType: 'ASSET' },
+      { tenantId: tenant.id, code: '191', name: 'VAT Receivable', accountType: 'ASSET' },
     ],
   });
 
@@ -462,8 +469,101 @@ async function cleanup(): Promise<void> {
 }
 
 async function testTenantIsolation(ctx: TestContext): Promise<void> {
-  const result = await api('GET', `/api/contacts/${ctx.contactBId}`, token(ctx.ownerAId, ctx.tenantAId));
-  assertStatus(result, 404, 'tenant A, tenant B carisini okuyamamali');
+  const suffix = crypto.randomUUID();
+  const warehouseB = await prisma.warehouse.create({
+    data: { tenantId: ctx.tenantBId, code: `ISO-WH-${suffix}`, name: 'Tenant B isolation warehouse' },
+  });
+  const [invoiceB, salesOrderB, purchaseOrderB, workOrderB, employeeB, paymentB, deliveryNoteB, integrationB, attachmentB] = await Promise.all([
+    prisma.invoice.create({
+      data: {
+        tenantId: ctx.tenantBId, contactId: ctx.contactBId, type: InvoiceType.SALES,
+        number: `ISO-INV-${suffix}`, date: new Date(), totalGross: 10,
+      },
+    }),
+    prisma.salesOrder.create({
+      data: {
+        tenantId: ctx.tenantBId, contactId: ctx.contactBId, number: `ISO-SO-${suffix}`,
+        date: new Date(), totalGross: 10,
+      },
+    }),
+    prisma.purchaseOrder.create({
+      data: {
+        tenantId: ctx.tenantBId, contactId: ctx.contactBId, number: `ISO-PO-${suffix}`,
+        date: new Date(), totalGross: 10,
+      },
+    }),
+    prisma.workOrder.create({
+      data: {
+        tenantId: ctx.tenantBId, productId: ctx.productBId, number: `ISO-WO-${suffix}`,
+        plannedQty: 1,
+      },
+    }),
+    prisma.employee.create({
+      data: {
+        tenantId: ctx.tenantBId, firstName: 'Tenant', lastName: 'B Employee', hireDate: new Date(),
+      },
+    }),
+    prisma.payment.create({
+      data: {
+        tenantId: ctx.tenantBId, contactId: ctx.contactBId, date: new Date(), amount: 10,
+        method: PaymentMethod.CASH,
+      },
+    }),
+    prisma.deliveryNote.create({
+      data: {
+        tenantId: ctx.tenantBId, number: `ISO-DN-${suffix}`, type: DeliveryNoteType.OUTBOUND,
+        contactId: ctx.contactBId, warehouseId: warehouseB.id, date: new Date(),
+      },
+    }),
+    prisma.marketplaceIntegration.create({
+      data: { tenantId: ctx.tenantBId, channel: MarketplaceChannel.OTHER, name: 'Tenant B isolation integration' },
+    }),
+    prisma.attachment.create({
+      data: {
+        tenantId: ctx.tenantBId, entityType: EntityType.PRODUCT, entityId: ctx.productBId,
+        fileName: 'tenant-b-private.txt', storagePath: `isolation/${suffix}.txt`,
+      },
+    }),
+  ]);
+
+  const tenantAToken = token(ctx.ownerAId, ctx.tenantAId);
+  const foreignReads = [
+    [`/api/products/${ctx.productBId}`, 'urun'],
+    [`/api/contacts/${ctx.contactBId}`, 'cari'],
+    [`/api/invoices/${invoiceB.id}`, 'fatura'],
+    [`/api/sales-orders/${salesOrderB.id}`, 'satis siparisi'],
+    [`/api/purchase-orders/${purchaseOrderB.id}`, 'satinalma siparisi'],
+    [`/api/production/work-orders/${workOrderB.id}`, 'is emri'],
+    [`/api/hr/employees/${employeeB.id}`, 'calisan'],
+    [`/api/payments/${paymentB.id}`, 'odeme'],
+    [`/api/delivery-notes/${deliveryNoteB.id}`, 'irsaliye'],
+    [`/api/marketplace/integrations/${integrationB.id}`, 'marketplace entegrasyonu'],
+    [`/api/attachments/${attachmentB.id}`, 'ek dosya'],
+  ] as const;
+  for (const [path, entity] of foreignReads) {
+    const result = await api('GET', path, tenantAToken);
+    assertStatus(result, 404, `tenant A, tenant B ${entity} kaydini okuyamamali`);
+  }
+
+  const foreignInvoiceUpdate = await api('PATCH', `/api/invoices/${invoiceB.id}`, tenantAToken, { notes: 'forbidden' });
+  if (foreignInvoiceUpdate.status !== 403 && foreignInvoiceUpdate.status !== 404) {
+    throw new Error(`Tenant B faturasi guncellenebildi: HTTP ${foreignInvoiceUpdate.status}`);
+  }
+
+  const nestedProductLeak = await api('POST', '/api/invoices', tenantAToken, {
+    contactId: ctx.contactAId,
+    type: InvoiceType.SALES,
+    date: '2026-05-24',
+    lines: [{ productId: ctx.productBId, description: 'foreign product', quantity: 1, unitPrice: 10 }],
+  });
+  assertStatus(nestedProductLeak, 400, 'tenant B urunu tenant A faturasina baglanamamali');
+
+  const nestedInvoiceLeak = await api('POST', '/api/e-documents', tenantAToken, {
+    invoiceId: invoiceB.id,
+    type: EDocumentType.E_ARCHIVE,
+    submissionIdempotencyKey: `tenant-isolation:${suffix}`,
+  });
+  assertStatus(nestedInvoiceLeak, 404, 'tenant B faturasi tenant A e-belgesine baglanamamali');
 }
 
 async function testSessionAuthenticationKeepsTenantScope(ctx: TestContext): Promise<void> {
@@ -704,14 +804,41 @@ async function createInvoice(ctx: TestContext): Promise<string> {
   return readDataId(result.body);
 }
 
+async function approveInvoice(ctx: TestContext, invoiceId: string): Promise<void> {
+  const idempotencyKey = `invoice-posting:${crypto.randomUUID()}`;
+  const approveRequest = () => api(
+    'POST',
+    `/api/invoices/${invoiceId}/approve`,
+    token(ctx.ownerAId, ctx.tenantAId),
+    { idempotencyKey },
+  );
+  const [result, concurrentReplay] = await Promise.all([approveRequest(), approveRequest()]);
+  assertStatus(result, 200, 'taslak fatura onaylanabilmeli');
+  assertStatus(concurrentReplay, 200, 'es zamanli ayni key fatura sonucunu dondurmeli');
+  const replay = await approveRequest();
+  assertStatus(replay, 200, 'ayni key ile fatura onayi ayni sonucu dondurmeli');
+  const [accountEntryCount, journalEntryCount] = await Promise.all([
+    prisma.accountEntry.count({ where: { tenantId: ctx.tenantAId, refType: 'INVOICE', refId: invoiceId } }),
+    prisma.journalEntry.count({ where: { tenantId: ctx.tenantAId, refType: 'INVOICE', refId: invoiceId } }),
+  ]);
+  if (accountEntryCount !== 1 || journalEntryCount !== 1) {
+    throw new Error('Fatura onayi idempotent tekrarda cift mali kayit olusturdu.');
+  }
+}
+
 async function testInvoiceCreatesAccountEntry(ctx: TestContext): Promise<string> {
   const invoiceId = await createInvoice(ctx);
+  await approveInvoice(ctx, invoiceId);
   const accountEntry = await prisma.accountEntry.findFirst({
     where: { tenantId: ctx.tenantAId, contactId: ctx.contactAId, refType: 'INVOICE', refId: invoiceId },
   });
   if (!accountEntry || Number(accountEntry.debit) <= 0) {
-    throw new Error('Fatura olusturma account entry yazmadi.');
+    throw new Error('Fatura onayi account entry yazmadi.');
   }
+  const journalEntry = await prisma.journalEntry.findFirst({
+    where: { tenantId: ctx.tenantAId, refType: 'INVOICE', refId: invoiceId },
+  });
+  if (!journalEntry) throw new Error('Fatura onayi journal entry yazmadi.');
   return invoiceId;
 }
 
@@ -732,25 +859,49 @@ async function testClosedFiscalPeriodBlocksInvoice(ctx: TestContext): Promise<vo
     date: '2026-04-15',
     lines: [{ productId: ctx.productAId, description: 'Closed period service', quantity: 1, unitPrice: 100 }],
   });
-  assertStatus(result, 400, 'kapali mali doneme fatura yazilamamali');
+  assertStatus(result, 201, 'kapali mali donemde fatura taslagi olusturulabilmeli');
+  const approveResult = await api('POST', `/api/invoices/${readDataId(result.body)}/approve`, token(ctx.ownerAId, ctx.tenantAId), {
+    idempotencyKey: `invoice-posting:${crypto.randomUUID()}`,
+  });
+  assertStatus(approveResult, 400, 'kapali mali donemde fatura onaylanamamali');
 }
 
 async function testPaymentAllocation(ctx: TestContext, invoiceId: string): Promise<void> {
-  const result = await api('POST', '/api/payments', token(ctx.ownerAId, ctx.tenantAId), {
+  const idempotencyKey = `payment:${crypto.randomUUID()}`;
+  const input = {
     contactId: ctx.contactAId,
     cashAccountId: ctx.cashAccountAId,
     date: '2026-05-24',
     amount: 100,
     method: PaymentMethod.CASH,
     direction: 'RECEIVE',
+    idempotencyKey,
     allocations: [{ invoiceId, amount: 100 }],
-  });
+  };
+  const createRequest = () => api('POST', '/api/payments', token(ctx.ownerAId, ctx.tenantAId), input);
+  const [result, concurrentReplay] = await Promise.all([createRequest(), createRequest()]);
   assertStatus(result, 201, 'odeme tahsisati olusturulabilmeli');
+  assertStatus(concurrentReplay, 201, 'es zamanli odeme retry ayni sonucu dondurmeli');
   const paymentId = readDataId(result.body);
+  if (readDataId(concurrentReplay.body) !== paymentId) {
+    throw new Error('Es zamanli odeme retry ayni kaydi dondurmedi.');
+  }
   const allocation = await prisma.paymentAllocation.findFirst({ where: { tenantId: ctx.tenantAId, paymentId, invoiceId } });
   if (!allocation || Number(allocation.amount) !== 100) {
     throw new Error('Odeme tahsisati fatura ile eslesmedi.');
   }
+  const replay = await api('POST', '/api/payments', token(ctx.ownerAId, ctx.tenantAId), input);
+  assertStatus(replay, 201, 'odeme ayni key ile idempotent olmali');
+  if (readDataId(replay.body) !== paymentId) throw new Error('Odeme retry ayni kaydi dondurmedi.');
+  if (await prisma.payment.count({ where: { tenantId: ctx.tenantAId, idempotencyKey } }) !== 1) {
+    throw new Error('Odeme retry cift kayit olusturdu.');
+  }
+  const conflictingReplay = await api('POST', '/api/payments', token(ctx.ownerAId, ctx.tenantAId), {
+    ...input,
+    amount: 101,
+    allocations: [{ invoiceId, amount: 101 }],
+  });
+  assertStatus(conflictingReplay, 409, 'ayni odeme key farkli payload ile kullanilamamali');
 }
 
 async function testPaymentAllocationCannotExceedInvoiceTotal(ctx: TestContext, invoiceId: string): Promise<void> {
@@ -768,6 +919,7 @@ async function testPaymentAllocationCannotExceedInvoiceTotal(ctx: TestContext, i
 
 async function testInvoiceCancelCreatesReverseEntry(ctx: TestContext): Promise<void> {
   const invoiceId = await createInvoice(ctx);
+  await approveInvoice(ctx, invoiceId);
   const beforeEntries = await prisma.accountEntry.findMany({
     where: { tenantId: ctx.tenantAId, refType: 'INVOICE', refId: invoiceId },
     select: { debit: true, credit: true },
@@ -866,6 +1018,28 @@ async function testSalesOrderDeliveryInvoiceChain(ctx: TestContext): Promise<voi
 
   const crossTenantWorkspace = await api('GET', `/api/sales-orders/${orderId}/process-workspace`, token(ctx.ownerBId, ctx.tenantBId));
   assertStatus(crossTenantWorkspace, 404, 'satis is dosyasi tenant disina sizmamali');
+}
+
+async function testEDocumentSubmissionIdempotency(ctx: TestContext, invoiceId: string): Promise<void> {
+  const submissionIdempotencyKey = `edocument-submit:${crypto.randomUUID()}`;
+  const input = { invoiceId, type: EDocumentType.E_ARCHIVE, submissionIdempotencyKey };
+  const createRequest = () => api('POST', '/api/e-documents', token(ctx.ownerAId, ctx.tenantAId), input);
+  const [first, concurrentReplay] = await Promise.all([createRequest(), createRequest()]);
+  if (![200, 201].includes(first.status) || ![200, 201].includes(concurrentReplay.status)) {
+    throw new Error(`Es zamanli e-belge retry basarisiz: ${first.status}/${concurrentReplay.status}`);
+  }
+  if (readDataId(first.body) !== readDataId(concurrentReplay.body)) {
+    throw new Error('Es zamanli e-belge retry ayni kaydi dondurmedi.');
+  }
+  const replay = await api('POST', '/api/e-documents', token(ctx.ownerAId, ctx.tenantAId), input);
+  assertStatus(replay, 200, 'e-belge ayni key ile mevcut kaydi dondurmeli');
+  if (readDataId(first.body) !== readDataId(replay.body)) {
+    throw new Error('E-belge retry ayni kaydi dondurmedi.');
+  }
+  const count = await prisma.eDocument.count({
+    where: { tenantId: ctx.tenantAId, submissionIdempotencyKey },
+  });
+  if (count !== 1) throw new Error('E-belge retry cift kayit olusturdu.');
 }
 
 async function testPilotReadinessGate(ctx: TestContext): Promise<void> {
@@ -1006,6 +1180,15 @@ async function testPurchaseOrderReceiptInvoiceChain(ctx: TestContext): Promise<v
     where: { tenantId: ctx.tenantAId, refType: 'PURCHASE_ORDER', refId: orderId },
   });
   if (receiptMovementCount !== 1) throw new Error('Mal kabul retry cift stok hareketi olusturdu.');
+  const receiptNoteCount = await prisma.deliveryNote.count({
+    where: { tenantId: ctx.tenantAId, purchaseOrderId: orderId, type: DeliveryNoteType.INBOUND },
+  });
+  const receiptNoteItemCount = await prisma.deliveryNoteItem.count({
+    where: { tenantId: ctx.tenantAId, purchaseOrderItemId: orderItem.id },
+  });
+  if (receiptNoteCount !== 1 || receiptNoteItemCount !== 1) {
+    throw new Error('Mal kabul inbound irsaliye ve kalemini atomik olusturmadi.');
+  }
 
   const rollbackReceipt = await api('POST', `/api/purchase-orders/${orderId}/receive`, token(ctx.ownerAId, ctx.tenantAId), {
     idempotencyKey: `receipt-${crypto.randomUUID()}`,
@@ -1053,6 +1236,7 @@ async function testPurchaseOrderReceiptInvoiceChain(ctx: TestContext): Promise<v
   });
   assertStatus(invoiceResult, 201, 'satinalma siparisinden fatura olusturulabilmeli');
   const invoiceId = readDataId(invoiceResult.body);
+  await approveInvoice(ctx, invoiceId);
 
   const accountEntry = await prisma.accountEntry.findFirst({
     where: { tenantId: ctx.tenantAId, refType: 'INVOICE', refId: invoiceId },
@@ -1746,6 +1930,8 @@ async function main(): Promise<void> {
     await testPermissionSimulatorSmoke(ctx);
     console.log('Integration: invoice account entry');
     const invoiceId = await testInvoiceCreatesAccountEntry(ctx);
+    console.log('Integration: e-document submission idempotency');
+    await testEDocumentSubmissionIdempotency(ctx, invoiceId);
     console.log('Integration: closed fiscal period');
     await testClosedFiscalPeriodBlocksInvoice(ctx);
     console.log('Integration: payment allocation');

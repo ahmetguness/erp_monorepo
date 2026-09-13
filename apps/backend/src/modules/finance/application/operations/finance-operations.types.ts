@@ -5,7 +5,12 @@ export interface FinanceOperationsPolicy {
   duplicateWindowDays: number;
 }
 
-export type FinanceExceptionKind = 'LOW_CONFIDENCE' | 'NO_CANDIDATE' | 'POSSIBLE_SPLIT' | 'DUPLICATE_DRAFT' | 'FEED_STALE';
+export type FinanceExceptionKind =
+  | "LOW_CONFIDENCE"
+  | "NO_CANDIDATE"
+  | "POSSIBLE_SPLIT"
+  | "DUPLICATE_DRAFT"
+  | "FEED_STALE";
 
 export interface FinanceExceptionItem {
   id: string;
@@ -23,14 +28,19 @@ export interface RecurringFinancePattern {
   description: string;
   occurrences: number;
   averageAmount: number;
-  suggestedAction: 'CREATE_RECURRING_EXPENSE_DRAFT' | 'LEARN_DESCRIPTION';
+  suggestedAction: "CREATE_RECURRING_EXPENSE_DRAFT" | "LEARN_DESCRIPTION";
 }
 
 export interface FinanceOperationsWorkspace {
   generatedAt: string;
   policy: FinanceOperationsPolicy;
   feed: { lastTransactionAt: string | null; stale: boolean };
-  summary: { automaticallyProcessed: number; readyForAutomaticProcessing: number; exceptions: number; recurringPatterns: number };
+  summary: {
+    automaticallyProcessed: number;
+    readyForAutomaticProcessing: number;
+    exceptions: number;
+    recurringPatterns: number;
+  };
   exceptions: FinanceExceptionItem[];
   recurringPatterns: RecurringFinancePattern[];
 }

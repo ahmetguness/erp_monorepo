@@ -1,17 +1,28 @@
-import { Hono } from 'hono';
-import { requireAuth } from '../middleware/requireAuth';
-import { validateBody } from '../middleware/validateBody';
-import { AuthController } from '../modules/identity/http/controllers/index.js';
-import { loginBodySchema,registerBodySchema } from '../schemas/request-body.schemas';
+import { Hono } from "hono";
+import { requireAuth } from "../middleware/requireAuth";
+import { validateBody } from "../middleware/validateBody";
+import { AuthController } from "../modules/identity/http/controllers/index.js";
+import {
+  loginBodySchema,
+  registerBodySchema,
+} from "../schemas/request-body.schemas";
 
 const authRoutes = new Hono();
 
-authRoutes.post('/login', validateBody(loginBodySchema), AuthController.login);
-authRoutes.post('/register', validateBody(registerBodySchema), AuthController.register);
-authRoutes.post('/logout', AuthController.logout);
-authRoutes.get('/me', requireAuth, AuthController.me);
-authRoutes.patch('/me/preferences', requireAuth, AuthController.updatePreferences);
-authRoutes.post('/sso/login', AuthController.ssoLogin);
-authRoutes.get('/sso/callback', AuthController.ssoCallback);
+authRoutes.post("/login", validateBody(loginBodySchema), AuthController.login);
+authRoutes.post(
+  "/register",
+  validateBody(registerBodySchema),
+  AuthController.register,
+);
+authRoutes.post("/logout", AuthController.logout);
+authRoutes.get("/me", requireAuth, AuthController.me);
+authRoutes.patch(
+  "/me/preferences",
+  requireAuth,
+  AuthController.updatePreferences,
+);
+authRoutes.post("/sso/login", AuthController.ssoLogin);
+authRoutes.get("/sso/callback", AuthController.ssoCallback);
 
 export { authRoutes };

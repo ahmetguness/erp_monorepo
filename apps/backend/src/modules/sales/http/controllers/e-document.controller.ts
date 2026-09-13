@@ -1,9 +1,10 @@
 import { EDocumentStatus,EDocumentType,Prisma } from '@prisma/client';
 import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
+import { ConflictError,NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { EDocumentAutomationService } from '../../../../services/edocument-automation.service.js';
 import { requireParam,requireTenantId } from '../../../../utils/context.js';
+import { parseIdempotencyKey } from '../../application/operations/idempotency-key.js';
 
 const automationService = new EDocumentAutomationService(prisma);
 
@@ -32,6 +33,7 @@ interface CreateEDocumentDTO {
   uuid?: string;
   providerCode?: string;
   requestPayload?: unknown;
+  submissionIdempotencyKey?: string;
 }
 
 interface UpdateEDocumentStatusDTO {
@@ -81,6 +83,19 @@ const E_DOCUMENT_STATUSES = [
   EDocumentStatus.CANCELLED,
   EDocumentStatus.ERROR,
 ] as const;
+
+function hasSameSubmissionIdentity(
+  document: { type: EDocumentType; invoiceId: string | null; deliveryNoteId: string | null },
+  request: CreateEDocumentDTO,
+): boolean {
+  return document.type === request.type
+    && document.invoiceId === (request.invoiceId ?? null)
+    && document.deliveryNoteId === (request.deliveryNoteId ?? null);
+}
+
+function isUniqueConstraintError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
 
 // ─────────────────────────────────────────────
 // E-Document Controller
@@ -274,22 +289,80 @@ export const EDocumentController = {
         400,
       );
     }
+    if (body.type === EDocumentType.E_WAYBILL && body.invoiceId) {
+      return c.json(new ValidationError('E_WAYBILL tipi invoiceId kabul etmez.').toJSON(), 400);
+    }
+    if (body.type !== EDocumentType.E_WAYBILL && body.deliveryNoteId) {
+      return c.json(new ValidationError(`${body.type} tipi deliveryNoteId kabul etmez.`).toJSON(), 400);
+    }
 
-    const doc = await prisma.eDocument.create({
-      data: {
-        tenantId,
-        invoiceId: body.invoiceId ?? null,
-        deliveryNoteId: body.deliveryNoteId ?? null,
-        type: body.type,
-        uuid: body.uuid ?? null,
-        providerCode: body.providerCode ?? null,
-        requestPayload: body.requestPayload as Prisma.InputJsonValue ?? undefined,
-      },
-      include: {
-        invoice: { select: { id: true, number: true } },
-        deliveryNote: { select: { id: true, number: true } },
-      },
-    });
+    if (body.invoiceId) {
+      const invoiceExists = await prisma.invoice.count({
+        where: { id: body.invoiceId, tenantId, deletedAt: null },
+      });
+      if (invoiceExists !== 1) return c.json(new NotFoundError('Fatura', body.invoiceId).toJSON(), 404);
+    }
+    if (body.deliveryNoteId) {
+      const deliveryNoteExists = await prisma.deliveryNote.count({
+        where: { id: body.deliveryNoteId, tenantId, deletedAt: null },
+      });
+      if (deliveryNoteExists !== 1) {
+        return c.json(new NotFoundError('Irsaliye', body.deliveryNoteId).toJSON(), 404);
+      }
+    }
+
+    const submissionIdempotencyKey = body.submissionIdempotencyKey === undefined
+      ? undefined
+      : parseIdempotencyKey(body.submissionIdempotencyKey);
+    if (submissionIdempotencyKey) {
+      const existing = await prisma.eDocument.findUnique({
+        where: { tenantId_submissionIdempotencyKey: { tenantId, submissionIdempotencyKey } },
+        include: {
+          invoice: { select: { id: true, number: true } },
+          deliveryNote: { select: { id: true, number: true } },
+        },
+      });
+      if (existing) {
+        if (!hasSameSubmissionIdentity(existing, body)) {
+          throw new ConflictError('submissionIdempotencyKey baska bir e-belge istegi icin kullanilmis.');
+        }
+        return c.json({ data: existing });
+      }
+    }
+
+    let doc;
+    try {
+      doc = await prisma.eDocument.create({
+        data: {
+          tenantId,
+          invoiceId: body.invoiceId ?? null,
+          deliveryNoteId: body.deliveryNoteId ?? null,
+          type: body.type,
+          uuid: body.uuid ?? null,
+          providerCode: body.providerCode ?? null,
+          requestPayload: body.requestPayload as Prisma.InputJsonValue ?? undefined,
+          submissionIdempotencyKey: submissionIdempotencyKey ?? null,
+        },
+        include: {
+          invoice: { select: { id: true, number: true } },
+          deliveryNote: { select: { id: true, number: true } },
+        },
+      });
+    } catch (error) {
+      if (!submissionIdempotencyKey || !isUniqueConstraintError(error)) throw error;
+      const replay = await prisma.eDocument.findUnique({
+        where: { tenantId_submissionIdempotencyKey: { tenantId, submissionIdempotencyKey } },
+        include: {
+          invoice: { select: { id: true, number: true } },
+          deliveryNote: { select: { id: true, number: true } },
+        },
+      });
+      if (!replay) throw error;
+      if (!hasSameSubmissionIdentity(replay, body)) {
+        throw new ConflictError('submissionIdempotencyKey baska bir e-belge istegi icin kullanilmis.');
+      }
+      return c.json({ data: replay });
+    }
 
     return c.json({ data: doc }, 201);
   },

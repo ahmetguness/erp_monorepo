@@ -114,7 +114,7 @@ export default function Sectors() {
   const [activeSector, setActiveSector] = useState(0);
 
   return (
-    <section id="solutions" className="section-spacing relative bg-[#0F172A] overflow-hidden">
+    <section id="solutions" className="section-spacing relative bg-[#0B1120] border-t border-slate-800 overflow-hidden">
       <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="section-container relative z-10">
@@ -128,8 +128,9 @@ export default function Sectors() {
           className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10"
         >
           <div>
-            <div className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-3">
-              Sektörler & Neden Biz
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-400 mb-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+              <span>Sektörel Çözümler & Güvence</span>
             </div>
             <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">
               Her sektöre özel, güvenilir altyapı
@@ -262,7 +263,16 @@ export default function Sectors() {
                         <span className="text-xs text-slate-500">
                           {sectors[activeSector].title} sektörüne özel yapılandırma mevcuttur.
                         </span>
-                        <button className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-medium transition-colors">
+                        <button
+                          onClick={() => {
+                            window.dispatchEvent(
+                              new CustomEvent('openChatWithMessage', {
+                                detail: `${sectors[activeSector].title} sektörü çözümleri için demo ve teknik bilgi talep ediyorum.`
+                              })
+                            );
+                          }}
+                          className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-medium transition-colors cursor-pointer"
+                        >
                           Demo Talep Et
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

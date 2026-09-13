@@ -53,7 +53,7 @@ export default function Deployment() {
   const model = models.find(m => m.id === active)!;
 
   return (
-    <section id="deployment" className="section-spacing relative bg-[#0F172A] overflow-hidden">
+    <section id="deployment" className="section-spacing relative bg-[#0F172A] border-t border-slate-800 overflow-hidden">
       <div className="absolute bottom-0 right-1/4 w-[400px] h-[300px] bg-indigo-600/5 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="section-container relative z-10">
@@ -67,7 +67,10 @@ export default function Deployment() {
           className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10"
         >
           <div>
-            <p className="text-sm text-blue-400 font-medium mb-3 border-l-2 border-blue-500 pl-3">Kurulum Modelleri</p>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-400 mb-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+              <span>Esnek Dağıtım & Kurulum</span>
+            </div>
             <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">
               Altyapınıza uygun kurulum seçeneği
             </h2>
@@ -124,7 +127,16 @@ export default function Deployment() {
                 <p className="text-sm text-slate-300 leading-relaxed">{model.ideal}</p>
               </div>
 
-              <button className="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-3 rounded-lg transition-colors duration-150">
+              <button
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('openChatWithMessage', {
+                      detail: `${model.title} kurulum modeli ve altyapı gereksinimleri hakkında bilgi almak istiyorum.`
+                    })
+                  );
+                }}
+                className="mt-auto w-full btn-primary text-xs font-semibold py-3 rounded-lg cursor-pointer text-center"
+              >
                 Bu Seçenek Hakkında Bilgi Al
               </button>
             </div>

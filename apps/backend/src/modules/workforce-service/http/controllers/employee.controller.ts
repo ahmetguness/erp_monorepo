@@ -1,14 +1,14 @@
-import { Context } from 'hono';
+import { Context } from "hono";
 import {
-createEmployee,
-getEmployeeById,
-listEmployeeDepartments,
-listEmployees,
-removeEmployee,
-updateEmployee,
-} from '../../../../services/employee.service.js';
-import { requireParam,requireTenantId } from '../../../../utils/context.js';
-import { getPaginationParams } from '../../../../utils/pagination.js';
+  createEmployee,
+  getEmployeeById,
+  listEmployeeDepartments,
+  listEmployees,
+  removeEmployee,
+  updateEmployee,
+} from "../../../../services/employee.service.js";
+import { requireParam, requireTenantId } from "../../../../utils/context.js";
+import { getPaginationParams } from "../../../../utils/pagination.js";
 
 // ─────────────────────────────────────────────
 // Employee Controller — Personel CRUD
@@ -19,17 +19,24 @@ export const EmployeeController = {
     const tenantId = requireTenantId(c);
 
     const { page, limit, skip } = getPaginationParams(c, 20);
-    const department = c.req.query('department');
-    const isActive = c.req.query('isActive');
+    const department = c.req.query("department");
+    const isActive = c.req.query("isActive");
 
-    const result = await listEmployees({ tenantId, page, limit, skip, department, isActive });
+    const result = await listEmployees({
+      tenantId,
+      page,
+      limit,
+      skip,
+      department,
+      isActive,
+    });
 
     return c.json(result);
   },
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
     const employee = await getEmployeeById(tenantId, id);
 
@@ -40,8 +47,14 @@ export const EmployeeController = {
     const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{
-      firstName: string; lastName: string; email?: string; phone?: string;
-      position?: string; department?: string; hireDate: string; salary?: number;
+      firstName: string;
+      lastName: string;
+      email?: string;
+      phone?: string;
+      position?: string;
+      department?: string;
+      hireDate: string;
+      salary?: number;
     }>();
     const employee = await createEmployee({ tenantId, ...body });
 
@@ -50,12 +63,18 @@ export const EmployeeController = {
 
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
     const body = await c.req.json<{
-      firstName?: string; lastName?: string; email?: string; phone?: string;
-      position?: string; department?: string; salary?: number;
-      isActive?: boolean; leaveDate?: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      phone?: string;
+      position?: string;
+      department?: string;
+      salary?: number;
+      isActive?: boolean;
+      leaveDate?: string;
     }>();
     const updated = await updateEmployee({ tenantId, id, ...body });
 
@@ -64,7 +83,7 @@ export const EmployeeController = {
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
     const result = await removeEmployee(tenantId, id);
 

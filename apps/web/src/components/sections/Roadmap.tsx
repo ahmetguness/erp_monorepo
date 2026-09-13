@@ -6,38 +6,38 @@ import { motion, AnimatePresence } from 'framer-motion';
 const steps = [
   {
     num: '01',
-    title: 'İhtiyaç Analizi',
+    title: 'İhtiyaç & Süreç Analizi',
     short: 'Analiz',
-    desc: 'Mevcut süreçlerinizi ve is akislarinizi inceliyor, sisteme geçiş planini birlikte hazirliyoruz.',
-    duration: '1-2 is gunu',
+    desc: 'Mevcut süreçlerinizi ve iş akışlarınızı inceliyor, sisteme geçiş planını birlikte hazırlıyoruz.',
+    duration: '1-2 iş günü',
     tag: 'Başlangıç',
     items: [
       'Mevcut süreç haritalama',
       'İhtiyaç ve modül belirleme',
-      'Gecis takvimi oluşturma',
-      'Teknik altyapi degerlendirmesi',
+      'Geçiş takvimi oluşturma',
+      'Teknik altyapı değerlendirmesi',
     ],
   },
   {
     num: '02',
     title: 'Demo ve Yapılandırma',
     short: 'Demo',
-    desc: 'Sistemi işletmenize özel yapilandiriyor, kullanıcı rolleri ve yetkilendirmeleri tanimliyoruz.',
-    duration: '2-3 is gunu',
+    desc: 'Sistemi işletmenize özel yapılandırıyor, kullanıcı rolleri ve yetkilendirmeleri tanımlıyoruz.',
+    duration: '2-3 iş günü',
     tag: 'Yapılandırma',
     items: [
-      'Canli sistem demosu',
+      'Canlı sistem demosu',
       'Kullanıcı rol tanımları',
       'Modül özelleştirme',
-      'Onay akislari kurulumu',
+      'Onay akışları kurulumu',
     ],
   },
   {
     num: '03',
-    title: 'Kurulum ve Veri Aktarimi',
+    title: 'Kurulum ve Veri Aktarımı',
     short: 'Kurulum',
-    desc: 'Mevcut verilerinizi sisteme aktarıyor, entegrasyonları tamamlıyor ve test sürecini yürütüyor.',
-    duration: '3-5 is gunu',
+    desc: 'Mevcut verilerinizi sisteme aktarıyor, entegrasyonları tamamlıyor ve test sürecini yürütüyoruz.',
+    duration: '3-5 iş günü',
     tag: 'Entegrasyon',
     items: [
       'Veri migrasyonu ve doğrulama',
@@ -49,15 +49,15 @@ const steps = [
   {
     num: '04',
     title: 'Eğitim ve Canlı Kullanım',
-    short: 'Canli',
-    desc: 'Ekibinize modül bazlı eğitimler veriyor, canlı geçiş sonrasında teknik destek sağlıyoruz.',
-    duration: 'Surekli',
+    short: 'Canlı',
+    desc: 'Ekibinize modül bazlı eğitimler veriyor, canlı geçiş sonrasında kesintisiz teknik destek sağlıyoruz.',
+    duration: 'Sürekli',
     tag: 'Canlı Kullanım',
     items: [
       'Modül bazlı kullanıcı eğitimi',
-      'Canli geçiş yönetimi',
+      'Canlı geçiş yönetimi',
       '7/24 teknik destek',
-      'Duzenli güncelleme ve bakim',
+      'Düzenli güncelleme ve bakım',
     ],
   },
 ];
@@ -66,8 +66,7 @@ export default function Roadmap() {
   const [active, setActive] = useState(0);
 
   return (
-    <section className="section-spacing relative bg-[#0F172A] overflow-hidden">
-
+    <section className="section-spacing relative bg-[#0F172A] border-t border-slate-800 overflow-hidden">
       <div className="section-container relative z-10">
 
         {/* Header */}
@@ -78,15 +77,16 @@ export default function Roadmap() {
             viewport={{ once: true }}
             transition={{ duration: 0.4 }}
           >
-            <p className="text-sm text-blue-400 font-medium mb-3 border-l-2 border-blue-500 pl-3">
-              Uygulama Süreci
-            </p>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-400 mb-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+              <span>Geçiş ve Devreye Alma Süreci</span>
+            </div>
             <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">
               Sistemden canlı kullanıma 4 adım
             </h2>
             <p className="text-slate-400 text-sm leading-relaxed max-w-lg">
-              Her adimda uzman ekibimiz süreci sizin adiniza yonetir.
-              Kurulum ve geçiş surecinde kesinti yasamazsiniz.
+              Her adımda uzman ekibimiz süreci sizin adınıza yönetir.
+              Kurulum ve geçiş sürecinde iş kesintisi yaşamazsınız.
             </p>
           </motion.div>
 
@@ -97,7 +97,7 @@ export default function Roadmap() {
                 key={i}
                 onClick={() => setActive(i)}
                 className={
-                  'transition-all duration-300 rounded-full ' +
+                  'transition-all duration-300 rounded-full cursor-pointer ' +
                   (i === active
                     ? 'w-8 h-1.5 bg-blue-500'
                     : i < active

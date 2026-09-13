@@ -48,10 +48,10 @@ model MarketplaceIntegration {
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
 
-  tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  listings MarketplaceListing[]
-  orders   MarketplaceOrder[]
-  syncJobs     MarketplaceSyncJob[]
+  tenant        Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  listings      MarketplaceListing[]
+  orders        MarketplaceOrder[]
+  syncJobs      MarketplaceSyncJob[]
   webhookEvents MarketplaceWebhookEvent[]
 
   @@unique([tenantId, channel])
@@ -66,14 +66,14 @@ model MarketplaceListing {
   externalId    String
   externalSku   String?
   price         Decimal   @db.Decimal(18, 2)
-  stock         Decimal   @db.Decimal(18, 3) @default(0)
+  stock         Decimal   @default(0) @db.Decimal(18, 3)
   isActive      Boolean   @default(true)
   lastSyncAt    DateTime?
   syncError     String?
 
-  integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  product     Product                @relation(fields: [productId], references: [id])
-  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  integration MarketplaceIntegration      @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  product     Product                     @relation(fields: [productId], references: [id])
+  tenant      Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   snapshot    MarketplaceListingSnapshot?
 
   @@unique([integrationId, externalId])
@@ -127,35 +127,35 @@ model MarketplaceOrderItem {
 }
 
 model MarketplaceSyncJob {
-  id            String        @id @default(cuid())
-  tenantId      String
-  integrationId String
-  jobType       SyncJobType
-  status        SyncJobStatus @default(PENDING)
-  startedAt     DateTime?
-  finishedAt    DateTime?
+  id              String        @id @default(cuid())
+  tenantId        String
+  integrationId   String
+  jobType         SyncJobType
+  status          SyncJobStatus @default(PENDING)
+  startedAt       DateTime?
+  finishedAt      DateTime?
   /// Kaç kayıt işlendi
-  processedCount Int          @default(0)
+  processedCount  Int           @default(0)
   /// Kaç kayıt hata verdi
-  errorCount    Int           @default(0)
+  errorCount      Int           @default(0)
   /// Hata mesajı (varsa)
-  errorMessage  String?
-  attempts      Int           @default(0)
-  maxAttempts   Int           @default(5)
-  nextRetryAt   DateTime?
-  leaseOwner    String?
-  leaseExpiresAt DateTime?
+  errorMessage    String?
+  attempts        Int           @default(0)
+  maxAttempts     Int           @default(5)
+  nextRetryAt     DateTime?
+  leaseOwner      String?
+  leaseExpiresAt  DateTime?
   /// Job parametreleri (JSON): hoursBack, status filtresi vb.
-  params        Json?
+  params          Json?
   /// Sonuç özeti (JSON): created, updated, skipped, batchIds vb.
-  result        Json?
+  result          Json?
   quarantinedAt   DateTime?
   quarantinedById String?
   resolvedAt      DateTime?
   resolvedById    String?
   resolutionNote  String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -170,16 +170,16 @@ model MarketplaceSyncJob {
 }
 
 model MarketplaceWebhookEvent {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   tenantId      String
   integrationId String
   /// Trendyol'un gönderdiği event ID (idempotency key)
   eventId       String
-  eventType     String   // 'ORDER_STATUS_CHANGED' | 'STOCK_UPDATED' vb.
+  eventType     String // 'ORDER_STATUS_CHANGED' | 'STOCK_UPDATED' vb.
   payload       Json
   processedAt   DateTime?
   errorMessage  String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   integration MarketplaceIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -190,14 +190,14 @@ model MarketplaceWebhookEvent {
 }
 
 model MarketplaceListingSnapshot {
-  id            String   @id @default(cuid())
-  tenantId      String
-  listingId     String   @unique
-  lastSentQty   Decimal  @db.Decimal(18, 3)
-  lastSentSalePrice  Decimal @db.Decimal(18, 2)
-  lastSentListPrice  Decimal @db.Decimal(18, 2)
-  lastSentAt    DateTime
-  batchRequestId String?
+  id                String   @id @default(cuid())
+  tenantId          String
+  listingId         String   @unique
+  lastSentQty       Decimal  @db.Decimal(18, 3)
+  lastSentSalePrice Decimal  @db.Decimal(18, 2)
+  lastSentListPrice Decimal  @db.Decimal(18, 2)
+  lastSentAt        DateTime
+  batchRequestId    String?
 
   listing MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   tenant  Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)

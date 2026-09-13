@@ -84,9 +84,9 @@ model ServiceRequestItem {
   serviceRequestId String
   productId        String?
   description      String
-  quantity         Decimal @db.Decimal(18, 3) @default(1)
-  unitPrice        Decimal @db.Decimal(18, 2) @default(0)
-  lineTotal        Decimal @db.Decimal(18, 2) @default(0)
+  quantity         Decimal @default(1) @db.Decimal(18, 3)
+  unitPrice        Decimal @default(0) @db.Decimal(18, 2)
+  lineTotal        Decimal @default(0) @db.Decimal(18, 2)
 
   serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
   product        Product?       @relation(fields: [productId], references: [id])

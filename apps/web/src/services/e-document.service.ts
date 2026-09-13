@@ -17,6 +17,7 @@ export const EDocumentSchema = z.object({
   sentAt: z.string().nullable(), acceptedAt: z.string().nullable(),
   rejectedAt: z.string().nullable(), cancelledAt: z.string().nullable(),
   createdAt: z.string(), updatedAt: z.string(),
+  submissionIdempotencyKey: z.string().nullable().optional(),
   invoice: InvoiceRef.optional().nullable(),
   deliveryNote: DNRef.optional().nullable(),
 });
@@ -52,6 +53,7 @@ export type EDocumentSummary = z.infer<typeof EDocumentSummarySchema>;
 export interface CreateEDocumentDTO {
   invoiceId?: string; deliveryNoteId?: string;
   type: EDocumentType; uuid?: string; providerCode?: string;
+  submissionIdempotencyKey?: string;
 }
 
 export interface ListParams extends PaginationParams, DateRangeParams {

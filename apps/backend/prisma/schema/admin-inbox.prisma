@@ -1,13 +1,13 @@
 model AdminInboxItemState {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   adminId    String
   sourceType String
   sourceId   String
   ownerId    String?
   readAt     DateTime?
   resolvedAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@unique([adminId, sourceType, sourceId])
   @@index([adminId, resolvedAt, updatedAt])
@@ -27,13 +27,13 @@ model AdminInboxPreference {
 }
 
 model AdminInboxTaskState {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   sourceType String
   sourceId   String
   ownerId    String?
   resolvedAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@unique([sourceType, sourceId])
   @@index([ownerId, resolvedAt])

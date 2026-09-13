@@ -1,33 +1,89 @@
-import { ACCESS_POLICIES } from '@repo/types/plans';
-import { Hono } from 'hono';
-import { requireAccess } from '../middleware/requireAccess';
-import { requireModule } from '../middleware/requireModule';
-import { requirePermission } from '../middleware/requirePermission';
-import { validateBody } from '../middleware/validateBody';
-import { StockController } from '../modules/inventory/http/controllers/index.js';
+import { ACCESS_POLICIES } from "@repo/types/plans";
+import { Hono } from "hono";
+import { requireAccess } from "../middleware/requireAccess";
+import { requireModule } from "../middleware/requireModule";
+import { requirePermission } from "../middleware/requirePermission";
+import { validateBody } from "../middleware/validateBody";
+import { StockController } from "../modules/inventory/http/controllers/index.js";
 import {
-createStockCountBodySchema,
-createStockMovementBodySchema,
-finalizeStockCountBodySchema,
-} from '../schemas/request-body.schemas';
-import { MODULE_KEYS } from '../types/module.types';
+  createStockCountBodySchema,
+  createStockMovementBodySchema,
+  finalizeStockCountBodySchema,
+} from "../schemas/request-body.schemas";
+import { MODULE_KEYS } from "../types/module.types";
 
 const stockRoutes = new Hono();
 
-stockRoutes.use('*', requireModule(MODULE_KEYS.INVENTORY));
+stockRoutes.use("*", requireModule(MODULE_KEYS.INVENTORY));
 
-stockRoutes.get('/alerts', requirePermission('inventory', 'READ'), StockController.stockAlerts);
-stockRoutes.get('/levels', requirePermission('inventory', 'READ'), StockController.listStockLevels);
-stockRoutes.get('/reorder-suggestions', requirePermission('inventory', 'READ'), StockController.listReorderSuggestions);
-stockRoutes.get('/advanced-suggestions', requireAccess(ACCESS_POLICIES.advancedStockSuggestions), requirePermission('inventory', 'READ'), StockController.listAdvancedSuggestions);
-stockRoutes.post('/reservations/cleanup-expired', requirePermission('inventory', 'UPDATE'), StockController.cleanupExpiredReservations);
-stockRoutes.get('/movements', requirePermission('inventory', 'READ'), StockController.listMovements);
-stockRoutes.post('/movements', requirePermission('inventory', 'CREATE'), validateBody(createStockMovementBodySchema), StockController.createManualMovement);
-stockRoutes.get('/counts', requirePermission('inventory', 'READ'), StockController.listStockCounts);
-stockRoutes.get('/counts/:id', requirePermission('inventory', 'READ'), StockController.getStockCount);
-stockRoutes.post('/counts', requirePermission('inventory', 'CREATE'), validateBody(createStockCountBodySchema), StockController.createStockCount);
-stockRoutes.post('/counts/:id/finalize', requirePermission('inventory', 'UPDATE'), validateBody(finalizeStockCountBodySchema), StockController.finalizeStockCount);
-stockRoutes.post('/reorder-suggestions/convert', requirePermission('inventory', 'CREATE'), StockController.convertSuggestionsToRequest);
-stockRoutes.get('/valuation/reconciliation', requirePermission('inventory', 'READ'), StockController.getValuationReconciliation);
+stockRoutes.get(
+  "/alerts",
+  requirePermission("inventory", "READ"),
+  StockController.stockAlerts,
+);
+stockRoutes.get(
+  "/levels",
+  requirePermission("inventory", "READ"),
+  StockController.listStockLevels,
+);
+stockRoutes.get(
+  "/reorder-suggestions",
+  requirePermission("inventory", "READ"),
+  StockController.listReorderSuggestions,
+);
+stockRoutes.get(
+  "/advanced-suggestions",
+  requireAccess(ACCESS_POLICIES.advancedStockSuggestions),
+  requirePermission("inventory", "READ"),
+  StockController.listAdvancedSuggestions,
+);
+stockRoutes.post(
+  "/reservations/cleanup-expired",
+  requirePermission("inventory", "UPDATE"),
+  StockController.cleanupExpiredReservations,
+);
+stockRoutes.get(
+  "/movements",
+  requirePermission("inventory", "READ"),
+  StockController.listMovements,
+);
+stockRoutes.post(
+  "/movements",
+  requirePermission("inventory", "CREATE"),
+  validateBody(createStockMovementBodySchema),
+  StockController.createManualMovement,
+);
+stockRoutes.get(
+  "/counts",
+  requirePermission("inventory", "READ"),
+  StockController.listStockCounts,
+);
+stockRoutes.get(
+  "/counts/:id",
+  requirePermission("inventory", "READ"),
+  StockController.getStockCount,
+);
+stockRoutes.post(
+  "/counts",
+  requirePermission("inventory", "CREATE"),
+  validateBody(createStockCountBodySchema),
+  StockController.createStockCount,
+);
+stockRoutes.post(
+  "/counts/:id/finalize",
+  requirePermission("inventory", "UPDATE"),
+  validateBody(finalizeStockCountBodySchema),
+  StockController.finalizeStockCount,
+);
+stockRoutes.post(
+  "/reorder-suggestions/convert",
+  requirePermission("inventory", "CREATE"),
+  StockController.convertSuggestionsToRequest,
+);
+stockRoutes.get(
+  "/valuation/reconciliation",
+  requirePermission("inventory", "READ"),
+  StockController.getValuationReconciliation,
+);
 
 export { stockRoutes };

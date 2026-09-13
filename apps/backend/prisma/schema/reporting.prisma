@@ -2,20 +2,20 @@
 // Keep related enums and models together; cross-domain relations are resolved by Prisma.
 
 model SavedReport {
-  id        String   @id @default(cuid())
-  tenantId  String
-  name      String
-  module    String
-  filters   Json     @default("{}")
-  columns   String[] @default([])
-  isShared  Boolean  @default(false)
-  sharedRoleIds String[] @default([])
-  sharedUserIds String[] @default([])
+  id                 String   @id @default(cuid())
+  tenantId           String
+  name               String
+  module             String
+  filters            Json     @default("{}")
+  columns            String[] @default([])
+  isShared           Boolean  @default(false)
+  sharedRoleIds      String[] @default([])
+  sharedUserIds      String[] @default([])
   columnTemplateName String?
-  pinnedToDashboard Boolean @default(false)
-  createdBy String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  pinnedToDashboard  Boolean  @default(false)
+  createdBy          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -120,22 +120,22 @@ model DemoRequest {
   companyName String
   email       String
   phone       String?
-  plan        Plan       @default(STARTER)
+  plan        Plan              @default(STARTER)
   status      DemoRequestStatus @default(PENDING)
 
   /// Provisioning sonrası oluşturulan tenant
-  tenantId    String?
+  tenantId          String?
   /// Şifre belirleme token'ı
-  setPasswordToken   String?
-  setPasswordExpiry  DateTime?
+  setPasswordToken  String?
+  setPasswordExpiry DateTime?
 
-  notes       String?
+  notes          String?
   rejectedReason String?
-  processedAt DateTime?
-  processedBy String?
-  ownerId     String?
-  slaDueAt    DateTime @default(dbgenerated("(now() + '04:00:00'::interval)"))
-  history     DemoRequestHistory[]
+  processedAt    DateTime?
+  processedBy    String?
+  ownerId        String?
+  slaDueAt       DateTime             @default(dbgenerated("(now() + '04:00:00'::interval)"))
+  history        DemoRequestHistory[]
 
   tenant Tenant? @relation(fields: [tenantId], references: [id])
 
@@ -147,12 +147,12 @@ model DemoRequest {
 }
 
 model DemoRequestHistory {
-  id            String   @id @default(cuid())
+  id            String      @id @default(cuid())
   demoRequestId String
   action        String
   note          String?
   actorId       String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime    @default(now())
   demoRequest   DemoRequest @relation(fields: [demoRequestId], references: [id], onDelete: Cascade)
 
   @@index([demoRequestId, createdAt])

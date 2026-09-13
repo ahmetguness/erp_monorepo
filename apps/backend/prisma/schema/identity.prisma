@@ -32,9 +32,9 @@ enum PermissionAction {
 }
 
 enum FeatureType {
-  BOOLEAN   // isEnabled kullanılır, value "true"/"false"
-  LIMIT     // value sayısal limit (örn: "500", "unlimited")
-  ENUM      // value izin verilen değerlerden biri
+  BOOLEAN // isEnabled kullanılır, value "true"/"false"
+  LIMIT // value sayısal limit (örn: "500", "unlimited")
+  ENUM // value izin verilen değerlerden biri
 }
 
 enum FeatureKey {
@@ -94,27 +94,27 @@ enum InvitationStatus {
 }
 
 model Tenant {
-  lifecycleVersion Int @default(0)
-  legalHold Boolean @default(false)
-  retentionUntil DateTime?
-  deletionNotBefore DateTime?
-  lifecycleRequests TenantLifecycleRequest[]
-  lifecycleExports TenantLifecycleExport[]
-  provisioningJobs TenantProvisioningJob[]
-  billingSubscription BillingSubscription?
-  billingInvoices BillingInvoice[]
+  lifecycleVersion      Int                         @default(0)
+  legalHold             Boolean                     @default(false)
+  retentionUntil        DateTime?
+  deletionNotBefore     DateTime?
+  lifecycleRequests     TenantLifecycleRequest[]
+  lifecycleExports      TenantLifecycleExport[]
+  provisioningJobs      TenantProvisioningJob[]
+  billingSubscription   BillingSubscription?
+  billingInvoices       BillingInvoice[]
   subscriptionDiscounts SubscriptionDiscount[]
-  customPriceRequests CustomPriceRequest[]
-  supportSessions SupportSession[]
-  supportNotes TenantSupportNote[]
+  customPriceRequests   CustomPriceRequest[]
+  supportSessions       SupportSession[]
+  supportNotes          TenantSupportNote[]
   sensitiveAccessGrants AdminSensitiveAccessGrant[]
-  platformTickets PlatformSupportTicket[]
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deletedAt DateTime?
+  platformTickets       PlatformSupportTicket[]
+  id                    String                      @id @default(cuid())
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  deletedAt             DateTime?
 
-  slug        String  @unique
+  slug        String @unique
   companyName String
 
   taxNumber String? @unique
@@ -126,7 +126,7 @@ model Tenant {
 
   address String?
   city    String?
-  country String @default("TR")
+  country String  @default("TR")
 
   sector String?
 
@@ -149,107 +149,107 @@ model Tenant {
   notes   String?
 
   // Relations
-  users                  TenantUser[]
-  roles                  Role[]
-  units                  Unit[]
-  categories             Category[]
-  taxRates               TaxRate[]
-  currencies             Currency[]
-  currencyRates          CurrencyRate[]
-  contacts               Contact[]
-  products               Product[]
-  warehouses             Warehouse[]
-  stockMovements         StockMovement[]
-  stockCounts            StockCount[]
-  inventoryReservations  InventoryReservation[]
-  salesOrders            SalesOrder[]
-  salesQuotes            SalesQuote[]
-  purchaseRequests       PurchaseRequest[]
-  purchaseOrders         PurchaseOrder[]
-  deliveryNotes          DeliveryNote[]
-  invoices               Invoice[]
-  payments               Payment[]
-  bankAccounts           BankAccount[]
-  cashAccounts           CashAccount[]
-  bankTransactions       BankTransaction[]
-  checkPromissoryNotes   CheckPromissoryNote[]
-  ledgerAccounts         LedgerAccount[]
-  journalEntries         JournalEntry[]
-  fiscalPeriods          FiscalPeriod[]
-  reconciliations        Reconciliation[]
-  employees              Employee[]
-  workOrders             WorkOrder[]
-  workCenters            WorkCenter[]
-  boms                   BOM[]
-  serviceRequests        ServiceRequest[]
-  customerAssets         CustomerAsset[]
-  marketplaces           MarketplaceIntegration[]
-  savedReports           SavedReport[]
-  savedViews             SavedView[]
-  numberSequences        NumberSequence[]
-  auditLogs              AuditLog[]
-  attachments            Attachment[]
-  approvalFlows          ApprovalFlow[]
-  approvalRequests       ApprovalRequest[]
-  notifications          Notification[]
-  mailMessages           MailMessage[]
-  tasks                  Task[]
-  automationRules        AutomationRule[]
-  automationExecutions   AutomationExecution[]
-  domainEventOutbox      DomainEventOutbox[]
-  tenantSettings         TenantSetting[]
-  moduleSettings         ModuleSetting[]
-  aiRequestLogs          AiRequestLog[]
+  users                       TenantUser[]
+  roles                       Role[]
+  units                       Unit[]
+  categories                  Category[]
+  taxRates                    TaxRate[]
+  currencies                  Currency[]
+  currencyRates               CurrencyRate[]
+  contacts                    Contact[]
+  products                    Product[]
+  warehouses                  Warehouse[]
+  stockMovements              StockMovement[]
+  stockCounts                 StockCount[]
+  inventoryReservations       InventoryReservation[]
+  salesOrders                 SalesOrder[]
+  salesQuotes                 SalesQuote[]
+  purchaseRequests            PurchaseRequest[]
+  purchaseOrders              PurchaseOrder[]
+  deliveryNotes               DeliveryNote[]
+  invoices                    Invoice[]
+  payments                    Payment[]
+  bankAccounts                BankAccount[]
+  cashAccounts                CashAccount[]
+  bankTransactions            BankTransaction[]
+  checkPromissoryNotes        CheckPromissoryNote[]
+  ledgerAccounts              LedgerAccount[]
+  journalEntries              JournalEntry[]
+  fiscalPeriods               FiscalPeriod[]
+  reconciliations             Reconciliation[]
+  employees                   Employee[]
+  workOrders                  WorkOrder[]
+  workCenters                 WorkCenter[]
+  boms                        BOM[]
+  serviceRequests             ServiceRequest[]
+  customerAssets              CustomerAsset[]
+  marketplaces                MarketplaceIntegration[]
+  savedReports                SavedReport[]
+  savedViews                  SavedView[]
+  numberSequences             NumberSequence[]
+  auditLogs                   AuditLog[]
+  attachments                 Attachment[]
+  approvalFlows               ApprovalFlow[]
+  approvalRequests            ApprovalRequest[]
+  notifications               Notification[]
+  mailMessages                MailMessage[]
+  tasks                       Task[]
+  automationRules             AutomationRule[]
+  automationExecutions        AutomationExecution[]
+  domainEventOutbox           DomainEventOutbox[]
+  tenantSettings              TenantSetting[]
+  moduleSettings              ModuleSetting[]
+  aiRequestLogs               AiRequestLog[]
   // Back-relations for models with tenantId
-  accountEntries           AccountEntry[]
-  stockLevels              StockLevel[]
-  locations                Location[]
-  stockCountItems          StockCountItem[]
-  paymentAllocations       PaymentAllocation[]
-  payrolls                 Payroll[]
-  leaveRequests            LeaveRequest[]
-  attendances              Attendance[]
-  lotSerialNumbers         LotSerialNumber[]
-  productBatches           ProductBatch[]
-  salesOrderHistories      SalesOrderHistory[]
-  purchaseOrderHistories   PurchaseOrderHistory[]
-  invoiceHistories         InvoiceHistory[]
-  workOrderHistories       WorkOrderHistory[]
-  routingOperations        RoutingOperation[]
-  journalEntryLines        JournalEntryLine[]
-  reconciliationLines      ReconciliationLine[]
-  payrollItems             PayrollItem[]
-  bomItems                 BOMItem[]
-  workOrderItems           WorkOrderItem[]
-  workOrderOperations      WorkOrderOperation[]
-  workCenterCapacities     WorkCenterCapacity[]
-  salesQuoteItems          SalesQuoteItem[]
-  salesOrderItems          SalesOrderItem[]
-  purchaseRequestItems     PurchaseRequestItem[]
-  purchaseOrderItems       PurchaseOrderItem[]
-  deliveryNoteItems        DeliveryNoteItem[]
-  invoiceLines             InvoiceLine[]
-  stockValuations          StockValuation[]
-  eDocuments               EDocument[]
-  serviceActivities        ServiceActivity[]
-  serviceRequestHistories  ServiceRequestHistory[]
-  serviceRequestItems      ServiceRequestItem[]
-  marketplaceListings      MarketplaceListing[]
-  marketplaceOrders        MarketplaceOrder[]
-  marketplaceSyncJobs      MarketplaceSyncJob[]
-  marketplaceWebhookEvents MarketplaceWebhookEvent[]
+  accountEntries              AccountEntry[]
+  stockLevels                 StockLevel[]
+  locations                   Location[]
+  stockCountItems             StockCountItem[]
+  paymentAllocations          PaymentAllocation[]
+  payrolls                    Payroll[]
+  leaveRequests               LeaveRequest[]
+  attendances                 Attendance[]
+  lotSerialNumbers            LotSerialNumber[]
+  productBatches              ProductBatch[]
+  salesOrderHistories         SalesOrderHistory[]
+  purchaseOrderHistories      PurchaseOrderHistory[]
+  invoiceHistories            InvoiceHistory[]
+  workOrderHistories          WorkOrderHistory[]
+  routingOperations           RoutingOperation[]
+  journalEntryLines           JournalEntryLine[]
+  reconciliationLines         ReconciliationLine[]
+  payrollItems                PayrollItem[]
+  bomItems                    BOMItem[]
+  workOrderItems              WorkOrderItem[]
+  workOrderOperations         WorkOrderOperation[]
+  workCenterCapacities        WorkCenterCapacity[]
+  salesQuoteItems             SalesQuoteItem[]
+  salesOrderItems             SalesOrderItem[]
+  purchaseRequestItems        PurchaseRequestItem[]
+  purchaseOrderItems          PurchaseOrderItem[]
+  deliveryNoteItems           DeliveryNoteItem[]
+  invoiceLines                InvoiceLine[]
+  stockValuations             StockValuation[]
+  eDocuments                  EDocument[]
+  serviceActivities           ServiceActivity[]
+  serviceRequestHistories     ServiceRequestHistory[]
+  serviceRequestItems         ServiceRequestItem[]
+  marketplaceListings         MarketplaceListing[]
+  marketplaceOrders           MarketplaceOrder[]
+  marketplaceSyncJobs         MarketplaceSyncJob[]
+  marketplaceWebhookEvents    MarketplaceWebhookEvent[]
   marketplaceListingSnapshots MarketplaceListingSnapshot[]
-  marketplaceOrderItems    MarketplaceOrderItem[]
+  marketplaceOrderItems       MarketplaceOrderItem[]
   // DEĞİŞİKLİK 3: TenantFeatureOverride back-relation
-  featureOverrides         TenantFeatureOverride[]
+  featureOverrides            TenantFeatureOverride[]
   // DEĞİŞİKLİK 6: ApiKey back-relation
-  apiKeys                  ApiKey[]
+  apiKeys                     ApiKey[]
   // Invitation & DemoRequest back-relations
-  invitations              Invitation[]
-  demoRequests             DemoRequest[]
-  collectionReminders      CollectionReminder[]
-  collaborationEntries    RecordCollaborationEntry[]
-  recordFollowers          RecordFollower[]
+  invitations                 Invitation[]
+  demoRequests                DemoRequest[]
+  collectionReminders         CollectionReminder[]
+  collaborationEntries        RecordCollaborationEntry[]
+  recordFollowers             RecordFollower[]
 
   @@index([status])
   @@index([deletedAt])
@@ -259,29 +259,29 @@ model Tenant {
 model User {
   supportSessions SupportSession[]
   platformTickets PlatformSupportTicket[]
-  ticketMessages PlatformTicketMessage[]
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deletedAt DateTime?
+  ticketMessages  PlatformTicketMessage[]
+  id              String                  @id @default(cuid())
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  deletedAt       DateTime?
 
   email    String  @unique
   name     String
   phone    String?
   password String
 
-  isActive            Boolean  @default(true)
+  isActive            Boolean   @default(true)
   lastLoginAt         DateTime?
   passwordResetToken  String?
   passwordResetExpiry DateTime?
 
-  tenants TenantUser[]
-  approvalSteps ApprovalStep[] @relation("StepApproverUser")
-  sentInvitations Invitation[] @relation("InvitationInviter")
-  sentMailMessages MailMessage[] @relation("MailMessageSender")
-  aiRequestLogs AiRequestLog[]
+  tenants              TenantUser[]
+  approvalSteps        ApprovalStep[]             @relation("StepApproverUser")
+  sentInvitations      Invitation[]               @relation("InvitationInviter")
+  sentMailMessages     MailMessage[]              @relation("MailMessageSender")
+  aiRequestLogs        AiRequestLog[]
   collaborationEntries RecordCollaborationEntry[] @relation("RecordCollaborationEntryCreator")
-  followedRecords RecordFollower[] @relation("RecordFollowerUser")
+  followedRecords      RecordFollower[]           @relation("RecordFollowerUser")
 
   @@index([email])
   @@index([deletedAt])
@@ -289,37 +289,37 @@ model User {
 }
 
 model AdminUser {
-  uiPreference AdminUiPreference?
-  savedListViews AdminSavedListView[]
-  idempotencyRecords AdminIdempotencyRecord[]
+  uiPreference          AdminUiPreference?
+  savedListViews        AdminSavedListView[]
+  idempotencyRecords    AdminIdempotencyRecord[]
   sensitiveAccessGrants AdminSensitiveAccessGrant[]
-  supportSessions SupportSession[]
-  tenantSupportNotes TenantSupportNote[]
-  assignedTickets PlatformSupportTicket[]
-  adminTicketMessages PlatformTicketMessage[]
-  inviteTokenHash String? @unique
-  invitationExpiresAt DateTime?
-  invitationAcceptedAt DateTime?
-  failedLoginCount Int @default(0)
-  lastFailedLoginAt DateTime?
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  supportSessions       SupportSession[]
+  tenantSupportNotes    TenantSupportNote[]
+  assignedTickets       PlatformSupportTicket[]
+  adminTicketMessages   PlatformTicketMessage[]
+  inviteTokenHash       String?                     @unique
+  invitationExpiresAt   DateTime?
+  invitationAcceptedAt  DateTime?
+  failedLoginCount      Int                         @default(0)
+  lastFailedLoginAt     DateTime?
+  id                    String                      @id @default(cuid())
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
 
-  email    String  @unique
+  email    String @unique
   name     String
   password String
 
-  isActive    Boolean  @default(true)
-  lastLoginAt DateTime?
-  passwordChangedAt DateTime @default(now())
+  isActive           Boolean   @default(true)
+  lastLoginAt        DateTime?
+  passwordChangedAt  DateTime  @default(now())
   mfaSecretEncrypted String?
-  mfaEnabled         Boolean @default(false)
-  mfaLastCounter     Int @default(-1)
+  mfaEnabled         Boolean   @default(false)
+  mfaLastCounter     Int       @default(-1)
   mfaVerifiedAt      DateTime?
-  tokenVersion       Int     @default(0)
+  tokenVersion       Int       @default(0)
 
-  roleAssignments AdminUserRole[]
+  roleAssignments         AdminUserRole[]
   requestedChangeRequests AdminChangeRequest[] @relation("AdminChangeRequestRequester")
   decidedChangeRequests   AdminChangeRequest[] @relation("AdminChangeRequestDecider")
   auditLogs               AuditLog[]
@@ -330,19 +330,19 @@ model AdminUser {
 }
 
 model AdminSession {
-  tokenVersion Int @default(0)
-  id               String   @id @default(cuid())
+  tokenVersion     Int       @default(0)
+  id               String    @id @default(cuid())
   adminUserId      String
-  refreshTokenHash String   @unique
+  refreshTokenHash String    @unique
   deviceName       String
   ipAddress        String?
   userAgent        String?
-  rememberMe       Boolean  @default(false)
+  rememberMe       Boolean   @default(false)
   mfaVerifiedAt    DateTime
-  lastSeenAt       DateTime @default(now())
+  lastSeenAt       DateTime  @default(now())
   expiresAt        DateTime
   revokedAt        DateTime?
-  createdAt        DateTime @default(now())
+  createdAt        DateTime  @default(now())
 
   adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
 
@@ -351,14 +351,14 @@ model AdminSession {
 }
 
 model AdminSecurityEvent {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   adminUserId String
   type        String
   message     String
   ipAddress   String?
   userAgent   String?
   readAt      DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
 
@@ -367,29 +367,32 @@ model AdminSecurityEvent {
 }
 
 model AdminRole {
-  id          String @id @default(cuid())
-  key         String @unique
+  id          String                @id @default(cuid())
+  key         String                @unique
   name        String
   description String?
   users       AdminUserRole[]
   permissions AdminRolePermission[]
+
   @@map("admin_roles")
 }
 
 model AdminPermission {
-  id          String @id @default(cuid())
-  key         String @unique
+  id          String                @id @default(cuid())
+  key         String                @unique
   description String?
-  roles AdminRolePermission[]
+  roles       AdminRolePermission[]
+
   @@map("admin_permissions")
 }
 
 model AdminUserRole {
   adminUserId String
   adminRoleId String
-  assignedAt  DateTime @default(now())
-  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
-  adminRole AdminRole @relation(fields: [adminRoleId], references: [id], onDelete: Cascade)
+  assignedAt  DateTime  @default(now())
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  adminRole   AdminRole @relation(fields: [adminRoleId], references: [id], onDelete: Cascade)
+
   @@id([adminUserId, adminRoleId])
   @@index([adminRoleId])
   @@map("admin_user_roles")
@@ -398,8 +401,9 @@ model AdminUserRole {
 model AdminRolePermission {
   adminRoleId       String
   adminPermissionId String
-  adminRole AdminRole @relation(fields: [adminRoleId], references: [id], onDelete: Cascade)
-  adminPermission AdminPermission @relation(fields: [adminPermissionId], references: [id], onDelete: Cascade)
+  adminRole         AdminRole       @relation(fields: [adminRoleId], references: [id], onDelete: Cascade)
+  adminPermission   AdminPermission @relation(fields: [adminPermissionId], references: [id], onDelete: Cascade)
+
   @@id([adminRoleId, adminPermissionId])
   @@index([adminPermissionId])
   @@map("admin_role_permissions")
@@ -416,12 +420,12 @@ model TenantUser {
 
   isOwner  Boolean @default(false)
   isActive Boolean @default(true)
-  
+
   preferences Json? // Eklenen alan: Dashboard layout, widget ayarları vb.
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  roleRef Role?   @relation(fields: [roleId], references: [id])
+  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleRef Role?  @relation(fields: [roleId], references: [id])
 
   @@unique([tenantId, userId])
   @@index([tenantId])
@@ -438,11 +442,11 @@ model Role {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  permissions RolePermission[]
-  users       TenantUser[]
-  approvalSteps ApprovalStep[] @relation("StepApproverRole")
-  invitations Invitation[]
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissions   RolePermission[]
+  users         TenantUser[]
+  approvalSteps ApprovalStep[]   @relation("StepApproverRole")
+  invitations   Invitation[]
 
   @@unique([tenantId, name])
   @@map("roles")
@@ -465,17 +469,17 @@ model PlanFeature {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  plan  Plan   
-  key   String 
+  plan  Plan
+  key   String
   value String
 
   // DEĞİŞİKLİK 1: yeni alanlar
-  type        FeatureType  @default(LIMIT)
-  isEnabled   Boolean      @default(true)
+  type        FeatureType @default(LIMIT)
+  isEnabled   Boolean     @default(true)
   description String?
 
   // DEĞİŞİKLİK 2: typed key — key String korunur, featureKey nullable eklendi
-  featureKey  FeatureKey?
+  featureKey FeatureKey?
 
   // Mevcut unique korunur; featureKey için ayrı unique eklendi
   @@unique([plan, key])
@@ -490,8 +494,8 @@ model TenantFeatureOverride {
   featureKey  FeatureKey
   value       String
   isEnabled   Boolean    @default(true)
-  reason      String?    // neden override edildiğine dair not (Enterprise satış)
-  expiresAt   DateTime?  // geçici override desteği
+  reason      String? // neden override edildiğine dair not (Enterprise satış)
+  expiresAt   DateTime? // geçici override desteği
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   createdById String?
@@ -504,32 +508,32 @@ model TenantFeatureOverride {
 }
 
 model FeatureRollout {
-  id                   String   @id @default(cuid())
+  id                   String     @id @default(cuid())
   plan                 Plan
   featureKey           FeatureKey
   version              Int
   environment          String
   stage                String
-  status               String   @default("DRAFT")
+  status               String     @default("DRAFT")
   value                String
-  isEnabled            Boolean  @default(true)
-  rolloutPercentage    Int      @default(0)
-  targetTenantIds      String[] @default([])
-  dependencies         String[] @default([])
-  conflicts            String[] @default([])
+  isEnabled            Boolean    @default(true)
+  rolloutPercentage    Int        @default(0)
+  targetTenantIds      String[]   @default([])
+  dependencies         String[]   @default([])
+  conflicts            String[]   @default([])
   startsAt             DateTime
   endsAt               DateTime?
-  errorThresholdPct    Decimal  @db.Decimal(5, 2)
-  observedErrorRatePct Decimal? @db.Decimal(5, 2)
-  killSwitch           Boolean  @default(false)
+  errorThresholdPct    Decimal    @db.Decimal(5, 2)
+  observedErrorRatePct Decimal?   @db.Decimal(5, 2)
+  killSwitch           Boolean    @default(false)
   reason               String
   ticketId             String?
   createdById          String
   activatedById        String?
   activatedAt          DateTime?
   pausedAt             DateTime?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 
   @@unique([plan, featureKey, environment, version])
   @@index([plan, featureKey, environment, status])
@@ -538,23 +542,23 @@ model FeatureRollout {
 }
 
 model ApiKey {
-  id          String    @id @default(cuid())
-  tenantId    String
-  name        String                       // key'e verilen isim (örn: "Production API")
-  keyHash     String    @unique            // bcrypt/sha256 hash — ham key saklanmaz
-  keyPrefix   String                       // ilk 8 karakter, UI'da gösterim için (örn: "sk_live_")
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
-  isActive    Boolean   @default(true)
-  scopes      String[]  @default([])       // izin verilen scope'lar (örn: ["invoices:read"])
-  ipAllowlist String[]  @default([])       // bos ise tum IP'lere izin verilir
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-  createdById String?
-  revokedAt   DateTime?
-  revokedById String?
-  rotatedAt   DateTime?
+  id            String    @id @default(cuid())
+  tenantId      String
+  name          String // key'e verilen isim (örn: "Production API")
+  keyHash       String    @unique // bcrypt/sha256 hash — ham key saklanmaz
+  keyPrefix     String // ilk 8 karakter, UI'da gösterim için (örn: "sk_live_")
+  lastUsedAt    DateTime?
+  expiresAt     DateTime?
+  isActive      Boolean   @default(true)
+  scopes        String[]  @default([]) // izin verilen scope'lar (örn: ["invoices:read"])
+  ipAllowlist   String[]  @default([]) // bos ise tum IP'lere izin verilir
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+  createdById   String?
+  revokedAt     DateTime?
+  revokedById   String?
+  rotatedAt     DateTime?
   rotatedFromId String?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -570,20 +574,20 @@ model Invitation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenantId    String
-  email       String
-  roleId      String?
-  status      InvitationStatus @default(PENDING)
+  tenantId String
+  email    String
+  roleId   String?
+  status   InvitationStatus @default(PENDING)
 
-  tokenHash   String   @unique
-  expiresAt   DateTime
+  tokenHash String   @unique
+  expiresAt DateTime
 
-  invitedBy   String
-  acceptedAt  DateTime?
+  invitedBy  String
+  acceptedAt DateTime?
 
-  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  role      Role?   @relation(fields: [roleId], references: [id])
-  inviter   User    @relation("InvitationInviter", fields: [invitedBy], references: [id])
+  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role    Role?  @relation(fields: [roleId], references: [id])
+  inviter User   @relation("InvitationInviter", fields: [invitedBy], references: [id])
 
   @@unique([tenantId, email])
   @@index([tenantId])

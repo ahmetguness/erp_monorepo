@@ -1,6 +1,6 @@
 model PlatformBackupEvidence {
-  id                    String   @id @default(cuid())
-  providerRef           String   @unique
+  id                    String                 @id @default(cuid())
+  providerRef           String                 @unique
   status                String
   sizeBytes             BigInt
   encrypted             Boolean
@@ -11,7 +11,7 @@ model PlatformBackupEvidence {
   startedAt             DateTime
   completedAt           DateTime
   recordedById          String
-  recordedAt            DateTime @default(now())
+  recordedAt            DateTime               @default(now())
   restoreDrills         PlatformRestoreDrill[]
 
   @@index([status, completedAt])
@@ -19,9 +19,9 @@ model PlatformBackupEvidence {
 }
 
 model PlatformRestoreDrill {
-  id               String   @id @default(cuid())
+  id               String                 @id @default(cuid())
   backupId         String
-  status           String   @default("PLANNED")
+  status           String                 @default("PLANNED")
   environment      String
   runbookUrl       String
   approvalId       String
@@ -32,8 +32,8 @@ model PlatformRestoreDrill {
   actualRpoMinutes Int?
   actualRtoMinutes Int?
   notes            String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
   backup           PlatformBackupEvidence @relation(fields: [backupId], references: [id], onDelete: Restrict)
 
   @@index([status, createdAt])
@@ -48,5 +48,6 @@ model PlatformDisasterRecoveryPolicy {
   maxReplicationLagSeconds Int      @default(300)
   updatedById              String?
   updatedAt                DateTime @updatedAt
+
   @@map("platform_disaster_recovery_policies")
 }

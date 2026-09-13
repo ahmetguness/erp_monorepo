@@ -1,7 +1,7 @@
-import { Context } from 'hono';
-import { prisma } from '../../../../lib/prisma.js';
-import { getAdvancedService } from '../../../../services/advanced-service.service.js';
-import { requireTenantId } from '../../../../utils/context.js';
+import { Context } from "hono";
+import { prisma } from "../../../../lib/prisma.js";
+import { getAdvancedService } from "../../../../services/advanced-service.service.js";
+import { requireTenantId } from "../../../../utils/context.js";
 
 function parseHorizonDays(value: string | undefined): number {
   const parsed = Number(value ?? 30);
@@ -12,7 +12,7 @@ function parseHorizonDays(value: string | undefined): number {
 export const AdvancedServiceController = {
   async get(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const horizonDays = parseHorizonDays(c.req.query('horizonDays'));
+    const horizonDays = parseHorizonDays(c.req.query("horizonDays"));
     const data = await getAdvancedService(prisma, { tenantId, horizonDays });
     return c.json({ data });
   },

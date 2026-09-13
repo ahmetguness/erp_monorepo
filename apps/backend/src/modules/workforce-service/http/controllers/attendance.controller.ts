@@ -1,8 +1,8 @@
-import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
-import { prisma } from '../../../../lib/prisma.js';
-import { requireParam,requireTenantId } from '../../../../utils/context.js';
-import { getPaginationParams } from '../../../../utils/pagination.js';
+import { Context } from "hono";
+import { NotFoundError, ValidationError } from "../../../../errors/index.js";
+import { prisma } from "../../../../lib/prisma.js";
+import { requireParam, requireTenantId } from "../../../../utils/context.js";
+import { getPaginationParams } from "../../../../utils/pagination.js";
 
 // ─────────────────────────────────────────────
 // Attendance Controller — Puantaj / Giriş-Çıkış
@@ -13,19 +13,21 @@ export const AttendanceController = {
     const tenantId = requireTenantId(c);
 
     const { page, limit, skip } = getPaginationParams(c, 50);
-    const employeeId = c.req.query('employeeId');
-    const dateFrom = c.req.query('dateFrom');
-    const dateTo = c.req.query('dateTo');
+    const employeeId = c.req.query("employeeId");
+    const dateFrom = c.req.query("dateFrom");
+    const dateTo = c.req.query("dateTo");
 
     const where = {
       tenantId,
       ...(employeeId && { employeeId }),
-      ...(dateFrom || dateTo ? {
-        date: {
-          ...(dateFrom && { gte: new Date(dateFrom) }),
-          ...(dateTo && { lte: new Date(dateTo) }),
-        },
-      } : {}),
+      ...(dateFrom || dateTo
+        ? {
+            date: {
+              ...(dateFrom && { gte: new Date(dateFrom) }),
+              ...(dateTo && { lte: new Date(dateTo) }),
+            },
+          }
+        : {}),
     };
 
     const [total, data] = await prisma.$transaction([
@@ -33,30 +35,62 @@ export const AttendanceController = {
       prisma.attendance.findMany({
         where,
         include: {
-          employee: { select: { id: true, firstName: true, lastName: true, department: true } },
+          employee: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              department: true,
+            },
+          },
         },
-        orderBy: { date: 'desc' },
+        orderBy: { date: "desc" },
         skip: skip,
         take: limit,
       }),
     ]);
 
-    return c.json({ data, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
+    return c.json({
+      data,
+      meta: {
+        total,
+        page,
+        pageSize: limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
   },
 
   async checkIn(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<{ employeeId: string; date?: string; checkIn?: string; notes?: string }>();
-    if (!body.employeeId) return c.json(new ValidationError('employeeId zorunludur.').toJSON(), 400);
+    const body = await c.req.json<{
+      employeeId: string;
+      date?: string;
+      checkIn?: string;
+      notes?: string;
+    }>();
+    if (!body.employeeId)
+      return c.json(
+        new ValidationError("employeeId zorunludur.").toJSON(),
+        400,
+      );
 
     const date = body.date ? new Date(body.date) : new Date();
-    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const dateOnly = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+    );
 
     const attendance = await prisma.attendance.upsert({
-      where: { employeeId_date: { employeeId: body.employeeId, date: dateOnly } },
+      where: {
+        employeeId_date: { employeeId: body.employeeId, date: dateOnly },
+      },
       create: {
-        tenantId, employeeId: body.employeeId, date: dateOnly,
+        tenantId,
+        employeeId: body.employeeId,
+        date: dateOnly,
         checkIn: body.checkIn ? new Date(body.checkIn) : new Date(),
         notes: body.notes ?? null,
       },
@@ -64,7 +98,9 @@ export const AttendanceController = {
         checkIn: body.checkIn ? new Date(body.checkIn) : new Date(),
         ...(body.notes !== undefined && { notes: body.notes }),
       },
-      include: { employee: { select: { id: true, firstName: true, lastName: true } } },
+      include: {
+        employee: { select: { id: true, firstName: true, lastName: true } },
+      },
     });
     return c.json({ data: attendance });
   },
@@ -72,42 +108,77 @@ export const AttendanceController = {
   async checkOut(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<{ employeeId: string; date?: string; checkOut?: string; overtimeHours?: number }>();
-    if (!body.employeeId) return c.json(new ValidationError('employeeId zorunludur.').toJSON(), 400);
+    const body = await c.req.json<{
+      employeeId: string;
+      date?: string;
+      checkOut?: string;
+      overtimeHours?: number;
+    }>();
+    if (!body.employeeId)
+      return c.json(
+        new ValidationError("employeeId zorunludur.").toJSON(),
+        400,
+      );
 
     const date = body.date ? new Date(body.date) : new Date();
-    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const dateOnly = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+    );
 
     const existing = await prisma.attendance.findFirst({
       where: { tenantId, employeeId: body.employeeId, date: dateOnly },
     });
-    if (!existing) return c.json(new ValidationError('Önce giriş kaydı oluşturulmalıdır.').toJSON(), 400);
+    if (!existing)
+      return c.json(
+        new ValidationError("Önce giriş kaydı oluşturulmalıdır.").toJSON(),
+        400,
+      );
 
     const updated = await prisma.attendance.update({
       where: { id: existing.id },
       data: {
         checkOut: body.checkOut ? new Date(body.checkOut) : new Date(),
-        ...(body.overtimeHours !== undefined && { overtimeHours: body.overtimeHours }),
+        ...(body.overtimeHours !== undefined && {
+          overtimeHours: body.overtimeHours,
+        }),
       },
-      include: { employee: { select: { id: true, firstName: true, lastName: true } } },
+      include: {
+        employee: { select: { id: true, firstName: true, lastName: true } },
+      },
     });
     return c.json({ data: updated });
   },
 
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
-    const existing = await prisma.attendance.findFirst({ where: { id, tenantId } });
-    if (!existing) return c.json(new NotFoundError('Puantaj', id).toJSON(), 404);
+    const existing = await prisma.attendance.findFirst({
+      where: { id, tenantId },
+    });
+    if (!existing)
+      return c.json(new NotFoundError("Puantaj", id).toJSON(), 404);
 
-    const body = await c.req.json<{ checkIn?: string; checkOut?: string; overtimeHours?: number; notes?: string }>();
+    const body = await c.req.json<{
+      checkIn?: string;
+      checkOut?: string;
+      overtimeHours?: number;
+      notes?: string;
+    }>();
     const updated = await prisma.attendance.update({
       where: { id },
       data: {
-        ...(body.checkIn !== undefined && { checkIn: body.checkIn ? new Date(body.checkIn) : null }),
-        ...(body.checkOut !== undefined && { checkOut: body.checkOut ? new Date(body.checkOut) : null }),
-        ...(body.overtimeHours !== undefined && { overtimeHours: body.overtimeHours }),
+        ...(body.checkIn !== undefined && {
+          checkIn: body.checkIn ? new Date(body.checkIn) : null,
+        }),
+        ...(body.checkOut !== undefined && {
+          checkOut: body.checkOut ? new Date(body.checkOut) : null,
+        }),
+        ...(body.overtimeHours !== undefined && {
+          overtimeHours: body.overtimeHours,
+        }),
         ...(body.notes !== undefined && { notes: body.notes }),
       },
     });
@@ -116,10 +187,13 @@ export const AttendanceController = {
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
-    const existing = await prisma.attendance.findFirst({ where: { id, tenantId } });
-    if (!existing) return c.json(new NotFoundError('Puantaj', id).toJSON(), 404);
+    const existing = await prisma.attendance.findFirst({
+      where: { id, tenantId },
+    });
+    if (!existing)
+      return c.json(new NotFoundError("Puantaj", id).toJSON(), 404);
 
     await prisma.attendance.delete({ where: { id } });
     return c.json({ data: { success: true } });

@@ -110,40 +110,42 @@ enum BankTransactionRefType {
 }
 
 model Invoice {
-  id              String        @id @default(cuid())
-  tenantId        String
-  contactId       String
-  salesOrderId    String?
-  purchaseOrderId String?
-  type            InvoiceType
-  status          InvoiceStatus @default(DRAFT)
-  number          String
-  date            DateTime
-  dueDate         DateTime?
-  currencyCode    String        @default("TRY")
-  exchangeRate    Decimal       @db.Decimal(18, 6) @default(1)
-  totalNet        Decimal       @db.Decimal(18, 2) @default(0)
-  totalTax        Decimal       @db.Decimal(18, 2) @default(0)
-  totalGross      Decimal       @db.Decimal(18, 2) @default(0)
-  notes           String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  deletedAt       DateTime?
-  createdById     String?
-  updatedById     String?
-  totalWithholding Decimal      @db.Decimal(18, 2) @default(0)
+  id                    String        @id @default(cuid())
+  tenantId              String
+  contactId             String
+  salesOrderId          String?
+  purchaseOrderId       String?
+  type                  InvoiceType
+  status                InvoiceStatus @default(DRAFT)
+  number                String
+  date                  DateTime
+  dueDate               DateTime?
+  currencyCode          String        @default("TRY")
+  exchangeRate          Decimal       @default(1) @db.Decimal(18, 6)
+  totalNet              Decimal       @default(0) @db.Decimal(18, 2)
+  totalTax              Decimal       @default(0) @db.Decimal(18, 2)
+  totalGross            Decimal       @default(0) @db.Decimal(18, 2)
+  notes                 String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  deletedAt             DateTime?
+  createdById           String?
+  updatedById           String?
+  totalWithholding      Decimal       @default(0) @db.Decimal(18, 2)
+  postingIdempotencyKey String?
 
-  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  contact       Contact             @relation(fields: [contactId], references: [id])
-  salesOrder    SalesOrder?         @relation(fields: [salesOrderId], references: [id])
-  purchaseOrder PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
-  lines         InvoiceLine[]
-  eDocuments    EDocument[]
-  payments      PaymentAllocation[]
-  history       InvoiceHistory[]
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact             Contact              @relation(fields: [contactId], references: [id])
+  salesOrder          SalesOrder?          @relation(fields: [salesOrderId], references: [id])
+  purchaseOrder       PurchaseOrder?       @relation(fields: [purchaseOrderId], references: [id])
+  lines               InvoiceLine[]
+  eDocuments          EDocument[]
+  payments            PaymentAllocation[]
+  history             InvoiceHistory[]
   collectionReminders CollectionReminder[]
 
   @@unique([tenantId, number])
+  @@unique([tenantId, postingIdempotencyKey])
   @@index([tenantId, status])
   @@index([tenantId, contactId])
   @@index([tenantId, date])
@@ -157,39 +159,39 @@ model Invoice {
 }
 
 model InvoiceLine {
-  id          String  @id @default(cuid())
-  tenantId    String
-  invoiceId   String
-  productId   String?
-  taxRateId   String?
+  id                String  @id @default(cuid())
+  tenantId          String
+  invoiceId         String
+  productId         String?
+  taxRateId         String?
   withholdingRateId String?
-  description String
-  quantity    Decimal @db.Decimal(18, 3)
-  unitPrice   Decimal @db.Decimal(18, 2)
-  discount    Decimal @db.Decimal(5, 2) @default(0)
-  taxAmount   Decimal @db.Decimal(18, 2) @default(0)
-  withholdingAmount Decimal @db.Decimal(18, 2) @default(0)
-  lineTotal   Decimal @db.Decimal(18, 2)
-  sortOrder   Int     @default(0)
+  description       String
+  quantity          Decimal @db.Decimal(18, 3)
+  unitPrice         Decimal @db.Decimal(18, 2)
+  discount          Decimal @default(0) @db.Decimal(5, 2)
+  taxAmount         Decimal @default(0) @db.Decimal(18, 2)
+  withholdingAmount Decimal @default(0) @db.Decimal(18, 2)
+  lineTotal         Decimal @db.Decimal(18, 2)
+  sortOrder         Int     @default(0)
 
-  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  product Product? @relation(fields: [productId], references: [id])
-  taxRate TaxRate? @relation(fields: [taxRateId], references: [id])
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product         Product? @relation(fields: [productId], references: [id])
+  taxRate         TaxRate? @relation(fields: [taxRateId], references: [id])
   withholdingRate TaxRate? @relation("InvoiceLineWithholding", fields: [withholdingRateId], references: [id])
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, invoiceId])
   @@map("invoice_lines")
 }
 
 model InvoiceHistory {
-  id          String        @id @default(cuid())
+  id          String         @id @default(cuid())
   tenantId    String
   invoiceId   String
   fromStatus  InvoiceStatus?
   toStatus    InvoiceStatus
   notes       String?
-  createdAt   DateTime      @default(now())
+  createdAt   DateTime       @default(now())
   createdById String?
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
@@ -200,32 +202,34 @@ model InvoiceHistory {
 }
 
 model EDocument {
-  id              String          @id @default(cuid())
-  tenantId        String
+  id                       String          @id @default(cuid())
+  tenantId                 String
   // Required for E_INVOICE / E_ARCHIVE; must be null for E_WAYBILL
-  invoiceId       String?
+  invoiceId                String?
   // Required for E_WAYBILL; must be null for E_INVOICE / E_ARCHIVE
-  deliveryNoteId  String?
-  type            EDocumentType
-  status          EDocumentStatus @default(PENDING)
-  uuid            String?         @unique
-  providerCode    String?
-  providerMessage String?
-  requestPayload  Json?
-  responsePayload Json?
-  retryCount      Int             @default(0)
-  lastRetryAt     DateTime?
-  sentAt          DateTime?
-  acceptedAt      DateTime?
-  rejectedAt      DateTime?
-  cancelledAt     DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  deliveryNoteId           String?
+  type                     EDocumentType
+  status                   EDocumentStatus @default(PENDING)
+  uuid                     String?         @unique
+  providerCode             String?
+  providerMessage          String?
+  requestPayload           Json?
+  responsePayload          Json?
+  retryCount               Int             @default(0)
+  lastRetryAt              DateTime?
+  sentAt                   DateTime?
+  acceptedAt               DateTime?
+  rejectedAt               DateTime?
+  cancelledAt              DateTime?
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+  submissionIdempotencyKey String?
 
   invoice      Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   deliveryNote DeliveryNote? @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
   tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, submissionIdempotencyKey])
   @@index([tenantId, status])
   @@index([tenantId, invoiceId])
   @@index([tenantId, deliveryNoteId])
@@ -250,7 +254,7 @@ model BankAccount {
   deletedAt     DateTime?
   createdById   String?
 
-  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   transactions BankTransaction[]
   payments     Payment[]
 
@@ -261,13 +265,13 @@ model BankAccount {
 }
 
 model CashAccount {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   tenantId     String
   name         String
-  currencyCode String   @default("TRY")
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  currencyCode String    @default("TRY")
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
   createdById  String?
 
@@ -280,18 +284,18 @@ model CashAccount {
 }
 
 model BankTransaction {
-  id            String              @id @default(cuid())
+  id            String                  @id @default(cuid())
   tenantId      String
   bankAccountId String
   type          BankTransactionType
-  amount        Decimal             @db.Decimal(18, 2)
-  balanceAfter  Decimal             @db.Decimal(18, 2)
+  amount        Decimal                 @db.Decimal(18, 2)
+  balanceAfter  Decimal                 @db.Decimal(18, 2)
   date          DateTime
   description   String?
   reference     String?
   refType       BankTransactionRefType?
   refId         String?
-  createdAt     DateTime            @default(now())
+  createdAt     DateTime                @default(now())
   createdById   String?
 
   tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -304,21 +308,21 @@ model BankTransaction {
 }
 
 model CheckPromissoryNote {
-  id           String      @id @default(cuid())
+  id           String        @id @default(cuid())
   tenantId     String
   contactId    String?
   type         CheckNoteType
   number       String
-  amount       Decimal     @db.Decimal(18, 2)
-  currencyCode String      @default("TRY")
-  issueDate    DateTime    @db.Date
-  dueDate      DateTime    @db.Date
+  amount       Decimal       @db.Decimal(18, 2)
+  currencyCode String        @default("TRY")
+  issueDate    DateTime      @db.Date
+  dueDate      DateTime      @db.Date
   bankName     String?
-  status       CheckStatus @default(PENDING)
+  status       CheckStatus   @default(PENDING)
   notes        String?
   deletedAt    DateTime?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   createdById  String?
 
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -333,24 +337,24 @@ model CheckPromissoryNote {
 }
 
 model Payment {
-  id            String        @id @default(cuid())
-  tenantId      String
-  contactId     String?
-  bankAccountId String?
-  cashAccountId String?
-  checkNoteId   String?
-  date          DateTime
-  amount        Decimal       @db.Decimal(18, 2)
-  method        PaymentMethod @default(CASH)
-  direction     String        @default("RECEIVE")
-  reference     String?
+  id             String        @id @default(cuid())
+  tenantId       String
+  contactId      String?
+  bankAccountId  String?
+  cashAccountId  String?
+  checkNoteId    String?
+  date           DateTime
+  amount         Decimal       @db.Decimal(18, 2)
+  method         PaymentMethod @default(CASH)
+  direction      String        @default("RECEIVE")
+  reference      String?
   idempotencyKey String?
-  status        PaymentStatus @default(PENDING)
-  notes         String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  deletedAt     DateTime?
-  createdById   String?
+  status         PaymentStatus @default(PENDING)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+  createdById    String?
 
   tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact     Contact?             @relation(fields: [contactId], references: [id])
@@ -359,10 +363,10 @@ model Payment {
   checkNote   CheckPromissoryNote? @relation(fields: [checkNoteId], references: [id])
   allocations PaymentAllocation[]
 
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId, status])
   @@index([tenantId, date])
   @@index([tenantId, contactId])
-  @@unique([tenantId, idempotencyKey])
   @@map("payments")
 }
 
@@ -394,10 +398,10 @@ model LedgerAccount {
   accountType AccountType @default(ASSET)
   deletedAt   DateTime?
 
-  tenant   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  parent   LedgerAccount?     @relation("AccountTree", fields: [parentId], references: [id])
-  children LedgerAccount[]    @relation("AccountTree")
-  lines    JournalEntryLine[]
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent              LedgerAccount?       @relation("AccountTree", fields: [parentId], references: [id])
+  children            LedgerAccount[]      @relation("AccountTree")
+  lines               JournalEntryLine[]
   reconciliationLines ReconciliationLine[]
 
   @@unique([tenantId, code])
@@ -442,12 +446,14 @@ model JournalEntry {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   createdById    String?
+  idempotencyKey String?
 
   tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   fiscalPeriod FiscalPeriod?      @relation(fields: [fiscalPeriodId], references: [id])
   lines        JournalEntryLine[]
 
   @@unique([tenantId, number])
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId, date])
   @@index([tenantId, isPosted])
   @@index([refType, refId])
@@ -459,8 +465,8 @@ model JournalEntryLine {
   tenantId       String
   journalEntryId String
   accountId      String
-  debit          Decimal @db.Decimal(18, 2) @default(0)
-  credit         Decimal @db.Decimal(18, 2) @default(0)
+  debit          Decimal @default(0) @db.Decimal(18, 2)
+  credit         Decimal @default(0) @db.Decimal(18, 2)
   description    String?
   sortOrder      Int     @default(0)
 
@@ -474,16 +480,16 @@ model JournalEntryLine {
 }
 
 model Reconciliation {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   tenantId      String
   name          String
   description   String?
-  date          DateTime @db.Date
-  isFinalized   Boolean  @default(false)
+  date          DateTime  @db.Date
+  isFinalized   Boolean   @default(false)
   finalizedAt   DateTime?
   finalizedById String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   createdById   String?
 
   tenant Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -513,16 +519,16 @@ model ReconciliationLine {
 }
 
 model CollectionReminder {
-  id         String   @id @default(cuid())
-  tenantId   String
-  contactId  String
-  invoiceId  String?
-  amount     Decimal  @db.Decimal(18, 2)
-  dueDate    DateTime
-  status     String   @default("PENDING") // PENDING, SENT, CANCELLED
-  notes      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  tenantId  String
+  contactId String
+  invoiceId String?
+  amount    Decimal  @db.Decimal(18, 2)
+  dueDate   DateTime
+  status    String   @default("PENDING") // PENDING, SENT, CANCELLED
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)

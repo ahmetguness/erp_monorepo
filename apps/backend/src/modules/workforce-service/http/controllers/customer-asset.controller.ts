@@ -1,8 +1,8 @@
-import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
-import { prisma } from '../../../../lib/prisma.js';
-import { requireParam,requireTenantId } from '../../../../utils/context.js';
-import { getPaginationParams } from '../../../../utils/pagination.js';
+import { Context } from "hono";
+import { NotFoundError, ValidationError } from "../../../../errors/index.js";
+import { prisma } from "../../../../lib/prisma.js";
+import { requireParam, requireTenantId } from "../../../../utils/context.js";
+import { getPaginationParams } from "../../../../utils/pagination.js";
 
 // ─────────────────────────────────────────────
 // Customer Asset Controller — Müşteri varlıkları CRUD
@@ -13,9 +13,13 @@ export const CustomerAssetController = {
     const tenantId = requireTenantId(c);
 
     const { page, limit, skip } = getPaginationParams(c, 20);
-    const contactId = c.req.query('contactId');
+    const contactId = c.req.query("contactId");
 
-    const where = { tenantId, deletedAt: null, ...(contactId && { contactId }) };
+    const where = {
+      tenantId,
+      deletedAt: null,
+      ...(contactId && { contactId }),
+    };
 
     const [total, data] = await prisma.$transaction([
       prisma.customerAsset.count({ where }),
@@ -25,32 +29,56 @@ export const CustomerAssetController = {
           contact: { select: { id: true, name: true, code: true } },
           _count: { select: { serviceRequests: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         skip: skip,
         take: limit,
       }),
     ]);
 
-    return c.json({ data, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
+    return c.json({
+      data,
+      meta: {
+        total,
+        page,
+        pageSize: limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
   },
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
     const asset = await prisma.customerAsset.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: {
-        contact: { select: { id: true, name: true, code: true, phone: true, email: true } },
+        contact: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            phone: true,
+            email: true,
+          },
+        },
         serviceRequests: {
           where: { deletedAt: null },
-          select: { id: true, number: true, subject: true, status: true, priority: true, createdAt: true },
-          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            number: true,
+            subject: true,
+            status: true,
+            priority: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "desc" },
           take: 10,
         },
       },
     });
-    if (!asset) return c.json(new NotFoundError('Müşteri Varlığı', id).toJSON(), 404);
+    if (!asset)
+      return c.json(new NotFoundError("Müşteri Varlığı", id).toJSON(), 404);
     return c.json({ data: asset });
   },
 
@@ -58,16 +86,30 @@ export const CustomerAssetController = {
     const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{
-      contactId: string; name: string; brand?: string; model?: string;
-      serialNo?: string; purchaseDate?: string; warrantyEnd?: string; notes?: string;
+      contactId: string;
+      name: string;
+      brand?: string;
+      model?: string;
+      serialNo?: string;
+      purchaseDate?: string;
+      warrantyEnd?: string;
+      notes?: string;
     }>();
-    if (!body.contactId || !body.name) return c.json(new ValidationError('contactId ve name zorunludur.').toJSON(), 400);
+    if (!body.contactId || !body.name)
+      return c.json(
+        new ValidationError("contactId ve name zorunludur.").toJSON(),
+        400,
+      );
 
     const asset = await prisma.customerAsset.create({
       data: {
-        tenantId, contactId: body.contactId, name: body.name,
-        brand: body.brand ?? null, model: body.model ?? null,
-        serialNo: body.serialNo ?? null, notes: body.notes ?? null,
+        tenantId,
+        contactId: body.contactId,
+        name: body.name,
+        brand: body.brand ?? null,
+        model: body.model ?? null,
+        serialNo: body.serialNo ?? null,
+        notes: body.notes ?? null,
         purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : null,
         warrantyEnd: body.warrantyEnd ? new Date(body.warrantyEnd) : null,
       },
@@ -78,14 +120,23 @@ export const CustomerAssetController = {
 
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
-    const existing = await prisma.customerAsset.findFirst({ where: { id, tenantId, deletedAt: null } });
-    if (!existing) return c.json(new NotFoundError('Müşteri Varlığı', id).toJSON(), 404);
+    const existing = await prisma.customerAsset.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+    if (!existing)
+      return c.json(new NotFoundError("Müşteri Varlığı", id).toJSON(), 404);
 
     const body = await c.req.json<{
-      name?: string; brand?: string; model?: string; serialNo?: string;
-      purchaseDate?: string; warrantyEnd?: string; notes?: string; isActive?: boolean;
+      name?: string;
+      brand?: string;
+      model?: string;
+      serialNo?: string;
+      purchaseDate?: string;
+      warrantyEnd?: string;
+      notes?: string;
+      isActive?: boolean;
     }>();
 
     const updated = await prisma.customerAsset.update({
@@ -97,8 +148,12 @@ export const CustomerAssetController = {
         ...(body.serialNo !== undefined && { serialNo: body.serialNo }),
         ...(body.notes !== undefined && { notes: body.notes }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
-        ...(body.purchaseDate !== undefined && { purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : null }),
-        ...(body.warrantyEnd !== undefined && { warrantyEnd: body.warrantyEnd ? new Date(body.warrantyEnd) : null }),
+        ...(body.purchaseDate !== undefined && {
+          purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : null,
+        }),
+        ...(body.warrantyEnd !== undefined && {
+          warrantyEnd: body.warrantyEnd ? new Date(body.warrantyEnd) : null,
+        }),
       },
     });
     return c.json({ data: updated });
@@ -106,12 +161,18 @@ export const CustomerAssetController = {
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
-    const existing = await prisma.customerAsset.findFirst({ where: { id, tenantId, deletedAt: null } });
-    if (!existing) return c.json(new NotFoundError('Müşteri Varlığı', id).toJSON(), 404);
+    const existing = await prisma.customerAsset.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+    if (!existing)
+      return c.json(new NotFoundError("Müşteri Varlığı", id).toJSON(), 404);
 
-    await prisma.customerAsset.update({ where: { id }, data: { deletedAt: new Date() } });
+    await prisma.customerAsset.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
     return c.json({ data: { success: true } });
   },
 };

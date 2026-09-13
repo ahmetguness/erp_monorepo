@@ -386,6 +386,11 @@ export async function cancelInvoice(id: string): Promise<Invoice> {
   return safeParse(SingleResponseSchema(InvoiceSchema), res.data, 'cancelInvoice').data;
 }
 
+export async function approveInvoice(id: string, idempotencyKey: string): Promise<Invoice> {
+  const res = await apiClient.post(`/api/invoices/${id}/approve`, { idempotencyKey });
+  return safeParse(SingleResponseSchema(InvoiceSchema), res.data, 'approveInvoice').data;
+}
+
 export const InvoiceStatusRecomputeResultSchema = z.object({
   scanned: z.coerce.number(),
   changed: z.coerce.number(),

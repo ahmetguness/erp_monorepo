@@ -1,11 +1,23 @@
-import { Hono } from 'hono';
-import { ProductionAutonomyController } from '../modules/production/http/controllers/index.js';
+import { Hono } from "hono";
+import { ProductionAutonomyController } from "../modules/production/http/controllers/index.js";
 
 const productionAutonomyRoutes = new Hono();
 
-productionAutonomyRoutes.get('/work-center-capacity', ProductionAutonomyController.getCapacityAnalysis);
-productionAutonomyRoutes.post('/optimize-schedule', ProductionAutonomyController.optimizeSchedule);
-productionAutonomyRoutes.get('/predictive-maintenance', ProductionAutonomyController.getPredictiveMaintenance);
-productionAutonomyRoutes.post('/reserve-maintenance-parts', ProductionAutonomyController.reserveMaintenanceParts);
+productionAutonomyRoutes.get(
+  "/work-center-capacity",
+  ProductionAutonomyController.getCapacityAnalysis,
+);
+productionAutonomyRoutes.post(
+  "/optimize-schedule",
+  ProductionAutonomyController.optimizeSchedule,
+);
+productionAutonomyRoutes.get(
+  "/predictive-maintenance",
+  ProductionAutonomyController.getPredictiveMaintenance,
+);
+productionAutonomyRoutes.post(
+  "/reserve-maintenance-parts",
+  ProductionAutonomyController.reserveMaintenanceParts,
+);
 
 export { productionAutonomyRoutes };

@@ -45,10 +45,10 @@ model PlatformSupportTicket {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
-  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  createdBy       User                   @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  assignedAdmin   AdminUser?             @relation(fields: [assignedAdminId], references: [id], onDelete: SetNull)
-  messages        PlatformTicketMessage[]
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy     User                    @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  assignedAdmin AdminUser?              @relation(fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  messages      PlatformTicketMessage[]
 
   @@index([tenantId, status, createdAt])
   @@index([status, priority, createdAt])
@@ -66,9 +66,9 @@ model PlatformTicketMessage {
   isInternal    Boolean              @default(false)
   createdAt     DateTime             @default(now())
 
-  ticket        PlatformSupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  authorUser    User?                 @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
-  authorAdmin   AdminUser?            @relation(fields: [authorAdminId], references: [id], onDelete: SetNull)
+  ticket      PlatformSupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorUser  User?                 @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  authorAdmin AdminUser?            @relation(fields: [authorAdminId], references: [id], onDelete: SetNull)
 
   @@index([ticketId, createdAt])
   @@map("platform_ticket_messages")

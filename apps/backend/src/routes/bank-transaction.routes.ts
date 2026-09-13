@@ -1,20 +1,52 @@
-import { ACCESS_POLICIES } from '@repo/types/plans';
-import { Hono } from 'hono';
-import { requireAccess } from '../middleware/requireAccess';
-import { requirePermission } from '../middleware/requirePermission';
-import { BankTransactionController } from '../modules/finance/http/controllers/index.js';
+import { ACCESS_POLICIES } from "@repo/types/plans";
+import { Hono } from "hono";
+import { requireAccess } from "../middleware/requireAccess";
+import { requirePermission } from "../middleware/requirePermission";
+import { BankTransactionController } from "../modules/finance/http/controllers/index.js";
 
 const bankTransactionRoutes = new Hono();
 
-bankTransactionRoutes.use('*', requireAccess(ACCESS_POLICIES.bankTransactions));
+bankTransactionRoutes.use("*", requireAccess(ACCESS_POLICIES.bankTransactions));
 
-bankTransactionRoutes.get('/', requirePermission('accounting', 'READ'), BankTransactionController.list);
-bankTransactionRoutes.post('/', requirePermission('accounting', 'CREATE'), BankTransactionController.create);
-bankTransactionRoutes.get('/matching-workbench', requirePermission('accounting', 'READ'), BankTransactionController.matchingWorkbench);
-bankTransactionRoutes.post('/bulk-approve-matches', requirePermission('accounting', 'UPDATE'), BankTransactionController.bulkApproveMatches);
-bankTransactionRoutes.post('/auto-process-matches', requirePermission('accounting', 'UPDATE'), BankTransactionController.autoProcessMatches);
-bankTransactionRoutes.get('/:id/match-suggestions', requirePermission('accounting', 'READ'), BankTransactionController.suggestions);
-bankTransactionRoutes.post('/:id/approve-match', requirePermission('accounting', 'UPDATE'), BankTransactionController.approveMatch);
-bankTransactionRoutes.post('/:id/match', requirePermission('accounting', 'UPDATE'), BankTransactionController.matchPayment);
+bankTransactionRoutes.get(
+  "/",
+  requirePermission("accounting", "READ"),
+  BankTransactionController.list,
+);
+bankTransactionRoutes.post(
+  "/",
+  requirePermission("accounting", "CREATE"),
+  BankTransactionController.create,
+);
+bankTransactionRoutes.get(
+  "/matching-workbench",
+  requirePermission("accounting", "READ"),
+  BankTransactionController.matchingWorkbench,
+);
+bankTransactionRoutes.post(
+  "/bulk-approve-matches",
+  requirePermission("accounting", "UPDATE"),
+  BankTransactionController.bulkApproveMatches,
+);
+bankTransactionRoutes.post(
+  "/auto-process-matches",
+  requirePermission("accounting", "UPDATE"),
+  BankTransactionController.autoProcessMatches,
+);
+bankTransactionRoutes.get(
+  "/:id/match-suggestions",
+  requirePermission("accounting", "READ"),
+  BankTransactionController.suggestions,
+);
+bankTransactionRoutes.post(
+  "/:id/approve-match",
+  requirePermission("accounting", "UPDATE"),
+  BankTransactionController.approveMatch,
+);
+bankTransactionRoutes.post(
+  "/:id/match",
+  requirePermission("accounting", "UPDATE"),
+  BankTransactionController.matchPayment,
+);
 
 export { bankTransactionRoutes };

@@ -122,26 +122,26 @@ enum AdminChangeRequestStatus {
 }
 
 model AdminChangeRequest {
-  id                     String                   @id @default(cuid())
-  type                   AdminChangeRequestType
-  status                 AdminChangeRequestStatus @default(PENDING)
-  targetId               String
-  targetLabel            String
-  requiredPermission     String
-  payload                Json
-  previousValues         Json?
-  affectedTenantCount    Int                      @default(0)
-  affectedUserCount      Int                      @default(0)
-  requestedById          String
-  decidedById            String?
-  decisionNote           String?
-  reason                 String
-  ticketId               String?
-  rollbackOfId           String?
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime                 @updatedAt
-  decidedAt              DateTime?
-  appliedAt              DateTime?
+  id                  String                   @id @default(cuid())
+  type                AdminChangeRequestType
+  status              AdminChangeRequestStatus @default(PENDING)
+  targetId            String
+  targetLabel         String
+  requiredPermission  String
+  payload             Json
+  previousValues      Json?
+  affectedTenantCount Int                      @default(0)
+  affectedUserCount   Int                      @default(0)
+  requestedById       String
+  decidedById         String?
+  decisionNote        String?
+  reason              String
+  ticketId            String?
+  rollbackOfId        String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  decidedAt           DateTime?
+  appliedAt           DateTime?
 
   requestedBy AdminUser  @relation("AdminChangeRequestRequester", fields: [requestedById], references: [id], onDelete: Restrict)
   decidedBy   AdminUser? @relation("AdminChangeRequestDecider", fields: [decidedById], references: [id], onDelete: Restrict)
@@ -189,24 +189,24 @@ model ObservabilitySlo {
 }
 
 model ObservabilityAlertHistory {
-  id                  String   @id @default(cuid())
+  id                  String    @id @default(cuid())
   fingerprint         String
   metricKey           String
   scope               String
   scopeId             String
   severity            String
-  status              String   @default("OPEN")
-  value               Decimal  @db.Decimal(18, 4)
-  threshold           Decimal  @db.Decimal(18, 4)
+  status              String    @default("OPEN")
+  value               Decimal   @db.Decimal(18, 4)
+  threshold           Decimal   @db.Decimal(18, 4)
   owner               String
   runbookUrl          String
   notificationChannel String
   silencedUntil       DateTime?
   silenceReason       String?
   lastModifiedById    String?
-  openedAt            DateTime @default(now())
+  openedAt            DateTime  @default(now())
   resolvedAt          DateTime?
-  updatedAt           DateTime @updatedAt
+  updatedAt           DateTime  @updatedAt
 
   @@index([fingerprint, status])
   @@index([scope, scopeId, openedAt])
@@ -247,24 +247,24 @@ model ObservabilityLogEntry {
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
-  tenantId   String
-  userId     String?
-  module     String
-  entityType EntityType
-  entityId   String
-  action     AuditAction
-  oldValues  Json?
-  newValues  Json?
-  ipAddress  String?
-  userAgent  String?
-  adminId     String?
-  reason      String?
-  ticketId    String?
-  requestId   String?
-  approvalId  String?
+  id           String      @id @default(cuid())
+  tenantId     String
+  userId       String?
+  module       String
+  entityType   EntityType
+  entityId     String
+  action       AuditAction
+  oldValues    Json?
+  newValues    Json?
+  ipAddress    String?
+  userAgent    String?
+  adminId      String?
+  reason       String?
+  ticketId     String?
+  requestId    String?
+  approvalId   String?
   rollbackOfId String?
-  createdAt  DateTime @default(now())
+  createdAt    DateTime    @default(now())
 
   tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   admin  AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
@@ -280,190 +280,202 @@ model AuditLog {
 }
 
 model TenantSupportNote {
-  id String @id @default(cuid())
-  tenantId String
-  authorId String
-  body String
-  ticketId String?
-  createdAt DateTime @default(now())
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  author AdminUser @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  id        String    @id @default(cuid())
+  tenantId  String
+  authorId  String
+  body      String
+  ticketId  String?
+  createdAt DateTime  @default(now())
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  author    AdminUser @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
   @@index([tenantId, createdAt])
   @@map("tenant_support_notes")
 }
 
 model SupportSession {
-  id String @id @default(cuid())
-  tenantId String
-  adminId String
-  adminSessionId String
-  targetUserId String
-  reason String
-  ticketId String
-  scopes String[]
-  expiresAt DateTime
-  approvedAt DateTime?
-  approvedById String?
-  revokedAt DateTime?
-  writeRequested Boolean @default(false)
-  writeApprovedAt DateTime?
+  id                String    @id @default(cuid())
+  tenantId          String
+  adminId           String
+  adminSessionId    String
+  targetUserId      String
+  reason            String
+  ticketId          String
+  scopes            String[]
+  expiresAt         DateTime
+  approvedAt        DateTime?
+  approvedById      String?
+  revokedAt         DateTime?
+  writeRequested    Boolean   @default(false)
+  writeApprovedAt   DateTime?
   writeApprovedById String?
-  createdAt DateTime @default(now())
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
-  targetUser User @relation(fields: [targetUserId], references: [id], onDelete: Restrict)
+  createdAt         DateTime  @default(now())
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  admin             AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
+  targetUser        User      @relation(fields: [targetUserId], references: [id], onDelete: Restrict)
+
   @@index([tenantId, createdAt])
   @@index([adminId, expiresAt])
   @@map("support_sessions")
 }
 
 model TenantLifecycleRequest {
-  id String @id @default(cuid())
-  tenantId String
-  fromStatus TenantStatus
-  version Int
-  input Json
-  state String @default("PENDING")
-  requestedById String
+  id              String       @id @default(cuid())
+  tenantId        String
+  fromStatus      TenantStatus
+  version         Int
+  input           Json
+  state           String       @default("PENDING")
+  requestedById   String
   requestedByName String
-  decidedById String?
-  createdAt DateTime @default(now())
-  decidedAt DateTime?
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  decidedById     String?
+  createdAt       DateTime     @default(now())
+  decidedAt       DateTime?
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@index([tenantId, createdAt])
   @@map("tenant_lifecycle_requests")
 }
 
 model TenantLifecycleExport {
-  id String @id @default(cuid())
-  tenantId String
-  version Int
-  digest String
-  data Json
+  id          String   @id @default(cuid())
+  tenantId    String
+  version     Int
+  digest      String
+  data        Json
   createdById String
-  createdAt DateTime @default(now())
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@index([tenantId, createdAt])
   @@map("tenant_lifecycle_exports")
 }
 
 model TenantProvisioningJob {
-  id String @id @default(cuid())
-  provisionedTenantId String? @map("tenantId")
-  idempotencyKey String @unique
-  requestHash String
-  input Json
-  status String @default("PENDING")
-  error String?
-  createdById String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tenant Tenant? @relation(fields: [provisionedTenantId], references: [id], onDelete: SetNull)
-  steps TenantProvisioningStep[]
+  id                  String                   @id @default(cuid())
+  provisionedTenantId String?                  @map("tenantId")
+  idempotencyKey      String                   @unique
+  requestHash         String
+  input               Json
+  status              String                   @default("PENDING")
+  error               String?
+  createdById         String
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  tenant              Tenant?                  @relation(fields: [provisionedTenantId], references: [id], onDelete: SetNull)
+  steps               TenantProvisioningStep[]
+
   @@index([provisionedTenantId, createdAt])
   @@map("tenant_provisioning_jobs")
 }
 
 model TenantProvisioningStep {
-  id String @id @default(cuid())
-  jobId String
-  key String
-  status String @default("PENDING")
-  attempts Int @default(0)
-  error String?
-  updatedAt DateTime @updatedAt
-  job TenantProvisioningJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id        String                @id @default(cuid())
+  jobId     String
+  key       String
+  status    String                @default("PENDING")
+  attempts  Int                   @default(0)
+  error     String?
+  updatedAt DateTime              @updatedAt
+  job       TenantProvisioningJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
   @@unique([jobId, key])
   @@map("tenant_provisioning_steps")
 }
 
 model BillingSubscription {
-  id String @id @default(cuid())
-  tenantId String @unique
-  provider String @default("MANUAL")
-  providerCustomerId String?
-  state String @default("TRIALING")
-  monthlyAmount Decimal @default(0) @db.Decimal(12, 2)
-  currency String @default("TRY")
-  dunningAttempt Int @default(0)
-  nextRetryAt DateTime?
-  customUnitPrice Decimal? @db.Decimal(12, 2)
+  id                     String    @id @default(cuid())
+  tenantId               String    @unique
+  provider               String    @default("MANUAL")
+  providerCustomerId     String?
+  state                  String    @default("TRIALING")
+  monthlyAmount          Decimal   @default(0) @db.Decimal(12, 2)
+  currency               String    @default("TRY")
+  dunningAttempt         Int       @default(0)
+  nextRetryAt            DateTime?
+  customUnitPrice        Decimal?  @db.Decimal(12, 2)
   customPricingExpiresAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  tenant                 Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@map("billing_subscriptions")
 }
 
 model BillingInvoice {
-  id String @id @default(cuid())
-  tenantId String
+  id                String    @id @default(cuid())
+  tenantId          String
   providerInvoiceId String?
-  amount Decimal @db.Decimal(12, 2)
-  currency String @default("TRY")
-  status String @default("OPEN")
-  dueAt DateTime
-  paidAt DateTime?
-  failureReason String?
-  createdAt DateTime @default(now())
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  @@index([tenantId, createdAt])
+  amount            Decimal   @db.Decimal(12, 2)
+  currency          String    @default("TRY")
+  status            String    @default("OPEN")
+  dueAt             DateTime
+  paidAt            DateTime?
+  failureReason     String?
+  createdAt         DateTime  @default(now())
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@unique([tenantId, providerInvoiceId])
+  @@index([tenantId, createdAt])
   @@map("billing_invoices")
 }
 
 model BillingProviderEvent {
-  id String @id @default(cuid())
-  provider String
+  id              String   @id @default(cuid())
+  provider        String
   providerEventId String
-  type String
-  payload Json
-  processedAt DateTime @default(now())
+  type            String
+  payload         Json
+  processedAt     DateTime @default(now())
+
   @@unique([provider, providerEventId])
   @@map("billing_provider_events")
 }
 
 model BillingCoupon {
-  id String @id @default(cuid())
-  code String @unique
-  percent Int
-  plan String? // null = tüm planlar geçerli; "STARTER" | "PROFESSIONAL" | "ENTERPRISE"
-  expiresAt DateTime
-  maxRedemptions Int?
-  redemptionCount Int @default(0)
-  isActive Boolean @default(true)
-  description String? // Admin notları / kampanya açıklaması
-  createdAt DateTime @default(now())
-  discounts SubscriptionDiscount[]
+  id              String                 @id @default(cuid())
+  code            String                 @unique
+  percent         Int
+  plan            String? // null = tüm planlar geçerli; "STARTER" | "PROFESSIONAL" | "ENTERPRISE"
+  expiresAt       DateTime
+  maxRedemptions  Int?
+  redemptionCount Int                    @default(0)
+  isActive        Boolean                @default(true)
+  description     String? // Admin notları / kampanya açıklaması
+  createdAt       DateTime               @default(now())
+  discounts       SubscriptionDiscount[]
+
   @@map("billing_coupons")
 }
 
 model SubscriptionDiscount {
-  id String @id @default(cuid())
-  tenantId String
-  couponId String
+  id        String        @id @default(cuid())
+  tenantId  String
+  couponId  String
   expiresAt DateTime
-  createdAt DateTime @default(now())
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  coupon BillingCoupon @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  createdAt DateTime      @default(now())
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  coupon    BillingCoupon @relation(fields: [couponId], references: [id], onDelete: Restrict)
+
   @@unique([tenantId, couponId])
   @@index([tenantId, expiresAt])
   @@map("subscription_discounts")
 }
 
 model CustomPriceRequest {
-  id String @id @default(cuid())
-  tenantId String
-  monthlyAmount Decimal @db.Decimal(12, 2)
-  unitPrice Decimal? @db.Decimal(12, 2)
-  expiresAt DateTime
-  reason String
-  state String @default("PENDING")
+  id            String    @id @default(cuid())
+  tenantId      String
+  monthlyAmount Decimal   @db.Decimal(12, 2)
+  unitPrice     Decimal?  @db.Decimal(12, 2)
+  expiresAt     DateTime
+  reason        String
+  state         String    @default("PENDING")
   requestedById String
-  decidedById String?
-  createdAt DateTime @default(now())
-  decidedAt DateTime?
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  decidedById   String?
+  createdAt     DateTime  @default(now())
+  decidedAt     DateTime?
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@index([tenantId, createdAt])
   @@map("custom_price_requests")
 }
@@ -507,23 +519,23 @@ model AiRequestLog {
 }
 
 model Attachment {
-  id              String   @id @default(cuid())
+  id              String     @id @default(cuid())
   tenantId        String
   entityType      EntityType
   entityId        String
   fileName        String
   storagePath     String
   mimeType        String?
-  fileSize        Int?     // bytes
+  fileSize        Int? // bytes
   category        String?
-  tags            String[] @default([])
+  tags            String[]   @default([])
   documentKind    String?
   confidentiality String?
   validFrom       DateTime?
   validUntil      DateTime?
-  version         Int      @default(1)
+  version         Int        @default(1)
   uploadedById    String?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime   @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -554,15 +566,15 @@ model Notification {
 }
 
 model Currency {
-  id       String   @id @default(cuid())
-  tenantId String
-  code     String
-  name     String
-  symbol   String
+  id          String   @id @default(cuid())
+  tenantId    String
+  code        String
+  name        String
+  symbol      String
   /// Fallback rate when no CurrencyRate row exists for a given date
-  defaultRate Decimal  @db.Decimal(18, 6) @default(1)
-  isBase   Boolean  @default(false)
-  updatedAt DateTime @updatedAt
+  defaultRate Decimal  @default(1) @db.Decimal(18, 6)
+  isBase      Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -571,13 +583,13 @@ model Currency {
 }
 
 model CurrencyRate {
-  id           String   @id @default(cuid())
+  id           String              @id @default(cuid())
   tenantId     String
   currencyCode String
-  rate         Decimal  @db.Decimal(18, 6)
-  date         DateTime @db.Date
+  rate         Decimal             @db.Decimal(18, 6)
+  date         DateTime            @db.Date
   source       CurrencyRateSource?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime            @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

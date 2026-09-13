@@ -1,100 +1,163 @@
-import { Hono } from 'hono';
-import { FeatureKey } from '@prisma/client';
-import { apiKeyRateLimit, authenticateApiKey, requireScope } from '../middleware/authenticateApiKey';
-import { requireFeature } from '../middleware/requireFeature';
-import { prisma } from '../lib/prisma';
-import { ValidationError, NotFoundError } from '../errors';
-import { requireTenantId, requireParam } from '../utils/context.js';
-import { validateTenantOwnership, buildOwnershipChecks } from '../utils/validateTenantOwnership';
-import { getExternalApiManifest, getExternalOpenApiDocument } from '../services/external-api-registry.service.js';
+import { Hono } from "hono";
+import { FeatureKey } from "@prisma/client";
+import {
+  apiKeyRateLimit,
+  authenticateApiKey,
+  requireScope,
+} from "../middleware/authenticateApiKey";
+import { requireFeature } from "../middleware/requireFeature";
+import { prisma } from "../lib/prisma";
+import { ValidationError, NotFoundError } from "../errors";
+import { requireTenantId, requireParam } from "../utils/context.js";
+import {
+  validateTenantOwnership,
+  buildOwnershipChecks,
+} from "../utils/validateTenantOwnership";
+import {
+  getExternalApiManifest,
+  getExternalOpenApiDocument,
+} from "../services/external-api-registry.service.js";
 
 const externalRoutes = new Hono();
 
-externalRoutes.get('/manifest', (c) => c.json({ data: getExternalApiManifest() }));
-externalRoutes.get('/openapi.json', (c) => {
+externalRoutes.get("/manifest", (c) =>
+  c.json({ data: getExternalApiManifest() }),
+);
+externalRoutes.get("/openapi.json", (c) => {
   const origin = new URL(c.req.url).origin;
   return c.json(getExternalOpenApiDocument(origin));
 });
 
-externalRoutes.use('*', authenticateApiKey());
-externalRoutes.use('*', apiKeyRateLimit());
-externalRoutes.use('*', requireFeature(FeatureKey.API_ACCESS));
+externalRoutes.use("*", authenticateApiKey());
+externalRoutes.use("*", apiKeyRateLimit());
+externalRoutes.use("*", requireFeature(FeatureKey.API_ACCESS));
 
 // ═══════════════════════════════════════════
 // PRODUCTS
 // ═══════════════════════════════════════════
 
-externalRoutes.get('/products', requireScope('products:read'), async (c) => {
+externalRoutes.get("/products", requireScope("products:read"), async (c) => {
   const tenantId = requireTenantId(c);
-  const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+  const page = Math.max(1, parseInt(c.req.query("page") ?? "1", 10));
+  const limit = Math.min(
+    100,
+    Math.max(1, parseInt(c.req.query("limit") ?? "20", 10)),
+  );
 
   const [total, products] = await prisma.$transaction([
     prisma.product.count({ where: { tenantId, deletedAt: null } }),
     prisma.product.findMany({
       where: { tenantId, deletedAt: null },
       select: {
-        id: true, code: true, name: true, barcode: true,
-        purchasePrice: true, salesPrice: true, averageCost: true,
-        isActive: true, createdAt: true, updatedAt: true,
+        id: true,
+        code: true,
+        name: true,
+        barcode: true,
+        purchasePrice: true,
+        salesPrice: true,
+        averageCost: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
         category: { select: { id: true, name: true } },
         unit: { select: { id: true, name: true, code: true } },
       },
-      orderBy: { code: 'asc' },
+      orderBy: { code: "asc" },
       skip: (page - 1) * limit,
       take: limit,
     }),
   ]);
 
-  return c.json({ data: products, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
-});
-
-externalRoutes.get('/products/:id', requireScope('products:read'), async (c) => {
-  const tenantId = requireTenantId(c);
-  const id = requireParam(c, 'id');
-
-  const product = await prisma.product.findFirst({
-    where: { id, tenantId, deletedAt: null },
-    select: {
-      id: true, code: true, name: true, barcode: true, description: true,
-      purchasePrice: true, salesPrice: true, averageCost: true, minStockLevel: true,
-      isActive: true, createdAt: true, updatedAt: true,
-      category: { select: { id: true, name: true } },
-      unit: { select: { id: true, name: true, code: true } },
-      taxRate: { select: { id: true, name: true, rate: true } },
+  return c.json({
+    data: products,
+    meta: {
+      total,
+      page,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit),
     },
   });
-
-  if (!product) return c.json(new NotFoundError('Ürün', id).toJSON(), 404);
-  return c.json({ data: product });
 });
 
-externalRoutes.post('/products', requireScope('products:write'), async (c) => {
+externalRoutes.get(
+  "/products/:id",
+  requireScope("products:read"),
+  async (c) => {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, "id");
+
+    const product = await prisma.product.findFirst({
+      where: { id, tenantId, deletedAt: null },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        barcode: true,
+        description: true,
+        purchasePrice: true,
+        salesPrice: true,
+        averageCost: true,
+        minStockLevel: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        category: { select: { id: true, name: true } },
+        unit: { select: { id: true, name: true, code: true } },
+        taxRate: { select: { id: true, name: true, rate: true } },
+      },
+    });
+
+    if (!product) return c.json(new NotFoundError("Ürün", id).toJSON(), 404);
+    return c.json({ data: product });
+  },
+);
+
+externalRoutes.post("/products", requireScope("products:write"), async (c) => {
   const tenantId = requireTenantId(c);
   const body = await c.req.json<{
-    code: string; name: string; unitId: string;
-    barcode?: string; description?: string; categoryId?: string; taxRateId?: string;
-    purchasePrice?: number; salesPrice?: number; minStockLevel?: number;
+    code: string;
+    name: string;
+    unitId: string;
+    barcode?: string;
+    description?: string;
+    categoryId?: string;
+    taxRateId?: string;
+    purchasePrice?: number;
+    salesPrice?: number;
+    minStockLevel?: number;
   }>();
 
   if (!body.code || !body.name || !body.unitId) {
-    return c.json(new ValidationError('code, name ve unitId zorunludur.').toJSON(), 400);
+    return c.json(
+      new ValidationError("code, name ve unitId zorunludur.").toJSON(),
+      400,
+    );
   }
 
   const product = await prisma.$transaction(async (tx) => {
     // Body'deki ilişkili ID'lerin bu tenant'a ait olduğunu doğrula
-    await validateTenantOwnership(tenantId, buildOwnershipChecks([
-      { model: 'unit', id: body.unitId, label: 'Birim' },
-      { model: 'category', id: body.categoryId, label: 'Kategori' },
-      { model: 'taxRate', id: body.taxRateId, label: 'Vergi oranı' },
-    ]), tx);
+    await validateTenantOwnership(
+      tenantId,
+      buildOwnershipChecks([
+        { model: "unit", id: body.unitId, label: "Birim" },
+        { model: "category", id: body.categoryId, label: "Kategori" },
+        { model: "taxRate", id: body.taxRateId, label: "Vergi oranı" },
+      ]),
+      tx,
+    );
 
     return tx.product.create({
       data: {
-        tenantId, code: body.code, name: body.name, unitId: body.unitId,
-        barcode: body.barcode ?? null, description: body.description ?? null,
-        categoryId: body.categoryId ?? null, taxRateId: body.taxRateId ?? null,
-        purchasePrice: body.purchasePrice ?? 0, salesPrice: body.salesPrice ?? 0,
+        tenantId,
+        code: body.code,
+        name: body.name,
+        unitId: body.unitId,
+        barcode: body.barcode ?? null,
+        description: body.description ?? null,
+        categoryId: body.categoryId ?? null,
+        taxRateId: body.taxRateId ?? null,
+        purchasePrice: body.purchasePrice ?? 0,
+        salesPrice: body.salesPrice ?? 0,
         minStockLevel: body.minStockLevel ?? 0,
       },
       select: { id: true, code: true, name: true, createdAt: true },
@@ -104,111 +167,189 @@ externalRoutes.post('/products', requireScope('products:write'), async (c) => {
   return c.json({ data: product }, 201);
 });
 
-externalRoutes.patch('/products/:id', requireScope('products:write'), async (c) => {
-  const tenantId = requireTenantId(c);
-  const id = requireParam(c, 'id');
-  const body = await c.req.json<{
-    name?: string; barcode?: string; description?: string;
-    purchasePrice?: number; salesPrice?: number; minStockLevel?: number; isActive?: boolean;
-  }>();
+externalRoutes.patch(
+  "/products/:id",
+  requireScope("products:write"),
+  async (c) => {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, "id");
+    const body = await c.req.json<{
+      name?: string;
+      barcode?: string;
+      description?: string;
+      purchasePrice?: number;
+      salesPrice?: number;
+      minStockLevel?: number;
+      isActive?: boolean;
+    }>();
 
-  const existing = await prisma.product.findFirst({ where: { id, tenantId, deletedAt: null } });
-  if (!existing) return c.json(new NotFoundError('Ürün', id).toJSON(), 404);
+    const existing = await prisma.product.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+    if (!existing) return c.json(new NotFoundError("Ürün", id).toJSON(), 404);
 
-  const updated = await prisma.product.update({
-    where: { id },
-    data: {
-      ...(body.name !== undefined && { name: body.name }),
-      ...(body.barcode !== undefined && { barcode: body.barcode }),
-      ...(body.description !== undefined && { description: body.description }),
-      ...(body.purchasePrice !== undefined && { purchasePrice: body.purchasePrice }),
-      ...(body.salesPrice !== undefined && { salesPrice: body.salesPrice }),
-      ...(body.minStockLevel !== undefined && { minStockLevel: body.minStockLevel }),
-      ...(body.isActive !== undefined && { isActive: body.isActive }),
-    },
-    select: { id: true, code: true, name: true, updatedAt: true },
-  });
+    const updated = await prisma.product.update({
+      where: { id },
+      data: {
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.barcode !== undefined && { barcode: body.barcode }),
+        ...(body.description !== undefined && {
+          description: body.description,
+        }),
+        ...(body.purchasePrice !== undefined && {
+          purchasePrice: body.purchasePrice,
+        }),
+        ...(body.salesPrice !== undefined && { salesPrice: body.salesPrice }),
+        ...(body.minStockLevel !== undefined && {
+          minStockLevel: body.minStockLevel,
+        }),
+        ...(body.isActive !== undefined && { isActive: body.isActive }),
+      },
+      select: { id: true, code: true, name: true, updatedAt: true },
+    });
 
-  return c.json({ data: updated });
-});
+    return c.json({ data: updated });
+  },
+);
 
-externalRoutes.delete('/products/:id', requireScope('products:delete'), async (c) => {
-  const tenantId = requireTenantId(c);
-  const id = requireParam(c, 'id');
+externalRoutes.delete(
+  "/products/:id",
+  requireScope("products:delete"),
+  async (c) => {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, "id");
 
-  const existing = await prisma.product.findFirst({ where: { id, tenantId, deletedAt: null } });
-  if (!existing) return c.json(new NotFoundError('Ürün', id).toJSON(), 404);
+    const existing = await prisma.product.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+    if (!existing) return c.json(new NotFoundError("Ürün", id).toJSON(), 404);
 
-  await prisma.product.update({ where: { id }, data: { deletedAt: new Date() } });
-  return c.json({ data: { success: true } });
-});
+    await prisma.product.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    return c.json({ data: { success: true } });
+  },
+);
 
 // ═══════════════════════════════════════════
 // CONTACTS
 // ═══════════════════════════════════════════
 
-externalRoutes.get('/contacts', requireScope('contacts:read'), async (c) => {
+externalRoutes.get("/contacts", requireScope("contacts:read"), async (c) => {
   const tenantId = requireTenantId(c);
-  const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+  const page = Math.max(1, parseInt(c.req.query("page") ?? "1", 10));
+  const limit = Math.min(
+    100,
+    Math.max(1, parseInt(c.req.query("limit") ?? "20", 10)),
+  );
 
   const [total, contacts] = await prisma.$transaction([
     prisma.contact.count({ where: { tenantId, deletedAt: null } }),
     prisma.contact.findMany({
       where: { tenantId, deletedAt: null },
       select: {
-        id: true, type: true, code: true, name: true,
-        taxNumber: true, email: true, phone: true, city: true,
-        isActive: true, createdAt: true, updatedAt: true,
+        id: true,
+        type: true,
+        code: true,
+        name: true,
+        taxNumber: true,
+        email: true,
+        phone: true,
+        city: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
       },
-      orderBy: { name: 'asc' },
+      orderBy: { name: "asc" },
       skip: (page - 1) * limit,
       take: limit,
     }),
   ]);
 
-  return c.json({ data: contacts, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
-});
-
-externalRoutes.get('/contacts/:id', requireScope('contacts:read'), async (c) => {
-  const tenantId = requireTenantId(c);
-  const id = requireParam(c, 'id');
-
-  const contact = await prisma.contact.findFirst({
-    where: { id, tenantId, deletedAt: null },
-    select: {
-      id: true, type: true, code: true, name: true,
-      taxNumber: true, taxOffice: true, email: true, phone: true,
-      address: true, city: true, country: true, notes: true,
-      creditLimit: true, paymentTermDays: true,
-      isActive: true, createdAt: true, updatedAt: true,
+  return c.json({
+    data: contacts,
+    meta: {
+      total,
+      page,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit),
     },
   });
-
-  if (!contact) return c.json(new NotFoundError('Cari hesap', id).toJSON(), 404);
-  return c.json({ data: contact });
 });
 
-externalRoutes.post('/contacts', requireScope('contacts:write'), async (c) => {
+externalRoutes.get(
+  "/contacts/:id",
+  requireScope("contacts:read"),
+  async (c) => {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, "id");
+
+    const contact = await prisma.contact.findFirst({
+      where: { id, tenantId, deletedAt: null },
+      select: {
+        id: true,
+        type: true,
+        code: true,
+        name: true,
+        taxNumber: true,
+        taxOffice: true,
+        email: true,
+        phone: true,
+        address: true,
+        city: true,
+        country: true,
+        notes: true,
+        creditLimit: true,
+        paymentTermDays: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!contact)
+      return c.json(new NotFoundError("Cari hesap", id).toJSON(), 404);
+    return c.json({ data: contact });
+  },
+);
+
+externalRoutes.post("/contacts", requireScope("contacts:write"), async (c) => {
   const tenantId = requireTenantId(c);
   const body = await c.req.json<{
-    type: 'CUSTOMER' | 'SUPPLIER' | 'BOTH'; name: string;
-    code?: string; taxNumber?: string; taxOffice?: string;
-    email?: string; phone?: string; address?: string; city?: string;
-    creditLimit?: number; paymentTermDays?: number;
+    type: "CUSTOMER" | "SUPPLIER" | "BOTH";
+    name: string;
+    code?: string;
+    taxNumber?: string;
+    taxOffice?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    creditLimit?: number;
+    paymentTermDays?: number;
   }>();
 
   if (!body.type || !body.name) {
-    return c.json(new ValidationError('type ve name zorunludur.').toJSON(), 400);
+    return c.json(
+      new ValidationError("type ve name zorunludur.").toJSON(),
+      400,
+    );
   }
 
   const contact = await prisma.contact.create({
     data: {
-      tenantId, type: body.type, name: body.name,
-      code: body.code ?? null, taxNumber: body.taxNumber ?? null,
-      taxOffice: body.taxOffice ?? null, email: body.email ?? null,
-      phone: body.phone ?? null, address: body.address ?? null,
-      city: body.city ?? null, creditLimit: body.creditLimit ?? null,
+      tenantId,
+      type: body.type,
+      name: body.name,
+      code: body.code ?? null,
+      taxNumber: body.taxNumber ?? null,
+      taxOffice: body.taxOffice ?? null,
+      email: body.email ?? null,
+      phone: body.phone ?? null,
+      address: body.address ?? null,
+      city: body.city ?? null,
+      creditLimit: body.creditLimit ?? null,
       paymentTermDays: body.paymentTermDays ?? null,
     },
     select: { id: true, type: true, code: true, name: true, createdAt: true },
@@ -217,127 +358,227 @@ externalRoutes.post('/contacts', requireScope('contacts:write'), async (c) => {
   return c.json({ data: contact }, 201);
 });
 
-externalRoutes.patch('/contacts/:id', requireScope('contacts:write'), async (c) => {
-  const tenantId = requireTenantId(c);
-  const id = requireParam(c, 'id');
-  const body = await c.req.json<{
-    name?: string; email?: string; phone?: string; address?: string; city?: string;
-    creditLimit?: number; paymentTermDays?: number; isActive?: boolean;
-  }>();
+externalRoutes.patch(
+  "/contacts/:id",
+  requireScope("contacts:write"),
+  async (c) => {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, "id");
+    const body = await c.req.json<{
+      name?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
+      city?: string;
+      creditLimit?: number;
+      paymentTermDays?: number;
+      isActive?: boolean;
+    }>();
 
-  const existing = await prisma.contact.findFirst({ where: { id, tenantId, deletedAt: null } });
-  if (!existing) return c.json(new NotFoundError('Cari hesap', id).toJSON(), 404);
+    const existing = await prisma.contact.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+    if (!existing)
+      return c.json(new NotFoundError("Cari hesap", id).toJSON(), 404);
 
-  const updated = await prisma.contact.update({
-    where: { id },
-    data: {
-      ...(body.name !== undefined && { name: body.name }),
-      ...(body.email !== undefined && { email: body.email }),
-      ...(body.phone !== undefined && { phone: body.phone }),
-      ...(body.address !== undefined && { address: body.address }),
-      ...(body.city !== undefined && { city: body.city }),
-      ...(body.creditLimit !== undefined && { creditLimit: body.creditLimit }),
-      ...(body.paymentTermDays !== undefined && { paymentTermDays: body.paymentTermDays }),
-      ...(body.isActive !== undefined && { isActive: body.isActive }),
-    },
-    select: { id: true, code: true, name: true, updatedAt: true },
-  });
+    const updated = await prisma.contact.update({
+      where: { id },
+      data: {
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.email !== undefined && { email: body.email }),
+        ...(body.phone !== undefined && { phone: body.phone }),
+        ...(body.address !== undefined && { address: body.address }),
+        ...(body.city !== undefined && { city: body.city }),
+        ...(body.creditLimit !== undefined && {
+          creditLimit: body.creditLimit,
+        }),
+        ...(body.paymentTermDays !== undefined && {
+          paymentTermDays: body.paymentTermDays,
+        }),
+        ...(body.isActive !== undefined && { isActive: body.isActive }),
+      },
+      select: { id: true, code: true, name: true, updatedAt: true },
+    });
 
-  return c.json({ data: updated });
-});
+    return c.json({ data: updated });
+  },
+);
 
-externalRoutes.delete('/contacts/:id', requireScope('contacts:delete'), async (c) => {
-  const tenantId = requireTenantId(c);
-  const id = requireParam(c, 'id');
+externalRoutes.delete(
+  "/contacts/:id",
+  requireScope("contacts:delete"),
+  async (c) => {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, "id");
 
-  const existing = await prisma.contact.findFirst({ where: { id, tenantId, deletedAt: null } });
-  if (!existing) return c.json(new NotFoundError('Cari hesap', id).toJSON(), 404);
+    const existing = await prisma.contact.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+    if (!existing)
+      return c.json(new NotFoundError("Cari hesap", id).toJSON(), 404);
 
-  await prisma.contact.update({ where: { id }, data: { deletedAt: new Date() } });
-  return c.json({ data: { success: true } });
-});
+    await prisma.contact.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    return c.json({ data: { success: true } });
+  },
+);
 
 // ═══════════════════════════════════════════
 // INVOICES
 // ═══════════════════════════════════════════
 
-externalRoutes.get('/invoices', requireScope('invoices:read'), async (c) => {
+externalRoutes.get("/invoices", requireScope("invoices:read"), async (c) => {
   const tenantId = requireTenantId(c);
-  const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+  const page = Math.max(1, parseInt(c.req.query("page") ?? "1", 10));
+  const limit = Math.min(
+    100,
+    Math.max(1, parseInt(c.req.query("limit") ?? "20", 10)),
+  );
 
   const [total, invoices] = await prisma.$transaction([
     prisma.invoice.count({ where: { tenantId, deletedAt: null } }),
     prisma.invoice.findMany({
       where: { tenantId, deletedAt: null },
       select: {
-        id: true, number: true, type: true, status: true,
-        date: true, dueDate: true,
-        totalNet: true, totalTax: true, totalGross: true,
-        currencyCode: true, createdAt: true, updatedAt: true,
+        id: true,
+        number: true,
+        type: true,
+        status: true,
+        date: true,
+        dueDate: true,
+        totalNet: true,
+        totalTax: true,
+        totalGross: true,
+        currencyCode: true,
+        createdAt: true,
+        updatedAt: true,
         contact: { select: { id: true, name: true, code: true } },
       },
-      orderBy: { date: 'desc' },
+      orderBy: { date: "desc" },
       skip: (page - 1) * limit,
       take: limit,
     }),
   ]);
 
-  return c.json({ data: invoices, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
-});
-
-externalRoutes.get('/invoices/:id', requireScope('invoices:read'), async (c) => {
-  const tenantId = requireTenantId(c);
-  const id = requireParam(c, 'id');
-
-  const invoice = await prisma.invoice.findFirst({
-    where: { id, tenantId, deletedAt: null },
-    select: {
-      id: true, number: true, type: true, status: true,
-      date: true, dueDate: true, notes: true,
-      totalNet: true, totalTax: true, totalGross: true,
-      currencyCode: true, exchangeRate: true,
-      createdAt: true, updatedAt: true,
-      contact: { select: { id: true, name: true, code: true } },
-      lines: {
-        select: {
-          id: true, description: true, quantity: true, unitPrice: true,
-          discount: true, taxAmount: true, lineTotal: true,
-          product: { select: { id: true, code: true, name: true } },
-        },
-        orderBy: { sortOrder: 'asc' },
-      },
+  return c.json({
+    data: invoices,
+    meta: {
+      total,
+      page,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit),
     },
   });
-
-  if (!invoice) return c.json(new NotFoundError('Fatura', id).toJSON(), 404);
-  return c.json({ data: invoice });
 });
 
-externalRoutes.post('/invoices', requireScope('invoices:write'), async (c) => {
+externalRoutes.get(
+  "/invoices/:id",
+  requireScope("invoices:read"),
+  async (c) => {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, "id");
+
+    const invoice = await prisma.invoice.findFirst({
+      where: { id, tenantId, deletedAt: null },
+      select: {
+        id: true,
+        number: true,
+        type: true,
+        status: true,
+        date: true,
+        dueDate: true,
+        notes: true,
+        totalNet: true,
+        totalTax: true,
+        totalGross: true,
+        currencyCode: true,
+        exchangeRate: true,
+        createdAt: true,
+        updatedAt: true,
+        contact: { select: { id: true, name: true, code: true } },
+        lines: {
+          select: {
+            id: true,
+            description: true,
+            quantity: true,
+            unitPrice: true,
+            discount: true,
+            taxAmount: true,
+            lineTotal: true,
+            product: { select: { id: true, code: true, name: true } },
+          },
+          orderBy: { sortOrder: "asc" },
+        },
+      },
+    });
+
+    if (!invoice) return c.json(new NotFoundError("Fatura", id).toJSON(), 404);
+    return c.json({ data: invoice });
+  },
+);
+
+externalRoutes.post("/invoices", requireScope("invoices:write"), async (c) => {
   const tenantId = requireTenantId(c);
   const body = await c.req.json<{
-    contactId: string; type: 'SALES' | 'PURCHASE'; number: string;
-    date: string; dueDate?: string; notes?: string; currencyCode?: string;
+    contactId: string;
+    type: "SALES" | "PURCHASE";
+    number: string;
+    date: string;
+    dueDate?: string;
+    notes?: string;
+    currencyCode?: string;
     lines: Array<{
-      description: string; quantity: number; unitPrice: number;
-      productId?: string; taxRateId?: string; discount?: number;
+      description: string;
+      quantity: number;
+      unitPrice: number;
+      productId?: string;
+      taxRateId?: string;
+      discount?: number;
     }>;
   }>();
 
-  if (!body.contactId || !body.type || !body.number || !body.date || !body.lines?.length) {
-    return c.json(new ValidationError('contactId, type, number, date ve en az bir satır zorunludur.').toJSON(), 400);
+  if (
+    !body.contactId ||
+    !body.type ||
+    !body.number ||
+    !body.date ||
+    !body.lines?.length
+  ) {
+    return c.json(
+      new ValidationError(
+        "contactId, type, number, date ve en az bir satır zorunludur.",
+      ).toJSON(),
+      400,
+    );
   }
 
   const invoice = await prisma.$transaction(async (tx) => {
     // Body'deki ilişkili ID'lerin bu tenant'a ait olduğunu doğrula
-    const lineProductIds = body.lines.map((l) => l.productId).filter((id): id is string => typeof id === 'string');
-    const lineTaxRateIds = body.lines.map((l) => l.taxRateId).filter((id): id is string => typeof id === 'string');
-    await validateTenantOwnership(tenantId, buildOwnershipChecks([
-      { model: 'contact', id: body.contactId, label: 'Cari hesap' },
-      ...lineProductIds.map((id) => ({ model: 'product' as const, id, label: 'Ürün' })),
-      ...lineTaxRateIds.map((id) => ({ model: 'taxRate' as const, id, label: 'Vergi oranı' })),
-    ]), tx);
+    const lineProductIds = body.lines
+      .map((l) => l.productId)
+      .filter((id): id is string => typeof id === "string");
+    const lineTaxRateIds = body.lines
+      .map((l) => l.taxRateId)
+      .filter((id): id is string => typeof id === "string");
+    await validateTenantOwnership(
+      tenantId,
+      buildOwnershipChecks([
+        { model: "contact", id: body.contactId, label: "Cari hesap" },
+        ...lineProductIds.map((id) => ({
+          model: "product" as const,
+          id,
+          label: "Ürün",
+        })),
+        ...lineTaxRateIds.map((id) => ({
+          model: "taxRate" as const,
+          id,
+          label: "Vergi oranı",
+        })),
+      ]),
+      tx,
+    );
 
     // Calculate totals
     let totalNet = 0;
@@ -365,212 +606,349 @@ externalRoutes.post('/invoices', requireScope('invoices:write'), async (c) => {
 
     return tx.invoice.create({
       data: {
-        tenantId, contactId: body.contactId, type: body.type,
-        number: body.number, date: new Date(body.date),
+        tenantId,
+        contactId: body.contactId,
+        type: body.type,
+        number: body.number,
+        date: new Date(body.date),
         dueDate: body.dueDate ? new Date(body.dueDate) : null,
-        notes: body.notes ?? null, currencyCode: body.currencyCode ?? 'TRY',
-        totalNet, totalTax, totalGross,
+        notes: body.notes ?? null,
+        currencyCode: body.currencyCode ?? "TRY",
+        totalNet,
+        totalTax,
+        totalGross,
         lines: { create: lineData },
       },
-      select: { id: true, number: true, type: true, status: true, totalGross: true, createdAt: true },
+      select: {
+        id: true,
+        number: true,
+        type: true,
+        status: true,
+        totalGross: true,
+        createdAt: true,
+      },
     });
   });
 
   return c.json({ data: invoice }, 201);
 });
 
-externalRoutes.post('/invoices/:id/cancel', requireScope('invoices:delete'), async (c) => {
-  const tenantId = requireTenantId(c);
-  const id = requireParam(c, 'id');
+externalRoutes.post(
+  "/invoices/:id/cancel",
+  requireScope("invoices:delete"),
+  async (c) => {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, "id");
 
-  const existing = await prisma.invoice.findFirst({ where: { id, tenantId, deletedAt: null } });
-  if (!existing) return c.json(new NotFoundError('Fatura', id).toJSON(), 404);
-  if (existing.status === 'CANCELLED') return c.json(new ValidationError('Fatura zaten iptal edilmiş.').toJSON(), 400);
+    const existing = await prisma.invoice.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+    if (!existing) return c.json(new NotFoundError("Fatura", id).toJSON(), 404);
+    if (existing.status === "CANCELLED")
+      return c.json(
+        new ValidationError("Fatura zaten iptal edilmiş.").toJSON(),
+        400,
+      );
 
-  const updated = await prisma.invoice.update({
-    where: { id },
-    data: { status: 'CANCELLED' },
-    select: { id: true, number: true, status: true, updatedAt: true },
-  });
+    const updated = await prisma.invoice.update({
+      where: { id },
+      data: { status: "CANCELLED" },
+      select: { id: true, number: true, status: true, updatedAt: true },
+    });
 
-  return c.json({ data: updated });
-});
+    return c.json({ data: updated });
+  },
+);
 
 // ═══════════════════════════════════════════
 // STOCK
 // ═══════════════════════════════════════════
 
-externalRoutes.get('/stock-levels', requireScope('inventory:read'), async (c) => {
-  const tenantId = requireTenantId(c);
-  const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '50', 10)));
+externalRoutes.get(
+  "/stock-levels",
+  requireScope("inventory:read"),
+  async (c) => {
+    const tenantId = requireTenantId(c);
+    const page = Math.max(1, parseInt(c.req.query("page") ?? "1", 10));
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(c.req.query("limit") ?? "50", 10)),
+    );
 
-  const [total, levels] = await prisma.$transaction([
-    prisma.stockLevel.count({ where: { tenantId } }),
-    prisma.stockLevel.findMany({
-      where: { tenantId },
-      select: {
-        id: true, quantity: true,
-        product: { select: { id: true, code: true, name: true } },
-        warehouse: { select: { id: true, code: true, name: true } },
+    const [total, levels] = await prisma.$transaction([
+      prisma.stockLevel.count({ where: { tenantId } }),
+      prisma.stockLevel.findMany({
+        where: { tenantId },
+        select: {
+          id: true,
+          quantity: true,
+          product: { select: { id: true, code: true, name: true } },
+          warehouse: { select: { id: true, code: true, name: true } },
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    return c.json({
+      data: levels,
+      meta: {
+        total,
+        page,
+        pageSize: limit,
+        totalPages: Math.ceil(total / limit),
       },
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-  ]);
-
-  return c.json({ data: levels, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
-});
-
-externalRoutes.post('/stock-movements', requireScope('inventory:write'), async (c) => {
-  const tenantId = requireTenantId(c);
-  const body = await c.req.json<{
-    productId: string; type: 'IN' | 'OUT' | 'ADJUSTMENT';
-    quantity: number; toWarehouseId?: string; fromWarehouseId?: string; notes?: string;
-  }>();
-
-  if (!body.productId || !body.type || !body.quantity) {
-    return c.json(new ValidationError('productId, type ve quantity zorunludur.').toJSON(), 400);
-  }
-
-  // IN ve ADJUSTMENT için toWarehouseId zorunlu, OUT için fromWarehouseId zorunlu
-  const warehouseId = body.type === 'OUT' ? body.fromWarehouseId : body.toWarehouseId;
-  if (!warehouseId) {
-    return c.json(new ValidationError(
-      body.type === 'OUT'
-        ? 'OUT hareketi için fromWarehouseId zorunludur.'
-        : 'IN/ADJUSTMENT hareketi için toWarehouseId zorunludur.'
-    ).toJSON(), 400);
-  }
-
-  // Transaction: movement + stockLevel güncelleme
-  const result = await prisma.$transaction(async (tx) => {
-    // Body'deki ilişkili ID'lerin bu tenant'a ait olduğunu doğrula
-    await validateTenantOwnership(tenantId, buildOwnershipChecks([
-      { model: 'product', id: body.productId, label: 'Ürün' },
-      { model: 'warehouse', id: body.toWarehouseId, label: 'Hedef depo' },
-      { model: 'warehouse', id: body.fromWarehouseId, label: 'Kaynak depo' },
-    ]), tx);
-    const movement = await tx.stockMovement.create({
-      data: {
-        tenantId, productId: body.productId,
-        type: body.type, quantity: body.quantity,
-        toWarehouseId: body.toWarehouseId ?? null,
-        fromWarehouseId: body.fromWarehouseId ?? null,
-        notes: body.notes ?? null,
-      },
-      select: { id: true, type: true, quantity: true, createdAt: true },
     });
+  },
+);
 
-    // StockLevel güncelle (upsert)
-    const quantityDelta = body.type === 'OUT' ? -body.quantity : body.quantity;
+externalRoutes.post(
+  "/stock-movements",
+  requireScope("inventory:write"),
+  async (c) => {
+    const tenantId = requireTenantId(c);
+    const body = await c.req.json<{
+      productId: string;
+      type: "IN" | "OUT" | "ADJUSTMENT";
+      quantity: number;
+      toWarehouseId?: string;
+      fromWarehouseId?: string;
+      notes?: string;
+    }>();
 
-    const existing = await tx.stockLevel.findFirst({
-      where: { tenantId, productId: body.productId, warehouseId },
-    });
-
-    if (existing) {
-      const newQty = Number(existing.quantity) + quantityDelta;
-      if (newQty < 0) throw new Error(`Yetersiz stok. Mevcut: ${existing.quantity}, Talep: ${body.quantity}`);
-      await tx.stockLevel.update({
-        where: { id: existing.id },
-        data: { quantity: newQty },
-      });
-    } else {
-      if (quantityDelta < 0) throw new Error('Stok kaydı bulunamadı, çıkış yapılamaz.');
-      await tx.stockLevel.create({
-        data: { tenantId, productId: body.productId, warehouseId, quantity: quantityDelta },
-      });
+    if (!body.productId || !body.type || !body.quantity) {
+      return c.json(
+        new ValidationError("productId, type ve quantity zorunludur.").toJSON(),
+        400,
+      );
     }
 
-    // OUT'ta fromWarehouse, IN'de toWarehouse güncellendi.
-    // TRANSFER durumunda her iki depo da güncellenmeli (şimdilik desteklenmiyor, ayrı endpoint gerekir)
+    // IN ve ADJUSTMENT için toWarehouseId zorunlu, OUT için fromWarehouseId zorunlu
+    const warehouseId =
+      body.type === "OUT" ? body.fromWarehouseId : body.toWarehouseId;
+    if (!warehouseId) {
+      return c.json(
+        new ValidationError(
+          body.type === "OUT"
+            ? "OUT hareketi için fromWarehouseId zorunludur."
+            : "IN/ADJUSTMENT hareketi için toWarehouseId zorunludur.",
+        ).toJSON(),
+        400,
+      );
+    }
 
-    return movement;
-  });
+    // Transaction: movement + stockLevel güncelleme
+    const result = await prisma.$transaction(async (tx) => {
+      // Body'deki ilişkili ID'lerin bu tenant'a ait olduğunu doğrula
+      await validateTenantOwnership(
+        tenantId,
+        buildOwnershipChecks([
+          { model: "product", id: body.productId, label: "Ürün" },
+          { model: "warehouse", id: body.toWarehouseId, label: "Hedef depo" },
+          {
+            model: "warehouse",
+            id: body.fromWarehouseId,
+            label: "Kaynak depo",
+          },
+        ]),
+        tx,
+      );
+      const movement = await tx.stockMovement.create({
+        data: {
+          tenantId,
+          productId: body.productId,
+          type: body.type,
+          quantity: body.quantity,
+          toWarehouseId: body.toWarehouseId ?? null,
+          fromWarehouseId: body.fromWarehouseId ?? null,
+          notes: body.notes ?? null,
+        },
+        select: { id: true, type: true, quantity: true, createdAt: true },
+      });
 
-  return c.json({ data: result }, 201);
-});
+      // StockLevel güncelle (upsert)
+      const quantityDelta =
+        body.type === "OUT" ? -body.quantity : body.quantity;
+
+      const existing = await tx.stockLevel.findFirst({
+        where: { tenantId, productId: body.productId, warehouseId },
+      });
+
+      if (existing) {
+        const newQty = Number(existing.quantity) + quantityDelta;
+        if (newQty < 0)
+          throw new Error(
+            `Yetersiz stok. Mevcut: ${existing.quantity}, Talep: ${body.quantity}`,
+          );
+        await tx.stockLevel.update({
+          where: { id: existing.id },
+          data: { quantity: newQty },
+        });
+      } else {
+        if (quantityDelta < 0)
+          throw new Error("Stok kaydı bulunamadı, çıkış yapılamaz.");
+        await tx.stockLevel.create({
+          data: {
+            tenantId,
+            productId: body.productId,
+            warehouseId,
+            quantity: quantityDelta,
+          },
+        });
+      }
+
+      // OUT'ta fromWarehouse, IN'de toWarehouse güncellendi.
+      // TRANSFER durumunda her iki depo da güncellenmeli (şimdilik desteklenmiyor, ayrı endpoint gerekir)
+
+      return movement;
+    });
+
+    return c.json({ data: result }, 201);
+  },
+);
 
 // ═══════════════════════════════════════════
 // WEBHOOKS / ORDERS (read-only for now)
 // ═══════════════════════════════════════════
 
-externalRoutes.get('/sales-orders', requireScope('orders:read'), async (c) => {
+externalRoutes.get("/sales-orders", requireScope("orders:read"), async (c) => {
   const tenantId = requireTenantId(c);
-  const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+  const page = Math.max(1, parseInt(c.req.query("page") ?? "1", 10));
+  const limit = Math.min(
+    100,
+    Math.max(1, parseInt(c.req.query("limit") ?? "20", 10)),
+  );
 
   const [total, orders] = await prisma.$transaction([
     prisma.salesOrder.count({ where: { tenantId, deletedAt: null } }),
     prisma.salesOrder.findMany({
       where: { tenantId, deletedAt: null },
       select: {
-        id: true, number: true, status: true, date: true, dueDate: true,
-        totalNet: true, totalTax: true, totalGross: true,
-        createdAt: true, updatedAt: true,
+        id: true,
+        number: true,
+        status: true,
+        date: true,
+        dueDate: true,
+        totalNet: true,
+        totalTax: true,
+        totalGross: true,
+        createdAt: true,
+        updatedAt: true,
         contact: { select: { id: true, name: true, code: true } },
       },
-      orderBy: { date: 'desc' },
+      orderBy: { date: "desc" },
       skip: (page - 1) * limit,
       take: limit,
     }),
   ]);
 
-  return c.json({ data: orders, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
-});
-
-externalRoutes.post('/sales-orders', requireScope('orders:write'), async (c) => {
-  const tenantId = requireTenantId(c);
-  const body = await c.req.json<{
-    contactId: string; number: string; date: string; dueDate?: string; notes?: string;
-    items: Array<{
-      productId: string; description: string; quantity: number; unitPrice: number;
-      discount?: number; taxRate?: number;
-    }>;
-  }>();
-
-  if (!body.contactId || !body.number || !body.date || !body.items?.length) {
-    return c.json(new ValidationError('contactId, number, date ve en az bir kalem zorunludur.').toJSON(), 400);
-  }
-
-  const order = await prisma.$transaction(async (tx) => {
-    const itemProductIds = body.items.map((item) => item.productId).filter(Boolean);
-    // Body'deki ilişkili ID'lerin bu tenant'a ait olduğunu doğrula
-    await validateTenantOwnership(tenantId, buildOwnershipChecks([
-      { model: 'contact', id: body.contactId, label: 'Cari hesap' },
-      ...itemProductIds.map((id) => ({ model: 'product' as const, id, label: 'Ürün' })),
-    ]), tx);
-
-    let totalNet = 0;
-    let totalTax = 0;
-    const itemData = body.items.map((item, i) => {
-      const discount = item.discount ?? 0;
-      const taxRate = item.taxRate ?? 0;
-      const net = item.quantity * item.unitPrice * (1 - discount / 100);
-      const tax = net * taxRate / 100;
-      totalNet += net;
-      totalTax += tax;
-      return {
-        tenantId, productId: item.productId, description: item.description,
-        quantity: item.quantity, unitPrice: item.unitPrice,
-        discount, taxRate, taxAmount: tax, lineTotal: net + tax, sortOrder: i,
-      };
-    });
-
-    return tx.salesOrder.create({
-      data: {
-        tenantId, contactId: body.contactId, number: body.number,
-        date: new Date(body.date), dueDate: body.dueDate ? new Date(body.dueDate) : null,
-        notes: body.notes ?? null,
-        totalNet, totalTax, totalGross: totalNet + totalTax,
-        items: { create: itemData },
-      },
-      select: { id: true, number: true, status: true, totalGross: true, createdAt: true },
-    });
+  return c.json({
+    data: orders,
+    meta: {
+      total,
+      page,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit),
+    },
   });
-
-  return c.json({ data: order }, 201);
 });
+
+externalRoutes.post(
+  "/sales-orders",
+  requireScope("orders:write"),
+  async (c) => {
+    const tenantId = requireTenantId(c);
+    const body = await c.req.json<{
+      contactId: string;
+      number: string;
+      date: string;
+      dueDate?: string;
+      notes?: string;
+      items: Array<{
+        productId: string;
+        description: string;
+        quantity: number;
+        unitPrice: number;
+        discount?: number;
+        taxRate?: number;
+      }>;
+    }>();
+
+    if (!body.contactId || !body.number || !body.date || !body.items?.length) {
+      return c.json(
+        new ValidationError(
+          "contactId, number, date ve en az bir kalem zorunludur.",
+        ).toJSON(),
+        400,
+      );
+    }
+
+    const order = await prisma.$transaction(async (tx) => {
+      const itemProductIds = body.items
+        .map((item) => item.productId)
+        .filter(Boolean);
+      // Body'deki ilişkili ID'lerin bu tenant'a ait olduğunu doğrula
+      await validateTenantOwnership(
+        tenantId,
+        buildOwnershipChecks([
+          { model: "contact", id: body.contactId, label: "Cari hesap" },
+          ...itemProductIds.map((id) => ({
+            model: "product" as const,
+            id,
+            label: "Ürün",
+          })),
+        ]),
+        tx,
+      );
+
+      let totalNet = 0;
+      let totalTax = 0;
+      const itemData = body.items.map((item, i) => {
+        const discount = item.discount ?? 0;
+        const taxRate = item.taxRate ?? 0;
+        const net = item.quantity * item.unitPrice * (1 - discount / 100);
+        const tax = (net * taxRate) / 100;
+        totalNet += net;
+        totalTax += tax;
+        return {
+          tenantId,
+          productId: item.productId,
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discount,
+          taxRate,
+          taxAmount: tax,
+          lineTotal: net + tax,
+          sortOrder: i,
+        };
+      });
+
+      return tx.salesOrder.create({
+        data: {
+          tenantId,
+          contactId: body.contactId,
+          number: body.number,
+          date: new Date(body.date),
+          dueDate: body.dueDate ? new Date(body.dueDate) : null,
+          notes: body.notes ?? null,
+          totalNet,
+          totalTax,
+          totalGross: totalNet + totalTax,
+          items: { create: itemData },
+        },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          totalGross: true,
+          createdAt: true,
+        },
+      });
+    });
+
+    return c.json({ data: order }, 201);
+  },
+);
 
 export { externalRoutes };

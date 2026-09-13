@@ -1,16 +1,32 @@
-import { ACCESS_POLICIES } from '@repo/types/plans';
-import { Hono } from 'hono';
-import { requireAccess } from '../middleware/requireAccess';
-import { requirePermission } from '../middleware/requirePermission';
-import { LotSerialController } from '../modules/inventory/http/controllers/index.js';
+import { ACCESS_POLICIES } from "@repo/types/plans";
+import { Hono } from "hono";
+import { requireAccess } from "../middleware/requireAccess";
+import { requirePermission } from "../middleware/requirePermission";
+import { LotSerialController } from "../modules/inventory/http/controllers/index.js";
 
 const lotSerialRoutes = new Hono();
 
-lotSerialRoutes.use('*', requireAccess(ACCESS_POLICIES.lotSerials));
+lotSerialRoutes.use("*", requireAccess(ACCESS_POLICIES.lotSerials));
 
-lotSerialRoutes.get('/', requirePermission('inventory', 'READ'), LotSerialController.list);
-lotSerialRoutes.get('/traceability', requirePermission('inventory', 'READ'), LotSerialController.traceability);
-lotSerialRoutes.post('/', requirePermission('inventory', 'CREATE'), LotSerialController.create);
-lotSerialRoutes.post('/:id/assign', requirePermission('inventory', 'UPDATE'), LotSerialController.assignToMovement);
+lotSerialRoutes.get(
+  "/",
+  requirePermission("inventory", "READ"),
+  LotSerialController.list,
+);
+lotSerialRoutes.get(
+  "/traceability",
+  requirePermission("inventory", "READ"),
+  LotSerialController.traceability,
+);
+lotSerialRoutes.post(
+  "/",
+  requirePermission("inventory", "CREATE"),
+  LotSerialController.create,
+);
+lotSerialRoutes.post(
+  "/:id/assign",
+  requirePermission("inventory", "UPDATE"),
+  LotSerialController.assignToMovement,
+);
 
 export { lotSerialRoutes };

@@ -1,17 +1,17 @@
 model AdminIdempotencyRecord {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   adminId      String
   method       String
   path         String
   key          String
   requestHash  String
-  state        String   @default("PROCESSING")
+  state        String    @default("PROCESSING")
   statusCode   Int?
   contentType  String?
   responseBody String?
   expiresAt    DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   admin        AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
   @@unique([adminId, method, path, key])

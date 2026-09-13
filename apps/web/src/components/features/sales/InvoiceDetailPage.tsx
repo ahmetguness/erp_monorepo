@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { AlertTriangle, ArrowLeft, Ban, CheckCircle2, Clock3, CreditCard, ExternalLink, FileText, Mail, Printer, ReceiptText, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Ban, CheckCircle, CheckCircle2, Clock3, CreditCard, ExternalLink, FileText, Mail, Printer, ReceiptText, XCircle } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { InvoiceStatusBadge } from '@/components/shared/StatusBadge';
@@ -11,13 +11,14 @@ import { Button } from '@/components/ui/Button';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FullPageSpinner } from '@/components/ui/Spinner';
-import { useInvoice, useCancelInvoice } from '@/hooks/useSales';
+import { useInvoice, useApproveInvoice, useCancelInvoice } from '@/hooks/useSales';
 import { cn, formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import { EntityImageManager } from '@/components/shared/EntityImageManager';
 import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 import { DocumentPdfThemePanel } from '@/components/features/sales/DocumentPdfThemePanel';
 import type { RecommendedEntityAction } from '@/components/shared/RecommendedActionsPanel';
 import type { Invoice } from '@/services/sales.service';
+import { createClientIdempotencyKey } from '@/lib/idempotency';
 
 interface LineRow {
   id: string;
@@ -277,6 +278,8 @@ export function InvoiceDetailPage({ id }: Props) {
   const router = useRouter();
   const { data: invoice, isLoading } = useInvoice(id);
   const cancelInvoice = useCancelInvoice(id);
+  const [approvalIdempotencyKey] = useState(() => createClientIdempotencyKey('invoice-posting'));
+  const approveInvoice = useApproveInvoice(id, approvalIdempotencyKey);
   const [cancelOpen, setCancelOpen] = useState(false);
 
   const lineColumns: ColumnDef<LineRow>[] = [
@@ -381,6 +384,11 @@ export function InvoiceDetailPage({ id }: Props) {
 
   const headerActions = (
     <div className="flex flex-wrap items-center justify-end gap-2">
+      {invoice.status === 'DRAFT' && (
+        <Button size="sm" leftIcon={<CheckCircle className="h-3.5 w-3.5" />} loading={approveInvoice.isPending} onClick={() => approveInvoice.mutate()}>
+          Onayla ve muhasebeleştir
+        </Button>
+      )}
       <Button variant="outline" size="sm" leftIcon={<Printer className="h-3.5 w-3.5" />} onClick={() => window.print()}>PDF / Yazdır</Button>
       <Button
         variant="outline"

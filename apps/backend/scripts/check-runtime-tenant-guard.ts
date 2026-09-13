@@ -23,13 +23,18 @@ async function main(): Promise<void> {
     expectViolation(model, 'create', { data: {} });
 
     await runWithTenantScope('tenant-a', async () => {
-      const read = params(model, 'findUnique', { where: { id: 'record-id' } });
+      const read = params(model, 'findUnique', { where: { id: 'record-id', tenantId: 'tenant-b' } });
       enforceTenantIsolation(read);
-      if (!JSON.stringify(read.args.where).includes('tenant-a')) throw new Error(`${model}.findUnique was not scoped.`);
+      const readWhere = read.args.where;
+      if (typeof readWhere !== 'object' || readWhere === null || Reflect.get(readWhere, 'tenantId') !== 'tenant-a') {
+        throw new Error(`${model}.findUnique accepted a client tenant override.`);
+      }
 
       const create = params(model, 'create', { data: {} });
       enforceTenantIsolation(create);
       if (!JSON.stringify(create.args.data).includes('tenant-a')) throw new Error(`${model}.create was not scoped.`);
+
+      expectViolation(model, 'create', { data: { tenantId: 'tenant-b' } });
     });
   }
 

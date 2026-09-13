@@ -43,7 +43,7 @@ export default function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section className="py-10 relative bg-[#0F172A]">
+    <section className="py-10 relative bg-[#0F172A] border-t border-slate-800">
       <div className="section-container">
 
         {/* Trigger row */}

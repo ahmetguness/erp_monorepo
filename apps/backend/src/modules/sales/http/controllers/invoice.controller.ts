@@ -18,12 +18,15 @@ import {
 } from '../../../../services/financial/index.js';
 import { scanAndRecomputeInvoiceStatuses } from '../../../../services/financial/invoice-status.service.js';
 import { assertInvoiceStatusTransition, isComputedInvoiceStatus } from '../../../../services/financial/status-transition.service.js';
-import { reverseInvoiceAccountEntry, writeInvoiceAccountEntry } from '../../../../utils/account-entry.js';
+import { reverseInvoiceAccountEntry } from '../../../../utils/account-entry.js';
 import { createAuditLog, getRequestMeta } from '../../../../utils/audit.js';
+import { salesApplication } from '../../composition.js';
+import { parseIdempotencyKey } from '../../application/operations/idempotency-key.js';
 
 type InvoiceLineDTO = CreateInvoiceBody['lines'][number];
-import { requireTenantId } from '../../../../utils/context.js';
+import { requireParam, requireTenantId } from '../../../../utils/context.js';
 import { generateDocumentNumber } from '../../../../utils/generate-number.js';
+import { buildOwnershipChecks, validateTenantOwnership } from '../../../../utils/validateTenantOwnership.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -225,7 +228,7 @@ export const InvoiceController = {
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const invoiceId = c.req.param('id');
+    const invoiceId = requireParam(c, 'id');
 
     const invoice = await prisma.invoice.findFirst({
       where: { id: invoiceId, tenantId },
@@ -305,6 +308,15 @@ export const InvoiceController = {
       return c.json(new NotFoundError('Cari hesap', body.contactId).toJSON(), 404);
     }
 
+    await validateTenantOwnership(
+      tenantId,
+      buildOwnershipChecks(body.lines.flatMap((line, index) => [
+        { model: 'product', id: line.productId, label: `Fatura satiri ${index + 1} urunu` },
+        { model: 'taxRate', id: line.taxRateId, label: `Fatura satiri ${index + 1} vergi orani` },
+        { model: 'taxRate', id: line.withholdingRateId, label: `Fatura satiri ${index + 1} tevkifat orani` },
+      ])),
+    );
+
     const { lineData, totalNet, totalTax, totalWithholding, totalGross } = await computeLineTotals(
       body.lines,
       tenantId,
@@ -350,18 +362,6 @@ export const InvoiceController = {
         data: { tenantId, invoiceId: newInvoice.id, toStatus: InvoiceStatus.DRAFT, notes: 'Fatura oluşturuldu' },
       });
 
-      // AccountEntry: cari hesap hareketi
-      await writeInvoiceAccountEntry(tx, {
-        tenantId,
-        contactId: body.contactId,
-        invoiceId: newInvoice.id,
-        invoiceNumber: newInvoice.number,
-        invoiceType: body.type,
-        totalGross,
-        date: invoiceDate,
-        userId,
-      });
-
       // SalesOrder.invoicedAmount güncelle
       if (body.salesOrderId && (body.type === 'SALES' || body.type === 'RETURN_SALES')) {
         await tx.salesOrder.updateMany({
@@ -399,10 +399,57 @@ export const InvoiceController = {
       },
     });
 
-    const eDocAutomation = new EDocumentAutomationService(prisma);
-    eDocAutomation.autoCreateAndSendEDocument(tenantId, invoice.id).catch(() => { });
-
     return c.json({ data: invoice }, 201);
+  },
+
+  async approve(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = c.get('userId') as string | undefined;
+    const invoiceId = requireParam(c, 'id');
+    const body = await c.req.json<unknown>();
+    const idempotencyKey = parseIdempotencyKey(
+      typeof body === 'object' && body !== null && 'idempotencyKey' in body
+        ? body.idempotencyKey
+        : undefined,
+    );
+    const { ipAddress, userAgent } = getRequestMeta(c);
+    const result = await salesApplication.approveInvoice.execute({ tenantId, invoiceId, userId, idempotencyKey });
+    await createAuditLog(prisma, {
+      tenantId, userId, module: 'invoicing', entityType: EntityType.INVOICE, entityId: invoiceId,
+      action: AuditAction.UPDATE,
+      oldValues: { status: InvoiceStatus.DRAFT },
+      newValues: { status: result.status, journalEntryId: result.journalEntryId },
+      ipAddress, userAgent,
+    });
+    const invoice = await prisma.invoice.findFirst({
+      where: { id: invoiceId, tenantId },
+      include: {
+        contact: { select: { id: true, name: true, taxNumber: true, email: true } },
+        lines: { include: { product: { select: { id: true, code: true, name: true } }, taxRate: true } },
+        payments: { include: { payment: true } },
+        eDocuments: true,
+      },
+    });
+    if (!invoice) throw new NotFoundError('Fatura', invoiceId);
+    const formattedInvoice = {
+      ...invoice,
+      payments: invoice.payments.map((allocation) => ({
+        id: allocation.id,
+        paymentId: allocation.paymentId,
+        amount: Number(allocation.amount),
+        date: allocation.payment?.date
+          ? allocation.payment.date.toISOString()
+          : allocation.createdAt.toISOString(),
+        method: allocation.payment?.method ?? 'CASH',
+        direction: allocation.payment?.direction ?? 'RECEIVE',
+        reference: allocation.payment?.reference ?? null,
+        status: allocation.payment?.status ?? 'COMPLETED',
+        notes: allocation.payment?.notes ?? null,
+      })),
+    };
+    const eDocumentAutomation = new EDocumentAutomationService(prisma);
+    void eDocumentAutomation.autoCreateAndSendEDocument(tenantId, invoice.id, idempotencyKey).catch(() => undefined);
+    return c.json({ data: formattedInvoice });
   },
 
   async update(c: Context): Promise<Response> {

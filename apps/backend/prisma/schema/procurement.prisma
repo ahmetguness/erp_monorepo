@@ -73,11 +73,11 @@ model PurchaseOrder {
   dueDate      DateTime?
   status       PurchaseOrderStatus @default(DRAFT)
   currencyCode String              @default("TRY")
-  exchangeRate Decimal             @db.Decimal(18, 6) @default(1)
+  exchangeRate Decimal             @default(1) @db.Decimal(18, 6)
   notes        String?
-  totalNet     Decimal             @db.Decimal(18, 2) @default(0)
-  totalTax     Decimal             @db.Decimal(18, 2) @default(0)
-  totalGross   Decimal             @db.Decimal(18, 2) @default(0)
+  totalNet     Decimal             @default(0) @db.Decimal(18, 2)
+  totalTax     Decimal             @default(0) @db.Decimal(18, 2)
+  totalGross   Decimal             @default(0) @db.Decimal(18, 2)
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
   deletedAt    DateTime?
@@ -106,17 +106,17 @@ model PurchaseOrderItem {
   description String?
   quantity    Decimal @db.Decimal(18, 3)
   /// @computed - must be updated within the same transaction as the parent write
-  received    Decimal @db.Decimal(18, 3) @default(0)
+  received    Decimal @default(0) @db.Decimal(18, 3)
   unitPrice   Decimal @db.Decimal(18, 2)
-  discount    Decimal @db.Decimal(5, 2) @default(0)
-  taxRate     Decimal @db.Decimal(5, 2) @default(0)
-  taxAmount   Decimal @db.Decimal(18, 2) @default(0)
+  discount    Decimal @default(0) @db.Decimal(5, 2)
+  taxRate     Decimal @default(0) @db.Decimal(5, 2)
+  taxAmount   Decimal @default(0) @db.Decimal(18, 2)
   lineTotal   Decimal @db.Decimal(18, 2)
   sortOrder   Int     @default(0)
 
-  order         PurchaseOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product       Product          @relation(fields: [productId], references: [id])
-  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order         PurchaseOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product            @relation(fields: [productId], references: [id])
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   deliveryItems DeliveryNoteItem[]
 
   @@index([tenantId, orderId])

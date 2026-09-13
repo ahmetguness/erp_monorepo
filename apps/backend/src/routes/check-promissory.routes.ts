@@ -1,17 +1,37 @@
-import { ACCESS_POLICIES } from '@repo/types/plans';
-import { Hono } from 'hono';
-import { requireAccess } from '../middleware/requireAccess';
-import { requirePermission } from '../middleware/requirePermission';
-import { CheckPromissoryController } from '../modules/finance/http/controllers/index.js';
+import { ACCESS_POLICIES } from "@repo/types/plans";
+import { Hono } from "hono";
+import { requireAccess } from "../middleware/requireAccess";
+import { requirePermission } from "../middleware/requirePermission";
+import { CheckPromissoryController } from "../modules/finance/http/controllers/index.js";
 
 const checkPromissoryRoutes = new Hono();
 
-checkPromissoryRoutes.use('*', requireAccess(ACCESS_POLICIES.checkPromissory));
+checkPromissoryRoutes.use("*", requireAccess(ACCESS_POLICIES.checkPromissory));
 
-checkPromissoryRoutes.get('/', requirePermission('accounting', 'READ'), CheckPromissoryController.list);
-checkPromissoryRoutes.post('/', requirePermission('accounting', 'CREATE'), CheckPromissoryController.create);
-checkPromissoryRoutes.patch('/:id', requirePermission('accounting', 'UPDATE'), CheckPromissoryController.update);
-checkPromissoryRoutes.patch('/:id/status', requirePermission('accounting', 'UPDATE'), CheckPromissoryController.updateStatus);
-checkPromissoryRoutes.delete('/:id', requirePermission('accounting', 'DELETE'), CheckPromissoryController.remove);
+checkPromissoryRoutes.get(
+  "/",
+  requirePermission("accounting", "READ"),
+  CheckPromissoryController.list,
+);
+checkPromissoryRoutes.post(
+  "/",
+  requirePermission("accounting", "CREATE"),
+  CheckPromissoryController.create,
+);
+checkPromissoryRoutes.patch(
+  "/:id",
+  requirePermission("accounting", "UPDATE"),
+  CheckPromissoryController.update,
+);
+checkPromissoryRoutes.patch(
+  "/:id/status",
+  requirePermission("accounting", "UPDATE"),
+  CheckPromissoryController.updateStatus,
+);
+checkPromissoryRoutes.delete(
+  "/:id",
+  requirePermission("accounting", "DELETE"),
+  CheckPromissoryController.remove,
+);
 
 export { checkPromissoryRoutes };

@@ -1,9 +1,9 @@
-import { Priority,ServiceActivityType } from '@prisma/client';
-import { Hono } from 'hono';
-import { prisma } from '../lib/prisma';
-import { calculateSla } from '../modules/workforce-service/http/controllers/index.js';
-import { generateDocumentNumber } from '../utils/generate-number.js';
-import { getPaginationParams } from '../utils/pagination.js';
+import { Priority, ServiceActivityType } from "@prisma/client";
+import { Hono } from "hono";
+import { prisma } from "../lib/prisma";
+import { calculateSla } from "../modules/workforce-service/http/controllers/index.js";
+import { generateDocumentNumber } from "../utils/generate-number.js";
+import { getPaginationParams } from "../utils/pagination.js";
 
 const portalRoutes = new Hono<{
   Variables: {
@@ -13,12 +13,15 @@ const portalRoutes = new Hono<{
 }>();
 
 // Auth Middleware for Portal
-portalRoutes.use('*', async (c, next) => {
-  const contactId = c.req.header('X-Contact-Id');
-  const token = c.req.header('X-Portal-Token');
+portalRoutes.use("*", async (c, next) => {
+  const contactId = c.req.header("X-Contact-Id");
+  const token = c.req.header("X-Portal-Token");
 
   if (!contactId || !token) {
-    return c.json({ error: 'X-Contact-Id ve X-Portal-Token başlıkları zorunludur.' }, 401);
+    return c.json(
+      { error: "X-Contact-Id ve X-Portal-Token başlıkları zorunludur." },
+      401,
+    );
   }
 
   // 1. Find the Contact
@@ -27,7 +30,7 @@ portalRoutes.use('*', async (c, next) => {
     select: { tenantId: true },
   });
   if (!contact) {
-    return c.json({ error: 'Geçersiz müşteri kimliği veya pasif cari.' }, 401);
+    return c.json({ error: "Geçersiz müşteri kimliği veya pasif cari." }, 401);
   }
 
   // 2. Validate Plan (Enterprise only)
@@ -35,8 +38,11 @@ portalRoutes.use('*', async (c, next) => {
     where: { id: contact.tenantId },
     select: { plan: true },
   });
-  if (!tenant || tenant.plan !== 'ENTERPRISE') {
-    return c.json({ error: 'Müşteri portalı sadece ENTERPRISE planı kapsamındadır.' }, 403);
+  if (!tenant || tenant.plan !== "ENTERPRISE") {
+    return c.json(
+      { error: "Müşteri portalı sadece ENTERPRISE planı kapsamındadır." },
+      403,
+    );
   }
 
   // 3. Find and verify the setting
@@ -49,18 +55,21 @@ portalRoutes.use('*', async (c, next) => {
   });
 
   if (!expectedTokenSetting || expectedTokenSetting.value !== token) {
-    return c.json({ error: 'Müşteri portal bağlantı anahtarı (token) geçersiz.' }, 401);
+    return c.json(
+      { error: "Müşteri portal bağlantı anahtarı (token) geçersiz." },
+      401,
+    );
   }
 
-  c.set('tenantId', contact.tenantId);
-  c.set('contactId', contactId);
+  c.set("tenantId", contact.tenantId);
+  c.set("contactId", contactId);
   await next();
 });
 
 // GET /requests - List customer's requests
-portalRoutes.get('/requests', async (c) => {
-  const tenantId = c.get('tenantId') as string;
-  const contactId = c.get('contactId') as string;
+portalRoutes.get("/requests", async (c) => {
+  const tenantId = c.get("tenantId") as string;
+  const contactId = c.get("contactId") as string;
   const { page, limit, skip } = getPaginationParams(c, 20);
 
   const where = {
@@ -74,10 +83,18 @@ portalRoutes.get('/requests', async (c) => {
     prisma.serviceRequest.findMany({
       where,
       include: {
-        customerAsset: { select: { id: true, name: true, brand: true, model: true, serialNo: true } },
+        customerAsset: {
+          select: {
+            id: true,
+            name: true,
+            brand: true,
+            model: true,
+            serialNo: true,
+          },
+        },
         _count: { select: { activities: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       skip,
       take: limit,
     }),
@@ -88,26 +105,42 @@ portalRoutes.get('/requests', async (c) => {
     sla: calculateSla(row.createdAt, row.priority, row.status, row.closedAt),
   }));
 
-  return c.json({ data: dataWithSla, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
+  return c.json({
+    data: dataWithSla,
+    meta: {
+      total,
+      page,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit),
+    },
+  });
 });
 
 // GET /requests/:id - Get details of a request
-portalRoutes.get('/requests/:id', async (c) => {
-  const tenantId = c.get('tenantId') as string;
-  const contactId = c.get('contactId') as string;
-  const id = c.req.param('id');
+portalRoutes.get("/requests/:id", async (c) => {
+  const tenantId = c.get("tenantId") as string;
+  const contactId = c.get("contactId") as string;
+  const id = c.req.param("id");
 
   const sr = await prisma.serviceRequest.findFirst({
     where: { id, tenantId, contactId, deletedAt: null },
     include: {
-      customerAsset: { select: { id: true, name: true, brand: true, model: true, serialNo: true } },
-      activities: { orderBy: { createdAt: 'desc' }, take: 50 },
-      history: { orderBy: { createdAt: 'desc' }, take: 20 },
+      customerAsset: {
+        select: {
+          id: true,
+          name: true,
+          brand: true,
+          model: true,
+          serialNo: true,
+        },
+      },
+      activities: { orderBy: { createdAt: "desc" }, take: 50 },
+      history: { orderBy: { createdAt: "desc" }, take: 20 },
     },
   });
 
   if (!sr) {
-    return c.json({ error: 'Kayıt bulunamadı.' }, 404);
+    return c.json({ error: "Kayıt bulunamadı." }, 404);
   }
 
   const srWithSla = {
@@ -119,9 +152,9 @@ portalRoutes.get('/requests/:id', async (c) => {
 });
 
 // POST /requests - Create request as a customer
-portalRoutes.post('/requests', async (c) => {
-  const tenantId = c.get('tenantId') as string;
-  const contactId = c.get('contactId') as string;
+portalRoutes.post("/requests", async (c) => {
+  const tenantId = c.get("tenantId") as string;
+  const contactId = c.get("contactId") as string;
   const body = await c.req.json<{
     subject: string;
     description?: string;
@@ -130,10 +163,15 @@ portalRoutes.post('/requests', async (c) => {
   }>();
 
   if (!body.subject) {
-    return c.json({ error: 'Konu (subject) alanı zorunludur.' }, 400);
+    return c.json({ error: "Konu (subject) alanı zorunludur." }, 400);
   }
 
-  const number = await generateDocumentNumber(tenantId, 'service_request', 'SR-', 'serviceRequest');
+  const number = await generateDocumentNumber(
+    tenantId,
+    "service_request",
+    "SR-",
+    "serviceRequest",
+  );
 
   let warrantyEnd: Date | null = null;
   if (body.customerAssetId) {
@@ -152,9 +190,9 @@ portalRoutes.post('/requests', async (c) => {
       number,
       subject: body.subject,
       description: body.description ?? null,
-      priority: body.priority ?? 'MEDIUM',
+      priority: body.priority ?? "MEDIUM",
       warrantyEnd,
-      history: { create: { tenantId, toStatus: 'OPEN' } },
+      history: { create: { tenantId, toStatus: "OPEN" } },
     },
   });
 
@@ -162,14 +200,14 @@ portalRoutes.post('/requests', async (c) => {
 });
 
 // POST /requests/:id/comments - Add customer comment to a request
-portalRoutes.post('/requests/:id/comments', async (c) => {
-  const tenantId = c.get('tenantId') as string;
-  const contactId = c.get('contactId') as string;
-  const id = c.req.param('id');
+portalRoutes.post("/requests/:id/comments", async (c) => {
+  const tenantId = c.get("tenantId") as string;
+  const contactId = c.get("contactId") as string;
+  const id = c.req.param("id");
   const body = await c.req.json<{ notes: string }>();
 
   if (!body.notes) {
-    return c.json({ error: 'Yorum metni (notes) zorunludur.' }, 400);
+    return c.json({ error: "Yorum metni (notes) zorunludur." }, 400);
   }
 
   const sr = await prisma.serviceRequest.findFirst({
@@ -177,7 +215,7 @@ portalRoutes.post('/requests/:id/comments', async (c) => {
     select: { id: true },
   });
   if (!sr) {
-    return c.json({ error: 'Kayıt bulunamadı.' }, 404);
+    return c.json({ error: "Kayıt bulunamadı." }, 404);
   }
 
   const comment = await prisma.serviceActivity.create({

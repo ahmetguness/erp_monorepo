@@ -1,18 +1,18 @@
 model PlatformIncident {
-  id             String   @id @default(cuid())
+  id             String                          @id @default(cuid())
   alertId        String?
   title          String
   summary        String
   severity       String
-  status         String   @default("INVESTIGATING")
+  status         String                          @default("INVESTIGATING")
   owner          String
   runbookUrl     String
   rootCause      String?
   resolution     String?
   createdById    String
   resolvedAt     DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime                        @default(now())
+  updatedAt      DateTime                        @updatedAt
   tenants        PlatformIncidentTenant[]
   timeline       PlatformIncidentTimeline[]
   communications PlatformIncidentCommunication[]
@@ -25,7 +25,7 @@ model PlatformIncident {
 model PlatformIncidentTenant {
   incidentId String
   tenantId   String
-  createdAt  DateTime @default(now())
+  createdAt  DateTime         @default(now())
   incident   PlatformIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
   @@id([incidentId, tenantId])
@@ -34,12 +34,12 @@ model PlatformIncidentTenant {
 }
 
 model PlatformIncidentTimeline {
-  id          String   @id @default(cuid())
+  id          String           @id @default(cuid())
   incidentId  String
   type        String
   message     String
   createdById String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime         @default(now())
   incident    PlatformIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
   @@index([incidentId, createdAt])
@@ -47,17 +47,17 @@ model PlatformIncidentTimeline {
 }
 
 model PlatformIncidentCommunication {
-  id             String   @id @default(cuid())
+  id             String           @id @default(cuid())
   incidentId     String
   message        String
-  status         String   @default("PENDING_APPROVAL")
+  status         String           @default("PENDING_APPROVAL")
   recipientCount Int
   requestedById  String
   approvedById   String?
   decisionNote   String?
   publishedAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
   incident       PlatformIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
   @@index([incidentId, status, createdAt])

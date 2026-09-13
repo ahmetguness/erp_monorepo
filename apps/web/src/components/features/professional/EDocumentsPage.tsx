@@ -15,6 +15,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { useEDocuments, useCreateEDocument, useEDocumentSummary, useUpdateEDocumentStatus } from '@/hooks/useEDocuments';
 import { cn, formatDate, formatDateTime } from '@/lib/utils';
+import { createClientIdempotencyKey } from '@/lib/idempotency';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import type { EDocument, EDocumentStatus, EDocumentType } from '@/services/e-document.service';
 import { EDocumentExceptionCenter } from '../e-documents/EDocumentExceptionCenter';
@@ -199,6 +200,9 @@ export function EDocumentsPage() {
   });
   const { data: summary } = useEDocumentSummary();
   const createDoc = useCreateEDocument();
+  const [submissionIdempotencyKey, setSubmissionIdempotencyKey] = useState(
+    () => createClientIdempotencyKey('edocument-submit'),
+  );
   const updateStatus = useUpdateEDocumentStatus();
   const documents = data?.data ?? [];
   const filteredTypeOptions = TYPE_OPTIONS.filter((option) => option.value && (!isStarter || option.value !== 'E_WAYBILL')) as Array<{ value: EDocumentType; label: string }>;
@@ -232,7 +236,11 @@ export function EDocumentsPage() {
       type: form.type,
       invoiceId: form.type !== 'E_WAYBILL' ? form.invoiceId : undefined,
       deliveryNoteId: form.type === 'E_WAYBILL' ? form.deliveryNoteId : undefined,
-    }, { onSuccess: () => setCreateOpen(false) });
+      submissionIdempotencyKey,
+    }, { onSuccess: () => {
+      setCreateOpen(false);
+      setSubmissionIdempotencyKey(createClientIdempotencyKey('edocument-submit'));
+    } });
   };
 
   const retry = () => {

@@ -68,10 +68,10 @@ model Location {
   code        String
   isActive    Boolean @default(true)
 
-  warehouse   Warehouse  @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse    @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   // Fix #4: locationId on StockLevel uses empty string "" as sentinel for "no location"
   stockLevels StockLevel[]
-  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([warehouseId, code])
   @@index([tenantId])
@@ -84,7 +84,7 @@ model StockLevel {
   productId   String
   warehouseId String
   locationId  String   @default("")
-  quantity    Decimal  @db.Decimal(18, 3) @default(0)
+  quantity    Decimal  @default(0) @db.Decimal(18, 3)
   updatedAt   DateTime @updatedAt
 
   product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -100,38 +100,38 @@ model StockLevel {
 }
 
 model StockMovement {
-  id              String       @id @default(cuid())
+  id              String           @id @default(cuid())
   tenantId        String
   productId       String
   type            MovementType
-  quantity        Decimal      @db.Decimal(18, 3)
-  unitCost        Decimal?     @db.Decimal(18, 4)
-  totalCost       Decimal?     @db.Decimal(18, 2)
+  quantity        Decimal          @db.Decimal(18, 3)
+  unitCost        Decimal?         @db.Decimal(18, 4)
+  totalCost       Decimal?         @db.Decimal(18, 2)
   fromWarehouseId String?
   toWarehouseId   String?
   locationId      String?
-  lotId           String?      // LotSerialNumber reference
-  batchId         String?      // ProductBatch reference
+  lotId           String? // LotSerialNumber reference
+  batchId         String? // ProductBatch reference
   refType         MovementRefType?
   refId           String?
   notes           String?
-  createdAt       DateTime     @default(now())
+  createdAt       DateTime         @default(now())
   createdById     String?
   idempotencyKey  String?
 
-  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  product       Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  fromWarehouse Warehouse? @relation("MovementFrom", fields: [fromWarehouseId], references: [id])
-  toWarehouse   Warehouse? @relation("MovementTo", fields: [toWarehouseId], references: [id])
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product       Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fromWarehouse Warehouse?       @relation("MovementFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse?       @relation("MovementTo", fields: [toWarehouseId], references: [id])
   lot           LotSerialNumber? @relation("LotMovements", fields: [lotId], references: [id])
   batch         ProductBatch?    @relation("BatchMovements", fields: [batchId], references: [id])
 
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId, productId])
   @@index([tenantId, type])
   @@index([tenantId, createdAt])
   @@index([tenantId, createdAt, type])
   @@index([refType, refId])
-  @@unique([tenantId, idempotencyKey])
   @@map("stock_movements")
 }
 
@@ -142,9 +142,9 @@ model StockValuation {
   warehouseId String
   movementId  String?
   date        DateTime
-  qtyIn       Decimal  @db.Decimal(18, 3) @default(0)
-  qtyOut      Decimal  @db.Decimal(18, 3) @default(0)
-  qtyBalance  Decimal  @db.Decimal(18, 3) @default(0)
+  qtyIn       Decimal  @default(0) @db.Decimal(18, 3)
+  qtyOut      Decimal  @default(0) @db.Decimal(18, 3)
+  qtyBalance  Decimal  @default(0) @db.Decimal(18, 3)
   unitCost    Decimal  @db.Decimal(18, 4)
   totalValue  Decimal  @db.Decimal(18, 2)
   createdAt   DateTime @default(now())
@@ -158,15 +158,15 @@ model StockValuation {
 }
 
 model StockCount {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   tenantId      String
   warehouseId   String
   number        String
   date          DateTime
-  isFinalized   Boolean  @default(false)
+  isFinalized   Boolean   @default(false)
   notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   createdById   String?
   finalizedById String?
   finalizedAt   DateTime?
@@ -198,15 +198,15 @@ model StockCountItem {
 }
 
 model InventoryReservation {
-  id          String   @id @default(cuid())
+  id          String             @id @default(cuid())
   tenantId    String
   productId   String
   warehouseId String
-  quantity    Decimal  @db.Decimal(18, 3)
+  quantity    Decimal            @db.Decimal(18, 3)
   refType     ReservationRefType
   refId       String
   notes       String?
-  reservedAt  DateTime @default(now())
+  reservedAt  DateTime           @default(now())
   expiresAt   DateTime?
   releasedAt  DateTime?
   createdById String?
@@ -227,7 +227,7 @@ model ProductBatch {
   batchNumber    String
   expiryDate     DateTime? @db.Date
   manufacturedAt DateTime? @db.Date
-  quantity       Decimal   @db.Decimal(18, 3) @default(0)
+  quantity       Decimal   @default(0) @db.Decimal(18, 3)
   notes          String?
   createdAt      DateTime  @default(now())
 
@@ -243,20 +243,20 @@ model ProductBatch {
 }
 
 model LotSerialNumber {
-  id           String    @id @default(cuid())
+  id           String          @id @default(cuid())
   tenantId     String
   productId    String
   batchId      String?
   serialNumber String
-  isUsed       Boolean   @default(false)
+  isUsed       Boolean         @default(false)
   usedAt       DateTime?
   usedRefType  LotUsedRefType?
   usedRefId    String?
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime        @default(now())
 
-  batch         ProductBatch? @relation(fields: [batchId], references: [id])
-  product       Product       @relation(fields: [productId], references: [id])
-  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  batch         ProductBatch?      @relation(fields: [batchId], references: [id])
+  product       Product            @relation(fields: [productId], references: [id])
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   movements     StockMovement[]    @relation("LotMovements")
   deliveryItems DeliveryNoteItem[] @relation("LotDeliveryItems")
 

@@ -17,7 +17,7 @@ const CheckIcon = ({ highlighted }: { highlighted: boolean }) => (
 
 export default function Pricing() {
   return (
-    <section id="pricing" className="relative bg-[#0B1120] py-24 overflow-hidden">
+    <section id="pricing" className="relative bg-[#0B1120] border-t border-slate-800 py-24 overflow-hidden">
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[400px] bg-blue-700/5 rounded-full blur-[120px]" />
       </div>
@@ -30,12 +30,15 @@ export default function Pricing() {
           transition={{ duration: 0.45 }}
           className="text-center max-w-2xl mx-auto mb-16"
         >
-          <p className="text-sm text-blue-400 font-medium mb-4">Lisans & Fiyatlandirma</p>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-400 mb-4">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+            <span>Şeffaf Lisans & Yatırım</span>
+          </div>
           <h2 className="text-3xl lg:text-4xl font-bold text-white mb-4 leading-tight">
-            Isletmenizin olcegine uygun<br className="hidden sm:block" /> ERP lisansi
+            İşletmenizin ölçeğine uygun<br className="hidden sm:block" /> kurumsal lisans planları
           </h2>
           <p className="text-slate-400 text-sm leading-relaxed">
-            Tüm paketlere kurulum desteği ve kullanıcı eğitimi dahildir. Ozellik matrisi plan kaynağından otomatik üretilir.
+            Tüm paketlere kurulum desteği ve kullanıcı eğitimi dahildir. Gizli ek maliyet yoktur.
           </p>
         </motion.div>
 
@@ -116,6 +119,13 @@ export default function Pricing() {
               </div>
 
               <button
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('openChatWithMessage', {
+                      detail: `${tier.meta.label} paketi için lisans teklifi ve demo hesabı talep ediyorum.`
+                    })
+                  );
+                }}
                 className={[
                   'w-full h-12 mt-8 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer flex-shrink-0',
                   tier.meta.ctaStyle === 'primary'
@@ -138,13 +148,13 @@ export default function Pricing() {
           transition={{ duration: 0.4, delay: 0.35 }}
           className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 pt-6 border-t border-slate-800/60"
         >
-          <p className="text-xs text-slate-600">
-            Fiyatlara KDV dahil degildir. Yillik odemede indirim uygulanir.
+          <p className="text-xs text-slate-400">
+            Fiyatlara KDV dahil değildir. Yıllık ödemelerde ek indirim uygulanır.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-slate-600">
-            {['Kurulum desteği dahil', 'Kullanıcı eğitimi dahil', 'Moduler genisleme'].map((item) => (
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-slate-400">
+            {['Kurulum ve migrasyon desteği dahil', 'Kullanıcı eğitimi dahil', 'Modüler genişletilebilir altyapı'].map((item) => (
               <span key={item} className="flex items-center gap-1.5">
-                <svg className="w-3 h-3 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                 </svg>
                 {item}

@@ -1,21 +1,59 @@
-import { Hono } from 'hono';
-import { requireModule } from '../middleware/requireModule';
-import { requirePermission } from '../middleware/requirePermission';
-import { validateBody } from '../middleware/validateBody';
-import { InvoiceController } from '../modules/sales/http/controllers/index.js';
-import { createInvoiceBodySchema,updateInvoiceBodySchema } from '../schemas/request-body.schemas';
-import { MODULE_KEYS } from '../types/module.types';
+import { Hono } from "hono";
+import { requireModule } from "../middleware/requireModule";
+import { requirePermission } from "../middleware/requirePermission";
+import { validateBody } from "../middleware/validateBody";
+import { InvoiceController } from "../modules/sales/http/controllers/index.js";
+import {
+  createInvoiceBodySchema,
+  updateInvoiceBodySchema,
+} from "../schemas/request-body.schemas";
+import { MODULE_KEYS } from "../types/module.types";
 
 const invoiceRoutes = new Hono();
 
-invoiceRoutes.use('*', requireModule(MODULE_KEYS.INVOICING));
+invoiceRoutes.use("*", requireModule(MODULE_KEYS.INVOICING));
 
-invoiceRoutes.get('/', requirePermission('invoicing', 'READ'), InvoiceController.list);
-invoiceRoutes.post('/recompute-statuses', requirePermission('invoicing', 'UPDATE'), InvoiceController.recomputeStatuses);
-invoiceRoutes.get('/:id', requirePermission('invoicing', 'READ'), InvoiceController.getById);
-invoiceRoutes.get('/:id/history', requirePermission('invoicing', 'READ'), InvoiceController.getHistory);
-invoiceRoutes.post('/', requirePermission('invoicing', 'CREATE'), validateBody(createInvoiceBodySchema), InvoiceController.create);
-invoiceRoutes.patch('/:id', requirePermission('invoicing', 'UPDATE'), validateBody(updateInvoiceBodySchema), InvoiceController.update);
-invoiceRoutes.post('/:id/cancel', requirePermission('invoicing', 'UPDATE'), InvoiceController.cancel);
+invoiceRoutes.get(
+  "/",
+  requirePermission("invoicing", "READ"),
+  InvoiceController.list,
+);
+invoiceRoutes.post(
+  "/recompute-statuses",
+  requirePermission("invoicing", "UPDATE"),
+  InvoiceController.recomputeStatuses,
+);
+invoiceRoutes.get(
+  "/:id",
+  requirePermission("invoicing", "READ"),
+  InvoiceController.getById,
+);
+invoiceRoutes.get(
+  "/:id/history",
+  requirePermission("invoicing", "READ"),
+  InvoiceController.getHistory,
+);
+invoiceRoutes.post(
+  "/",
+  requirePermission("invoicing", "CREATE"),
+  validateBody(createInvoiceBodySchema),
+  InvoiceController.create,
+);
+invoiceRoutes.post(
+  "/:id/approve",
+  requirePermission("invoicing", "UPDATE"),
+  InvoiceController.approve,
+);
+invoiceRoutes.patch(
+  "/:id",
+  requirePermission("invoicing", "UPDATE"),
+  validateBody(updateInvoiceBodySchema),
+  InvoiceController.update,
+);
+invoiceRoutes.post(
+  "/:id/cancel",
+  requirePermission("invoicing", "UPDATE"),
+  InvoiceController.cancel,
+);
 
 export { invoiceRoutes };

@@ -390,6 +390,7 @@ export async function postProductionAccountingEntry(
     "journal",
     "JE-",
     "journalEntry",
+    db,
   );
 
   await db.journalEntry.create({
@@ -403,6 +404,7 @@ export async function postProductionAccountingEntry(
       isPosted: true, // Automated entries are posted directly to keep ledger synced
       postedAt: entryDate,
       createdById: userId,
+      idempotencyKey: `work-order-completion:${workOrder.id}`,
       lines: {
         create: journalLines.map((l, index) => ({
           tenantId,

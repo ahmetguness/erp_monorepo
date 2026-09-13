@@ -1,12 +1,18 @@
-import { AuditAction,EntityType } from '@prisma/client';
-import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
-import { prisma } from '../../../../lib/prisma.js';
-import { createPayrollAccountingVoucher,generateBankPaymentFile,readRequiredReason,reversePayroll,runPeriodClosingChecks } from '../../../../services/financial/index.js';
-import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
-import { requireParam,requireTenantId } from '../../../../utils/context.js';
-import { getPaginationParams } from '../../../../utils/pagination.js';
-import { workforceApplication } from '../../composition.js';
+import { AuditAction, EntityType } from "@prisma/client";
+import { Context } from "hono";
+import { NotFoundError, ValidationError } from "../../../../errors/index.js";
+import { prisma } from "../../../../lib/prisma.js";
+import {
+  createPayrollAccountingVoucher,
+  generateBankPaymentFile,
+  readRequiredReason,
+  reversePayroll,
+  runPeriodClosingChecks,
+} from "../../../../services/financial/index.js";
+import { createAuditLog, getRequestMeta } from "../../../../utils/audit.js";
+import { requireParam, requireTenantId } from "../../../../utils/context.js";
+import { getPaginationParams } from "../../../../utils/pagination.js";
+import { workforceApplication } from "../../composition.js";
 
 // ─────────────────────────────────────────────
 // Payroll Controller — Bordro CRUD + toplu oluşturma
@@ -17,21 +23,26 @@ export const PayrollController = {
     const tenantId = requireTenantId(c);
 
     const { page, limit } = getPaginationParams(c, 20);
-    const period = c.req.query('period');
-    const employeeId = c.req.query('employeeId');
+    const period = c.req.query("period");
+    const employeeId = c.req.query("employeeId");
 
-    return c.json(await workforceApplication.payrollQueries.list(
-      tenantId,
-      { period, employeeId },
-      { page, pageSize: limit },
-    ));
+    return c.json(
+      await workforceApplication.payrollQueries.list(
+        tenantId,
+        { period, employeeId },
+        { page, pageSize: limit },
+      ),
+    );
   },
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
-    const payroll = await workforceApplication.payrollQueries.getById(tenantId, id);
+    const payroll = await workforceApplication.payrollQueries.getById(
+      tenantId,
+      id,
+    );
     return c.json({ data: payroll });
   },
 
@@ -39,41 +50,75 @@ export const PayrollController = {
     const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{
-      employeeId: string; period: string; grossSalary: number;
+      employeeId: string;
+      period: string;
+      grossSalary: number;
       items?: Array<{ label: string; amount: number; isDeduction: boolean }>;
       notes?: string;
     }>();
     if (!body.employeeId || !body.period || body.grossSalary == null) {
-      return c.json(new ValidationError('employeeId, period ve grossSalary zorunludur.').toJSON(), 400);
+      return c.json(
+        new ValidationError(
+          "employeeId, period ve grossSalary zorunludur.",
+        ).toJSON(),
+        400,
+      );
     }
 
     // Dönem formatı kontrolü (YYYY-MM)
     if (!/^\d{4}-\d{2}$/.test(body.period)) {
-      return c.json(new ValidationError('period formatı YYYY-MM olmalıdır (ör. 2026-03).').toJSON(), 400);
+      return c.json(
+        new ValidationError(
+          "period formatı YYYY-MM olmalıdır (ör. 2026-03).",
+        ).toJSON(),
+        400,
+      );
     }
 
     // Aynı dönem + personel kontrolü
     const exists = await prisma.payroll.findUnique({
-      where: { tenantId_employeeId_period: { tenantId, employeeId: body.employeeId, period: body.period } },
+      where: {
+        tenantId_employeeId_period: {
+          tenantId,
+          employeeId: body.employeeId,
+          period: body.period,
+        },
+      },
     });
     if (exists && !exists.deletedAt) {
-      return c.json(new ValidationError('Bu personel için bu dönemde zaten bordro mevcut.').toJSON(), 400);
+      return c.json(
+        new ValidationError(
+          "Bu personel için bu dönemde zaten bordro mevcut.",
+        ).toJSON(),
+        400,
+      );
     }
 
     // Kesintileri hesapla
-    const deductions = (body.items ?? []).filter((i) => i.isDeduction).reduce((sum, i) => sum + i.amount, 0);
-    const additions = (body.items ?? []).filter((i) => !i.isDeduction).reduce((sum, i) => sum + i.amount, 0);
+    const deductions = (body.items ?? [])
+      .filter((i) => i.isDeduction)
+      .reduce((sum, i) => sum + i.amount, 0);
+    const additions = (body.items ?? [])
+      .filter((i) => !i.isDeduction)
+      .reduce((sum, i) => sum + i.amount, 0);
     const netSalary = body.grossSalary + additions - deductions;
 
     const payroll = await prisma.payroll.create({
       data: {
-        tenantId, employeeId: body.employeeId, period: body.period,
-        grossSalary: body.grossSalary, deductions, netSalary,
+        tenantId,
+        employeeId: body.employeeId,
+        period: body.period,
+        grossSalary: body.grossSalary,
+        deductions,
+        netSalary,
         notes: body.notes ?? null,
         ...(body.items?.length && {
           items: {
             create: body.items.map((item) => ({
-              tenantId, label: item.label, amount: item.amount, isDeduction: item.isDeduction,
+              tenantId,
+              label: item.label,
+              amount: item.amount,
+              isDeduction: item.isDeduction,
             })),
           },
         }),
@@ -91,7 +136,10 @@ export const PayrollController = {
 
     const body = await c.req.json<{ period: string }>();
     if (!body.period || !/^\d{4}-\d{2}$/.test(body.period)) {
-      return c.json(new ValidationError('period formatı YYYY-MM olmalıdır.').toJSON(), 400);
+      return c.json(
+        new ValidationError("period formatı YYYY-MM olmalıdır.").toJSON(),
+        400,
+      );
     }
 
     // Aktif personelleri al
@@ -109,45 +157,92 @@ export const PayrollController = {
     const toCreate = employees.filter((e) => !existingIds.has(e.id));
 
     if (toCreate.length === 0) {
-      return c.json({ data: { created: 0, message: 'Tüm personeller için bu dönemde bordro zaten mevcut.' } });
+      return c.json({
+        data: {
+          created: 0,
+          message: "Tüm personeller için bu dönemde bordro zaten mevcut.",
+        },
+      });
     }
 
     const created = await prisma.$transaction(
       toCreate.map((emp) =>
         prisma.payroll.create({
           data: {
-            tenantId, employeeId: emp.id, period: body.period,
-            grossSalary: emp.salary, deductions: 0, netSalary: emp.salary,
+            tenantId,
+            employeeId: emp.id,
+            period: body.period,
+            grossSalary: emp.salary,
+            deductions: 0,
+            netSalary: emp.salary,
           },
         }),
       ),
     );
 
-    return c.json({ data: { created: created.length, message: `${created.length} bordro oluşturuldu.` } }, 201);
+    return c.json(
+      {
+        data: {
+          created: created.length,
+          message: `${created.length} bordro oluşturuldu.`,
+        },
+      },
+      201,
+    );
   },
 
   async addItem(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const payrollId = requireParam(c, 'id');
+    const payrollId = requireParam(c, "id");
 
-    const payroll = await prisma.payroll.findFirst({ where: { id: payrollId, tenantId, deletedAt: null } });
-    if (!payroll) return c.json(new NotFoundError('Bordro', payrollId).toJSON(), 404);
-    if (payroll.paidAt) return c.json(new ValidationError('Ödenmiş bordroya kalem eklenemez.').toJSON(), 400);
+    const payroll = await prisma.payroll.findFirst({
+      where: { id: payrollId, tenantId, deletedAt: null },
+    });
+    if (!payroll)
+      return c.json(new NotFoundError("Bordro", payrollId).toJSON(), 404);
+    if (payroll.paidAt)
+      return c.json(
+        new ValidationError("Ödenmiş bordroya kalem eklenemez.").toJSON(),
+        400,
+      );
 
-    const body = await c.req.json<{ label: string; amount: number; isDeduction: boolean }>();
-    if (!body.label || body.amount == null) return c.json(new ValidationError('label ve amount zorunludur.').toJSON(), 400);
+    const body = await c.req.json<{
+      label: string;
+      amount: number;
+      isDeduction: boolean;
+    }>();
+    if (!body.label || body.amount == null)
+      return c.json(
+        new ValidationError("label ve amount zorunludur.").toJSON(),
+        400,
+      );
 
     const item = await prisma.payrollItem.create({
-      data: { tenantId, payrollId, label: body.label, amount: body.amount, isDeduction: body.isDeduction ?? false },
+      data: {
+        tenantId,
+        payrollId,
+        label: body.label,
+        amount: body.amount,
+        isDeduction: body.isDeduction ?? false,
+      },
     });
 
     // Net maaşı yeniden hesapla
-    const allItems = await prisma.payrollItem.findMany({ where: { tenantId, payrollId } });
-    const deductions = allItems.filter((i) => i.isDeduction).reduce((sum, i) => sum + Number(i.amount), 0);
-    const additions = allItems.filter((i) => !i.isDeduction).reduce((sum, i) => sum + Number(i.amount), 0);
+    const allItems = await prisma.payrollItem.findMany({
+      where: { tenantId, payrollId },
+    });
+    const deductions = allItems
+      .filter((i) => i.isDeduction)
+      .reduce((sum, i) => sum + Number(i.amount), 0);
+    const additions = allItems
+      .filter((i) => !i.isDeduction)
+      .reduce((sum, i) => sum + Number(i.amount), 0);
     await prisma.payroll.update({
       where: { id: payrollId },
-      data: { deductions, netSalary: Number(payroll.grossSalary) + additions - deductions },
+      data: {
+        deductions,
+        netSalary: Number(payroll.grossSalary) + additions - deductions,
+      },
     });
 
     return c.json({ data: item }, 201);
@@ -155,24 +250,42 @@ export const PayrollController = {
 
   async removeItem(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const itemId = requireParam(c, 'itemId');
+    const itemId = requireParam(c, "itemId");
 
-    const item = await prisma.payrollItem.findFirst({ where: { id: itemId, tenantId } });
-    if (!item) return c.json(new NotFoundError('Bordro Kalemi', itemId).toJSON(), 404);
+    const item = await prisma.payrollItem.findFirst({
+      where: { id: itemId, tenantId },
+    });
+    if (!item)
+      return c.json(new NotFoundError("Bordro Kalemi", itemId).toJSON(), 404);
 
-    const payroll = await prisma.payroll.findFirst({ where: { id: item.payrollId, tenantId, deletedAt: null } });
-    if (payroll?.paidAt) return c.json(new ValidationError('Ödenmiş bordrodan kalem silinemez.').toJSON(), 400);
+    const payroll = await prisma.payroll.findFirst({
+      where: { id: item.payrollId, tenantId, deletedAt: null },
+    });
+    if (payroll?.paidAt)
+      return c.json(
+        new ValidationError("Ödenmiş bordrodan kalem silinemez.").toJSON(),
+        400,
+      );
 
     await prisma.payrollItem.delete({ where: { id: itemId } });
 
     // Net maaşı yeniden hesapla
     if (payroll) {
-      const allItems = await prisma.payrollItem.findMany({ where: { tenantId, payrollId: payroll.id } });
-      const deductions = allItems.filter((i) => i.isDeduction).reduce((sum, i) => sum + Number(i.amount), 0);
-      const additions = allItems.filter((i) => !i.isDeduction).reduce((sum, i) => sum + Number(i.amount), 0);
+      const allItems = await prisma.payrollItem.findMany({
+        where: { tenantId, payrollId: payroll.id },
+      });
+      const deductions = allItems
+        .filter((i) => i.isDeduction)
+        .reduce((sum, i) => sum + Number(i.amount), 0);
+      const additions = allItems
+        .filter((i) => !i.isDeduction)
+        .reduce((sum, i) => sum + Number(i.amount), 0);
       await prisma.payroll.update({
         where: { id: payroll.id },
-        data: { deductions, netSalary: Number(payroll.grossSalary) + additions - deductions },
+        data: {
+          deductions,
+          netSalary: Number(payroll.grossSalary) + additions - deductions,
+        },
       });
     }
 
@@ -181,39 +294,54 @@ export const PayrollController = {
 
   async markPaid(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
-    const payroll = await prisma.payroll.findFirst({ where: { id, tenantId, deletedAt: null } });
-    if (!payroll) return c.json(new NotFoundError('Bordro', id).toJSON(), 404);
-    if (payroll.paidAt) return c.json(new ValidationError('Bordro zaten ödenmiş.').toJSON(), 400);
+    const payroll = await prisma.payroll.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+    if (!payroll) return c.json(new NotFoundError("Bordro", id).toJSON(), 404);
+    if (payroll.paidAt)
+      return c.json(new ValidationError("Bordro zaten ödenmiş.").toJSON(), 400);
 
-    const updated = await prisma.payroll.update({ where: { id }, data: { paidAt: new Date() } });
+    const updated = await prisma.payroll.update({
+      where: { id },
+      data: { paidAt: new Date() },
+    });
     return c.json({ data: updated });
   },
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
-    const payroll = await prisma.payroll.findFirst({ where: { id, tenantId, deletedAt: null } });
-    if (!payroll) return c.json(new NotFoundError('Bordro', id).toJSON(), 404);
-    if (payroll.paidAt) return c.json(new ValidationError('Ödenmiş bordro silinemez.').toJSON(), 400);
+    const payroll = await prisma.payroll.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
+    if (!payroll) return c.json(new NotFoundError("Bordro", id).toJSON(), 404);
+    if (payroll.paidAt)
+      return c.json(
+        new ValidationError("Ödenmiş bordro silinemez.").toJSON(),
+        400,
+      );
 
-    await prisma.payroll.update({ where: { id }, data: { deletedAt: new Date() } });
+    await prisma.payroll.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
     return c.json({ data: { success: true } });
   },
 
   async reversePayroll(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const userId = c.get('userId') as string | undefined;
-    const id = requireParam(c, 'id');
+    const userId = c.get("userId") as string | undefined;
+    const id = requireParam(c, "id");
     const { ipAddress, userAgent } = getRequestMeta(c);
 
     let body: Record<string, unknown>;
     try {
-      body = await c.req.json() as Record<string, unknown>;
+      body = (await c.req.json()) as Record<string, unknown>;
     } catch {
-      throw new ValidationError('Geçersiz JSON gövdesi.');
+      throw new ValidationError("Geçersiz JSON gövdesi.");
     }
 
     const reason = readRequiredReason(body);
@@ -231,53 +359,65 @@ export const PayrollController = {
 
   async getBankFile(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const userId = c.get('userId') as string | undefined;
-    const period = c.req.query('period');
-    if (!period) throw new ValidationError('period parametresi zorunludur.');
+    const userId = c.get("userId") as string | undefined;
+    const period = c.req.query("period");
+    if (!period) throw new ValidationError("period parametresi zorunludur.");
 
     const result = await generateBankPaymentFile(prisma, tenantId, period);
     const { ipAddress, userAgent } = getRequestMeta(c);
     await createAuditLog(prisma, {
       tenantId,
       userId,
-      module: 'payroll',
+      module: "payroll",
       entityType: EntityType.OTHER,
       entityId: period,
       action: AuditAction.EXPORT,
-      newValues: { period, filename: result.filename, exportType: 'bank_payment_file' },
+      newValues: {
+        period,
+        filename: result.filename,
+        exportType: "bank_payment_file",
+      },
       ipAddress,
       userAgent,
     });
 
-    c.header('Content-Type', result.mimeType);
-    c.header('Content-Disposition', `attachment; filename="${result.filename}"`);
+    c.header("Content-Type", result.mimeType);
+    c.header(
+      "Content-Disposition",
+      `attachment; filename="${result.filename}"`,
+    );
     return c.body(result.content);
   },
 
   async postAccountingVoucher(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const userId = c.get('userId') as string | undefined;
+    const userId = c.get("userId") as string | undefined;
 
     let body: Record<string, unknown>;
     try {
-      body = await c.req.json() as Record<string, unknown>;
+      body = (await c.req.json()) as Record<string, unknown>;
     } catch {
-      throw new ValidationError('Geçersiz JSON gövdesi.');
+      throw new ValidationError("Geçersiz JSON gövdesi.");
     }
 
     const period = body.period;
-    if (typeof period !== 'string' || !period) {
-      throw new ValidationError('period alanı zorunludur.');
+    if (typeof period !== "string" || !period) {
+      throw new ValidationError("period alanı zorunludur.");
     }
 
-    const result = await createPayrollAccountingVoucher(prisma, tenantId, period, userId);
+    const result = await createPayrollAccountingVoucher(
+      prisma,
+      tenantId,
+      period,
+      userId,
+    );
     return c.json({ data: result }, 201);
   },
 
   async getClosingChecks(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const period = c.req.query('period');
-    if (!period) throw new ValidationError('period parametresi zorunludur.');
+    const period = c.req.query("period");
+    if (!period) throw new ValidationError("period parametresi zorunludur.");
 
     const result = await runPeriodClosingChecks(prisma, tenantId, period);
     return c.json({ data: result });

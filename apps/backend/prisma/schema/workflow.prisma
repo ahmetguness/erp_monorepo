@@ -165,13 +165,13 @@ model MailMessage {
 }
 
 model Task {
-  id           String     @id @default(cuid())
+  id           String      @id @default(cuid())
   tenantId     String
   title        String
   detail       String?
-  type         TaskType   @default(GENERAL)
-  priority     Priority   @default(MEDIUM)
-  status       TaskStatus @default(TODO)
+  type         TaskType    @default(GENERAL)
+  priority     Priority    @default(MEDIUM)
+  status       TaskStatus  @default(TODO)
   module       String?
   entityType   EntityType?
   entityId     String?
@@ -181,8 +181,8 @@ model Task {
   createdById  String?
   dueAt        DateTime?
   completedAt  DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -212,7 +212,7 @@ model AutomationRule {
   updatedAt    DateTime          @updatedAt
   deletedAt    DateTime?
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant     Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   executions AutomationExecution[]
 
   @@unique([tenantId, name])
@@ -223,23 +223,23 @@ model AutomationRule {
 }
 
 model AutomationExecution {
-  id             String                    @id @default(cuid())
-  tenantId       String
-  ruleId         String?
-  trigger        AutomationTrigger?
-  action         AutomationAction?
-  entityType     EntityType?
-  entityId       String?
-  status         AutomationExecutionStatus @default(RUNNING)
-  input          Json?
-  output         Json?
-  error          String?
-  attempt        Int                       @default(1)
-  startedAt      DateTime                  @default(now())
-  completedAt    DateTime?
-  createdAt      DateTime                  @default(now())
+  id          String                    @id @default(cuid())
+  tenantId    String
+  ruleId      String?
+  trigger     AutomationTrigger?
+  action      AutomationAction?
+  entityType  EntityType?
+  entityId    String?
+  status      AutomationExecutionStatus @default(RUNNING)
+  input       Json?
+  output      Json?
+  error       String?
+  attempt     Int                       @default(1)
+  startedAt   DateTime                  @default(now())
+  completedAt DateTime?
+  createdAt   DateTime                  @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   rule   AutomationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, status, startedAt])
@@ -249,17 +249,17 @@ model AutomationExecution {
 }
 
 model ApprovalFlow {
-  id         String   @id @default(cuid())
-  tenantId   String
-  name       String
-  module     ApprovalModule
-  conditions Json?
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String         @id @default(cuid())
+  tenantId    String
+  name        String
+  module      ApprovalModule
+  conditions  Json?
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
   createdById String?
 
-  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   steps    ApprovalStep[]
   requests ApprovalRequest[]
 
@@ -269,18 +269,18 @@ model ApprovalFlow {
 }
 
 model ApprovalStep {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   flowId         String
   stepOrder      Int
   name           String
-  approverRoleId String?  // Role that can approve this step
-  approverUserId String?  // Specific user override
-  isRequired     Boolean  @default(true)
+  approverRoleId String? // Role that can approve this step
+  approverUserId String? // Specific user override
+  isRequired     Boolean @default(true)
 
-  flow    ApprovalFlow      @relation(fields: [flowId], references: [id], onDelete: Cascade)
-  actions ApprovalAction[]
-  approverRole Role?   @relation("StepApproverRole", fields: [approverRoleId], references: [id])
-  approverUser User?   @relation("StepApproverUser", fields: [approverUserId], references: [id])
+  flow         ApprovalFlow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  actions      ApprovalAction[]
+  approverRole Role?            @relation("StepApproverRole", fields: [approverRoleId], references: [id])
+  approverUser User?            @relation("StepApproverUser", fields: [approverUserId], references: [id])
 
   @@unique([flowId, stepOrder])
   @@map("approval_steps")

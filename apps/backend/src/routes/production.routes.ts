@@ -1,49 +1,185 @@
-import { ACCESS_POLICIES } from '@repo/types/plans';
-import { Hono } from 'hono';
-import { requireAccess } from '../middleware/requireAccess';
-import { requirePermission } from '../middleware/requirePermission';
-import { AdvancedProductionController,BOMController,CapacityPlanningController,MrpPlanningController,QualityControlController,WorkCenterController,WorkOrderController } from '../modules/production/http/controllers/index.js';
+import { ACCESS_POLICIES } from "@repo/types/plans";
+import { Hono } from "hono";
+import { requireAccess } from "../middleware/requireAccess";
+import { requirePermission } from "../middleware/requirePermission";
+import {
+  AdvancedProductionController,
+  BOMController,
+  CapacityPlanningController,
+  MrpPlanningController,
+  QualityControlController,
+  WorkCenterController,
+  WorkOrderController,
+} from "../modules/production/http/controllers/index.js";
 
 const productionRoutes = new Hono();
 
-productionRoutes.use('*', requireAccess(ACCESS_POLICIES.production));
-productionRoutes.get('/advanced', requirePermission('production', 'READ'), AdvancedProductionController.get);
-productionRoutes.get('/capacity-planning', requirePermission('production', 'READ'), CapacityPlanningController.get);
-productionRoutes.get('/mrp', requirePermission('production', 'READ'), MrpPlanningController.get);
-productionRoutes.get('/quality-control', requirePermission('production', 'READ'), QualityControlController.get);
+productionRoutes.use("*", requireAccess(ACCESS_POLICIES.production));
+productionRoutes.get(
+  "/advanced",
+  requirePermission("production", "READ"),
+  AdvancedProductionController.get,
+);
+productionRoutes.get(
+  "/capacity-planning",
+  requirePermission("production", "READ"),
+  CapacityPlanningController.get,
+);
+productionRoutes.get(
+  "/mrp",
+  requirePermission("production", "READ"),
+  MrpPlanningController.get,
+);
+productionRoutes.get(
+  "/quality-control",
+  requirePermission("production", "READ"),
+  QualityControlController.get,
+);
 
 // İş Merkezleri
-productionRoutes.get('/work-centers', requirePermission('production', 'READ'), WorkCenterController.list);
-productionRoutes.get('/work-centers/:id', requirePermission('production', 'READ'), WorkCenterController.getById);
-productionRoutes.get('/work-centers/:id/capacity', requirePermission('production', 'READ'), WorkCenterController.getCapacityCalendar);
-productionRoutes.post('/work-centers', requirePermission('production', 'CREATE'), WorkCenterController.create);
-productionRoutes.patch('/work-centers/:id', requirePermission('production', 'UPDATE'), WorkCenterController.update);
-productionRoutes.delete('/work-centers/:id', requirePermission('production', 'DELETE'), WorkCenterController.remove);
+productionRoutes.get(
+  "/work-centers",
+  requirePermission("production", "READ"),
+  WorkCenterController.list,
+);
+productionRoutes.get(
+  "/work-centers/:id",
+  requirePermission("production", "READ"),
+  WorkCenterController.getById,
+);
+productionRoutes.get(
+  "/work-centers/:id/capacity",
+  requirePermission("production", "READ"),
+  WorkCenterController.getCapacityCalendar,
+);
+productionRoutes.post(
+  "/work-centers",
+  requirePermission("production", "CREATE"),
+  WorkCenterController.create,
+);
+productionRoutes.patch(
+  "/work-centers/:id",
+  requirePermission("production", "UPDATE"),
+  WorkCenterController.update,
+);
+productionRoutes.delete(
+  "/work-centers/:id",
+  requirePermission("production", "DELETE"),
+  WorkCenterController.remove,
+);
 
 // BOM
-productionRoutes.get('/boms', requirePermission('production', 'READ'), BOMController.list);
-productionRoutes.get('/boms/:id/engineering', requirePermission('production', 'READ'), BOMController.engineering);
-productionRoutes.get('/boms/:id', requirePermission('production', 'READ'), BOMController.getById);
-productionRoutes.post('/boms', requirePermission('production', 'CREATE'), BOMController.create);
-productionRoutes.patch('/boms/:id', requirePermission('production', 'UPDATE'), BOMController.update);
-productionRoutes.post('/boms/:id/items', requirePermission('production', 'UPDATE'), BOMController.addItem);
-productionRoutes.delete('/boms/:id/items/:itemId', requirePermission('production', 'UPDATE'), BOMController.removeItem);
-productionRoutes.post('/boms/:id/routings', requirePermission('production', 'UPDATE'), BOMController.addRouting);
-productionRoutes.patch('/boms/:id', requirePermission('production', 'UPDATE'), BOMController.update);
-productionRoutes.post('/boms/:id/items', requirePermission('production', 'UPDATE'), BOMController.addItem);
-productionRoutes.delete('/boms/:id/items/:itemId', requirePermission('production', 'UPDATE'), BOMController.removeItem);
-productionRoutes.post('/boms/:id/routings', requirePermission('production', 'UPDATE'), BOMController.addRouting);
-productionRoutes.delete('/boms/:id/routings/:routingId', requirePermission('production', 'UPDATE'), BOMController.removeRouting);
+productionRoutes.get(
+  "/boms",
+  requirePermission("production", "READ"),
+  BOMController.list,
+);
+productionRoutes.get(
+  "/boms/:id/engineering",
+  requirePermission("production", "READ"),
+  BOMController.engineering,
+);
+productionRoutes.get(
+  "/boms/:id",
+  requirePermission("production", "READ"),
+  BOMController.getById,
+);
+productionRoutes.post(
+  "/boms",
+  requirePermission("production", "CREATE"),
+  BOMController.create,
+);
+productionRoutes.patch(
+  "/boms/:id",
+  requirePermission("production", "UPDATE"),
+  BOMController.update,
+);
+productionRoutes.post(
+  "/boms/:id/items",
+  requirePermission("production", "UPDATE"),
+  BOMController.addItem,
+);
+productionRoutes.delete(
+  "/boms/:id/items/:itemId",
+  requirePermission("production", "UPDATE"),
+  BOMController.removeItem,
+);
+productionRoutes.post(
+  "/boms/:id/routings",
+  requirePermission("production", "UPDATE"),
+  BOMController.addRouting,
+);
+productionRoutes.patch(
+  "/boms/:id",
+  requirePermission("production", "UPDATE"),
+  BOMController.update,
+);
+productionRoutes.post(
+  "/boms/:id/items",
+  requirePermission("production", "UPDATE"),
+  BOMController.addItem,
+);
+productionRoutes.delete(
+  "/boms/:id/items/:itemId",
+  requirePermission("production", "UPDATE"),
+  BOMController.removeItem,
+);
+productionRoutes.post(
+  "/boms/:id/routings",
+  requirePermission("production", "UPDATE"),
+  BOMController.addRouting,
+);
+productionRoutes.delete(
+  "/boms/:id/routings/:routingId",
+  requirePermission("production", "UPDATE"),
+  BOMController.removeRouting,
+);
 
 // İş Emirleri
-productionRoutes.get('/work-orders', requirePermission('production', 'READ'), WorkOrderController.list);
-productionRoutes.get('/work-orders/:id', requirePermission('production', 'READ'), WorkOrderController.getById);
-productionRoutes.post('/work-orders', requirePermission('production', 'CREATE'), WorkOrderController.create);
-productionRoutes.post('/work-orders/:id/status', requirePermission('production', 'UPDATE'), WorkOrderController.changeStatus);
-productionRoutes.post('/work-orders/:id/automation/derive-status', requirePermission('production', 'UPDATE'), WorkOrderController.deriveStatus);
-productionRoutes.post('/work-orders/:id/automation/auto-complete', requirePermission('production', 'UPDATE'), WorkOrderController.autoComplete);
-productionRoutes.post('/work-orders/:id/report', requirePermission('production', 'UPDATE'), WorkOrderController.reportProduction);
-productionRoutes.patch('/work-orders/:id/operations/:operationId', requirePermission('production', 'UPDATE'), WorkOrderController.updateOperation);
-productionRoutes.delete('/work-orders/:id', requirePermission('production', 'DELETE'), WorkOrderController.remove);
+productionRoutes.get(
+  "/work-orders",
+  requirePermission("production", "READ"),
+  WorkOrderController.list,
+);
+productionRoutes.get(
+  "/work-orders/:id",
+  requirePermission("production", "READ"),
+  WorkOrderController.getById,
+);
+productionRoutes.post(
+  "/work-orders",
+  requirePermission("production", "CREATE"),
+  WorkOrderController.create,
+);
+productionRoutes.post(
+  "/work-orders/:id/status",
+  requirePermission("production", "UPDATE"),
+  WorkOrderController.changeStatus,
+);
+productionRoutes.post(
+  "/work-orders/:id/automation/derive-status",
+  requirePermission("production", "UPDATE"),
+  WorkOrderController.deriveStatus,
+);
+productionRoutes.post(
+  "/work-orders/:id/automation/auto-complete",
+  requirePermission("production", "UPDATE"),
+  WorkOrderController.autoComplete,
+);
+productionRoutes.post(
+  "/work-orders/:id/report",
+  requirePermission("production", "UPDATE"),
+  WorkOrderController.reportProduction,
+);
+productionRoutes.patch(
+  "/work-orders/:id/operations/:operationId",
+  requirePermission("production", "UPDATE"),
+  WorkOrderController.updateOperation,
+);
+productionRoutes.delete(
+  "/work-orders/:id",
+  requirePermission("production", "DELETE"),
+  WorkOrderController.remove,
+);
 
 export { productionRoutes };

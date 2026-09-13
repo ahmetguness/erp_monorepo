@@ -1,5 +1,5 @@
-import { AuditAction, EntityType, InvoiceType, PaymentMethod, PaymentStatus, type PrismaClient } from '@prisma/client';
-import { ValidationError } from '../errors';
+import { AuditAction, EntityType, InvoiceType, PaymentMethod, PaymentStatus, Prisma, type PrismaClient } from '@prisma/client';
+import { ConflictError, ValidationError } from '../errors';
 import { createEventContext, domainEvents } from '../domain-events';
 import { createAuditLog } from '../utils/audit.js';
 import { writePaymentAccountEntry } from '../utils/account-entry.js';
@@ -33,6 +33,66 @@ export interface CreatePaymentInput {
 export interface RequestAuditMeta {
   ipAddress?: string | null;
   userAgent?: string | null;
+}
+
+const paymentReplayInclude = {
+  contact: { select: { id: true, name: true } },
+  bankAccount: { select: { id: true, name: true } },
+  cashAccount: { select: { id: true, name: true } },
+  allocations: {
+    include: { invoice: { select: { id: true, number: true, totalGross: true } } },
+  },
+} satisfies Prisma.PaymentInclude;
+
+type PaymentReplay = Prisma.PaymentGetPayload<{ include: typeof paymentReplayInclude }>;
+
+async function findPaymentReplay(
+  db: PrismaClient,
+  tenantId: string,
+  idempotencyKey: string,
+): Promise<PaymentReplay | null> {
+  return db.payment.findUnique({
+    where: { tenantId_idempotencyKey: { tenantId, idempotencyKey } },
+    include: paymentReplayInclude,
+  });
+}
+
+function hasSamePaymentIdentity(
+  payment: PaymentReplay,
+  input: CreatePaymentInput,
+  amount: number,
+  direction: PaymentDirection,
+  paymentDate: Date,
+): boolean {
+  const requestedAllocations = [...(input.allocations ?? [])]
+    .map((allocation) => `${allocation.invoiceId}:${Number(allocation.amount)}`)
+    .sort();
+  const storedAllocations = payment.allocations
+    .map((allocation) => `${allocation.invoiceId}:${Number(allocation.amount)}`)
+    .sort();
+  return payment.contactId === (input.contactId ?? null)
+    && payment.bankAccountId === (input.bankAccountId ?? null)
+    && payment.cashAccountId === (input.cashAccountId ?? null)
+    && payment.date.getTime() === paymentDate.getTime()
+    && Number(payment.amount) === amount
+    && payment.method === input.method
+    && payment.direction === direction
+    && payment.reference === (input.reference ?? null)
+    && payment.notes === (input.notes ?? null)
+    && requestedAllocations.length === storedAllocations.length
+    && requestedAllocations.every((value, index) => value === storedAllocations[index]);
+}
+
+function assertPaymentReplayMatches(
+  payment: PaymentReplay,
+  input: CreatePaymentInput,
+  amount: number,
+  direction: PaymentDirection,
+  paymentDate: Date,
+): void {
+  if (!hasSamePaymentIdentity(payment, input, amount, direction, paymentDate)) {
+    throw new ConflictError('idempotencyKey baska bir odeme istegi icin kullanilmis.');
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -223,30 +283,20 @@ export async function createPayment(options: {
   const idempotencyKey = options.input.idempotencyKey?.trim() || undefined;
 
   if (idempotencyKey) {
-    const existing = await db.payment.findUnique({
-      where: {
-        tenantId_idempotencyKey: {
-          tenantId: options.tenantId,
-          idempotencyKey,
-        },
-      },
-      include: {
-        contact: { select: { id: true, name: true } },
-        bankAccount: { select: { id: true, name: true } },
-        cashAccount: { select: { id: true, name: true } },
-        allocations: {
-          include: { invoice: { select: { id: true, number: true, totalGross: true } } },
-        },
-      },
-    });
-    if (existing) return existing;
+    const existing = await findPaymentReplay(db, options.tenantId, idempotencyKey);
+    if (existing) {
+      assertPaymentReplayMatches(existing, options.input, amount, direction, paymentDate);
+      return existing;
+    }
   }
 
   await validatePaymentRelations(db, options.tenantId, options.input);
   await validatePaymentAllocations(db, options.tenantId, options.input, amount, direction);
   await assertAccountingPeriodOpen(db, options.tenantId, paymentDate, 'Odeme');
 
-  const payment = await db.$transaction(async (tx) => {
+  let payment;
+  try {
+    payment = await db.$transaction(async (tx) => {
     await assertPaymentAllocationsWithinInvoiceBalance(tx, options.tenantId, options.input.allocations ?? []);
 
     const newPayment = await tx.payment.create({
@@ -258,6 +308,7 @@ export async function createPayment(options: {
         date: paymentDate,
         amount,
         method: options.input.method,
+        direction,
         reference: options.input.reference ?? null,
         idempotencyKey: idempotencyKey ?? null,
         notes: options.input.notes ?? null,
@@ -310,7 +361,17 @@ export async function createPayment(options: {
     }
 
     return newPayment;
-  });
+    });
+  } catch (error) {
+    const isIdempotencyRace = idempotencyKey
+      && error instanceof Prisma.PrismaClientKnownRequestError
+      && error.code === 'P2002';
+    if (!isIdempotencyRace) throw error;
+    const replay = await findPaymentReplay(db, options.tenantId, idempotencyKey);
+    if (!replay) throw error;
+    assertPaymentReplayMatches(replay, options.input, amount, direction, paymentDate);
+    return replay;
+  }
 
   await createAuditLog(db, {
     tenantId: options.tenantId,

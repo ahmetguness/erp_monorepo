@@ -44,7 +44,11 @@ export class EDocumentAutomationService {
   /**
    * Pipeline Step 1: Invoice Approved / Sent -> EDocument Create & Send to Provider
    */
-  async autoCreateAndSendEDocument(tenantId: string, invoiceId: string): Promise<{ id: string; uuid: string; status: EDocumentStatus }> {
+  async autoCreateAndSendEDocument(
+    tenantId: string,
+    invoiceId: string,
+    submissionIdempotencyKey?: string,
+  ): Promise<{ id: string; uuid: string; status: EDocumentStatus }> {
     const invoice = await this.db.invoice.findFirst({
       where: { id: invoiceId, tenantId },
       include: {
@@ -58,7 +62,10 @@ export class EDocumentAutomationService {
     }
 
     // Check if an EDocument already exists for this invoice
-    const existing = invoice.eDocuments[0];
+    const existing = submissionIdempotencyKey
+      ? invoice.eDocuments.find((document) => document.submissionIdempotencyKey === submissionIdempotencyKey)
+        ?? invoice.eDocuments[0]
+      : invoice.eDocuments[0];
     if (existing) {
       return { id: existing.id, uuid: existing.uuid ?? '', status: existing.status };
     }
@@ -74,23 +81,37 @@ export class EDocumentAutomationService {
     const uuid = randomUUID();
     const providerCode = `GIB-${type}-${uuid.slice(0, 8).toUpperCase()}`;
 
-    const doc = await this.db.eDocument.create({
-      data: {
-        tenantId,
-        invoiceId: invoice.id,
-        type,
-        uuid,
-        providerCode,
-        status: EDocumentStatus.PROCESSING,
-        requestPayload: {
-          invoiceNumber: invoice.number,
-          totalGross: Number(invoice.totalGross),
-          contactName: invoice.contact?.name,
-          taxNumber: invoice.contact?.taxNumber,
-          issueDate: invoice.date.toISOString(),
-        } as Prisma.InputJsonValue,
-      },
-    });
+    let doc;
+    try {
+      doc = await this.db.eDocument.create({
+        data: {
+          tenantId,
+          invoiceId: invoice.id,
+          type,
+          uuid,
+          providerCode,
+          status: EDocumentStatus.PROCESSING,
+          submissionIdempotencyKey: submissionIdempotencyKey ?? null,
+          requestPayload: {
+            invoiceNumber: invoice.number,
+            totalGross: Number(invoice.totalGross),
+            contactName: invoice.contact?.name,
+            taxNumber: invoice.contact?.taxNumber,
+            issueDate: invoice.date.toISOString(),
+          } as Prisma.InputJsonValue,
+        },
+      });
+    } catch (error) {
+      const isIdempotencyRace = submissionIdempotencyKey
+        && error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === 'P2002';
+      if (!isIdempotencyRace) throw error;
+      const replay = await this.db.eDocument.findUnique({
+        where: { tenantId_submissionIdempotencyKey: { tenantId, submissionIdempotencyKey } },
+      });
+      if (!replay || replay.invoiceId !== invoice.id || replay.type !== type) throw error;
+      return { id: replay.id, uuid: replay.uuid ?? '', status: replay.status };
+    }
 
     // Simulate / Dispatch to Provider Integration
     try {

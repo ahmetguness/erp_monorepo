@@ -1,14 +1,21 @@
 import {
   MovementRefType,
   MovementType,
+  DeliveryNoteStatus,
+  DeliveryNoteType,
   PurchaseOrderStatus,
   type InventoryReservation,
   type Prisma,
   type PrismaClient,
   type PurchaseOrder,
   type StockMovement,
-} from '@prisma/client';
-import { ConflictError, NotFoundError, ValidationError } from '../../../../errors/index.js';
+} from "@prisma/client";
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from "../../../../errors/index.js";
+import { generateDocumentNumber } from "../../../../utils/generate-number.js";
 import {
   assertCanConsumeStock,
   assertCanReserveStock,
@@ -16,7 +23,7 @@ import {
   getStockPosition,
   recordInventoryCosting,
   resolveStockLevelLocationId,
-} from '../../../../services/inventory-rules.service.js';
+} from "../../../../services/inventory-rules.service.js";
 import type {
   ConfirmGoodsReceiptInput,
   InventoryOperationRepository,
@@ -24,7 +31,7 @@ import type {
   RecordStockMovementResult,
   ReleaseReservationInput,
   ReserveStockInput,
-} from '../../application/ports/inventory-operation.repository.js';
+} from "../../application/ports/inventory-operation.repository.js";
 
 type DbTransaction = Prisma.TransactionClient;
 
@@ -33,7 +40,9 @@ const purchaseOrderInclude = {
   items: true,
 } satisfies Prisma.PurchaseOrderInclude;
 
-type PurchaseOrderResult = Prisma.PurchaseOrderGetPayload<{ include: typeof purchaseOrderInclude }>;
+type PurchaseOrderResult = Prisma.PurchaseOrderGetPayload<{
+  include: typeof purchaseOrderInclude;
+}>;
 
 export class PrismaInventoryOperationRepository implements InventoryOperationRepository<
   StockMovement,
@@ -42,43 +51,72 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
 > {
   constructor(private readonly db: PrismaClient) {}
 
-  async recordStockMovement(command: RecordStockMovementInput): Promise<RecordStockMovementResult<StockMovement>> {
+  async recordStockMovement(
+    command: RecordStockMovementInput,
+  ): Promise<RecordStockMovementResult<StockMovement>> {
     const existing = await this.db.stockMovement.findFirst({
-      where: { tenantId: command.tenantId, idempotencyKey: command.idempotencyKey },
+      where: {
+        tenantId: command.tenantId,
+        idempotencyKey: command.idempotencyKey,
+      },
     });
     if (existing) {
-      const sameCommand = existing.refType === MovementRefType.MANUAL
-        && existing.productId === command.productId
-        && (existing.fromWarehouseId === command.warehouseId || existing.toWarehouseId === command.warehouseId)
-        && existing.type === command.type
-        && Number(existing.quantity) === command.quantity
-        && Number(existing.unitCost ?? 0) === Number(command.unitCost ?? 0)
-        && (existing.lotId ?? undefined) === command.lotId
-        && (existing.batchId ?? undefined) === command.batchId;
-      if (!sameCommand) throw new ConflictError('idempotencyKey baska bir stok islemi icin kullanilmis.');
+      const sameCommand =
+        existing.refType === MovementRefType.MANUAL &&
+        existing.productId === command.productId &&
+        (existing.fromWarehouseId === command.warehouseId ||
+          existing.toWarehouseId === command.warehouseId) &&
+        existing.type === command.type &&
+        Number(existing.quantity) === command.quantity &&
+        Number(existing.unitCost ?? 0) === Number(command.unitCost ?? 0) &&
+        (existing.lotId ?? undefined) === command.lotId &&
+        (existing.batchId ?? undefined) === command.batchId;
+      if (!sameCommand)
+        throw new ConflictError(
+          "idempotencyKey baska bir stok islemi icin kullanilmis.",
+        );
       return { movement: existing, replayed: true };
     }
 
     const [product, warehouse, rules] = await Promise.all([
-      this.db.product.findFirst({ where: { id: command.productId, tenantId: command.tenantId, deletedAt: null } }),
-      this.db.warehouse.findFirst({ where: { id: command.warehouseId, tenantId: command.tenantId, isActive: true } }),
+      this.db.product.findFirst({
+        where: {
+          id: command.productId,
+          tenantId: command.tenantId,
+          deletedAt: null,
+        },
+      }),
+      this.db.warehouse.findFirst({
+        where: {
+          id: command.warehouseId,
+          tenantId: command.tenantId,
+          isActive: true,
+        },
+      }),
       getInventoryRules(this.db, command.tenantId),
     ]);
-    if (!product) throw new NotFoundError('Urun', command.productId);
-    if (!warehouse) throw new NotFoundError('Depo', command.warehouseId);
+    if (!product) throw new NotFoundError("Urun", command.productId);
+    if (!warehouse) throw new NotFoundError("Depo", command.warehouseId);
 
-    const consumption = command.type === MovementType.OUT
-      ? await assertCanConsumeStock(this.db, command.tenantId, {
-          productId: command.productId,
-          warehouseId: command.warehouseId,
-          quantity: command.quantity,
-          lotId: command.lotId ?? null,
-        })
-      : null;
+    const consumption =
+      command.type === MovementType.OUT
+        ? await assertCanConsumeStock(this.db, command.tenantId, {
+            productId: command.productId,
+            warehouseId: command.warehouseId,
+            quantity: command.quantity,
+            lotId: command.lotId ?? null,
+          })
+        : null;
 
-    const movement = await this.db.$transaction((tx) => this.writeMovement(tx, command));
+    const movement = await this.db.$transaction((tx) =>
+      this.writeMovement(tx, command),
+    );
     const updatedProduct = await this.db.product.findFirst({
-      where: { id: command.productId, tenantId: command.tenantId, deletedAt: null },
+      where: {
+        id: command.productId,
+        tenantId: command.tenantId,
+        deletedAt: null,
+      },
       select: {
         id: true,
         code: true,
@@ -87,48 +125,73 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
         stockLevels: { select: { quantity: true } },
       },
     });
-    const currentQuantity = updatedProduct?.stockLevels.reduce(
-      (total, level) => total + Number(level.quantity),
-      0,
-    ) ?? 0;
+    const currentQuantity =
+      updatedProduct?.stockLevels.reduce(
+        (total, level) => total + Number(level.quantity),
+        0,
+      ) ?? 0;
     const minStockLevel = Number(updatedProduct?.minStockLevel ?? 0);
-    const lowStockSignal = updatedProduct && minStockLevel > 0 && currentQuantity <= minStockLevel
-      ? {
-          productId: updatedProduct.id,
-          productCode: updatedProduct.code,
-          productName: updatedProduct.name,
-          currentQuantity,
-          minStockLevel,
-          warehouseId: command.warehouseId,
-        }
-      : undefined;
+    const lowStockSignal =
+      updatedProduct && minStockLevel > 0 && currentQuantity <= minStockLevel
+        ? {
+            productId: updatedProduct.id,
+            productCode: updatedProduct.code,
+            productName: updatedProduct.name,
+            currentQuantity,
+            minStockLevel,
+            warehouseId: command.warehouseId,
+          }
+        : undefined;
     return {
       movement,
       replayed: false,
-      ...(rules.negativeStockPolicy === 'WARN' && consumption?.warning
+      ...(rules.negativeStockPolicy === "WARN" && consumption?.warning
         ? { warning: consumption.warning }
         : {}),
       ...(lowStockSignal ? { lowStockSignal } : {}),
     };
   }
 
-  async reserveStock(command: ReserveStockInput): Promise<InventoryReservation> {
+  async reserveStock(
+    command: ReserveStockInput,
+  ): Promise<InventoryReservation> {
     const [product, warehouse] = await Promise.all([
-      this.db.product.findFirst({ where: { id: command.productId, tenantId: command.tenantId, deletedAt: null } }),
-      this.db.warehouse.findFirst({ where: { id: command.warehouseId, tenantId: command.tenantId, isActive: true } }),
+      this.db.product.findFirst({
+        where: {
+          id: command.productId,
+          tenantId: command.tenantId,
+          deletedAt: null,
+        },
+      }),
+      this.db.warehouse.findFirst({
+        where: {
+          id: command.warehouseId,
+          tenantId: command.tenantId,
+          isActive: true,
+        },
+      }),
     ]);
-    if (!product) throw new NotFoundError('Urun', command.productId);
-    if (!warehouse) throw new NotFoundError('Depo', command.warehouseId);
+    if (!product) throw new NotFoundError("Urun", command.productId);
+    if (!warehouse) throw new NotFoundError("Depo", command.warehouseId);
 
     return this.db.$transaction(async (tx) => {
-      const position = await getStockPosition(tx, command.tenantId, command.productId, command.warehouseId, {
-        refType: command.refType,
-        refId: command.refId,
-      });
+      const position = await getStockPosition(
+        tx,
+        command.tenantId,
+        command.productId,
+        command.warehouseId,
+        {
+          refType: command.refType,
+          refId: command.refId,
+        },
+      );
       const quantity = command.allowPartial
         ? Math.min(command.quantity, Math.max(0, position.available))
         : command.quantity;
-      if (quantity <= 0) throw new ValidationError('Kismi rezervasyon icin kullanilabilir stok yok.');
+      if (quantity <= 0)
+        throw new ValidationError(
+          "Kismi rezervasyon icin kullanilabilir stok yok.",
+        );
       await assertCanReserveStock(tx, command.tenantId, {
         productId: command.productId,
         warehouseId: command.warehouseId,
@@ -156,12 +219,15 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     });
   }
 
-  async releaseReservation(command: ReleaseReservationInput): Promise<InventoryReservation> {
+  async releaseReservation(
+    command: ReleaseReservationInput,
+  ): Promise<InventoryReservation> {
     return this.db.$transaction(async (tx) => {
       const reservation = await tx.inventoryReservation.findFirst({
         where: { id: command.reservationId, tenantId: command.tenantId },
       });
-      if (!reservation) throw new NotFoundError('Rezervasyon', command.reservationId);
+      if (!reservation)
+        throw new NotFoundError("Rezervasyon", command.reservationId);
       if (reservation.releasedAt) return reservation;
       return tx.inventoryReservation.update({
         where: { id: reservation.id },
@@ -170,53 +236,147 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     });
   }
 
-  async confirmGoodsReceipt(command: ConfirmGoodsReceiptInput): Promise<PurchaseOrderResult> {
+  async confirmGoodsReceipt(
+    command: ConfirmGoodsReceiptInput,
+  ): Promise<PurchaseOrderResult> {
     return this.db.$transaction(async (tx) => {
       const replay = await tx.stockMovement.findFirst({
-        where: { tenantId: command.tenantId, idempotencyKey: command.idempotencyKey },
+        where: {
+          tenantId: command.tenantId,
+          idempotencyKey: command.idempotencyKey,
+        },
       });
       if (replay) {
-        if (replay.refType !== MovementRefType.PURCHASE_ORDER || replay.refId !== command.purchaseOrderId) {
-          throw new ConflictError('idempotencyKey baska bir stok islemi icin kullanilmis.');
+        if (
+          replay.refType !== MovementRefType.PURCHASE_ORDER ||
+          replay.refId !== command.purchaseOrderId
+        ) {
+          throw new ConflictError(
+            "idempotencyKey baska bir stok islemi icin kullanilmis.",
+          );
         }
-        return this.findPurchaseOrder(tx, command.tenantId, command.purchaseOrderId);
+        return this.findPurchaseOrder(
+          tx,
+          command.tenantId,
+          command.purchaseOrderId,
+        );
       }
 
       const [order, warehouse] = await Promise.all([
         tx.purchaseOrder.findFirst({
-          where: { id: command.purchaseOrderId, tenantId: command.tenantId, deletedAt: null },
+          where: {
+            id: command.purchaseOrderId,
+            tenantId: command.tenantId,
+            deletedAt: null,
+          },
           include: { items: true },
         }),
         tx.warehouse.findFirst({
-          where: { id: command.warehouseId, tenantId: command.tenantId, isActive: true },
+          where: {
+            id: command.warehouseId,
+            tenantId: command.tenantId,
+            isActive: true,
+          },
         }),
       ]);
-      if (!order) throw new NotFoundError('Satin alma siparisi', command.purchaseOrderId);
-      if (!warehouse) throw new NotFoundError('Depo', command.warehouseId);
-      if (order.status !== PurchaseOrderStatus.SENT && order.status !== PurchaseOrderStatus.PARTIALLY_RECEIVED) {
-        throw new ValidationError('Sadece gonderilmis veya kismi teslim alinmis siparisler teslim alinabilir.');
+      if (!order)
+        throw new NotFoundError("Satin alma siparisi", command.purchaseOrderId);
+      if (!warehouse) throw new NotFoundError("Depo", command.warehouseId);
+      if (
+        order.status !== PurchaseOrderStatus.SENT &&
+        order.status !== PurchaseOrderStatus.PARTIALLY_RECEIVED
+      ) {
+        throw new ValidationError(
+          "Sadece gonderilmis veya kismi teslim alinmis siparisler teslim alinabilir.",
+        );
       }
+
+      const deliveryNumber = await generateDocumentNumber(
+        command.tenantId,
+        "purchase_delivery_note",
+        "GRN-",
+        "deliveryNote",
+        tx,
+      );
+      const deliveryNote = await tx.deliveryNote.create({
+        data: {
+          tenantId: command.tenantId,
+          number: deliveryNumber,
+          type: DeliveryNoteType.INBOUND,
+          status: DeliveryNoteStatus.DELIVERED,
+          purchaseOrderId: order.id,
+          contactId: order.contactId,
+          warehouseId: command.warehouseId,
+          date: new Date(),
+          deliveredAt: new Date(),
+          createdById: command.userId,
+        },
+      });
 
       for (const [index, line] of command.items.entries()) {
         const orderItem = order.items.find((item) => item.id === line.itemId);
-        if (!orderItem) throw new ValidationError(`Sipariste bulunmayan teslim kalemi: ${line.itemId}`);
-        if (Number(orderItem.received) + line.receivedQty > Number(orderItem.quantity)) {
-          throw new ValidationError(`Teslim miktari siparis miktarini asamaz: ${line.itemId}`);
+        if (!orderItem)
+          throw new ValidationError(
+            `Sipariste bulunmayan teslim kalemi: ${line.itemId}`,
+          );
+        if (
+          Number(orderItem.received) + line.receivedQty >
+          Number(orderItem.quantity)
+        ) {
+          throw new ValidationError(
+            `Teslim miktari siparis miktarini asamaz: ${line.itemId}`,
+          );
         }
-        await tx.purchaseOrderItem.update({
-          where: { id: orderItem.id },
+        const updatedLine = await tx.purchaseOrderItem.updateMany({
+          where: {
+            id: orderItem.id,
+            tenantId: command.tenantId,
+            orderId: order.id,
+            received: { lte: Number(orderItem.quantity) - line.receivedQty },
+          },
           data: { received: { increment: line.receivedQty } },
         });
-        await this.writeReceiptMovement(tx, command, order.number, orderItem, line.receivedQty, index);
+        if (updatedLine.count !== 1) {
+          throw new ConflictError(
+            `Teslim kalemi es zamanli olarak degisti: ${line.itemId}`,
+          );
+        }
+        await tx.deliveryNoteItem.create({
+          data: {
+            tenantId: command.tenantId,
+            deliveryNoteId: deliveryNote.id,
+            productId: orderItem.productId,
+            orderedQty: orderItem.quantity,
+            deliveredQty: line.receivedQty,
+            purchaseOrderItemId: orderItem.id,
+            sortOrder: index,
+          },
+        });
+        await this.writeReceiptMovement(
+          tx,
+          command,
+          order.number,
+          orderItem,
+          line.receivedQty,
+          index,
+        );
       }
 
       const updatedItems = await tx.purchaseOrderItem.findMany({
         where: { tenantId: command.tenantId, orderId: order.id },
       });
-      const status = updatedItems.every((item) => Number(item.received) >= Number(item.quantity))
+      const status = updatedItems.every(
+        (item) => Number(item.received) >= Number(item.quantity),
+      )
         ? PurchaseOrderStatus.RECEIVED
         : PurchaseOrderStatus.PARTIALLY_RECEIVED;
-      await tx.purchaseOrder.update({ where: { id: order.id }, data: { status } });
+      const updatedOrder = await tx.purchaseOrder.updateMany({
+        where: { id: order.id, tenantId: command.tenantId },
+        data: { status },
+      });
+      if (updatedOrder.count !== 1) {
+        throw new ConflictError('Satinalma siparisi es zamanli olarak degisti veya tenant erisimi reddedildi.');
+      }
       await tx.purchaseOrderHistory.create({
         data: {
           tenantId: command.tenantId,
@@ -231,15 +391,31 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     });
   }
 
-  private async writeMovement(tx: DbTransaction, command: RecordStockMovementInput): Promise<StockMovement> {
+  private async writeMovement(
+    tx: DbTransaction,
+    command: RecordStockMovementInput,
+  ): Promise<StockMovement> {
     const level = await tx.stockLevel.findFirst({
-      where: { tenantId: command.tenantId, productId: command.productId, warehouseId: command.warehouseId },
+      where: {
+        tenantId: command.tenantId,
+        productId: command.productId,
+        warehouseId: command.warehouseId,
+      },
     });
     const previousQuantity = Number(level?.quantity ?? 0);
-    const resultingQuantity = command.type === MovementType.ADJUSTMENT
-      ? command.quantity
-      : previousQuantity + (command.type === MovementType.OUT ? -command.quantity : command.quantity);
-    const locationId = await resolveStockLevelLocationId(tx, command.tenantId, command.warehouseId, level?.locationId);
+    const resultingQuantity =
+      command.type === MovementType.ADJUSTMENT
+        ? command.quantity
+        : previousQuantity +
+          (command.type === MovementType.OUT
+            ? -command.quantity
+            : command.quantity);
+    const locationId = await resolveStockLevelLocationId(
+      tx,
+      command.tenantId,
+      command.warehouseId,
+      level?.locationId,
+    );
     const movement = await tx.stockMovement.create({
       data: {
         tenantId: command.tenantId,
@@ -249,8 +425,10 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
         unitCost: command.unitCost ?? null,
         lotId: command.lotId ?? null,
         batchId: command.batchId ?? null,
-        fromWarehouseId: command.type === MovementType.OUT ? command.warehouseId : null,
-        toWarehouseId: command.type === MovementType.OUT ? null : command.warehouseId,
+        fromWarehouseId:
+          command.type === MovementType.OUT ? command.warehouseId : null,
+        toWarehouseId:
+          command.type === MovementType.OUT ? null : command.warehouseId,
         refType: MovementRefType.MANUAL,
         notes: command.notes ?? null,
         createdById: command.userId,
@@ -258,13 +436,26 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
       },
     });
     await tx.stockLevel.upsert({
-      where: { productId_warehouseId_locationId: { productId: command.productId, warehouseId: command.warehouseId, locationId } },
-      create: { tenantId: command.tenantId, productId: command.productId, warehouseId: command.warehouseId, locationId, quantity: resultingQuantity },
-      update: command.type === MovementType.ADJUSTMENT
-        ? { quantity: command.quantity }
-        : command.type === MovementType.OUT
-          ? { quantity: { decrement: command.quantity } }
-          : { quantity: { increment: command.quantity } },
+      where: {
+        productId_warehouseId_locationId: {
+          productId: command.productId,
+          warehouseId: command.warehouseId,
+          locationId,
+        },
+      },
+      create: {
+        tenantId: command.tenantId,
+        productId: command.productId,
+        warehouseId: command.warehouseId,
+        locationId,
+        quantity: resultingQuantity,
+      },
+      update:
+        command.type === MovementType.ADJUSTMENT
+          ? { quantity: command.quantity }
+          : command.type === MovementType.OUT
+            ? { quantity: { decrement: command.quantity } }
+            : { quantity: { increment: command.quantity } },
     });
     await recordInventoryCosting(tx, command.tenantId, {
       movementId: movement.id,
@@ -290,10 +481,19 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     index: number,
   ): Promise<void> {
     const level = await tx.stockLevel.findFirst({
-      where: { tenantId: command.tenantId, productId: item.productId, warehouseId: command.warehouseId },
+      where: {
+        tenantId: command.tenantId,
+        productId: item.productId,
+        warehouseId: command.warehouseId,
+      },
     });
     const previousQuantity = Number(level?.quantity ?? 0);
-    const locationId = await resolveStockLevelLocationId(tx, command.tenantId, command.warehouseId, level?.locationId);
+    const locationId = await resolveStockLevelLocationId(
+      tx,
+      command.tenantId,
+      command.warehouseId,
+      level?.locationId,
+    );
     const movement = await tx.stockMovement.create({
       data: {
         tenantId: command.tenantId,
@@ -306,12 +506,27 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
         refId: command.purchaseOrderId,
         notes: `Satin alma teslimi: ${orderNumber}`,
         createdById: command.userId,
-        idempotencyKey: index === 0 ? command.idempotencyKey : `${command.idempotencyKey}:${item.id}`,
+        idempotencyKey:
+          index === 0
+            ? command.idempotencyKey
+            : `${command.idempotencyKey}:${item.id}`,
       },
     });
     await tx.stockLevel.upsert({
-      where: { productId_warehouseId_locationId: { productId: item.productId, warehouseId: command.warehouseId, locationId } },
-      create: { tenantId: command.tenantId, productId: item.productId, warehouseId: command.warehouseId, locationId, quantity },
+      where: {
+        productId_warehouseId_locationId: {
+          productId: item.productId,
+          warehouseId: command.warehouseId,
+          locationId,
+        },
+      },
+      create: {
+        tenantId: command.tenantId,
+        productId: item.productId,
+        warehouseId: command.warehouseId,
+        locationId,
+        quantity,
+      },
       update: { quantity: { increment: quantity } },
     });
     await recordInventoryCosting(tx, command.tenantId, {
@@ -328,12 +543,16 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     });
   }
 
-  private async findPurchaseOrder(tx: DbTransaction, tenantId: string, id: string): Promise<PurchaseOrderResult> {
+  private async findPurchaseOrder(
+    tx: DbTransaction,
+    tenantId: string,
+    id: string,
+  ): Promise<PurchaseOrderResult> {
     const order = await tx.purchaseOrder.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: purchaseOrderInclude,
     });
-    if (!order) throw new NotFoundError('Satin alma siparisi', id);
+    if (!order) throw new NotFoundError("Satin alma siparisi", id);
     return order;
   }
 }
