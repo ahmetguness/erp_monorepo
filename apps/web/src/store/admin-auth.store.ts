@@ -29,9 +29,14 @@ export const useAdminAuthStore = create<AdminAuthState>((set) => ({
   },
 
   logout: async () => {
-    await adminLogout();
-    set({ admin: null });
-    window.location.href = '/admin/login';
+    try {
+      await adminLogout();
+    } catch {
+      // Logout is best-effort: an unreachable API must not keep local admin state alive.
+    } finally {
+      set({ admin: null, isLoading: false });
+      window.location.replace('/admin/login');
+    }
   },
 
   fetchMe: async () => {

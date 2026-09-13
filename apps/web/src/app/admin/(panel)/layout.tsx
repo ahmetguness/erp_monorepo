@@ -307,7 +307,7 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
 
             <button
               type="button"
-              onClick={logout}
+              onClick={() => { void logout(); }}
               className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-xs font-medium text-slate-400 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -333,7 +333,7 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
             </div>
             <button
               type="button"
-              onClick={logout}
+              onClick={() => { void logout(); }}
               aria-label="Çıkış yap"
               className="rounded-lg border border-slate-800 p-2 text-slate-400 hover:border-red-500/30 hover:text-red-300"
             >

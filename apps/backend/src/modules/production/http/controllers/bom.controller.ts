@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
-import { getProductionEngineering } from '../../../../services/production-engineering.service.js';
+import { getProductionEngineering } from '../../infrastructure/services/production-engineering.service.js';
 import { requireParam,requireTenantId } from '../../../../utils/context.js';
 import { getPaginationParams } from '../../../../utils/pagination.js';
 

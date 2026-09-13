@@ -1,6 +1,6 @@
 import { Context } from 'hono';
 import { prisma } from '../../../../lib/prisma.js';
-import { getAdvancedProduction } from '../../../../services/advanced-production.service.js';
+import { getAdvancedProduction } from '../../infrastructure/services/advanced-production.service.js';
 import { requireTenantId } from '../../../../utils/context.js';
 
 function parseHorizonDays(value: string | undefined): number {

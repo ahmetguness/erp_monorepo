@@ -121,7 +121,7 @@ export function useRemoveBOMRouting() {
 
 // ─── Work Orders ──────────────────────────────
 
-export function useWorkOrders(params?: { page?: number; limit?: number; status?: string }) {
+export function useWorkOrders(params?: Parameters<typeof svc.getWorkOrders>[0]) {
   return useQuery({ queryKey: ['work-orders', params], queryFn: () => svc.getWorkOrders(params) });
 }
 
@@ -143,7 +143,7 @@ export function useChangeWorkOrderStatus() {
   const qc = useQueryClient();
   const { toast } = useUIStore();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { status: string; notes?: string } }) => svc.changeWorkOrderStatus(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof svc.changeWorkOrderStatus>[1] }) => svc.changeWorkOrderStatus(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['work-orders'] }); toast.success('Durum güncellendi.'); },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

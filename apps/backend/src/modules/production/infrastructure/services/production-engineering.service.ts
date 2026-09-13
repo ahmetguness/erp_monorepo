@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from "@prisma/client";
 
 type ProductionEngineeringDbClient = PrismaClient;
 
@@ -17,7 +17,7 @@ export interface BomRevisionRow {
   itemCount: number;
   routingCount: number;
   workOrderCount: number;
-  status: 'active' | 'future' | 'expired' | 'draft';
+  status: "active" | "future" | "expired" | "draft";
 }
 
 export interface AlternativeMaterialRow {
@@ -151,25 +151,38 @@ function productRef(product: ProductCostLookup): ProductionEngineeringRef {
   return { id: product.id, code: product.code, name: product.name };
 }
 
-function unitCost(product: Pick<ProductCostLookup, 'averageCost' | 'purchasePrice'>): number {
+function unitCost(
+  product: Pick<ProductCostLookup, "averageCost" | "purchasePrice">,
+): number {
   return numeric(product.averageCost) || numeric(product.purchasePrice);
 }
 
-function revisionStatus(row: { isActive: boolean; effectiveFrom: Date | null; effectiveTo: Date | null }, now: Date): BomRevisionRow['status'] {
-  if (!row.isActive) return 'draft';
-  if (row.effectiveFrom && row.effectiveFrom > now) return 'future';
-  if (row.effectiveTo && row.effectiveTo < now) return 'expired';
-  return 'active';
+function revisionStatus(
+  row: {
+    isActive: boolean;
+    effectiveFrom: Date | null;
+    effectiveTo: Date | null;
+  },
+  now: Date,
+): BomRevisionRow["status"] {
+  if (!row.isActive) return "draft";
+  if (row.effectiveFrom && row.effectiveFrom > now) return "future";
+  if (row.effectiveTo && row.effectiveTo < now) return "expired";
+  return "active";
 }
 
 function plannedRoutingCostPerUnit(routing: BomRoutingLookup): number {
   const setupHours = numeric(routing.setupTime) / 60;
   const runHours = numeric(routing.runTime) / 60;
-  const hourlyRate = numeric(routing.workCenter.laborRate) + numeric(routing.workCenter.overheadRate);
+  const hourlyRate =
+    numeric(routing.workCenter.laborRate) +
+    numeric(routing.workCenter.overheadRate);
   return round((setupHours + runHours) * hourlyRate);
 }
 
-function buildCostRow(workOrder: WorkOrderCostLookup): ProductionCostComparisonRow {
+function buildCostRow(
+  workOrder: WorkOrderCostLookup,
+): ProductionCostComparisonRow {
   const plannedMaterial = numeric(workOrder.estimatedMaterialCost);
   const plannedLabor = numeric(workOrder.estimatedLaborCost);
   const plannedOverhead = numeric(workOrder.estimatedOverheadCost);
@@ -218,7 +231,7 @@ export async function getProductionEngineering(
         effectiveTo: true,
         _count: { select: { items: true, routings: true, workOrders: true } },
       },
-      orderBy: [{ effectiveFrom: 'desc' }, { version: 'desc' }],
+      orderBy: [{ effectiveFrom: "desc" }, { version: "desc" }],
     }),
     db.bOMItem.findMany({
       where: { tenantId, bomId },
@@ -238,7 +251,7 @@ export async function getProductionEngineering(
           },
         },
       },
-      orderBy: { sortOrder: 'asc' },
+      orderBy: { sortOrder: "asc" },
     }),
     db.routingOperation.findMany({
       where: { tenantId, bomId },
@@ -248,9 +261,17 @@ export async function getProductionEngineering(
         stepOrder: true,
         setupTime: true,
         runTime: true,
-        workCenter: { select: { id: true, code: true, name: true, laborRate: true, overheadRate: true } },
+        workCenter: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            laborRate: true,
+            overheadRate: true,
+          },
+        },
       },
-      orderBy: { stepOrder: 'asc' },
+      orderBy: { stepOrder: "asc" },
     }),
     db.workOrder.findMany({
       where: { tenantId, bomId, deletedAt: null },
@@ -267,47 +288,69 @@ export async function getProductionEngineering(
         actualLaborCost: true,
         actualOverheadCost: true,
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { updatedAt: "desc" },
       take: 20,
     }),
   ]);
 
-  const alternativeMaterials = await buildAlternativeMaterials(db, tenantId, items);
-  const operationRoutes = routings.map((routing): OperationRouteRow => ({
-    routingId: routing.id,
-    stepOrder: routing.stepOrder,
-    operationName: routing.name,
-    workCenter: { id: routing.workCenter.id, code: routing.workCenter.code, name: routing.workCenter.name },
-    setupMinutes: round(numeric(routing.setupTime)),
-    runMinutesPerUnit: round(numeric(routing.runTime)),
-    laborRate: round(numeric(routing.workCenter.laborRate)),
-    overheadRate: round(numeric(routing.workCenter.overheadRate)),
-    plannedCostPerUnit: plannedRoutingCostPerUnit(routing),
-  }));
+  const alternativeMaterials = await buildAlternativeMaterials(
+    db,
+    tenantId,
+    items,
+  );
+  const operationRoutes = routings.map(
+    (routing): OperationRouteRow => ({
+      routingId: routing.id,
+      stepOrder: routing.stepOrder,
+      operationName: routing.name,
+      workCenter: {
+        id: routing.workCenter.id,
+        code: routing.workCenter.code,
+        name: routing.workCenter.name,
+      },
+      setupMinutes: round(numeric(routing.setupTime)),
+      runMinutesPerUnit: round(numeric(routing.runTime)),
+      laborRate: round(numeric(routing.workCenter.laborRate)),
+      overheadRate: round(numeric(routing.workCenter.overheadRate)),
+      plannedCostPerUnit: plannedRoutingCostPerUnit(routing),
+    }),
+  );
   const costComparison = workOrders.map(buildCostRow);
-  const plannedCostTotal = costComparison.reduce((sum, row) => sum + row.plannedCost, 0);
-  const actualCostTotal = costComparison.reduce((sum, row) => sum + row.actualCost, 0);
+  const plannedCostTotal = costComparison.reduce(
+    (sum, row) => sum + row.plannedCost,
+    0,
+  );
+  const actualCostTotal = costComparison.reduce(
+    (sum, row) => sum + row.actualCost,
+    0,
+  );
 
   const now = new Date();
-  const revisionRows = revisions.map((row): BomRevisionRow => ({
-    id: row.id,
-    version: row.version,
-    isActive: row.isActive,
-    effectiveFrom: toIso(row.effectiveFrom),
-    effectiveTo: toIso(row.effectiveTo),
-    itemCount: row._count.items,
-    routingCount: row._count.routings,
-    workOrderCount: row._count.workOrders,
-    status: revisionStatus(row, now),
-  }));
+  const revisionRows = revisions.map(
+    (row): BomRevisionRow => ({
+      id: row.id,
+      version: row.version,
+      isActive: row.isActive,
+      effectiveFrom: toIso(row.effectiveFrom),
+      effectiveTo: toIso(row.effectiveTo),
+      itemCount: row._count.items,
+      routingCount: row._count.routings,
+      workOrderCount: row._count.workOrders,
+      status: revisionStatus(row, now),
+    }),
+  );
 
   return {
     bomId,
     generatedAt: new Date().toISOString(),
     summary: {
       revisionCount: revisionRows.length,
-      activeRevisionCount: revisionRows.filter((row) => row.status === 'active').length,
-      alternativeSuggestionCount: alternativeMaterials.reduce((sum, row) => sum + row.alternatives.length, 0),
+      activeRevisionCount: revisionRows.filter((row) => row.status === "active")
+        .length,
+      alternativeSuggestionCount: alternativeMaterials.reduce(
+        (sum, row) => sum + row.alternatives.length,
+        0,
+      ),
       routeStepCount: operationRoutes.length,
       plannedCostTotal: round(plannedCostTotal),
       actualCostTotal: round(actualCostTotal),
@@ -333,7 +376,7 @@ async function buildAlternativeMaterials(
         bomItemId: item.id,
         primaryProduct: productRef(item.product),
         requiredQty: round(numeric(item.quantity), 3),
-        unit: item.unit ?? 'AD',
+        unit: item.unit ?? "AD",
         primaryUnitCost: round(unitCost(item.product)),
         alternatives: [],
       });
@@ -359,7 +402,7 @@ async function buildAlternativeMaterials(
         averageCost: true,
         stockLevels: { select: { quantity: true } },
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { updatedAt: "desc" },
       take: 5,
     });
 
@@ -368,17 +411,28 @@ async function buildAlternativeMaterials(
       bomItemId: item.id,
       primaryProduct: productRef(item.product),
       requiredQty: round(numeric(item.quantity), 3),
-      unit: item.unit ?? 'AD',
+      unit: item.unit ?? "AD",
       primaryUnitCost: round(primaryCost),
       alternatives: candidates.slice(0, 3).map((candidate) => {
         const candidateCost = unitCost(candidate);
-        const availableQty = candidate.stockLevels.reduce((sum, level) => sum + numeric(level.quantity), 0);
+        const availableQty = candidate.stockLevels.reduce(
+          (sum, level) => sum + numeric(level.quantity),
+          0,
+        );
         return {
-          product: { id: candidate.id, code: candidate.code, name: candidate.name },
+          product: {
+            id: candidate.id,
+            code: candidate.code,
+            name: candidate.name,
+          },
           availableQty: round(availableQty, 3),
           unitCost: round(candidateCost),
-          costDeltaPct: primaryCost > 0 ? pct(candidateCost - primaryCost, primaryCost) : 0,
-          reason: availableQty > 0 ? 'Ayni kategori ve birimde stoklu alternatif' : 'Ayni kategori ve birimde alternatif',
+          costDeltaPct:
+            primaryCost > 0 ? pct(candidateCost - primaryCost, primaryCost) : 0,
+          reason:
+            availableQty > 0
+              ? "Ayni kategori ve birimde stoklu alternatif"
+              : "Ayni kategori ve birimde alternatif",
         };
       }),
     });

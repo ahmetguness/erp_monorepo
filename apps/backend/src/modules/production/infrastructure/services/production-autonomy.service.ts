@@ -4,9 +4,9 @@ import {
   PrismaClient,
   ReservationRefType,
   WorkOrderStatus,
-} from '@prisma/client';
-import { logger } from '../lib/logger.js';
-import { createAuditLog } from '../utils/audit.js';
+} from "@prisma/client";
+import { logger } from "../../../../lib/logger.js";
+import { createAuditLog } from "../../../../utils/audit.js";
 
 export interface WorkCenterCapacityItem {
   workCenterId: string;
@@ -16,7 +16,7 @@ export interface WorkCenterCapacityItem {
   plannedWorkloadHours: number;
   utilizationPct: number;
   activeWorkOrdersCount: number;
-  status: 'NORMAL' | 'HIGH_LOAD' | 'BOTTLENECK';
+  status: "NORMAL" | "HIGH_LOAD" | "BOTTLENECK";
 }
 
 export interface ScheduleOptimizationDetail {
@@ -42,7 +42,7 @@ export interface PredictiveMaintenanceItem {
   workCenterName: string;
   operatingHours: number;
   failureProbabilityPct: number;
-  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  riskLevel: "LOW" | "MEDIUM" | "HIGH";
   recommendedSpareParts: Array<{
     productId: string;
     productName: string;
@@ -57,12 +57,18 @@ export class ProductionAutonomyService {
   /**
    * 1. Work Center Capacity Utilization & Bottleneck Detection
    */
-  async getWorkCenterCapacityAnalysis(tenantId: string): Promise<WorkCenterCapacityItem[]> {
+  async getWorkCenterCapacityAnalysis(
+    tenantId: string,
+  ): Promise<WorkCenterCapacityItem[]> {
     const workCenters = await this.db.workCenter.findMany({
       where: { tenantId, isActive: true },
       include: {
         workOrderOps: {
-          where: { status: { in: [WorkOrderStatus.PLANNED, WorkOrderStatus.IN_PROGRESS] } },
+          where: {
+            status: {
+              in: [WorkOrderStatus.PLANNED, WorkOrderStatus.IN_PROGRESS],
+            },
+          },
         },
       },
       take: 50,
@@ -79,11 +85,13 @@ export class ProductionAutonomyService {
       }
 
       const totalCapacity = capacityPerDay * 5; // 5 working days
-      const utilizationPct = Math.round((totalWorkload / Math.max(1, totalCapacity)) * 100);
+      const utilizationPct = Math.round(
+        (totalWorkload / Math.max(1, totalCapacity)) * 100,
+      );
 
-      let status: WorkCenterCapacityItem['status'] = 'NORMAL';
-      if (utilizationPct >= 85) status = 'BOTTLENECK';
-      else if (utilizationPct >= 70) status = 'HIGH_LOAD';
+      let status: WorkCenterCapacityItem["status"] = "NORMAL";
+      if (utilizationPct >= 85) status = "BOTTLENECK";
+      else if (utilizationPct >= 70) status = "HIGH_LOAD";
 
       items.push({
         workCenterId: wc.id,
@@ -108,9 +116,13 @@ export class ProductionAutonomyService {
     autoReschedule = true,
   ): Promise<ScheduleOptimizationResult> {
     const activeWorkOrders = await this.db.workOrder.findMany({
-      where: { tenantId, deletedAt: null, status: { in: [WorkOrderStatus.PLANNED, WorkOrderStatus.IN_PROGRESS] } },
+      where: {
+        tenantId,
+        deletedAt: null,
+        status: { in: [WorkOrderStatus.PLANNED, WorkOrderStatus.IN_PROGRESS] },
+      },
       include: { product: true, operations: { include: { workCenter: true } } },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: "asc" },
       take: 20,
     });
 
@@ -134,7 +146,8 @@ export class ProductionAutonomyService {
         rescheduledCount++;
       }
 
-      const assignedWc = wo.operations[0]?.workCenter?.name ?? 'Varsayılan İş Merkezi';
+      const assignedWc =
+        wo.operations[0]?.workCenter?.name ?? "Varsayılan İş Merkezi";
 
       details.push({
         workOrderId: wo.id,
@@ -146,7 +159,9 @@ export class ProductionAutonomyService {
       });
     }
 
-    logger.info(`[ProductionAutonomy] Optimized schedule for ${activeWorkOrders.length} work orders`);
+    logger.info(
+      `[ProductionAutonomy] Optimized schedule for ${activeWorkOrders.length} work orders`,
+    );
 
     return {
       totalWorkOrdersScanned: activeWorkOrders.length,
@@ -161,7 +176,9 @@ export class ProductionAutonomyService {
   /**
    * 3. Predictive Maintenance Spare Parts Reservations
    */
-  async getPredictiveMaintenanceReservations(tenantId: string): Promise<PredictiveMaintenanceItem[]> {
+  async getPredictiveMaintenanceReservations(
+    tenantId: string,
+  ): Promise<PredictiveMaintenanceItem[]> {
     const workCenters = await this.db.workCenter.findMany({
       where: { tenantId, isActive: true },
       select: { id: true, name: true, code: true },
@@ -178,12 +195,15 @@ export class ProductionAutonomyService {
 
     for (let i = 0; i < workCenters.length; i++) {
       const wc = workCenters[i];
-      const opHours = 450 + (i * 120);
-      const failureProb = Math.min(95, Math.max(10, Math.round((opHours / 1000) * 100)));
+      const opHours = 450 + i * 120;
+      const failureProb = Math.min(
+        95,
+        Math.max(10, Math.round((opHours / 1000) * 100)),
+      );
 
-      let riskLevel: PredictiveMaintenanceItem['riskLevel'] = 'LOW';
-      if (failureProb >= 70) riskLevel = 'HIGH';
-      else if (failureProb >= 40) riskLevel = 'MEDIUM';
+      let riskLevel: PredictiveMaintenanceItem["riskLevel"] = "LOW";
+      if (failureProb >= 70) riskLevel = "HIGH";
+      else if (failureProb >= 40) riskLevel = "MEDIUM";
 
       const spare = spareProducts[i % spareProducts.length];
 
@@ -223,7 +243,7 @@ export class ProductionAutonomyService {
       where: { tenantId, isActive: true },
     });
 
-    if (!warehouse) throw new Error('Sistemde varsayılan depo bulunamadı.');
+    if (!warehouse) throw new Error("Sistemde varsayılan depo bulunamadı.");
 
     const res = await this.db.inventoryReservation.create({
       data: {
@@ -238,12 +258,14 @@ export class ProductionAutonomyService {
       },
     });
 
-    logger.info(`[ProductionAutonomy] Predictive maintenance reservation ${res.id} created for workCenter ${workCenterId}`);
+    logger.info(
+      `[ProductionAutonomy] Predictive maintenance reservation ${res.id} created for workCenter ${workCenterId}`,
+    );
 
     await createAuditLog(this.db, {
       tenantId,
       userId,
-      module: 'production',
+      module: "production",
       entityType: EntityType.WORK_ORDER,
       entityId: workCenterId,
       action: AuditAction.CREATE,

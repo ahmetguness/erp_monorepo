@@ -1,7 +1,7 @@
 import { AuditAction,EntityType,MovementType,ReservationRefType,WorkOrderStatus } from '@prisma/client';
 import { Context } from 'hono';
 import { createEventContext,domainEvents } from '../../../../domain-events/index.js';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
+import { ConflictError,NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import {
 assertCanConsumeStock,
@@ -9,17 +9,24 @@ assertCanReserveStock,
 recordInventoryCosting,
 resolveStockLevelLocationId,
 } from '../../../../services/inventory-rules.service.js';
-import { ProductionAutomationService } from '../../../../services/production-automation.service.js';
+import { ProductionAutomationService } from '../../infrastructure/services/production-automation.service.js';
 import {
 allocateCapacity,
 calculateEstimatedCosts,
 postProductionAccountingEntry,
 releaseCapacity,
-} from '../../../../services/production-rules.service.js';
+} from '../../infrastructure/services/production-rules.service.js';
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
 import { generateDocumentNumber } from '../../../../utils/generate-number.js';
 import { getPaginationParams } from '../../../../utils/pagination.js';
+import { productionApplication } from '../../composition.js';
+import {
+assertWorkOrderStatusTransition,
+buildMaterialRequirements,
+} from '../../domain/index.js';
+import type { CreateWorkOrderCommand, RecordProductionOutputCommand } from '@repo/types';
+import { decideWorkOrderCompletion, validateCreateWorkOrder, validateProductionOutput } from '../../application/operations/index.js';
 
 const prodAutomation = new ProductionAutomationService(prisma);
 
@@ -27,107 +34,36 @@ const prodAutomation = new ProductionAutomationService(prisma);
 // Work Order Controller — İş emri CRUD + durum geçişleri
 // ─────────────────────────────────────────────
 
-const STATUS_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
-  PLANNED: ['IN_PROGRESS', 'CANCELLED'],
-  IN_PROGRESS: ['PAUSED', 'COMPLETED', 'CANCELLED'],
-  PAUSED: ['IN_PROGRESS', 'CANCELLED'],
-  COMPLETED: [],
-  CANCELLED: [],
-};
-
-interface MaterialRequirement {
-  productId: string;
-  warehouseId: string;
-  quantity: number;
-}
-
 interface ReservationResult {
   reservedLineCount: number;
   reservedQuantity: number;
 }
 
-function requirePositiveQuantity(value: number, field: string): void {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new ValidationError(`${field} pozitif olmalıdır.`);
-  }
-}
-
-function materialRequirementKey(productId: string, warehouseId: string): string {
-  return `${productId}:${warehouseId}`;
-}
-
-function buildMaterialRequirements(
-  items: Array<{ productId: string; requiredQty: unknown; consumedQty: unknown; sourceWarehouseId: string | null }>,
-  inputWarehouseId: string | null,
-): MaterialRequirement[] {
-  const requirements = new Map<string, MaterialRequirement>();
-
-  for (const item of items) {
-    const warehouseId = item.sourceWarehouseId ?? inputWarehouseId;
-    if (!warehouseId) continue;
-    const remainingQty = Math.max(0, Number(item.requiredQty ?? 0) - Number(item.consumedQty ?? 0));
-    if (remainingQty <= 0) continue;
-
-    const key = materialRequirementKey(item.productId, warehouseId);
-    const current = requirements.get(key);
-    if (current) {
-      current.quantity += remainingQty;
-    } else {
-      requirements.set(key, { productId: item.productId, warehouseId, quantity: remainingQty });
-    }
-  }
-
-  return Array.from(requirements.values());
-}
-
 export const WorkOrderController = {
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-
-    const { page, limit, skip } = getPaginationParams(c, 20);
+    const { page, limit } = getPaginationParams(c, 20);
     const status = c.req.query('status') as WorkOrderStatus | undefined;
-
-    const where = { tenantId, deletedAt: null, ...(status && { status }) };
-
-    const [total, data] = await prisma.$transaction([
-      prisma.workOrder.count({ where }),
-      prisma.workOrder.findMany({
-        where,
-        include: {
-          product: { select: { id: true, code: true, name: true } },
-          bom: { select: { id: true, name: true, version: true } },
-          _count: { select: { items: true, operations: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip: skip,
-        take: limit,
-      }),
-    ]);
-
-    return c.json({ data, meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) } });
+    const result = await productionApplication.workOrderQueries.list({
+      tenantId,
+      page,
+      pageSize: limit,
+      ...(status ? { status } : {}),
+    });
+    return c.json(result);
   },
 
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const id = requireParam(c, 'id');
 
-    const wo = await prisma.workOrder.findFirst({
-      where: { id, tenantId, deletedAt: null },
-      include: {
-        product: { select: { id: true, code: true, name: true, purchasePrice: true, averageCost: true } },
-        bom: { select: { id: true, name: true, version: true } },
-        inputWarehouse: { select: { id: true, code: true, name: true } },
-        outputWarehouse: { select: { id: true, code: true, name: true } },
-        items: { include: { product: { select: { id: true, code: true, name: true, purchasePrice: true, averageCost: true } } } },
-        operations: {
-          include: { workCenter: { select: { id: true, code: true, name: true } } },
-          orderBy: { stepOrder: 'asc' },
-        },
-        history: { orderBy: { createdAt: 'desc' }, take: 20 },
-      },
-    });
-    if (!wo) return c.json(new NotFoundError('İş Emri', id).toJSON(), 404);
-    return c.json({ data: wo });
+    try {
+      const workOrder = await productionApplication.workOrderQueries.detail(tenantId, id);
+      return c.json({ data: workOrder });
+    } catch (error) {
+      if (error instanceof NotFoundError) return c.json(error.toJSON(), 404);
+      throw error;
+    }
   },
 
   async create(c: Context): Promise<Response> {
@@ -135,13 +71,13 @@ export const WorkOrderController = {
     const userId = requireUserId(c);
     const requestMeta = getRequestMeta(c);
 
-    const body = await c.req.json<{
-      productId: string; bomId?: string; plannedQty: number;
-      startDate?: string; endDate?: string; notes?: string;
-      inputWarehouseId?: string; outputWarehouseId?: string;
-    }>();
-
-    if (!body.productId || !body.plannedQty) return c.json(new ValidationError('productId ve plannedQty zorunludur.').toJSON(), 400);
+    let body: CreateWorkOrderCommand;
+    try {
+      body = validateCreateWorkOrder(await c.req.json<unknown>());
+    } catch (error) {
+      if (error instanceof ValidationError) return c.json(error.toJSON(), 400);
+      throw error;
+    }
 
     // Numara üret
     const number = await generateDocumentNumber(tenantId, 'work_order', 'WO-', 'workOrder');
@@ -236,9 +172,16 @@ export const WorkOrderController = {
     const body = await c.req.json<{ status: WorkOrderStatus; notes?: string }>();
     if (!body.status) return c.json(new ValidationError('status zorunludur.').toJSON(), 400);
 
-    const allowed = STATUS_TRANSITIONS[wo.status];
-    if (!allowed.includes(body.status)) {
-      return c.json(new ValidationError(`${wo.status} → ${body.status} geçişi yapılamaz.`).toJSON(), 400);
+    if (body.status === WorkOrderStatus.COMPLETED && decideWorkOrderCompletion(wo.status) === 'ALREADY_COMPLETED') {
+      const { product: _product, items: _items, ...completedWorkOrder } = wo;
+      return c.json({ data: completedWorkOrder });
+    }
+
+    try {
+      assertWorkOrderStatusTransition(wo.status, body.status);
+    } catch (error) {
+      if (error instanceof ValidationError) return c.json(error.toJSON(), 400);
+      throw error;
     }
 
     const reservationEvents: ReservationResult[] = [];
@@ -440,21 +383,10 @@ export const WorkOrderController = {
     if (!wo) return c.json(new NotFoundError('İş Emri', id).toJSON(), 404);
     if (wo.status !== 'IN_PROGRESS') return c.json(new ValidationError('Üretim bildirimi sadece IN_PROGRESS durumunda yapılabilir.').toJSON(), 400);
 
-    const body = await c.req.json<{
-      producedQty: number;
-      scrapQty?: number;
-      scrapReason?: string;
-      operationId?: string;
-      notes?: string;
-      consumptions?: Array<{ itemId: string; quantity: number }>;
-    }>();
+    let body: RecordProductionOutputCommand;
 
     try {
-      requirePositiveQuantity(body.producedQty, 'producedQty');
-      if (body.scrapQty !== undefined && body.scrapQty < 0) throw new ValidationError('scrapQty negatif olamaz.');
-      for (const cons of body.consumptions ?? []) {
-        requirePositiveQuantity(cons.quantity, 'consumption.quantity');
-      }
+      body = validateProductionOutput(await c.req.json<unknown>());
     } catch (error) {
       if (error instanceof ValidationError) return c.json(error.toJSON(), 400);
       throw error;
@@ -463,16 +395,23 @@ export const WorkOrderController = {
     if (body.consumptions?.length) {
       for (const cons of body.consumptions) {
         const item = wo.items.find((i) => i.id === cons.itemId);
-        if (!item) continue;
+        if (!item) return c.json(new ValidationError(`İş emri malzeme kalemi bulunamadı: ${cons.itemId}`).toJSON(), 400);
         const warehouseId = item.sourceWarehouseId ?? wo.inputWarehouseId;
-        if (!warehouseId) continue;
-        await assertCanConsumeStock(prisma, tenantId, {
-          productId: item.productId,
-          warehouseId,
-          quantity: cons.quantity,
-          refType: 'WORK_ORDER',
-          refId: id,
-        });
+        if (!warehouseId) return c.json(new ValidationError('Malzeme tüketimi için kaynak depo zorunludur.').toJSON(), 400);
+        let stockCheck;
+        try {
+          stockCheck = await assertCanConsumeStock(prisma, tenantId, {
+            productId: item.productId,
+            warehouseId,
+            quantity: cons.quantity,
+            refType: 'WORK_ORDER',
+            refId: id,
+          });
+        } catch (error) {
+          if (error instanceof ValidationError) throw new ConflictError(error.message);
+          throw error;
+        }
+        if (stockCheck.warning) throw new ConflictError(stockCheck.warning);
       }
     }
 

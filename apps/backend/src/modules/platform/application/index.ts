@@ -4,3 +4,13 @@ export { ADMIN_RECENT_MFA_SECONDS } from '../admin-auth/admin-session.service.js
 export { resolveSupportSession, supportRouteAllowed } from '../support-sessions/support-session-access.service.js';
 export { assertTenantOwner } from '../support-sessions/support-session.service.js';
 export { supportContactNoteSchema } from '../support-sessions/support-session.schemas.js';
+export {
+  abandonAdminRequest,
+  claimAdminRequest,
+  completeAdminRequest,
+} from '../admin-api-safety/admin-idempotency.service.js';
+export {
+  adminMutationBodySchema,
+  idempotencyKeySchema,
+} from '../admin-api-safety/admin-api-safety.schemas.js';
+export { adminApiOpenApi } from '../admin-api-safety/admin-api-openapi.js';

@@ -3,13 +3,11 @@ import type { MiddlewareHandler } from "hono";
 import { ValidationError } from "../errors/index.js";
 import {
   abandonAdminRequest,
+  adminMutationBodySchema,
   claimAdminRequest,
   completeAdminRequest,
-} from "../modules/platform/admin-api-safety/admin-idempotency.service.js";
-import {
-  adminMutationBodySchema,
   idempotencyKeySchema,
-} from "../modules/platform/admin-api-safety/admin-api-safety.schemas.js";
+} from "../modules/platform/application/index.js";
 
 const conflict = (message: string) => ({
   error: { code: "IDEMPOTENCY_CONFLICT", message },

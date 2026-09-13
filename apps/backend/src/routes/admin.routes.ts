@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { requireAdmin, requireAdminPermission, requireRecentAdminMfa } from '../middleware/requireAdmin';
 import { platformAdminAuditMiddleware } from '../middleware/platform-admin-audit.js';
 import { adminIdempotency } from '../middleware/admin-idempotency.js';
-import { adminApiOpenApi } from '../modules/platform/admin-api-safety/index.js';
+import { adminApiOpenApi } from '../modules/platform/application/index.js';
 import {
 AdminAuditController,
 AdminChangeRequestController,

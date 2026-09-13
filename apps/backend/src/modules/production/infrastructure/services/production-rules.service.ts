@@ -1,8 +1,11 @@
-import { Prisma, JournalEntryType } from '@prisma/client';
-import type { PrismaClient } from '@prisma/client';
-import { ValidationError } from '../errors/index.js';
-import { generateDocumentNumber } from '../utils/generate-number.js';
-import { resolveOpenFiscalPeriodId, assertJournalBalanced } from './financial/index.js';
+import { Prisma, JournalEntryType } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+import { ValidationError } from "../../../../errors/index.js";
+import {
+  resolveOpenFiscalPeriodId,
+  assertJournalBalanced,
+} from "../../../../services/financial/index.js";
+import { generateDocumentNumber } from "../../../../utils/generate-number.js";
 
 type ProductionDbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -19,7 +22,7 @@ export async function calculateEstimatedCosts(
   db: ProductionDbClient,
   tenantId: string,
   bomId: string,
-  plannedQty: number
+  plannedQty: number,
 ): Promise<EstimatedCosts> {
   const bom = await db.bOM.findFirst({
     where: { id: bomId, tenantId },
@@ -30,7 +33,7 @@ export async function calculateEstimatedCosts(
   });
 
   if (!bom) {
-    throw new ValidationError('Belirtilen BOM bulunamadı.');
+    throw new ValidationError("Belirtilen BOM bulunamadı.");
   }
 
   let estimatedMaterialCost = 0;
@@ -40,7 +43,9 @@ export async function calculateEstimatedCosts(
   // 1. Material Cost Calculation
   for (const item of bom.items) {
     const qtyNeeded = Number(item.quantity) * plannedQty;
-    const avgCost = Number(item.product.averageCost ?? item.product.purchasePrice ?? 0);
+    const avgCost = Number(
+      item.product.averageCost ?? item.product.purchasePrice ?? 0,
+    );
     estimatedMaterialCost += qtyNeeded * avgCost;
   }
 
@@ -54,7 +59,7 @@ export async function calculateEstimatedCosts(
     if (wc) {
       const setupTime = Number(routing.setupTime ?? 0);
       const runTime = Number(routing.runTime ?? 0);
-      const totalMinutes = setupTime + (runTime * plannedQty);
+      const totalMinutes = setupTime + runTime * plannedQty;
       const totalHours = totalMinutes / 60;
 
       estimatedLaborCost += totalHours * Number(wc.laborRate ?? 0);
@@ -75,7 +80,7 @@ export async function calculateEstimatedCosts(
 export async function allocateCapacity(
   db: ProductionDbClient,
   tenantId: string,
-  workOrderId: string
+  workOrderId: string,
 ): Promise<void> {
   const workOrder = await db.workOrder.findFirst({
     where: { id: workOrderId, tenantId },
@@ -112,7 +117,7 @@ export async function allocateCapacity(
   for (const op of workOrder.operations) {
     const setupTime = Number(op.plannedSetupTime ?? 0);
     const runTime = Number(op.plannedRunTime ?? 0);
-    const totalMinutes = setupTime + (runTime * plannedQty);
+    const totalMinutes = setupTime + runTime * plannedQty;
     const totalHours = totalMinutes / 60;
 
     // Distribute hours evenly over the dates range
@@ -150,7 +155,7 @@ export async function allocateCapacity(
 export async function releaseCapacity(
   db: ProductionDbClient,
   tenantId: string,
-  workOrderId: string
+  workOrderId: string,
 ): Promise<void> {
   const workOrder = await db.workOrder.findFirst({
     where: { id: workOrderId, tenantId },
@@ -185,7 +190,7 @@ export async function releaseCapacity(
   for (const op of workOrder.operations) {
     const setupTime = Number(op.plannedSetupTime ?? 0);
     const runTime = Number(op.plannedRunTime ?? 0);
-    const totalMinutes = setupTime + (runTime * plannedQty);
+    const totalMinutes = setupTime + runTime * plannedQty;
     const totalHours = totalMinutes / 60;
     const dailyHours = totalHours / datesRange.length;
 
@@ -218,14 +223,14 @@ export async function postProductionAccountingEntry(
   db: ProductionDbClient,
   tenantId: string,
   workOrderId: string,
-  userId: string
+  userId: string,
 ): Promise<void> {
   const workOrder = await db.workOrder.findFirst({
     where: { id: workOrderId, tenantId },
     include: { product: true },
   });
 
-  if (!workOrder) throw new ValidationError('İş emri bulunamadı.');
+  if (!workOrder) throw new ValidationError("İş emri bulunamadı.");
 
   const actualMat = Number(workOrder.actualMaterialCost ?? 0);
   const actualLab = Number(workOrder.actualLaborCost ?? 0);
@@ -244,27 +249,56 @@ export async function postProductionAccountingEntry(
     select: { id: true, code: true, name: true, accountType: true },
   });
 
-  const findAccount = (prefix: string, keywords: string[], fallbackType: string) => {
+  const findAccount = (
+    prefix: string,
+    keywords: string[],
+    fallbackType: string,
+  ) => {
     let acc = accounts.find((a) => a.code.startsWith(prefix));
     if (!acc) {
-      acc = accounts.find((a) => keywords.some((kw) => a.name.toLowerCase().includes(kw)));
+      acc = accounts.find((a) =>
+        keywords.some((kw) => a.name.toLowerCase().includes(kw)),
+      );
     }
     if (!acc) {
       acc = accounts.find((a) => a.accountType === fallbackType);
     }
     if (!acc) {
-      throw new ValidationError(`Muhasebe entegrasyonu için uygun bir hesap bulunamadı (Aranan: Kod ${prefix} veya anahtar kelime: ${keywords.join(', ')}).`);
+      throw new ValidationError(
+        `Muhasebe entegrasyonu için uygun bir hesap bulunamadı (Aranan: Kod ${prefix} veya anahtar kelime: ${keywords.join(", ")}).`,
+      );
     }
     return acc;
   };
 
-  const finishedGoodsAcc = findAccount('152', ['mamul', 'finished goods'], 'ASSET');
-  const rawMaterialsAcc = findAccount('150', ['hammadde', 'malzeme', 'raw material'], 'ASSET');
-  const laborAcc = findAccount('720', ['işçilik', 'labor'], 'EXPENSE');
-  const overheadAcc = findAccount('730', ['genel üretim', 'gider', 'overhead'], 'EXPENSE');
-  const scrapAcc = findAccount('689', ['zayiat', 'fire', 'scrap', 'kabul edilmeyen'], 'EXPENSE');
+  const finishedGoodsAcc = findAccount(
+    "152",
+    ["mamul", "finished goods"],
+    "ASSET",
+  );
+  const rawMaterialsAcc = findAccount(
+    "150",
+    ["hammadde", "malzeme", "raw material"],
+    "ASSET",
+  );
+  const laborAcc = findAccount("720", ["işçilik", "labor"], "EXPENSE");
+  const overheadAcc = findAccount(
+    "730",
+    ["genel üretim", "gider", "overhead"],
+    "EXPENSE",
+  );
+  const scrapAcc = findAccount(
+    "689",
+    ["zayiat", "fire", "scrap", "kabul edilmeyen"],
+    "EXPENSE",
+  );
 
-  const lines: { accountId: string; debit: number; credit: number; description: string }[] = [];
+  const lines: {
+    accountId: string;
+    debit: number;
+    credit: number;
+    description: string;
+  }[] = [];
 
   // Finished Goods debit
   if (finishedGoodsCost > 0) {
@@ -325,7 +359,9 @@ export async function postProductionAccountingEntry(
   // If there's a minor precision mismatch, adjust the largest entry
   const diff = Number((totalDebit - totalCredit).toFixed(2));
   if (Math.abs(diff) > 0 && Math.abs(diff) < 0.05) {
-    const largestLine = lines.sort((a, b) => (b.debit + b.credit) - (a.debit + a.credit))[0];
+    const largestLine = lines.sort(
+      (a, b) => b.debit + b.credit - (a.debit + a.credit),
+    )[0];
     if (largestLine.debit > 0) {
       largestLine.debit = Number((largestLine.debit - diff).toFixed(2));
     } else {
@@ -343,8 +379,18 @@ export async function postProductionAccountingEntry(
   assertJournalBalanced(lines);
 
   const entryDate = new Date();
-  const fiscalPeriodId = await resolveOpenFiscalPeriodId(db, tenantId, entryDate, 'Üretim muhasebe fişi');
-  const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', 'journalEntry');
+  const fiscalPeriodId = await resolveOpenFiscalPeriodId(
+    db,
+    tenantId,
+    entryDate,
+    "Üretim muhasebe fişi",
+  );
+  const number = await generateDocumentNumber(
+    tenantId,
+    "journal",
+    "JE-",
+    "journalEntry",
+  );
 
   await db.journalEntry.create({
     data: {

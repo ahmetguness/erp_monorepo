@@ -257,7 +257,13 @@ export function StockMovementsPage({ defaultType = '', title = 'Stok Hareketleri
           <div className="min-w-[240px] flex-1">
             <Input aria-label="Ürün ara" placeholder="Ürün adı veya kod ara..." value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} prefixIcon={<Search className="h-4 w-4" />} />
           </div>
-          <select value={type} onChange={(event) => { setType(event.target.value as StockMovementType | ''); setPage(1); }} aria-label="Hareket tipi" className="h-10 w-full rounded-xl border border-slate-700/75 bg-slate-950/35 px-3.5 text-sm text-slate-200 outline-none transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:border-sky-500/60 focus:ring-2 focus:ring-sky-500/35 xl:w-44">
+          <select value={type} onChange={(event) => {
+            const nextType = event.target.value;
+            if (nextType === '' || isMovementType(nextType)) {
+              setType(nextType);
+              setPage(1);
+            }
+          }} aria-label="Hareket tipi" className="h-10 w-full rounded-xl border border-slate-700/75 bg-slate-950/35 px-3.5 text-sm text-slate-200 outline-none transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:border-sky-500/60 focus:ring-2 focus:ring-sky-500/35 xl:w-44">
             <option value="">Tüm Hareketler</option>
             {Object.entries(MOVEMENT_TYPE_META).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}
           </select>

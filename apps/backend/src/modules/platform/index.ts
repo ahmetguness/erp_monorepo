@@ -23,6 +23,7 @@ import { starterCsvImportRoutes } from '../../routes/starter-csv-import.routes.j
 import { starterHealthRoutes } from '../../routes/starter-health.routes.js';
 import { taskRoutes } from '../../routes/task.routes.js';
 import { currencyRatesRoutes } from './http/currency-rates.routes.js';
+import { pilotReadinessRoutes } from './pilot-readiness/infrastructure/http/pilot-readiness.routes.js';
 export { MetricsController } from './http/controllers/metrics.controller.js';
 export { PersistentObservabilityWorker } from './persistent-observability/persistent-observability.worker.js';
 export { getPublicStatusIncidents } from './incident-management/incident-management.service.js';
@@ -55,5 +56,6 @@ export const platformModule: BackendModule = {
     app.route('/master-data-enrichment', masterDataEnrichmentRoutes);
     app.route('/contextual-forms', contextualFormRoutes);
     app.route('/currency-rates', currencyRatesRoutes);
+    app.route('/pilot-readiness', pilotReadinessRoutes);
   },
 };

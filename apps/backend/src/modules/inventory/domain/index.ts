@@ -16,3 +16,9 @@ export {
   type SalesVelocity,
   type SuggestionPriority,
 } from './replenishment-policy.js';
+export {
+  assertManualStockMovement,
+  isManualStockMovementType,
+  MANUAL_STOCK_MOVEMENT_TYPES,
+  type ManualStockMovementType,
+} from './stock-movement-policy.js';

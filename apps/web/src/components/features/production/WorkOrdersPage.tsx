@@ -10,12 +10,12 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useWorkOrders } from "@/hooks/useProduction";
 import { cn, formatDate } from "@/lib/utils";
-import type { WorkOrder } from "@/services/production.service";
+import type { WorkOrder, WorkOrderStatus } from "@/services/production.service";
 
 const PAGE_SIZE = 20;
 const EMPTY_WORK_ORDERS: WorkOrder[] = [];
 
-const STATUS_MAP: Record<string, { label: string; variant: "neutral" | "success" | "warning" | "danger" | "info" }> = {
+const STATUS_MAP: Record<WorkOrderStatus, { label: string; variant: "neutral" | "success" | "warning" | "danger" | "info" }> = {
   PLANNED: { label: "Planlandı", variant: "info" },
   IN_PROGRESS: { label: "Devam Ediyor", variant: "warning" },
   PAUSED: { label: "Duraklatıldı", variant: "neutral" },
@@ -23,7 +23,7 @@ const STATUS_MAP: Record<string, { label: string; variant: "neutral" | "success"
   CANCELLED: { label: "İptal", variant: "danger" },
 };
 
-const STATUSES = ["", "PLANNED", "IN_PROGRESS", "PAUSED", "COMPLETED", "CANCELLED"];
+const STATUSES = ["", "PLANNED", "IN_PROGRESS", "PAUSED", "COMPLETED", "CANCELLED"] as const satisfies readonly (WorkOrderStatus | "")[];
 
 function formatQty(value: number): string {
   return new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 3 }).format(value);
@@ -34,15 +34,15 @@ function progressPct(order: WorkOrder): number {
   return Math.min(100, Math.max(0, (order.producedQty / order.plannedQty) * 100));
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: WorkOrderStatus }) {
   const mapped = STATUS_MAP[status];
-  return mapped ? <Badge variant={mapped.variant}>{mapped.label}</Badge> : <Badge variant="neutral">{status}</Badge>;
+  return <Badge variant={mapped.variant}>{mapped.label}</Badge>;
 }
 
 export function WorkOrdersPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<WorkOrderStatus | "">("");
   const [search, setSearch] = useState("");
 
   const { data, isLoading } = useWorkOrders({

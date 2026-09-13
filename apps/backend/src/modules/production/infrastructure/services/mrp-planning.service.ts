@@ -1,5 +1,10 @@
-import { OrderStatus, PurchaseOrderStatus, PurchaseRequestStatus, WorkOrderStatus } from '@prisma/client';
-import type { PrismaClient } from '@prisma/client';
+import {
+  OrderStatus,
+  PurchaseOrderStatus,
+  PurchaseRequestStatus,
+  WorkOrderStatus,
+} from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 
 type MrpDbClient = PrismaClient;
 
@@ -63,7 +68,7 @@ export interface MrpProductionRecommendation {
 
 export interface MrpPurchaseRecommendation {
   product: MrpProductRef;
-  source: 'finished_good_without_bom' | 'bom_component';
+  source: "finished_good_without_bom" | "bom_component";
   parentProduct?: MrpProductRef;
   grossRequirementQty: number;
   safetyStockQty: number;
@@ -154,7 +159,11 @@ function workCenterDailyCapacity(value: unknown): number {
   return parsed > 0 ? parsed : 8;
 }
 
-function productRef(value: { id: string; code: string; name: string }): MrpProductRef {
+function productRef(value: {
+  id: string;
+  code: string;
+  name: string;
+}): MrpProductRef {
   return { id: value.id, code: value.code, name: value.name };
 }
 
@@ -193,13 +202,18 @@ function getPlanningWindow(horizonDays: number): { start: Date; end: Date } {
   return { start, end };
 }
 
-async function getStockByProduct(db: MrpDbClient, tenantId: string): Promise<Map<string, number>> {
+async function getStockByProduct(
+  db: MrpDbClient,
+  tenantId: string,
+): Promise<Map<string, number>> {
   const rows = await db.stockLevel.groupBy({
-    by: ['productId'],
+    by: ["productId"],
     where: { tenantId },
     _sum: { quantity: true },
   });
-  return new Map(rows.map((row) => [row.productId, decimalToNumber(row._sum.quantity)]));
+  return new Map(
+    rows.map((row) => [row.productId, decimalToNumber(row._sum.quantity)]),
+  );
 }
 
 async function getSalesDemandByProduct(
@@ -228,7 +242,14 @@ async function getSalesDemandByProduct(
   const demand = new Map<string, number>();
   for (const order of orders) {
     for (const item of order.items) {
-      addToMap(demand, item.productId, Math.max(0, decimalToNumber(item.quantity) - decimalToNumber(item.delivered)));
+      addToMap(
+        demand,
+        item.productId,
+        Math.max(
+          0,
+          decimalToNumber(item.quantity) - decimalToNumber(item.delivered),
+        ),
+      );
     }
   }
   return demand;
@@ -242,14 +263,25 @@ async function getHistoricalForecastByProduct(
   const end = new Date();
   end.setUTCHours(0, 0, 0, 0);
   const start = new Date(end);
-  start.setUTCDate(start.getUTCDate() - Math.max(30, Math.min(180, horizonDays * 3)));
-  const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86_400_000));
+  start.setUTCDate(
+    start.getUTCDate() - Math.max(30, Math.min(180, horizonDays * 3)),
+  );
+  const days = Math.max(
+    1,
+    Math.ceil((end.getTime() - start.getTime()) / 86_400_000),
+  );
 
   const orders = await db.salesOrder.findMany({
     where: {
       tenantId,
       deletedAt: null,
-      status: { in: [OrderStatus.CONFIRMED, OrderStatus.PARTIALLY_DELIVERED, OrderStatus.DELIVERED] },
+      status: {
+        in: [
+          OrderStatus.CONFIRMED,
+          OrderStatus.PARTIALLY_DELIVERED,
+          OrderStatus.DELIVERED,
+        ],
+      },
       date: { gte: start, lt: end },
     },
     select: {
@@ -295,16 +327,27 @@ async function getOpenWorkOrderSupplyByProduct(
     addToMap(
       supply,
       workOrder.productId,
-      Math.max(0, decimalToNumber(workOrder.plannedQty) - decimalToNumber(workOrder.producedQty)),
+      Math.max(
+        0,
+        decimalToNumber(workOrder.plannedQty) -
+          decimalToNumber(workOrder.producedQty),
+      ),
     );
   }
   return supply;
 }
 
-async function getOpenPurchaseSupplyByProduct(db: MrpDbClient, tenantId: string): Promise<Map<string, number>> {
+async function getOpenPurchaseSupplyByProduct(
+  db: MrpDbClient,
+  tenantId: string,
+): Promise<Map<string, number>> {
   const [purchaseOrders, purchaseRequests] = await Promise.all([
     db.purchaseOrder.findMany({
-      where: { tenantId, deletedAt: null, status: { in: [...OPEN_PURCHASE_ORDER_STATUSES] } },
+      where: {
+        tenantId,
+        deletedAt: null,
+        status: { in: [...OPEN_PURCHASE_ORDER_STATUSES] },
+      },
       select: {
         items: {
           select: {
@@ -316,7 +359,11 @@ async function getOpenPurchaseSupplyByProduct(db: MrpDbClient, tenantId: string)
       },
     }),
     db.purchaseRequest.findMany({
-      where: { tenantId, deletedAt: null, status: { in: [...OPEN_PURCHASE_REQUEST_STATUSES] } },
+      where: {
+        tenantId,
+        deletedAt: null,
+        status: { in: [...OPEN_PURCHASE_REQUEST_STATUSES] },
+      },
       select: {
         items: {
           select: {
@@ -331,7 +378,14 @@ async function getOpenPurchaseSupplyByProduct(db: MrpDbClient, tenantId: string)
   const supply = new Map<string, number>();
   for (const order of purchaseOrders) {
     for (const item of order.items) {
-      addToMap(supply, item.productId, Math.max(0, decimalToNumber(item.quantity) - decimalToNumber(item.received)));
+      addToMap(
+        supply,
+        item.productId,
+        Math.max(
+          0,
+          decimalToNumber(item.quantity) - decimalToNumber(item.received),
+        ),
+      );
     }
   }
   for (const request of purchaseRequests) {
@@ -342,27 +396,39 @@ async function getOpenPurchaseSupplyByProduct(db: MrpDbClient, tenantId: string)
   return supply;
 }
 
-async function getLeadTimeDaysByProduct(db: MrpDbClient, tenantId: string): Promise<Map<string, number>> {
+async function getLeadTimeDaysByProduct(
+  db: MrpDbClient,
+  tenantId: string,
+): Promise<Map<string, number>> {
   const orders = await db.purchaseOrder.findMany({
     where: {
       tenantId,
       deletedAt: null,
       dueDate: { not: null },
-      status: { in: [PurchaseOrderStatus.SENT, PurchaseOrderStatus.PARTIALLY_RECEIVED, PurchaseOrderStatus.RECEIVED] },
+      status: {
+        in: [
+          PurchaseOrderStatus.SENT,
+          PurchaseOrderStatus.PARTIALLY_RECEIVED,
+          PurchaseOrderStatus.RECEIVED,
+        ],
+      },
     },
     select: {
       date: true,
       dueDate: true,
       items: { select: { productId: true } },
     },
-    orderBy: { date: 'desc' },
+    orderBy: { date: "desc" },
     take: 200,
   });
 
   const buckets = new Map<string, { totalDays: number; count: number }>();
   for (const order of orders) {
     if (!order.dueDate) continue;
-    const leadTimeDays = Math.max(1, Math.ceil((order.dueDate.getTime() - order.date.getTime()) / 86_400_000));
+    const leadTimeDays = Math.max(
+      1,
+      Math.ceil((order.dueDate.getTime() - order.date.getTime()) / 86_400_000),
+    );
     for (const item of order.items) {
       const current = buckets.get(item.productId) ?? { totalDays: 0, count: 0 };
       current.totalDays += leadTimeDays;
@@ -373,27 +439,27 @@ async function getLeadTimeDaysByProduct(db: MrpDbClient, tenantId: string): Prom
 
   const result = new Map<string, number>();
   for (const [productId, bucket] of buckets.entries()) {
-    result.set(productId, Math.max(1, Math.round(bucket.totalDays / Math.max(bucket.count, 1))));
+    result.set(
+      productId,
+      Math.max(1, Math.round(bucket.totalDays / Math.max(bucket.count, 1))),
+    );
   }
   return result;
 }
 
-async function getActiveBomByProduct(db: MrpDbClient, tenantId: string): Promise<Map<string, BomLookup>> {
+async function getActiveBomByProduct(
+  db: MrpDbClient,
+  tenantId: string,
+): Promise<Map<string, BomLookup>> {
   const now = new Date();
   const boms = await db.bOM.findMany({
     where: {
       tenantId,
       isActive: true,
-      OR: [
-        { effectiveFrom: null },
-        { effectiveFrom: { lte: now } },
-      ],
+      OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: now } }],
       AND: [
         {
-          OR: [
-            { effectiveTo: null },
-            { effectiveTo: { gte: now } },
-          ],
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: now } }],
         },
       ],
     },
@@ -406,21 +472,29 @@ async function getActiveBomByProduct(db: MrpDbClient, tenantId: string): Promise
         select: {
           productId: true,
           quantity: true,
-          product: { select: { id: true, code: true, name: true, minStockLevel: true } },
+          product: {
+            select: { id: true, code: true, name: true, minStockLevel: true },
+          },
         },
-        orderBy: { sortOrder: 'asc' },
+        orderBy: { sortOrder: "asc" },
       },
       routings: {
         select: {
           workCenterId: true,
           setupTime: true,
           runTime: true,
-          workCenter: { select: { id: true, code: true, name: true, capacity: true } },
+          workCenter: {
+            select: { id: true, code: true, name: true, capacity: true },
+          },
         },
-        orderBy: { stepOrder: 'asc' },
+        orderBy: { stepOrder: "asc" },
       },
     },
-    orderBy: [{ productId: 'asc' }, { effectiveFrom: 'desc' }, { updatedAt: 'desc' }],
+    orderBy: [
+      { productId: "asc" },
+      { effectiveFrom: "desc" },
+      { updatedAt: "desc" },
+    ],
   });
 
   const byProduct = new Map<string, BomLookup>();
@@ -449,33 +523,50 @@ async function getCapacityByWorkCenter(
   tenantId: string,
   startDate: Date,
   endDate: Date,
-): Promise<Map<string, { availableHours: number; allocatedHours: number; plannedDays: number }>> {
+): Promise<
+  Map<
+    string,
+    { availableHours: number; allocatedHours: number; plannedDays: number }
+  >
+> {
   const rows = await db.workCenterCapacity.groupBy({
-    by: ['workCenterId'],
+    by: ["workCenterId"],
     where: { tenantId, date: { gte: startDate, lte: endDate } },
     _sum: { capacity: true, allocated: true },
     _count: { _all: true },
   });
 
-  return new Map(rows.map((row) => [
-    row.workCenterId,
-    {
-      availableHours: decimalToNumber(row._sum.capacity),
-      allocatedHours: decimalToNumber(row._sum.allocated),
-      plannedDays: row._count._all,
-    },
-  ]));
+  return new Map(
+    rows.map((row) => [
+      row.workCenterId,
+      {
+        availableHours: decimalToNumber(row._sum.capacity),
+        allocatedHours: decimalToNumber(row._sum.allocated),
+        plannedDays: row._count._all,
+      },
+    ]),
+  );
 }
 
 function availableCapacityForWindow(
-  capacity: { availableHours: number; allocatedHours: number; plannedDays: number } | undefined,
+  capacity:
+    | { availableHours: number; allocatedHours: number; plannedDays: number }
+    | undefined,
   dailyCapacity: number,
   horizonDays: number,
 ): number {
   const calendarAvailableHours = capacity?.availableHours ?? 0;
   const allocatedHours = capacity?.allocatedHours ?? 0;
-  const missingCalendarDays = Math.max(0, horizonDays - (capacity?.plannedDays ?? 0));
-  return Math.max(0, calendarAvailableHours + (dailyCapacity * missingCalendarDays) - allocatedHours);
+  const missingCalendarDays = Math.max(
+    0,
+    horizonDays - (capacity?.plannedDays ?? 0),
+  );
+  return Math.max(
+    0,
+    calendarAvailableHours +
+      dailyCapacity * missingCalendarDays -
+      allocatedHours,
+  );
 }
 
 interface MaterialRequirementAccumulator {
@@ -495,7 +586,11 @@ function collectMaterialRequirement(
     current.quantity += quantity;
     current.parentProductIds.add(parentProductId);
   } else {
-    materialRequirements.set(productId, { productId, quantity, parentProductIds: new Set([parentProductId]) });
+    materialRequirements.set(productId, {
+      productId,
+      quantity,
+      parentProductIds: new Set([parentProductId]),
+    });
   }
 }
 
@@ -526,11 +621,17 @@ export async function getMrpPlanning(
     getCapacityByWorkCenter(db, tenantId, start, end),
   ]);
 
-  const demandProductIds = new Set([...salesDemandByProduct.keys(), ...forecastDemandByProduct.keys()]);
+  const demandProductIds = new Set([
+    ...salesDemandByProduct.keys(),
+    ...forecastDemandByProduct.keys(),
+  ]);
   const products = await getProductsByIds(db, tenantId, demandProductIds);
   const productionRecommendations: MrpProductionRecommendation[] = [];
   const purchaseRecommendations: MrpPurchaseRecommendation[] = [];
-  const materialRequirements = new Map<string, MaterialRequirementAccumulator>();
+  const materialRequirements = new Map<
+    string,
+    MaterialRequirementAccumulator
+  >();
   const requiredCapacityByWorkCenter = new Map<string, number>();
   const workCenterRefs = new Map<string, WorkCenterLookup>();
 
@@ -540,24 +641,33 @@ export async function getMrpPlanning(
     const openSalesOrderQty = salesDemandByProduct.get(productId) ?? 0;
     const forecastDemandQty = forecastDemandByProduct.get(productId) ?? 0;
     const productSafetyStockQty = safetyStockQty(product);
-    const demandQty = openSalesOrderQty + forecastDemandQty + productSafetyStockQty;
+    const demandQty =
+      openSalesOrderQty + forecastDemandQty + productSafetyStockQty;
     const stockQty = stockByProduct.get(productId) ?? 0;
     const openWorkOrderQty = openWorkOrderSupplyByProduct.get(productId) ?? 0;
     const productMinOrderQty = minOrderQty(product, forecastDemandQty);
     const leadTimeDays = leadTimeDaysByProduct.get(productId) ?? 7;
     const suggestedOrderDate = dateOnly(new Date());
-    const expectedAvailabilityDate = dateOnly(addDays(new Date(), leadTimeDays));
-    const recommendedQty = roundUpToLot(Math.max(0, demandQty - stockQty - openWorkOrderQty), productMinOrderQty);
+    const expectedAvailabilityDate = dateOnly(
+      addDays(new Date(), leadTimeDays),
+    );
+    const recommendedQty = roundUpToLot(
+      Math.max(0, demandQty - stockQty - openWorkOrderQty),
+      productMinOrderQty,
+    );
     if (recommendedQty <= 0) continue;
 
     const bom = bomByProduct.get(productId);
     if (!bom) {
       const openPurchaseQty = openPurchaseSupplyByProduct.get(productId) ?? 0;
-      const purchaseQty = roundUpToLot(Math.max(0, recommendedQty - openPurchaseQty), productMinOrderQty);
+      const purchaseQty = roundUpToLot(
+        Math.max(0, recommendedQty - openPurchaseQty),
+        productMinOrderQty,
+      );
       if (purchaseQty <= 0) continue;
       purchaseRecommendations.push({
         product: productRef(product),
-        source: 'finished_good_without_bom',
+        source: "finished_good_without_bom",
         grossRequirementQty: roundQty(demandQty),
         safetyStockQty: roundQty(productSafetyStockQty),
         stockQty: roundQty(stockQty),
@@ -578,7 +688,11 @@ export async function getMrpPlanning(
       const runHours = (decimalToNumber(routing.runTime) * recommendedQty) / 60;
       const requiredHours = setupHours + runHours;
       requiredCapacityHours += requiredHours;
-      addToMap(requiredCapacityByWorkCenter, routing.workCenterId, requiredHours);
+      addToMap(
+        requiredCapacityByWorkCenter,
+        routing.workCenterId,
+        requiredHours,
+      );
       workCenterRefs.set(routing.workCenterId, routing.workCenter);
       const capacity = capacityByWorkCenter.get(routing.workCenterId);
       availableCapacityHours += availableCapacityForWindow(
@@ -613,15 +727,26 @@ export async function getMrpPlanning(
       recommendedQty: roundQty(recommendedQty),
       capacityHours: roundQty(requiredCapacityHours),
       capacityAvailableHours: roundQty(availableCapacityHours),
-      capacityGapHours: roundQty(Math.max(0, requiredCapacityHours - availableCapacityHours)),
+      capacityGapHours: roundQty(
+        Math.max(0, requiredCapacityHours - availableCapacityHours),
+      ),
     });
   }
 
-  const componentProducts = await getProductsByIds(db, tenantId, Array.from(materialRequirements.values()).map((row) => row.productId));
+  const componentProducts = await getProductsByIds(
+    db,
+    tenantId,
+    Array.from(materialRequirements.values()).map((row) => row.productId),
+  );
   for (const row of materialRequirements.values()) {
     const product = componentProducts.get(row.productId);
-    const parentProductId = row.parentProductIds.size === 1 ? Array.from(row.parentProductIds)[0] : undefined;
-    const parentProduct = parentProductId ? products.get(parentProductId) : undefined;
+    const parentProductId =
+      row.parentProductIds.size === 1
+        ? Array.from(row.parentProductIds)[0]
+        : undefined;
+    const parentProduct = parentProductId
+      ? products.get(parentProductId)
+      : undefined;
     if (!product) continue;
     const componentSafetyStockQty = safetyStockQty(product);
     const grossRequirementQty = row.quantity + componentSafetyStockQty;
@@ -629,11 +754,14 @@ export async function getMrpPlanning(
     const openPurchaseQty = openPurchaseSupplyByProduct.get(row.productId) ?? 0;
     const leadTimeDays = leadTimeDaysByProduct.get(row.productId) ?? 7;
     const componentMinOrderQty = minOrderQty(product, 0);
-    const recommendedQty = roundUpToLot(Math.max(0, grossRequirementQty - stockQty - openPurchaseQty), componentMinOrderQty);
+    const recommendedQty = roundUpToLot(
+      Math.max(0, grossRequirementQty - stockQty - openPurchaseQty),
+      componentMinOrderQty,
+    );
     if (recommendedQty <= 0) continue;
     purchaseRecommendations.push({
       product: productRef(product),
-      source: 'bom_component',
+      source: "bom_component",
       ...(parentProduct ? { parentProduct: productRef(parentProduct) } : {}),
       grossRequirementQty: roundQty(grossRequirementQty),
       safetyStockQty: roundQty(componentSafetyStockQty),
@@ -648,12 +776,17 @@ export async function getMrpPlanning(
   }
 
   const capacityRecommendations: MrpCapacityRecommendation[] = [];
-  for (const [workCenterId, requiredHours] of requiredCapacityByWorkCenter.entries()) {
+  for (const [
+    workCenterId,
+    requiredHours,
+  ] of requiredCapacityByWorkCenter.entries()) {
     const ref = workCenterRefs.get(workCenterId);
     if (!ref) continue;
     const capacity = capacityByWorkCenter.get(workCenterId);
-    const availableHours = (capacity?.availableHours ?? 0)
-      + (workCenterDailyCapacity(ref.capacity) * Math.max(0, horizonDays - (capacity?.plannedDays ?? 0)));
+    const availableHours =
+      (capacity?.availableHours ?? 0) +
+      workCenterDailyCapacity(ref.capacity) *
+        Math.max(0, horizonDays - (capacity?.plannedDays ?? 0));
     const allocatedHours = capacity?.allocatedHours ?? 0;
     const freeHours = Math.max(0, availableHours - allocatedHours);
     const gapHours = Math.max(0, requiredHours - freeHours);
@@ -671,10 +804,30 @@ export async function getMrpPlanning(
     summary: {
       horizonDays,
       demandProducts: demandProductIds.size,
-      openSalesOrderQty: roundQty([...salesDemandByProduct.values()].reduce((sum, value) => sum + value, 0)),
-      forecastDemandQty: roundQty([...forecastDemandByProduct.values()].reduce((sum, value) => sum + value, 0)),
-      safetyStockQty: roundQty([...products.values()].reduce((sum, product) => sum + safetyStockQty(product), 0)),
-      openPurchaseQty: roundQty([...openPurchaseSupplyByProduct.values()].reduce((sum, value) => sum + value, 0)),
+      openSalesOrderQty: roundQty(
+        [...salesDemandByProduct.values()].reduce(
+          (sum, value) => sum + value,
+          0,
+        ),
+      ),
+      forecastDemandQty: roundQty(
+        [...forecastDemandByProduct.values()].reduce(
+          (sum, value) => sum + value,
+          0,
+        ),
+      ),
+      safetyStockQty: roundQty(
+        [...products.values()].reduce(
+          (sum, product) => sum + safetyStockQty(product),
+          0,
+        ),
+      ),
+      openPurchaseQty: roundQty(
+        [...openPurchaseSupplyByProduct.values()].reduce(
+          (sum, value) => sum + value,
+          0,
+        ),
+      ),
       productionRecommendationCount: productionRecommendations.length,
       purchaseRecommendationCount: purchaseRecommendations.length,
       capacityGapCount: capacityRecommendations.length,

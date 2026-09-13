@@ -10,10 +10,10 @@ import { SingleResponseSchema } from '@/types/api.types';
 
 export interface MarketplaceIntegration {
   id: string; tenantId: string; channel: string; name: string;
-  apiKey: string | null; apiSecret: string | null; storeId: string | null;
+  apiKey: null; apiSecret: null; storeId: string | null;
   isActive: boolean; lastSyncAt: string | null; syncErrors: number;
   createdAt: string; updatedAt: string;
-  hasApiKey?: boolean; hasApiSecret?: boolean;
+  hasApiKey: boolean; hasApiSecret: boolean;
   _count?: { listings: number; orders: number };
 }
 
@@ -101,16 +101,16 @@ const MarketplaceIntegrationSchema = z.object({
   tenantId: z.string(),
   channel: z.string(),
   name: z.string(),
-  apiKey: z.string().nullable(),
-  apiSecret: z.string().nullable(),
+  apiKey: z.null(),
+  apiSecret: z.null(),
   storeId: z.string().nullable(),
   isActive: z.boolean(),
   lastSyncAt: z.string().nullable(),
   syncErrors: z.coerce.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
-  hasApiKey: z.boolean().optional(),
-  hasApiSecret: z.boolean().optional(),
+  hasApiKey: z.boolean(),
+  hasApiSecret: z.boolean(),
   _count: z.object({ listings: z.coerce.number(), orders: z.coerce.number() }).optional(),
 });
 

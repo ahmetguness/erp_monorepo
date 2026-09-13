@@ -32,6 +32,7 @@ import {
   Boxes,
   Hash,
   Shield,
+  ShieldCheck,
   TrendingUp,
   Factory,
   Cog,
@@ -240,6 +241,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Otonom Komut Ajanı', href: '/dashboard/agent/command', icon: Bot, plan: ENTERPRISE_PLAN, module: 'operations' },
       { label: 'Operasyon Sağlığı', href: '/dashboard/operations', icon: Activity, plan: PROFESSIONAL_PLAN, module: 'operations' },
+      { label: 'Pilot GO / NO-GO', href: '/dashboard/operations/pilot-readiness', icon: ShieldCheck, plan: PROFESSIONAL_PLAN, module: 'operations' },
       { label: 'Onay Akışları', href: '/dashboard/approvals', icon: GitBranch, plan: PROFESSIONAL_PLAN, module: 'approvals' },
       { label: 'İş Akışı Merkezi', href: '/dashboard/workflow', icon: ClipboardCheck, plan: PROFESSIONAL_PLAN, module: 'workflow' },
       { label: 'Toplu İşlem Merkezi', href: '/dashboard/bulk-operations', icon: ListChecks, plan: PROFESSIONAL_PLAN, module: 'contacts' },

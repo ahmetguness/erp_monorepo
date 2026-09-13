@@ -3,6 +3,10 @@ import crypto from 'crypto';
 const ALGORITHM = 'aes-256-gcm';
 const PREFIX = 'enc:v1:';
 
+export function isEncryptedPayload(value: string): boolean {
+  return value.startsWith(PREFIX);
+}
+
 function getKey(): Buffer {
   const secret = process.env.ENCRYPTION_KEY;
   if (!secret) {
@@ -28,7 +32,7 @@ export function encrypt(text: string): string {
 export function decrypt(text: string): string {
   if (!text) return text;
 
-  if (!text.startsWith(PREFIX)) {
+  if (!isEncryptedPayload(text)) {
     return text;
   }
 

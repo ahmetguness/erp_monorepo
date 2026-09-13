@@ -3,6 +3,10 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'integration-test-jwt-secret'
 process.env.ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'integration-test-admin-secret';
 process.env.ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS || 'http://localhost:3000';
 process.env.MARKETPLACE_WORKER_ENABLED = 'false';
+delete process.env.PILOT_RETRY_VERIFIED_AT;
+delete process.env.PILOT_TENANT_ISOLATION_VERIFIED_AT;
+delete process.env.PILOT_DETERMINISM_VERIFIED_AT;
+process.env.PILOT_DETERMINISM_RUNS = '0';
 
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
@@ -864,6 +868,22 @@ async function testSalesOrderDeliveryInvoiceChain(ctx: TestContext): Promise<voi
   assertStatus(crossTenantWorkspace, 404, 'satis is dosyasi tenant disina sizmamali');
 }
 
+async function testPilotReadinessGate(ctx: TestContext): Promise<void> {
+  const result = await api('GET', '/api/pilot-readiness', token(ctx.ownerAId, ctx.tenantAId));
+  assertStatus(result, 200, 'pilot karar kapisi calismali');
+  const report = readDataRecord(result.body);
+  if ((report.decision !== 'GO' && report.decision !== 'NO_GO') || !Array.isArray(report.checks) || !Array.isArray(report.blockers)) {
+    throw new Error('Pilot karar kapisi contract ile uyusmuyor.');
+  }
+  if (report.decision !== 'NO_GO') {
+    throw new Error('Kanitsiz integration ortaminda pilot karar kapisi fail-closed davranmadi.');
+  }
+  const keys = report.checks.filter(isRecord).map((check) => check.key);
+  for (const expected of ['stock_integrity', 'retry_safety', 'tenant_isolation', 'deterministic_flow']) {
+    if (!keys.includes(expected)) throw new Error(`Pilot karar kriteri eksik: ${expected}`);
+  }
+}
+
 async function testDataDeduplicationMergeAndRollback(ctx: TestContext): Promise<void> {
   const source = await prisma.contact.create({ data: { tenantId: ctx.tenantAId, type: ContactType.CUSTOMER, name: 'Dedup Acme Limited', code: `DEDUP-S-${crypto.randomUUID()}`, taxNumber: 'DEDUP-123', email: 'source@dedup.test' } });
   const target = await prisma.contact.create({ data: { tenantId: ctx.tenantAId, type: ContactType.CUSTOMER, name: 'Dedup Acme Ltd', code: `DEDUP-T-${crypto.randomUUID()}`, taxNumber: 'DEDUP-123', email: 'target@dedup.test' } });
@@ -1242,6 +1262,16 @@ async function testStockMovementUpdatesLevel(ctx: TestContext): Promise<void> {
 }
 
 async function testProductionExecutionFlow(ctx: TestContext): Promise<void> {
+  const created = await api('POST', '/api/production/work-orders', token(ctx.ownerAId, ctx.tenantAId), {
+    productId: ctx.productAId,
+    plannedQty: 1,
+    inputWarehouseId: ctx.warehouseAId,
+    outputWarehouseId: ctx.warehouseAId,
+  });
+  assertStatus(created, 201, 'application operation is emri olusturabilmeli');
+  const createdRecord = readDataRecord(created.body);
+  if (createdRecord.status !== WorkOrderStatus.PLANNED) throw new Error('Yeni is emri PLANNED durumunda olusturulmadi.');
+
   const workOrder = await prisma.workOrder.create({
     data: {
       tenantId: ctx.tenantAId,
@@ -1275,6 +1305,27 @@ async function testProductionExecutionFlow(ctx: TestContext): Promise<void> {
     throw new Error('Is emri baslatilinca malzeme rezervasyonu olusmadi.');
   }
 
+  const stockBeforeRejectedReport = await prisma.stockLevel.findFirstOrThrow({
+    where: { tenantId: ctx.tenantAId, productId: ctx.productAId, warehouseId: ctx.warehouseAId },
+    select: { quantity: true },
+  });
+  const rejectedReport = await api('POST', `/api/production/work-orders/${workOrder.id}/report`, token(ctx.ownerAId, ctx.tenantAId), {
+    producedQty: 1,
+    consumptions: [{ itemId: workOrder.items[0]!.id, quantity: 1_000_000_000 }],
+  });
+  assertStatus(rejectedReport, 409, 'yetersiz stok 409 donmeli');
+  const stockAfterRejectedReport = await prisma.stockLevel.findFirstOrThrow({
+    where: { tenantId: ctx.tenantAId, productId: ctx.productAId, warehouseId: ctx.warehouseAId },
+    select: { quantity: true },
+  });
+  if (!stockAfterRejectedReport.quantity.equals(stockBeforeRejectedReport.quantity)) throw new Error('Reddedilen tuketim stogu degistirdi.');
+
+  const invalidItemReport = await api('POST', `/api/production/work-orders/${workOrder.id}/report`, token(ctx.ownerAId, ctx.tenantAId), {
+    producedQty: 1,
+    consumptions: [{ itemId: 'missing-item', quantity: 1 }],
+  });
+  assertStatus(invalidItemReport, 400, 'gecersiz malzeme kalemi atomik olarak reddedilmeli');
+
   const reportResult = await api('POST', `/api/production/work-orders/${workOrder.id}/report`, token(ctx.ownerAId, ctx.tenantAId), {
     producedQty: 2,
     scrapQty: 0.25,
@@ -1294,6 +1345,19 @@ async function testProductionExecutionFlow(ctx: TestContext): Promise<void> {
     status: WorkOrderStatus.COMPLETED,
   });
   assertStatus(completeResult, 200, 'is emri tamamlanabilmeli');
+
+  const stockMovementCount = await prisma.stockMovement.count({ where: { tenantId: ctx.tenantAId, refId: workOrder.id } });
+  const journalEntryCount = await prisma.journalEntry.count({ where: { tenantId: ctx.tenantAId, description: { contains: workOrder.number } } });
+  const repeatedCompletion = await api('POST', `/api/production/work-orders/${workOrder.id}/status`, token(ctx.ownerAId, ctx.tenantAId), {
+    status: WorkOrderStatus.COMPLETED,
+  });
+  assertStatus(repeatedCompletion, 200, 'tamamlama retry idempotent olmali');
+  if (await prisma.stockMovement.count({ where: { tenantId: ctx.tenantAId, refId: workOrder.id } }) !== stockMovementCount) {
+    throw new Error('Tamamlama retry cift stok hareketi olusturdu.');
+  }
+  if (await prisma.journalEntry.count({ where: { tenantId: ctx.tenantAId, description: { contains: workOrder.number } } }) !== journalEntryCount) {
+    throw new Error('Tamamlama retry cift muhasebe fisi olusturdu.');
+  }
 
   const openReservation = await prisma.inventoryReservation.findFirst({
     where: { tenantId: ctx.tenantAId, refId: workOrder.id, releasedAt: null },
@@ -1590,6 +1654,8 @@ async function main(): Promise<void> {
     await testSessionAuthenticationKeepsTenantScope(ctx);
     console.log('Integration: repository-backed critical queries');
     await testRepositoryBackedQueries(ctx);
+    console.log('Integration: pilot GO / NO-GO decision gate');
+    await testPilotReadinessGate(ctx);
     console.log('Integration: automation assistant tenant-safe preview and draft');
     await testAutomationAssistantFlow(ctx);
     console.log('Integration: versioned tenant process blueprint');

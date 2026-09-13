@@ -10,7 +10,6 @@ createStockMovementBodySchema,
 finalizeStockCountBodySchema,
 } from '../../../../schemas/request-body.schemas.js';
 import {
-assertCanConsumeStock,
 assertStockCountApproval,
 convertReorderSuggestionsToPurchaseRequest,
 getAdvancedStockSuggestions,
@@ -158,135 +157,18 @@ export const StockController = {
       );
     }
 
-    const allowedManualTypes: MovementType[] = [
-      MovementType.IN,
-      MovementType.OUT,
-      MovementType.ADJUSTMENT,
-      MovementType.OPENING,
-    ];
-
-    if (!allowedManualTypes.includes(body.type)) {
-      return c.json(
-        new ValidationError(
-          `Manuel hareket için geçerli tipler: ${allowedManualTypes.join(', ')}`,
-        ).toJSON(),
-        400,
-      );
-    }
-
-    if (body.quantity <= 0) {
-      return c.json(new ValidationError('Miktar 0\'dan büyük olmalıdır.').toJSON(), 400);
-    }
-
-    const inventoryRules = await getInventoryRules(prisma, tenantId);
-    const consumptionCheck = body.type === MovementType.OUT
-      ? await assertCanConsumeStock(prisma, tenantId, {
-          productId: body.productId,
-          warehouseId: body.warehouseId,
-          quantity: body.quantity,
-          lotId: body.lotId ?? null,
-        })
-      : null;
-
-    const movement = await prisma.$transaction(async (tx) => {
-      const existingLevel = await tx.stockLevel.findFirst({
-        where: { tenantId, productId: body.productId, warehouseId: body.warehouseId },
-      });
-      const previousQuantity = Number(existingLevel?.quantity ?? 0);
-      const locId = await resolveStockLevelLocationId(tx, tenantId, body.warehouseId, existingLevel?.locationId);
-
-      const stockMovement = await tx.stockMovement.create({
-        data: {
-          tenantId,
-          productId: body.productId,
-          type: body.type,
-          quantity: body.quantity,
-          unitCost: body.unitCost ?? null,
-          lotId: body.lotId ?? null,
-          batchId: body.batchId ?? null,
-          ...(body.type === MovementType.OUT
-            ? { fromWarehouseId: body.warehouseId }
-            : { toWarehouseId: body.warehouseId }),
-          notes: body.notes ?? null,
-        },
-      });
-
-      // StockLevel güncelle — mevcut kaydın locationId'sini bul
-      let resultingQuantity = previousQuantity;
-      if (body.type === MovementType.IN || body.type === MovementType.OPENING) {
-        resultingQuantity = previousQuantity + body.quantity;
-        await tx.stockLevel.upsert({
-          where: {
-            productId_warehouseId_locationId: {
-              productId: body.productId,
-              warehouseId: body.warehouseId,
-              locationId: locId,
-            },
-          },
-          create: {
-            tenantId,
-            productId: body.productId,
-            warehouseId: body.warehouseId,
-            locationId: locId,
-            quantity: body.quantity,
-          },
-          update: { quantity: { increment: body.quantity } },
-        });
-      } else if (body.type === MovementType.OUT) {
-        resultingQuantity = previousQuantity - body.quantity;
-        await tx.stockLevel.upsert({
-          where: {
-            productId_warehouseId_locationId: {
-              productId: body.productId,
-              warehouseId: body.warehouseId,
-              locationId: locId,
-            },
-          },
-          create: {
-            tenantId,
-            productId: body.productId,
-            warehouseId: body.warehouseId,
-            locationId: locId,
-            quantity: -body.quantity,
-          },
-          update: { quantity: { decrement: body.quantity } },
-        });
-      } else if (body.type === MovementType.ADJUSTMENT) {
-        resultingQuantity = body.quantity;
-        await tx.stockLevel.upsert({
-          where: {
-            productId_warehouseId_locationId: {
-              productId: body.productId,
-              warehouseId: body.warehouseId,
-              locationId: locId,
-            },
-          },
-          create: {
-            tenantId,
-            productId: body.productId,
-            warehouseId: body.warehouseId,
-            locationId: locId,
-            quantity: body.quantity,
-          },
-          update: { quantity: body.quantity },
-        });
-      }
-
-      await recordInventoryCosting(tx, tenantId, {
-        movementId: stockMovement.id,
-        productId: body.productId,
-        warehouseId: body.warehouseId,
-        type: body.type,
-        quantity: body.quantity,
-        previousQuantity,
-        quantityChange: resultingQuantity - previousQuantity,
-        resultingQuantity,
-        unitCost: body.unitCost ?? null,
-        date: stockMovement.createdAt,
-      });
-
-      return stockMovement;
+    const result = await inventoryApplication.createManualStockMovement.execute({
+      tenantId,
+      productId: body.productId,
+      warehouseId: body.warehouseId,
+      type: body.type,
+      quantity: body.quantity,
+      ...(body.unitCost !== undefined ? { unitCost: body.unitCost } : {}),
+      ...(body.lotId ? { lotId: body.lotId } : {}),
+      ...(body.batchId ? { batchId: body.batchId } : {}),
+      ...(body.notes ? { notes: body.notes } : {}),
     });
+    const { movement } = result;
 
     await createAuditLog(prisma, {
       tenantId,
@@ -305,41 +187,17 @@ export const StockController = {
       ...getRequestMeta(c),
     });
 
-    const product = await prisma.product.findFirst({
-      where: { id: body.productId, tenantId, deletedAt: null },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        minStockLevel: true,
-        stockLevels: { select: { quantity: true } },
-      },
-    });
-
-    if (product && Number(product.minStockLevel) > 0) {
-      const currentQuantity = product.stockLevels.reduce((total, level) => total + Number(level.quantity), 0);
-      const minStockLevel = Number(product.minStockLevel);
-      if (currentQuantity <= minStockLevel) {
-        await domainEvents.publish({
-          name: 'stock.low',
-          context: createEventContext({ tenantId, userId }),
-          payload: {
-            productId: product.id,
-            productCode: product.code,
-            productName: product.name,
-            currentQuantity,
-            minStockLevel,
-            warehouseId: body.warehouseId,
-          },
-        });
-      }
+    if (result.lowStockSignal) {
+      await domainEvents.publish({
+        name: 'stock.low',
+        context: createEventContext({ tenantId, userId }),
+        payload: result.lowStockSignal,
+      });
     }
 
     return c.json({
       data: movement,
-      ...(inventoryRules.negativeStockPolicy === 'WARN' && consumptionCheck?.warning
-        ? { meta: { warnings: [consumptionCheck.warning] } }
-        : {}),
+      ...(result.warning ? { meta: { warnings: [result.warning] } } : {}),
     }, 201);
   },
 

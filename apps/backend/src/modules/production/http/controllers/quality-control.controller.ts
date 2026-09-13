@@ -1,6 +1,6 @@
 import { Context } from 'hono';
 import { prisma } from '../../../../lib/prisma.js';
-import { getQualityControl } from '../../../../services/quality-control.service.js';
+import { getQualityControl } from '../../infrastructure/services/quality-control.service.js';
 import { requireTenantId } from '../../../../utils/context.js';
 
 function parseHorizonDays(value: string | undefined): number {

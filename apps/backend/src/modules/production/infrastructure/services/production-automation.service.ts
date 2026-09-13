@@ -4,10 +4,10 @@ import {
   PrismaClient,
   ReservationRefType,
   WorkOrderStatus,
-} from '@prisma/client';
-import { logger } from '../lib/logger.js';
-import { postProductionAccountingEntry } from './production-rules.service.js';
-import { assertCanReserveStock } from './inventory-rules.service.js';
+} from "@prisma/client";
+import { logger } from "../../../../lib/logger.js";
+import { assertCanReserveStock } from "../../../../services/inventory-rules.service.js";
+import { postProductionAccountingEntry } from "./production-rules.service.js";
 
 export interface ProductionDerivationResult {
   workOrderId: string;
@@ -173,10 +173,16 @@ export class ProductionAutomationService {
     }
 
     // Auto Reserve Materials if in PLANNED
-    const reservationRes = await this.autoReserveWorkOrderMaterials(tenantId, workOrderId);
+    const reservationRes = await this.autoReserveWorkOrderMaterials(
+      tenantId,
+      workOrderId,
+    );
 
     // If status transitioned to COMPLETED
-    if (derivedStatus === WorkOrderStatus.COMPLETED && previousStatus !== WorkOrderStatus.COMPLETED) {
+    if (
+      derivedStatus === WorkOrderStatus.COMPLETED &&
+      previousStatus !== WorkOrderStatus.COMPLETED
+    ) {
       await this.autoCompleteProduction(tenantId, workOrderId);
       autoCompleted = true;
     } else if (derivedStatus !== previousStatus) {
@@ -227,7 +233,10 @@ export class ProductionAutomationService {
       throw new Error(`İş Emri bulunamadı: ${workOrderId}`);
     }
 
-    const outputQty = finalOutputQty !== undefined && Number.isFinite(finalOutputQty) ? finalOutputQty : Number(wo.plannedQty);
+    const outputQty =
+      finalOutputQty !== undefined && Number.isFinite(finalOutputQty)
+        ? finalOutputQty
+        : Number(wo.plannedQty);
 
     await this.db.$transaction(async (tx) => {
       const targetWo = await tx.workOrder.findFirst({
@@ -268,7 +277,9 @@ export class ProductionAutomationService {
             type: MovementType.IN,
             quantity: new Prisma.Decimal(outputQty),
             unitCost: wo.product.averageCost ?? new Prisma.Decimal(0),
-            totalCost: new Prisma.Decimal(outputQty * Number(wo.product.averageCost ?? 0)),
+            totalCost: new Prisma.Decimal(
+              outputQty * Number(wo.product.averageCost ?? 0),
+            ),
             notes: `Üretim çıktısı — İş Emri: ${wo.number}`,
           },
         });
@@ -281,15 +292,22 @@ export class ProductionAutomationService {
           workOrderId,
           fromStatus: wo.status,
           toStatus: WorkOrderStatus.COMPLETED,
-          notes: 'Üretim otomasyonu ile tamamlandı.',
+          notes: "Üretim otomasyonu ile tamamlandı.",
         },
       });
 
       // 5. Post Production Accounting Entry
-      await postProductionAccountingEntry(tx, tenantId, workOrderId, wo.createdById || 'SYSTEM');
+      await postProductionAccountingEntry(
+        tx,
+        tenantId,
+        workOrderId,
+        wo.createdById || "SYSTEM",
+      );
     });
 
-    logger.info(`[ProductionAutomation] Auto-completed production for WorkOrder ${workOrderId}`);
+    logger.info(
+      `[ProductionAutomation] Auto-completed production for WorkOrder ${workOrderId}`,
+    );
     return { workOrderId, status: WorkOrderStatus.COMPLETED };
   }
 }

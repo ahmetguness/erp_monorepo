@@ -1,6 +1,6 @@
 import { ContactType, EntityType, Priority, TaskStatus, WorkOrderStatus } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
-import { getSupplierPerformanceScore } from './supplier-performance.service.js';
+import { getSupplierPerformanceScore } from '../../../../services/supplier-performance.service.js';
 
 type QualityControlDbClient = PrismaClient;
 

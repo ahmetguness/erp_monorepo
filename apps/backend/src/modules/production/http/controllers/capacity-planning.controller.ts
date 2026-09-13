@@ -1,6 +1,6 @@
 import { Context } from 'hono';
 import { prisma } from '../../../../lib/prisma.js';
-import { getCapacityPlanning } from '../../../../services/capacity-planning.service.js';
+import { getCapacityPlanning } from '../../infrastructure/services/capacity-planning.service.js';
 import { requireTenantId } from '../../../../utils/context.js';
 
 function parseHorizonDays(value: string | undefined): number {

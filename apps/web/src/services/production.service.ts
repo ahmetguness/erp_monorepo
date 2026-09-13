@@ -1,4 +1,9 @@
 import { apiClient } from '@/lib/api-client';
+import type { WorkOrderStatus } from '@/features/production';
+import type { CreateWorkOrderCommand, RecordProductionOutputCommand } from '@repo/types';
+
+export { WORK_ORDER_STATUSES, isWorkOrderStatus } from '@/features/production';
+export type { WorkOrderStatus } from '@/features/production';
 
 // ─────────────────────────────────────────────
 // Types
@@ -111,13 +116,13 @@ export interface WorkOrderItem {
 
 export interface WorkOrderOp {
   id: string; workCenterId: string; name: string; stepOrder: number;
-  status: string; plannedStartAt: string | null; actualStartAt: string | null;
+  status: WorkOrderStatus; plannedStartAt: string | null; actualStartAt: string | null;
   actualEndAt: string | null; notes: string | null;
   workCenter?: { id: string; code: string; name: string };
 }
 
 export interface WorkOrder {
-  id: string; tenantId: string; number: string; status: string;
+  id: string; tenantId: string; number: string; status: WorkOrderStatus;
   productId: string; bomId: string | null;
   plannedQty: number; producedQty: number;
   startDate: string | null; endDate: string | null; notes: string | null;
@@ -128,7 +133,7 @@ export interface WorkOrder {
   inputWarehouse?: { id: string; code: string; name: string } | null;
   outputWarehouse?: { id: string; code: string; name: string } | null;
   items?: WorkOrderItem[]; operations?: WorkOrderOp[];
-  history?: Array<{ id: string; fromStatus: string | null; toStatus: string; notes: string | null; createdAt: string }>;
+  history?: Array<{ id: string; fromStatus: WorkOrderStatus | null; toStatus: WorkOrderStatus; notes: string | null; createdAt: string }>;
   _count?: { items: number; operations: number };
 }
 
@@ -520,32 +525,23 @@ export const removeBOMRouting = (bomId: string, routingId: string) =>
 // Work Orders
 // ─────────────────────────────────────────────
 
-export const getWorkOrders = (params?: { page?: number; limit?: number; status?: string }) =>
+export const getWorkOrders = (params?: { page?: number; limit?: number; status?: WorkOrderStatus }) =>
   apiClient.get<{ data: WorkOrder[]; meta: { total: number; page: number; pageSize: number; totalPages: number } }>('/api/production/work-orders', { params }).then((r) => r.data);
 
 export const getWorkOrder = (id: string) =>
   apiClient.get<{ data: WorkOrder }>(`/api/production/work-orders/${id}`).then((r) => r.data.data);
 
-export const createWorkOrder = (data: {
-  productId: string; bomId?: string; plannedQty: number;
-  startDate?: string; endDate?: string; notes?: string;
-  inputWarehouseId?: string; outputWarehouseId?: string;
-}) => apiClient.post<{ data: WorkOrder }>('/api/production/work-orders', data).then((r) => r.data.data);
+export const createWorkOrder = (data: CreateWorkOrderCommand) =>
+  apiClient.post<{ data: WorkOrder }>('/api/production/work-orders', data).then((r) => r.data.data);
 
-export const changeWorkOrderStatus = (id: string, data: { status: string; notes?: string }) =>
+export const changeWorkOrderStatus = (id: string, data: { status: WorkOrderStatus; notes?: string }) =>
   apiClient.post<{ data: WorkOrder }>(`/api/production/work-orders/${id}/status`, data).then((r) => r.data.data);
 
-export const reportProduction = (id: string, data: {
-  producedQty: number;
-  scrapQty?: number;
-  operationId?: string;
-  notes?: string;
-  consumptions?: Array<{ itemId: string; quantity: number }>;
-}) =>
+export const reportProduction = (id: string, data: RecordProductionOutputCommand) =>
   apiClient.post(`/api/production/work-orders/${id}/report`, data).then((r) => r.data);
 
 export const updateWorkOrderOperation = (workOrderId: string, operationId: string, data: {
-  status?: string;
+  status?: WorkOrderStatus;
   actualStartAt?: string | null;
   actualEndAt?: string | null;
   notes?: string | null;

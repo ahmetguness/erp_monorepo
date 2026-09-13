@@ -1,6 +1,6 @@
 import { Context } from 'hono';
 import { prisma } from '../../../../lib/prisma.js';
-import { ProductionAutonomyService } from '../../../../services/production-autonomy.service.js';
+import { ProductionAutonomyService } from '../../infrastructure/services/production-autonomy.service.js';
 import { requireTenantId,requireUserId } from '../../../../utils/context.js';
 
 const productionService = new ProductionAutonomyService(prisma);
