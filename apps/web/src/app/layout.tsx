@@ -27,10 +27,10 @@ export default function RootLayout({
         <meta charSet="utf-8" />
       </head>
       <body className="font-sans relative text-slate-900 bg-slate-950 selection:bg-blue-50 selection:text-blue-900">
-        <main id="main-content" role="main" className="h-full">
+        <div id="main-content" role="main" className="min-h-screen">
           <AppProviders>{children}</AppProviders>
           <ToastContainer />
-        </main>
+        </div>
       </body>
     </html>
   );
