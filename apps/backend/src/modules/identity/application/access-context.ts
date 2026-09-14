@@ -28,7 +28,7 @@ export interface ResolvedAccessFeature {
 export interface AccessContext {
   userId: string;
   tenantId: string;
-  tenant: { plan: Plan; status: TenantStatus; modules: readonly string[] };
+  tenant: { plan: Plan; status: TenantStatus; modules: readonly string[]; trialEndsAt: Date | null };
   membership: AccessMembership;
   features: ReadonlyMap<FeatureKey, ResolvedAccessFeature>;
   security: { ipRestrictionEnabled: boolean; ipWhitelist: readonly string[] };

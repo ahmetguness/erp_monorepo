@@ -65,7 +65,7 @@ export async function resolveAccessContext(
       id: true, roleId: true, isOwner: true,
       roleRef: { select: { name: true, permissions: { select: { module: true, action: true } } } },
       tenant: { select: {
-        plan: true, status: true, modules: true,
+        plan: true, status: true, modules: true, trialEndsAt: true,
         tenantSettings: { where: { key: { in: [...SECURITY_SETTING_KEYS] } }, select: { key: true, value: true } },
         featureOverrides: {
           where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
@@ -84,7 +84,7 @@ export async function resolveAccessContext(
   const settings = new Map(membership.tenant.tenantSettings.map((setting) => [setting.key, setting.value]));
   return { queryCount: 2, context: {
     userId, tenantId,
-    tenant: { plan: membership.tenant.plan, status: membership.tenant.status, modules: membership.tenant.modules },
+    tenant: { plan: membership.tenant.plan, status: membership.tenant.status, modules: membership.tenant.modules, trialEndsAt: membership.tenant.trialEndsAt },
     membership: {
       id: membership.id, roleId: membership.roleId, roleName: membership.roleRef?.name ?? null,
       isOwner: membership.isOwner, permissions: membership.roleRef?.permissions ?? [],
@@ -107,7 +107,7 @@ export async function resolveServiceAccessContext(
   const tenant = await db.tenant.findFirst({
     where: { id: tenantId, deletedAt: null },
     select: {
-      plan: true, status: true, modules: true,
+      plan: true, status: true, modules: true, trialEndsAt: true,
       tenantSettings: { where: { key: { in: [...SECURITY_SETTING_KEYS] } }, select: { key: true, value: true } },
       featureOverrides: {
         where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
@@ -124,7 +124,7 @@ export async function resolveServiceAccessContext(
   const settings = new Map(tenant.tenantSettings.map((setting) => [setting.key, setting.value]));
   return { queryCount: 2, context: {
     userId: principalId, tenantId,
-    tenant: { plan: tenant.plan, status: tenant.status, modules: tenant.modules },
+    tenant: { plan: tenant.plan, status: tenant.status, modules: tenant.modules, trialEndsAt: tenant.trialEndsAt },
     membership: { id: principalId, roleId: null, roleName: 'API Key', isOwner: false, permissions: [] },
     features,
     security: {

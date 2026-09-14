@@ -69,6 +69,8 @@ interface UIActions {
 type UIStore = UIState & UIActions;
 
 let toastCounter = 0;
+const TOAST_DEDUPE_WINDOW_MS = 500;
+const recentToastMessages = new Map<string, number>();
 
 export const useUIStore = create<UIStore>()((set, get) => ({
   sidebarMode: 'expanded',
@@ -98,6 +100,14 @@ export const useUIStore = create<UIStore>()((set, get) => ({
   setSidebarOpen: (open) => get().setSidebarMode(open ? 'expanded' : 'hidden'),
 
   addToast: (toast) => {
+    const now = Date.now();
+    const lastShownAt = recentToastMessages.get(toast.message);
+    if (lastShownAt !== undefined && now - lastShownAt < TOAST_DEDUPE_WINDOW_MS) return;
+    recentToastMessages.set(toast.message, now);
+    setTimeout(() => {
+      if (recentToastMessages.get(toast.message) === now) recentToastMessages.delete(toast.message);
+    }, TOAST_DEDUPE_WINDOW_MS);
+
     const id = `toast-${++toastCounter}`;
     const duration = toast.duration ?? (toast.action ? 8000 : 4000);
     set((s) => ({ toasts: [...s.toasts, { ...toast, id }] }));

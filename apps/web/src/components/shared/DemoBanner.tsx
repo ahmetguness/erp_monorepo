@@ -3,6 +3,7 @@
 import { useAuthStore } from '@/store/auth.store';
 import { FlaskConical, Clock } from 'lucide-react';
 import { useState } from 'react';
+import Link from 'next/link';
 
 export function DemoBanner() {
   const tenant = useAuthStore((s) => s.tenant);
@@ -32,6 +33,9 @@ export function DemoBanner() {
         <span className="text-xs text-amber-300/80">Deneme hesabı</span>
       )}
       <div className="flex-1" />
+      <Link href={`/checkout?plan=${tenant.plan}&billing=annual&source=tenant`} className="rounded-lg bg-amber-400 px-3 py-1 text-xs font-bold text-slate-950 hover:bg-amber-300">
+        Tam Sürüme Geç
+      </Link>
       <span className="text-[10px] text-amber-500/60 hidden sm:block">
         {tenant.plan} planı
       </span>

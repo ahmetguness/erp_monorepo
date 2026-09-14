@@ -75,7 +75,7 @@ export function useLogout() {
 // useMe — refresh current user from server
 // ─────────────────────────────────────────────
 
-export function useMe() {
+export function useMe(enabled = true) {
   const { syncFromServer } = useAuthStore();
 
   const query = useQuery({
@@ -83,6 +83,7 @@ export function useMe() {
     queryFn: getMe,
     staleTime: 5 * 60 * 1000, // 5 min
     retry: false,
+    enabled,
   });
 
   // Sunucudan gelen güncel user + tenant'ı store'a yaz

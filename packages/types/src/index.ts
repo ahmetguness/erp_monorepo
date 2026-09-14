@@ -755,6 +755,7 @@ export * from "./security-center.js";
 export * from "./disaster-recovery.js";
 export * from "./privacy-operations.js";
 export * from "./demo-operations.js";
+export * from "./tenant-checkout.js";
 export * from "./admin-global-search.js";
 export * from "./admin-inbox.js";
 export * from "./admin-decision-dashboard.js";

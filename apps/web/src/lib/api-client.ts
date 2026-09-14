@@ -2,6 +2,9 @@ import axios, { type AxiosInstance } from 'axios';
 import { API_URL } from '@/lib/constants';
 import { installApiErrorInterceptor } from '@/lib/http/api-error.interceptor';
 import { assertTenantResponseBoundary } from '@/lib/http/tenant-response.guard';
+import { isTrialExpiredError, TRIAL_EXPIRED_MESSAGE } from '@/lib/http/trial-expiry.handler';
+import { toast } from '@/store/ui.store';
+import { ApiErrorSchema } from '@repo/types/contracts';
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_URL,
@@ -25,6 +28,14 @@ function clearUnauthorizedSession(): void {
 }
 
 installApiErrorInterceptor(apiClient, { onUnauthorized: clearUnauthorizedSession });
+
+apiClient.interceptors.response.use(undefined, (error: unknown) => {
+  const normalized = ApiErrorSchema.safeParse(error);
+  if (normalized.success && isTrialExpiredError(normalized.data)) {
+    toast.warning(TRIAL_EXPIRED_MESSAGE, { label: 'Tam Sürüme Geç', href: '/checkout?billing=annual&source=tenant' }, 8_000);
+  }
+  return Promise.reject(error);
+});
 
 apiClient.interceptors.response.use(async (response) => {
   if (typeof window === 'undefined') return response;

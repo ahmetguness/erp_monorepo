@@ -2,6 +2,8 @@ import type { AdminPermission, AdminRoleKey } from '@repo/types';
 
 declare module 'hono' {
   interface ContextVariableMap {
+    userId: string;
+    tenantId: string;
     adminId: string;
     adminEmail: string;
     adminRoles: AdminRoleKey[];

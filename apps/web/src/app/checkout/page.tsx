@@ -23,6 +23,10 @@ import {
 } from 'lucide-react';
 import { PLAN_PRICING_META, PLAN_LABELS, type PlanName } from '@/lib/plans';
 import { API_BASE_URL } from '@/lib/constants';
+import { completeTenantCheckout, getTenantCheckoutContext } from '@/services/tenant-checkout.service';
+import { useAuthStore } from '@/store/auth.store';
+import { normalizeApiError } from '@/lib/http/api-error.interceptor';
+import { useMe } from '@/hooks/useAuth';
 
 // Seeded / system coupons matching backend Prisma billingCoupon
 interface CouponDefinition {
@@ -96,6 +100,9 @@ const PLAN_BASE_NUMERICAL: Record<
 function CheckoutContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const isTenantUpgrade = searchParams.get('source') === 'tenant';
+  useMe(isTenantUpgrade);
+  const authenticatedTenant = useAuthStore((state) => state.tenant);
 
   // Plan & Billing State
   const initialPlanParam = (searchParams.get('plan') || 'PROFESSIONAL').toUpperCase() as PlanName;
@@ -110,13 +117,13 @@ function CheckoutContent() {
   const [billingInterval, setBillingInterval] = useState<'annual' | 'monthly'>(initialBilling);
 
   // Form states
-  const [companyName, setCompanyName] = useState('ABC Teknoloji Sanayi ve Ticaret A.Ş.');
-  const [taxOffice, setTaxOffice] = useState('Kadıköy');
-  const [taxNumber, setTaxNumber] = useState('1234567890');
-  const [contactName, setContactName] = useState('Ahmet Yılmaz');
-  const [email, setEmail] = useState('ahmet@abcteknoloji.com');
-  const [phone, setPhone] = useState('0532 000 00 00');
-  const [city, setCity] = useState('İstanbul');
+  const [companyName, setCompanyName] = useState(isTenantUpgrade ? '' : 'ABC Teknoloji Sanayi ve Ticaret A.Ş.');
+  const [taxOffice, setTaxOffice] = useState(isTenantUpgrade ? '' : 'Kadıköy');
+  const [taxNumber, setTaxNumber] = useState(isTenantUpgrade ? '' : '1234567890');
+  const [contactName, setContactName] = useState(isTenantUpgrade ? '' : 'Ahmet Yılmaz');
+  const [email, setEmail] = useState(isTenantUpgrade ? '' : 'ahmet@abcteknoloji.com');
+  const [phone, setPhone] = useState(isTenantUpgrade ? '' : '0532 000 00 00');
+  const [city, setCity] = useState(isTenantUpgrade ? '' : 'İstanbul');
 
   // Payment Method
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'bank'>('card');
@@ -132,12 +139,36 @@ function CheckoutContent() {
   const [couponSuccessMessage, setCouponSuccessMessage] = useState<string | null>(null);
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const couponValidationSequence = useRef(0);
+  const checkoutIdempotencyKey = useRef<string | null>(null);
+  const tenantProfileLoaded = useRef(false);
 
   // Processing & Success State
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [licenseKey, setLicenseKey] = useState('');
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [activationPending, setActivationPending] = useState(false);
+
+  useEffect(() => {
+    if (!isTenantUpgrade || !authenticatedTenant || tenantProfileLoaded.current) return;
+    tenantProfileLoaded.current = true;
+    void getTenantCheckoutContext()
+      .then((context) => {
+        setCompanyName(context.companyName);
+        setTaxOffice(context.billingProfile.taxOffice ?? '');
+        setTaxNumber(context.billingProfile.taxNumber ?? '');
+        setContactName(context.contact.name);
+        setEmail(context.contact.email || context.billingProfile.email);
+        setPhone(context.contact.phone ?? context.billingProfile.phone ?? '');
+        setCity(context.billingProfile.city ?? '');
+        setSelectedPlan(context.currentPlan);
+      })
+      .catch((error: unknown) => {
+        setCheckoutError(normalizeApiError(error).error.message || 'Şirket bilgileri yüklenemedi.');
+        tenantProfileLoaded.current = false;
+      });
+  }, [authenticatedTenant, isTenantUpgrade]);
 
   const applyCouponCode = useCallback(async (codeToApply: string, planToValidate = selectedPlan) => {
     const sequence = ++couponValidationSequence.current;
@@ -204,9 +235,33 @@ function CheckoutContent() {
   const kdvAmount = Math.round(netSubtotal * 0.2); // %20 KDV
   const grandTotal = netSubtotal + kdvAmount;
 
-  const handleCheckoutSubmit = (e: React.FormEvent) => {
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsProcessing(true);
+    setCheckoutError(null);
+
+    if (authenticatedTenant) {
+      try {
+        checkoutIdempotencyKey.current ??= crypto.randomUUID();
+        const receipt = await completeTenantCheckout({
+          plan: selectedPlan,
+          billing: billingInterval,
+          paymentMethod,
+          ...(appliedCoupon ? { couponCode: appliedCoupon.code } : {}),
+          idempotencyKey: checkoutIdempotencyKey.current,
+        });
+        setOrderId(receipt.invoiceId);
+        setLicenseKey(receipt.activated ? `AXON-${selectedPlan.slice(0, 3)}-ACTIVE` : 'Ödeme onayı bekleniyor');
+        setActivationPending(!receipt.activated);
+        setOrderComplete(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (error: unknown) {
+        setCheckoutError(normalizeApiError(error).error.message || 'Ödeme tamamlanamadı. Lütfen tekrar deneyin.');
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
 
     setTimeout(() => {
       setIsProcessing(false);
@@ -234,7 +289,7 @@ function CheckoutContent() {
 
           <div className="text-center mb-8">
             <span className="text-[11px] font-bold uppercase tracking-widest px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              ÖDEME BAŞARILI & LİSANS AKTİF
+              {activationPending ? 'ÖDEME TALİMATI ALINDI' : 'ÖDEME BAŞARILI & LİSANS AKTİF'}
             </span>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white mt-3 mb-2">
               Tebrikler! Axon ERP Lisansınız Hazır.
@@ -581,6 +636,7 @@ function CheckoutContent() {
             {/* Complete Purchase Button */}
             <div className="bg-[#0B1424] border border-slate-800 rounded-2xl p-6 shadow-xl">
               <form onSubmit={handleCheckoutSubmit}>
+                {checkoutError && <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">{checkoutError}</div>}
                 <div className="flex items-start gap-2.5 mb-5 text-xs text-slate-400">
                   <input
                     type="checkbox"

@@ -10,6 +10,8 @@ import {
 import { tenantModules } from '../../modules/index.js';
 import { registerBrowserProtection } from './middleware.js';
 import { MetricsController } from '../../modules/platform/index.js';
+import { tenantCheckoutRoutes } from '../../routes/tenant-checkout.routes.js';
+import { requireActiveTrial } from '../../middleware/require-active-trial.js';
 
 export function registerPublicRoutes(app: Hono): void {
   app.get('/', (context) => context.json({ status: 'ok', service: 'Axon ERP API' }));
@@ -32,6 +34,8 @@ export function registerPublicRoutes(app: Hono): void {
 export function registerTenantRoutes(app: Hono): void {
   const tenantApi = new Hono();
   tenantApi.use('*', requireAuth);
+  tenantApi.use('*', requireActiveTrial);
+  tenantApi.route('/checkout', tenantCheckoutRoutes);
   for (const module of tenantModules) module.register(tenantApi);
 
   registerExternalHttpSurface(app);
