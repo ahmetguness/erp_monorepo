@@ -64,6 +64,7 @@ import {
   type JournalEntryForm,
   type JournalEntryStatusFilter,
 } from "./journal-entries/schema";
+import { OpeningBalancesPanel } from "./opening-balances/OpeningBalancesPanel";
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Component
@@ -255,6 +256,8 @@ export function JournalEntriesPage() {
       />
 
       <PostingEnginePanel result={postingResult} />
+
+      <OpeningBalancesPanel />
 
       <section className="rounded-xl border border-slate-800/80 bg-slate-950/40">
         <div className="border-b border-slate-800/70 bg-slate-900/45 px-4 py-3">

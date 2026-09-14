@@ -6,6 +6,7 @@ import { requirePermission } from "../middleware/requirePermission";
 import {
   AccountingController,
   AccountingExtController,
+  OpeningBalanceController,
 } from "../modules/finance/http/controllers/index.js";
 import { MODULE_KEYS } from "../types/module.types";
 
@@ -40,6 +41,16 @@ accountingRoutes.post(
   "/posting-engine/run",
   requirePermission("accounting", "CREATE"),
   AccountingController.runPostingEngine,
+);
+accountingRoutes.post(
+  "/opening-balances/preview",
+  requirePermission("accounting", "CREATE"),
+  OpeningBalanceController.preview,
+);
+accountingRoutes.post(
+  "/opening-balances/commit",
+  requirePermission("accounting", "CREATE"),
+  OpeningBalanceController.commit,
 );
 accountingRoutes.get(
   "/journal-entries",
