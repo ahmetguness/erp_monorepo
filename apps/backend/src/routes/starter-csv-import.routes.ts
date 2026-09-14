@@ -44,4 +44,25 @@ starterCsvImportRoutes.post(
   StarterCsvImportController.commit,
 );
 
+for (const entity of ["opening-stock", "prices"] as const) {
+  starterCsvImportRoutes.get(
+    `/${entity}/template`,
+    requireModule(MODULE_KEYS.INVENTORY),
+    requirePermission("inventory", "READ"),
+    StarterCsvImportController.template,
+  );
+  starterCsvImportRoutes.post(
+    `/${entity}/preview`,
+    requireModule(MODULE_KEYS.INVENTORY),
+    requirePermission("inventory", "CREATE"),
+    StarterCsvImportController.preview,
+  );
+  starterCsvImportRoutes.post(
+    `/${entity}/commit`,
+    requireModule(MODULE_KEYS.INVENTORY),
+    requirePermission("inventory", "CREATE"),
+    StarterCsvImportController.commit,
+  );
+}
+
 export { starterCsvImportRoutes };

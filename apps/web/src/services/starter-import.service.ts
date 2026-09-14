@@ -1,15 +1,27 @@
-import { z } from 'zod';
-import { apiClient } from '@/lib/api-client';
-import { safeParse } from '@/lib/safe-parse';
-import { SingleResponseSchema } from '@/types/api.types';
+import { z } from "zod";
+import { apiClient } from "@/lib/api-client";
+import { safeParse } from "@/lib/safe-parse";
+import { SingleResponseSchema } from "@/types/api.types";
 
-export const StarterCsvImportEntitySchema = z.enum(['products', 'contacts']);
-export type StarterCsvImportEntity = z.infer<typeof StarterCsvImportEntitySchema>;
+export const StarterCsvImportEntitySchema = z.enum([
+  "products",
+  "contacts",
+  "opening-stock",
+  "prices",
+]);
+export type StarterCsvImportEntity = z.infer<
+  typeof StarterCsvImportEntitySchema
+>;
 
 export const StarterCsvImportPreviewRowSchema = z.object({
   rowNumber: z.coerce.number(),
   values: z.record(z.string(), z.string()),
-  normalized: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).nullable(),
+  normalized: z
+    .record(
+      z.string(),
+      z.union([z.string(), z.number(), z.boolean(), z.null()]),
+    )
+    .nullable(),
   valid: z.boolean(),
   errors: z.array(z.string()),
   warnings: z.array(z.string()),
@@ -36,6 +48,7 @@ export const StarterCsvImportPreviewSchema = z.object({
   entity: StarterCsvImportEntitySchema,
   sourceHeaders: z.array(z.string()),
   targetFields: z.array(z.string()),
+  resolvedMapping: z.record(z.string(), z.string()),
   rows: z.array(StarterCsvImportPreviewRowSchema),
   errors: z.array(z.string()),
   checklist: z.array(StarterCsvImportChecklistItemSchema),
@@ -45,13 +58,22 @@ export const StarterCsvImportPreviewSchema = z.object({
 export const StarterCsvImportCommitResultSchema = z.object({
   entity: StarterCsvImportEntitySchema,
   createdCount: z.coerce.number(),
+  updatedCount: z.coerce.number(),
   skippedCount: z.coerce.number(),
+  replayed: z.boolean(),
+  importId: z.string(),
   summary: StarterCsvImportSummarySchema,
 });
 
-export type StarterCsvImportPreview = z.infer<typeof StarterCsvImportPreviewSchema>;
-export type StarterCsvImportPreviewRow = z.infer<typeof StarterCsvImportPreviewRowSchema>;
-export type StarterCsvImportCommitResult = z.infer<typeof StarterCsvImportCommitResultSchema>;
+export type StarterCsvImportPreview = z.infer<
+  typeof StarterCsvImportPreviewSchema
+>;
+export type StarterCsvImportPreviewRow = z.infer<
+  typeof StarterCsvImportPreviewRowSchema
+>;
+export type StarterCsvImportCommitResult = z.infer<
+  typeof StarterCsvImportCommitResultSchema
+>;
 
 export interface StarterCsvImportInput {
   entity: StarterCsvImportEntity;
@@ -60,25 +82,48 @@ export interface StarterCsvImportInput {
   partialImport?: boolean;
 }
 
-export async function downloadStarterCsvImportTemplate(entity: StarterCsvImportEntity): Promise<Blob> {
-  const res = await apiClient.get<Blob>(`/api/starter-import/${entity}/template`, { responseType: 'blob' });
+export async function downloadStarterCsvImportTemplate(
+  entity: StarterCsvImportEntity,
+): Promise<Blob> {
+  const res = await apiClient.get<Blob>(
+    `/api/starter-import/${entity}/template`,
+    { responseType: "blob" },
+  );
   return res.data;
 }
 
-export async function previewStarterCsvImport(input: StarterCsvImportInput): Promise<StarterCsvImportPreview> {
-  const res = await apiClient.post(`/api/starter-import/${input.entity}/preview`, {
-    csv: input.csv,
-    mapping: input.mapping ?? {},
-    partialImport: input.partialImport ?? false,
-  });
-  return safeParse(SingleResponseSchema(StarterCsvImportPreviewSchema), res.data, 'previewStarterCsvImport').data;
+export async function previewStarterCsvImport(
+  input: StarterCsvImportInput,
+): Promise<StarterCsvImportPreview> {
+  const res = await apiClient.post(
+    `/api/starter-import/${input.entity}/preview`,
+    {
+      csv: input.csv,
+      mapping: input.mapping ?? {},
+      partialImport: input.partialImport ?? false,
+    },
+  );
+  return safeParse(
+    SingleResponseSchema(StarterCsvImportPreviewSchema),
+    res.data,
+    "previewStarterCsvImport",
+  ).data;
 }
 
-export async function commitStarterCsvImport(input: StarterCsvImportInput): Promise<StarterCsvImportCommitResult> {
-  const res = await apiClient.post(`/api/starter-import/${input.entity}/commit`, {
-    csv: input.csv,
-    mapping: input.mapping ?? {},
-    partialImport: input.partialImport ?? false,
-  });
-  return safeParse(SingleResponseSchema(StarterCsvImportCommitResultSchema), res.data, 'commitStarterCsvImport').data;
+export async function commitStarterCsvImport(
+  input: StarterCsvImportInput,
+): Promise<StarterCsvImportCommitResult> {
+  const res = await apiClient.post(
+    `/api/starter-import/${input.entity}/commit`,
+    {
+      csv: input.csv,
+      mapping: input.mapping ?? {},
+      partialImport: input.partialImport ?? false,
+    },
+  );
+  return safeParse(
+    SingleResponseSchema(StarterCsvImportCommitResultSchema),
+    res.data,
+    "commitStarterCsvImport",
+  ).data;
 }

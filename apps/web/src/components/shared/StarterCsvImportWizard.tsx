@@ -1,14 +1,25 @@
-'use client';
+"use client";
 
-import { useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, UploadCloud } from 'lucide-react';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { useCommitStarterCsvImport, useStarterCsvImportPreview, useStarterCsvImportTemplate } from '@/hooks/useStarterImport';
-import { cn } from '@/lib/utils';
-import { useUIStore } from '@/store/ui.store';
-import { getErrorMessage } from '@/types/api.types';
-import type { StarterCsvImportEntity } from '@/services/starter-import.service';
+import { useRef, useState } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  FileSpreadsheet,
+  UploadCloud,
+} from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import {
+  useCommitStarterCsvImport,
+  useStarterCsvImportPreview,
+  useStarterCsvImportTemplate,
+} from "@/hooks/useStarterImport";
+import { cn } from "@/lib/utils";
+import { parseSpreadsheetFile } from "@/lib/import/parse-spreadsheet-file";
+import { useUIStore } from "@/store/ui.store";
+import { getErrorMessage } from "@/types/api.types";
+import type { StarterCsvImportEntity } from "@/services/starter-import.service";
 
 interface StarterCsvImportWizardProps {
   entity: StarterCsvImportEntity;
@@ -25,26 +36,77 @@ interface EntityCopy {
 
 const ENTITY_COPY: Record<StarterCsvImportEntity, EntityCopy> = {
   products: {
-    title: 'Ürün CSV içe aktarım',
-    description: 'Starter için ürünleri CSV ile hızlıca kontrol edin, basit alan eşleme ile geçerli satırları kaydedin.',
-    rowLabel: 'Ürün',
-    primaryField: 'name',
-    secondaryField: 'code',
-    filename: 'starter-products-import-template.csv',
+    title: "Ürün CSV içe aktarım",
+    description:
+      "Starter için ürünleri CSV ile hızlıca kontrol edin, basit alan eşleme ile geçerli satırları kaydedin.",
+    rowLabel: "Ürün",
+    primaryField: "name",
+    secondaryField: "code",
+    filename: "starter-products-import-template.csv",
   },
   contacts: {
-    title: 'Cari CSV içe aktarım',
-    description: 'Müşteri ve tedarikçi temel kartlarını CSV ile aktarırken alan eşlemeyi sade tutun.',
-    rowLabel: 'Cari',
-    primaryField: 'name',
-    secondaryField: 'code',
-    filename: 'starter-contacts-import-template.csv',
+    title: "Cari CSV içe aktarım",
+    description:
+      "Müşteri ve tedarikçi temel kartlarını CSV ile aktarırken alan eşlemeyi sade tutun.",
+    rowLabel: "Cari",
+    primaryField: "name",
+    secondaryField: "code",
+    filename: "starter-contacts-import-template.csv",
   },
+  "opening-stock": {
+    title: "Açılış stoku Excel / CSV içe aktarımı",
+    description:
+      "Ürün ve depo koduna göre başlangıç miktarlarını transaction güvencesiyle yükleyin.",
+    rowLabel: "Stok",
+    primaryField: "productCode",
+    secondaryField: "warehouseCode",
+    filename: "opening-stock-import-template.csv",
+  },
+  prices: {
+    title: "Fiyat Excel / CSV içe aktarımı",
+    description:
+      "Ürün alış ve satış fiyatlarını toplu ve geri alınabilir bir işlemle güncelleyin.",
+    rowLabel: "Fiyat",
+    primaryField: "productCode",
+    secondaryField: "salesPrice",
+    filename: "prices-import-template.csv",
+  },
+};
+
+const TARGET_FIELDS: Record<StarterCsvImportEntity, string[]> = {
+  products: [
+    "code",
+    "name",
+    "unitCode",
+    "barcode",
+    "salesPrice",
+    "purchasePrice",
+    "minStockLevel",
+    "categoryName",
+    "taxRateName",
+    "description",
+    "isActive",
+  ],
+  contacts: [
+    "type",
+    "code",
+    "name",
+    "taxNumber",
+    "taxOffice",
+    "email",
+    "phone",
+    "city",
+    "country",
+    "paymentTermDays",
+    "isActive",
+  ],
+  "opening-stock": ["productCode", "warehouseCode", "quantity", "unitCost"],
+  prices: ["productCode", "salesPrice", "purchasePrice"],
 };
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
+  const link = document.createElement("a");
   link.href = url;
   link.download = filename;
   link.click();
@@ -52,17 +114,26 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 function parseCsvHeaders(csv: string): string[] {
-  const firstLine = csv.replace(/^\uFEFF/, '').split(/\r?\n/).find((line) => line.trim().length > 0);
+  const firstLine = csv
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .find((line) => line.trim().length > 0);
   if (!firstLine) return [];
-  const delimiter = firstLine.split(';').length > firstLine.split(',').length ? ';' : ',';
-  return firstLine.split(delimiter).map((header) => header.replace(/^"|"$/g, '').trim()).filter(Boolean);
+  const delimiter =
+    firstLine.split(";").length > firstLine.split(",").length ? ";" : ",";
+  return firstLine
+    .split(delimiter)
+    .map((header) => header.replace(/^"|"$/g, "").trim())
+    .filter(Boolean);
 }
 
-export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) {
+export function StarterCsvImportWizard({
+  entity,
+}: StarterCsvImportWizardProps) {
   const copy = ENTITY_COPY[entity];
-  const [csv, setCsv] = useState('');
+  const [csv, setCsv] = useState("");
   const [mapping, setMapping] = useState<Partial<Record<string, string>>>({});
-  const [partialImport, setPartialImport] = useState(true);
+  const [partialImport, setPartialImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const template = useStarterCsvImportTemplate();
   const preview = useStarterCsvImportPreview();
@@ -71,17 +142,12 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
 
   const previewData = preview.data;
   const sourceHeaders = previewData?.sourceHeaders ?? parseCsvHeaders(csv);
-  const targetFields = previewData?.targetFields ?? Object.keys(mapping);
   const hasCsv = csv.trim().length > 0;
-  const effectiveMapping = useMemo(() => {
-    const fields = previewData?.targetFields ?? targetFields;
-    return Object.fromEntries(fields.map((field) => [field, mapping[field] ?? field]));
-  }, [mapping, previewData?.targetFields, targetFields]);
   const canCommit = Boolean(
-    previewData
-    && previewData.errors.length === 0
-    && previewData.summary.importableRows > 0
-    && (partialImport || previewData.summary.invalidRows === 0),
+    previewData &&
+    previewData.errors.length === 0 &&
+    previewData.summary.importableRows > 0 &&
+    (partialImport || previewData.summary.invalidRows === 0),
   );
 
   async function handleTemplate() {
@@ -95,15 +161,28 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
-    const text = await file.text();
-    setCsv(text);
-    setMapping({});
-    preview.reset();
+    try {
+      setCsv(await parseSpreadsheetFile(file));
+      setMapping({});
+      preview.reset();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
   }
 
   async function handlePreview() {
     try {
-      await preview.mutateAsync({ entity, csv, mapping: effectiveMapping, partialImport });
+      const result = await preview.mutateAsync({
+        entity,
+        csv,
+        mapping,
+        partialImport,
+      });
+      if (
+        Object.keys(mapping).length === 0 &&
+        Object.keys(result.resolvedMapping).length > 0
+      )
+        setMapping(result.resolvedMapping);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -111,15 +190,49 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
 
   async function handleCommit() {
     try {
-      const result = await commit.mutateAsync({ entity, csv, mapping: effectiveMapping, partialImport });
-      toast.success(`${result.createdCount} kayıt kaydedildi, ${result.skippedCount} satır atlandı.`);
-      setCsv('');
+      const result = await commit.mutateAsync({
+        entity,
+        csv,
+        mapping,
+        partialImport,
+      });
+      const affected = result.createdCount + result.updatedCount;
+      toast.success(
+        result.replayed
+          ? "Bu dosya daha önce işlendi; çift kayıt oluşturulmadı."
+          : `${affected} kayıt işlendi, ${result.skippedCount} satır atlandı.`,
+      );
+      setCsv("");
       setMapping({});
       preview.reset();
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
+  }
+
+  function handleErrorReport() {
+    if (!previewData) return;
+    const lines = [
+      "rowNumber,errors,warnings",
+      ...previewData.rows
+        .filter((row) => row.errors.length > 0 || row.warnings.length > 0)
+        .map((row) =>
+          [
+            String(row.rowNumber),
+            row.errors.join(" | "),
+            row.warnings.join(" | "),
+          ]
+            .map((value) => `"${value.replace(/"/g, '""')}"`)
+            .join(","),
+        ),
+    ];
+    downloadBlob(
+      new Blob([`\uFEFF${lines.join("\n")}`], {
+        type: "text/csv;charset=utf-8",
+      }),
+      `${entity}-import-error-report.csv`,
+    );
   }
 
   return (
@@ -128,23 +241,40 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
         <div>
           <div className="flex items-center gap-2">
             <FileSpreadsheet className="h-4 w-4 text-sky-300" />
-            <h2 className="text-sm font-semibold text-slate-200">{copy.title}</h2>
+            <h2 className="text-sm font-semibold text-slate-200">
+              {copy.title}
+            </h2>
           </div>
-          <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{copy.description}</p>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
+            {copy.description}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} loading={template.isPending} onClick={handleTemplate}>
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<Download className="h-3.5 w-3.5" />}
+            loading={template.isPending}
+            onClick={handleTemplate}
+          >
             Şablon
           </Button>
-          <Button variant="secondary" size="sm" leftIcon={<UploadCloud className="h-3.5 w-3.5" />} onClick={() => fileInputRef.current?.click()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<UploadCloud className="h-3.5 w-3.5" />}
+            onClick={() => fileInputRef.current?.click()}
+          >
             Dosya Seç
           </Button>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv,text/csv,application/vnd.ms-excel"
+            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="hidden"
-            onChange={(event) => { void handleFile(event.target.files?.[0]); }}
+            onChange={(event) => {
+              void handleFile(event.target.files?.[0]);
+            }}
           />
         </div>
       </div>
@@ -165,32 +295,42 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
           {sourceHeaders.length > 0 && (
             <div className="rounded-lg border border-slate-800 bg-slate-950/35 p-3">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="text-xs font-semibold text-slate-300">Basit alan eşleme</h3>
-                <span className="text-[11px] text-slate-500">Kolon adları aynıysa otomatik eşleşir.</span>
+                <h3 className="text-xs font-semibold text-slate-300">
+                  Basit alan eşleme
+                </h3>
+                <span className="text-[11px] text-slate-500">
+                  Kolon adları aynıysa otomatik eşleşir.
+                </span>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {(previewData?.targetFields ?? (entity === 'products'
-                  ? ['code', 'name', 'unitCode', 'barcode', 'salesPrice', 'purchasePrice', 'minStockLevel', 'categoryName', 'taxRateName', 'description', 'isActive']
-                  : ['type', 'code', 'name', 'taxNumber', 'taxOffice', 'email', 'phone', 'city', 'country', 'paymentTermDays', 'isActive']
-                )).map((field) => (
-                  <label key={field} className="flex flex-col gap-1">
-                    <span className="text-[11px] font-medium text-slate-400">{field}</span>
-                    <select
-                      value={mapping[field] ?? field}
-                      onChange={(event) => {
-                        setMapping((current) => ({ ...current, [field]: event.target.value }));
-                        preview.reset();
-                      }}
-                      className="h-9 rounded-lg border border-slate-800 bg-slate-950 px-2 text-xs text-slate-200 outline-none focus:border-sky-500/60"
-                    >
-                      <option value={field}>{field}</option>
-                      <option value="">Eşleme yok</option>
-                      {sourceHeaders.map((header) => (
-                        <option key={`${field}-${header}`} value={header}>{header}</option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
+                {(previewData?.targetFields ?? TARGET_FIELDS[entity]).map(
+                  (field) => (
+                    <label key={field} className="flex flex-col gap-1">
+                      <span className="text-[11px] font-medium text-slate-400">
+                        {field}
+                      </span>
+                      <select
+                        value={mapping[field] ?? field}
+                        onChange={(event) => {
+                          setMapping((current) => ({
+                            ...current,
+                            [field]: event.target.value,
+                          }));
+                          preview.reset();
+                        }}
+                        className="h-9 rounded-lg border border-slate-800 bg-slate-950 px-2 text-xs text-slate-200 outline-none focus:border-sky-500/60"
+                      >
+                        <option value={field}>{field}</option>
+                        <option value="">Eşleme yok</option>
+                        {sourceHeaders.map((header) => (
+                          <option key={`${field}-${header}`} value={header}>
+                            {header}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ),
+                )}
               </div>
             </div>
           )}
@@ -206,10 +346,29 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
               Hatalı satırları atla, geçerli satırları aktar
             </label>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" disabled={!hasCsv} loading={preview.isPending} onClick={handlePreview}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasCsv}
+                loading={preview.isPending}
+                onClick={handlePreview}
+              >
                 Kontrol Et
               </Button>
-              <Button size="sm" disabled={!canCommit} loading={commit.isPending} onClick={handleCommit}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!previewData || previewData.summary.invalidRows === 0}
+                onClick={handleErrorReport}
+              >
+                Hata Raporu
+              </Button>
+              <Button
+                size="sm"
+                disabled={!canCommit}
+                loading={commit.isPending}
+                onClick={handleCommit}
+              >
                 İçe Aktar
               </Button>
             </div>
@@ -224,16 +383,37 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
               </div>
               <div className="max-h-72 overflow-auto divide-y divide-slate-800">
                 {previewData.rows.slice(0, 80).map((row) => (
-                  <div key={row.rowNumber} className="grid grid-cols-[72px_1fr_110px] gap-3 px-3 py-2 text-xs">
-                    <span className="font-mono text-slate-500">{row.rowNumber}</span>
+                  <div
+                    key={row.rowNumber}
+                    className="grid grid-cols-[72px_1fr_110px] gap-3 px-3 py-2 text-xs"
+                  >
+                    <span className="font-mono text-slate-500">
+                      {row.rowNumber}
+                    </span>
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-slate-200">{row.values[copy.primaryField] || String(row.normalized?.[copy.primaryField] ?? '-')}</p>
-                      <p className="truncate font-mono text-slate-500">{row.values[copy.secondaryField] || String(row.normalized?.[copy.secondaryField] ?? '-')}</p>
-                      {row.errors.length > 0 && <p className="mt-1 text-red-300">{row.errors.join(' ')}</p>}
-                      {row.errors.length === 0 && row.warnings.length > 0 && <p className="mt-1 text-amber-300">{row.warnings.join(' ')}</p>}
+                      <p className="truncate font-medium text-slate-200">
+                        {row.values[copy.primaryField] ||
+                          String(row.normalized?.[copy.primaryField] ?? "-")}
+                      </p>
+                      <p className="truncate font-mono text-slate-500">
+                        {row.values[copy.secondaryField] ||
+                          String(row.normalized?.[copy.secondaryField] ?? "-")}
+                      </p>
+                      {row.errors.length > 0 && (
+                        <p className="mt-1 text-red-300">
+                          {row.errors.join(" ")}
+                        </p>
+                      )}
+                      {row.errors.length === 0 && row.warnings.length > 0 && (
+                        <p className="mt-1 text-amber-300">
+                          {row.warnings.join(" ")}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
-                      <Badge variant={row.valid ? 'success' : 'danger'}>{row.valid ? 'Hazır' : 'Hata'}</Badge>
+                      <Badge variant={row.valid ? "success" : "danger"}>
+                        {row.valid ? "Hazır" : "Hata"}
+                      </Badge>
                     </div>
                   </div>
                 ))}
@@ -246,31 +426,57 @@ export function StarterCsvImportWizard({ entity }: StarterCsvImportWizardProps) 
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
               <p className="text-[11px] text-slate-500">Toplam</p>
-              <p className="mt-1 text-lg font-semibold text-slate-100">{previewData?.summary.totalRows ?? '-'}</p>
+              <p className="mt-1 text-lg font-semibold text-slate-100">
+                {previewData?.summary.totalRows ?? "-"}
+              </p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
               <p className="text-[11px] text-slate-500">Hazır</p>
-              <p className="mt-1 text-lg font-semibold text-emerald-300">{previewData?.summary.importableRows ?? '-'}</p>
+              <p className="mt-1 text-lg font-semibold text-emerald-300">
+                {previewData?.summary.importableRows ?? "-"}
+              </p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
               <p className="text-[11px] text-slate-500">Kalan</p>
-              <p className="mt-1 text-lg font-semibold text-sky-300">{previewData?.summary.remainingSlots ?? '-'}</p>
+              <p className="mt-1 text-lg font-semibold text-sky-300">
+                {previewData?.summary.remainingSlots ?? "-"}
+              </p>
             </div>
           </div>
 
           <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
-            <h3 className="mb-2 text-xs font-semibold text-slate-300">Kontrol listesi</h3>
+            <h3 className="mb-2 text-xs font-semibold text-slate-300">
+              Kontrol listesi
+            </h3>
             <div className="space-y-2">
-              {previewData ? previewData.checklist.map((item) => (
-                <div key={item.key} className="flex items-start gap-2">
-                  {item.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-300" /> : <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-300" />}
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-slate-200">{item.label}</p>
-                    <p className={cn('text-[11px] leading-4', item.ok ? 'text-slate-500' : 'text-amber-200')}>{item.detail}</p>
+              {previewData ? (
+                previewData.checklist.map((item) => (
+                  <div key={item.key} className="flex items-start gap-2">
+                    {item.ok ? (
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-300" />
+                    ) : (
+                      <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-300" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-slate-200">
+                        {item.label}
+                      </p>
+                      <p
+                        className={cn(
+                          "text-[11px] leading-4",
+                          item.ok ? "text-slate-500" : "text-amber-200",
+                        )}
+                      >
+                        {item.detail}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              )) : (
-                <p className="text-xs leading-5 text-slate-500">CSV yükleyince kolon eşleme, zorunlu alan, tekrar ve Starter limit kontrolleri burada görünür.</p>
+                ))
+              ) : (
+                <p className="text-xs leading-5 text-slate-500">
+                  CSV yükleyince kolon eşleme, zorunlu alan, tekrar ve Starter
+                  limit kontrolleri burada görünür.
+                </p>
               )}
             </div>
           </div>
