@@ -9,6 +9,8 @@ import { stockRoutes } from '../../routes/stock.routes.js';
 import { warehouseRoutes } from '../../routes/warehouse.routes.js';
 
 export { inventoryApplication } from './composition.js';
+export { InventoryTruthGateService } from './infrastructure/services/inventory-truth-gate.service.js';
+export type { InventoryTruthGateReport } from './application/truth-gate/index.js';
 export {
   parseConfirmGoodsReceipt,
   parseRecordStockMovement,

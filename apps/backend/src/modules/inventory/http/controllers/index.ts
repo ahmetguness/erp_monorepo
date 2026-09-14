@@ -1,5 +1,6 @@
 export * from './attachment.controller.js';
 export * from './inventory-reservation.controller.js';
+export * from './inventory-truth-gate.controller.js';
 export * from './lot-serial.controller.js';
 export * from './master-data.controller.js';
 export * from './product-batch.controller.js';

@@ -12,6 +12,7 @@ import { ValidationError } from "../errors/index.js";
 import { buildCsv, parseCsv } from "../utils/csv.js";
 import { createAuditLog } from "../utils/audit.js";
 import { StarterAccessService } from "./starter-access.service.js";
+import { recordInventoryCosting } from "./inventory-rules.service.js";
 
 export type StarterCsvImportEntity =
   | "products"
@@ -1124,7 +1125,7 @@ export class StarterCsvImportService {
           create: { tenantId, ...key, quantity },
           update: { quantity },
         });
-        await tx.stockMovement.create({
+        const movement = await tx.stockMovement.create({
           data: {
             tenantId,
             productId,
@@ -1139,6 +1140,17 @@ export class StarterCsvImportService {
             createdById: userId ?? null,
             idempotencyKey: `${importId}:${row.rowNumber}`,
           },
+        });
+        await recordInventoryCosting(tx, tenantId, {
+          movementId: movement.id,
+          productId,
+          warehouseId,
+          type: MovementType.OPENING,
+          quantity: Number(quantity),
+          previousQuantity: 0,
+          resultingQuantity: Number(quantity),
+          unitCost: Number(unitCost),
+          date: movement.createdAt,
         });
       }
       await createAuditLog(tx, {

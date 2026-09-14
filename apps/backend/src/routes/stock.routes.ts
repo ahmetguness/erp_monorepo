@@ -4,7 +4,10 @@ import { requireAccess } from "../middleware/requireAccess";
 import { requireModule } from "../middleware/requireModule";
 import { requirePermission } from "../middleware/requirePermission";
 import { validateBody } from "../middleware/validateBody";
-import { StockController } from "../modules/inventory/http/controllers/index.js";
+import {
+  InventoryTruthGateController,
+  StockController,
+} from "../modules/inventory/http/controllers/index.js";
 import {
   createStockCountBodySchema,
   createStockMovementBodySchema,
@@ -25,6 +28,11 @@ stockRoutes.get(
   "/levels",
   requirePermission("inventory", "READ"),
   StockController.listStockLevels,
+);
+stockRoutes.get(
+  "/truth-gate",
+  requirePermission("inventory", "READ"),
+  InventoryTruthGateController.evaluate,
 );
 stockRoutes.get(
   "/reorder-suggestions",
