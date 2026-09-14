@@ -831,7 +831,7 @@ function CredentialsModal({
         <Input label="Entegrasyon Adı" required value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
         <Input label="Satıcı / Mağaza ID" value={form.storeId} onChange={(e) => setForm((p) => ({ ...p, storeId: e.target.value }))} />
         <Input label="API Key" placeholder={integration?.hasApiKey ? "Tanımlı - değiştirmek için yazın" : "API Key"} value={form.apiKey} onChange={(e) => setForm((p) => ({ ...p, apiKey: e.target.value }))} />
-        <Input label="API Secret / Webhook x-api-key" type="password" placeholder={integration?.hasApiSecret ? "Tanımlı - değiştirmek için yazın" : "API Secret"} value={form.apiSecret} onChange={(e) => setForm((p) => ({ ...p, apiSecret: e.target.value }))} />
+        <Input label="API Secret / Webhook x-api-key" type="password" autoComplete="off" spellCheck={false} placeholder={integration?.hasApiSecret ? "Tanımlı - değiştirmek için yazın" : "API Secret"} value={form.apiSecret} onChange={(e) => setForm((p) => ({ ...p, apiSecret: e.target.value }))} />
       </div>
     </Modal>
   );
@@ -1140,7 +1140,7 @@ export function IntegrationsPage() {
           <Input label="Entegrasyon Adı" required placeholder="örn. Trendyol Mağazam" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
           <Input label="Satıcı / Mağaza ID" value={form.storeId} onChange={(e) => setForm((p) => ({ ...p, storeId: e.target.value }))} />
           <Input label="API Key" value={form.apiKey} onChange={(e) => setForm((p) => ({ ...p, apiKey: e.target.value }))} />
-          <Input label="API Secret" type="password" value={form.apiSecret} onChange={(e) => setForm((p) => ({ ...p, apiSecret: e.target.value }))} />
+          <Input label="API Secret" type="password" autoComplete="off" spellCheck={false} value={form.apiSecret} onChange={(e) => setForm((p) => ({ ...p, apiSecret: e.target.value }))} />
         </div>
       </Modal>
 

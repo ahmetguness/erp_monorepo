@@ -28,4 +28,15 @@ describe('structured logger', () => {
     expect(parsed.apiKey).toBe('[REDACTED]');
     expect(String(line)).not.toContain('must-not-leak');
   });
+
+  it('redacts the complete bearer credential from log messages', () => {
+    process.env.LOG_FORMAT = 'json';
+    const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    logger.warn('Authorization: Bearer abc.def.ghi');
+
+    const line = String(output.mock.calls[0]?.[0]);
+    expect(line).not.toContain('abc.def.ghi');
+    expect(line).toContain('[REDACTED]');
+  });
 });

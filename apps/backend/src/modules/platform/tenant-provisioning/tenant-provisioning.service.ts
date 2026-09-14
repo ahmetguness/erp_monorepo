@@ -10,6 +10,7 @@ import { sendMail } from '../../../services/mail.service.js';
 import { createAuditLog } from '../../../utils/audit.js';
 import { toAppModules } from '../../../utils/tenant-modules.js';
 import { tenantProvisioningInputSchema } from './tenant-provisioning.schemas.js';
+import { createPasswordResetToken } from '../../../security/password-reset-token.js';
 
 const STEP_KEYS: readonly TenantProvisioningStepKey[] = ['TENANT_CREATED', 'OWNER_CREATED', 'DEFAULT_ROLES_CREATED', 'EMAIL_SENT'];
 export class TenantProvisioningError extends BaseError {
@@ -68,8 +69,8 @@ async function markStep(jobId: string, key: TenantProvisioningStepKey, status: '
 
 async function deliverOwnerEmail(jobId: string, tenantId: string, input: TenantProvisioningInput): Promise<void> {
   await markStep(jobId, 'EMAIL_SENT', 'RUNNING');
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  await prisma.user.update({ where: { email: input.email.toLowerCase() }, data: { passwordResetToken: crypto.createHash('sha256').update(rawToken).digest('hex'), passwordResetExpiry: new Date(Date.now() + 3600000) } });
+  const { rawToken, tokenHash, expiresAt } = createPasswordResetToken();
+  await prisma.user.update({ where: { email: input.email.toLowerCase() }, data: { passwordResetToken: tokenHash, passwordResetExpiry: expiresAt } });
   const link = `${process.env.APP_URL || 'http://localhost:3000'}/set-password?token=${rawToken}&email=${encodeURIComponent(input.email.toLowerCase())}`;
   const mail = await sendMail({ to: input.email, ...tenantReadyEmail(input.ownerName, input.companyName, input.plan, link) });
   if (!mail.success) {

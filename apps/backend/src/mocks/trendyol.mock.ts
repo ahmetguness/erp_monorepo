@@ -483,7 +483,7 @@ export function startTrendyolMock(): void {
   if (mockServer) return;
   mockServer = serve({ fetch: mock.fetch, port: MOCK_PORT }, () => {
     logger.info(`[TrendyolMock] Mock server running on http://localhost:${MOCK_PORT}`);
-    logger.info('[TrendyolMock] Use sellerId=12345, apiKey=test-key, apiSecret=test-secret');
+    logger.info('[TrendyolMock] Development credentials are configured; secret values are not logged.');
   });
 }
 

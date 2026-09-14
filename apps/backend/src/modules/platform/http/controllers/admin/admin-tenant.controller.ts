@@ -18,6 +18,7 @@ import { tenantListQuerySchema } from '../../../admin-list-operations/index.js';
 import { tenantSettingsUpdateSchema } from '../../../admin-api-safety/index.js';
 import { maskTenantForAdmin,maskTenantsForAdmin } from '../../../sensitive-data/index.js';
 import { syncSubscriptionForPlan } from '../../../subscription-operations/subscription-operations.service.js';
+import { createPasswordResetToken } from '../../../../../security/password-reset-token.js';
 import { buildChangeLine,createSlug,formatNotificationValue,normalizeEmail,notifyTenantOwners,parseNullableDate,planChangeExperienceService,translateModules,VALID_PLANS,VALID_STATUSES,validateModules } from './shared.js';
 
 export const AdminTenantController = {
@@ -118,9 +119,7 @@ export const AdminTenantController = {
     const baseSlug = createSlug(body.slug?.trim() || body.companyName);
     const slugExists = await prisma.tenant.findUnique({ where: { slug: baseSlug } });
     const slug = slugExists ? `${baseSlug}-${Date.now()}` : baseSlug;
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const setPasswordToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const setPasswordExpiry = new Date(Date.now() + 60 * 60 * 1000);
+    const { rawToken, tokenHash: setPasswordToken, expiresAt: setPasswordExpiry } = createPasswordResetToken();
     const tempPassword = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 12);
     const meta = getRequestMeta(c);
 

@@ -1,28 +1,19 @@
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-import { Context } from 'hono';
-import { ValidationError } from '../../../../errors/index.js';
-import { logger } from '../../../../lib/logger.js';
-import { prisma } from '../../../../lib/prisma.js';
-import { validatePasswordStrength } from '../../../../utils/password-policy.js';
-import { getTrustedClientIp } from '../../../../utils/request-ip.js';
+import { Context } from "hono";
+import { ValidationError } from "../../../../errors/index.js";
+import { logger } from "../../../../lib/logger.js";
+import { prisma } from "../../../../lib/prisma.js";
+import { validatePasswordStrength } from "../../../../utils/password-policy.js";
+import { getTrustedClientIp } from "../../../../utils/request-ip.js";
 
-import { rateLimiter } from '../../../../lib/rateLimiter.js';
+import { rateLimiter } from "../../../../lib/rateLimiter.js";
+import { hashPassword } from "../../../../security/password-hashing.js";
+import { verifyPasswordResetToken } from "../../../../security/password-reset-token.js";
+import { rateLimitResponse } from "../../../../security/rate-limit-response.js";
 
 const RATE_LIMIT = 5;
 const RATE_WINDOW = 15 * 60 * 1000;
 
 /** Timing-safe token karşılaştırma */
-function tokensMatch(storedHash: string | null, rawToken: string): boolean {
-  if (!storedHash) return false;
-  try {
-    const incomingHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    return crypto.timingSafeEqual(Buffer.from(storedHash), Buffer.from(incomingHash));
-  } catch {
-    return false;
-  }
-}
-
 interface SetPasswordBody {
   token: string;
   email: string;
@@ -41,15 +32,24 @@ export class SetPasswordController {
    */
   static async setPassword(c: Context) {
     const ip = getTrustedClientIp(c);
-    if (await rateLimiter.check(`set-password:${ip}`, RATE_LIMIT, RATE_WINDOW)) {
-      return c.json({ error: 'Çok fazla deneme. Lütfen 15 dakika sonra tekrar deneyin.' }, 429);
+    if (
+      await rateLimiter.check(`set-password:${ip}`, RATE_LIMIT, RATE_WINDOW)
+    ) {
+      return rateLimitResponse(
+        c,
+        "Çok fazla deneme. Lütfen 15 dakika sonra tekrar deneyin.",
+        900,
+      );
     }
 
     const body = await c.req.json<SetPasswordBody>();
     const { token, email, password } = body;
 
     if (!token || !email || !password) {
-      return c.json(new ValidationError('token, email ve password zorunludur.').toJSON(), 400);
+      return c.json(
+        new ValidationError("token, email ve password zorunludur.").toJSON(),
+        400,
+      );
     }
 
     validatePasswordStrength(password);
@@ -59,14 +59,16 @@ export class SetPasswordController {
     });
 
     // Genel hata mesajı — kullanıcı varlığını sızdırma
-    const genericError = new ValidationError('Geçersiz veya süresi dolmuş token.').toJSON();
+    const genericError = new ValidationError(
+      "Geçersiz veya süresi dolmuş token.",
+    ).toJSON();
 
     if (!user) {
       logger.warn(`[SetPassword] Geçersiz email: ${email}`);
       return c.json(genericError, 400);
     }
 
-    if (!tokensMatch(user.passwordResetToken, token)) {
+    if (!verifyPasswordResetToken(user.passwordResetToken, token)) {
       logger.warn(`[SetPassword] Geçersiz token: ${email}`);
       return c.json(genericError, 400);
     }
@@ -76,7 +78,7 @@ export class SetPasswordController {
       return c.json(genericError, 400);
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = await hashPassword(password);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -88,7 +90,9 @@ export class SetPasswordController {
     });
 
     logger.info(`[SetPassword] Şifre güncellendi: ${email}`);
-    return c.json({ data: { success: true, message: 'Şifreniz başarıyla belirlendi.' } });
+    return c.json({
+      data: { success: true, message: "Şifreniz başarıyla belirlendi." },
+    });
   }
 
   /**
@@ -97,24 +101,36 @@ export class SetPasswordController {
    */
   static async validateToken(c: Context) {
     const ip = getTrustedClientIp(c);
-    if (await rateLimiter.check(`validate-token:${ip}`, RATE_LIMIT, RATE_WINDOW)) {
-      return c.json({ error: 'Çok fazla deneme. Lütfen 15 dakika sonra tekrar deneyin.' }, 429);
+    if (
+      await rateLimiter.check(`validate-token:${ip}`, RATE_LIMIT, RATE_WINDOW)
+    ) {
+      return rateLimitResponse(
+        c,
+        "Çok fazla deneme. Lütfen 15 dakika sonra tekrar deneyin.",
+        900,
+      );
     }
 
     const body = await c.req.json<ValidateTokenBody>();
     const { token, email } = body;
 
     if (!token || !email) {
-      return c.json(new ValidationError('token ve email zorunludur.').toJSON(), 400);
+      return c.json(
+        new ValidationError("token ve email zorunludur.").toJSON(),
+        400,
+      );
     }
 
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
     });
 
-    const genericError = { valid: false, error: 'Geçersiz veya süresi dolmuş token.' };
+    const genericError = {
+      valid: false,
+      error: "Geçersiz veya süresi dolmuş token.",
+    };
 
-    if (!user || !tokensMatch(user.passwordResetToken, token)) {
+    if (!user || !verifyPasswordResetToken(user.passwordResetToken, token)) {
       return c.json(genericError, 400);
     }
 

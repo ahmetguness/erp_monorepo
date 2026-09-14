@@ -1,7 +1,8 @@
 import { Context, Hono } from "hono";
-import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 import { Plan, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { hashPassword } from "../security/password-hashing.js";
 
 const scimRoutes = new Hono<{ Variables: { tenantId: string } }>();
 
@@ -402,7 +403,7 @@ scimRoutes.post("/Users", async (c) => {
         data: {
           email: normalizedEmail,
           name,
-          password: bcrypt.hashSync("axonDefaultSCIM123!", 10),
+          password: await hashPassword(randomBytes(48).toString("base64url")),
           isActive: active,
         },
       });

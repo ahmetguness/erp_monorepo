@@ -1,35 +1,50 @@
-import { PermissionAction,Prisma } from '@prisma/client';
-import bcrypt from 'bcryptjs';
-import { Context } from 'hono';
-import { deleteCookie,getCookie,setCookie } from 'hono/cookie';
-import jwt from 'jsonwebtoken';
-import { ForbiddenError,NotFoundError,ValidationError } from '../../../../errors/index.js';
-import { isSecureCookieEnabled } from '../../../../lib/cookie-config.js';
-import { logger } from '../../../../lib/logger.js';
-import { prisma } from '../../../../lib/prisma.js';
-import { rateLimiter } from '../../../../lib/rateLimiter.js';
-import { getValidatedBody } from '../../../../middleware/validateBody.js';
-import { loginBodySchema,registerBodySchema } from '../../../../schemas/request-body.schemas.js';
+import { PermissionAction, Prisma } from "@prisma/client";
+import { Context } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import jwt from "jsonwebtoken";
 import {
-createSecuritySession,
-revokeSecuritySession,
-type RequestSecurityMeta,
-} from '../../../../services/security-hardening.service.js';
-import { requireTenantId } from '../../../../utils/context.js';
-import { validatePasswordStrength } from '../../../../utils/password-policy.js';
-import { getTrustedClientIp } from '../../../../utils/request-ip.js';
-import { modulesForPlan } from '../../../../utils/tenant-modules.js';
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from "../../../../errors/index.js";
+import { isSecureCookieEnabled } from "../../../../lib/cookie-config.js";
+import { logger } from "../../../../lib/logger.js";
+import { prisma } from "../../../../lib/prisma.js";
+import { rateLimiter } from "../../../../lib/rateLimiter.js";
+import { getValidatedBody } from "../../../../middleware/validateBody.js";
+import {
+  loginBodySchema,
+  registerBodySchema,
+} from "../../../../schemas/request-body.schemas.js";
+import {
+  createSecuritySession,
+  revokeSecuritySession,
+  type RequestSecurityMeta,
+} from "../../../../services/security-hardening.service.js";
+import { requireTenantId } from "../../../../utils/context.js";
+import { validatePasswordStrength } from "../../../../utils/password-policy.js";
+import { getTrustedClientIp } from "../../../../utils/request-ip.js";
+import { modulesForPlan } from "../../../../utils/tenant-modules.js";
+import {
+  hashPassword,
+  passwordHashNeedsUpgrade,
+  verifyPassword,
+} from "../../../../security/password-hashing.js";
+import { rateLimitResponse } from "../../../../security/rate-limit-response.js";
 
 // ─────────────────────────────────────────────
 // Config
 // ─────────────────────────────────────────────
 
 const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.');
+if (!JWT_SECRET)
+  throw new Error(
+    "JWT_SECRET ortam değişkeni tanımlı değil. Uygulama başlatılamaz.",
+  );
 
 const RESOLVED_JWT_SECRET = JWT_SECRET;
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '7d';
-const AUTH_COOKIE_NAME = 'axon_token';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? "7d";
+const AUTH_COOKIE_NAME = "axon_token";
 const REMEMBER_ME_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const LOGIN_IP_LIMIT = 10;
 const LOGIN_EMAIL_LIMIT = 5;
@@ -93,17 +108,17 @@ function setAuthCookie(c: Context, token: string, rememberMe = true): void {
   setCookie(c, AUTH_COOKIE_NAME, token, {
     httpOnly: true,
     secure: isSecureCookieEnabled(),
-    sameSite: 'Lax',
-    path: '/',
+    sameSite: "Lax",
+    path: "/",
     ...(rememberMe ? { maxAge: REMEMBER_ME_MAX_AGE_SECONDS } : {}),
   });
 }
 
 function clearAuthCookie(c: Context): void {
   deleteCookie(c, AUTH_COOKIE_NAME, {
-    path: '/',
+    path: "/",
     secure: isSecureCookieEnabled(),
-    sameSite: 'Lax',
+    sameSite: "Lax",
   });
 }
 
@@ -114,24 +129,29 @@ function getClientIp(c: Context): string {
 function getAuthRequestMeta(c: Context): RequestSecurityMeta {
   return {
     ipAddress: getClientIp(c),
-    userAgent: c.req.header('user-agent') ?? null,
+    userAgent: c.req.header("user-agent") ?? null,
   };
 }
 
 function getTokenPayloadFromRequest(c: Context): JwtPayload | null {
-  const auth = c.req.header('Authorization');
+  const auth = c.req.header("Authorization");
   const cookieToken = getCookie(c, AUTH_COOKIE_NAME);
-  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : cookieToken;
+  const token = auth?.startsWith("Bearer ") ? auth.slice(7) : cookieToken;
   if (!token) return null;
 
   try {
     const payload = jwt.verify(token, RESOLVED_JWT_SECRET);
-    if (typeof payload === 'string') return null;
-    if (typeof payload.userId !== 'string' || typeof payload.tenantId !== 'string') return null;
+    if (typeof payload === "string") return null;
+    if (
+      typeof payload.userId !== "string" ||
+      typeof payload.tenantId !== "string"
+    )
+      return null;
     return {
       userId: payload.userId,
       tenantId: payload.tenantId,
-      sessionId: typeof payload.sessionId === 'string' ? payload.sessionId : undefined,
+      sessionId:
+        typeof payload.sessionId === "string" ? payload.sessionId : undefined,
     };
   } catch {
     return null;
@@ -154,15 +174,25 @@ export const AuthController = {
   async login(c: Context): Promise<Response> {
     // Rate limit: IP başına 15 dakikada max 10 giriş denemesi
     const ip = getClientIp(c);
-    if (await rateLimiter.check(`login:${ip}`, LOGIN_IP_LIMIT, LOGIN_LOCKOUT_WINDOW_MS)) {
-      return c.json({ error: { code: 'RATE_LIMITED', message: 'Çok fazla giriş denemesi. Lütfen 15 dakika sonra tekrar deneyin.' } }, 429);
+    if (
+      await rateLimiter.check(
+        `login:${ip}`,
+        LOGIN_IP_LIMIT,
+        LOGIN_LOCKOUT_WINDOW_MS,
+      )
+    ) {
+      return rateLimitResponse(
+        c,
+        "Çok fazla giriş denemesi. Lütfen 15 dakika sonra tekrar deneyin.",
+        900,
+      );
     }
 
     const body = getValidatedBody(c, loginBodySchema);
 
     if (!body.email || !body.password) {
       return c.json(
-        new ValidationError('email ve password zorunludur.').toJSON(),
+        new ValidationError("email ve password zorunludur.").toJSON(),
         400,
       );
     }
@@ -170,8 +200,18 @@ export const AuthController = {
     // Kullanıcıyı bul
     const normalizedEmail = normalizeEmail(body.email);
     const emailLockKey = `login_email:${normalizedEmail}`;
-    if (await rateLimiter.check(emailLockKey, LOGIN_EMAIL_LIMIT, LOGIN_LOCKOUT_WINDOW_MS)) {
-      return c.json({ error: { code: 'ACCOUNT_LOCKED', message: 'Bu hesap icin cok fazla basarisiz giris denemesi var. Lutfen 15 dakika sonra tekrar deneyin.' } }, 429);
+    if (
+      await rateLimiter.check(
+        emailLockKey,
+        LOGIN_EMAIL_LIMIT,
+        LOGIN_LOCKOUT_WINDOW_MS,
+      )
+    ) {
+      return rateLimitResponse(
+        c,
+        "Bu hesap icin cok fazla basarisiz giris denemesi var. Lutfen 15 dakika sonra tekrar deneyin.",
+        900,
+      );
     }
 
     const user = await prisma.user.findUnique({
@@ -205,19 +245,21 @@ export const AuthController = {
     });
 
     if (!user || !user.isActive) {
-      logger.warn(`[Auth] Login başarısız — kullanıcı bulunamadı: ${body.email}`);
+      logger.warn(
+        `[Auth] Login başarısız — kullanıcı bulunamadı: ${body.email}`,
+      );
       return c.json(
-        new ValidationError('E-posta veya şifre hatalı.').toJSON(),
+        new ValidationError("E-posta veya şifre hatalı.").toJSON(),
         401,
       );
     }
 
     // Şifre kontrolü
-    const isPasswordValid = await bcrypt.compare(body.password, user.password);
+    const isPasswordValid = await verifyPassword(body.password, user.password);
     if (!isPasswordValid) {
       logger.warn(`[Auth] Login başarısız — yanlış şifre: ${body.email}`);
       return c.json(
-        new ValidationError('E-posta veya şifre hatalı.').toJSON(),
+        new ValidationError("E-posta veya şifre hatalı.").toJSON(),
         401,
       );
     }
@@ -225,7 +267,9 @@ export const AuthController = {
     // Tenant seç
     if (user.tenants.length === 0) {
       return c.json(
-        new ForbiddenError('Bu kullanıcıya ait aktif tenant bulunamadı.').toJSON(),
+        new ForbiddenError(
+          "Bu kullanıcıya ait aktif tenant bulunamadı.",
+        ).toJSON(),
         403,
       );
     }
@@ -233,10 +277,12 @@ export const AuthController = {
     let selectedTenantUser = user.tenants[0];
 
     if (body.tenantSlug) {
-      const found = user.tenants.find((tu) => tu.tenant.slug === body.tenantSlug);
+      const found = user.tenants.find(
+        (tu) => tu.tenant.slug === body.tenantSlug,
+      );
       if (!found) {
         return c.json(
-          new NotFoundError('Tenant', body.tenantSlug).toJSON(),
+          new NotFoundError("Tenant", body.tenantSlug).toJSON(),
           404,
         );
       }
@@ -245,15 +291,22 @@ export const AuthController = {
 
     const tenant = selectedTenantUser.tenant;
 
-    if (tenant.status === 'SUSPENDED' || tenant.status === 'CANCELLED') {
+    if (tenant.status === "SUSPENDED" || tenant.status === "CANCELLED") {
       return c.json(
-        new ForbiddenError('Bu tenant hesabı askıya alınmış veya iptal edilmiş.').toJSON(),
+        new ForbiddenError(
+          "Bu tenant hesabı askıya alınmış veya iptal edilmiş.",
+        ).toJSON(),
         403,
       );
     }
 
     // JWT oluştur
-    const session = await createSecuritySession(prisma, tenant.id, user.id, getAuthRequestMeta(c));
+    const session = await createSecuritySession(
+      prisma,
+      tenant.id,
+      user.id,
+      getAuthRequestMeta(c),
+    );
     const payload: JwtPayload = {
       userId: user.id,
       tenantId: tenant.id,
@@ -261,14 +314,20 @@ export const AuthController = {
     };
 
     const token = jwt.sign(payload, RESOLVED_JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+      expiresIn: JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"],
     });
     setAuthCookie(c, token, body.rememberMe ?? true);
 
     // lastLoginAt güncelle
+    const upgradedPassword = passwordHashNeedsUpgrade(user.password)
+      ? await hashPassword(body.password)
+      : undefined;
     await prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date() },
+      data: {
+        lastLoginAt: new Date(),
+        ...(upgradedPassword ? { password: upgradedPassword } : {}),
+      },
     });
     await Promise.all([
       rateLimiter.reset(`login:${ip}`),
@@ -313,14 +372,20 @@ export const AuthController = {
     // Rate limit: IP başına 15 dakikada max 5 kayıt
     const ip = getTrustedClientIp(c);
     if (await rateLimiter.check(`register:${ip}`, 5, 15 * 60 * 1000)) {
-      return c.json({ error: { code: 'RATE_LIMITED', message: 'Çok fazla kayıt denemesi. Lütfen 15 dakika sonra tekrar deneyin.' } }, 429);
+      return rateLimitResponse(
+        c,
+        "Çok fazla kayıt denemesi. Lütfen 15 dakika sonra tekrar deneyin.",
+        900,
+      );
     }
 
     const body = getValidatedBody(c, registerBodySchema);
 
     if (!body.email || !body.name || !body.password || !body.companyName) {
       return c.json(
-        new ValidationError('email, name, password ve companyName zorunludur.').toJSON(),
+        new ValidationError(
+          "email, name, password ve companyName zorunludur.",
+        ).toJSON(),
         400,
       );
     }
@@ -333,22 +398,24 @@ export const AuthController = {
 
     if (existingUser) {
       return c.json(
-        new ValidationError('Bu e-posta adresi zaten kullanımda.').toJSON(),
+        new ValidationError("Bu e-posta adresi zaten kullanımda.").toJSON(),
         400,
       );
     }
 
-    const hashedPassword = await bcrypt.hash(body.password, 12);
+    const hashedPassword = await hashPassword(body.password);
 
     // Slug oluştur
     const baseSlug = body.companyName
       .toLowerCase()
-      .replace(/[^a-z0-9]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
+      .replace(/[^a-z0-9]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
       .slice(0, 40);
 
-    const existingTenant = await prisma.tenant.findUnique({ where: { slug: baseSlug } });
+    const existingTenant = await prisma.tenant.findUnique({
+      where: { slug: baseSlug },
+    });
     const slug = existingTenant ? `${baseSlug}-${Date.now()}` : baseSlug;
 
     // Transaction: user + tenant + tenantUser
@@ -367,9 +434,9 @@ export const AuthController = {
           slug,
           companyName: body.companyName,
           email: body.email.toLowerCase().trim(),
-          plan: 'STARTER',
-          status: 'TRIAL',
-          modules: modulesForPlan('STARTER'),
+          plan: "STARTER",
+          status: "TRIAL",
+          modules: modulesForPlan("STARTER"),
         },
       });
 
@@ -385,7 +452,12 @@ export const AuthController = {
       return { user: newUser, tenant: newTenant };
     });
 
-    const session = await createSecuritySession(prisma, result.tenant.id, result.user.id, getAuthRequestMeta(c));
+    const session = await createSecuritySession(
+      prisma,
+      result.tenant.id,
+      result.user.id,
+      getAuthRequestMeta(c),
+    );
     const payload: JwtPayload = {
       userId: result.user.id,
       tenantId: result.tenant.id,
@@ -393,7 +465,7 @@ export const AuthController = {
     };
 
     const token = jwt.sign(payload, RESOLVED_JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+      expiresIn: JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"],
     });
     setAuthCookie(c, token, true);
 
@@ -430,7 +502,13 @@ export const AuthController = {
   async logout(c: Context): Promise<Response> {
     const payload = getTokenPayloadFromRequest(c);
     if (payload?.sessionId) {
-      await revokeSecuritySession(prisma, payload.tenantId, payload.sessionId, payload.userId, getAuthRequestMeta(c));
+      await revokeSecuritySession(
+        prisma,
+        payload.tenantId,
+        payload.sessionId,
+        payload.userId,
+        getAuthRequestMeta(c),
+      );
     }
     clearAuthCookie(c);
     return c.json({ data: { success: true } });
@@ -442,7 +520,7 @@ export const AuthController = {
    */
   async me(c: Context): Promise<Response> {
     // userId ve tenantId artık requireAuth middleware'inden geliyor
-    const userId = c.get('userId') as string;
+    const userId = c.get("userId") as string;
     const tenantId = requireTenantId(c);
 
     const user = await prisma.user.findUnique({
@@ -457,7 +535,10 @@ export const AuthController = {
     });
 
     if (!user || !user.isActive) {
-      return c.json(new ForbiddenError('Kullanıcı bulunamadı veya pasif.').toJSON(), 401);
+      return c.json(
+        new ForbiddenError("Kullanıcı bulunamadı veya pasif.").toJSON(),
+        401,
+      );
     }
 
     const tenant = await prisma.tenant.findUnique({
@@ -474,12 +555,12 @@ export const AuthController = {
     });
 
     if (!tenant) {
-      return c.json(new NotFoundError('Tenant', tenantId).toJSON(), 404);
+      return c.json(new NotFoundError("Tenant", tenantId).toJSON(), 404);
     }
 
     const tenantUser = await prisma.tenantUser.findUnique({
       where: {
-        tenantId_userId: { tenantId, userId }
+        tenantId_userId: { tenantId, userId },
       },
       select: {
         preferences: true,
@@ -493,14 +574,16 @@ export const AuthController = {
             permissions: { select: { module: true, action: true } },
           },
         },
-      }
+      },
     });
 
     return c.json({
       data: {
         user: {
           ...user,
-          tenantMembership: tenantUser ? toTenantMembershipView(tenantUser) : undefined,
+          tenantMembership: tenantUser
+            ? toTenantMembershipView(tenantUser)
+            : undefined,
         },
         tenant,
         preferences: tenantUser?.preferences || null,
@@ -513,7 +596,7 @@ export const AuthController = {
    * Kullanıcının o anki tenant'a ait ayarlarını (ör: dashboard layout) günceller.
    */
   async updatePreferences(c: Context): Promise<Response> {
-    const userId = c.get('userId') as string;
+    const userId = c.get("userId") as string;
     const tenantId = requireTenantId(c);
 
     const body = await c.req.json<{ preferences: Prisma.InputJsonObject }>();
@@ -523,12 +606,15 @@ export const AuthController = {
     });
 
     if (!tenantUser) {
-      return c.json(new NotFoundError('Kullanıcı', userId).toJSON(), 404);
+      return c.json(new NotFoundError("Kullanıcı", userId).toJSON(), 404);
     }
 
     // JSON birleştirme: Mevcut preferences ile yeni gelen preferences
     const currentPrefs = (tenantUser.preferences as Prisma.JsonObject) || {};
-    const newPrefs: Prisma.InputJsonObject = { ...currentPrefs, ...body.preferences };
+    const newPrefs: Prisma.InputJsonObject = {
+      ...currentPrefs,
+      ...body.preferences,
+    };
 
     const updated = await prisma.tenantUser.update({
       where: { id: tenantUser.id },
@@ -544,16 +630,21 @@ export const AuthController = {
     try {
       body = await c.req.json();
     } catch {
-      throw new ValidationError('Geçersiz JSON gövdesi.');
+      throw new ValidationError("Geçersiz JSON gövdesi.");
     }
 
-    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-      throw new ValidationError('Geçersiz JSON gövdesi.');
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      throw new ValidationError("Geçersiz JSON gövdesi.");
     }
 
     const { email, tenantSlug } = body as Record<string, unknown>;
-    if (typeof email !== 'string' || typeof tenantSlug !== 'string' || !email.trim() || !tenantSlug.trim()) {
-      throw new ValidationError('email ve tenantSlug alanları zorunludur.');
+    if (
+      typeof email !== "string" ||
+      typeof tenantSlug !== "string" ||
+      !email.trim() ||
+      !tenantSlug.trim()
+    ) {
+      throw new ValidationError("email ve tenantSlug alanları zorunludur.");
     }
 
     const tenant = await prisma.tenant.findUnique({
@@ -561,27 +652,33 @@ export const AuthController = {
     });
 
     if (!tenant) {
-      throw new NotFoundError('İşletme', tenantSlug);
+      throw new NotFoundError("İşletme", tenantSlug);
     }
 
-    if (tenant.plan !== 'ENTERPRISE') {
-      throw new ValidationError('SSO girişi sadece Enterprise planındaki işletmeler için geçerlidir.');
+    if (tenant.plan !== "ENTERPRISE") {
+      throw new ValidationError(
+        "SSO girişi sadece Enterprise planındaki işletmeler için geçerlidir.",
+      );
     }
 
     const ssoEnabled = await prisma.tenantSetting.findUnique({
-      where: { tenantId_key: { tenantId: tenant.id, key: 'security.sso.enabled' } }
+      where: {
+        tenantId_key: { tenantId: tenant.id, key: "security.sso.enabled" },
+      },
     });
 
-    if (ssoEnabled?.value !== 'true') {
-      throw new ValidationError('Bu işletme için SSO (Tekli Oturum Açma) etkinleştirilmemiş.');
+    if (ssoEnabled?.value !== "true") {
+      throw new ValidationError(
+        "Bu işletme için SSO (Tekli Oturum Açma) etkinleştirilmemiş.",
+      );
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() }
+      where: { email: email.toLowerCase().trim() },
     });
 
     if (!user) {
-      throw new NotFoundError('Kullanıcı', email);
+      throw new NotFoundError("Kullanıcı", email);
     }
 
     // Simulate redirection to Identity Provider (Okta/Entra ID) and then back to our callback
@@ -591,45 +688,51 @@ export const AuthController = {
   },
 
   async ssoCallback(c: Context): Promise<Response> {
-    const email = c.req.query('email');
-    const tenantId = c.req.query('tenantId');
-    const code = c.req.query('code');
+    const email = c.req.query("email");
+    const tenantId = c.req.query("tenantId");
+    const code = c.req.query("code");
 
-    if (!email || !tenantId || code !== 'sso_mock_code_123') {
-      throw new ValidationError('Geçersiz SSO kimlik doğrulama kodu.');
+    if (!email || !tenantId || code !== "sso_mock_code_123") {
+      throw new ValidationError("Geçersiz SSO kimlik doğrulama kodu.");
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() }
+      where: { email: email.toLowerCase().trim() },
     });
 
     if (!user) {
-      throw new NotFoundError('Kullanıcı', email);
+      throw new NotFoundError("Kullanıcı", email);
     }
 
     // Verify tenant membership
     const membership = await prisma.tenantUser.findUnique({
-      where: { tenantId_userId: { tenantId, userId: user.id } }
+      where: { tenantId_userId: { tenantId, userId: user.id } },
     });
 
     if (!membership || !membership.isActive) {
-      throw new ForbiddenError('Bu işletmeye erişim izniniz bulunmuyor.');
+      throw new ForbiddenError("Bu işletmeye erişim izniniz bulunmuyor.");
     }
 
     // Create session
     const meta = getAuthRequestMeta(c);
-    const session = await createSecuritySession(prisma, tenantId, user.id, meta);
+    const session = await createSecuritySession(
+      prisma,
+      tenantId,
+      user.id,
+      meta,
+    );
 
     // Create JWT token
     const token = jwt.sign(
       { userId: user.id, tenantId, sessionId: session.id },
       RESOLVED_JWT_SECRET as string,
-      { expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] }
+      { expiresIn: JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"] },
     );
 
     setAuthCookie(c, token, true);
 
-    const frontendUrl = process.env.ALLOWED_ORIGINS?.split(',')[0] || 'http://localhost:3000';
+    const frontendUrl =
+      process.env.ALLOWED_ORIGINS?.split(",")[0] || "http://localhost:3000";
     return c.redirect(`${frontendUrl}/dashboard`);
   },
 };

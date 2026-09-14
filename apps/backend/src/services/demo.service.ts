@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { modulesForPlan } from '../utils/tenant-modules';
 import type { PlanName } from '@repo/types/plans';
+import { createPasswordResetToken } from '../security/password-reset-token.js';
 
 // ── Tipler ───────────────────────────────────
 
@@ -242,9 +243,7 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
     const slug = existing ? `${baseSlug}-${Date.now().toString(36)}` : baseSlug;
 
     // Set-password token oluştur
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const setPasswordToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const setPasswordExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 saat
+    const { rawToken, tokenHash: setPasswordToken, expiresAt: setPasswordExpiry } = createPasswordResetToken();
 
     // Trial süresi: 15 gün
     const trialEndsAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);

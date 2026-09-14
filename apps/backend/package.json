@@ -20,6 +20,7 @@
     "test:e2e": "npm run test:web-smoke",
     "test:tenant-isolation": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-tenant-isolation.ts",
     "test:tenant-runtime": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-runtime-tenant-guard.ts",
+    "test:security-hardening": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-security-hardening.ts",
     "test:permission-gating": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-permission-gating.ts",
     "test:admin-approval": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/admin-assurance/check-two-person-approval.ts",
     "test:admin-audit-identity": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-admin-audit-identity.ts",
@@ -49,7 +50,7 @@
     "test:admin-sensitive-data": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-admin-sensitive-data.ts",
     "test:admin-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/admin-assurance/run-admin-assurance.ts",
     "test:prisma-architecture": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-prisma-architecture.ts && prisma validate --schema=prisma/schema",
-    "test:quality": "npm run test:typecheck && npm run test:prisma-architecture && npm run test:unit:coverage && npm run test:code-quality && npm run test:module-boundaries && npm run test:contracts && npm run test:tenant-isolation && npm run test:tenant-runtime && npm run test:permission-gating && npm run test:e2e && npm run test:integration && npm run test:admin-assurance && npm run db:health",
+    "test:quality": "npm run test:typecheck && npm run test:prisma-architecture && npm run test:unit:coverage && npm run test:code-quality && npm run test:module-boundaries && npm run test:contracts && npm run test:tenant-isolation && npm run test:tenant-runtime && npm run test:security-hardening && npm run test:permission-gating && npm run test:e2e && npm run test:integration && npm run test:admin-assurance && npm run db:health",
     "ci:artifacts": "tsx scripts/generate-ci-artifacts.ts",
     "start": "node dist/src/index.js",
     "db:health": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-db-health.ts",
@@ -62,7 +63,7 @@
     "db:studio": "prisma studio --schema=prisma/schema",
     "db:seed": "tsx prisma/seed.ts",
     "storage:migrate": "tsx scripts/migrate-local-storage-to-object-storage.ts",
-    "marketplace:encrypt-credentials": "tsx scripts/encrypt-marketplace-credentials.ts"
+    "marketplace:encrypt-credentials": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/encrypt-marketplace-credentials.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
