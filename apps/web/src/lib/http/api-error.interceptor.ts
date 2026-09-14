@@ -29,6 +29,7 @@ export function normalizeApiError(error: unknown): ApiError {
           else if (error.response?.status === 404) code = 'NOT_FOUND';
           else if (error.response?.status === 409) code = 'CONFLICT';
           else if (error.response?.status === 422) code = 'VALIDATION_ERROR';
+          else if (error.response?.status === 429) code = 'RATE_LIMITED';
           else code = API_ERROR_CODES.UNKNOWN;
         }
         return {

@@ -26,4 +26,17 @@ describe('normalizeApiError', () => {
       error: { code: 'RATE_LIMITED', message: 'Biraz sonra tekrar deneyin.', details: { retryAfterSeconds: 60 } },
     });
   });
+
+  it('maps a legacy string rate-limit response to RATE_LIMITED', () => {
+    const error = new axios.AxiosError('rate limited', 'ERR_BAD_RESPONSE', undefined, undefined, {
+      data: { error: 'Çok fazla deneme.' },
+      status: 429,
+      statusText: 'Too Many Requests',
+      headers: {},
+      config: { headers: new axios.AxiosHeaders() },
+    });
+    expect(normalizeApiError(error)).toEqual({
+      error: { code: 'RATE_LIMITED', message: 'Çok fazla deneme.', details: undefined, fields: undefined },
+    });
+  });
 });

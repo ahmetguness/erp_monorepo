@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { prisma } from '../src/lib/prisma.js';
-import { applyCoupon, createCoupon, decideCustomPrice, getRevenueOverview, getSubscriptionSnapshot, ingestProviderEvent, quotePlanChange, reconcileEntitlements, requestCustomPrice, SubscriptionOperationsError } from '../src/modules/platform/subscription-operations/subscription-operations.service.js';
+import { applyCoupon, createCoupon, decideCustomPrice, getRevenueOverview, getSubscriptionSnapshot, ingestProviderEvent, quotePlanChange, reconcileEntitlements, requestCustomPrice, SubscriptionOperationsError, validateCheckoutCoupon } from '../src/modules/platform/subscription-operations/subscription-operations.service.js';
 
 const suffix = `${Date.now()}-${process.pid}`; let tenantId: string | undefined; const admins: string[] = []; const eventIds = [`active-${suffix}`, `failed-${suffix}`, `paid-${suffix}`];
 async function main(): Promise<void> {
@@ -18,6 +18,7 @@ async function main(): Promise<void> {
   await ingestProviderEvent({ provider: 'STRIPE', providerEventId: eventIds[2], tenantId, type: 'INVOICE_PAID', providerInvoiceId: `inv-${suffix}`, amount: 1990, currency: 'TRY' }, first);
   snapshot = await getSubscriptionSnapshot(tenantId); assert.equal(snapshot.state, 'ACTIVE'); assert.equal(snapshot.dunningAttempt, 0); assert.equal(snapshot.invoices[0]?.status, 'PAID');
   const coupon = await createCoupon({ code: `TEST_${suffix}`.replace(/-/g, '_'), percent: 10, expiresAt: new Date(Date.now() + 86400000), maxRedemptions: 1 });
+  assert.equal((await validateCheckoutCoupon(coupon.code, 'STARTER'))?.percent, 10);
   snapshot = await applyCoupon(tenantId, coupon.code, first); assert.equal(snapshot.discount?.percent, 10); assert.equal(snapshot.mrr, '1791.00');
   await applyCoupon(tenantId, coupon.code, first); assert.equal((await prisma.billingCoupon.findUniqueOrThrow({ where: { id: coupon.id } })).redemptionCount, 1);
   const request = await requestCustomPrice(tenantId, first, { monthlyAmount: 2500, unitPrice: 125, expiresAt: new Date(Date.now() + 86400000), reason: 'Approved negotiated annual contract' });

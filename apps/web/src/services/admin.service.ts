@@ -470,3 +470,6 @@ export async function createAdminCoupon(data: CreateCouponInput): Promise<Billin
 export async function deactivateAdminCoupon(id: string): Promise<void> {
   await adminApiClient.delete(`/api/admin/billing/coupons/${id}`);
 }
+export async function setAdminCouponActive(id: string, isActive: boolean): Promise<void> {
+  await adminApiClient.patch(`/api/admin/billing/coupons/${id}/status`, { isActive });
+}

@@ -236,6 +236,12 @@ adminRoutes.delete(
   requireAdminPermission("tenant.plan.update"),
   AdminSubscriptionOperationsController.deactivateCoupon,
 );
+adminRoutes.patch(
+  "/billing/coupons/:id/status",
+  requireAdmin,
+  requireAdminPermission("tenant.plan.update"),
+  AdminSubscriptionOperationsController.updateCouponStatus,
+);
 adminRoutes.get(
   "/tenants/:id/subscription",
   requireAdmin,

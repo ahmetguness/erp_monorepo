@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AdminSessionSummary } from '@repo/types';
 import {
@@ -93,6 +93,8 @@ export default function AdminSessionsPage() {
   const [otp, setOtp] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [reauthSuccessUntil, setReauthSuccessUntil] = useState<Date | null>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   // Dialog State
   const [sessionToClose, setSessionToClose] = useState<AdminSessionSummary | null>(null);
@@ -121,11 +123,13 @@ export default function AdminSessionsPage() {
   // Reauth Mutation
   const reauthMutation = useMutation({
     mutationFn: () => reauthenticateAdmin(password, otp),
-    onSuccess: () => {
+    onSuccess: async (reauthenticationExpiresAt) => {
       setPassword('');
       setOtp('');
-      const validUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const validUntil = new Date(reauthenticationExpiresAt);
       setReauthSuccessUntil(validUntil);
+      setNow(Date.now());
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'sessions'] });
       toast.success(
         'Kimliğiniz başarıyla doğrulandı! 1 gün boyunca hassas işlemleri gerçekleştirebilirsiniz.',
       );
@@ -171,7 +175,15 @@ export default function AdminSessionsPage() {
   const securityEvents = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data]);
   const currentSession = sessions.find((s) => s.current);
 
-  const isReauthenticated = Boolean(reauthSuccessUntil && reauthSuccessUntil > new Date());
+  const serverReauthUntil = currentSession ? new Date(currentSession.reauthenticationExpiresAt) : null;
+  const effectiveReauthUntil = reauthSuccessUntil ?? serverReauthUntil;
+  const isReauthenticated = Boolean(effectiveReauthUntil && effectiveReauthUntil.getTime() > now);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    if (new URLSearchParams(window.location.search).get('reauth') === '1') passwordInputRef.current?.focus();
+    return () => window.clearInterval(timer);
+  }, []);
 
   const handleReauthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -555,6 +567,7 @@ export default function AdminSessionsPage() {
                     <Lock className="h-4 w-4" />
                   </div>
                   <input
+                    ref={passwordInputRef}
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     placeholder="••••••••••••"

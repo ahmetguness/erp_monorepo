@@ -5,6 +5,7 @@ import { prisma } from "../../../lib/prisma.js";
 import type { PlatformAuditFiltersInput } from "./platform-audit.schemas.js";
 
 const actorSelect = { id: true, name: true, email: true } as const;
+const DEFAULT_AUDIT_RETENTION_DAYS = 2555;
 type AuditRow = Prisma.PlatformAdminAuditLogGetPayload<Record<string, never>>;
 export interface CreatePlatformAuditInput {
   actorId: string | null; action: string; module: string; targetType: string; targetId: string | null;
@@ -50,7 +51,11 @@ export async function createPlatformAudit(input: CreatePlatformAuditInput): Prom
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(78124019)`;
     const [head, policy] = await Promise.all([
       tx.platformAdminAuditLog.findFirst({ orderBy: [{ createdAt: "desc" }, { id: "desc" }] }),
-      tx.platformAuditPolicy.findUniqueOrThrow({ where: { id: "default" } }),
+      tx.platformAuditPolicy.upsert({
+        where: { id: "default" },
+        create: { id: "default", retentionDays: DEFAULT_AUDIT_RETENTION_DAYS },
+        update: {},
+      }),
     ]);
     const createdAt = new Date(); const id = randomUUID(); const changedFields = differences(input.beforeValues, input.afterValues);
     const base = { id, actorId: input.actorId, action: input.action, module: input.module, targetType: input.targetType, targetId: input.targetId, outcome: input.outcome, reason: input.reason ?? null, approvalId: input.approvalId ?? null, ipAddress: input.ipAddress ?? null, device: input.device ?? null, requestId: input.requestId ?? null, correlationId: input.correlationId ?? null, beforeValues: input.beforeValues ?? null, afterValues: input.afterValues ?? null, changedFields, previousHash: head?.hash ?? null, retentionUntil: new Date(createdAt.getTime() + policy.retentionDays * 86400000), createdAt };
@@ -75,7 +80,7 @@ export async function verifyPlatformAuditIntegrity(): Promise<PlatformAuditPage[
 
 export async function listPlatformAudit(filters: PlatformAuditFiltersInput): Promise<PlatformAuditPage> {
   const where = whereFor(filters); const skip = (filters.page - 1) * filters.limit;
-  const [total, rows, integrity, policy] = await Promise.all([prisma.platformAdminAuditLog.count({ where }), prisma.platformAdminAuditLog.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: filters.limit }), verifyPlatformAuditIntegrity(), prisma.platformAuditPolicy.findUniqueOrThrow({ where: { id: "default" } })]);
+  const [total, rows, integrity, policy] = await Promise.all([prisma.platformAdminAuditLog.count({ where }), prisma.platformAdminAuditLog.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: filters.limit }), verifyPlatformAuditIntegrity(), prisma.platformAuditPolicy.upsert({ where: { id: "default" }, create: { id: "default", retentionDays: DEFAULT_AUDIT_RETENTION_DAYS }, update: {} })]);
   return { data: await mapRows(rows), meta: { total, page: filters.page, pageSize: filters.limit, totalPages: Math.ceil(total / filters.limit) }, integrity, retentionDays: policy.retentionDays };
 }
 export async function getPlatformAudit(id: string): Promise<PlatformAuditEntry | null> { const row = await prisma.platformAdminAuditLog.findUnique({ where: { id } }); return row ? (await mapRows([row]))[0] ?? null : null; }
@@ -85,4 +90,4 @@ export async function exportPlatformAudit(filters: Omit<PlatformAuditFiltersInpu
   const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
   return { contentType: "text/csv; charset=utf-8", filename: "platform-audit.csv", body: ["id,createdAt,actor,module,action,target,outcome,reason,requestId,correlationId,hash", ...entries.map((entry) => [entry.id, entry.createdAt, entry.actor?.email, entry.module, entry.action, `${entry.targetType}:${entry.targetId ?? ""}`, entry.outcome, entry.reason, entry.requestId, entry.correlationId, entry.hash].map(escape).join(","))].join("\n") };
 }
-export async function updateRetentionPolicy(retentionDays: number, adminId: string): Promise<number> { const policy = await prisma.platformAuditPolicy.update({ where: { id: "default" }, data: { retentionDays, updatedById: adminId } }); return policy.retentionDays; }
+export async function updateRetentionPolicy(retentionDays: number, adminId: string): Promise<number> { const policy = await prisma.platformAuditPolicy.upsert({ where: { id: "default" }, create: { id: "default", retentionDays, updatedById: adminId }, update: { retentionDays, updatedById: adminId } }); return policy.retentionDays; }

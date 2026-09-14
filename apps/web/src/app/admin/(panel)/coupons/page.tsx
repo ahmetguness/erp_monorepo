@@ -32,7 +32,7 @@ import {
 import {
   getCoupons,
   createAdminCoupon,
-  deactivateAdminCoupon,
+  setAdminCouponActive,
   type BillingCoupon,
   type CouponPlan,
   type CreateCouponInput,
@@ -528,7 +528,7 @@ function RedeemedTenantsList({ discounts, totalCount }: { discounts?: CouponDisc
 
 // ── CouponCard ────────────────────────────────────────────────────────────────
 
-function CouponCard({ coupon, onDeactivate }: { coupon: BillingCoupon; onDeactivate: (id: string) => void }) {
+function CouponCard({ coupon, onStatusChange }: { coupon: BillingCoupon; onStatusChange: (id: string, isActive: boolean) => void }) {
   const expired = isExpired(coupon.expiresAt);
   const canDeactivate = coupon.isActive && !expired;
   const days = daysLeft(coupon.expiresAt);
@@ -635,14 +635,14 @@ function CouponCard({ coupon, onDeactivate }: { coupon: BillingCoupon; onDeactiv
             {formatDate(coupon.expiresAt)}
           </span>
         </span>
-        {canDeactivate && (
+        {!expired && (
           <button
             type="button"
-            onClick={() => onDeactivate(coupon.id)}
+            onClick={() => onStatusChange(coupon.id, !coupon.isActive)}
             className="flex items-center gap-1.5 rounded-lg border border-slate-700/60 px-2.5 py-1.5 text-[10px] font-medium text-slate-400 transition hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-400"
           >
             <ToggleLeft className="h-3 w-3" />
-            Devre Dışı Bırak
+            {canDeactivate ? 'Devre Dışı Bırak' : 'Yeniden Etkinleştir'}
           </button>
         )}
       </div>
@@ -668,15 +668,13 @@ export default function CouponsPage() {
     refetchInterval: 60_000,
   });
 
-  const deactivateMutation = useMutation({
-    mutationFn: deactivateAdminCoupon,
-    onSuccess: () => {
-      toast.success('Kupon başarıyla pasife alındı.');
-      qc.invalidateQueries({ queryKey: ['admin', 'coupons'] });
+  const statusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => setAdminCouponActive(id, isActive),
+    onSuccess: async (_, { isActive }) => {
+      toast.success(isActive ? 'Kupon yeniden etkinleştirildi.' : 'Kupon devre dışı bırakıldı.');
+      await qc.invalidateQueries({ queryKey: ['admin', 'coupons'] });
     },
-    onError: (err: unknown) => {
-      toastAdminError(err, 'Kupon pasife alınırken bir sorun oluştu.');
-    },
+    onError: (err: unknown) => toastAdminError(err, 'Kupon durumu güncellenemedi.'),
   });
 
   const filtered = useMemo(() => {
@@ -848,7 +846,7 @@ export default function CouponsPage() {
             <CouponCard
               key={coupon.id}
               coupon={coupon}
-              onDeactivate={(id) => deactivateMutation.mutate(id)}
+              onStatusChange={(id, isActive) => statusMutation.mutate({ id, isActive })}
             />
           ))}
         </div>

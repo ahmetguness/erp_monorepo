@@ -9,8 +9,9 @@ export async function listAdminSecurityEvents(): Promise<AdminSecurityEventSumma
   const response = await adminApiClient.get<{ data: AdminSecurityEventSummary[] }>('/api/admin/auth/security-events');
   return response.data.data;
 }
-export async function reauthenticateAdmin(password: string, otp: string): Promise<void> {
-  await adminApiClient.post('/api/admin/auth/reauthenticate', { password, otp });
+export async function reauthenticateAdmin(password: string, otp: string): Promise<string> {
+  const response = await adminApiClient.post<{ data: { success: true; reauthenticationExpiresAt: string } }>('/api/admin/auth/reauthenticate', { password, otp });
+  return response.data.data.reauthenticationExpiresAt;
 }
 export async function closeAdminSession(id: string): Promise<void> {
   await adminApiClient.delete(`/api/admin/auth/sessions/${encodeURIComponent(id)}`);

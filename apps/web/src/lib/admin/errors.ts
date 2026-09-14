@@ -69,7 +69,11 @@ export function extractAdminError(err: unknown, fallback = 'Beklenmeyen bir hata
     // Reauth'ta sunucu mesajını yoksay
     if (REAUTH_CODES.has(code)) return base;
     // Sunucunun döndürdüğü özel mesaj varsa onu da ekle
-    if (message && message !== base) return `${base}\n${message}`;
+    if (message && message !== base) {
+      const normalizedBase = base.toLocaleLowerCase('tr-TR');
+      const normalizedMessage = message.toLocaleLowerCase('tr-TR').trim();
+      if (!normalizedBase.includes(normalizedMessage)) return `${base}\n${message}`;
+    }
     return base;
   }
 

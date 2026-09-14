@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect, useMemo } from 'react';
+import { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,6 +22,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { PLAN_PRICING_META, PLAN_LABELS, type PlanName } from '@/lib/plans';
+import { API_BASE_URL } from '@/lib/constants';
 
 // Seeded / system coupons matching backend Prisma billingCoupon
 interface CouponDefinition {
@@ -129,6 +130,8 @@ function CheckoutContent() {
   const [appliedCoupon, setAppliedCoupon] = useState<CouponDefinition | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponSuccessMessage, setCouponSuccessMessage] = useState<string | null>(null);
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+  const couponValidationSequence = useRef(0);
 
   // Processing & Success State
   const [isProcessing, setIsProcessing] = useState(false);
@@ -136,56 +139,57 @@ function CheckoutContent() {
   const [orderId, setOrderId] = useState('');
   const [licenseKey, setLicenseKey] = useState('');
 
-  // Apply initial coupon if present in URL
-  useEffect(() => {
-    if (initialCoupon) {
-      applyCouponCode(initialCoupon);
-    }
-  }, [initialCoupon]);
-
-  const applyCouponCode = (codeToApply: string) => {
+  const applyCouponCode = useCallback(async (codeToApply: string, planToValidate = selectedPlan) => {
+    const sequence = ++couponValidationSequence.current;
     const trimmed = codeToApply.trim().toUpperCase();
     if (!trimmed) {
       setCouponError('Lütfen geçerli bir indirim kodu girin.');
       return;
     }
 
-    const found = SYSTEM_COUPONS.find((c) => c.code === trimmed);
-
-    if (!found) {
-      setCouponError(`"${trimmed}" geçerli bir kupon kodu değil veya süresi dolmuş.`);
+    setIsValidatingCoupon(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/public/checkout/coupons/${encodeURIComponent(trimmed)}?plan=${planToValidate}`);
+      if (!response.ok) throw new Error('Coupon validation failed');
+      const result = await response.json() as { data: { valid: false } | { valid: true; coupon: CouponDefinition } };
+      if (sequence !== couponValidationSequence.current) return;
+      if (!result.data.valid) {
+        setAppliedCoupon(null);
+        setCouponError(`"${trimmed}" bu plan için geçerli değil, kullanım limiti dolmuş veya süresi geçmiş.`);
+        setCouponSuccessMessage(null);
+        return;
+      }
+      setAppliedCoupon(result.data.coupon);
+      setCouponError(null);
+      setCouponSuccessMessage(`✓ %${result.data.coupon.percent} indirim başarıyla uygulandı! (${result.data.coupon.description})`);
+    } catch {
+      if (sequence !== couponValidationSequence.current) return;
+      setCouponError('Kupon şu anda doğrulanamıyor. Lütfen tekrar deneyin.');
       setCouponSuccessMessage(null);
-      return;
+    } finally {
+      if (sequence === couponValidationSequence.current) setIsValidatingCoupon(false);
     }
+  }, [selectedPlan]);
 
-    if (found.applicablePlans !== 'ALL' && !found.applicablePlans.includes(selectedPlan)) {
-      setCouponError(
-        `"${found.code}" kuponu yalnızca ${found.applicablePlans.join(', ')} planında geçerlidir. Lütfen planınızı değiştirin.`
-      );
-      setCouponSuccessMessage(null);
-      return;
-    }
-
-    setAppliedCoupon(found);
-    setCouponError(null);
-    setCouponSuccessMessage(`✓ %${found.percent} indirim başarıyla uygulandı! (${found.description})`);
-  };
+  // Apply initial coupon if present in URL
+  useEffect(() => {
+    if (!initialCoupon) return;
+    const timer = window.setTimeout(() => void applyCouponCode(initialCoupon), 0);
+    return () => window.clearTimeout(timer);
+  }, [initialCoupon, applyCouponCode]);
 
   const removeCoupon = () => {
+    couponValidationSequence.current += 1;
     setAppliedCoupon(null);
     setCouponInput('');
     setCouponError(null);
     setCouponSuccessMessage(null);
   };
 
-  // Re-validate coupon if plan changes
-  useEffect(() => {
-    if (appliedCoupon && appliedCoupon.applicablePlans !== 'ALL' && !appliedCoupon.applicablePlans.includes(selectedPlan)) {
-      setAppliedCoupon(null);
-      setCouponError(`Seçilen ${selectedPlan} planı için "${appliedCoupon.code}" kuponu geçerli olmadığından kaldırıldı.`);
-      setCouponSuccessMessage(null);
-    }
-  }, [selectedPlan, appliedCoupon]);
+  const handlePlanChange = (plan: PlanName) => {
+    setSelectedPlan(plan);
+    if (appliedCoupon) void applyCouponCode(appliedCoupon.code, plan);
+  };
 
   // Price calculations
   const priceInfo = PLAN_BASE_NUMERICAL[selectedPlan];
@@ -586,8 +590,8 @@ function CheckoutContent() {
                     className="mt-0.5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0"
                   />
                   <label htmlFor="terms">
-                    <span className="text-blue-400 hover:underline cursor-pointer">Mesafeli Satış Sözleşmesi</span>'ni
-                    ve <span className="text-blue-400 hover:underline cursor-pointer">Hizmet Şartları</span>'nı okudum, kabul ediyorum.
+                    <span className="text-blue-400 hover:underline cursor-pointer">Mesafeli Satış Sözleşmesi</span>&apos;ni
+                    ve <span className="text-blue-400 hover:underline cursor-pointer">Hizmet Şartları</span>&apos;nı okudum, kabul ediyorum.
                   </label>
                 </div>
 
@@ -633,7 +637,7 @@ function CheckoutContent() {
                   <button
                     key={plan}
                     type="button"
-                    onClick={() => setSelectedPlan(plan)}
+                    onClick={() => handlePlanChange(plan)}
                     className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       selectedPlan === plan
                         ? 'bg-blue-600 text-white shadow'
@@ -715,10 +719,11 @@ function CheckoutContent() {
                       />
                       <button
                         type="button"
-                        onClick={() => applyCouponCode(couponInput)}
+                        onClick={() => void applyCouponCode(couponInput)}
+                        disabled={isValidatingCoupon}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
                       >
-                        Uygula
+                        {isValidatingCoupon ? 'Kontrol ediliyor…' : 'Uygula'}
                       </button>
                     </div>
 
@@ -741,7 +746,7 @@ function CheckoutContent() {
                             type="button"
                             onClick={() => {
                               setCouponInput(c.code);
-                              applyCouponCode(c.code);
+                              void applyCouponCode(c.code);
                             }}
                             className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-[10px] font-mono text-blue-300 hover:text-white transition-colors cursor-pointer"
                           >

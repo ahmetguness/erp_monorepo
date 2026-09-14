@@ -167,6 +167,9 @@ async function cleanupPlatformRecords() {
 
   // Platform audit policy
   await prisma.platformAuditPolicy.deleteMany({});
+  await prisma.platformAuditPolicy.create({
+    data: { id: 'default', retentionDays: 2555 },
+  });
 
   // Privacy
   await prisma.privacyDownloadGrant.deleteMany({});

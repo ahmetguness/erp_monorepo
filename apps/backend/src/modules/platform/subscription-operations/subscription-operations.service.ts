@@ -424,6 +424,30 @@ export async function createCoupon(input: {
   return prisma.billingCoupon.create({ data: input });
 }
 
+export async function validateCheckoutCoupon(code: string, plan: string): Promise<{
+  code: string;
+  percent: number;
+  applicablePlans: string[] | 'ALL';
+  description: string;
+} | null> {
+  const coupon = await prisma.billingCoupon.findFirst({
+    where: {
+      code: code.trim().toUpperCase(),
+      isActive: true,
+      expiresAt: { gt: new Date() },
+      OR: [{ plan: null }, { plan }],
+    },
+    select: { code: true, percent: true, plan: true, description: true, maxRedemptions: true, redemptionCount: true },
+  });
+  if (!coupon || (coupon.maxRedemptions !== null && coupon.redemptionCount >= coupon.maxRedemptions)) return null;
+  return {
+    code: coupon.code,
+    percent: coupon.percent,
+    applicablePlans: coupon.plan ? [coupon.plan] : 'ALL',
+    description: coupon.description || `%${coupon.percent} indirim kuponu`,
+  };
+}
+
 export async function listCoupons(opts?: {
   plan?: string | null;
   isActive?: boolean;
@@ -459,6 +483,10 @@ export async function deactivateCoupon(id: string): Promise<void> {
   const coupon = await prisma.billingCoupon.findUnique({ where: { id } });
   if (!coupon) throw new SubscriptionOperationsError('Kupon bulunamadı.', 404);
   await prisma.billingCoupon.update({ where: { id }, data: { isActive: false } });
+}
+export async function setCouponActive(id: string, isActive: boolean): Promise<void> {
+  const updated = await prisma.billingCoupon.updateMany({ where: { id }, data: { isActive } });
+  if (updated.count === 0) throw new SubscriptionOperationsError('Kupon bulunamadı.', 404);
 }
 export async function applyCoupon(
   tenantId: string,

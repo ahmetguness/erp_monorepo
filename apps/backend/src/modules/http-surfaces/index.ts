@@ -8,6 +8,7 @@ import { externalRoutes } from "../../routes/external.routes.js";
 import { invitationPublicRoutes } from "../../routes/invitation.routes.js";
 import { portalRoutes } from "../../routes/portal.routes.js";
 import { publicChatRoutes } from "../../routes/public-chat.routes.js";
+import { checkoutPublicRoutes } from "../../routes/checkout.routes.js";
 import { scimRoutes } from "../../routes/scim.routes.js";
 import { SetPasswordController } from "../identity/http/controllers/index.js";
 import { TrendyolWebhookController } from "../marketplace/http/controllers/index.js";
@@ -33,6 +34,7 @@ export function registerPublicHttpSurface(app: Hono): void {
   app.route("/api/public", demoPublicRoutes);
   app.route("/api/public", invitationPublicRoutes);
   app.route("/api/public", publicChatRoutes);
+  app.route("/api/public", checkoutPublicRoutes);
   app.post("/api/public/set-password", SetPasswordController.setPassword);
   app.post(
     "/api/public/set-password/validate",

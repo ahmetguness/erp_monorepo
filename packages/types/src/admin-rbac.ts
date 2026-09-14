@@ -148,6 +148,7 @@ export interface AdminSessionSummary {
   createdAt: string;
   lastSeenAt: string;
   expiresAt: string;
+  reauthenticationExpiresAt: string;
 }
 export interface AdminSecurityEventSummary {
   id: string;
