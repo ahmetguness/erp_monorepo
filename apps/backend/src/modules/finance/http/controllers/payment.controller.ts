@@ -178,6 +178,7 @@ export const PaymentController = {
     const query: PaymentListQuery = {
       page: c.req.query('page'),
       limit: c.req.query('limit'),
+      paymentId: c.req.query('paymentId'),
       contactId: c.req.query('contactId'),
       status: c.req.query('status'),
       dateFrom: c.req.query('dateFrom'),

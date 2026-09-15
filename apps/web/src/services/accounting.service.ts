@@ -171,7 +171,7 @@ export interface CreatePaymentDTO {
   direction?: PaymentDirection;
   allocations?: Array<{ invoiceId: string; amount: number }>;
 }
-export interface PaymentListParams extends PaginationParams, DateRangeParams { contactId?: string; status?: string; }
+export interface PaymentListParams extends PaginationParams, DateRangeParams { paymentId?: string; contactId?: string; status?: string; }
 export interface JournalEntryListParams extends PaginationParams, DateRangeParams { isPosted?: boolean; }
 export interface RunPostingEngineDTO { source?: PostingEngineRunResult['source']; limit?: number; postImmediately?: boolean; }
 

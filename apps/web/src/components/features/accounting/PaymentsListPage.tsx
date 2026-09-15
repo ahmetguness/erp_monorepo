@@ -20,6 +20,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { BankAccountSelect, CashAccountSelect, ContactSelect } from "@/components/shared/EntitySelect";
@@ -127,10 +128,12 @@ type PaymentForm = z.infer<typeof paymentSchema>;
 // ─────────────────────────────────────────────
 
 export function PaymentsListPage() {
+  const searchParams = useSearchParams();
+  const focusedPaymentId = searchParams.get("paymentId") ?? undefined;
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(() => createClientIdempotencyKey("web-payment-quick"));
-  const { data, isLoading } = usePayments({ page, limit: 20 });
+  const { data, isLoading } = usePayments({ page, limit: 20, paymentId: focusedPaymentId });
   const createPayment = useCreatePayment();
 
   const { data: contactsData } = useContacts({ page: 1, limit: 200 });
@@ -357,6 +360,15 @@ export function PaymentsListPage() {
           </Link>
         }
       />
+
+      {focusedPaymentId && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-500/25 bg-sky-500/5 px-4 py-3">
+          <p className="text-sm text-sky-200">Satış akışındaki ilgili ödeme kaydı gösteriliyor.</p>
+          <Link href="/dashboard/payments" className="text-xs font-medium text-sky-300 hover:text-sky-200">
+            Tüm ödemeleri göster
+          </Link>
+        </div>
+      )}
 
       {/* ── Summary cards ───────────────────────── */}
       <div className="grid grid-cols-3 gap-3">

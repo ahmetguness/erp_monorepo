@@ -43,6 +43,10 @@ notificationRoutes.get(
   NotificationController.list,
 );
 notificationRoutes.post(
+  "/push-token",
+  NotificationController.registerPushToken,
+);
+notificationRoutes.post(
   "/read-all",
   requirePermission("notifications", "UPDATE"),
   NotificationController.markAllAsRead,

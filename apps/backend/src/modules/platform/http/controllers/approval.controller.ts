@@ -9,7 +9,7 @@ parseApprovalRequestContext,
 toApprovalConditionJson,
 toApprovalRequestContextJson,
 } from '../../../../services/approval-conditions.service.js';
-import { requireParam,requireTenantId } from '../../../../utils/context.js';
+import { requireParam, requireTenantId, requireUserId } from '../../../../utils/context.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -317,13 +317,14 @@ export const ApprovalController = {
       return c.json(new ValidationError('actionType zorunludur.').toJSON(), 400);
     }
 
+    const userId = c.get('userId') as string | undefined;
     const result = await prisma.$transaction(async (tx) => {
       const action = await tx.approvalAction.create({
         data: {
           requestId,
           stepId: body.stepId ?? null,
           actionType: body.actionType,
-          actorId: body.actorId ?? null,
+          actorId: body.actorId ?? userId ?? null,
           notes: body.notes ?? null,
         },
       });
@@ -351,12 +352,119 @@ export const ApprovalController = {
           currentStep: newStep,
           ...(newStatus !== ApprovalStatus.PENDING && { resolvedAt: new Date() }),
         },
+        include: { flow: { select: { id: true, name: true, module: true } } },
       });
 
       return { action, request: updated };
     });
 
     return c.json({ data: result }, 201);
+  },
+
+  async getRequest(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
+
+    const request = await prisma.approvalRequest.findFirst({
+      where: { id, tenantId },
+      include: {
+        flow: {
+          include: {
+            steps: {
+              orderBy: { stepOrder: 'asc' },
+              include: {
+                approverRole: { select: { id: true, name: true } },
+                approverUser: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+        actions: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            step: { select: { id: true, name: true, stepOrder: true } },
+          },
+        },
+      },
+    });
+
+    if (!request) return c.json(new NotFoundError('Onay talebi', id).toJSON(), 404);
+
+    return c.json({ data: request });
+  },
+
+  async batchAction(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const body = await c.req.json<{
+      requestIds: string[];
+      actionType: ApprovalActionType;
+      notes?: string;
+    }>();
+
+    if (!body.requestIds || !Array.isArray(body.requestIds) || body.requestIds.length === 0) {
+      return c.json(new ValidationError('requestIds dizisi zorunludur.').toJSON(), 400);
+    }
+    if (!body.actionType) {
+      return c.json(new ValidationError('actionType zorunludur.').toJSON(), 400);
+    }
+
+    const requests = await prisma.approvalRequest.findMany({
+      where: {
+        id: { in: body.requestIds },
+        tenantId,
+        status: ApprovalStatus.PENDING,
+      },
+      include: {
+        flow: { include: { steps: { orderBy: { stepOrder: 'asc' } } } },
+      },
+    });
+
+    if (requests.length === 0) {
+      return c.json(new ValidationError('Isleme alinabilecek bekleyen talep bulunamadi.').toJSON(), 400);
+    }
+
+    const processed = await prisma.$transaction(async (tx) => {
+      const results = [];
+      for (const req of requests) {
+        let newStatus = req.status;
+        let newStep = req.currentStep;
+
+        if (body.actionType === ApprovalActionType.APPROVE) {
+          const totalSteps = req.flow.steps.length;
+          if (req.currentStep >= totalSteps) {
+            newStatus = ApprovalStatus.APPROVED;
+          } else {
+            newStep = req.currentStep + 1;
+          }
+        } else if (body.actionType === ApprovalActionType.REJECT) {
+          newStatus = ApprovalStatus.REJECTED;
+        }
+
+        const action = await tx.approvalAction.create({
+          data: {
+            requestId: req.id,
+            actionType: body.actionType,
+            actorId: userId,
+            notes: body.notes ?? null,
+          },
+        });
+
+        const updated = await tx.approvalRequest.update({
+          where: { id: req.id },
+          data: {
+            status: newStatus,
+            currentStep: newStep,
+            ...(newStatus !== ApprovalStatus.PENDING && { resolvedAt: new Date() }),
+          },
+        });
+
+        results.push({ id: req.id, status: newStatus, actionId: action.id });
+      }
+      return results;
+    });
+
+    return c.json({ data: { success: true, count: processed.length, items: processed } });
   },
 
   async deleteRequest(c: Context): Promise<Response> {

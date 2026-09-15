@@ -3,7 +3,48 @@ import { apiClient } from '../lib/api-client';
 import { SingleResponseSchema } from '../types/api.types';
 
 // ─────────────────────────────────────────────
-// Schemas
+// FAZ 2: Executive Mobile Dashboard Schemas
+// ─────────────────────────────────────────────
+
+export const MobileDashboardActivitySchema = z.object({
+  id: z.string(),
+  type: z.enum(['INVOICE', 'ORDER', 'APPROVAL', 'PAYMENT', 'STOCK', 'SYSTEM']),
+  title: z.string(),
+  subtitle: z.string(),
+  timestamp: z.string(),
+  status: z.string(),
+  module: z.string(),
+});
+
+export const MobileDashboardDataSchema = z.object({
+  salesSummary: z.object({
+    todayGross: z.coerce.number(),
+    todayCount: z.coerce.number(),
+    yesterdayGross: z.coerce.number(),
+    changePercent: z.coerce.number(),
+    targetProgress: z.coerce.number(),
+  }),
+  financeSummary: z.object({
+    cashBankTotal: z.coerce.number(),
+    overdueTotal: z.coerce.number(),
+    overdueCount: z.coerce.number(),
+  }),
+  operationsSummary: z.object({
+    pendingOrders: z.coerce.number(),
+    criticalStockCount: z.coerce.number(),
+    pendingApprovals: z.coerce.number(),
+  }),
+  activities: z.array(MobileDashboardActivitySchema),
+  unreadNotificationCount: z.coerce.number(),
+});
+
+export const MobileDashboardResponseSchema = SingleResponseSchema(MobileDashboardDataSchema);
+
+export type MobileDashboardData = z.infer<typeof MobileDashboardDataSchema>;
+export type MobileDashboardActivity = z.infer<typeof MobileDashboardActivitySchema>;
+
+// ─────────────────────────────────────────────
+// Legacy / Supplementary Schemas
 // ─────────────────────────────────────────────
 
 const RevenueSummarySchema = SingleResponseSchema(
@@ -91,6 +132,14 @@ export type NotificationItem = z.infer<typeof NotificationItemSchema>;
 // ─────────────────────────────────────────────
 // Service Functions
 // ─────────────────────────────────────────────
+
+/**
+ * Fetch executive aggregated KPI dashboard data for Mobile
+ */
+export async function getMobileDashboard(): Promise<MobileDashboardData> {
+  const res = await apiClient.get('/api/mobile/dashboard');
+  return MobileDashboardResponseSchema.parse(res.data).data;
+}
 
 export async function getRevenueSummary(dateFrom: string, dateTo: string): Promise<RevenueSummary> {
   const res = await apiClient.get('/api/reports/revenue-summary', { params: { dateFrom, dateTo } });

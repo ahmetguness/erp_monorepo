@@ -27,7 +27,9 @@ export function initials(name: string): string {
  */
 export function formatDate(dateStr: string): string {
   try {
-    return new Date(dateStr).toLocaleDateString('tr-TR', {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('tr-TR', {
       day: '2-digit',
       month: 'short',
     });
@@ -35,3 +37,22 @@ export function formatDate(dateStr: string): string {
     return dateStr;
   }
 }
+
+/**
+ * Formats an ISO date string to a Turkish date with hours and minutes.
+ */
+export function formatDateTime(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('tr-TR', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return dateStr;
+  }
+}
+

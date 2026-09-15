@@ -5,6 +5,17 @@ import type { RecoveryAuditCandidate, RecoveryChange, RecoveryContext, RecoveryI
 const UNDO_WINDOW_MS = 15 * 60 * 1000;
 const LABELS: Readonly<Record<string, string>> = { name: 'Unvan', code: 'Kod', taxNumber: 'Vergi no', taxOffice: 'Vergi dairesi', email: 'E-posta', phone: 'Telefon', website: 'Web sitesi', address: 'Adres', city: 'Şehir', country: 'Ülke', notes: 'Notlar', creditLimit: 'Kredi limiti', paymentTermDays: 'Vade günü', isActive: 'Aktiflik' };
 
+function compensationAction(candidate: RecoveryAuditCandidate): RecoveryItem['recoveryAction'] {
+  const routes: Partial<Record<RecoveryAuditCandidate['entityType'], string>> = {
+    INVOICE: `/dashboard/invoices/${candidate.entityId}`,
+    PURCHASE_ORDER: `/dashboard/purchase-orders/${candidate.entityId}`,
+    SALES_ORDER: `/dashboard/sales-orders/${candidate.entityId}`,
+    DELIVERY_NOTE: `/dashboard/delivery-notes?deliveryNoteId=${candidate.entityId}`,
+  };
+  const href = routes[candidate.entityType];
+  return href ? { label: 'İptal / ters kayıt akışını aç', href } : null;
+}
+
 function changes(candidate: RecoveryAuditCandidate): RecoveryChange[] {
   const before = candidate.oldValues ?? {};
   const after = candidate.newValues ?? {};
@@ -21,7 +32,7 @@ function toItem(candidate: RecoveryAuditCandidate, impacts: RecoveryItem['impact
   const mode = recoverable ? 'UNDO' : financial ? 'COMPENSATE' : 'UNAVAILABLE';
   const canExecute = mode === 'UNDO' && !expired && candidate.recoveredAt === null;
   const explanation = candidate.recoveredAt ? 'Bu değişiklik daha önce geri alındı.' : expired && mode === 'UNDO' ? '15 dakikalık güvenli geri alma süresi doldu.' : mode === 'COMPENSATE' ? 'Finansal veya yasal kayıt doğrudan silinmez; ters kayıt ya da iptal akışı kullanılmalıdır.' : mode === 'UNDO' ? 'Kayıt sonradan değişmediyse önceki sürüm güvenle geri yüklenebilir.' : 'Bu kayıt türü için otomatik geri alma desteklenmiyor.';
-  return { auditLogId: candidate.id, mode, title: candidate.action === 'DELETE' ? 'Kayıt silindi' : 'Kayıt güncellendi', explanation, canExecute, expiresAt: mode === 'UNDO' ? expiresAt.toISOString() : null, occurredAt: candidate.createdAt.toISOString(), changes: changes(candidate), impacts };
+  return { auditLogId: candidate.id, mode, title: candidate.action === 'DELETE' ? 'Kayıt silindi' : 'Kayıt güncellendi', explanation, canExecute, expiresAt: mode === 'UNDO' ? expiresAt.toISOString() : null, occurredAt: candidate.createdAt.toISOString(), changes: changes(candidate), impacts, recoveryAction: mode === 'COMPENSATE' ? compensationAction(candidate) : null };
 }
 
 export class OperationRecoveryService {

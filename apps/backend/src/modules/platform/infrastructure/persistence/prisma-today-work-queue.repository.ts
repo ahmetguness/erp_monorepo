@@ -23,6 +23,7 @@ export class PrismaTodayWorkQueueRepository implements TodayWorkQueueRepository 
     const [tasks, approvals, invoices, exceptions] = await Promise.all([
       canRead('tasks') ? this.db.task.findMany({
         where: { tenantId, status: { in: [TaskStatus.TODO, TaskStatus.IN_PROGRESS] }, OR: [{ assignedToId: userId }, { assignedToId: null }] },
+        orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
         take: 40,
       }) : [],
       canRead('approvals') ? this.db.approvalRequest.findMany({
@@ -30,11 +31,15 @@ export class PrismaTodayWorkQueueRepository implements TodayWorkQueueRepository 
         select: {
           id: true, createdAt: true, entityType: true, entityId: true, currentStep: true,
           flow: { select: { name: true, module: true, steps: { select: { stepOrder: true, approverUserId: true, approverRoleId: true } } } },
-        }, take: 20,
+        }, orderBy: { createdAt: 'asc' }, take: 20,
       }) : [],
       canRead('invoicing') ? this.db.invoice.findMany({
         where: { tenantId, deletedAt: null, type: 'SALES', OR: [{ status: InvoiceStatus.OVERDUE }, { status: { in: [InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID] }, dueDate: { lt: now } }] },
-        select: { id: true, number: true, dueDate: true, totalGross: true, createdAt: true, contact: { select: { name: true } } }, take: 20,
+        select: {
+          id: true, number: true, dueDate: true, totalGross: true, exchangeRate: true, createdAt: true,
+          contact: { select: { name: true } },
+          payments: { where: { payment: { status: 'COMPLETED' } }, select: { amount: true } },
+        }, orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }], take: 20,
       }) : [],
       new ExceptionCenterService(this.db).snapshot(tenantId),
     ]);
@@ -64,7 +69,9 @@ export class PrismaTodayWorkQueueRepository implements TodayWorkQueueRepository 
     const invoiceItems: TodayWorkCandidate[] = invoices.map((invoice) => ({
       id: `invoice:${invoice.id}`, sourceId: invoice.id, kind: 'ANOMALY', title: `${invoice.number} gecikmiş tahsilat`,
       detail: invoice.contact?.name ?? null, risk: invoice.dueDate && now.getTime() - invoice.dueDate.getTime() >= 30 * 86_400_000 ? 'CRITICAL' : 'HIGH',
-      dueAt: invoice.dueDate, occurredAt: invoice.createdAt, monetaryImpact: Number(invoice.totalGross), assignee: null,
+      dueAt: invoice.dueDate, occurredAt: invoice.createdAt,
+      monetaryImpact: Math.max(0, Number(invoice.totalGross) - invoice.payments.reduce((sum, allocation) => sum + Number(allocation.amount), 0)) * Number(invoice.exchangeRate),
+      assignee: null,
       reason: 'Vadesi geçen satış faturası nakit akışını etkiliyor.', action: { kind: 'OPEN', label: 'Tahsilatı yönet', href: `/dashboard/invoices/${invoice.id}` },
     }));
     const representedCategories = new Set(['workflow_task', 'invoice_overdue', 'approval_required']);

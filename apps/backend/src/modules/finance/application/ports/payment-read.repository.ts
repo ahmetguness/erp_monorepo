@@ -1,6 +1,7 @@
 import type { PageRequest, PageResult } from '../../../shared/index.js';
 
 export interface PaymentFilters {
+  paymentId?: string;
   contactId?: string;
   status?: string;
   dateFrom?: string;

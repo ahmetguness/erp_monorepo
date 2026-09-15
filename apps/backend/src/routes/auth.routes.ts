@@ -5,6 +5,7 @@ import { AuthController } from "../modules/identity/http/controllers/index.js";
 import {
   loginBodySchema,
   registerBodySchema,
+  switchTenantBodySchema,
 } from "../schemas/request-body.schemas";
 
 const authRoutes = new Hono();
@@ -16,6 +17,12 @@ authRoutes.post(
   AuthController.register,
 );
 authRoutes.post("/logout", AuthController.logout);
+authRoutes.post(
+  "/switch-tenant",
+  requireAuth,
+  validateBody(switchTenantBodySchema),
+  AuthController.switchTenant,
+);
 authRoutes.get("/me", requireAuth, AuthController.me);
 authRoutes.patch(
   "/me/preferences",

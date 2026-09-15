@@ -22,6 +22,13 @@ export const registerBodySchema = z.object({
   phone: optionalString,
 }).strict();
 
+export const switchTenantBodySchema = z.object({
+  tenantId: optionalString,
+  tenantSlug: optionalString,
+}).refine((val) => Boolean(val.tenantId || val.tenantSlug), {
+  message: 'tenantId veya tenantSlug alanlarindan en az biri zorunludur.',
+});
+
 export const invoiceLineBodySchema = z.object({
   productId: optionalString,
   taxRateId: optionalString,

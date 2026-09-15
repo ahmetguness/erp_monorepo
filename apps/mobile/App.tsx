@@ -1,32 +1,28 @@
-import React, { useState } from 'react';
-import { StatusBar } from 'expo-status-bar';
+// ⚠️ suppress-expo-go-warnings MUST be the very first import so that
+// console patches are applied before expo-notifications module init runs.
+import './src/lib/suppress-expo-go-warnings';
+
+import React from 'react';
+import { LogBox } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import IntroScreen from './src/screens/IntroScreen';
-import LoginScreen from './src/screens/LoginScreen';
-import DashboardScreen from './src/screens/DashboardScreen';
-import { useAuthStore } from './src/store/auth.store';
+import { ThemeProvider } from './src/theme';
+import { RootNavigator } from './src/navigation';
+import { ErrorBoundary } from './src/components/common';
+
+// Belt-and-suspenders: also remove from the in-app LogBox overlay UI
+LogBox.ignoreLogs([
+  'expo-notifications: Android Push notifications',
+  '`expo-notifications` functionality is not fully supported in Expo Go',
+]);
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<'intro' | 'login'>('intro');
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-
-  if (isAuthenticated) {
-    return (
-      <SafeAreaProvider>
-        <StatusBar style="dark" />
-        <DashboardScreen />
-      </SafeAreaProvider>
-    );
-  }
-
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
-      {currentScreen === 'intro' ? (
-        <IntroScreen onNext={() => setCurrentScreen('login')} />
-      ) : (
-        <LoginScreen onBack={() => setCurrentScreen('intro')} />
-      )}
+      <ErrorBoundary>
+        <ThemeProvider>
+          <RootNavigator />
+        </ThemeProvider>
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }

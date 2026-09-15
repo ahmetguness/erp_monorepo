@@ -26,4 +26,13 @@ describe('operation recovery', () => {
     expect(item?.canExecute).toBe(false);
     await expect(service.undo(context, 'audit-1')).rejects.toMatchObject({ code: 'CONFLICT' });
   });
+
+  it('routes financial changes to a compensating workflow', async () => {
+    const financeRepository: OperationRecoveryRepository = {
+      ...repository(new Date()),
+      listCandidates: async () => [{ id: 'audit-2', action: 'UPDATE', entityType: 'INVOICE', entityId: 'invoice-1', oldValues: { status: 'SENT' }, newValues: { status: 'PAID' }, createdAt: new Date(), recoveredAt: null }],
+    };
+    const [item] = await new OperationRecoveryService(financeRepository).list({ ...context, entityType: 'INVOICE', entityId: 'invoice-1' });
+    expect(item).toMatchObject({ mode: 'COMPENSATE', canExecute: false, recoveryAction: { href: '/dashboard/invoices/invoice-1' } });
+  });
 });

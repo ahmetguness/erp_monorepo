@@ -5,6 +5,7 @@
   "workspaces": [
     "apps/backend",
     "apps/web",
+    "apps/mobile",
     "packages/*"
   ],
   "scripts": {
@@ -21,7 +22,8 @@
     "test:types-layout": "npm --workspace=@repo/types run test:layout",
     "typecheck:backend": "npm --workspace=@repo/backend run typecheck",
     "typecheck:web": "npm --workspace=web run typecheck",
-    "typecheck": "npm run build:types && npm run typecheck:types && npm run typecheck:backend && npm run typecheck:web",
+    "typecheck:mobile": "npm --workspace=mobile run typecheck",
+    "typecheck": "npm run build:types && npm run typecheck:types && npm run typecheck:backend && npm run typecheck:web && npm run typecheck:mobile",
     "lint:backend": "npm --workspace=@repo/backend run lint",
     "lint:web": "npm --workspace=web run lint",
     "lint": "npm run lint:backend && npm run lint:web",

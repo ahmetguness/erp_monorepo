@@ -25,6 +25,7 @@ implements PaymentReadRepository<PaymentListRecord, PaymentDetailRecord> {
     const where: Prisma.PaymentWhereInput = {
       tenantId,
       deletedAt: null,
+      ...(filters.paymentId && { id: filters.paymentId }),
       ...(filters.contactId && { contactId: filters.contactId }),
       ...(status && { status }),
       ...(filters.dateFrom || filters.dateTo

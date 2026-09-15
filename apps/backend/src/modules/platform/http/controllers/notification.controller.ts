@@ -181,6 +181,38 @@ export const NotificationController = {
 
     return c.json({ data: { success: true, count: ids.length } });
   },
+
+  async registerPushToken(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const body = await c.req.json<{ pushToken: string }>().catch(() => ({ pushToken: '' }));
+
+    if (!body.pushToken || typeof body.pushToken !== 'string') {
+      return c.json(new ValidationError('pushToken alani zorunludur.').toJSON(), 400);
+    }
+
+    const tenantUser = await prisma.tenantUser.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+    });
+
+    if (!tenantUser) {
+      return c.json(new NotFoundError('Kullanici', userId).toJSON(), 404);
+    }
+
+    const currentPrefs = (tenantUser.preferences as Record<string, unknown>) || {};
+    await prisma.tenantUser.update({
+      where: { id: tenantUser.id },
+      data: {
+        preferences: {
+          ...currentPrefs,
+          pushToken: body.pushToken,
+          pushTokenUpdatedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    return c.json({ data: { success: true, message: 'Push token basariyla kaydedildi.' } });
+  },
 };
 
 function isSmartNotificationAction(value: string): value is SmartNotificationAction {

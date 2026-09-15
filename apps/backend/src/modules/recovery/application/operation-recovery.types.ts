@@ -16,6 +16,7 @@ export interface RecoveryAuditCandidate {
 
 export interface RecoveryChange { field: string; label: string; before: RecoveryValue; after: RecoveryValue }
 export interface RecoveryImpact { label: string; count: number }
+export interface RecoveryAction { label: string; href: string }
 export interface RecoveryItem {
   auditLogId: string;
   mode: RecoveryMode;
@@ -26,6 +27,7 @@ export interface RecoveryItem {
   occurredAt: string;
   changes: RecoveryChange[];
   impacts: RecoveryImpact[];
+  recoveryAction: RecoveryAction | null;
 }
 
 export interface RecoveryContext { tenantId: string; userId: string; entityType: RecoveryEntityType; entityId: string }

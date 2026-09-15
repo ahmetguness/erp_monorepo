@@ -43,6 +43,7 @@ import { OverviewTab } from "./tabs/OverviewTab";
 import { FinancialTab } from "./tabs/FinancialTab";
 import { OperationsTab } from "./tabs/OperationsTab";
 import { TeamTab } from "./tabs/TeamTab";
+import { BasicDashboards } from '@/features/basic-dashboard';
 
 // ─────────────────────────────────────────────
 // Access helpers
@@ -130,6 +131,8 @@ export function DashboardOverview() {
   const canReadTasks = canRead("tasks");
   const canReadNotifications = canRead("notifications");
   const canReadSettings = canRead("settings");
+  const canReadProduction = canRead("production");
+  const canReadPurchasing = canRead("purchasing");
   const canReadTodayQueue =
     canReadTasks ||
     canReadApprovals ||
@@ -257,6 +260,11 @@ export function DashboardOverview() {
   // ── Render ──
   return (
     <div className="space-y-5 pb-12">
+      <BasicDashboards
+        executive={canReadReporting}
+        production={canReadProduction}
+        procurement={canReadPurchasing}
+      />
       {/* Tab Bar */}
       <TabBar active={activeTab} onChange={setActiveTab} />
 

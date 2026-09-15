@@ -15,6 +15,7 @@ import { getValidatedBody } from "../../../../middleware/validateBody.js";
 import {
   loginBodySchema,
   registerBodySchema,
+  switchTenantBodySchema,
 } from "../../../../schemas/request-body.schemas.js";
 import {
   createSecuritySession,
@@ -92,14 +93,14 @@ function toTenantMembershipView(input: {
     roleId: input.roleId,
     role: input.roleRef
       ? {
-          id: input.roleRef.id,
-          name: input.roleRef.name,
-          isSystem: input.roleRef.isSystem,
-          permissions: input.roleRef.permissions.map((permission) => ({
-            module: permission.module,
-            action: permission.action,
-          })),
-        }
+        id: input.roleRef.id,
+        name: input.roleRef.name,
+        isSystem: input.roleRef.isSystem,
+        permissions: input.roleRef.permissions.map((permission) => ({
+          module: permission.module,
+          action: permission.action,
+        })),
+      }
       : null,
   };
 }
@@ -336,6 +337,7 @@ export const AuthController = {
 
     return c.json({
       data: {
+        token,
         user: {
           id: user.id,
           email: user.email,
@@ -472,6 +474,7 @@ export const AuthController = {
     return c.json(
       {
         data: {
+          token,
           user: {
             id: result.user.id,
             email: result.user.email,
@@ -734,5 +737,122 @@ export const AuthController = {
     const frontendUrl =
       process.env.ALLOWED_ORIGINS?.split(",")[0] || "http://localhost:3000";
     return c.redirect(`${frontendUrl}/dashboard`);
+  },
+
+  /**
+   * POST /api/auth/switch-tenant
+   * Kullanıcının aktif tenant'ını değiştirir ve yeni JWT üretir.
+   */
+  async switchTenant(c: Context): Promise<Response> {
+    const userId = c.get("userId") as string;
+    if (!userId) {
+      return c.json(new ForbiddenError("Yetkilendirme gerekli.").toJSON(), 401);
+    }
+
+    const body = getValidatedBody(c, switchTenantBodySchema);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        tenants: {
+          where: { isActive: true },
+          include: {
+            roleRef: {
+              select: {
+                id: true,
+                name: true,
+                isSystem: true,
+                permissions: { select: { module: true, action: true } },
+              },
+            },
+            tenant: {
+              select: {
+                id: true,
+                slug: true,
+                companyName: true,
+                plan: true,
+                status: true,
+                modules: true,
+                trialEndsAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user || !user.isActive) {
+      return c.json(new ForbiddenError("Kullanıcı aktif değil.").toJSON(), 401);
+    }
+
+    const targetTenantUser = user.tenants.find(
+      (tu) =>
+        (body.tenantId && tu.tenant.id === body.tenantId) ||
+        (body.tenantSlug && tu.tenant.slug === body.tenantSlug),
+    );
+
+    if (!targetTenantUser) {
+      return c.json(
+        new ForbiddenError("Bu şirkete erişim yetkiniz bulunmamaktadır.").toJSON(),
+        403,
+      );
+    }
+
+    const tenant = targetTenantUser.tenant;
+
+    if (tenant.status === "SUSPENDED" || tenant.status === "CANCELLED") {
+      return c.json(
+        new ForbiddenError("Bu şirket hesabı askıya alınmış veya iptal edilmiş.").toJSON(),
+        403,
+      );
+    }
+
+    const session = await createSecuritySession(
+      prisma,
+      tenant.id,
+      user.id,
+      getAuthRequestMeta(c),
+    );
+
+    const payload: JwtPayload = {
+      userId: user.id,
+      tenantId: tenant.id,
+      sessionId: session.id,
+    };
+
+    const token = jwt.sign(payload, RESOLVED_JWT_SECRET, {
+      expiresIn: JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"],
+    });
+
+    setAuthCookie(c, token, true);
+
+    return c.json({
+      data: {
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          phone: user.phone,
+          isActive: user.isActive,
+          tenantMembership: toTenantMembershipView(targetTenantUser),
+        },
+        tenant: {
+          id: tenant.id,
+          slug: tenant.slug,
+          companyName: tenant.companyName,
+          plan: tenant.plan,
+          status: tenant.status,
+          modules: tenant.modules,
+          trialEndsAt: tenant.trialEndsAt,
+        },
+        availableTenants: user.tenants.map((tu) => ({
+          id: tu.tenant.id,
+          slug: tu.tenant.slug,
+          companyName: tu.tenant.companyName,
+          plan: tu.tenant.plan,
+        })),
+      },
+    });
   },
 };

@@ -41,10 +41,20 @@ approvalRoutes.get(
   requirePermission("approvals", "READ"),
   ApprovalController.listRequests,
 );
+approvalRoutes.get(
+  "/requests/:id",
+  requirePermission("approvals", "READ"),
+  ApprovalController.getRequest,
+);
 approvalRoutes.post(
   "/requests",
   requirePermission("approvals", "CREATE"),
   ApprovalController.createRequest,
+);
+approvalRoutes.post(
+  "/requests/batch-action",
+  requirePermission("approvals", "UPDATE"),
+  ApprovalController.batchAction,
 );
 approvalRoutes.post(
   "/requests/:id/action",

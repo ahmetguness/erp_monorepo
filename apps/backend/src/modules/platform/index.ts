@@ -24,6 +24,8 @@ import { starterHealthRoutes } from '../../routes/starter-health.routes.js';
 import { taskRoutes } from '../../routes/task.routes.js';
 import { currencyRatesRoutes } from './http/currency-rates.routes.js';
 import { pilotReadinessRoutes } from './pilot-readiness/infrastructure/http/pilot-readiness.routes.js';
+import { mobileDashboardRoutes } from '../../routes/mobile-dashboard.routes.js';
+import { basicDashboardRoutes } from './basic-dashboard/infrastructure/http/basic-dashboard.routes.js';
 export { MetricsController } from './http/controllers/metrics.controller.js';
 export { PersistentObservabilityWorker } from './persistent-observability/persistent-observability.worker.js';
 export { getPublicStatusIncidents } from './incident-management/incident-management.service.js';
@@ -57,5 +59,7 @@ export const platformModule: BackendModule = {
     app.route('/contextual-forms', contextualFormRoutes);
     app.route('/currency-rates', currencyRatesRoutes);
     app.route('/pilot-readiness', pilotReadinessRoutes);
+    app.route('/mobile/dashboard', mobileDashboardRoutes);
+    app.route('/dashboard/basic', basicDashboardRoutes);
   },
 };
