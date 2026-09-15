@@ -145,6 +145,10 @@ model Product {
   purchasePrice Decimal       @default(0) @db.Decimal(18, 2)
   salesPrice    Decimal       @default(0) @db.Decimal(18, 2)
   minStockLevel Decimal       @default(0) @db.Decimal(18, 3)
+  safetyStock   Decimal?      @db.Decimal(18, 3)
+  reorderPoint  Decimal?      @db.Decimal(18, 3)
+  reorderQty    Decimal?      @db.Decimal(18, 3)
+  leadTimeDays  Int?
   costingMethod CostingMethod @default(MOVING_AVERAGE)
   averageCost   Decimal       @default(0) @db.Decimal(18, 4)
 

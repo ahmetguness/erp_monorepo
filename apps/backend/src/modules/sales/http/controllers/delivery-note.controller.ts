@@ -136,7 +136,7 @@ export const DeliveryNoteController = {
         purchaseOrder: { select: { id: true, number: true } },
         items: {
           include: {
-            product: { select: { id: true, code: true, name: true } },
+            product: { select: { id: true, code: true, name: true, barcode: true } },
           },
           orderBy: { sortOrder: 'asc' },
         },

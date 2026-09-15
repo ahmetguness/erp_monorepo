@@ -1,40 +1,20 @@
-import { AuditAction,EntityType } from '@prisma/client';
-import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
-import { prisma } from '../../../../lib/prisma.js';
-import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
-import { requireTenantId } from '../../../../utils/context.js';
+import { AuditAction, EntityType } from "@prisma/client";
+import { Context } from "hono";
+import { NotFoundError, ValidationError } from "../../../../errors/index.js";
+import { prisma } from "../../../../lib/prisma.js";
+import { getValidatedBody } from "../../../../middleware/validateBody.js";
+import {
+  createProductBodySchema,
+  updateProductBodySchema,
+  type CreateProductBody,
+  type UpdateProductBody,
+} from "../../../../schemas/request-body.schemas.js";
+import { createAuditLog, getRequestMeta } from "../../../../utils/audit.js";
+import { requireTenantId } from "../../../../utils/context.js";
 
 // ─────────────────────────────────────────────
 // DTOs
 // ─────────────────────────────────────────────
-
-interface CreateProductDTO {
-  code: string;
-  name: string;
-  unitId: string;
-  categoryId?: string;
-  taxRateId?: string;
-  barcode?: string;
-  description?: string;
-  imageUrl?: string;
-  purchasePrice?: number;
-  salesPrice?: number;
-  minStockLevel?: number;
-}
-
-interface UpdateProductDTO {
-  name?: string;
-  categoryId?: string;
-  taxRateId?: string;
-  barcode?: string;
-  description?: string;
-  imageUrl?: string;
-  purchasePrice?: number;
-  salesPrice?: number;
-  minStockLevel?: number;
-  isActive?: boolean;
-}
 
 interface ProductListQuery {
   page?: string;
@@ -63,33 +43,36 @@ export const ProductController = {
     const tenantId = requireTenantId(c);
 
     const query = c.req.query() as ProductListQuery;
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
+    const page = Math.max(1, parseInt(query.page ?? "1", 10));
+    const pageSize = Math.min(
+      100,
+      Math.max(1, parseInt(query.limit ?? "20", 10)),
+    );
     const skip = (page - 1) * pageSize;
     const minMargin = query.minMargin ? Number(query.minMargin) : undefined;
     const maxMargin = query.maxMargin ? Number(query.maxMargin) : undefined;
-    const marginFilterEnabled = Number.isFinite(minMargin) || Number.isFinite(maxMargin);
+    const marginFilterEnabled =
+      Number.isFinite(minMargin) || Number.isFinite(maxMargin);
 
     const where = {
       tenantId,
       deletedAt: null,
       ...(query.search && {
         OR: [
-          { name: { contains: query.search, mode: 'insensitive' as const } },
-          { code: { contains: query.search, mode: 'insensitive' as const } },
-          { barcode: { contains: query.search, mode: 'insensitive' as const } },
+          { name: { contains: query.search, mode: "insensitive" as const } },
+          { code: { contains: query.search, mode: "insensitive" as const } },
+          { barcode: { contains: query.search, mode: "insensitive" as const } },
         ],
       }),
       ...(query.categoryId && { categoryId: query.categoryId }),
-      ...(query.isActive !== undefined && { isActive: query.isActive === 'true' }),
-      ...(query.noCategory === 'true' && { categoryId: null }),
-      ...(query.missingPrice === 'true' && {
-        OR: [
-          { salesPrice: { lte: 0 } },
-          { purchasePrice: { lte: 0 } },
-        ],
+      ...(query.isActive !== undefined && {
+        isActive: query.isActive === "true",
       }),
-      ...(query.missingMinStock === 'true' && { minStockLevel: { lte: 0 } }),
+      ...(query.noCategory === "true" && { categoryId: null }),
+      ...(query.missingPrice === "true" && {
+        OR: [{ salesPrice: { lte: 0 } }, { purchasePrice: { lte: 0 } }],
+      }),
+      ...(query.missingMinStock === "true" && { minStockLevel: { lte: 0 } }),
     };
 
     const [rawTotal, rawProducts] = await prisma.$transaction([
@@ -101,7 +84,7 @@ export const ProductController = {
           unit: { select: { id: true, name: true, code: true } },
           taxRate: { select: { id: true, name: true, rate: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         skip: marginFilterEnabled ? undefined : skip,
         take: marginFilterEnabled ? undefined : pageSize,
       }),
@@ -110,15 +93,22 @@ export const ProductController = {
       ? rawProducts.filter((product) => {
           const salesPrice = Number(product.salesPrice);
           const purchasePrice = Number(product.purchasePrice);
-          const margin = salesPrice > 0 ? ((salesPrice - purchasePrice) / salesPrice) * 100 : -100;
+          const margin =
+            salesPrice > 0
+              ? ((salesPrice - purchasePrice) / salesPrice) * 100
+              : -100;
           return (
-            (!Number.isFinite(minMargin) || margin >= minMargin!)
-            && (!Number.isFinite(maxMargin) || margin <= maxMargin!)
+            (!Number.isFinite(minMargin) || margin >= minMargin!) &&
+            (!Number.isFinite(maxMargin) || margin <= maxMargin!)
           );
         })
       : rawProducts;
-    const products = marginFilterEnabled ? marginFilteredProducts.slice(skip, skip + pageSize) : marginFilteredProducts;
-    const total = marginFilterEnabled ? marginFilteredProducts.length : rawTotal;
+    const products = marginFilterEnabled
+      ? marginFilteredProducts.slice(skip, skip + pageSize)
+      : marginFilteredProducts;
+    const total = marginFilterEnabled
+      ? marginFilteredProducts.length
+      : rawTotal;
 
     return c.json({
       data: products,
@@ -132,7 +122,7 @@ export const ProductController = {
    */
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const productId = c.req.param('id');
+    const productId = c.req.param("id");
 
     const product = await prisma.product.findFirst({
       where: { id: productId, tenantId, deletedAt: null },
@@ -149,7 +139,7 @@ export const ProductController = {
     });
 
     if (!product) {
-      return c.json(new NotFoundError('Ürün', productId).toJSON(), 404);
+      return c.json(new NotFoundError("Ürün", productId).toJSON(), 404);
     }
 
     return c.json({ data: product });
@@ -162,14 +152,19 @@ export const ProductController = {
    */
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const userId = c.get('userId') as string | undefined;
+    const userId = c.get("userId") as string | undefined;
     const { ipAddress, userAgent } = getRequestMeta(c);
 
-    const body = await c.req.json<CreateProductDTO>();
+    const body: CreateProductBody = getValidatedBody(
+      c,
+      createProductBodySchema,
+    );
 
     if (!body.code || !body.name || !body.unitId) {
       return c.json(
-        new ValidationError('code, name ve unitId alanları zorunludur.').toJSON(),
+        new ValidationError(
+          "code, name ve unitId alanları zorunludur.",
+        ).toJSON(),
         400,
       );
     }
@@ -200,6 +195,10 @@ export const ProductController = {
         purchasePrice: body.purchasePrice ?? 0,
         salesPrice: body.salesPrice ?? 0,
         minStockLevel: body.minStockLevel ?? 0,
+        safetyStock: body.safetyStock ?? null,
+        reorderPoint: body.reorderPoint ?? null,
+        reorderQty: body.reorderQty ?? null,
+        leadTimeDays: body.leadTimeDays ?? null,
       },
       include: {
         category: { select: { id: true, name: true } },
@@ -209,11 +208,15 @@ export const ProductController = {
     });
 
     await createAuditLog(prisma, {
-      tenantId, userId, module: 'inventory',
-      entityType: EntityType.PRODUCT, entityId: product.id,
+      tenantId,
+      userId,
+      module: "inventory",
+      entityType: EntityType.PRODUCT,
+      entityId: product.id,
       action: AuditAction.CREATE,
       newValues: { code: product.code, name: product.name },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return c.json({ data: product }, 201);
@@ -225,17 +228,20 @@ export const ProductController = {
    */
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const productId = c.req.param('id');
+    const productId = c.req.param("id");
 
     const product = await prisma.product.findFirst({
       where: { id: productId, tenantId, deletedAt: null },
     });
 
     if (!product) {
-      return c.json(new NotFoundError('Ürün', productId).toJSON(), 404);
+      return c.json(new NotFoundError("Ürün", productId).toJSON(), 404);
     }
 
-    const body = await c.req.json<UpdateProductDTO>();
+    const body: UpdateProductBody = getValidatedBody(
+      c,
+      updateProductBodySchema,
+    );
 
     const updated = await prisma.product.update({
       where: { id: productId },
@@ -244,11 +250,27 @@ export const ProductController = {
         ...(body.categoryId !== undefined && { categoryId: body.categoryId }),
         ...(body.taxRateId !== undefined && { taxRateId: body.taxRateId }),
         ...(body.barcode !== undefined && { barcode: body.barcode }),
-        ...(body.description !== undefined && { description: body.description }),
+        ...(body.description !== undefined && {
+          description: body.description,
+        }),
         ...(body.imageUrl !== undefined && { imageUrl: body.imageUrl }),
-        ...(body.purchasePrice !== undefined && { purchasePrice: body.purchasePrice }),
+        ...(body.purchasePrice !== undefined && {
+          purchasePrice: body.purchasePrice,
+        }),
         ...(body.salesPrice !== undefined && { salesPrice: body.salesPrice }),
-        ...(body.minStockLevel !== undefined && { minStockLevel: body.minStockLevel }),
+        ...(body.minStockLevel !== undefined && {
+          minStockLevel: body.minStockLevel,
+        }),
+        ...(body.safetyStock !== undefined && {
+          safetyStock: body.safetyStock,
+        }),
+        ...(body.reorderPoint !== undefined && {
+          reorderPoint: body.reorderPoint,
+        }),
+        ...(body.reorderQty !== undefined && { reorderQty: body.reorderQty }),
+        ...(body.leadTimeDays !== undefined && {
+          leadTimeDays: body.leadTimeDays,
+        }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
       },
       include: {
@@ -267,14 +289,14 @@ export const ProductController = {
    */
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const productId = c.req.param('id');
+    const productId = c.req.param("id");
 
     const product = await prisma.product.findFirst({
       where: { id: productId, tenantId, deletedAt: null },
     });
 
     if (!product) {
-      return c.json(new NotFoundError('Ürün', productId).toJSON(), 404);
+      return c.json(new NotFoundError("Ürün", productId).toJSON(), 404);
     }
 
     await prisma.product.update({

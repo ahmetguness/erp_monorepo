@@ -73,7 +73,10 @@ import {
   type ProductForm,
 } from "./product-form/schema";
 import { ProductLimitNotice } from "./ProductLimitNotice";
-import { getProductLimitStatus, PRODUCT_LIMIT_UPGRADE_HREF } from "./product-limit";
+import {
+  getProductLimitStatus,
+  PRODUCT_LIMIT_UPGRADE_HREF,
+} from "./product-limit";
 import { MasterDataSuggestionsPanel } from "@/components/features/onboarding/MasterDataSuggestionsPanel";
 import { useMasterDataEnrichment } from "@/hooks/useMasterDataEnrichment";
 import type { MasterDataSuggestion } from "@/services/master-data-enrichment.service";
@@ -329,10 +332,16 @@ export function ProductFormPage({ editId }: Props) {
   });
 
   const watchAll = useWatch({ control });
-  useDirtyStateWarning(isDirty && !createProduct.isSuccess && !updateProduct.isSuccess);
+  useDirtyStateWarning(
+    isDirty && !createProduct.isSuccess && !updateProduct.isSuccess,
+  );
 
   const applyEnrichment = (item: MasterDataSuggestion): void => {
-    if (item.field === "code" || item.field === "name") setValue(item.field, item.value, { shouldDirty: true, shouldValidate: true });
+    if (item.field === "code" || item.field === "name")
+      setValue(item.field, item.value, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
   };
 
   // Section completion checks
@@ -470,7 +479,13 @@ export function ProductFormPage({ editId }: Props) {
   }, [isEdit, productUsage, productLimitStatus.isLimitReached, router]);
 
   const onSubmit = async (data: ProductForm) => {
-    if (isSubmitLocked(isSubmitting, createProduct.isPending || updateProduct.isPending)) return;
+    if (
+      isSubmitLocked(
+        isSubmitting,
+        createProduct.isPending || updateProduct.isPending,
+      )
+    )
+      return;
     const payload = toProductPayload(data);
 
     if (isEdit) {
@@ -492,7 +507,11 @@ export function ProductFormPage({ editId }: Props) {
           router.push(`/dashboard/products/${editId}`);
         },
         onError: (error) => {
-          applyServerFieldErrors<ProductForm>(error, setError, PRODUCT_FORM_SERVER_FIELDS);
+          applyServerFieldErrors<ProductForm>(
+            error,
+            setError,
+            PRODUCT_FORM_SERVER_FIELDS,
+          );
         },
       });
     } else {
@@ -527,19 +546,29 @@ export function ProductFormPage({ editId }: Props) {
           router.push(`/dashboard/products/${p.id}`);
         },
         onError: (error) => {
-          applyServerFieldErrors<ProductForm>(error, setError, PRODUCT_FORM_SERVER_FIELDS);
+          applyServerFieldErrors<ProductForm>(
+            error,
+            setError,
+            PRODUCT_FORM_SERVER_FIELDS,
+          );
         },
       });
     }
   };
 
-  if ((isEdit && loadingExisting) || (!isEdit && productUsage && productLimitStatus.isLimitReached)) {
+  if (
+    (isEdit && loadingExisting) ||
+    (!isEdit && productUsage && productLimitStatus.isLimitReached)
+  ) {
     return <FullPageSpinner />;
   }
 
   const isImageBusy = imageStatus === "uploading" || imageStatus === "removing";
   const isPending =
-    isSubmitting || createProduct.isPending || updateProduct.isPending || isImageBusy;
+    isSubmitting ||
+    createProduct.isPending ||
+    updateProduct.isPending ||
+    isImageBusy;
   const errorCount = Object.keys(errors).length;
 
   return (
@@ -684,9 +713,21 @@ export function ProductFormPage({ editId }: Props) {
               />
             </FormRow>
             {!isEdit && (
-              <Button type="button" variant="outline" size="sm" leftIcon={<Sparkles className="w-3.5 h-3.5" />}
-                loading={enrichment.isPending} disabled={!watchAll.barcode}
-                onClick={() => enrichment.mutate({ entityType: "product", barcode: watchAll.barcode, name: watchAll.name })}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                leftIcon={<Sparkles className="w-3.5 h-3.5" />}
+                loading={enrichment.isPending}
+                disabled={!watchAll.barcode}
+                onClick={() =>
+                  enrichment.mutate({
+                    entityType: "product",
+                    barcode: watchAll.barcode,
+                    name: watchAll.name,
+                  })
+                }
+              >
                 Barkodu doğrula ve kod öner
               </Button>
             )}
@@ -752,6 +793,51 @@ export function ProductFormPage({ editId }: Props) {
                 {...register("minStockLevel")}
               />
             </FormRow>
+            <div className="mt-4 border-t border-slate-800 pt-4">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                Stok planlama
+              </p>
+              <FormRow cols={2}>
+                <Input
+                  label="Emniyet Stoğu"
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  placeholder="Opsiyonel"
+                  error={errors.safetyStock?.message}
+                  {...register("safetyStock")}
+                />
+                <Input
+                  label="Yeniden Sipariş Noktası"
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  placeholder="Opsiyonel"
+                  error={errors.reorderPoint?.message}
+                  {...register("reorderPoint")}
+                />
+              </FormRow>
+              <FormRow cols={2} className="mt-3">
+                <Input
+                  label="Sipariş Miktarı"
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  placeholder="Opsiyonel"
+                  error={errors.reorderQty?.message}
+                  {...register("reorderQty")}
+                />
+                <Input
+                  label="Temin Süresi (gün)"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="Opsiyonel"
+                  error={errors.leadTimeDays?.message}
+                  {...register("leadTimeDays")}
+                />
+              </FormRow>
+            </div>
           </SectionCard>
 
           {/* ── Step 3: Başlangıç Stoğu ─────────── */}
@@ -768,7 +854,12 @@ export function ProductFormPage({ editId }: Props) {
                 <WarehouseSelect
                   label="Depo"
                   value={watchAll.warehouseId ?? ""}
-                  onChange={(value) => setValue("warehouseId", value, { shouldDirty: true, shouldValidate: true })}
+                  onChange={(value) =>
+                    setValue("warehouseId", value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
                 />
                 <Input
                   label="Miktar"
@@ -827,7 +918,12 @@ export function ProductFormPage({ editId }: Props) {
         {/* ── Sidebar: live preview ─────────────── */}
         <div className="hidden lg:block w-72 shrink-0">
           <div className="sticky top-4 space-y-4">
-            {!isEdit && <MasterDataSuggestionsPanel result={enrichment.data} onApply={applyEnrichment} />}
+            {!isEdit && (
+              <MasterDataSuggestionsPanel
+                result={enrichment.data}
+                onApply={applyEnrichment}
+              />
+            )}
             <LivePreview
               name={watchAll.name ?? ""}
               code={watchAll.code ?? ""}

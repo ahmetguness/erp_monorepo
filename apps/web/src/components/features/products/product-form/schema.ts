@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   optionalText,
   parseMoneyInput,
+  parseOptionalDecimalInput,
   parseQuantityInput,
 } from "@/lib/form-standard";
 import type { CreateProductDTO, Product } from "@/services/product.service";
@@ -17,6 +18,35 @@ export const productSchema = z.object({
   purchasePrice: z.string().optional(),
   salesPrice: z.string().optional(),
   minStockLevel: z.string().optional(),
+  safetyStock: z
+    .string()
+    .optional()
+    .refine(
+      (value) => !value || parseQuantityInput(value) >= 0,
+      "Emniyet stoğu negatif olamaz",
+    ),
+  reorderPoint: z
+    .string()
+    .optional()
+    .refine(
+      (value) => !value || parseQuantityInput(value) >= 0,
+      "Sipariş noktası negatif olamaz",
+    ),
+  reorderQty: z
+    .string()
+    .optional()
+    .refine(
+      (value) => !value || parseQuantityInput(value) >= 0,
+      "Sipariş miktarı negatif olamaz",
+    ),
+  leadTimeDays: z
+    .string()
+    .optional()
+    .refine(
+      (value) =>
+        !value || (Number.isInteger(Number(value)) && Number(value) >= 0),
+      "Temin süresi negatif olmayan tam sayı olmalıdır",
+    ),
   initialStock: z.string().optional(),
   warehouseId: z.string().optional(),
 });
@@ -34,6 +64,10 @@ export const PRODUCT_FORM_SERVER_FIELDS = [
   "purchasePrice",
   "salesPrice",
   "minStockLevel",
+  "safetyStock",
+  "reorderPoint",
+  "reorderQty",
+  "leadTimeDays",
   "initialStock",
   "warehouseId",
 ] as const satisfies readonly (keyof ProductForm)[];
@@ -56,6 +90,10 @@ export function toProductPayload(data: ProductForm): CreateProductDTO {
     purchasePrice: parseMoneyInput(data.purchasePrice),
     salesPrice: parseMoneyInput(data.salesPrice),
     minStockLevel: parseQuantityInput(data.minStockLevel),
+    safetyStock: parseOptionalDecimalInput(data.safetyStock) ?? null,
+    reorderPoint: parseOptionalDecimalInput(data.reorderPoint) ?? null,
+    reorderQty: parseOptionalDecimalInput(data.reorderQty) ?? null,
+    leadTimeDays: parseOptionalDecimalInput(data.leadTimeDays) ?? null,
   };
 }
 
@@ -71,6 +109,13 @@ export function productToFormDefaults(product: Product): ProductForm {
     purchasePrice: String(product.purchasePrice),
     salesPrice: String(product.salesPrice),
     minStockLevel: String(product.minStockLevel),
+    safetyStock:
+      product.safetyStock === null ? "" : String(product.safetyStock),
+    reorderPoint:
+      product.reorderPoint === null ? "" : String(product.reorderPoint),
+    reorderQty: product.reorderQty === null ? "" : String(product.reorderQty),
+    leadTimeDays:
+      product.leadTimeDays === null ? "" : String(product.leadTimeDays),
     initialStock: "",
     warehouseId: "",
   };

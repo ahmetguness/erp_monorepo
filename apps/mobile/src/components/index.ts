@@ -5,3 +5,8 @@ export * from './StatCard';
 export * from './SectionCard';
 export * from './ChatBot';
 export * from './approvals';
+export * from './scanner';
+export * from './inventory';
+export * from './sales';
+export * from './field-service';
+export * from './production';

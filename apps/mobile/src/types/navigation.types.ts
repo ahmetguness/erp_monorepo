@@ -28,6 +28,8 @@ export type RootStackParamList = {
     canGoBack?: boolean;
   } | undefined;
   Notifications: undefined;
+  FieldService: undefined;
+  ProductionShopFloor: undefined;
 };
 
 export type DashboardScreenNavigationProp = CompositeNavigationProp<

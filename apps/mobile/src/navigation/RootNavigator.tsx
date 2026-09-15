@@ -6,6 +6,8 @@ import { AuthNavigator } from './AuthNavigator';
 import { MainTabNavigator } from './MainTabNavigator';
 import TenantSelectScreen from '../screens/TenantSelectScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import FieldServiceScreen from '../screens/FieldServiceScreen';
+import ProductionScreen from '../screens/ProductionScreen';
 import { BiometricLockView } from '../components/BiometricLockView';
 import { RootStackParamList } from '../types/navigation.types';
 import { useAuthStore } from '../store/auth.store';
@@ -89,6 +91,16 @@ export const RootNavigator: React.FC = () => {
               <Stack.Screen
                 name="Notifications"
                 component={NotificationsScreen}
+                options={{ presentation: 'card', animation: 'slide_from_right' }}
+              />
+              <Stack.Screen
+                name="FieldService"
+                component={FieldServiceScreen}
+                options={{ presentation: 'card', animation: 'slide_from_right' }}
+              />
+              <Stack.Screen
+                name="ProductionShopFloor"
+                component={ProductionScreen}
                 options={{ presentation: 'card', animation: 'slide_from_right' }}
               />
             </>

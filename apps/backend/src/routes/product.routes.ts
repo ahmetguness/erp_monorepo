@@ -7,7 +7,11 @@ import {
   ProductController,
   ProductQuickImportController,
 } from "../modules/inventory/http/controllers/index.js";
-import { productQuickImportBodySchema } from "../schemas/request-body.schemas";
+import {
+  createProductBodySchema,
+  productQuickImportBodySchema,
+  updateProductBodySchema,
+} from "../schemas/request-body.schemas";
 import { MODULE_KEYS } from "../types/module.types";
 
 const productRoutes = new Hono();
@@ -45,11 +49,13 @@ productRoutes.post(
   "/",
   requirePermission("inventory", "CREATE"),
   enforceStarterLimits("product"),
+  validateBody(createProductBodySchema),
   ProductController.create,
 );
 productRoutes.patch(
   "/:id",
   requirePermission("inventory", "UPDATE"),
+  validateBody(updateProductBodySchema),
   ProductController.update,
 );
 productRoutes.delete(

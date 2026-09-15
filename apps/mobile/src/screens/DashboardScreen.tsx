@@ -15,6 +15,8 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore } from '../store/auth.store';
 import { useNotificationStore } from '../store/notification.store';
+import { useAppDispatch } from '../store/redux';
+import { setMode } from '../store/redux/warehouseSessionSlice';
 import { useTheme } from '../theme';
 import { KpiCard } from '../components/dashboard/KpiCard';
 import { QuickActionsBar } from '../components/dashboard/QuickActionsBar';
@@ -46,6 +48,7 @@ function getTodayFormatted(): string {
 
 export default function DashboardScreen() {
   const navigation = useNavigation<DashboardScreenNavigationProp>();
+  const dispatch = useAppDispatch();
   const { user, tenant } = useAuthStore();
   const { theme } = useTheme();
 
@@ -336,6 +339,7 @@ export default function DashboardScreen() {
         <QuickActionsBar
           pendingApprovalsCount={ops?.pendingApprovals ?? 0}
           onBarcodeScan={() => {
+            dispatch(setMode('LOOKUP'));
             navigation.navigate('InventoryTab');
           }}
           onCreateOrder={() => {
@@ -348,9 +352,78 @@ export default function DashboardScreen() {
             navigation.navigate('ApprovalsTab');
           }}
           onStockCount={() => {
+            dispatch(setMode('COUNT'));
             navigation.navigate('InventoryTab');
           }}
         />
+
+        {/* ── Saha ve Üretim Operasyonları (FAZ 6) ── */}
+        <View style={styles.operationsSection}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            Saha ve Üretim Operasyonları
+          </Text>
+          <View style={styles.operationsGrid}>
+            <TouchableOpacity
+              style={[
+                styles.opActionCard,
+                {
+                  backgroundColor: theme.colors.surfaceCard,
+                  borderColor: theme.colors.borderSubtle,
+                  borderRadius: theme.borderRadius.lg,
+                  ...theme.shadows.sm,
+                },
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                navigation.navigate('FieldService');
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.opIconWrap, { backgroundColor: '#eff6ff' }]}>
+                <Ionicons name="construct" size={20} color="#2563eb" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.opCardTitle, { color: theme.colors.text }]}>
+                  Saha Teknik Servis
+                </Text>
+                <Text style={[styles.opCardDesc, { color: theme.colors.textMuted }]}>
+                  Çağrı listesi, müdahale, parça & müşteri imzası
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.opActionCard,
+                {
+                  backgroundColor: theme.colors.surfaceCard,
+                  borderColor: theme.colors.borderSubtle,
+                  borderRadius: theme.borderRadius.lg,
+                  ...theme.shadows.sm,
+                },
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                navigation.navigate('ProductionShopFloor');
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.opIconWrap, { backgroundColor: '#ecfdf5' }]}>
+                <Ionicons name="hardware-chip" size={20} color="#10b981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.opCardTitle, { color: theme.colors.text }]}>
+                  Üretim Takibi (Shop Floor)
+                </Text>
+                <Text style={[styles.opCardDesc, { color: theme.colors.textMuted }]}>
+                  İş emirleri, dijital kronometre, fire & çıktı girişi
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* ── Live Activity Stream ── */}
         <ActivityStream
@@ -508,6 +581,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+  },
+  operationsSection: {
+    gap: 10,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  operationsGrid: {
+    gap: 8,
+  },
+  opActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    gap: 12,
+  },
+  opIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  opCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  opCardDesc: {
+    fontSize: 11,
+    marginTop: 2,
   },
   footer: {
     alignItems: 'center',

@@ -22,6 +22,10 @@ export const ProductSchema = z.object({
   purchasePrice: z.coerce.number(),
   salesPrice: z.coerce.number(),
   minStockLevel: z.coerce.number(),
+  safetyStock: z.coerce.number().nullable(),
+  reorderPoint: z.coerce.number().nullable(),
+  reorderQty: z.coerce.number().nullable(),
+  leadTimeDays: z.number().int().nullable(),
   averageCost: z.coerce.number(),
   isActive: z.boolean(),
   createdAt: z.string(),
@@ -135,6 +139,10 @@ export interface CreateProductDTO {
   purchasePrice?: number;
   salesPrice?: number;
   minStockLevel?: number;
+  safetyStock?: number | null;
+  reorderPoint?: number | null;
+  reorderQty?: number | null;
+  leadTimeDays?: number | null;
 }
 
 export type UpdateProductDTO = Partial<CreateProductDTO> & { isActive?: boolean };
