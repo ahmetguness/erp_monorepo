@@ -1,6 +1,7 @@
 export interface StockLevelFilters {
   warehouseId?: string;
   productId?: string;
+  locationId?: string;
   belowMinimum?: boolean;
 }
 

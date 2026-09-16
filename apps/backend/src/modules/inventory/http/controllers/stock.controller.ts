@@ -43,6 +43,7 @@ interface StockMovementListQuery {
 interface StockLevelListQuery {
   warehouseId?: string;
   productId?: string;
+  locationId?: string;
   belowMin?: string;
 }
 
@@ -70,6 +71,7 @@ export const StockController = {
     const result = await inventoryApplication.stockLevelQueries.list(tenantId, {
       warehouseId: query.warehouseId,
       productId: query.productId,
+      locationId: query.locationId,
       belowMinimum: query.belowMin === 'true',
     });
 

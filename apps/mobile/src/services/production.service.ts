@@ -54,6 +54,7 @@ export const WorkOrderItemSchema = z.object({
       id: z.string(),
       code: z.string(),
       name: z.string(),
+      barcode: z.string().nullable().optional(),
     })
     .optional(),
 });
@@ -116,12 +117,44 @@ export interface WorkOrderListParams {
   search?: string;
 }
 
+export interface ProductionConsumptionItem {
+  itemId: string;
+  quantity: number;
+  lotNumber?: string;
+  serialNumber?: string;
+}
+
+export interface QCInspectionDTO {
+  visualPassed: boolean;
+  visualDefects?: string[];
+  dimensionTarget?: number;
+  dimensionMeasured?: number;
+  dimensionTolerance?: number;
+  dimensionPassed?: boolean;
+  functionalPassed?: boolean;
+  notes?: string;
+  defectType?: string;
+  scrapQty?: number;
+}
+
+export interface AddWorkOrderItemDTO {
+  productId: string;
+  requiredQty: number;
+  sourceWarehouseId?: string;
+}
+
 export interface RecordProductionOutputDTO {
   producedQty: number;
   scrapQty?: number;
   scrapReason?: string;
   operationId?: string;
   notes?: string;
+  consumptions?: ProductionConsumptionItem[];
+  lotNumber?: string;
+  serialNumber?: string;
+  downtimeSeconds?: number;
+  downtimeReason?: string;
+  qcInspection?: QCInspectionDTO;
 }
 
 // ─────────────────────────────────────────────
@@ -191,15 +224,52 @@ export async function reportWorkOrderProduction(
   id: string,
   data: RecordProductionOutputDTO
 ): Promise<any> {
+  const noteParts: string[] = [];
+  if (data.notes) noteParts.push(data.notes.trim());
+  if (data.lotNumber) noteParts.push(`Parti/Lot: ${data.lotNumber.trim()}`);
+  if (data.serialNumber) noteParts.push(`Seri No: ${data.serialNumber.trim()}`);
+  if (data.downtimeSeconds && data.downtimeSeconds > 0) {
+    noteParts.push(`Duruş: ${data.downtimeSeconds} sn (${data.downtimeReason || 'Belirtilmedi'})`);
+  }
+  if (data.qcInspection) {
+    const qc = data.qcInspection;
+    noteParts.push(
+      `QC: ${qc.visualPassed ? 'Görsel OK' : 'Görsel Kusurlu'}` +
+        (qc.dimensionPassed !== undefined ? (qc.dimensionPassed ? ', Tolerans OK' : ', Tolerans Dışı') : '') +
+        (qc.defectType ? ` (${qc.defectType})` : '')
+    );
+  }
+
   const payload = {
     producedQty: Math.max(0, data.producedQty),
     scrapQty: data.scrapQty !== undefined ? Math.max(0, data.scrapQty) : 0,
     scrapReason: data.scrapReason?.trim() || undefined,
     operationId: data.operationId || undefined,
-    notes: data.notes?.trim() || undefined,
+    notes: noteParts.length > 0 ? noteParts.join(' | ') : undefined,
+    consumptions: data.consumptions?.map((c) => ({
+      itemId: c.itemId,
+      quantity: c.quantity,
+      lotNumber: c.lotNumber?.trim() || undefined,
+      serialNumber: c.serialNumber?.trim() || undefined,
+    })),
   };
 
   const res = await apiClient.post(`/api/production/work-orders/${id}/report`, payload);
+  return res.data?.data ?? res.data;
+}
+
+/**
+ * 16.1: İş emrine reçete dışı ek malzeme/hammadde ekler
+ */
+export async function addWorkOrderItem(
+  workOrderId: string,
+  payload: AddWorkOrderItemDTO
+): Promise<WorkOrderItem> {
+  const res = await apiClient.post(`/api/production/work-orders/${workOrderId}/items`, payload);
+  const parsed = SingleResponseSchema(WorkOrderItemSchema).safeParse(res.data);
+  if (parsed.success) {
+    return parsed.data.data;
+  }
   return res.data?.data ?? res.data;
 }
 

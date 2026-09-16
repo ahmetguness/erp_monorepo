@@ -171,6 +171,11 @@ productionRoutes.post(
   requirePermission("production", "UPDATE"),
   WorkOrderController.reportProduction,
 );
+productionRoutes.post(
+  "/work-orders/:id/items",
+  requirePermission("production", "UPDATE"),
+  WorkOrderController.addItem,
+);
 productionRoutes.patch(
   "/work-orders/:id/operations/:operationId",
   requirePermission("production", "UPDATE"),

@@ -662,4 +662,73 @@ export const WorkOrderController = {
     const result = await prodAutomation.autoCompleteProduction(tenantId, id, body.outputQty);
     return c.json({ data: result });
   },
+
+  /**
+   * POST /api/production/work-orders/:id/items
+   * İş emrine reçete dışı ek hammadde / sarfiyat kalemi ekler.
+   */
+  async addItem(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const workOrderId = requireParam(c, 'id');
+    const requestMeta = getRequestMeta(c);
+
+    const wo = await prisma.workOrder.findFirst({
+      where: { id: workOrderId, tenantId, deletedAt: null },
+    });
+    if (!wo) return c.json(new NotFoundError('İş Emri', workOrderId).toJSON(), 404);
+    if (wo.status === WorkOrderStatus.COMPLETED || wo.status === WorkOrderStatus.CANCELLED) {
+      return c.json(
+        new ValidationError('Tamamlanmış veya iptal edilmiş iş emrine malzeme eklenemez.').toJSON(),
+        400
+      );
+    }
+
+    const body = await c.req.json<{
+      productId: string;
+      requiredQty: number;
+      sourceWarehouseId?: string;
+    }>();
+
+    if (!body.productId || !body.requiredQty || body.requiredQty <= 0) {
+      return c.json(
+        new ValidationError('productId ve pozitif bir requiredQty zorunludur.').toJSON(),
+        400
+      );
+    }
+
+    const product = await prisma.product.findFirst({
+      where: { id: body.productId, tenantId },
+      select: { id: true, name: true, code: true, purchasePrice: true, averageCost: true },
+    });
+    if (!product) return c.json(new NotFoundError('Ürün', body.productId).toJSON(), 404);
+
+    const item = await prisma.workOrderItem.create({
+      data: {
+        tenantId,
+        workOrderId,
+        productId: body.productId,
+        requiredQty: body.requiredQty,
+        consumedQty: 0,
+        sourceWarehouseId: body.sourceWarehouseId ?? wo.inputWarehouseId ?? null,
+      },
+      include: {
+        product: { select: { id: true, code: true, name: true, purchasePrice: true, averageCost: true } },
+      },
+    });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: 'production',
+      entityType: EntityType.WORK_ORDER,
+      entityId: workOrderId,
+      action: AuditAction.UPDATE,
+      newValues: { addedItemId: item.id, productId: body.productId, requiredQty: body.requiredQty },
+      ...requestMeta,
+    });
+
+    return c.json({ data: item }, 201);
+  },
 };
+

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Modal,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +16,8 @@ import { ProductLookup, StockLevel } from '../../services/inventory.service';
 import { Badge } from '../common/Badge';
 import { OptimizedImage } from '../common/OptimizedImage';
 import { formatCurrency } from '../../lib/utils';
+import { ReservedStockDetailModal } from './ReservedStockDetailModal';
+import { thermalPrinterService, generateProductLabel } from '../../services/thermal-printer.service';
 
 export interface StockLookupModalProps {
   visible: boolean;
@@ -34,6 +37,7 @@ export const StockLookupModal: React.FC<StockLookupModalProps> = ({
   onStartTransfer,
 }) => {
   const { theme } = useTheme();
+  const [reservedModalVisible, setReservedModalVisible] = useState(false);
 
   if (!product) return null;
 
@@ -41,6 +45,17 @@ export const StockLookupModal: React.FC<StockLookupModalProps> = ({
   const totalReserved = stockLevels.reduce((sum, s) => sum + (s.reservedQuantity || 0), 0);
   const totalAvailable = Math.max(0, totalStock - totalReserved);
   const isCritical = product.minStockLevel > 0 && totalStock <= product.minStockLevel;
+
+  const handlePrintLabel = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      const { bytes } = generateProductLabel(product);
+      const res = await thermalPrinterService.print(bytes, `Ürün Etiketi - ${product.code}`);
+      Alert.alert(res.success ? 'Yazdırıldı' : 'Yazıcı Uyarısı', res.message);
+    } catch {
+      Alert.alert('Hata', 'Barkod etiketi yazdırılamadı.');
+    }
+  };
 
   const handleCountPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -140,12 +155,24 @@ export const StockLookupModal: React.FC<StockLookupModalProps> = ({
 
               <View style={[styles.statDivider, { backgroundColor: theme.colors.borderSubtle }]} />
 
-              <View style={styles.statCol}>
+              <TouchableOpacity
+                style={styles.statCol}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  setReservedModalVisible(true);
+                }}
+                activeOpacity={0.7}
+              >
                 <Text style={[styles.statValue, { color: theme.colors.warning }]}>
                   {totalReserved} {product.unit?.code || 'AD'}
                 </Text>
-                <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>Rezerve</Text>
-              </View>
+                <View style={styles.rezerveLabelRow}>
+                  <Text style={[styles.statLabel, { color: theme.colors.warning, fontWeight: '700' }]}>
+                    Rezerve
+                  </Text>
+                  <Ionicons name="information-circle-outline" size={13} color={theme.colors.warning} />
+                </View>
+              </TouchableOpacity>
 
               <View style={[styles.statDivider, { backgroundColor: theme.colors.borderSubtle }]} />
 
@@ -277,6 +304,22 @@ export const StockLookupModal: React.FC<StockLookupModalProps> = ({
             },
           ]}
         >
+          <TouchableOpacity
+            style={[
+              styles.actionBtn,
+              {
+                backgroundColor: theme.colors.borderSubtle,
+                borderRadius: theme.borderRadius.md,
+                flex: 0.8,
+              },
+            ]}
+            onPress={handlePrintLabel}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="print-outline" size={18} color={theme.colors.text} />
+            <Text style={[styles.actionBtnText, { color: theme.colors.text }]}>Etiket</Text>
+          </TouchableOpacity>
+
           {onStartTransfer && (
             <TouchableOpacity
               style={[
@@ -292,7 +335,7 @@ export const StockLookupModal: React.FC<StockLookupModalProps> = ({
             >
               <Ionicons name="swap-horizontal-outline" size={18} color={theme.colors.primary} />
               <Text style={[styles.actionBtnText, { color: theme.colors.primary }]}>
-                Transfer Et
+                Transfer
               </Text>
             </TouchableOpacity>
           )}
@@ -311,10 +354,20 @@ export const StockLookupModal: React.FC<StockLookupModalProps> = ({
               activeOpacity={0.7}
             >
               <Ionicons name="clipboard-outline" size={18} color="#ffffff" />
-              <Text style={[styles.actionBtnText, { color: '#ffffff' }]}>Sayım Başlat</Text>
+              <Text style={[styles.actionBtnText, { color: '#ffffff' }]}>Sayım</Text>
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Reserved Stock Breakdown & Allocations Modal */}
+        <ReservedStockDetailModal
+          visible={reservedModalVisible}
+          product={product}
+          physicalQty={totalStock}
+          reservedQty={totalReserved}
+          availableQty={totalAvailable}
+          onClose={() => setReservedModalVisible(false)}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -487,5 +540,10 @@ const styles = StyleSheet.create({
   actionBtnText: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  rezerveLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
   },
 });

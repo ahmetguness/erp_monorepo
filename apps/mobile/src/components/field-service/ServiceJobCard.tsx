@@ -19,6 +19,7 @@ export interface ServiceJobCardProps {
   onAddParts: (job: FieldServiceJob) => void;
   onCaptureSignature: (job: FieldServiceJob) => void;
   onSubmitReport: (job: FieldServiceJob) => void;
+  onViewReportPdf?: (job: FieldServiceJob) => void;
 }
 
 export const ServiceJobCard: React.FC<ServiceJobCardProps> = ({
@@ -28,6 +29,7 @@ export const ServiceJobCard: React.FC<ServiceJobCardProps> = ({
   onAddParts,
   onCaptureSignature,
   onSubmitReport,
+  onViewReportPdf,
 }) => {
   const { theme } = useTheme();
 
@@ -339,7 +341,7 @@ export const ServiceJobCard: React.FC<ServiceJobCardProps> = ({
             </Text>
           </TouchableOpacity>
 
-          {/* Service Report Submit Button */}
+          {/* Service Report Submit / View PDF Button */}
           <TouchableOpacity
             style={[
               styles.actionBtnPrimary,
@@ -350,17 +352,21 @@ export const ServiceJobCard: React.FC<ServiceJobCardProps> = ({
             onPress={(e) => {
               e.stopPropagation?.();
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-              onSubmitReport(job);
+              if (job.serviceFormSubmitted && onViewReportPdf) {
+                onViewReportPdf(job);
+              } else {
+                onSubmitReport(job);
+              }
             }}
             activeOpacity={0.8}
           >
             <Ionicons
-              name={job.serviceFormSubmitted ? 'checkmark-circle' : 'document-text-outline'}
+              name={job.serviceFormSubmitted ? 'document-text' : 'document-text-outline'}
               size={13}
               color="#ffffff"
             />
             <Text style={styles.actionBtnPrimaryText}>
-              {job.serviceFormSubmitted ? 'Raporlandı' : 'Raporla'}
+              {job.serviceFormSubmitted ? 'PDF Rapor' : 'Raporla'}
             </Text>
           </TouchableOpacity>
         </View>

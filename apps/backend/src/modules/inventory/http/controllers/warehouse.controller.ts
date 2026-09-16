@@ -28,6 +28,8 @@ interface TransferStockDTO {
   fromWarehouseId: string;
   toWarehouseId: string;
   quantity: number;
+  fromLocationId?: string;
+  toLocationId?: string;
   notes?: string;
 }
 
@@ -200,11 +202,16 @@ export const WarehouseController = {
       );
     }
 
-    if (body.fromWarehouseId === body.toWarehouseId) {
-      return c.json(
-        new ValidationError('Kaynak ve hedef depo aynı olamaz.').toJSON(),
-        400,
-      );
+    const isSameWarehouse = body.fromWarehouseId === body.toWarehouseId;
+    if (isSameWarehouse) {
+      if (!body.fromLocationId || !body.toLocationId || body.fromLocationId === body.toLocationId) {
+        return c.json(
+          new ValidationError(
+            'Aynı depo içinde transfer için farklı kaynak ve hedef raf/lokasyon belirtilmelidir.',
+          ).toJSON(),
+          400,
+        );
+      }
     }
 
     // Kaynak depoda yeterli stok var mı?
@@ -221,20 +228,34 @@ export const WarehouseController = {
           tenantId,
           productId: body.productId,
           warehouseId: body.fromWarehouseId,
+          ...(body.fromLocationId ? { locationId: body.fromLocationId } : {}),
           quantity: { gte: body.quantity },
         },
         orderBy: { quantity: 'desc' },
       });
-      if (!sourceStock) throw new ValidationError('Kaynak depoda tek lokasyonda yeterli stok bulunamadi.');
-      const sourceLocationId = await resolveStockLevelLocationId(tx, tenantId, body.fromWarehouseId, sourceStock.locationId);
+      if (!sourceStock) {
+        throw new ValidationError(
+          body.fromLocationId
+            ? 'Kaynak rafta/lokasyonda yeterli stok bulunamadı.'
+            : 'Kaynak depoda tek lokasyonda yeterli stok bulunamadı.',
+        );
+      }
+      const sourceLocationId = body.fromLocationId
+        ? await resolveStockLevelLocationId(tx, tenantId, body.fromWarehouseId, body.fromLocationId)
+        : await resolveStockLevelLocationId(tx, tenantId, body.fromWarehouseId, sourceStock.locationId);
+
       const targetStock = await tx.stockLevel.findFirst({
         where: {
           tenantId,
           productId: body.productId,
           warehouseId: body.toWarehouseId,
+          ...(body.toLocationId ? { locationId: body.toLocationId } : {}),
         },
       });
-      const targetLocationId = await resolveStockLevelLocationId(tx, tenantId, body.toWarehouseId, targetStock?.locationId);
+      const targetLocationId = body.toLocationId
+        ? await resolveStockLevelLocationId(tx, tenantId, body.toWarehouseId, body.toLocationId)
+        : await resolveStockLevelLocationId(tx, tenantId, body.toWarehouseId, targetStock?.locationId);
+
       // Stok hareketi oluştur
       const stockMovement = await tx.stockMovement.create({
         data: {
@@ -244,6 +265,7 @@ export const WarehouseController = {
           quantity: body.quantity,
           fromWarehouseId: body.fromWarehouseId,
           toWarehouseId: body.toWarehouseId,
+          locationId: targetLocationId,
           notes: body.notes ?? null,
         },
       });
@@ -279,32 +301,34 @@ export const WarehouseController = {
         update: { quantity: { increment: body.quantity } },
       });
 
-      // Record costing for source warehouse (outbound)
-      await recordInventoryCosting(tx, tenantId, {
-        movementId: stockMovement.id,
-        productId: body.productId,
-        warehouseId: body.fromWarehouseId,
-        type: MovementType.TRANSFER,
-        quantity: body.quantity,
-        previousQuantity: Number(sourceStock.quantity),
-        quantityChange: -body.quantity,
-        resultingQuantity: Number(sourceStock.quantity) - body.quantity,
-        date: stockMovement.createdAt,
-      });
+      if (!isSameWarehouse) {
+        // Record costing for source warehouse (outbound)
+        await recordInventoryCosting(tx, tenantId, {
+          movementId: stockMovement.id,
+          productId: body.productId,
+          warehouseId: body.fromWarehouseId,
+          type: MovementType.TRANSFER,
+          quantity: body.quantity,
+          previousQuantity: Number(sourceStock.quantity),
+          quantityChange: -body.quantity,
+          resultingQuantity: Number(sourceStock.quantity) - body.quantity,
+          date: stockMovement.createdAt,
+        });
 
-      // Record costing for target warehouse (inbound)
-      const targetPreviousQty = Number(targetStock?.quantity ?? 0);
-      await recordInventoryCosting(tx, tenantId, {
-        movementId: stockMovement.id,
-        productId: body.productId,
-        warehouseId: body.toWarehouseId,
-        type: MovementType.TRANSFER,
-        quantity: body.quantity,
-        previousQuantity: targetPreviousQty,
-        quantityChange: body.quantity,
-        resultingQuantity: targetPreviousQty + body.quantity,
-        date: stockMovement.createdAt,
-      });
+        // Record costing for target warehouse (inbound)
+        const targetPreviousQty = Number(targetStock?.quantity ?? 0);
+        await recordInventoryCosting(tx, tenantId, {
+          movementId: stockMovement.id,
+          productId: body.productId,
+          warehouseId: body.toWarehouseId,
+          type: MovementType.TRANSFER,
+          quantity: body.quantity,
+          previousQuantity: targetPreviousQty,
+          quantityChange: body.quantity,
+          resultingQuantity: targetPreviousQty + body.quantity,
+          date: stockMovement.createdAt,
+        });
+      }
 
       return stockMovement;
     });

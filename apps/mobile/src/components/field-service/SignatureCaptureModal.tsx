@@ -24,7 +24,7 @@ export interface SignatureCaptureModalProps {
   visible: boolean;
   job: FieldServiceJob | null;
   onClose: () => void;
-  onSignatureSaved: (jobId: string) => void;
+  onSignatureSaved: (jobId: string, signatureSvgPaths?: string[]) => void;
 }
 
 export const SignatureCaptureModal: React.FC<SignatureCaptureModalProps> = ({
@@ -101,7 +101,7 @@ export const SignatureCaptureModal: React.FC<SignatureCaptureModalProps> = ({
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      onSignatureSaved(job.id);
+      onSignatureSaved(job.id, completedPaths);
       onClose();
     } catch (err: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});

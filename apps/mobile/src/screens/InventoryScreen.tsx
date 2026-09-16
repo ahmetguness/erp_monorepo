@@ -26,6 +26,7 @@ import {
 } from '../store/redux/warehouseSessionSlice';
 import {
   Warehouse,
+  Location,
   ProductLookup,
   StockLevel,
   getWarehouses,
@@ -39,6 +40,10 @@ import {
   StockCountSessionView,
   StockTransferSessionView,
   DeliveryVerificationView,
+  ShelfStockLookupModal,
+  LocationTransferModal,
+  OrderPickListModal,
+  PrinterSettingsModal,
 } from '../components';
 import { formatCurrency } from '../lib/utils';
 
@@ -71,6 +76,14 @@ export default function InventoryScreen() {
 
   // Scanner Modal
   const [scannerVisible, setScannerVisible] = useState(false);
+
+  // WMS 2.0 Modals State
+  const [shelfModalVisible, setShelfModalVisible] = useState(false);
+  const [locationTransferVisible, setLocationTransferVisible] = useState(false);
+  const [transferStockItem, setTransferStockItem] = useState<StockLevel | null>(null);
+  const [transferLocation, setTransferLocation] = useState<Location | null>(null);
+  const [pickListVisible, setPickListVisible] = useState(false);
+  const [printerModalVisible, setPrinterModalVisible] = useState(false);
 
   // Product Lookup State
   const [searchQuery, setSearchQuery] = useState('');
@@ -265,17 +278,30 @@ export default function InventoryScreen() {
         </View>
 
         {/* Global Camera Scanner CTA Button in Header */}
-        <TouchableOpacity
-          style={[styles.headerCameraBtn, { backgroundColor: theme.colors.primary }]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            setScannerVisible(true);
-          }}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="camera-outline" size={18} color="#ffffff" />
-          <Text style={styles.headerCameraBtnText}>Tara</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRightGroup}>
+          <TouchableOpacity
+            style={[styles.headerPrinterBtn, { backgroundColor: theme.colors.borderSubtle }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setPrinterModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="print-outline" size={17} color={theme.colors.text} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.headerCameraBtn, { backgroundColor: theme.colors.primary }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setScannerVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="camera-outline" size={18} color="#ffffff" />
+            <Text style={styles.headerCameraBtnText}>Tara</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── Module Segment Tabs Bar ── */}
@@ -326,6 +352,91 @@ export default function InventoryScreen() {
               </TouchableOpacity>
             );
           })}
+        </ScrollView>
+      </View>
+
+      {/* ── WMS 2.0 Quick Actions Strip ── */}
+      <View
+        style={[
+          styles.wmsActionsBar,
+          {
+            backgroundColor: theme.colors.surfaceCard,
+            borderBottomColor: theme.colors.borderSubtle,
+          },
+        ]}
+      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.wmsActionsScroll}
+        >
+          <TouchableOpacity
+            style={[
+              styles.wmsActionChip,
+              { backgroundColor: theme.colors.primaryMuted, borderColor: theme.colors.primary },
+            ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setShelfModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="grid-outline" size={14} color={theme.colors.primary} />
+            <Text style={[styles.wmsActionChipText, { color: theme.colors.primary }]}>
+              Raf / Lokasyon Stokları
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.wmsActionChip,
+              { backgroundColor: theme.colors.primaryMuted, borderColor: theme.colors.primary },
+            ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setPickListVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="cart-outline" size={14} color={theme.colors.primary} />
+            <Text style={[styles.wmsActionChipText, { color: theme.colors.primary }]}>
+              Sipariş Toplama (Pick List)
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.wmsActionChip,
+              { backgroundColor: theme.colors.primaryMuted, borderColor: theme.colors.primary },
+            ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setLocationTransferVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="swap-horizontal" size={14} color={theme.colors.primary} />
+            <Text style={[styles.wmsActionChipText, { color: theme.colors.primary }]}>
+              İç Raf Transferi
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.wmsActionChip,
+              { backgroundColor: theme.colors.borderSubtle, borderColor: 'transparent' },
+            ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setPrinterModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="print-outline" size={14} color={theme.colors.text} />
+            <Text style={[styles.wmsActionChipText, { color: theme.colors.text }]}>
+              Yazıcı
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </View>
 
@@ -499,6 +610,53 @@ export default function InventoryScreen() {
         onSelect={handleWarehouseSelected}
         onClose={() => setWhModalVisible(false)}
       />
+
+      {/* ── FAZ 15 WMS 2.0 Modals ── */}
+      {/* 15.1: Shelf Stock Lookup Modal */}
+      <ShelfStockLookupModal
+        visible={shelfModalVisible}
+        warehouse={selectedWarehouse}
+        onClose={() => setShelfModalVisible(false)}
+        onStartLocationTransfer={(item, loc) => {
+          setTransferStockItem(item);
+          setTransferLocation(loc);
+          setLocationTransferVisible(true);
+        }}
+      />
+
+      {/* 15.1: Intra-Warehouse Shelf Transfer Modal */}
+      <LocationTransferModal
+        visible={locationTransferVisible}
+        warehouse={selectedWarehouse}
+        initialStock={transferStockItem}
+        initialSourceLocation={transferLocation}
+        onClose={() => {
+          setLocationTransferVisible(false);
+          setTransferStockItem(null);
+          setTransferLocation(null);
+        }}
+        onTransferSuccess={() => {
+          if (selectedWarehouse && activeMode === 'COUNT') {
+            loadWarehouseCountItems(selectedWarehouse.id);
+          }
+        }}
+      />
+
+      {/* 15.2: Order Pick List & Delivery Note Modal */}
+      <OrderPickListModal
+        visible={pickListVisible}
+        warehouse={selectedWarehouse}
+        onClose={() => setPickListVisible(false)}
+        onDeliveryNoteCreated={(note) => {
+          // Handled within modal with receipt print inquiry
+        }}
+      />
+
+      {/* 15.3: Bluetooth Thermal Printer Settings Modal */}
+      <PrinterSettingsModal
+        visible={printerModalVisible}
+        onClose={() => setPrinterModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -540,6 +698,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  headerRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerPrinterBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerCameraBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -551,6 +721,27 @@ const styles = StyleSheet.create({
   headerCameraBtnText: {
     color: '#ffffff',
     fontSize: 13,
+    fontWeight: '700',
+  },
+  wmsActionsBar: {
+    borderBottomWidth: 1,
+    paddingVertical: 6,
+  },
+  wmsActionsScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  wmsActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  wmsActionChipText: {
+    fontSize: 11,
     fontWeight: '700',
   },
   segmentTabsWrapper: {

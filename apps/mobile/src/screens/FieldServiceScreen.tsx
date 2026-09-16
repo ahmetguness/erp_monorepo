@@ -27,6 +27,8 @@ import {
   ServicePartsModal,
   SignatureCaptureModal,
   ServiceReportModal,
+  FieldServiceRouteMapModal,
+  ServiceReportPdfModal,
 } from '../components/field-service';
 
 type StatusFilter = 'ALL' | 'IN_PROGRESS' | 'WAITING_PARTS' | 'OPEN' | 'COMPLETED';
@@ -50,6 +52,12 @@ export default function FieldServiceScreen({ navigation }: Props) {
   const [selectedJobForParts, setSelectedJobForParts] = useState<FieldServiceJob | null>(null);
   const [selectedJobForSignature, setSelectedJobForSignature] = useState<FieldServiceJob | null>(null);
   const [selectedJobForReport, setSelectedJobForReport] = useState<FieldServiceJob | null>(null);
+  const [routeMapVisible, setRouteMapVisible] = useState(false);
+  const [reportPdfJob, setReportPdfJob] = useState<FieldServiceJob | null>(null);
+  const [signaturesByJobId, setSignaturesByJobId] = useState<Record<string, string[]>>({});
+  const [reportDetailsByJobId, setReportDetailsByJobId] = useState<
+    Record<string, { diagnosis: string; actionsTaken: string }>
+  >({});
 
   const loadJobs = useCallback(async () => {
     setIsLoading(true);
@@ -106,7 +114,10 @@ export default function FieldServiceScreen({ navigation }: Props) {
     );
   };
 
-  const handleSignatureSaved = (jobId: string) => {
+  const handleSignatureSaved = (jobId: string, signatureSvgPaths?: string[]) => {
+    if (signatureSvgPaths && signatureSvgPaths.length > 0) {
+      setSignaturesByJobId((prev) => ({ ...prev, [jobId]: signatureSvgPaths }));
+    }
     setJobs((prev) =>
       prev.map((j) =>
         j.id === jobId ? { ...j, customerApproved: true, signatureCount: (j.signatureCount || 0) + 1 } : j
@@ -114,7 +125,16 @@ export default function FieldServiceScreen({ navigation }: Props) {
     );
   };
 
-  const handleReportSubmitted = (jobId: string) => {
+  const handleReportSubmitted = (jobId: string, diagnosis?: string, actionsTaken?: string) => {
+    if (diagnosis || actionsTaken) {
+      setReportDetailsByJobId((prev) => ({
+        ...prev,
+        [jobId]: {
+          diagnosis: diagnosis || 'Arıza giderildi ve bakım yapıldı.',
+          actionsTaken: actionsTaken || 'Gerekli parça ve test işlemleri tamamlandı.',
+        },
+      }));
+    }
     setJobs((prev) =>
       prev.map((j) =>
         j.id === jobId
@@ -156,13 +176,27 @@ export default function FieldServiceScreen({ navigation }: Props) {
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.refreshBtn, { backgroundColor: theme.colors.borderSubtle }]}
-          onPress={onRefresh}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="refresh" size={18} color={theme.colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerRightGroup}>
+          <TouchableOpacity
+            style={[styles.routeMapBtn, { backgroundColor: theme.colors.primaryMuted }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setRouteMapVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="navigate-outline" size={16} color={theme.colors.primary} />
+            <Text style={[styles.routeMapBtnText, { color: theme.colors.primary }]}>Rota</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.refreshBtn, { backgroundColor: theme.colors.borderSubtle }]}
+            onPress={onRefresh}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="refresh" size={18} color={theme.colors.text} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── Search Bar & Filter Chips ── */}
@@ -272,6 +306,7 @@ export default function FieldServiceScreen({ navigation }: Props) {
               onAddParts={(j) => setSelectedJobForParts(j)}
               onCaptureSignature={(j) => setSelectedJobForSignature(j)}
               onSubmitReport={(j) => setSelectedJobForReport(j)}
+              onViewReportPdf={(j) => setReportPdfJob(j)}
             />
           )}
           ListEmptyComponent={
@@ -316,6 +351,26 @@ export default function FieldServiceScreen({ navigation }: Props) {
         onClose={() => setSelectedJobForReport(null)}
         onReportSubmitted={handleReportSubmitted}
       />
+
+      {/* 16.4: Field Service Route Map Modal */}
+      <FieldServiceRouteMapModal
+        visible={routeMapVisible}
+        jobs={jobs}
+        onClose={() => setRouteMapVisible(false)}
+        onSelectJob={(j) => {
+          setSelectedJobForStatus(j);
+        }}
+      />
+
+      {/* 16.5: Signed Corporate Service Report PDF Modal */}
+      <ServiceReportPdfModal
+        visible={Boolean(reportPdfJob)}
+        job={reportPdfJob}
+        customerSignatureSvg={reportPdfJob ? signaturesByJobId[reportPdfJob.id] || [] : []}
+        diagnosis={reportPdfJob ? reportDetailsByJobId[reportPdfJob.id]?.diagnosis : undefined}
+        actionsTaken={reportPdfJob ? reportDetailsByJobId[reportPdfJob.id]?.actionsTaken : undefined}
+        onClose={() => setReportPdfJob(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -351,6 +406,23 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 11,
     marginTop: 2,
+  },
+  headerRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  routeMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  routeMapBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   refreshBtn: {
     width: 36,

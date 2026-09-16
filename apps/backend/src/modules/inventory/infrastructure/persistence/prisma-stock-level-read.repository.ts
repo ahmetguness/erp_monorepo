@@ -7,11 +7,13 @@ const stockLevelInclude = Prisma.validator<Prisma.StockLevelInclude>()({
       id: true,
       code: true,
       name: true,
+      barcode: true,
       minStockLevel: true,
       unit: { select: { code: true } },
     },
   },
   warehouse: { select: { id: true, name: true, code: true } },
+  location: { select: { id: true, name: true, code: true } },
 });
 
 export type StockLevelListRecord = Prisma.StockLevelGetPayload<{ include: typeof stockLevelInclude }>;
@@ -25,6 +27,7 @@ export class PrismaStockLevelReadRepository implements StockLevelReadRepository<
         tenantId,
         ...(filters.warehouseId && { warehouseId: filters.warehouseId }),
         ...(filters.productId && { productId: filters.productId }),
+        ...(filters.locationId && { locationId: filters.locationId }),
       },
       include: stockLevelInclude,
       orderBy: [{ warehouse: { name: 'asc' } }, { product: { name: 'asc' } }],

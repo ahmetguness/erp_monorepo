@@ -9,6 +9,7 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,10 @@ import {
   getBankTransactions,
 } from '../../services/finance.service';
 import { formatCurrency, formatDate } from '../../lib/utils';
+import {
+  thermalPrinterService,
+  generatePaymentReceipt,
+} from '../../services/thermal-printer.service';
 import { Badge } from '../common/Badge';
 
 interface Props {
@@ -58,6 +63,29 @@ export const BankStatementModal: React.FC<Props> = ({
       setIsLoading(false);
     }
   }, [account]);
+
+  const handlePrintTransactionReceipt = async (item: BankTransaction) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    try {
+      const { bytes } = generatePaymentReceipt({
+        receiptNumber: item.reference || item.id.slice(0, 8).toUpperCase(),
+        contactName: item.senderName || item.description || 'Cari / Hesap Hareketi',
+        date: formatDate(item.date),
+        amount: item.amount,
+        paymentMethod: item.type === 'INCOMING' ? 'Gelen Havale / EFT / Tahsilat' : 'Giden EFT / Ödeme',
+        remainingBalance: item.balanceAfter,
+        notes: item.description || undefined,
+      });
+
+      const res = await thermalPrinterService.print(
+        bytes,
+        `Tahsilat Fişi - ${item.reference || item.id.slice(0, 8)}`
+      );
+      Alert.alert(res.success ? 'Yazdırıldı' : 'Yazıcı Uyarısı', res.message);
+    } catch {
+      Alert.alert('Hata', 'Makbuz yazdırılamadı.');
+    }
+  };
 
   useEffect(() => {
     if (visible && account) {
@@ -295,6 +323,14 @@ export const BankStatementModal: React.FC<Props> = ({
                       </Text>
                     )}
                   </View>
+
+                  <TouchableOpacity
+                    style={[styles.txPrintBtn, { backgroundColor: theme.colors.borderSubtle }]}
+                    onPress={() => handlePrintTransactionReceipt(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="print-outline" size={15} color={theme.colors.text} />
+                  </TouchableOpacity>
                 </View>
               );
             }}
@@ -472,5 +508,13 @@ const styles = StyleSheet.create({
   emptyDesc: {
     fontSize: 12,
     textAlign: 'center',
+  },
+  txPrintBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
 });

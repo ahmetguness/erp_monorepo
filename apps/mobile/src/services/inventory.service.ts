@@ -48,6 +48,7 @@ export const StockLevelSchema = z.object({
   reservedQuantity: z.coerce.number().default(0),
   availableQuantity: z.coerce.number().optional(),
   warehouse: z.object({ id: z.string(), name: z.string(), code: z.string().optional() }).optional(),
+  location: z.object({ id: z.string(), name: z.string(), code: z.string().optional() }).nullable().optional(),
   product: z
     .object({
       id: z.string(),
@@ -151,6 +152,31 @@ export const LotSerialListResponseSchema = z.object({
 });
 
 // ─────────────────────────────────────────────
+// FAZ 15.4: Inventory Reservation Schemas
+// ─────────────────────────────────────────────
+
+export const InventoryReservationSchema = z.object({
+  id: z.string(),
+  productId: z.string(),
+  warehouseId: z.string(),
+  quantity: z.coerce.number().default(0),
+  refType: z.string(),
+  refId: z.string(),
+  notes: z.string().nullable().optional(),
+  reservedAt: z.string(),
+  expiresAt: z.string().nullable().optional(),
+  releasedAt: z.string().nullable().optional(),
+  product: z.object({ id: z.string(), code: z.string(), name: z.string() }).optional(),
+  warehouse: z.object({ id: z.string(), name: z.string() }).optional(),
+});
+
+export const InventoryReservationListResponseSchema = z.object({
+  data: z.array(InventoryReservationSchema),
+});
+
+export type InventoryReservation = z.infer<typeof InventoryReservationSchema>;
+
+// ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
 
@@ -192,6 +218,31 @@ export interface CreateLotSerialDTO {
   code: string;
   expirationDate?: string;
   quantity?: number;
+}
+
+export interface LocationTransferDTO {
+  productId: string;
+  warehouseId: string;
+  fromLocationId: string;
+  toLocationId: string;
+  quantity: number;
+  notes?: string;
+}
+
+export interface CreateDeliveryNoteFromPickDTO {
+  salesOrderId: string;
+  warehouseId: string;
+  contactId?: string;
+  carrier?: string;
+  trackingNumber?: string;
+  notes?: string;
+  items: Array<{
+    productId: string;
+    salesOrderItemId?: string;
+    orderedQty: number;
+    deliveredQty: number;
+    locationId?: string;
+  }>;
 }
 
 // ─────────────────────────────────────────────
@@ -373,4 +424,84 @@ export async function getLotSerials(productId?: string): Promise<LotSerial[]> {
 export async function createLotSerial(payload: CreateLotSerialDTO): Promise<LotSerial> {
   const res = await apiClient.post('/api/lot-serials', payload);
   return SingleResponseSchema(LotSerialSchema).parse(res.data).data;
+}
+
+// ─────────────────────────────────────────────
+// FAZ 15: WMS 2.0 Service Functions
+// ─────────────────────────────────────────────
+
+/**
+ * 15.1: Belirli bir raf/lokasyondaki stokları sorgular
+ */
+export async function getLocationStockLevels(
+  warehouseId: string,
+  locationId: string
+): Promise<StockLevel[]> {
+  const res = await apiClient.get('/api/stock/levels', {
+    params: { warehouseId, locationId },
+  });
+  const parsed = StockLevelListResponseSchema.safeParse(res.data);
+  return parsed.success ? parsed.data.data : res.data?.data || [];
+}
+
+/**
+ * 15.1: Depo içi raftan rafa stok transferi
+ */
+export async function transferStockBetweenLocations(payload: LocationTransferDTO): Promise<any> {
+  const res = await apiClient.post('/api/warehouses/transfer', {
+    productId: payload.productId,
+    fromWarehouseId: payload.warehouseId,
+    toWarehouseId: payload.warehouseId,
+    fromLocationId: payload.fromLocationId,
+    toLocationId: payload.toLocationId,
+    quantity: payload.quantity,
+    notes: payload.notes || 'Mobil Raf İçi Transfer',
+  });
+  return res.data?.data;
+}
+
+/**
+ * 15.4: Ürüne ait rezerve stok detaylarını getirir
+ */
+export async function getProductStockReservations(
+  productId: string,
+  warehouseId?: string
+): Promise<InventoryReservation[]> {
+  const res = await apiClient.get('/api/inventory-reservations', {
+    params: {
+      productId,
+      active: 'true',
+      ...(warehouseId ? { warehouseId } : {}),
+    },
+  });
+  const parsed = InventoryReservationListResponseSchema.safeParse(res.data);
+  return parsed.success ? parsed.data.data : res.data?.data || [];
+}
+
+/**
+ * 15.2: Sipariş toplama (Pick List) bittiğinde sevk irsaliyesi oluşturur
+ */
+export async function createDeliveryNoteFromPickList(
+  payload: CreateDeliveryNoteFromPickDTO
+): Promise<DeliveryNote> {
+  const res = await apiClient.post('/api/delivery-notes', {
+    type: 'OUTGOING',
+    salesOrderId: payload.salesOrderId,
+    warehouseId: payload.warehouseId,
+    contactId: payload.contactId || undefined,
+    carrier: payload.carrier || undefined,
+    trackingNumber: payload.trackingNumber || undefined,
+    date: new Date().toISOString(),
+    notes: payload.notes || 'Mobil Sipariş Toplama Sevk İrsaliyesi',
+    items: payload.items.map((i, idx) => ({
+      productId: i.productId,
+      salesOrderItemId: i.salesOrderItemId || undefined,
+      orderedQty: i.orderedQty,
+      deliveredQty: i.deliveredQty,
+      locationId: i.locationId || undefined,
+      sortOrder: idx + 1,
+    })),
+  });
+
+  return SingleResponseSchema(DeliveryNoteSchema).parse(res.data).data;
 }

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { apiClient } from '../lib/api-client';
 import { SingleResponseSchema } from '../types/api.types';
+import { formatCurrency, formatDate } from '../lib/utils';
 
 // ─────────────────────────────────────────────
 // FAZ 6: Field Service Schemas & Types
@@ -272,4 +273,161 @@ export async function createFieldCheckpoint(
     payload
   );
   return res.data?.data ?? res.data;
+}
+
+// ─────────────────────────────────────────────
+// FAZ 16.5: Corporate Service Report Document Engine
+// ─────────────────────────────────────────────
+
+export interface ServiceReportData {
+  job: FieldServiceJob;
+  diagnosis?: string;
+  actionsTaken?: string;
+  technicianName?: string;
+  customerName?: string;
+  customerSignatureSvg?: string[];
+  items?: ServiceRequestItem[];
+  companyName?: string;
+  date?: string;
+}
+
+/**
+ * 16.5: İmzalı kurumsal teknik servis raporu HTML çıktısı üretir
+ */
+export function generateServiceReportHtml(data: ServiceReportData): string {
+  const company = data.companyName || 'AXON ERP TEKNİK SERVİS A.Ş.';
+  const reportDate = data.date || new Date().toLocaleDateString('tr-TR');
+  const items = data.items || [];
+  const totalAmount = items.reduce((sum, i) => sum + (Number(i.lineTotal) || (Number(i.quantity) * Number(i.unitPrice))), 0);
+
+  const itemsRows = items.length > 0
+    ? items.map((it, idx) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center;">${idx + 1}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${it.product?.name || it.description}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center;">${it.quantity}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right;">${formatCurrency(it.unitPrice)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold;">${formatCurrency(it.lineTotal || it.quantity * it.unitPrice)}</td>
+      </tr>
+    `).join('')
+    : `<tr><td colspan="5" style="padding: 12px; text-align: center; color: #718096;">Yedek parça sarfiyatı kaydedilmedi.</td></tr>`;
+
+  const signaturePaths = (data.customerSignatureSvg || [])
+    .map((d) => `<path d="${d}" fill="none" stroke="#1a365d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />`)
+    .join('');
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Teknik Servis Raporu - ${data.job.number}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 24px; color: #2d3748; }
+    .header { border-bottom: 2px solid #3182ce; padding-bottom: 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .title { font-size: 20px; font-weight: bold; color: #2b6cb0; }
+    .subtitle { font-size: 13px; color: #718096; margin-top: 4px; }
+    .doc-num { font-size: 16px; font-weight: 700; color: #2d3748; text-align: right; }
+    .meta-box { display: flex; gap: 20px; margin-bottom: 20px; }
+    .card { flex: 1; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; }
+    .card-title { font-size: 12px; font-weight: bold; text-transform: uppercase; color: #4a5568; margin-bottom: 8px; border-bottom: 1px solid #edf2f7; padding-bottom: 4px; }
+    .row { font-size: 13px; margin-bottom: 4px; display: flex; }
+    .lbl { color: #718096; width: 90px; }
+    .val { font-weight: 600; color: #1a202c; flex: 1; }
+    .section-title { font-size: 14px; font-weight: bold; color: #2d3748; margin: 18px 0 8px 0; }
+    .notes-box { background: #edf2f7; border-left: 3px solid #3182ce; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; border-radius: 0 4px 4px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+    th { background: #ebf8ff; color: #2b6cb0; padding: 8px; text-align: left; border-bottom: 2px solid #bee3f8; }
+    .total-row { display: flex; justify-content: flex-end; padding: 12px 0; font-size: 15px; font-weight: bold; }
+    .signatures { display: flex; justify-content: space-between; margin-top: 30px; gap: 40px; }
+    .sig-block { flex: 1; text-align: center; border-top: 1px dashed #cbd5e0; padding-top: 10px; }
+    .sig-canvas { border: 1px solid #e2e8f0; background: #ffffff; border-radius: 4px; height: 100px; width: 100%; max-width: 280px; margin: 8px auto; }
+    .footer { margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 10px; font-size: 11px; color: #a0aec0; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="title">${company}</div>
+      <div class="subtitle">Yetkili Saha Servis ve Bakım Onarım Departmanı</div>
+    </div>
+    <div class="doc-num">
+      FORM NO: ${data.job.number}<br>
+      <span style="font-size: 12px; font-weight: normal; color: #718096;">Tarih: ${reportDate}</span>
+    </div>
+  </div>
+
+  <div class="meta-box">
+    <div class="card">
+      <div class="card-title">Müşteri Bilgileri</div>
+      <div class="row"><span class="lbl">Cari / Firma:</span><span class="val">${data.job.contact?.name || 'Belirtilmedi'}</span></div>
+      <div class="row"><span class="lbl">Telefon:</span><span class="val">${data.job.contact?.phone || '-'}</span></div>
+      <div class="row"><span class="lbl">Adres:</span><span class="val">${data.job.contact?.address || '-'} ${data.job.contact?.city || ''}</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Cihaz / Varlık Bilgileri</div>
+      <div class="row"><span class="lbl">Cihaz Adı:</span><span class="val">${data.job.asset?.name || 'Genel Servis'}</span></div>
+      <div class="row"><span class="lbl">Marka / Model:</span><span class="val">${data.job.asset?.brand || ''} ${data.job.asset?.model || '-'}</span></div>
+      <div class="row"><span class="lbl">Seri No:</span><span class="val">${data.job.asset?.serialNo || '-'}</span></div>
+    </div>
+  </div>
+
+  <div class="section-title">Servis Teşhisi ve Arıza Açıklaması</div>
+  <div class="notes-box">
+    <strong>Arıza Şikayeti:</strong> ${data.job.subject}<br>
+    <strong>Teşhis:</strong> ${data.diagnosis || 'Arıza tespiti yapıldı.'}
+  </div>
+
+  <div class="section-title">Uygulanan İşlemler ve Çözüm</div>
+  <div class="notes-box">
+    ${data.actionsTaken || 'Cihazın gerekli bakımı ve onarımı başarıyla tamamlandı.'}
+  </div>
+
+  <div class="section-title">Kullanılan Yedek Parçalar ve İşçilik</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 30px; text-align: center;">#</th>
+        <th>Parça / Açıklama</th>
+        <th style="width: 70px; text-align: center;">Miktar</th>
+        <th style="width: 100px; text-align: right;">Birim Fiyat</th>
+        <th style="width: 110px; text-align: right;">Toplam</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsRows}
+    </tbody>
+  </table>
+
+  <div class="total-row">
+    <span>GENEL TOPLAM:&nbsp;&nbsp;</span>
+    <span style="color: #2b6cb0;">${formatCurrency(totalAmount)}</span>
+  </div>
+
+  <div class="signatures">
+    <div class="sig-block">
+      <strong>Teknisyen / Servis Yetkilisi</strong>
+      <div style="font-size: 13px; color: #4a5568; margin-top: 6px;">${data.technicianName || 'Saha Servis Uzmanı'}</div>
+      <div style="font-size: 11px; color: #a0aec0; margin-top: 30px;">(İmza / Onay)</div>
+    </div>
+
+    <div class="sig-block">
+      <strong>Müşteri / Teslim Alan Yetkili</strong>
+      <div style="font-size: 13px; color: #4a5568; margin-top: 6px;">${data.customerName || data.job.contact?.name || 'Müşteri'}</div>
+      ${data.customerSignatureSvg && data.customerSignatureSvg.length > 0 ? `
+        <div class="sig-canvas">
+          <svg viewBox="0 0 320 160" style="width: 100%; height: 100%;">
+            ${signaturePaths}
+          </svg>
+        </div>
+      ` : '<div style="height: 60px; display: flex; align-items: center; justify-content: center; color: #a0aec0; font-size: 12px;">Dijital İmza Alındı</div>'}
+      <div style="font-size: 11px; color: #a0aec0;">Bu belge ile cihaz çalışır vaziyette teslim alınmıştır.</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    AXON ERP Mobil Saha Servis Sistemi tarafından elektronik ortamda tanzim edilmiştir. Belge No: ${data.job.id}
+  </div>
+</body>
+</html>`;
 }

@@ -24,7 +24,7 @@ export interface ServiceReportModalProps {
   visible: boolean;
   job: FieldServiceJob | null;
   onClose: () => void;
-  onReportSubmitted: (jobId: string) => void;
+  onReportSubmitted: (jobId: string, diagnosis?: string, actionsTaken?: string) => void;
 }
 
 export const ServiceReportModal: React.FC<ServiceReportModalProps> = ({
@@ -70,7 +70,7 @@ export const ServiceReportModal: React.FC<ServiceReportModalProps> = ({
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      onReportSubmitted(job.id);
+      onReportSubmitted(job.id, diagnosis.trim(), actionsTaken.trim());
       onClose();
     } catch (err: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});

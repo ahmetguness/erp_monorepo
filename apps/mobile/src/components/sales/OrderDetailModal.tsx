@@ -17,6 +17,10 @@ import { useTheme } from '../../theme';
 import { SalesOrder, SalesOrderStatus, cancelSalesOrder } from '../../services/sales.service';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { Badge, BadgeVariant } from '../common/Badge';
+import {
+  thermalPrinterService,
+  generateOrderReceipt,
+} from '../../services/thermal-printer.service';
 
 interface Props {
   visible: boolean;
@@ -111,6 +115,21 @@ export const OrderDetailModal: React.FC<Props> = ({
         },
       ]
     );
+  };
+
+  const handlePrintReceipt = async () => {
+    if (!order) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    try {
+      const { bytes } = generateOrderReceipt(order);
+      const res = await thermalPrinterService.print(
+        bytes,
+        `Sipariş Fişi - ${order.number || order.id.slice(0, 8)}`
+      );
+      Alert.alert(res.success ? 'Yazdırıldı' : 'Yazıcı Uyarısı', res.message);
+    } catch {
+      Alert.alert('Hata', 'Yazdırma işlemi gerçekleştirilemedi.');
+    }
   };
 
   return (
@@ -343,6 +362,21 @@ export const OrderDetailModal: React.FC<Props> = ({
           >
             <Ionicons name="share-social-outline" size={18} color={theme.colors.text} />
             <Text style={[styles.shareBtnText, { color: theme.colors.text }]}>Paylaş</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.shareBtn,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
+            onPress={handlePrintReceipt}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="print-outline" size={18} color={theme.colors.primary} />
+            <Text style={[styles.shareBtnText, { color: theme.colors.primary }]}>Fiş Yazdır</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

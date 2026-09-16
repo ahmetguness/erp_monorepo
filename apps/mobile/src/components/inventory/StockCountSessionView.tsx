@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -19,7 +20,13 @@ import {
   selectMatchedSummary,
   ExpectedItem,
 } from '../../store/redux/warehouseSessionSlice';
-import { Warehouse, createStockCount, finalizeStockCount } from '../../services/inventory.service';
+import {
+  Warehouse,
+  Location,
+  createStockCount,
+  finalizeStockCount,
+  getWarehouseLocations,
+} from '../../services/inventory.service';
 import { Badge } from '../common/Badge';
 
 export interface StockCountSessionViewProps {
@@ -41,6 +48,19 @@ export const StockCountSessionView: React.FC<StockCountSessionViewProps> = ({
   const summary = useAppSelector(selectMatchedSummary);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
+
+  useEffect(() => {
+    if (warehouse) {
+      getWarehouseLocations(warehouse.id).then((list) => {
+        setLocations(list);
+      });
+    } else {
+      setLocations([]);
+      setSelectedLocation(null);
+    }
+  }, [warehouse]);
 
   const handleIncrement = (item: ExpectedItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -93,6 +113,7 @@ export const StockCountSessionView: React.FC<StockCountSessionViewProps> = ({
                 notes: `Mobil Hızlı Sayım - ${new Date().toLocaleDateString('tr-TR')}`,
                 items: expectedItems.map((i) => ({
                   productId: i.productId,
+                  locationId: selectedLocation?.id || undefined,
                   expectedQty: i.expectedQty,
                   countedQty: i.countedQty,
                 })),
@@ -162,6 +183,68 @@ export const StockCountSessionView: React.FC<StockCountSessionViewProps> = ({
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Shelf / Location Selector Bar */}
+      {locations.length > 0 && (
+        <View style={styles.shelfFilterContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.shelfFilterScroll}
+          >
+            <TouchableOpacity
+              style={[
+                styles.shelfFilterPill,
+                !selectedLocation
+                  ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                  : { backgroundColor: theme.colors.surfaceCard, borderColor: theme.colors.borderSubtle },
+              ]}
+              onPress={() => setSelectedLocation(null)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.shelfFilterText,
+                  { color: !selectedLocation ? '#ffffff' : theme.colors.text, fontWeight: !selectedLocation ? '700' : '500' },
+                ]}
+              >
+                Tüm Depo
+              </Text>
+            </TouchableOpacity>
+
+            {locations.map((loc) => {
+              const isSel = selectedLocation?.id === loc.id;
+              return (
+                <TouchableOpacity
+                  key={loc.id}
+                  style={[
+                    styles.shelfFilterPill,
+                    isSel
+                      ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                      : { backgroundColor: theme.colors.surfaceCard, borderColor: theme.colors.borderSubtle },
+                  ]}
+                  onPress={() => setSelectedLocation(loc)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="grid-outline"
+                    size={12}
+                    color={isSel ? '#ffffff' : theme.colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.shelfFilterText,
+                      { color: isSel ? '#ffffff' : theme.colors.text, fontWeight: isSel ? '700' : '500' },
+                    ]}
+                  >
+                    Raf {loc.code}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Progress & Summary Metric Bar */}
       {expectedItems.length > 0 && (
@@ -562,5 +645,23 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  shelfFilterContainer: {
+    paddingVertical: 8,
+  },
+  shelfFilterScroll: {
+    gap: 8,
+  },
+  shelfFilterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  shelfFilterText: {
+    fontSize: 12,
   },
 });

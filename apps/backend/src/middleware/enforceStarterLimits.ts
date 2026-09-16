@@ -38,9 +38,25 @@ export function enforceStarterLimits(limitType: StarterLimitType) {
         case 'warehouse':
           await starterAccessService.enforceWarehouseCreation(tenantId);
           break;
-        case 'warehouse_transfer':
+        case 'warehouse_transfer': {
+          try {
+            const body = await c.req.json();
+            if (
+              body &&
+              typeof body === 'object' &&
+              'fromWarehouseId' in body &&
+              'toWarehouseId' in body &&
+              body.fromWarehouseId === body.toWarehouseId
+            ) {
+              // Same warehouse shelf-to-shelf transfer is an intra-warehouse operation
+              break;
+            }
+          } catch {
+            // body parse fallback; downstream controller will handle payload validation
+          }
           await starterAccessService.enforceWarehouseTransfer(tenantId);
           break;
+        }
         default: {
           const _exhaustive: never = limitType;
           return c.json(
