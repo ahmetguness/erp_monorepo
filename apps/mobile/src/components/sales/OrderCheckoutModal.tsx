@@ -30,6 +30,7 @@ import {
   setLastCreatedOrderNumber,
   CartOrderItem,
 } from '../../store/redux/cartOrderSlice';
+import { queueMutation, selectIsOnline } from '../../store/redux';
 import { createSalesOrder, SalesOrder } from '../../services/sales.service';
 import { Badge } from '../common/Badge';
 import { formatCurrency } from '../../lib/utils';
@@ -63,6 +64,7 @@ export const OrderCheckoutModal: React.FC<OrderCheckoutModalProps> = ({
   const items = useAppSelector(selectCartItemsList);
   const totals = useAppSelector(selectCartTotals);
   const isRiskExceeded = useAppSelector(selectIsRiskLimitExceeded);
+  const isOnline = useAppSelector(selectIsOnline);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTermDays, setSelectedTermDays] = useState<number>(0);
@@ -155,6 +157,25 @@ export const OrderCheckoutModal: React.FC<OrderCheckoutModalProps> = ({
         })),
       };
 
+      // 10.2: Offline Outbox check
+      if (!isOnline) {
+        dispatch(
+          queueMutation({
+            type: 'CREATE_SALES_ORDER',
+            payload: orderPayload,
+            title: `Satış Siparişi - ${customer.name} (${items.length} Kalem)`,
+          })
+        );
+        dispatch(clearCartItems());
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Alert.alert(
+          'Çevrimdışı Sipariş Alındı',
+          'İnternet bağlantınız bulunmadığı için sipariş yerel kuyruğa kaydedildi. Bağlantı kurulduğunda otomatik olarak sunucuya aktarılacaktır.'
+        );
+        onClose();
+        return;
+      }
+
       const created = await createSalesOrder(orderPayload);
       if (created?.id) {
         dispatch(setLastCreatedOrderNumber(created.number));
@@ -163,9 +184,48 @@ export const OrderCheckoutModal: React.FC<OrderCheckoutModalProps> = ({
         onClose();
         onOrderSuccess(created);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Hata', err?.response?.data?.message || 'Sipariş kaydedilemedi.');
+
+      if (!axiosErr?.response) {
+        Alert.alert(
+          'Ağ Hatası',
+          'Sunucuya ulaşılamadı. Siparişi çevrimdışı kuyruğa kaydedip internet geldiğinde otomatik göndermek ister misiniz?',
+          [
+            { text: 'Vazgeç', style: 'cancel' },
+            {
+              text: 'Kuyruğa Ekle',
+              onPress: () => {
+                dispatch(
+                  queueMutation({
+                    type: 'CREATE_SALES_ORDER',
+                    payload: {
+                      contactId: customer.id,
+                      date: new Date().toISOString(),
+                      notes: notes.trim() ? notes.trim() : undefined,
+                      items: items.map((i) => ({
+                        productId: i.productId,
+                        quantity: i.quantity,
+                        unitPrice: i.unitPrice,
+                        discount: i.discount,
+                        taxRate: i.taxRate,
+                      })),
+                    },
+                    title: `Satış Siparişi - ${customer.name} (${items.length} Kalem)`,
+                  })
+                );
+                dispatch(clearCartItems());
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+                onClose();
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      Alert.alert('Hata', axiosErr?.response?.data?.message || 'Sipariş kaydedilemedi.');
     } finally {
       setIsSubmitting(false);
     }

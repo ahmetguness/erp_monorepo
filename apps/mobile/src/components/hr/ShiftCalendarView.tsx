@@ -43,6 +43,18 @@ function getDayString(d: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function parseDateString(val?: string | null): string {
+  if (!val) return '';
+  if (val.length === 10 && val.includes('-')) return val;
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return val;
+    return getDayString(d);
+  } catch {
+    return val;
+  }
+}
+
 // Generate the 7 days of current week (Mon -> Sun)
 function getWeekDates(referenceDate: Date = new Date()): Date[] {
   const current = new Date(referenceDate);
@@ -84,17 +96,15 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
 
   // Match attendance records
   const todayAttendance = attendances.find((a) => {
-    return (
-      a.date === todayStr ||
-      (a.checkIn && getDayString(new Date(a.checkIn)) === todayStr)
-    );
+    const aDate = parseDateString(a.date);
+    const aIn = parseDateString(a.checkIn);
+    return aDate === todayStr || aIn === todayStr;
   });
 
   const selectedAttendance = attendances.find((a) => {
-    return (
-      a.date === selectedDateStr ||
-      (a.checkIn && getDayString(new Date(a.checkIn)) === selectedDateStr)
-    );
+    const aDate = parseDateString(a.date);
+    const aIn = parseDateString(a.checkIn);
+    return aDate === selectedDateStr || aIn === selectedDateStr;
   });
 
   // Determine current attendance state for today
@@ -275,10 +285,9 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
             const isWeekend = d.getDay() === 0 || d.getDay() === 6;
 
             const att = attendances.find((a) => {
-              return (
-                a.date === dStr ||
-                (a.checkIn && getDayString(new Date(a.checkIn)) === dStr)
-              );
+              const aDate = parseDateString(a.date);
+              const aIn = parseDateString(a.checkIn);
+              return aDate === dStr || aIn === dStr;
             });
             const hasAtt = Boolean(att?.checkIn);
 

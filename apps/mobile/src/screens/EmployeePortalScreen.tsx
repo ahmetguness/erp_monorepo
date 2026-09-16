@@ -37,6 +37,7 @@ import {
   PayrollSlipModal,
 } from '../components/hr';
 import { Badge } from '../components/common/Badge';
+import { useScreenCaptureProtection } from '../hooks';
 import { formatCurrency, formatDate } from '../lib/utils';
 
 export type EmployeePortalTab = 'leaves' | 'shifts' | 'payrolls';
@@ -53,6 +54,9 @@ interface Props {
 export default function EmployeePortalScreen({ navigation, route }: Props) {
   const { theme } = useTheme();
   const user = useAuthStore((s) => s.user);
+
+  // Screen capture & recording protection for sensitive employee payroll and personal data (KVKK/GDPR)
+  useScreenCaptureProtection({ enabled: true, screenName: 'EmployeePortalScreen' });
 
   const [activeTab, setActiveTab] = useState<EmployeePortalTab>(
     route?.params?.initialTab || 'leaves',
@@ -123,7 +127,7 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [user, employee]);
+  }, [user?.email, user?.name]);
 
   useEffect(() => {
     loadEmployeeAndData();
@@ -143,7 +147,11 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
       Alert.alert('Başarılı', 'İzin talebiniz iptal edildi.');
       await loadEmployeeAndData();
     } catch (err) {
-      Alert.alert('Hata', 'İzin talebi iptal edilirken bir sorun oluştu.');
+      const serverMsg =
+        (err as any)?.response?.data?.error?.message ||
+        (err as any)?.response?.data?.message ||
+        'İzin talebi iptal edilirken bir sorun oluştu.';
+      Alert.alert('Hata', serverMsg);
     } finally {
       setCancellingRequestId(null);
     }
@@ -160,7 +168,11 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
       const updated = await getAttendances({ employeeId: employee.id });
       setAttendances(updated);
     } catch (err) {
-      Alert.alert('Hata', 'Giriş damgası kaydedilemedi.');
+      const serverMsg =
+        (err as any)?.response?.data?.error?.message ||
+        (err as any)?.response?.data?.message ||
+        'Giriş damgası kaydedilemedi.';
+      Alert.alert('Hata', serverMsg);
     } finally {
       setIsClocking(false);
     }
@@ -176,7 +188,11 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
       const updated = await getAttendances({ employeeId: employee.id });
       setAttendances(updated);
     } catch (err) {
-      Alert.alert('Hata', 'Çıkış damgası kaydedilemedi.');
+      const serverMsg =
+        (err as any)?.response?.data?.error?.message ||
+        (err as any)?.response?.data?.message ||
+        'Çıkış damgası kaydedilemedi.';
+      Alert.alert('Hata', serverMsg);
     } finally {
       setIsClocking(false);
     }

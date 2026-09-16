@@ -267,6 +267,24 @@ export async function getWarehouseStockLevels(warehouseId: string): Promise<Stoc
 }
 
 /**
+ * List products with optional search and pagination
+ */
+export async function getProducts(params?: { search?: string; limit?: number }): Promise<ProductLookup[]> {
+  const res = await apiClient.get('/api/products', { params });
+  const parsed = ProductListResponseSchema.safeParse(res.data);
+  return parsed.success ? parsed.data.data : res.data?.data || [];
+}
+
+/**
+ * Fetch all stock levels across warehouses
+ */
+export async function getAllStockLevels(params?: { limit?: number; warehouseId?: string }): Promise<StockLevel[]> {
+  const res = await apiClient.get('/api/stock/levels', { params });
+  const parsed = StockLevelListResponseSchema.safeParse(res.data);
+  return parsed.success ? parsed.data.data : res.data?.data || [];
+}
+
+/**
  * 4.3: Hızlı Stok Sayımı
  */
 export async function getStockCounts(): Promise<StockCount[]> {

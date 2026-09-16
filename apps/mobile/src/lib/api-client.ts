@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { getAuthToken, removeAuthToken } from './token-storage';
 import { useAuthStore } from '../store/auth.store';
+import { attachSslAuditInterceptor } from './sslPinning';
 
 // Environment-based API URL resolution:
 // - Physical device (Expo Go): Dynamically extracts LAN host IP from Expo manifest (e.g. 192.168.1.6:3001)
@@ -10,7 +11,8 @@ import { useAuthStore } from '../store/auth.store';
 // - iOS Simulator / Web: localhost:3001
 // - Production: https://api.axon-erp.com
 function resolveApiUrl(): string {
-  if (!__DEV__) {
+  const isDebug = typeof __DEV__ !== 'undefined' ? Boolean(__DEV__) : false;
+  if (!isDebug) {
     return 'https://api.axon-erp.com';
   }
 
@@ -39,6 +41,9 @@ export const apiClient = axios.create({
   },
   timeout: 15000,
 });
+
+// Enforce SSL/TLS integrity in production
+attachSslAuditInterceptor(apiClient);
 
 // Request Interceptor: Attach Bearer Token if present
 apiClient.interceptors.request.use(

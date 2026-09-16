@@ -10,3 +10,5 @@ export * from './inventory';
 export * from './sales';
 export * from './field-service';
 export * from './production';
+export * from './copilot';
+export * from './offline';

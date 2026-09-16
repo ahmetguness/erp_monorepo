@@ -296,7 +296,7 @@ export async function getInvoices(params?: InvoiceListParams): Promise<{
   if (params?.contactId) query.contactId = params.contactId;
   if (params?.search) query.search = params.search;
 
-  const res = await apiClient.get('/invoices', { params: query });
+  const res = await apiClient.get('/api/invoices', { params: query });
   const rawList = res.data?.data ?? [];
   const meta = res.data?.meta ?? { total: rawList.length, totalPages: 1 };
 
@@ -398,7 +398,7 @@ export async function getOverdueReceivables(params?: {
  * Fetch detailed invoice with items, payments, and e-documents
  */
 export async function getInvoiceById(id: string): Promise<InvoiceDetail> {
-  const res = await apiClient.get(`/invoices/${id}`);
+  const res = await apiClient.get(`/api/invoices/${id}`);
   const raw = res.data?.data ?? res.data;
   const parsed = InvoiceDetailSchema.safeParse(raw);
   if (!parsed.success) {
@@ -422,7 +422,7 @@ export async function getEDocuments(params?: {
   total: number;
   totalPages: number;
 }> {
-  const res = await apiClient.get('/e-documents', { params });
+  const res = await apiClient.get('/api/e-documents', { params });
   const rawList = res.data?.data ?? [];
   const meta = res.data?.meta ?? { total: rawList.length, totalPages: 1 };
   const parsed = z.array(EDocumentSchema).safeParse(rawList);
@@ -437,7 +437,7 @@ export async function getEDocuments(params?: {
  * Fetch detailed E-Document
  */
 export async function getEDocumentById(id: string): Promise<EDocument> {
-  const res = await apiClient.get(`/e-documents/${id}`);
+  const res = await apiClient.get(`/api/e-documents/${id}`);
   const raw = res.data?.data ?? res.data;
   const parsed = EDocumentSchema.safeParse(raw);
   return parsed.success ? parsed.data : (raw as EDocument);
@@ -447,7 +447,7 @@ export async function getEDocumentById(id: string): Promise<EDocument> {
  * Fetch Cash Registers
  */
 export async function getCashAccounts(): Promise<CashAccount[]> {
-  const res = await apiClient.get('/payments/cash-accounts');
+  const res = await apiClient.get('/api/payments/cash-accounts');
   const list = res.data?.data ?? [];
   const parsed = z.array(CashAccountSchema).safeParse(list);
   return parsed.success ? parsed.data : (list as CashAccount[]);
@@ -457,7 +457,7 @@ export async function getCashAccounts(): Promise<CashAccount[]> {
  * Fetch Bank Accounts
  */
 export async function getBankAccounts(): Promise<BankAccount[]> {
-  const res = await apiClient.get('/payments/bank-accounts');
+  const res = await apiClient.get('/api/payments/bank-accounts');
   const list = res.data?.data ?? [];
   const parsed = z.array(BankAccountSchema).safeParse(list);
   return parsed.success ? parsed.data : (list as BankAccount[]);
@@ -471,7 +471,7 @@ export async function getPayments(params?: {
   limit?: number;
   contactId?: string;
 }): Promise<{ payments: PaymentRecord[]; total: number }> {
-  const res = await apiClient.get('/payments', { params });
+  const res = await apiClient.get('/api/payments', { params });
   const list = res.data?.data ?? [];
   const total = res.data?.meta?.total ?? list.length;
   const parsed = z.array(PaymentRecordSchema).safeParse(list);
@@ -511,7 +511,7 @@ export async function createPaymentReceipt(input: CreatePaymentInput): Promise<P
     allocations: input.allocations && input.allocations.length > 0 ? input.allocations : undefined,
   };
 
-  const res = await apiClient.post('/payments', payload);
+  const res = await apiClient.post('/api/payments', payload);
   const raw = res.data?.data ?? res.data;
   const parsed = PaymentRecordSchema.safeParse(raw);
   return parsed.success ? parsed.data : (raw as PaymentRecord);

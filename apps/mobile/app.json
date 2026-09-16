@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "AXON ERP",
+    "slug": "axon-erp-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +14,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.axonerp.mobile"
+      "bundleIdentifier": "com.axonerp.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Barkod ve QR kod tarama, evrak ve ürün fotoğrafı yükleme için kamera izni gereklidir.",
+        "NSFaceIDUsageDescription": "Uygulamaya hızlı ve güvenli giriş yapabilmeniz için Face ID izni gereklidir."
+      }
     },
     "android": {
       "package": "com.axonerp.mobile",
@@ -22,9 +26,30 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.VIBRATE",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Barkod ve QR kod tarama için kamera izni gereklidir."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Uygulamaya hızlı ve güvenli giriş yapabilmeniz için Face ID izni gereklidir."
+        }
+      ]
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     },

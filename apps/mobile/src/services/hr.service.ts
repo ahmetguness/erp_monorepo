@@ -206,7 +206,7 @@ export async function getEmployees(params?: {
   department?: string;
   limit?: number;
 }): Promise<{ employees: Employee[]; total: number }> {
-  const res = await apiClient.get('/hr/employees', { params });
+  const res = await apiClient.get('/api/hr/employees', { params });
   const rawList = res.data?.data ?? [];
   const total = res.data?.meta?.total ?? rawList.length;
   const parsed = z.array(EmployeeSchema).safeParse(rawList);
@@ -220,7 +220,7 @@ export async function getEmployees(params?: {
  * Fetch employee by ID
  */
 export async function getEmployeeById(id: string): Promise<Employee> {
-  const res = await apiClient.get(`/hr/employees/${id}`);
+  const res = await apiClient.get(`/api/hr/employees/${id}`);
   const raw = res.data?.data ?? res.data;
   const parsed = EmployeeSchema.safeParse(raw);
   return parsed.success ? parsed.data : (raw as Employee);
@@ -255,7 +255,7 @@ export async function getLeaveRequests(params?: {
   status?: LeaveStatus;
   limit?: number;
 }): Promise<{ requests: LeaveRequest[]; total: number }> {
-  const res = await apiClient.get('/hr/leave-requests', { params });
+  const res = await apiClient.get('/api/hr/leave-requests', { params });
   const rawList = res.data?.data ?? [];
   const total = res.data?.meta?.total ?? rawList.length;
   const parsed = z.array(LeaveRequestSchema).safeParse(rawList);
@@ -339,7 +339,7 @@ export async function getLeaveBalance(
 export async function createLeaveRequest(
   input: CreateLeaveRequestInput,
 ): Promise<LeaveRequest> {
-  const res = await apiClient.post('/hr/leave-requests', input);
+  const res = await apiClient.post('/api/hr/leave-requests', input);
   const raw = res.data?.data ?? res.data;
   const parsed = LeaveRequestSchema.safeParse(raw);
   return parsed.success ? parsed.data : (raw as LeaveRequest);
@@ -349,7 +349,7 @@ export async function createLeaveRequest(
  * 8.1: Cancel Pending Leave Request
  */
 export async function cancelLeaveRequest(id: string): Promise<void> {
-  await apiClient.post(`/hr/leave-requests/${id}/cancel`);
+  await apiClient.post(`/api/hr/leave-requests/${id}/cancel`);
 }
 
 /**
@@ -360,7 +360,7 @@ export async function getAttendances(params?: {
   dateFrom?: string;
   dateTo?: string;
 }): Promise<AttendanceRecord[]> {
-  const res = await apiClient.get('/hr/attendance', { params });
+  const res = await apiClient.get('/api/hr/attendance', { params });
   const rawList = res.data?.data ?? [];
   const parsed = z.array(AttendanceRecordSchema).safeParse(rawList);
   return parsed.success ? parsed.data : (rawList as AttendanceRecord[]);
@@ -373,8 +373,9 @@ export async function clockIn(
   employeeId: string,
   notes?: string,
 ): Promise<AttendanceRecord> {
-  const res = await apiClient.post('/hr/attendance/check-in', {
+  const res = await apiClient.post('/api/hr/attendance/check-in', {
     employeeId,
+    date: new Date().toISOString(),
     checkIn: new Date().toISOString(),
     notes,
   });
@@ -390,8 +391,9 @@ export async function clockOut(
   employeeId: string,
   overtimeHours = 0,
 ): Promise<AttendanceRecord> {
-  const res = await apiClient.post('/hr/attendance/check-out', {
+  const res = await apiClient.post('/api/hr/attendance/check-out', {
     employeeId,
+    date: new Date().toISOString(),
     checkOut: new Date().toISOString(),
     overtimeHours,
   });
@@ -408,7 +410,7 @@ export async function getPayrolls(params?: {
   period?: string;
   limit?: number;
 }): Promise<{ payrolls: PayrollRecord[]; total: number }> {
-  const res = await apiClient.get('/payroll', { params });
+  const res = await apiClient.get('/api/payroll', { params });
   const rawList = res.data?.data ?? [];
   const total = res.data?.meta?.total ?? rawList.length;
   const parsed = z.array(PayrollRecordSchema).safeParse(rawList);
@@ -422,7 +424,7 @@ export async function getPayrolls(params?: {
  * 8.3: Fetch Detailed Payroll Slip with Items
  */
 export async function getPayrollById(id: string): Promise<PayrollRecord> {
-  const res = await apiClient.get(`/payroll/${id}`);
+  const res = await apiClient.get(`/api/payroll/${id}`);
   const raw = res.data?.data ?? res.data;
   const parsed = PayrollRecordSchema.safeParse(raw);
   return parsed.success ? parsed.data : (raw as PayrollRecord);

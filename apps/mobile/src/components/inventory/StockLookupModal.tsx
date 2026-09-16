@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../theme';
 import { ProductLookup, StockLevel } from '../../services/inventory.service';
 import { Badge } from '../common/Badge';
+import { OptimizedImage } from '../common/OptimizedImage';
 import { formatCurrency } from '../../lib/utils';
 
 export interface StockLookupModalProps {
@@ -75,14 +76,15 @@ export const StockLookupModal: React.FC<StockLookupModalProps> = ({
           ]}
         >
           <View style={styles.headerLeft}>
-            <View
-              style={[
+            <OptimizedImage
+              source={undefined}
+              fallbackIcon="cube-outline"
+              fallbackIconSize={20}
+              containerStyle={[
                 styles.iconBadge,
-                { backgroundColor: theme.colors.primaryMuted },
+                { backgroundColor: theme.colors.primaryMuted, borderWidth: 0 },
               ]}
-            >
-              <Ionicons name="cube-outline" size={20} color={theme.colors.primary} />
-            </View>
+            />
             <View style={styles.headerTitles}>
               <Text style={[styles.headerTitle, { color: theme.colors.text }]} numberOfLines={1}>
                 {product.name}

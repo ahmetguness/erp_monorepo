@@ -1,0 +1,19 @@
+appId: com.axonerp.mobile
+---
+- launchApp
+
+# 1. Navigate to Employee Portal
+- tapOn: "Profil"
+- tapOn: "Çalışan Portalı"
+- assertVisible: "Çalışan Self-Servisi"
+
+# 2. Verify Tab Switching (Leaves, Shifts, Payroll)
+- assertVisible: "İzinlerim"
+- tapOn: "Maaş Bordroları"
+- assertVisible: "Son Dönem Bordroları"
+
+# 3. New Leave Request Modal
+- tapOn: "İzinlerim"
+- tapOn: "Yeni İzin Talebi"
+- assertVisible: "İzin Türü"
+- tapOn: "Kapat"

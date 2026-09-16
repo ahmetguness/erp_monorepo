@@ -149,7 +149,11 @@ export const NewLeaveRequestModal: React.FC<NewLeaveRequestModalProps> = ({
       );
     } catch (err: unknown) {
       console.warn('[NewLeaveRequestModal] Submit error:', err);
-      const msg = err instanceof Error ? err.message : 'Talep oluşturulurken bir hata oluştu.';
+      const serverMsg =
+        (err as any)?.response?.data?.error?.message ||
+        (err as any)?.response?.data?.message ||
+        (err instanceof Error ? err.message : null);
+      const msg = serverMsg || 'Talep oluşturulurken bir hata oluştu.';
       Alert.alert('Hata', msg);
     } finally {
       setIsSubmitting(false);

@@ -1,0 +1,35 @@
+appId: com.axonerp.mobile
+---
+- launchApp
+
+# 1. Simulate Airplane Mode (Offline)
+- setAirplaneMode: enabled
+
+# 2. Assert Offline Bar Displays
+- assertVisible: "Çevrimdışı Mod"
+
+# 3. Navigate to Sales Tab
+- tapOn: "Satış"
+- assertVisible: "Hızlı Satış & Sipariş"
+
+# 4. Create Offline Order
+- tapOn: "Hızlı Sipariş Girişi"
+- tapOn: "Müşteri Seçin"
+- tapOn:
+    index: 0
+- tapOn: "Devam Et"
+- tapOn: "Siparişi Kaydet"
+
+# 5. Assert Outbox Queue Notification
+- assertVisible: "Kuyrukta Bekliyor"
+
+# 6. Reconnect Network & Auto-Sync
+- setAirplaneMode: disabled
+- extendedWaitUntil:
+    notVisible: "Çevrimdışı Mod"
+    timeout: 10000
+
+# 7. Assert Outbox Queue Cleared
+- extendedWaitUntil:
+    notVisible: "Kuyrukta Bekliyor"
+    timeout: 15000

@@ -6,3 +6,5 @@ export * from './Header';
 export * from './ScreenWrapper';
 export * from './EmptyState';
 export * from './ErrorBoundary';
+export * from './OptimizedImage';
+export * from './OptimizedFlatList';

@@ -28,6 +28,11 @@ import {
   MobileDashboardData,
   MobileDashboardActivity,
 } from '../services/dashboard.service';
+import {
+  syncAllMasterData,
+  getCacheMetadata,
+  CacheMetadata,
+} from '../services/offline-cache.service';
 import { DashboardScreenNavigationProp } from '../types/navigation.types';
 
 function getGreeting(): string {
@@ -83,6 +88,28 @@ export default function DashboardScreen() {
     fetchDashboard();
     loadNotifications();
   }, [fetchDashboard, loadNotifications]);
+
+  const [cacheMeta, setCacheMeta] = useState<CacheMetadata | null>(null);
+  const [isCaching, setIsCaching] = useState(false);
+
+  useEffect(() => {
+    getCacheMetadata().then(setCacheMeta).catch(() => {});
+  }, []);
+
+  const handleSyncOfflineCache = async () => {
+    if (isCaching) return;
+    setIsCaching(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    try {
+      const meta = await syncAllMasterData();
+      setCacheMeta(meta);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (err) {
+      console.warn('[DashboardScreen] Failed to cache master data:', err);
+    } finally {
+      setIsCaching(false);
+    }
+  };
 
   useEffect(() => {
     initializePushNotifications();
@@ -485,6 +512,76 @@ export default function DashboardScreen() {
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.opActionCard,
+                {
+                  backgroundColor: theme.colors.surfaceCard,
+                  borderColor: theme.colors.borderSubtle,
+                  borderRadius: theme.borderRadius.lg,
+                  ...theme.shadows.sm,
+                },
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                navigation.navigate('Copilot');
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.opIconWrap, { backgroundColor: '#f0f9ff' }]}>
+                <Ionicons name="sparkles" size={20} color="#0284c7" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.opCardTitle, { color: theme.colors.text }]}>
+                  AXON AI Mobil Asistan (Copilot)
+                </Text>
+                <Text style={[styles.opCardDesc, { color: theme.colors.textMuted }]}>
+                  Doğal dille ERP sorgulama, hazır soru kalıpları & kısayollar
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.opActionCard,
+                {
+                  backgroundColor: theme.colors.surfaceCard,
+                  borderColor: theme.colors.borderSubtle,
+                  borderRadius: theme.borderRadius.lg,
+                  ...theme.shadows.sm,
+                },
+              ]}
+              onPress={handleSyncOfflineCache}
+              activeOpacity={0.8}
+              disabled={isCaching}
+            >
+              <View style={[styles.opIconWrap, { backgroundColor: '#fef3c7' }]}>
+                {isCaching ? (
+                  <ActivityIndicator size="small" color="#d97706" />
+                ) : (
+                  <Ionicons name="cloud-download-outline" size={20} color="#d97706" />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.opCardTitle, { color: theme.colors.text }]}>
+                  Çevrimdışı Veri Paketi
+                </Text>
+                <Text style={[styles.opCardDesc, { color: theme.colors.textMuted }]}>
+                  {isCaching
+                    ? 'Veriler indiriliyor ve yerel önbelleğe alınıyor...'
+                    : cacheMeta?.lastSyncAt
+                    ? `${cacheMeta.productsCount} ürün, ${cacheMeta.contactsCount} cari önbellekte`
+                    : 'Müşteri, ürün ve stokları çevrimdışı kullanım için indir'}
+                </Text>
+              </View>
+              <Ionicons
+                name={isCaching ? 'sync' : 'chevron-forward'}
+                size={16}
+                color={theme.colors.textMuted}
+              />
             </TouchableOpacity>
           </View>
         </View>

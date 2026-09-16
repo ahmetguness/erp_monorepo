@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  FlatList,
   ActivityIndicator,
   RefreshControl,
   Share,
@@ -29,6 +28,8 @@ import {
   EDocumentPreviewModal,
 } from '../components/finance';
 import { Badge } from '../components/common/Badge';
+import { OptimizedFlatList } from '../components/common';
+import { useScreenCaptureProtection } from '../hooks';
 
 type FinanceTab = 'overdue' | 'payments' | 'edocuments';
 
@@ -44,6 +45,9 @@ interface Props {
 
 export default function FinanceScreen({ navigation, route }: Props) {
   const { theme } = useTheme();
+
+  // Screen capture & recording protection for financial data
+  useScreenCaptureProtection({ enabled: true, screenName: 'FinanceScreen' });
 
   const [activeTab, setActiveTab] = useState<FinanceTab>(
     route?.params?.initialTab || 'overdue',
@@ -310,7 +314,7 @@ export default function FinanceScreen({ navigation, route }: Props) {
       {/* TAB 1: Vadesi Geçen Alacak Takibi (FAZ 7.1)                  */}
       {/* ───────────────────────────────────────────────────────────── */}
       {activeTab === 'overdue' && (
-        <FlatList
+        <OptimizedFlatList<OverdueInvoice>
           data={filteredOverdue}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
@@ -397,7 +401,7 @@ export default function FinanceScreen({ navigation, route }: Props) {
       {/* TAB 2: Sahada Tahsilat Makbuzları (FAZ 7.2)                  */}
       {/* ───────────────────────────────────────────────────────────── */}
       {activeTab === 'payments' && (
-        <FlatList
+        <OptimizedFlatList<PaymentRecord>
           data={filteredPayments}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
@@ -487,7 +491,7 @@ export default function FinanceScreen({ navigation, route }: Props) {
       {/* TAB 3: E-Belge & Fatura Önizleme (FAZ 7.3)                    */}
       {/* ───────────────────────────────────────────────────────────── */}
       {activeTab === 'edocuments' && (
-        <FlatList
+        <OptimizedFlatList<EDocument>
           data={filteredEDocuments}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}

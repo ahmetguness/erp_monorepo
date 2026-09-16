@@ -1,0 +1,20 @@
+appId: com.axonerp.mobile
+---
+- launchApp
+
+# 1. Open AXON AI Copilot from Dashboard
+- tapOn: "AXON AI Asistan"
+- assertVisible: "AXON AI Copilot"
+- assertVisible: "Size nasıl yardımcı olabilirim?"
+
+# 2. Select Suggested Quick Prompt
+- tapOn: "Vadesi geçmiş faturaları listele"
+
+# 3. Assert Assistant Response & Action Pill
+- extendedWaitUntil:
+    visible: "Finans & Tahsilat"
+    timeout: 10000
+
+# 4. Tap Action Pill to Navigate to Finance
+- tapOn: "Finans & Tahsilat"
+- assertVisible: "Vadesi Geçen Alacaklar"

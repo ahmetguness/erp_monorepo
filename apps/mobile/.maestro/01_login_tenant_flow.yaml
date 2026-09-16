@@ -1,0 +1,27 @@
+appId: com.axonerp.mobile
+---
+- launchApp:
+    clearState: true
+
+# 1. Tenant & Authentication Verification
+- assertVisible: "AXON ERP"
+- assertVisible: "Firma Kodu / Tenant"
+- tapOn: "Firma Kodu / Tenant"
+- inputText: "demo-corp"
+
+# 2. Input Email & Password
+- tapOn: "E-posta"
+- inputText: "admin@demo.com"
+- tapOn: "Şifre"
+- inputText: "Admin123!"
+
+# 3. Submit Login
+- tapOn: "Giriş Yap"
+
+# 4. Assert Dashboard Landing
+- extendedWaitUntil:
+    visible: "Genel Bakış"
+    timeout: 10000
+
+- assertVisible: "Bugünkü Ciro"
+- assertVisible: "Onay Bekleyenler"

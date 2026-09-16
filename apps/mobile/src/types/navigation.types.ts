@@ -37,6 +37,9 @@ export type RootStackParamList = {
   EmployeePortal: {
     initialTab?: 'leaves' | 'shifts' | 'payrolls';
   } | undefined;
+  Copilot: {
+    initialPrompt?: string;
+  } | undefined;
 };
 
 export type DashboardScreenNavigationProp = CompositeNavigationProp<
