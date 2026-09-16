@@ -30,6 +30,13 @@ export type RootStackParamList = {
   Notifications: undefined;
   FieldService: undefined;
   ProductionShopFloor: undefined;
+  Finance: {
+    initialTab?: 'overdue' | 'payments' | 'edocuments';
+    contactId?: string;
+  } | undefined;
+  EmployeePortal: {
+    initialTab?: 'leaves' | 'shifts' | 'payrolls';
+  } | undefined;
 };
 
 export type DashboardScreenNavigationProp = CompositeNavigationProp<

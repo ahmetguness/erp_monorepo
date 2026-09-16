@@ -212,7 +212,7 @@ export const InvoiceController = {
       prisma.invoice.findMany({
         where,
         include: {
-          contact: { select: { id: true, name: true, code: true } },
+          contact: { select: { id: true, name: true, code: true, phone: true } },
         },
         orderBy: { date: 'desc' },
         skip,
@@ -233,7 +233,7 @@ export const InvoiceController = {
     const invoice = await prisma.invoice.findFirst({
       where: { id: invoiceId, tenantId },
       include: {
-        contact: { select: { id: true, name: true, taxNumber: true, address: true, email: true } },
+        contact: { select: { id: true, name: true, taxNumber: true, address: true, email: true, phone: true } },
         lines: {
           include: {
             product: { select: { id: true, code: true, name: true } },

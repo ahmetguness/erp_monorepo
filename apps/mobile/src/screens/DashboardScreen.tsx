@@ -295,7 +295,7 @@ export default function DashboardScreen() {
             iconBg="#eff6ff"
           />
 
-          {/* Vadesi Geçmiş Alacak */}
+          {/* Vadesi Geçmiş Alacak (FAZ 7) */}
           <KpiCard
             title="Gecikmiş Alacak"
             value={formatCurrency(finance?.overdueTotal ?? 0)}
@@ -307,6 +307,10 @@ export default function DashboardScreen() {
             icon="alert-circle-outline"
             iconColor="#ef4444"
             iconBg="#fef2f2"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              navigation.navigate('Finance', { initialTab: 'overdue' });
+            }}
           />
 
           {/* Bekleyen Siparişler */}
@@ -346,7 +350,7 @@ export default function DashboardScreen() {
             navigation.navigate('SalesTab');
           }}
           onAddPayment={() => {
-            navigation.navigate('SalesTab');
+            navigation.navigate('Finance', { initialTab: 'payments' });
           }}
           onPendingApprovals={() => {
             navigation.navigate('ApprovalsTab');
@@ -357,12 +361,42 @@ export default function DashboardScreen() {
           }}
         />
 
-        {/* ── Saha ve Üretim Operasyonları (FAZ 6) ── */}
+        {/* ── Saha, Üretim, Finans & İK Operasyonları (FAZ 6, 7 & 8) ── */}
         <View style={styles.operationsSection}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Saha ve Üretim Operasyonları
+            Saha, Üretim, Finans & İK Operasyonları
           </Text>
           <View style={styles.operationsGrid}>
+            <TouchableOpacity
+              style={[
+                styles.opActionCard,
+                {
+                  backgroundColor: theme.colors.surfaceCard,
+                  borderColor: theme.colors.borderSubtle,
+                  borderRadius: theme.borderRadius.lg,
+                  ...theme.shadows.sm,
+                },
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                navigation.navigate('Finance', { initialTab: 'overdue' });
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.opIconWrap, { backgroundColor: '#fef2f2' }]}>
+                <Ionicons name="cash" size={20} color="#dc2626" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.opCardTitle, { color: theme.colors.text }]}>
+                  Hızlı Finans & Tahsilat
+                </Text>
+                <Text style={[styles.opCardDesc, { color: theme.colors.textMuted }]}>
+                  Vadesi geçen alacaklar, sahada makbuz kesimi & e-belge
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[
                 styles.opActionCard,
@@ -418,6 +452,36 @@ export default function DashboardScreen() {
                 </Text>
                 <Text style={[styles.opCardDesc, { color: theme.colors.textMuted }]}>
                   İş emirleri, dijital kronometre, fire & çıktı girişi
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.opActionCard,
+                {
+                  backgroundColor: theme.colors.surfaceCard,
+                  borderColor: theme.colors.borderSubtle,
+                  borderRadius: theme.borderRadius.lg,
+                  ...theme.shadows.sm,
+                },
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                navigation.navigate('EmployeePortal');
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.opIconWrap, { backgroundColor: '#faf5ff' }]}>
+                <Ionicons name="people" size={20} color="#8b5cf6" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.opCardTitle, { color: theme.colors.text }]}>
+                  Çalışan Self-Servisi (İK & Bordro)
+                </Text>
+                <Text style={[styles.opCardDesc, { color: theme.colors.textMuted }]}>
+                  İzin talepleri, vardiya & mesai, biyometrik maaş bordrosu
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />

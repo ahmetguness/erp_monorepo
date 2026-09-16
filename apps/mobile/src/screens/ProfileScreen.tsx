@@ -112,6 +112,92 @@ export default function ProfileScreen({ navigation }: Props) {
           </View>
         </Card>
 
+        {/* Employee Self-Service (FAZ 8) */}
+        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
+          Çalışan Self-Servisi (İK)
+        </Text>
+
+        <Card variant="outlined" style={styles.settingsCard}>
+          <TouchableOpacity
+            style={styles.settingRow}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (navigation?.navigate) {
+                navigation.navigate('EmployeePortal', { initialTab: 'leaves' });
+              }
+            }}
+          >
+            <View style={styles.settingLeft}>
+              <View style={[styles.iconCircle, { backgroundColor: '#e0f2fe' }]}>
+                <Ionicons name="calendar-outline" size={20} color="#0284c7" />
+              </View>
+              <View>
+                <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
+                  İzinlerim & Bakiye
+                </Text>
+                <Text style={[styles.settingHint, { color: theme.colors.textMuted }]}>
+                  Yıllık izin talebi ve onay durumları
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: theme.colors.borderSubtle }]} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (navigation?.navigate) {
+                navigation.navigate('EmployeePortal', { initialTab: 'shifts' });
+              }
+            }}
+          >
+            <View style={styles.settingLeft}>
+              <View style={[styles.iconCircle, { backgroundColor: '#fef3c7' }]}>
+                <Ionicons name="time-outline" size={20} color="#d97706" />
+              </View>
+              <View>
+                <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
+                  Vardiya & Mesai Takibi
+                </Text>
+                <Text style={[styles.settingHint, { color: theme.colors.textMuted }]}>
+                  Dijital puantaj damgası ve haftalık çizelge
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: theme.colors.borderSubtle }]} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (navigation?.navigate) {
+                navigation.navigate('EmployeePortal', { initialTab: 'payrolls' });
+              }
+            }}
+          >
+            <View style={styles.settingLeft}>
+              <View style={[styles.iconCircle, { backgroundColor: '#ede9fe' }]}>
+                <Ionicons name="receipt-outline" size={20} color="#7c3aed" />
+              </View>
+              <View>
+                <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
+                  Maaş Bordrolarım
+                </Text>
+                <Text style={[styles.settingHint, { color: theme.colors.textMuted }]}>
+                  Biyometrik kilitli maaş pusulası dökümü
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+          </TouchableOpacity>
+        </Card>
+
         {/* Tenant Switching Section */}
         <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
           İşletme Bilgileri

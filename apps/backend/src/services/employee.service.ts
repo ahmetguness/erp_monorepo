@@ -8,6 +8,7 @@ export interface EmployeeListInput {
   skip: number;
   department?: string;
   isActive?: string;
+  search?: string;
 }
 
 export interface CreateEmployeeInput {
@@ -37,11 +38,21 @@ export interface UpdateEmployeeInput {
 }
 
 export async function listEmployees(input: EmployeeListInput) {
+  const search = input.search?.trim();
   const where = {
     tenantId: input.tenantId,
     deletedAt: null,
     ...(input.department && { department: input.department }),
     ...(input.isActive !== undefined && { isActive: input.isActive === 'true' }),
+    ...(search && {
+      OR: [
+        { firstName: { contains: search, mode: 'insensitive' as const } },
+        { lastName: { contains: search, mode: 'insensitive' as const } },
+        { email: { contains: search, mode: 'insensitive' as const } },
+        { position: { contains: search, mode: 'insensitive' as const } },
+        { department: { contains: search, mode: 'insensitive' as const } },
+      ],
+    }),
   };
 
   const [total, data] = await prisma.$transaction([

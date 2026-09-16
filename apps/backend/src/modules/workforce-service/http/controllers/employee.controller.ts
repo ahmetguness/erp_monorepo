@@ -21,6 +21,7 @@ export const EmployeeController = {
     const { page, limit, skip } = getPaginationParams(c, 20);
     const department = c.req.query("department");
     const isActive = c.req.query("isActive");
+    const search = c.req.query("search");
 
     const result = await listEmployees({
       tenantId,
@@ -29,6 +30,7 @@ export const EmployeeController = {
       skip,
       department,
       isActive,
+      search,
     });
 
     return c.json(result);
