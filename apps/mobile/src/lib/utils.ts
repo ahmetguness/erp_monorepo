@@ -1,10 +1,10 @@
 /**
  * Formats a number as Turkish Lira currency.
  */
-export function formatCurrency(value: number): string {
+export function formatCurrency(value: number, currencyCode: string = 'TRY'): string {
   return new Intl.NumberFormat('tr-TR', {
     style: 'currency',
-    currency: 'TRY',
+    currency: currencyCode || 'TRY',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);

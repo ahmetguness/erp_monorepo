@@ -175,6 +175,31 @@ export const cartOrderSlice = createSlice({
       state.lastCreatedOrderNumber = action.payload;
     },
 
+    loadItemsIntoCart: (
+      state,
+      action: PayloadAction<{
+        contact?: CustomerRef | null;
+        items: CartOrderItem[];
+        generalDiscountPercent?: number;
+        notes?: string;
+      }>
+    ) => {
+      if (action.payload.contact) {
+        state.selectedContact = action.payload.contact;
+        if (action.payload.contact.address && !state.deliveryAddress) {
+          state.deliveryAddress = action.payload.contact.address;
+        }
+      }
+      state.items = {};
+      action.payload.items.forEach((item) => {
+        state.items[item.productId] = item;
+      });
+      state.generalDiscountPercent = action.payload.generalDiscountPercent || 0;
+      if (action.payload.notes) {
+        state.notes = action.payload.notes;
+      }
+    },
+
     clearCartItems: (state) => {
       state.items = {};
       state.generalDiscountPercent = 0;
@@ -197,6 +222,7 @@ export const {
   setGeneralDiscountPercent,
   setOrderMetadata,
   setLastCreatedOrderNumber,
+  loadItemsIntoCart,
   clearCartItems,
   resetCartOrder,
 } = cartOrderSlice.actions;

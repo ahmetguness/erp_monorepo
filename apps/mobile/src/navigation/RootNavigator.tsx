@@ -10,6 +10,7 @@ import FieldServiceScreen from '../screens/FieldServiceScreen';
 import ProductionScreen from '../screens/ProductionScreen';
 import FinanceScreen from '../screens/FinanceScreen';
 import EmployeePortalScreen from '../screens/EmployeePortalScreen';
+import ProcurementScreen from '../screens/ProcurementScreen';
 import CopilotScreen from '../screens/CopilotScreen';
 import { BiometricLockView } from '../components/BiometricLockView';
 import {
@@ -147,6 +148,11 @@ export const RootNavigator: React.FC = () => {
               <Stack.Screen
                 name="EmployeePortal"
                 component={EmployeePortalScreen}
+                options={{ presentation: 'card', animation: 'slide_from_right' }}
+              />
+              <Stack.Screen
+                name="Procurement"
+                component={ProcurementScreen}
                 options={{ presentation: 'card', animation: 'slide_from_right' }}
               />
               <Stack.Screen

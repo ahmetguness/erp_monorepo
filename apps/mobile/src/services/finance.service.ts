@@ -205,6 +205,7 @@ export const CashAccountSchema = z.object({
   name: z.string(),
   currencyCode: z.string().default('TRY'),
   isActive: z.boolean().default(true),
+  balance: z.coerce.number().optional().default(0),
 });
 export type CashAccount = z.infer<typeof CashAccountSchema>;
 
@@ -217,6 +218,7 @@ export const BankAccountSchema = z.object({
   branchName: z.string().nullable().optional(),
   currencyCode: z.string().default('TRY'),
   isActive: z.boolean().default(true),
+  balance: z.coerce.number().optional().default(0),
 });
 export type BankAccount = z.infer<typeof BankAccountSchema>;
 
@@ -515,4 +517,392 @@ export async function createPaymentReceipt(input: CreatePaymentInput): Promise<P
   const raw = res.data?.data ?? res.data;
   const parsed = PaymentRecordSchema.safeParse(raw);
   return parsed.success ? parsed.data : (raw as PaymentRecord);
+}
+
+// ─────────────────────────────────────────────
+// FAZ 14: Checks & Promissory Notes (Çek & Senet)
+// ─────────────────────────────────────────────
+
+export const CheckNoteTypeSchema = z.enum(['CHECK', 'PROMISSORY_NOTE']);
+export type CheckNoteType = z.infer<typeof CheckNoteTypeSchema>;
+
+export const CheckStatusSchema = z.enum([
+  'PENDING',
+  'DEPOSITED',
+  'CLEARED',
+  'BOUNCED',
+  'CANCELLED',
+]);
+export type CheckStatus = z.infer<typeof CheckStatusSchema>;
+
+export const CheckPromissoryNoteSchema = z.object({
+  id: z.string(),
+  tenantId: z.string().optional(),
+  contactId: z.string().nullable().optional(),
+  type: CheckNoteTypeSchema.default('CHECK'),
+  number: z.string(),
+  amount: z.coerce.number().default(0),
+  currencyCode: z.string().default('TRY'),
+  issueDate: z.string(),
+  dueDate: z.string(),
+  bankName: z.string().nullable().optional(),
+  status: CheckStatusSchema.default('PENDING'),
+  notes: z.string().nullable().optional(),
+  frontPhotoUri: z.string().nullable().optional(),
+  backPhotoUri: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  contact: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      code: z.string().nullable().optional(),
+      phone: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+});
+export type CheckPromissoryNote = z.infer<typeof CheckPromissoryNoteSchema>;
+
+export interface CreateCheckNoteInput {
+  contactId?: string;
+  type: CheckNoteType;
+  number: string;
+  amount: number;
+  currencyCode?: string;
+  issueDate: string;
+  dueDate: string;
+  bankName?: string;
+  notes?: string;
+  frontPhotoUri?: string;
+  backPhotoUri?: string;
+}
+
+/**
+ * Portföydeki çek ve senetleri listeler
+ */
+export async function getCheckPromissoryNotes(params?: {
+  page?: number;
+  limit?: number;
+  type?: CheckNoteType;
+  status?: CheckStatus;
+  contactId?: string;
+  search?: string;
+}): Promise<{ items: CheckPromissoryNote[]; total: number }> {
+  try {
+    const res = await apiClient.get('/api/check-promissory', { params });
+    const rawList = Array.isArray(res.data?.data) ? res.data.data : [];
+    const parsed = z.array(CheckPromissoryNoteSchema).safeParse(rawList);
+    return {
+      items: parsed.success ? parsed.data : rawList,
+      total: res.data?.meta?.total ?? rawList.length,
+    };
+  } catch {
+    return { items: [], total: 0 };
+  }
+}
+
+/**
+ * Portföye yeni çek/senet kaydeder
+ */
+export async function createCheckPromissoryNote(input: CreateCheckNoteInput): Promise<CheckPromissoryNote> {
+  let finalNotes = input.notes || '';
+  if (input.frontPhotoUri || input.backPhotoUri) {
+    const photoTag = `[PHOTOS: front=${input.frontPhotoUri || ''}; back=${input.backPhotoUri || ''}]`;
+    finalNotes = finalNotes ? `${finalNotes}\n${photoTag}` : photoTag;
+  }
+
+  const payload = {
+    contactId: input.contactId || undefined,
+    type: input.type,
+    number: input.number,
+    amount: Math.max(0.01, input.amount),
+    currencyCode: input.currencyCode || 'TRY',
+    issueDate: input.issueDate,
+    dueDate: input.dueDate,
+    bankName: input.bankName || undefined,
+    notes: finalNotes || undefined,
+  };
+
+  const res = await apiClient.post('/api/check-promissory', payload);
+  const raw = res.data?.data ?? res.data;
+  const parsed = CheckPromissoryNoteSchema.safeParse(raw);
+  return parsed.success ? parsed.data : (raw as CheckPromissoryNote);
+}
+
+/**
+ * Çek/senet durumunu günceller (State machine: PENDING -> DEPOSITED -> CLEARED / BOUNCED)
+ */
+export async function updateCheckPromissoryStatus(
+  id: string,
+  status: CheckStatus
+): Promise<CheckPromissoryNote> {
+  const res = await apiClient.patch(`/api/check-promissory/${id}/status`, { status });
+  const raw = res.data?.data ?? res.data;
+  const parsed = CheckPromissoryNoteSchema.safeParse(raw);
+  return parsed.success ? parsed.data : (raw as CheckPromissoryNote);
+}
+
+/**
+ * Bekleyen çek/senedi siler
+ */
+export async function deleteCheckPromissoryNote(id: string): Promise<boolean> {
+  await apiClient.delete(`/api/check-promissory/${id}`);
+  return true;
+}
+
+// ─────────────────────────────────────────────
+// FAZ 14: Field Expense Management (Saha Masraf & Harcırah)
+// ─────────────────────────────────────────────
+
+export const ExpenseCategorySchema = z.enum([
+  'FOOD',
+  'FUEL',
+  'ACCOMMODATION',
+  'TRANSPORT',
+  'HOSPITALITY',
+  'OFFICE',
+  'OTHER',
+]);
+export type ExpenseCategory = z.infer<typeof ExpenseCategorySchema>;
+
+export const ExpensePaymentMethodSchema = z.enum(['COMPANY_CARD', 'OUT_OF_POCKET']);
+export type ExpensePaymentMethod = z.infer<typeof ExpensePaymentMethodSchema>;
+
+export const ExpenseStatusSchema = z.enum([
+  'DRAFT',
+  'PENDING_APPROVAL',
+  'APPROVED',
+  'REJECTED',
+  'REIMBURSED',
+]);
+export type ExpenseStatus = z.infer<typeof ExpenseStatusSchema>;
+
+export const ExpenseRecordSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  category: ExpenseCategorySchema.default('OTHER'),
+  amount: z.coerce.number().default(0),
+  taxRate: z.coerce.number().default(20),
+  taxAmount: z.coerce.number().default(0),
+  totalAmount: z.coerce.number().default(0),
+  paymentMethod: ExpensePaymentMethodSchema.default('OUT_OF_POCKET'),
+  receiptPhotoUri: z.string().nullable().optional(),
+  status: ExpenseStatusSchema.default('PENDING_APPROVAL'),
+  date: z.string(),
+  notes: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
+});
+export type ExpenseRecord = z.infer<typeof ExpenseRecordSchema>;
+
+export interface CreateExpenseInput {
+  title: string;
+  category: ExpenseCategory;
+  amount: number;
+  taxRate?: number;
+  paymentMethod: ExpensePaymentMethod;
+  receiptPhotoUri?: string;
+  date: string;
+  notes?: string;
+}
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+const EXPENSES_STORAGE_KEY = '@axon_mobile_expense_records';
+
+/**
+ * Saha masraf fişlerini listeler
+ */
+export async function getExpenses(params?: {
+  category?: ExpenseCategory;
+  status?: ExpenseStatus;
+  search?: string;
+}): Promise<ExpenseRecord[]> {
+  try {
+    const rawStored = await AsyncStorage.getItem(EXPENSES_STORAGE_KEY);
+    let list: ExpenseRecord[] = rawStored ? JSON.parse(rawStored) : [];
+
+    if (params?.category) {
+      list = list.filter((e) => e.category === params.category);
+    }
+    if (params?.status) {
+      list = list.filter((e) => e.status === params.status);
+    }
+    if (params?.search?.trim()) {
+      const q = params.search.toLowerCase().trim();
+      list = list.filter(
+        (e) => e.title.toLowerCase().includes(q) || (e.notes && e.notes.toLowerCase().includes(q))
+      );
+    }
+
+    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Yeni masraf fişi oluşturur ve onaya sunar
+ */
+export async function createExpenseRecord(input: CreateExpenseInput): Promise<ExpenseRecord> {
+  const taxRate = input.taxRate !== undefined ? input.taxRate : 20;
+  const taxAmount = (input.amount * taxRate) / 100;
+  const totalAmount = input.amount + taxAmount;
+
+  const newRecord: ExpenseRecord = {
+    id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    title: input.title.trim(),
+    category: input.category,
+    amount: input.amount,
+    taxRate,
+    taxAmount,
+    totalAmount,
+    paymentMethod: input.paymentMethod,
+    receiptPhotoUri: input.receiptPhotoUri || null,
+    status: 'PENDING_APPROVAL',
+    date: input.date,
+    notes: input.notes?.trim() || null,
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const existing = await getExpenses();
+    const updated = [newRecord, ...existing];
+    await AsyncStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(updated));
+
+    // Also notify/submit to collaboration endpoint if available
+    apiClient
+      .post('/api/record-collaboration/EXPENSE/general/entries', {
+        content: `[MASRAF FİŞİ GİRİLDİ] ${newRecord.title} - ${totalAmount} TL (${newRecord.category})`,
+        activityType: 'NOTE',
+      })
+      .catch(() => {});
+  } catch (err) {
+    console.warn('[finance.service] createExpenseRecord storage error:', err);
+  }
+
+  return newRecord;
+}
+
+/**
+ * Masraf fişi durumunu günceller (Yönetici onayı)
+ */
+export async function updateExpenseStatus(id: string, status: ExpenseStatus): Promise<ExpenseRecord | null> {
+  try {
+    const list = await getExpenses();
+    let updatedRecord: ExpenseRecord | null = null;
+    const updatedList = list.map((item) => {
+      if (item.id === id) {
+        updatedRecord = { ...item, status };
+        return updatedRecord;
+      }
+      return item;
+    });
+    await AsyncStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(updatedList));
+    return updatedRecord;
+  } catch {
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────
+// FAZ 14: Treasury (Banka & Kasa Hareket Dökümü)
+// ─────────────────────────────────────────────
+
+export const BankTransactionSchema = z.object({
+  id: z.string(),
+  tenantId: z.string().optional(),
+  bankAccountId: z.string(),
+  type: z.enum(['INCOMING', 'OUTGOING', 'TRANSFER']).default('INCOMING'),
+  amount: z.coerce.number().default(0),
+  balanceAfter: z.coerce.number().default(0),
+  date: z.string(),
+  description: z.string().nullable().optional(),
+  reference: z.string().nullable().optional(),
+  senderName: z.string().nullable().optional(),
+  senderIban: z.string().nullable().optional(),
+  matched: z.boolean().optional().default(false),
+});
+export type BankTransaction = z.infer<typeof BankTransactionSchema>;
+
+/**
+ * Banka hesabı hareketlerini (son 30 gün) listeler
+ */
+export async function getBankTransactions(params?: {
+  bankAccountId?: string;
+  limit?: number;
+  dateFrom?: string;
+  dateTo?: string;
+}): Promise<BankTransaction[]> {
+  try {
+    const res = await apiClient.get('/api/bank-transactions', { params });
+    const raw = Array.isArray(res.data?.data) ? res.data.data : [];
+    const parsed = z.array(BankTransactionSchema).safeParse(raw);
+    return parsed.success ? parsed.data : raw;
+  } catch {
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────
+// FAZ 14: Contact Account Statement (Cari Hesap Ekstresi)
+// ─────────────────────────────────────────────
+
+export const AccountStatementRowSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  description: z.string().nullable().optional(),
+  documentNumber: z.string().nullable().optional(),
+  type: z.string().nullable().optional(),
+  debit: z.coerce.number().default(0),
+  credit: z.coerce.number().default(0),
+  balance: z.coerce.number().default(0),
+});
+export type AccountStatementRow = z.infer<typeof AccountStatementRowSchema>;
+
+export const AccountStatementSummarySchema = z.object({
+  totalDebit: z.coerce.number().default(0),
+  totalCredit: z.coerce.number().default(0),
+  calculatedBalance: z.coerce.number().default(0),
+  isBalanced: z.boolean().default(true),
+  difference: z.coerce.number().optional().default(0),
+});
+export type AccountStatementSummary = z.infer<typeof AccountStatementSummarySchema>;
+
+/**
+ * Müşteri veya tedarikçinin resmi cari hesap ekstresini getirir
+ */
+export async function getContactAccountStatement(
+  contactId: string,
+  params?: { dateFrom?: string; dateTo?: string; limit?: number }
+): Promise<{ rows: AccountStatementRow[]; summary: AccountStatementSummary }> {
+  try {
+    const res = await apiClient.get(`/api/accounting/account-statement/${contactId}`, { params });
+    const rawRows = Array.isArray(res.data?.data) ? res.data.data : [];
+    const parsedRows = z.array(AccountStatementRowSchema).safeParse(rawRows);
+    const parsedSummary = AccountStatementSummarySchema.safeParse(res.data?.meta);
+
+    return {
+      rows: parsedRows.success ? parsedRows.data : rawRows,
+      summary: parsedSummary.success
+        ? parsedSummary.data
+        : {
+            totalDebit: 0,
+            totalCredit: 0,
+            calculatedBalance: 0,
+            isBalanced: true,
+            difference: 0,
+          },
+    };
+  } catch {
+    return {
+      rows: [],
+      summary: {
+        totalDebit: 0,
+        totalCredit: 0,
+        calculatedBalance: 0,
+        isBalanced: true,
+        difference: 0,
+      },
+    };
+  }
 }

@@ -320,6 +320,10 @@ export default function DashboardScreen() {
             icon="wallet-outline"
             iconColor="#2563eb"
             iconBg="#eff6ff"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              navigation.navigate('Finance', { initialTab: 'treasury' });
+            }}
           />
 
           {/* Vadesi Geçmiş Alacak (FAZ 7) */}
@@ -415,10 +419,10 @@ export default function DashboardScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.opCardTitle, { color: theme.colors.text }]}>
-                  Hızlı Finans & Tahsilat
+                  Finans, Çek & Masraf Yönetimi
                 </Text>
                 <Text style={[styles.opCardDesc, { color: theme.colors.textMuted }]}>
-                  Vadesi geçen alacaklar, sahada makbuz kesimi & e-belge
+                  Alacak takibi, çek/senet, saha masrafları & banka/kasa
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
@@ -509,6 +513,37 @@ export default function DashboardScreen() {
                 </Text>
                 <Text style={[styles.opCardDesc, { color: theme.colors.textMuted }]}>
                   İzin talepleri, vardiya & mesai, biyometrik maaş bordrosu
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+
+            {/* FAZ 13: Satın Alma & Tedarik Zinciri */}
+            <TouchableOpacity
+              style={[
+                styles.opActionCard,
+                {
+                  backgroundColor: theme.colors.surfaceCard,
+                  borderColor: theme.colors.borderSubtle,
+                  borderRadius: theme.borderRadius.lg,
+                  ...theme.shadows.sm,
+                },
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                navigation.navigate('Procurement');
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.opIconWrap, { backgroundColor: '#f0fdf4' }]}>
+                <Ionicons name="cart" size={20} color="#16a34a" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.opCardTitle, { color: theme.colors.text }]}>
+                  Satın Alma & Tedarik Zinciri
+                </Text>
+                <Text style={[styles.opCardDesc, { color: theme.colors.textMuted }]}>
+                  Tedarikçiler, satın alma talepleri (PR), açık siparişler (PO) & mal kabul
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />

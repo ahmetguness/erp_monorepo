@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,12 +15,14 @@ import { useTheme } from '../../theme';
 import { ContactDetail } from '../../services/contact.service';
 import { Badge } from '../common/Badge';
 import { formatCurrency, formatDate } from '../../lib/utils';
+import { AccountStatementModal } from '../finance/AccountStatementModal';
 
 export interface Contact360ModalProps {
   visible: boolean;
   contact: ContactDetail | null;
   onClose: () => void;
   onStartOrder: (contact: ContactDetail) => void;
+  onStartVisit?: (contact: ContactDetail) => void;
 }
 
 export const Contact360Modal: React.FC<Contact360ModalProps> = ({
@@ -28,11 +30,13 @@ export const Contact360Modal: React.FC<Contact360ModalProps> = ({
   contact,
   onClose,
   onStartOrder,
+  onStartVisit,
 }) => {
   const { theme } = useTheme();
 
   if (!contact) return null;
 
+  const [isStatementModalVisible, setIsStatementModalVisible] = useState(false);
   const currentBalance = contact.financials?.currentBalance ?? 0;
   const isReceivable = currentBalance > 0;
   const isPayable = currentBalance < 0;
@@ -341,6 +345,30 @@ export const Contact360Modal: React.FC<Contact360ModalProps> = ({
                 <Text style={[styles.subStatLbl, { color: theme.colors.textMuted }]}>Açık Fatura</Text>
               </View>
             </View>
+
+            {/* FAZ 14.4: Cari Hesap Ekstresi (PDF / Paylaş) */}
+            <TouchableOpacity
+              style={[
+                styles.statementBtn,
+                {
+                  backgroundColor: theme.colors.primary + '12',
+                  borderColor: theme.colors.primary + '35',
+                },
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                setIsStatementModalVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.statementBtnLeft}>
+                <Ionicons name="receipt-outline" size={17} color={theme.colors.primary} />
+                <Text style={[styles.statementBtnText, { color: theme.colors.primary }]}>
+                  Cari Hesap Ekstresi (PDF / Paylaş)
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={15} color={theme.colors.primary} />
+            </TouchableOpacity>
           </View>
 
           {/* Contact Details Card */}
@@ -458,15 +486,38 @@ export const Contact360Modal: React.FC<Contact360ModalProps> = ({
             },
           ]}
         >
+          {onStartVisit && (
+            <TouchableOpacity
+              style={styles.startVisitBtn}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                onClose();
+                onStartVisit(contact);
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="location" size={17} color="#22c55e" />
+              <Text style={styles.startVisitBtnText}>Ziyaret</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={[styles.startOrderBtn, { backgroundColor: theme.colors.primary }]}
             onPress={handleStartOrderPress}
             activeOpacity={0.8}
           >
             <Ionicons name="cart" size={18} color="#ffffff" />
-            <Text style={styles.startOrderBtnText}>Bu Müşteri İçin Sipariş Başlat</Text>
+            <Text style={styles.startOrderBtnText}>Sipariş Başlat</Text>
           </TouchableOpacity>
         </View>
+
+        {/* FAZ 14.4: Cari Hesap Ekstresi Modal */}
+        <AccountStatementModal
+          visible={isStatementModalVisible}
+          contactId={contact.id}
+          contactName={contact.name}
+          onClose={() => setIsStatementModalVisible(false)}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -641,6 +692,25 @@ const styles = StyleSheet.create({
     width: 1,
     height: 24,
   },
+  statementBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  statementBtnLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statementBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -689,8 +759,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  startVisitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#22c55e',
+    backgroundColor: '#0f172a',
+  },
+  startVisitBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   startOrderBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

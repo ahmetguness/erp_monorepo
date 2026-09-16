@@ -24,6 +24,7 @@ import {
   updateItemDiscount,
   removeItemFromCart,
   clearCartItems,
+  loadItemsIntoCart,
   selectCartOrder,
   selectCartContact,
   selectCartItemsList,
@@ -42,7 +43,18 @@ import {
   lookupProductByBarcode,
 } from '../services/inventory.service';
 import { apiClient } from '../lib/api-client';
-import { SalesOrder } from '../services/sales.service';
+import {
+  SalesOrder,
+  SalesQuote,
+  SalesOrderStatus,
+  QuoteStatus,
+  FieldVisitData,
+  getSalesOrders,
+  getSalesQuotes,
+  convertQuoteToOrder,
+  startLocalVisitSession,
+  getActiveVisitSession,
+} from '../services/sales.service';
 import {
   ContactCard,
   Contact360Modal,
@@ -50,12 +62,20 @@ import {
   CartSummaryBar,
   OrderCheckoutModal,
   OrderSuccessModal,
+  SalesTargetBanner,
+  SalesOrderCard,
+  OrderDetailModal,
+  SalesQuoteCard,
+  QuoteDetailModal,
+  CreateQuoteModal,
+  ActiveVisitBar,
+  FieldVisitModal,
 } from '../components/sales';
 import { BarcodeScannerModal } from '../components/scanner';
 import { Badge } from '../components/common/Badge';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, formatDate } from '../lib/utils';
 
-type SalesSegmentTab = 'CUSTOMERS' | 'CATALOG' | 'CART';
+type SalesSegmentTab = 'CUSTOMERS' | 'ORDERS' | 'QUOTES' | 'CATALOG' | 'CART';
 
 interface SegmentOption {
   key: SalesSegmentTab;
@@ -64,9 +84,11 @@ interface SegmentOption {
 }
 
 const SEGMENT_OPTIONS: SegmentOption[] = [
-  { key: 'CUSTOMERS', label: 'Müşteri 360', icon: 'people-outline' },
+  { key: 'CUSTOMERS', label: 'Müşteri', icon: 'people-outline' },
+  { key: 'ORDERS', label: 'Sipariş', icon: 'receipt-outline' },
+  { key: 'QUOTES', label: 'Teklif', icon: 'document-text-outline' },
   { key: 'CATALOG', label: 'Katalog', icon: 'grid-outline' },
-  { key: 'CART', label: 'Sipariş Sepeti', icon: 'cart-outline' },
+  { key: 'CART', label: 'Sepet', icon: 'cart-outline' },
 ];
 
 export default function SalesScreen() {
@@ -95,6 +117,30 @@ export default function SalesScreen() {
   const [products, setProducts] = useState<ProductLookup[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [productSearchQuery, setProductSearchQuery] = useState('');
+
+  // Orders State (FAZ 12.1)
+  const [orders, setOrders] = useState<SalesOrder[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'ALL' | SalesOrderStatus>('ALL');
+  const [selectedOrderForDetail, setSelectedOrderForDetail] = useState<SalesOrder | null>(null);
+  const [orderDetailVisible, setOrderDetailVisible] = useState(false);
+
+  // Quotes State (FAZ 12.2)
+  const [quotes, setQuotes] = useState<SalesQuote[]>([]);
+  const [isLoadingQuotes, setIsLoadingQuotes] = useState(false);
+  const [quoteSearchQuery, setQuoteSearchQuery] = useState('');
+  const [quoteStatusFilter, setQuoteStatusFilter] = useState<'ALL' | QuoteStatus>('ALL');
+  const [selectedQuoteForDetail, setSelectedQuoteForDetail] = useState<SalesQuote | null>(null);
+  const [quoteDetailVisible, setQuoteDetailVisible] = useState(false);
+  const [createQuoteVisible, setCreateQuoteVisible] = useState(false);
+
+  // Field Visit State (FAZ 12.3)
+  const [activeVisit, setActiveVisit] = useState<FieldVisitData | null>(null);
+  const [visitModalVisible, setVisitModalVisible] = useState(false);
+
+  // Target Banner Refresh Trigger (FAZ 12.4)
+  const [targetRefreshTrigger, setTargetRefreshTrigger] = useState(0);
 
   // Scanner & Order Modals State
   const [scannerVisible, setScannerVisible] = useState(false);
@@ -161,6 +207,152 @@ export default function SalesScreen() {
       loadProducts();
     }
   }, [activeTab, loadProducts]);
+
+  // ─────────────────────────────────────────────
+  // Active Visit on Mount (FAZ 12.3)
+  // ─────────────────────────────────────────────
+
+  useEffect(() => {
+    getActiveVisitSession().then(setActiveVisit).catch(() => {});
+  }, []);
+
+  // ─────────────────────────────────────────────
+  // Fetch Sales Orders (FAZ 12.1)
+  // ─────────────────────────────────────────────
+
+  const loadOrders = useCallback(async () => {
+    setIsLoadingOrders(true);
+    try {
+      const params: any = { limit: 50 };
+      if (orderStatusFilter !== 'ALL') {
+        params.status = orderStatusFilter;
+      }
+      if (orderSearchQuery.trim()) {
+        params.search = orderSearchQuery.trim();
+      }
+      const res = await getSalesOrders(params);
+      setOrders(res.items);
+    } catch {
+      // Non-fatal
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  }, [orderStatusFilter, orderSearchQuery]);
+
+  useEffect(() => {
+    if (activeTab === 'ORDERS') {
+      loadOrders();
+    }
+  }, [activeTab, loadOrders]);
+
+  // ─────────────────────────────────────────────
+  // Fetch Sales Quotes (FAZ 12.2)
+  // ─────────────────────────────────────────────
+
+  const loadQuotes = useCallback(async () => {
+    setIsLoadingQuotes(true);
+    try {
+      const params: any = { limit: 50 };
+      if (quoteStatusFilter !== 'ALL') {
+        params.status = quoteStatusFilter;
+      }
+      if (quoteSearchQuery.trim()) {
+        params.search = quoteSearchQuery.trim();
+      }
+      const res = await getSalesQuotes(params);
+      setQuotes(res.items);
+    } catch {
+      // Non-fatal
+    } finally {
+      setIsLoadingQuotes(false);
+    }
+  }, [quoteStatusFilter, quoteSearchQuery]);
+
+  useEffect(() => {
+    if (activeTab === 'QUOTES') {
+      loadQuotes();
+    }
+  }, [activeTab, loadQuotes]);
+
+  // ─────────────────────────────────────────────
+  // Handlers: Reorder, Quote Convert, Field Visit
+  // ─────────────────────────────────────────────
+
+  const handleReorderOrder = (order: SalesOrder) => {
+    if (!order.items || order.items.length === 0) {
+      Alert.alert('Kalem Yok', 'Bu siparişte tekrarlanacak ürün kalemi bulunamadı.');
+      return;
+    }
+
+    const customerRef: CustomerRef | null = order.contact
+      ? {
+          id: order.contact.id,
+          name: order.contact.name,
+          phone: order.contact.phone || null,
+        }
+      : selectedCustomer;
+
+    const cartItemsToAdd = order.items.map((it) => ({
+      productId: it.productId,
+      code: it.product?.code || 'URUN',
+      name: it.product?.name || it.description || 'Ürün',
+      barcode: it.product?.barcode || null,
+      unitPrice: it.unitPrice,
+      taxRate: it.taxRate,
+      discount: it.discount,
+      quantity: it.quantity,
+      unit: 'AD',
+    }));
+
+    dispatch(
+      loadItemsIntoCart({
+        contact: customerRef,
+        items: cartItemsToAdd,
+        notes: order.notes || '',
+      })
+    );
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setActiveTab('CART');
+    Alert.alert(
+      'Sepete Yüklendi',
+      `"${order.number}" numaralı siparişin ${cartItemsToAdd.length} kalemi sepete aktarıldı. Sepet sekmesinden inceleyebilirsiniz.`
+    );
+  };
+
+  const handleConvertQuoteDirectly = async (quote: SalesQuote) => {
+    try {
+      const order = await convertQuoteToOrder(quote.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert(
+        'Sipariş Oluşturuldu',
+        `"${quote.number}" numaralı teklif "${order.number}" numaralı resmi siparişe dönüştürüldü.`
+      );
+      loadQuotes();
+      loadOrders();
+      setTargetRefreshTrigger((prev) => prev + 1);
+    } catch (err: any) {
+      Alert.alert('Hata', err?.response?.data?.message || 'Teklif siparişe dönüştürülemedi.');
+    }
+  };
+
+  const handleStartVisit = async (contact: ContactListItem | ContactDetail) => {
+    try {
+      const session = await startLocalVisitSession(contact.id, contact.name);
+      setActiveVisit(session);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert(
+        'Saha Ziyareti Başladı',
+        `"${contact.name}" için saha ziyareti başlatıldı. Görüşmeniz bittiğinde üst bardaki "Bitir" butonuna dokunarak CRM notlarınızı kaydedebilirsiniz.`
+      );
+    } catch {
+      Alert.alert('Hata', 'Ziyaret başlatılamadı.');
+    }
+  };
+
+  const handleVisitCompleted = () => {
+    setActiveVisit(null);
+  };
 
   // ─────────────────────────────────────────────
   // Handlers: Tab Switch
@@ -283,6 +475,8 @@ export default function SalesScreen() {
   const handleOrderSuccess = (order: SalesOrder) => {
     setLastCreatedOrder(order);
     setSuccessModalVisible(true);
+    setTargetRefreshTrigger((prev) => prev + 1);
+    loadOrders();
   };
 
   return (
@@ -348,6 +542,17 @@ export default function SalesScreen() {
           <Text style={styles.cameraBtnText}>Barkod</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ── 12.4: Sales Target Banner ── */}
+      <SalesTargetBanner onRefreshTrigger={targetRefreshTrigger} />
+
+      {/* ── 12.3: Active Field Visit Live Bar ── */}
+      {activeVisit && (
+        <ActiveVisitBar
+          activeVisit={activeVisit}
+          onFinishPress={() => setVisitModalVisible(true)}
+        />
+      )}
 
       {/* ── Module Segment Tabs Bar ── */}
       <View
@@ -521,6 +726,290 @@ export default function SalesScreen() {
                     <Text style={[styles.emptyDesc, { color: theme.colors.textMuted }]}>
                       Aradığınız kriterlere uygun cari hesap kaydı bulunamadı.
                     </Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+        )}
+
+        {/* ── TAB: SİPARİŞ TAKİP MERKEZİ (FAZ 12.1) ── */}
+        {activeTab === 'ORDERS' && (
+          <View style={styles.tabContainer}>
+            <View style={styles.filterStripWrapper}>
+              <View
+                style={[
+                  styles.searchBar,
+                  {
+                    backgroundColor: theme.colors.surfaceCard,
+                    borderColor: theme.colors.borderSubtle,
+                    borderRadius: theme.borderRadius.md,
+                  },
+                ]}
+              >
+                <Ionicons name="search-outline" size={18} color={theme.colors.textMuted} />
+                <TextInput
+                  style={[styles.searchInput, { color: theme.colors.text }]}
+                  placeholder="Sipariş no, müşteri veya açıklama..."
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={orderSearchQuery}
+                  onChangeText={setOrderSearchQuery}
+                  returnKeyType="search"
+                  onSubmitEditing={loadOrders}
+                />
+                {orderSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setOrderSearchQuery('')}>
+                    <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Order Status Filters */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterChipsRow}
+              >
+                {[
+                  { key: 'ALL', label: 'Tümü' },
+                  { key: 'CONFIRMED', label: 'Onaylandı' },
+                  { key: 'PARTIALLY_DELIVERED', label: 'Kısmi Sevk' },
+                  { key: 'DELIVERED', label: 'Teslim Edildi' },
+                  { key: 'DRAFT', label: 'Taslak' },
+                  { key: 'CANCELLED', label: 'İptal' },
+                ].map((f) => {
+                  const isSelected = orderStatusFilter === f.key;
+                  return (
+                    <TouchableOpacity
+                      key={f.key}
+                      style={[
+                        styles.filterChip,
+                        {
+                          backgroundColor: isSelected
+                            ? theme.colors.primary
+                            : theme.colors.surfaceCard,
+                          borderColor: isSelected
+                            ? theme.colors.primary
+                            : theme.colors.borderSubtle,
+                        },
+                      ]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setOrderStatusFilter(f.key as any);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          {
+                            color: isSelected ? '#ffffff' : theme.colors.textSecondary,
+                            fontWeight: isSelected ? '700' : '500',
+                          },
+                        ]}
+                      >
+                        {f.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Orders List */}
+            {isLoadingOrders ? (
+              <View style={styles.centerLoading}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
+                  Sipariş kayıtları yükleniyor...
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={orders}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isLoadingOrders}
+                    onRefresh={loadOrders}
+                    tintColor={theme.colors.primary}
+                  />
+                }
+                renderItem={({ item }) => (
+                  <SalesOrderCard
+                    order={item}
+                    onPress={(ord) => {
+                      setSelectedOrderForDetail(ord);
+                      setOrderDetailVisible(true);
+                    }}
+                    onReorder={handleReorderOrder}
+                  />
+                )}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Ionicons name="receipt-outline" size={48} color={theme.colors.textMuted} />
+                    <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+                      Sipariş Bulunamadı
+                    </Text>
+                    <Text style={[styles.emptyDesc, { color: theme.colors.textMuted }]}>
+                      Seçilen filtreye veya arama kriterine uygun sipariş kaydı bulunamadı.
+                    </Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+        )}
+
+        {/* ── TAB: SATIŞ TEKLİFLERİ (FAZ 12.2) ── */}
+        {activeTab === 'QUOTES' && (
+          <View style={styles.tabContainer}>
+            <View style={styles.filterStripWrapper}>
+              <View style={styles.quoteTopRow}>
+                <View
+                  style={[
+                    styles.searchBar,
+                    {
+                      flex: 1,
+                      backgroundColor: theme.colors.surfaceCard,
+                      borderColor: theme.colors.borderSubtle,
+                      borderRadius: theme.borderRadius.md,
+                    },
+                  ]}
+                >
+                  <Ionicons name="search-outline" size={18} color={theme.colors.textMuted} />
+                  <TextInput
+                    style={[styles.searchInput, { color: theme.colors.text }]}
+                    placeholder="Teklif no veya müşteri..."
+                    placeholderTextColor={theme.colors.textMuted}
+                    value={quoteSearchQuery}
+                    onChangeText={setQuoteSearchQuery}
+                    returnKeyType="search"
+                    onSubmitEditing={loadQuotes}
+                  />
+                  {quoteSearchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setQuoteSearchQuery('')}>
+                      <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.newQuoteBtn, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    setCreateQuoteVisible(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add" size={18} color="#ffffff" />
+                  <Text style={styles.newQuoteBtnText}>Yeni</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Quote Status Filters */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterChipsRow}
+              >
+                {[
+                  { key: 'ALL', label: 'Tümü' },
+                  { key: 'DRAFT', label: 'Taslak' },
+                  { key: 'SENT', label: 'Gönderildi' },
+                  { key: 'ACCEPTED', label: 'Kabul Edildi' },
+                  { key: 'REJECTED', label: 'Reddedildi' },
+                  { key: 'EXPIRED', label: 'Süresi Doldu' },
+                  { key: 'CANCELLED', label: 'İptal' },
+                ].map((f) => {
+                  const isSelected = quoteStatusFilter === f.key;
+                  return (
+                    <TouchableOpacity
+                      key={f.key}
+                      style={[
+                        styles.filterChip,
+                        {
+                          backgroundColor: isSelected
+                            ? theme.colors.primary
+                            : theme.colors.surfaceCard,
+                          borderColor: isSelected
+                            ? theme.colors.primary
+                            : theme.colors.borderSubtle,
+                        },
+                      ]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setQuoteStatusFilter(f.key as any);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          {
+                            color: isSelected ? '#ffffff' : theme.colors.textSecondary,
+                            fontWeight: isSelected ? '700' : '500',
+                          },
+                        ]}
+                      >
+                        {f.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Quotes List */}
+            {isLoadingQuotes ? (
+              <View style={styles.centerLoading}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
+                  Teklif kayıtları yükleniyor...
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={quotes}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isLoadingQuotes}
+                    onRefresh={loadQuotes}
+                    tintColor={theme.colors.primary}
+                  />
+                }
+                renderItem={({ item }) => (
+                  <SalesQuoteCard
+                    quote={item}
+                    onPress={(q) => {
+                      setSelectedQuoteForDetail(q);
+                      setQuoteDetailVisible(true);
+                    }}
+                    onConvertToOrder={handleConvertQuoteDirectly}
+                  />
+                )}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Ionicons name="document-text-outline" size={48} color={theme.colors.textMuted} />
+                    <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+                      Teklif Bulunamadı
+                    </Text>
+                    <Text style={[styles.emptyDesc, { color: theme.colors.textMuted }]}>
+                      Henüz hazırlanmış bir teklif bulunamadı veya arama sonucu boş.
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.emptyCtaBtn, { backgroundColor: theme.colors.primary }]}
+                      onPress={() => setCreateQuoteVisible(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="add" size={16} color="#ffffff" />
+                      <Text style={styles.emptyCtaBtnText}>Yeni Teklif Hazırla</Text>
+                    </TouchableOpacity>
                   </View>
                 }
               />
@@ -949,6 +1438,50 @@ export default function SalesScreen() {
         contact={selectedContactDetail}
         onClose={() => setContact360Visible(false)}
         onStartOrder={handleStartOrderWithContact}
+        onStartVisit={handleStartVisit}
+      />
+
+      {/* Sipariş Detay Modalı (FAZ 12.1) */}
+      <OrderDetailModal
+        visible={orderDetailVisible}
+        order={selectedOrderForDetail}
+        onClose={() => setOrderDetailVisible(false)}
+        onReorder={handleReorderOrder}
+        onOrderCancelled={() => {
+          loadOrders();
+          setTargetRefreshTrigger((p) => p + 1);
+        }}
+      />
+
+      {/* Teklif Detay Modalı (FAZ 12.2) */}
+      <QuoteDetailModal
+        visible={quoteDetailVisible}
+        quote={selectedQuoteForDetail}
+        onClose={() => setQuoteDetailVisible(false)}
+        onConvertedToOrder={() => {
+          loadQuotes();
+          loadOrders();
+          setTargetRefreshTrigger((p) => p + 1);
+        }}
+      />
+
+      {/* Yeni Teklif Hazırlama Modalı (FAZ 12.2) */}
+      <CreateQuoteModal
+        visible={createQuoteVisible}
+        onClose={() => setCreateQuoteVisible(false)}
+        onQuoteCreated={() => {
+          loadQuotes();
+          setActiveTab('QUOTES');
+        }}
+      />
+
+      {/* Saha Ziyareti Tamamlama & CRM Notu Modalı (FAZ 12.3) */}
+      <FieldVisitModal
+        visible={visitModalVisible}
+        visit={activeVisit}
+        onClose={() => setVisitModalVisible(false)}
+        onVisitCompleted={handleVisitCompleted}
+        onVisitCancelled={handleVisitCompleted}
       />
 
       {/* Kamera Barkod Okuyucu Modalı */}
@@ -1382,6 +1915,38 @@ const styles = StyleSheet.create({
   checkoutBtnText: {
     color: '#ffffff',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  quoteTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  newQuoteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  newQuoteBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  emptyCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  emptyCtaBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
     fontWeight: '700',
   },
 });

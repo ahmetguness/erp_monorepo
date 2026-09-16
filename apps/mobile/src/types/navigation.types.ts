@@ -31,11 +31,15 @@ export type RootStackParamList = {
   FieldService: undefined;
   ProductionShopFloor: undefined;
   Finance: {
-    initialTab?: 'overdue' | 'payments' | 'edocuments';
+    initialTab?: 'overdue' | 'payments' | 'edocuments' | 'checks' | 'expenses' | 'treasury';
     contactId?: string;
   } | undefined;
   EmployeePortal: {
     initialTab?: 'leaves' | 'shifts' | 'payrolls';
+  } | undefined;
+  Procurement: {
+    initialTab?: 'ORDERS' | 'REQUESTS' | 'RECEIPT' | 'SUPPLIERS';
+    poId?: string;
   } | undefined;
   Copilot: {
     initialPrompt?: string;
