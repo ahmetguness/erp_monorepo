@@ -1,121 +1,134 @@
-import React from 'react';
+// apps/mobile/src/navigation/MainTabNavigator.tsx
+
+import React, { useState } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { useNavigation } from '@react-navigation/native';
 import DashboardScreen from '../screens/DashboardScreen';
 import ApprovalsScreen from '../screens/ApprovalsScreen';
 import InventoryScreen from '../screens/InventoryScreen';
 import SalesScreen from '../screens/SalesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import { MainTabParamList } from '../types/navigation.types';
-import { useTheme } from '../theme';
+import { MainTabParamList, MainTabNavigationProp } from '../types/navigation.types';
+import { useTheme } from '../design-system/hooks/useTheme';
+import { useResponsive } from '../design-system/hooks/useResponsive';
+import { TabletSideRail } from './TabletSideRail';
+import { PhoneFloatingDock } from './PhoneFloatingDock';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export const MainTabNavigator: React.FC = () => {
   const { theme } = useTheme();
+  const { showSideRail } = useResponsive();
+  const navigation = useNavigation<MainTabNavigationProp>();
+  const [activeTab, setActiveTab] = useState<keyof MainTabParamList>('DashboardTab');
+
+  const handleTabletNavigate = (routeName: keyof MainTabParamList) => {
+    setActiveTab(routeName);
+    navigation.navigate(routeName);
+  };
+
+  if (showSideRail) {
+    return (
+      <View style={[styles.tabletLayout, { backgroundColor: theme.colors.canvas }]}>
+        <TabletSideRail
+          activeRouteName={activeTab}
+          onNavigate={handleTabletNavigate}
+        />
+        <View style={styles.tabletMainContent}>
+          <Tab.Navigator
+            initialRouteName="DashboardTab"
+            screenOptions={{
+              headerShown: false,
+              tabBarStyle: { display: 'none' },
+            }}
+            screenListeners={{
+              state: (e) => {
+                const state = e.data.state;
+                if (state) {
+                  const currentRoute = state.routes[state.index];
+                  if (currentRoute) {
+                    setActiveTab(currentRoute.name as keyof MainTabParamList);
+                  }
+                }
+              },
+            }}
+          >
+            <Tab.Screen
+              name="DashboardTab"
+              component={DashboardScreen}
+              options={{ tabBarLabel: 'Özet' }}
+            />
+            <Tab.Screen
+              name="ApprovalsTab"
+              component={ApprovalsScreen}
+              options={{ tabBarLabel: 'Onaylar' }}
+            />
+            <Tab.Screen
+              name="InventoryTab"
+              component={InventoryScreen}
+              options={{ tabBarLabel: 'Depo' }}
+            />
+            <Tab.Screen
+              name="SalesTab"
+              component={SalesScreen}
+              options={{ tabBarLabel: 'Satış' }}
+            />
+            <Tab.Screen
+              name="ProfileTab"
+              component={ProfileScreen}
+              options={{ tabBarLabel: 'Profil' }}
+            />
+          </Tab.Navigator>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <Tab.Navigator
       initialRouteName="DashboardTab"
+      tabBar={(props) => <PhoneFloatingDock {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: theme.colors.tabBar,
-          borderTopColor: theme.colors.tabBarBorder,
-          borderTopWidth: 1,
-          elevation: 8,
-          shadowColor: '#000000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 6,
-        },
-        tabBarActiveTintColor: theme.colors.tabBarActive,
-        tabBarInactiveTintColor: theme.colors.tabBarInactive,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
-      }}
-      screenListeners={{
-        tabPress: () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        },
       }}
     >
       <Tab.Screen
         name="DashboardTab"
         component={DashboardScreen}
-        options={{
-          tabBarLabel: 'Özet',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'grid' : 'grid-outline'}
-              size={size - 2}
-              color={color}
-            />
-          ),
-        }}
+        options={{ tabBarLabel: 'Özet' }}
       />
       <Tab.Screen
         name="ApprovalsTab"
         component={ApprovalsScreen}
-        options={{
-          tabBarLabel: 'Onaylar',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'checkmark-done-circle' : 'checkmark-done-circle-outline'}
-              size={size - 1}
-              color={color}
-            />
-          ),
-        }}
+        options={{ tabBarLabel: 'Onaylar' }}
       />
       <Tab.Screen
         name="InventoryTab"
         component={InventoryScreen}
-        options={{
-          tabBarLabel: 'Depo',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'barcode' : 'barcode-outline'}
-              size={size - 1}
-              color={color}
-            />
-          ),
-        }}
+        options={{ tabBarLabel: 'Depo' }}
       />
       <Tab.Screen
         name="SalesTab"
         component={SalesScreen}
-        options={{
-          tabBarLabel: 'Satış',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'cart' : 'cart-outline'}
-              size={size - 1}
-              color={color}
-            />
-          ),
-        }}
+        options={{ tabBarLabel: 'Satış' }}
       />
       <Tab.Screen
         name="ProfileTab"
         component={ProfileScreen}
-        options={{
-          tabBarLabel: 'Profil',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'person' : 'person-outline'}
-              size={size - 2}
-              color={color}
-            />
-          ),
-        }}
+        options={{ tabBarLabel: 'Profil' }}
       />
     </Tab.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  tabletLayout: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  tabletMainContent: {
+    flex: 1,
+    height: '100%',
+  },
+});

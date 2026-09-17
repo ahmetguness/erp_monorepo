@@ -90,9 +90,59 @@ vi.mock('expo-screen-capture', () => ({
   addScreenshotListener: vi.fn(() => ({ remove: vi.fn() })),
 }));
 
+// ─────────────────────────────────────────────
+// 6. Expo Modules Core Mock
+// ─────────────────────────────────────────────
+vi.mock('expo-modules-core', () => ({
+  EventEmitter: vi.fn(),
+  Platform: { OS: 'ios' },
+  requireNativeModule: vi.fn(() => ({})),
+  NativeModulesProxy: {},
+}));
+
+// ─────────────────────────────────────────────
+// 7. Expo Haptics Mock
+// ─────────────────────────────────────────────
+vi.mock('expo-haptics', () => ({
+  impactAsync: vi.fn(async () => {}),
+  notificationAsync: vi.fn(async () => {}),
+  selectionAsync: vi.fn(async () => {}),
+  ImpactFeedbackStyle: {
+    Light: 'light',
+    Medium: 'medium',
+    Heavy: 'heavy',
+    Rigid: 'rigid',
+    Soft: 'soft',
+  },
+  NotificationFeedbackType: {
+    Success: 'success',
+    Warning: 'warning',
+    Error: 'error',
+  },
+}));
+
+// ─────────────────────────────────────────────
+// 8. Vector Icons Mock
+// ─────────────────────────────────────────────
+vi.mock('@expo/vector-icons', () => ({
+  Ionicons: () => null,
+  MaterialCommunityIcons: () => null,
+  FontAwesome5: () => null,
+}));
+
+// ─────────────────────────────────────────────
+// 9. Expo Camera Mock
+// ─────────────────────────────────────────────
+vi.mock('expo-camera', () => ({
+  CameraView: () => null,
+  useCameraPermissions: vi.fn(() => [{ granted: true }, vi.fn()]),
+}));
+
 // Global cleanup before each test
 beforeEach(() => {
   storageCache.clear();
   secureStoreCache.clear();
   vi.clearAllMocks();
 });
+
+

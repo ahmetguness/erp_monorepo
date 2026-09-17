@@ -50,6 +50,8 @@ import {
   BankAccountCard,
   BankStatementModal,
 } from '../components/finance';
+import { PreciousPaperCard, DualPaneBankStatement } from '../features/finance';
+import { useResponsive } from '../design-system/hooks/useResponsive';
 import { Badge } from '../components/common/Badge';
 import { OptimizedFlatList } from '../components/common';
 import { useScreenCaptureProtection } from '../hooks';
@@ -74,6 +76,7 @@ interface Props {
 
 export default function FinanceScreen({ navigation, route }: Props) {
   const { theme } = useTheme();
+  const { isTablet } = useResponsive();
 
   // Screen capture & recording protection for financial data
   useScreenCaptureProtection({ enabled: true, screenName: 'FinanceScreen' });
@@ -972,13 +975,15 @@ export default function FinanceScreen({ navigation, route }: Props) {
             </View>
           }
           renderItem={({ item }) => (
-            <CheckNoteCard
+            <PreciousPaperCard
               item={item}
               onPress={(selected) => {
                 setSelectedCheckForDetail(selected);
                 setIsCheckDetailModalVisible(true);
               }}
-              onStatusChange={handleQuickCheckStatus}
+              onCollect={(selected) => handleQuickCheckStatus(selected, 'CLEARED')}
+              onBounce={(selected) => handleQuickCheckStatus(selected, 'BOUNCED')}
+              onEndorse={(selected) => handleQuickCheckStatus(selected, 'DEPOSITED')}
             />
           )}
           ListEmptyComponent={
@@ -1181,35 +1186,45 @@ export default function FinanceScreen({ navigation, route }: Props) {
           </View>
 
           {treasuryType === 'BANK' ? (
-            <OptimizedFlatList<BankAccount>
-              data={filteredBankAccounts}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
-              refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
-              renderItem={({ item }) => (
-                <BankAccountCard
-                  account={item}
-                  isCash={false}
-                  onPress={(acc) => {
-                    setSelectedAccountForStatement(acc);
-                    setIsBankStatementModalVisible(true);
-                  }}
+            isTablet ? (
+              <View style={styles.tabletDualPaneWrap}>
+                <DualPaneBankStatement
+                  accounts={filteredBankAccounts}
+                  selectedAccountId={selectedAccountForStatement?.id}
+                  onSelectAccount={(acc) => setSelectedAccountForStatement(acc)}
                 />
-              )}
-              ListEmptyComponent={
-                isLoading ? (
-                  <ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.primary} />
-                ) : (
-                  <View style={styles.emptyWrap}>
-                    <Ionicons name="business-outline" size={56} color={theme.colors.textMuted} />
-                    <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>Banka Hesabı Yok</Text>
-                    <Text style={[styles.emptySubtitle, { color: theme.colors.textMuted }]}>
-                      Sistemde tanımlı aktif banka hesabı bulunamadı.
-                    </Text>
-                  </View>
-                )
-              }
-            />
+              </View>
+            ) : (
+              <OptimizedFlatList<BankAccount>
+                data={filteredBankAccounts}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.listContent}
+                refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+                renderItem={({ item }) => (
+                  <BankAccountCard
+                    account={item}
+                    isCash={false}
+                    onPress={(acc) => {
+                      setSelectedAccountForStatement(acc);
+                      setIsBankStatementModalVisible(true);
+                    }}
+                  />
+                )}
+                ListEmptyComponent={
+                  isLoading ? (
+                    <ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.primary} />
+                  ) : (
+                    <View style={styles.emptyWrap}>
+                      <Ionicons name="business-outline" size={56} color={theme.colors.textMuted} />
+                      <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>Banka Hesabı Yok</Text>
+                      <Text style={[styles.emptySubtitle, { color: theme.colors.textMuted }]}>
+                        Sistemde tanımlı aktif banka hesabı bulunamadı.
+                      </Text>
+                    </View>
+                  )
+                }
+              />
+            )
           ) : (
             <OptimizedFlatList<CashAccount>
               data={filteredCashAccounts}
@@ -1854,5 +1869,9 @@ const styles = StyleSheet.create({
   treasuryToggleText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  tabletDualPaneWrap: {
+    flex: 1,
+    padding: 12,
   },
 });

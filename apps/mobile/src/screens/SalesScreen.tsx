@@ -15,6 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../theme';
+import { useResponsive } from '../design-system/hooks/useResponsive';
+import { CartStickyBar, CatalogSplitGrid, LiveCartSummaryPane } from '../features/sales';
 import { useAppDispatch, useAppSelector } from '../store/redux';
 import {
   selectContact,
@@ -93,6 +95,7 @@ const SEGMENT_OPTIONS: SegmentOption[] = [
 
 export default function SalesScreen() {
   const { theme } = useTheme();
+  const { isTablet } = useResponsive();
   const dispatch = useAppDispatch();
 
   // Redux Cart State
@@ -101,6 +104,15 @@ export default function SalesScreen() {
   const cartItems = useAppSelector(selectCartItemsList);
   const cartTotals = useAppSelector(selectCartTotals);
   const isRiskExceeded = useAppSelector(selectIsRiskLimitExceeded);
+
+  // Cart quantities map for fast lookup
+  const cartQuantitiesMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    cartItems.forEach((it) => {
+      map[it.productId] = it.quantity;
+    });
+    return map;
+  }, [cartItems]);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<SalesSegmentTab>('CUSTOMERS');
@@ -203,10 +215,10 @@ export default function SalesScreen() {
   }, [productSearchQuery]);
 
   useEffect(() => {
-    if (activeTab === 'CATALOG') {
+    if (activeTab === 'CATALOG' || (isTablet && activeTab === 'CART')) {
       loadProducts();
     }
-  }, [activeTab, loadProducts]);
+  }, [activeTab, isTablet, loadProducts]);
 
   // ─────────────────────────────────────────────
   // Active Visit on Mount (FAZ 12.3)
@@ -1017,370 +1029,418 @@ export default function SalesScreen() {
           </View>
         )}
 
-        {/* ── TAB 2: ÜRÜN KATALOĞU ── */}
-        {activeTab === 'CATALOG' && (
-          <View style={styles.tabContainer}>
-            {/* Search and Hero Banner */}
-            <View style={styles.catalogHeaderWrapper}>
-              <View
-                style={[
-                  styles.searchBar,
-                  {
-                    backgroundColor: theme.colors.surfaceCard,
-                    borderColor: theme.colors.borderSubtle,
-                    borderRadius: theme.borderRadius.md,
-                  },
-                ]}
-              >
-                <Ionicons name="search-outline" size={18} color={theme.colors.textMuted} />
-                <TextInput
-                  style={[styles.searchInput, { color: theme.colors.text }]}
-                  placeholder="Ürün adı, SKU veya barkod ara..."
-                  placeholderTextColor={theme.colors.textMuted}
-                  value={productSearchQuery}
-                  onChangeText={setProductSearchQuery}
-                  returnKeyType="search"
-                  onSubmitEditing={loadProducts}
-                />
-                {productSearchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setProductSearchQuery('')}>
-                    <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Quick Barcode Scan CTA Banner */}
-              <TouchableOpacity
-                style={[
-                  styles.scannerHeroBanner,
-                  {
-                    backgroundColor: theme.colors.primaryMuted,
-                    borderColor: theme.colors.primary,
-                    borderRadius: theme.borderRadius.md,
-                  },
-                ]}
-                onPress={() => setScannerVisible(true)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.scannerHeroLeft}>
-                  <View style={[styles.scannerHeroIcon, { backgroundColor: theme.colors.primary }]}>
-                    <Ionicons name="barcode-outline" size={20} color="#ffffff" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.scannerHeroTitle, { color: theme.colors.primary }]}>
-                      Kamerayla Barkod Tara & Sepete Ekle
-                    </Text>
-                    <Text style={[styles.scannerHeroDesc, { color: theme.colors.textSecondary }]}>
-                      Müşterinin seçtiği ürünlerin barkodunu vizöre tutun
-                    </Text>
-                  </View>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={theme.colors.primary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Products Catalog List */}
-            {isLoadingProducts ? (
-              <View style={styles.centerLoading}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-                  Ürün kataloğu yükleniyor...
-                </Text>
-              </View>
-            ) : (
-              <FlatList
-                data={products}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={[
-                  styles.listContent,
-                  cartTotals.totalItems > 0 && { paddingBottom: 90 },
-                ]}
-                showsVerticalScrollIndicator={false}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={isLoadingProducts}
-                    onRefresh={loadProducts}
-                    tintColor={theme.colors.primary}
-                  />
-                }
-                renderItem={({ item }) => (
-                  <ProductCatalogCard
-                    product={item}
-                    quantityInCart={cart.items[item.id]?.quantity || 0}
-                    onIncrement={handleIncrementProduct}
-                    onDecrement={handleDecrementProduct}
-                  />
-                )}
-                ListEmptyComponent={
-                  <View style={styles.emptyContainer}>
-                    <Ionicons name="cube-outline" size={48} color={theme.colors.textMuted} />
-                    <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-                      Ürün Bulunamadı
-                    </Text>
-                    <Text style={[styles.emptyDesc, { color: theme.colors.textMuted }]}>
-                      Aradığınız kritere uygun satış ürünü bulunamadı.
-                    </Text>
-                  </View>
-                }
+        {/* ── TABLET POS SPLIT VIEW (CATALOG + LIVE CART SIDE-BY-SIDE) ── */}
+        {isTablet && (activeTab === 'CATALOG' || activeTab === 'CART') ? (
+          <View style={styles.tabletSplitWrapper}>
+            <View style={styles.tabletSplitLeft}>
+              <CatalogSplitGrid
+                products={products}
+                isLoading={isLoadingProducts}
+                cartQuantities={cartQuantitiesMap}
+                searchQuery={productSearchQuery}
+                onSearchChange={setProductSearchQuery}
+                onRefresh={loadProducts}
+                onIncrement={handleIncrementProduct}
+                onDecrement={handleDecrementProduct}
+                onOpenScanner={() => setScannerVisible(true)}
               />
-            )}
-
-            {/* Floating Live Cart Summary Bar */}
-            <CartSummaryBar
-              customer={selectedCustomer}
-              totalItems={cartTotals.totalItems}
-              totalQuantity={cartTotals.totalQuantity}
-              grandTotal={cartTotals.grandTotal}
-              onPressCart={() => setActiveTab('CART')}
-              onPressCustomer={() => setActiveTab('CUSTOMERS')}
-            />
+            </View>
+            <View style={styles.tabletSplitRight}>
+              <LiveCartSummaryPane
+                customer={selectedCustomer}
+                items={cartItems}
+                subtotal={cartTotals.subtotal}
+                totalDiscount={cartTotals.totalDiscount}
+                totalTax={cartTotals.totalTax}
+                grandTotal={cartTotals.grandTotal}
+                onUpdateQuantity={(productId, qty) => {
+                  if (qty <= 0) {
+                    dispatch(removeItemFromCart(productId));
+                  } else {
+                    dispatch(updateItemQuantity({ productId, quantity: qty }));
+                  }
+                }}
+                onRemoveItem={(productId) => dispatch(removeItemFromCart(productId))}
+                onSelectCustomer={() => setActiveTab('CUSTOMERS')}
+                onClearCart={() => dispatch(clearCartItems())}
+                onCheckout={() => {
+                  if (!selectedCustomer) {
+                    Alert.alert('Müşteri Seçiniz', 'Lütfen önce siparişin kesileceği müşteriyi seçin.');
+                    setActiveTab('CUSTOMERS');
+                    return;
+                  }
+                  setCheckoutModalVisible(true);
+                }}
+              />
+            </View>
           </View>
-        )}
-
-        {/* ── TAB 3: SİPARİŞ SEPETİ ── */}
-        {activeTab === 'CART' && (
-          <View style={styles.tabContainer}>
-            {cartItems.length === 0 ? (
-              <View style={styles.emptyCartContainer}>
-                <Ionicons name="cart-outline" size={64} color={theme.colors.textMuted} />
-                <Text style={[styles.emptyCartTitle, { color: theme.colors.text }]}>
-                  Sipariş Sepetiniz Boş
-                </Text>
-                <Text style={[styles.emptyCartDesc, { color: theme.colors.textMuted }]}>
-                  Katalog sekmesinden ürün seçerek veya kamerayla barkod okutarak sepete ürün
-                  ekleyebilirsiniz.
-                </Text>
-                <TouchableOpacity
-                  style={[styles.goToCatalogBtn, { backgroundColor: theme.colors.primary }]}
-                  onPress={() => setActiveTab('CATALOG')}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="grid-outline" size={18} color="#ffffff" />
-                  <Text style={styles.goToCatalogBtnText}>Ürün Kataloğuna Git</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <>
-                <ScrollView
-                  contentContainerStyle={styles.cartScrollContent}
-                  showsVerticalScrollIndicator={false}
-                >
-                  {/* Selected Customer Header Card */}
-                  <TouchableOpacity
+        ) : (
+          <>
+            {/* ── TAB 2: ÜRÜN KATALOĞU (PHONE) ── */}
+            {activeTab === 'CATALOG' && (
+              <View style={styles.tabContainer}>
+                {/* Search and Hero Banner */}
+                <View style={styles.catalogHeaderWrapper}>
+                  <View
                     style={[
-                      styles.cartCustomerCard,
+                      styles.searchBar,
                       {
                         backgroundColor: theme.colors.surfaceCard,
-                        borderColor: selectedCustomer ? theme.colors.borderSubtle : theme.colors.warning,
-                        borderRadius: theme.borderRadius.lg,
-                        ...theme.shadows.sm,
+                        borderColor: theme.colors.borderSubtle,
+                        borderRadius: theme.borderRadius.md,
                       },
                     ]}
-                    onPress={() => setActiveTab('CUSTOMERS')}
-                    activeOpacity={0.7}
                   >
-                    <View style={styles.customerCardLeft}>
+                    <Ionicons name="search-outline" size={18} color={theme.colors.textMuted} />
+                    <TextInput
+                      style={[styles.searchInput, { color: theme.colors.text }]}
+                      placeholder="Ürün adı, SKU veya barkod ara..."
+                      placeholderTextColor={theme.colors.textMuted}
+                      value={productSearchQuery}
+                      onChangeText={setProductSearchQuery}
+                      returnKeyType="search"
+                      onSubmitEditing={loadProducts}
+                    />
+                    {productSearchQuery.length > 0 && (
+                      <TouchableOpacity onPress={() => setProductSearchQuery('')}>
+                        <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Quick Barcode Scan CTA Banner */}
+                  <TouchableOpacity
+                    style={[
+                      styles.scannerHeroBanner,
+                      {
+                        backgroundColor: theme.colors.primaryMuted,
+                        borderColor: theme.colors.primary,
+                        borderRadius: theme.borderRadius.md,
+                      },
+                    ]}
+                    onPress={() => setScannerVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.scannerHeroLeft}>
+                      <View style={[styles.scannerHeroIcon, { backgroundColor: theme.colors.primary }]}>
+                        <Ionicons name="barcode-outline" size={20} color="#ffffff" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.scannerHeroTitle, { color: theme.colors.primary }]}>
+                          Kamerayla Barkod Tara & Sepete Ekle
+                        </Text>
+                        <Text style={[styles.scannerHeroDesc, { color: theme.colors.textSecondary }]}>
+                          Müşterinin seçtiği ürünlerin barkodunu vizöre tutun
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Products Catalog List */}
+                {isLoadingProducts ? (
+                  <View style={styles.centerLoading}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                    <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
+                      Ürün kataloğu yükleniyor...
+                    </Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={products}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={[
+                      styles.listContent,
+                      cartTotals.totalItems > 0 && { paddingBottom: 90 },
+                    ]}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={isLoadingProducts}
+                        onRefresh={loadProducts}
+                        tintColor={theme.colors.primary}
+                      />
+                    }
+                    renderItem={({ item }) => (
+                      <ProductCatalogCard
+                        product={item}
+                        quantityInCart={cart.items[item.id]?.quantity || 0}
+                        onIncrement={handleIncrementProduct}
+                        onDecrement={handleDecrementProduct}
+                      />
+                    )}
+                    ListEmptyComponent={
+                      <View style={styles.emptyContainer}>
+                        <Ionicons name="cube-outline" size={48} color={theme.colors.textMuted} />
+                        <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+                          Ürün Bulunamadı
+                        </Text>
+                        <Text style={[styles.emptyDesc, { color: theme.colors.textMuted }]}>
+                          Aradığınız kritere uygun satış ürünü bulunamadı.
+                        </Text>
+                      </View>
+                    }
+                  />
+                )}
+
+                {/* Floating Live Cart Summary Bar */}
+                <CartStickyBar
+                  customer={selectedCustomer}
+                  totalItems={cartTotals.totalItems}
+                  totalQuantity={cartTotals.totalQuantity}
+                  grandTotal={cartTotals.grandTotal}
+                  onPressCart={() => setActiveTab('CART')}
+                  onPressCustomer={() => setActiveTab('CUSTOMERS')}
+                />
+
+              </View>
+            )}
+
+            {/* ── TAB 3: SİPARİŞ SEPETİ (PHONE) ── */}
+            {activeTab === 'CART' && (
+              <View style={styles.tabContainer}>
+                {cartItems.length === 0 ? (
+                  <View style={styles.emptyCartContainer}>
+                    <Ionicons name="cart-outline" size={64} color={theme.colors.textMuted} />
+                    <Text style={[styles.emptyCartTitle, { color: theme.colors.text }]}>
+                      Sipariş Sepetiniz Boş
+                    </Text>
+                    <Text style={[styles.emptyCartDesc, { color: theme.colors.textMuted }]}>
+                      Katalog sekmesinden ürün seçerek veya kamerayla barkod okutarak sepete ürün
+                      ekleyebilirsiniz.
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.goToCatalogBtn, { backgroundColor: theme.colors.primary }]}
+                      onPress={() => setActiveTab('CATALOG')}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="grid-outline" size={18} color="#ffffff" />
+                      <Text style={styles.goToCatalogBtnText}>Ürün Kataloğuna Git</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <>
+                    <ScrollView
+                      contentContainerStyle={styles.cartScrollContent}
+                      showsVerticalScrollIndicator={false}
+                    >
+                      {/* Selected Customer Header Card */}
+                      <TouchableOpacity
+                        style={[
+                          styles.cartCustomerCard,
+                          {
+                            backgroundColor: theme.colors.surfaceCard,
+                            borderColor: selectedCustomer ? theme.colors.borderSubtle : theme.colors.warning,
+                            borderRadius: theme.borderRadius.lg,
+                            ...theme.shadows.sm,
+                          },
+                        ]}
+                        onPress={() => setActiveTab('CUSTOMERS')}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.customerCardLeft}>
+                          <View
+                            style={[
+                              styles.customerIcon,
+                              {
+                                backgroundColor: selectedCustomer
+                                  ? theme.colors.primaryMuted
+                                  : theme.colors.warningMuted,
+                              },
+                            ]}
+                          >
+                            <Ionicons
+                              name="person"
+                              size={18}
+                              color={selectedCustomer ? theme.colors.primary : theme.colors.warning}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.customerLabel, { color: theme.colors.textMuted }]}>
+                              SİPARİŞ VERİLEN MÜŞTERİ
+                            </Text>
+                            <Text
+                              style={[styles.customerName, { color: theme.colors.text }]}
+                              numberOfLines={1}
+                            >
+                              {selectedCustomer ? selectedCustomer.name : 'Müşteri Seçilmedi (Zorunlu)'}
+                            </Text>
+                            {selectedCustomer && (
+                              <Text style={[styles.customerMeta, { color: theme.colors.textSecondary }]}>
+                                Bakiye: {formatCurrency(selectedCustomer.currentBalance ?? 0)}
+                                {selectedCustomer.creditLimit
+                                  ? ` • Limit: ${formatCurrency(selectedCustomer.creditLimit)}`
+                                  : ''}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+
+                        <Text style={[styles.changeCustText, { color: theme.colors.primary }]}>
+                          {selectedCustomer ? 'Değiştir' : 'Müşteri Seç'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* Cart Items List */}
                       <View
                         style={[
-                          styles.customerIcon,
+                          styles.cartItemsCard,
                           {
-                            backgroundColor: selectedCustomer
-                              ? theme.colors.primaryMuted
-                              : theme.colors.warningMuted,
+                            backgroundColor: theme.colors.surfaceCard,
+                            borderColor: theme.colors.borderSubtle,
+                            borderRadius: theme.borderRadius.lg,
+                            ...theme.shadows.sm,
                           },
                         ]}
                       >
-                        <Ionicons
-                          name="person"
-                          size={18}
-                          color={selectedCustomer ? theme.colors.primary : theme.colors.warning}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.customerLabel, { color: theme.colors.textMuted }]}>
-                          SİPARİŞ VERİLEN MÜŞTERİ
-                        </Text>
-                        <Text
-                          style={[styles.customerName, { color: theme.colors.text }]}
-                          numberOfLines={1}
-                        >
-                          {selectedCustomer ? selectedCustomer.name : 'Müşteri Seçilmedi (Zorunlu)'}
-                        </Text>
-                        {selectedCustomer && (
-                          <Text style={[styles.customerMeta, { color: theme.colors.textSecondary }]}>
-                            Bakiye: {formatCurrency(selectedCustomer.currentBalance ?? 0)}
-                            {selectedCustomer.creditLimit
-                              ? ` • Limit: ${formatCurrency(selectedCustomer.creditLimit)}`
-                              : ''}
+                        <View style={styles.cartCardHeader}>
+                          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
+                            Sepet Kalemleri ({cartItems.length})
                           </Text>
-                        )}
+                          <TouchableOpacity onPress={() => dispatch(clearCartItems())}>
+                            <Text style={[styles.clearBtnText, { color: theme.colors.danger }]}>
+                              Sepeti Boşalt
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        {cartItems.map((item) => (
+                          <View
+                            key={item.productId}
+                            style={[
+                              styles.cartItemRow,
+                              { borderBottomColor: theme.colors.borderSubtle },
+                            ]}
+                          >
+                            <View style={styles.cartItemLeft}>
+                              <Text
+                                style={[styles.cartItemName, { color: theme.colors.text }]}
+                                numberOfLines={1}
+                              >
+                                {item.name}
+                              </Text>
+                              <Text style={[styles.cartItemMeta, { color: theme.colors.textMuted }]}>
+                                SKU: {item.code} • Birim: {formatCurrency(item.unitPrice)}
+                              </Text>
+                            </View>
+
+                            <View style={styles.cartItemRight}>
+                              {/* Stepper */}
+                              <View style={styles.cartStepper}>
+                                <TouchableOpacity
+                                  style={[
+                                    styles.cartStepBtn,
+                                    { backgroundColor: theme.colors.borderSubtle },
+                                  ]}
+                                  onPress={() => {
+                                    if (item.quantity <= 1) {
+                                      dispatch(removeItemFromCart(item.productId));
+                                    } else {
+                                      dispatch(
+                                        updateItemQuantity({
+                                          productId: item.productId,
+                                          quantity: item.quantity - 1,
+                                        })
+                                      );
+                                    }
+                                  }}
+                                >
+                                  <Ionicons
+                                    name={item.quantity === 1 ? 'trash-outline' : 'remove'}
+                                    size={14}
+                                    color={item.quantity === 1 ? theme.colors.danger : theme.colors.text}
+                                  />
+                                </TouchableOpacity>
+
+                                <Text style={[styles.cartStepVal, { color: theme.colors.text }]}>
+                                  {item.quantity}
+                                </Text>
+
+                                <TouchableOpacity
+                                  style={[
+                                    styles.cartStepBtn,
+                                    { backgroundColor: theme.colors.primary },
+                                  ]}
+                                  onPress={() => {
+                                    dispatch(
+                                      updateItemQuantity({
+                                        productId: item.productId,
+                                        quantity: item.quantity + 1,
+                                      })
+                                    );
+                                  }}
+                                >
+                                  <Ionicons name="add" size={14} color="#ffffff" />
+                                </TouchableOpacity>
+                              </View>
+
+                              {/* Line Total */}
+                              <Text style={[styles.cartItemTotal, { color: theme.colors.primary }]}>
+                                {formatCurrency(item.quantity * item.unitPrice * (1 - item.discount / 100))}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
                       </View>
-                    </View>
 
-                    <Text style={[styles.changeCustText, { color: theme.colors.primary }]}>
-                      {selectedCustomer ? 'Değiştir' : 'Müşteri Seç'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Cart Items List */}
-                  <View
-                    style={[
-                      styles.cartItemsCard,
-                      {
-                        backgroundColor: theme.colors.surfaceCard,
-                        borderColor: theme.colors.borderSubtle,
-                        borderRadius: theme.borderRadius.lg,
-                        ...theme.shadows.sm,
-                      },
-                    ]}
-                  >
-                    <View style={styles.cartCardHeader}>
-                      <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-                        Sepet Kalemleri ({cartItems.length})
-                      </Text>
-                      <TouchableOpacity onPress={() => dispatch(clearCartItems())}>
-                        <Text style={[styles.clearBtnText, { color: theme.colors.danger }]}>
-                          Sepeti Boşalt
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {cartItems.map((item) => (
+                      {/* Financial Summary Card */}
                       <View
-                        key={item.productId}
                         style={[
-                          styles.cartItemRow,
-                          { borderBottomColor: theme.colors.borderSubtle },
+                          styles.cartItemsCard,
+                          {
+                            backgroundColor: theme.colors.surfaceCard,
+                            borderColor: theme.colors.borderSubtle,
+                            borderRadius: theme.borderRadius.lg,
+                            ...theme.shadows.sm,
+                          },
                         ]}
                       >
-                        <View style={styles.cartItemLeft}>
-                          <Text
-                            style={[styles.cartItemName, { color: theme.colors.text }]}
-                            numberOfLines={1}
-                          >
-                            {item.name}
+                        <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
+                          Sipariş Tutarı
+                        </Text>
+
+                        <View style={styles.summaryRow}>
+                          <Text style={[styles.summaryKey, { color: theme.colors.textMuted }]}>
+                            Ara Toplam
                           </Text>
-                          <Text style={[styles.cartItemMeta, { color: theme.colors.textMuted }]}>
-                            SKU: {item.code} • Birim: {formatCurrency(item.unitPrice)}
+                          <Text style={[styles.summaryVal, { color: theme.colors.text }]}>
+                            {formatCurrency(cartTotals.subtotal)}
                           </Text>
                         </View>
 
-                        <View style={styles.cartItemRight}>
-                          {/* Stepper */}
-                          <View style={styles.cartStepper}>
-                            <TouchableOpacity
-                              style={[
-                                styles.cartStepBtn,
-                                { backgroundColor: theme.colors.borderSubtle },
-                              ]}
-                              onPress={() => {
-                                if (item.quantity <= 1) {
-                                  dispatch(removeItemFromCart(item.productId));
-                                } else {
-                                  dispatch(
-                                    updateItemQuantity({
-                                      productId: item.productId,
-                                      quantity: item.quantity - 1,
-                                    })
-                                  );
-                                }
-                              }}
-                            >
-                              <Ionicons
-                                name={item.quantity === 1 ? 'trash-outline' : 'remove'}
-                                size={14}
-                                color={item.quantity === 1 ? theme.colors.danger : theme.colors.text}
-                              />
-                            </TouchableOpacity>
-
-                            <Text style={[styles.cartStepVal, { color: theme.colors.text }]}>
-                              {item.quantity}
+                        {cartTotals.totalDiscount > 0 && (
+                          <View style={styles.summaryRow}>
+                            <Text style={[styles.summaryKey, { color: theme.colors.textMuted }]}>
+                              İskonto Toplamı
                             </Text>
-
-                            <TouchableOpacity
-                              style={[
-                                styles.cartStepBtn,
-                                { backgroundColor: theme.colors.primary },
-                              ]}
-                              onPress={() => {
-                                dispatch(
-                                  updateItemQuantity({
-                                    productId: item.productId,
-                                    quantity: item.quantity + 1,
-                                  })
-                                );
-                              }}
-                            >
-                              <Ionicons name="add" size={14} color="#ffffff" />
-                            </TouchableOpacity>
+                            <Text style={[styles.summaryVal, { color: theme.colors.danger }]}>
+                              -{formatCurrency(cartTotals.totalDiscount)}
+                            </Text>
                           </View>
+                        )}
 
-                          {/* Line Total */}
-                          <Text style={[styles.cartItemTotal, { color: theme.colors.primary }]}>
-                            {formatCurrency(item.quantity * item.unitPrice * (1 - item.discount / 100))}
+                        <View style={styles.summaryRow}>
+                          <Text style={[styles.summaryKey, { color: theme.colors.textMuted }]}>
+                            KDV Toplamı
+                          </Text>
+                          <Text style={[styles.summaryVal, { color: theme.colors.text }]}>
+                            +{formatCurrency(cartTotals.totalTax)}
+                          </Text>
+                        </View>
+
+                        <View style={[styles.cartDivider, { backgroundColor: theme.colors.borderSubtle }]} />
+
+                        <View style={styles.grandTotalRow}>
+                          <Text style={[styles.grandTotalLabel, { color: theme.colors.text }]}>
+                            GENEL TOPLAM
+                          </Text>
+                          <Text style={[styles.grandTotalValue, { color: theme.colors.primary }]}>
+                            {formatCurrency(cartTotals.grandTotal)}
                           </Text>
                         </View>
                       </View>
-                    ))}
-                  </View>
-
-                  {/* Financial Summary Card */}
-                  <View
-                    style={[
-                      styles.cartItemsCard,
-                      {
-                        backgroundColor: theme.colors.surfaceCard,
-                        borderColor: theme.colors.borderSubtle,
-                        borderRadius: theme.borderRadius.lg,
-                        ...theme.shadows.sm,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-                      Sipariş Tutarı
-                    </Text>
-
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryKey, { color: theme.colors.textMuted }]}>
-                        Ara Toplam
-                      </Text>
-                      <Text style={[styles.summaryVal, { color: theme.colors.text }]}>
-                        {formatCurrency(cartTotals.subtotal)}
-                      </Text>
-                    </View>
-
-                    {cartTotals.totalDiscount > 0 && (
-                      <View style={styles.summaryRow}>
-                        <Text style={[styles.summaryKey, { color: theme.colors.textMuted }]}>
-                          İskonto Toplamı
-                        </Text>
-                        <Text style={[styles.summaryVal, { color: theme.colors.danger }]}>
-                          -{formatCurrency(cartTotals.totalDiscount)}
-                        </Text>
-                      </View>
-                    )}
-
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryKey, { color: theme.colors.textMuted }]}>
-                        KDV Toplamı
-                      </Text>
-                      <Text style={[styles.summaryVal, { color: theme.colors.text }]}>
-                        +{formatCurrency(cartTotals.totalTax)}
-                      </Text>
-                    </View>
-
-                    <View style={[styles.cartDivider, { backgroundColor: theme.colors.borderSubtle }]} />
-
-                    <View style={styles.grandTotalRow}>
-                      <Text style={[styles.grandTotalLabel, { color: theme.colors.text }]}>
-                        GENEL TOPLAM
-                      </Text>
-                      <Text style={[styles.grandTotalValue, { color: theme.colors.primary }]}>
-                        {formatCurrency(cartTotals.grandTotal)}
-                      </Text>
-                    </View>
-                  </View>
-                </ScrollView>
+                    </ScrollView>
 
                 {/* Bottom Checkout CTA Bar */}
                 <View
@@ -1425,9 +1485,11 @@ export default function SalesScreen() {
                     <Text style={styles.checkoutBtnText}>Siparişi Tamamla</Text>
                   </TouchableOpacity>
                 </View>
-              </>
+                  </>
+                )}
+              </View>
             )}
-          </View>
+          </>
         )}
       </View>
 
@@ -1948,5 +2010,19 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '700',
+  },
+  tabletSplitWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+    gap: 16,
+  },
+  tabletSplitLeft: {
+    flex: 0.65,
+  },
+  tabletSplitRight: {
+    flex: 0.35,
   },
 });

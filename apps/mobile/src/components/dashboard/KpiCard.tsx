@@ -1,9 +1,12 @@
+// apps/mobile/src/components/dashboard/KpiCard.tsx
+
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../theme';
 import { Badge, BadgeVariant } from '../common/Badge';
+import { SpringPressable } from '../../design-system/primitives/SpringPressable';
+import { TabularText } from '../../design-system/primitives/TabularText';
 
 export interface KpiCardProps {
   title: string;
@@ -12,6 +15,7 @@ export interface KpiCardProps {
   badge?: {
     text: string;
     variant?: BadgeVariant;
+    pulse?: boolean;
   };
   icon: keyof typeof Ionicons.glyphMap;
   iconColor?: string;
@@ -35,21 +39,14 @@ export const KpiCard: React.FC<KpiCardProps> = ({
 }) => {
   const { theme } = useTheme();
 
-  const handlePress = () => {
-    if (onPress) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      onPress();
-    }
-  };
-
-  const content = (
+  const cardContent = (
     <View
       style={[
         styles.card,
         {
           backgroundColor: theme.colors.surfaceCard,
-          borderColor: theme.colors.borderSubtle,
-          borderRadius: theme.borderRadius.lg,
+          borderColor: theme.colors.glassBorder,
+          borderRadius: 18,
           ...theme.shadows.sm,
         },
         fullWidth ? styles.fullWidth : styles.halfWidth,
@@ -70,17 +67,22 @@ export const KpiCard: React.FC<KpiCardProps> = ({
         </View>
 
         {badge && (
-          <Badge label={badge.text} variant={badge.variant || 'neutral'} size="sm" />
+          <Badge
+            label={badge.text}
+            variant={badge.variant || 'neutral'}
+            size="sm"
+            pulse={badge.pulse}
+          />
         )}
       </View>
 
       {/* Metric Value */}
       <View style={styles.valueWrapper}>
-        <Text
+        <TabularText
           style={[
             styles.value,
             {
-              color: theme.colors.text,
+              color: theme.colors.textPrimary,
               fontSize: fullWidth ? theme.typography.sizes['2xl'] : theme.typography.sizes.xl,
             },
           ]}
@@ -88,13 +90,13 @@ export const KpiCard: React.FC<KpiCardProps> = ({
           adjustsFontSizeToFit
         >
           {value}
-        </Text>
+        </TabularText>
         <Text
           style={[
             styles.title,
             {
               color: theme.colors.textSecondary,
-              fontSize: theme.typography.sizes.xs,
+              fontSize: 11,
             },
           ]}
           numberOfLines={1}
@@ -109,7 +111,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({
           <View
             style={[
               styles.progressBarTrack,
-              { backgroundColor: theme.colors.borderSubtle },
+              { backgroundColor: theme.colors.surface2 },
             ]}
           >
             <View
@@ -126,14 +128,14 @@ export const KpiCard: React.FC<KpiCardProps> = ({
             <Text style={[styles.progressLabel, { color: theme.colors.textMuted }]}>
               Hedef Gerçekleşme
             </Text>
-            <Text
+            <TabularText
               style={[
                 styles.progressLabel,
                 { color: theme.colors.primary, fontWeight: '700' },
               ]}
             >
               %{progress}
-            </Text>
+            </TabularText>
           </View>
         </View>
       )}
@@ -158,32 +160,35 @@ export const KpiCard: React.FC<KpiCardProps> = ({
 
   if (onPress) {
     return (
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={handlePress}
+      <SpringPressable
+        onPress={onPress}
         style={fullWidth ? styles.fullWidthContainer : styles.halfWidthContainer}
       >
-        {content}
-      </TouchableOpacity>
+        {cardContent}
+      </SpringPressable>
     );
   }
 
-  return content;
+  return (
+    <View style={fullWidth ? styles.fullWidthContainer : styles.halfWidthContainer}>
+      {cardContent}
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    padding: 14,
+    padding: 16,
     justifyContent: 'space-between',
   },
   halfWidth: {
     width: '100%',
-    minHeight: 124,
+    minHeight: 128,
   },
   fullWidth: {
     width: '100%',
-    minHeight: 134,
+    minHeight: 138,
   },
   halfWidthContainer: {
     width: '48%',
@@ -199,8 +204,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   iconWrapper: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -212,10 +217,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   title: {
-    fontWeight: '600',
-    marginTop: 2,
+    fontWeight: '700',
+    marginTop: 4,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   subtitle: {
     marginTop: 6,
@@ -225,7 +230,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   progressBarTrack: {
-    height: 6,
+    height: 5,
     borderRadius: 3,
     overflow: 'hidden',
   },

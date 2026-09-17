@@ -50,6 +50,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const [permission, requestPermission] = useCameraPermissions();
   const [manualInputVisible, setManualInputVisible] = useState(false);
   const [scanCooldown, setScanCooldown] = useState(false);
+  const [scanPulse, setScanPulse] = useState(false);
   const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Laser animation line
@@ -91,6 +92,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       if (scanCooldown) return;
 
       setScanCooldown(true);
+      setScanPulse(true);
+      setTimeout(() => setScanPulse(false), 150);
+
       cooldownTimerRef.current = setTimeout(() => {
         setScanCooldown(false);
       }, isContinuousScan ? 1200 : 800);
@@ -276,24 +280,41 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
               {/* Central Reticle Vizör */}
               <View style={styles.reticleContainer}>
-                <View style={styles.reticle}>
-                  {/* Corner Marks */}
-                  <View style={[styles.corner, styles.topLeft]} />
-                  <View style={[styles.corner, styles.topRight]} />
-                  <View style={[styles.corner, styles.bottomLeft]} />
-                  <View style={[styles.corner, styles.bottomRight]} />
+                {(() => {
+                  const activeBorderColor = scanPulse
+                    ? theme.colors.emeraldNeon
+                    : duplicateScanWarning
+                    ? theme.colors.crimsonLaser
+                    : theme.colors.primary;
+                  return (
+                    <View style={styles.reticle}>
+                      {/* Corner Marks */}
+                      <View style={[styles.corner, styles.topLeft, { borderColor: activeBorderColor }]} />
+                      <View style={[styles.corner, styles.topRight, { borderColor: activeBorderColor }]} />
+                      <View style={[styles.corner, styles.bottomLeft, { borderColor: activeBorderColor }]} />
+                      <View style={[styles.corner, styles.bottomRight, { borderColor: activeBorderColor }]} />
 
-                  {/* Animated Laser Line */}
-                  <Animated.View
-                    style={[
-                      styles.laserLine,
-                      {
-                        backgroundColor: duplicateScanWarning ? '#ef4444' : '#10b981',
-                        transform: [{ translateY: scanAnim }],
-                      },
-                    ]}
-                  />
-                </View>
+                      {/* Animated Laser Line */}
+                      <Animated.View
+                        style={[
+                          styles.laserLine,
+                          {
+                            backgroundColor: scanPulse
+                              ? theme.colors.emeraldNeon
+                              : duplicateScanWarning
+                              ? theme.colors.crimsonLaser
+                              : theme.colors.primary,
+                            shadowColor: scanPulse ? theme.colors.emeraldNeon : theme.colors.primary,
+                            shadowOpacity: 0.9,
+                            shadowRadius: 8,
+                            elevation: 6,
+                            transform: [{ translateY: scanAnim }],
+                          },
+                        ]}
+                      />
+                    </View>
+                  );
+                })()}
 
                 {duplicateScanWarning && (
                   <View style={styles.duplicateWarningBanner}>

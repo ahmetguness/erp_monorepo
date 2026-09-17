@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction, createSelector } from '@reduxjs/toolkit';
 
-export type WarehouseSessionMode = 'LOOKUP' | 'COUNT' | 'TRANSFER' | 'DELIVERY' | 'LOT_SERIAL';
+export type WarehouseSessionMode = 'LOOKUP' | 'COUNT' | 'TRANSFER' | 'DELIVERY' | 'LOT_SERIAL' | 'PLANOGRAM';
 
 export interface ScannedBarcodeEntry {
   id: string;

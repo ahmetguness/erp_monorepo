@@ -44,9 +44,16 @@ export type RootStackParamList = {
   Copilot: {
     initialPrompt?: string;
   } | undefined;
+  GlobalSearch: undefined;
 };
 
 export type DashboardScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'DashboardTab'>,
   NativeStackNavigationProp<RootStackParamList>
 >;
+
+export type MainTabNavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<MainTabParamList>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+

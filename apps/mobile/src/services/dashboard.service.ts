@@ -16,6 +16,34 @@ export const MobileDashboardActivitySchema = z.object({
   module: z.string(),
 });
 
+export const SalesTrendPointSchema = z.object({
+  date: z.string(),
+  dayLabel: z.string(),
+  amount: z.coerce.number(),
+  count: z.coerce.number(),
+});
+
+export const CashFlowTrendPointSchema = z.object({
+  date: z.string(),
+  dayLabel: z.string(),
+  inflow: z.coerce.number(),
+  outflow: z.coerce.number(),
+  net: z.coerce.number(),
+});
+
+export const CategoryShareSchema = z.object({
+  name: z.string(),
+  amount: z.coerce.number(),
+  percentage: z.coerce.number(),
+  color: z.string(),
+});
+
+export const MobileAnalyticsSchema = z.object({
+  salesTrend: z.array(SalesTrendPointSchema).default([]),
+  cashFlowTrend: z.array(CashFlowTrendPointSchema).default([]),
+  categoryDistribution: z.array(CategoryShareSchema).default([]),
+});
+
 export const MobileDashboardDataSchema = z.object({
   salesSummary: z.object({
     todayGross: z.coerce.number(),
@@ -36,12 +64,17 @@ export const MobileDashboardDataSchema = z.object({
   }),
   activities: z.array(MobileDashboardActivitySchema),
   unreadNotificationCount: z.coerce.number(),
+  analytics: MobileAnalyticsSchema.optional(),
 });
 
 export const MobileDashboardResponseSchema = SingleResponseSchema(MobileDashboardDataSchema);
 
 export type MobileDashboardData = z.infer<typeof MobileDashboardDataSchema>;
 export type MobileDashboardActivity = z.infer<typeof MobileDashboardActivitySchema>;
+export type SalesTrendPoint = z.infer<typeof SalesTrendPointSchema>;
+export type CashFlowTrendPoint = z.infer<typeof CashFlowTrendPointSchema>;
+export type CategoryShare = z.infer<typeof CategoryShareSchema>;
+export type MobileAnalytics = z.infer<typeof MobileAnalyticsSchema>;
 
 // ─────────────────────────────────────────────
 // Legacy / Supplementary Schemas

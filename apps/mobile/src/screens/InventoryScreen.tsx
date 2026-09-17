@@ -14,6 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../theme';
+import { useResponsive } from '../design-system/hooks/useResponsive';
+import { ShelfPlanogramGrid } from '../features/inventory';
 import { useAppDispatch, useAppSelector } from '../store/redux';
 import {
   setMode,
@@ -58,10 +60,12 @@ const SEGMENT_TABS: SegmentTab[] = [
   { key: 'COUNT', label: 'Hızlı Sayım', icon: 'clipboard-outline' },
   { key: 'TRANSFER', label: 'Transfer', icon: 'swap-horizontal-outline' },
   { key: 'DELIVERY', label: 'Mal Kabul', icon: 'file-tray-full-outline' },
+  { key: 'PLANOGRAM', label: 'Raf Planogramı', icon: 'grid-outline' },
 ];
 
 export default function InventoryScreen() {
-  const { theme } = useTheme();
+  const { theme, isHighContrast, toggleHighContrast } = useTheme();
+  const { isTablet } = useResponsive();
   const dispatch = useAppDispatch();
   const { activeMode } = useAppSelector(selectWarehouseSession);
 
@@ -277,8 +281,37 @@ export default function InventoryScreen() {
           </View>
         </View>
 
-        {/* Global Camera Scanner CTA Button in Header */}
+        {/* Global Camera Scanner & High Contrast Buttons in Header */}
         <View style={styles.headerRightGroup}>
+          <TouchableOpacity
+            style={[
+              styles.contrastToggleBtn,
+              {
+                backgroundColor: isHighContrast ? '#FFE600' : theme.colors.surface1,
+                borderColor: isHighContrast ? '#FFE600' : theme.colors.glassBorder,
+              },
+            ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+              toggleHighContrast();
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={isHighContrast ? 'contrast' : 'contrast-outline'}
+              size={15}
+              color={isHighContrast ? '#000000' : theme.colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.contrastToggleText,
+                { color: isHighContrast ? '#000000' : theme.colors.textSecondary },
+              ]}
+            >
+              {isHighContrast ? 'KONTRAST' : 'KONTRAST'}
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.headerPrinterBtn, { backgroundColor: theme.colors.borderSubtle }]}
             onPress={() => {
@@ -566,6 +599,24 @@ export default function InventoryScreen() {
         {/* TAB 4: MAL KABUL & İRSALİYE */}
         {activeMode === 'DELIVERY' && (
           <DeliveryVerificationView onOpenScanner={() => setScannerVisible(true)} />
+        )}
+
+        {/* TAB 5: RAF / LOKASYON PLANOGRAMI */}
+        {activeMode === 'PLANOGRAM' && (
+          <View style={styles.planogramWrapper}>
+            <ShelfPlanogramGrid
+              warehouseName={selectedWarehouse?.name}
+              onStartCountForBin={(_bin) => {
+                dispatch(setMode('COUNT'));
+                if (selectedWarehouse) {
+                  loadWarehouseCountItems(selectedWarehouse.id);
+                }
+              }}
+              onTransferBin={(_bin) => {
+                setLocationTransferVisible(true);
+              }}
+            />
+          </View>
         )}
       </View>
 
@@ -857,5 +908,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  contrastToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  contrastToggleText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  planogramWrapper: {
+    flex: 1,
+    padding: 12,
   },
 });

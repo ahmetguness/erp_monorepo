@@ -28,6 +28,9 @@ import {
   BatchActionBar,
 } from '../components/approvals';
 import { EmptyState } from '../components/common';
+import { useResponsive } from '../design-system/hooks/useResponsive';
+import { MasterDetailContainer } from '../navigation/MasterDetailContainer';
+import { SwipeableApprovalItem, ApprovalInspectionPane } from '../features/approvals';
 
 interface StatusFilterTab {
   key: ApprovalStatus | 'ALL';
@@ -59,6 +62,7 @@ const MODULE_CHIPS: ModuleFilterChip[] = [
 
 export default function ApprovalsScreen() {
   const { theme } = useTheme();
+  const { showMasterDetail } = useResponsive();
 
   const {
     requests,
@@ -109,23 +113,36 @@ export default function ApprovalsScreen() {
     return requests.filter((r) => r.flow.module === selectedModule);
   }, [requests, selectedModule]);
 
+  // Auto-select first request on tablet landscape if none selected
+  useEffect(() => {
+    if (showMasterDetail && !selectedRequest && filteredRequests.length > 0) {
+      const first = filteredRequests[0];
+      setSelectedRequest(first);
+      loadRequestDetails(first.id).then((full) => {
+        if (full) setSelectedRequest(full);
+      });
+    }
+  }, [showMasterDetail, selectedRequest, filteredRequests, loadRequestDetails]);
+
   // Pending count across loaded requests
   const pendingCount = useMemo(() => {
     return requests.filter((r) => r.status === 'PENDING').length;
   }, [requests]);
 
-  // Open detail modal
+  // Open detail modal or update selection on tablet
   const handleOpenDetail = useCallback(
     async (req: ApprovalRequest) => {
       setSelectedRequest(req);
-      setDetailModalVisible(true);
+      if (!showMasterDetail) {
+        setDetailModalVisible(true);
+      }
       // Fetch full details in background (steps, history, actor)
       const full = await loadRequestDetails(req.id);
       if (full) {
         setSelectedRequest(full);
       }
     },
-    [loadRequestDetails]
+    [loadRequestDetails, showMasterDetail]
   );
 
   // 1-Tap approve
@@ -175,11 +192,8 @@ export default function ApprovalsScreen() {
     }
   }, [isSelectionMode, clearSelection, setSelectionMode]);
 
-  return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      edges={['top']}
-    >
+  const masterContent = (
+    <View style={{ flex: 1 }}>
       {/* ── Screen Header ── */}
       <View
         style={[
@@ -273,7 +287,7 @@ export default function ApprovalsScreen() {
                   styles.statusTab,
                   isActive
                     ? [styles.statusTabActive, { backgroundColor: theme.colors.primary }]
-                    : { backgroundColor: theme.colors.borderSubtle },
+                    : [styles.statusTabInactive, { backgroundColor: theme.colors.borderSubtle }],
                 ]}
               >
                 <Ionicons
@@ -364,7 +378,7 @@ export default function ApprovalsScreen() {
         </ScrollView>
       </View>
 
-      {/* ── Error Banner if any ── */}
+      {/* ── Error Banner ── */}
       {error && (
         <View
           style={[
@@ -407,18 +421,47 @@ export default function ApprovalsScreen() {
               tintColor={theme.colors.primary}
             />
           }
-          renderItem={({ item }) => (
-            <ApprovalCard
-              request={item}
-              isSelectionMode={isSelectionMode}
-              isSelected={selectedIds.includes(item.id)}
-              isActing={isActing}
-              onPress={handleOpenDetail}
-              onApprove={handleApprove}
-              onReject={handleRejectPrompt}
-              onToggleSelect={toggleSelection}
-            />
-          )}
+          renderItem={({ item }) => {
+            if (showMasterDetail) {
+              const isInspected = selectedRequest?.id === item.id;
+              return (
+                <View
+                  style={[
+                    styles.tabletCardWrap,
+                    isInspected && {
+                      borderLeftWidth: 3,
+                      borderLeftColor: theme.colors.primary,
+                      backgroundColor: theme.colors.surface2,
+                      borderRadius: 12,
+                    },
+                  ]}
+                >
+                  <ApprovalCard
+                    request={item}
+                    isSelectionMode={isSelectionMode}
+                    isSelected={selectedIds.includes(item.id)}
+                    isActing={isActing}
+                    onPress={handleOpenDetail}
+                    onApprove={handleApprove}
+                    onReject={handleRejectPrompt}
+                    onToggleSelect={toggleSelection}
+                  />
+                </View>
+              );
+            }
+            return (
+              <SwipeableApprovalItem
+                request={item}
+                isSelectionMode={isSelectionMode}
+                isSelected={selectedIds.includes(item.id)}
+                isActing={isActing}
+                onPress={handleOpenDetail}
+                onApprove={handleApprove}
+                onReject={handleRejectPrompt}
+                onToggleSelect={toggleSelection}
+              />
+            );
+          }}
           ListEmptyComponent={
             <EmptyState
               icon="checkmark-done-circle-outline"
@@ -432,16 +475,37 @@ export default function ApprovalsScreen() {
           }
         />
       )}
+    </View>
+  );
 
-      {/* ── Detail Modal ── */}
-      <ApprovalDetailModal
-        visible={detailModalVisible}
-        request={selectedRequest}
-        isActing={isActing}
-        onClose={() => setDetailModalVisible(false)}
-        onApprove={handleApprove}
-        onReject={handleRejectPrompt}
+  return (
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
+    >
+      <MasterDetailContainer
+        masterView={masterContent}
+        detailView={
+          <ApprovalInspectionPane
+            request={selectedRequest}
+            isActing={isActing}
+            onApprove={handleApprove}
+            onReject={handleRejectPrompt}
+          />
+        }
       />
+
+      {/* ── Detail Modal (Phone Only) ── */}
+      {!showMasterDetail && (
+        <ApprovalDetailModal
+          visible={detailModalVisible}
+          request={selectedRequest}
+          isActing={isActing}
+          onClose={() => setDetailModalVisible(false)}
+          onApprove={handleApprove}
+          onReject={handleRejectPrompt}
+        />
+      )}
 
       {/* ── Rejection Reason Modal ── */}
       <RejectionReasonModal
@@ -541,6 +605,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   statusTabActive: {},
+  statusTabInactive: {},
   statusTabText: {
     fontSize: 12,
   },
@@ -605,4 +670,10 @@ const styles = StyleSheet.create({
   listWithBatchBar: {
     paddingBottom: 100,
   },
+  tabletCardWrap: {
+    marginBottom: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
 });
+

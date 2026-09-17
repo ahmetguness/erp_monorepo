@@ -12,6 +12,7 @@ import FinanceScreen from '../screens/FinanceScreen';
 import EmployeePortalScreen from '../screens/EmployeePortalScreen';
 import ProcurementScreen from '../screens/ProcurementScreen';
 import CopilotScreen from '../screens/CopilotScreen';
+import GlobalSearchScreen from '../screens/GlobalSearchScreen';
 import { BiometricLockView } from '../components/BiometricLockView';
 import {
   OfflineStatusBar,
@@ -159,6 +160,11 @@ export const RootNavigator: React.FC = () => {
                 name="Copilot"
                 component={CopilotScreen}
                 options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+              />
+              <Stack.Screen
+                name="GlobalSearch"
+                component={GlobalSearchScreen}
+                options={{ presentation: 'fullScreenModal', animation: 'fade' }}
               />
             </>
           )}

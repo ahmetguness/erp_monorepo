@@ -18,9 +18,18 @@ import { useNotificationStore } from '../store/notification.store';
 import { useAppDispatch } from '../store/redux';
 import { setMode } from '../store/redux/warehouseSessionSlice';
 import { useTheme } from '../theme';
+import { useResponsive } from '../design-system/hooks/useResponsive';
+import { HeroRevenueCard, BentoGridContainer } from '../features/dashboard';
 import { KpiCard } from '../components/dashboard/KpiCard';
 import { QuickActionsBar } from '../components/dashboard/QuickActionsBar';
 import { ActivityStream } from '../components/dashboard/ActivityStream';
+import {
+  SalesTrendChart,
+  CashFlowBarChart,
+  CategoryDonutChart,
+} from '../components/dashboard/charts';
+import { SpotlightSearchModal } from '../components/search/SpotlightSearchModal';
+import { GlobalSearchResult } from '../services/search.service';
 import { ChatBot } from '../components/ChatBot';
 import { formatCurrency, initials } from '../lib/utils';
 import {
@@ -56,6 +65,7 @@ export default function DashboardScreen() {
   const dispatch = useAppDispatch();
   const { user, tenant } = useAuthStore();
   const { theme } = useTheme();
+  const { isTablet } = useResponsive();
 
   const {
     unreadCount,
@@ -67,6 +77,8 @@ export default function DashboardScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<MobileDashboardData | null>(null);
+  const [isSearchModalVisible, setIsSearchModalVisible] = useState(false);
+  const [activeBiTab, setActiveBiTab] = useState<'SALES' | 'CASHFLOW' | 'CATEGORY'>('SALES');
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -218,6 +230,24 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.headerRight}>
+          {/* Spotlight Search Trigger (FAZ 17) */}
+          <TouchableOpacity
+            style={[
+              styles.iconBtn,
+              {
+                backgroundColor: theme.colors.borderSubtle,
+                borderColor: theme.colors.border,
+              },
+            ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setIsSearchModalVisible(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="search-outline" size={20} color={theme.colors.text} />
+          </TouchableOpacity>
+
           {/* Notification Bell with Badge */}
           <TouchableOpacity
             style={[
@@ -293,24 +323,83 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* ── Executive Primary Card: Günlük Satış ── */}
-        <KpiCard
-          fullWidth
-          title="Bugünkü Satış Cirosu"
-          value={formatCurrency(sales?.todayGross ?? 0)}
-          subtitle={`${sales?.todayCount ?? 0} Adet Satış Faturası Kesildi`}
-          badge={{
-            text: `${changeIsPositive ? '▲ +' : '▼ '}${sales?.changePercent ?? 0}% dünden`,
-            variant: changeIsPositive ? 'success' : 'danger',
+        {/* ── Spotlight Search Bar Trigger (FAZ 17) ── */}
+        <TouchableOpacity
+          style={[
+            styles.spotlightTriggerBar,
+            {
+              backgroundColor: theme.colors.surfaceCard,
+              borderColor: theme.colors.borderSubtle,
+              borderRadius: theme.borderRadius.md,
+              ...theme.shadows.sm,
+            },
+          ]}
+          activeOpacity={0.8}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            setIsSearchModalVisible(true);
           }}
-          icon="trending-up"
-          iconColor={theme.colors.primary}
-          iconBg={theme.colors.primaryMuted}
-          progress={sales?.targetProgress ?? 0}
-        />
+        >
+          <Ionicons name="search" size={17} color={theme.colors.primary} />
+          <Text style={[styles.spotlightPlaceholder, { color: theme.colors.textMuted }]}>
+            Müşteri, ürün, fatura veya sipariş ara...
+          </Text>
+          <View style={[styles.spotlightShortcut, { backgroundColor: theme.colors.borderSubtle }]}>
+            <Text style={[styles.spotlightShortcutText, { color: theme.colors.textSecondary }]}>
+              Spotlight
+            </Text>
+          </View>
+        </TouchableOpacity>
 
-        {/* ── KPI 2x2 Grid ── */}
-        <View style={styles.kpiGrid}>
+        {isTablet && dashboardData ? (
+          <BentoGridContainer
+            data={dashboardData}
+            activeBiTab={activeBiTab}
+            setActiveBiTab={setActiveBiTab}
+            renderBiChart={() => (
+              <>
+                {activeBiTab === 'SALES' && (
+                  <SalesTrendChart data={dashboardData?.analytics?.salesTrend ?? []} />
+                )}
+                {activeBiTab === 'CASHFLOW' && (
+                  <CashFlowBarChart data={dashboardData?.analytics?.cashFlowTrend ?? []} />
+                )}
+                {activeBiTab === 'CATEGORY' && (
+                  <CategoryDonutChart data={dashboardData?.analytics?.categoryDistribution ?? []} />
+                )}
+              </>
+            )}
+            renderActivityStream={() => (
+              <ActivityStream
+                activities={activities}
+                onActivityPress={handleActivityPress}
+                onViewAllPress={() => {
+                  navigation.navigate('SalesTab');
+                }}
+              />
+            )}
+            onNavigateFinance={(tab) => navigation.navigate('Finance', { initialTab: tab as any })}
+            onNavigateInventory={() => navigation.navigate('InventoryTab')}
+            onNavigateFieldVisit={() => navigation.navigate('FieldService')}
+            onNavigateCopilot={() => navigation.navigate('Copilot')}
+          />
+        ) : (
+          <>
+            {/* ── Executive Hero Card: Günlük Satış (Glass Quantum) ── */}
+            <HeroRevenueCard
+              todayGross={sales?.todayGross ?? 0}
+              todayCount={sales?.todayCount ?? 0}
+              changePercent={sales?.changePercent ?? 0}
+              changeIsPositive={changeIsPositive}
+              targetProgress={sales?.targetProgress ?? 0}
+            />
+          </>
+        )}
+
+        {!isTablet && (
+          <>
+            {/* ── KPI 2x2 Grid ── */}
+            <View style={styles.kpiGrid}>
           {/* Likidite */}
           <KpiCard
             title="Kasa & Banka"
@@ -369,6 +458,137 @@ export default function DashboardScreen() {
             iconBg="#fffbeb"
           />
         </View>
+
+        {/* ── Finans & Satış Analitiği (BI Trendleri - FAZ 17) ── */}
+        <View
+          style={[
+            styles.analyticsCard,
+            {
+              backgroundColor: theme.colors.surfaceCard,
+              borderColor: theme.colors.borderSubtle,
+              borderRadius: theme.borderRadius.lg,
+              ...theme.shadows.sm,
+            },
+          ]}
+        >
+          <View style={styles.analyticsHeader}>
+            <View style={styles.analyticsTitleWrap}>
+              <View style={[styles.analyticsIconBg, { backgroundColor: theme.colors.primaryMuted }]}>
+                <Ionicons name="stats-chart" size={16} color={theme.colors.primary} />
+              </View>
+              <Text style={[styles.analyticsTitle, { color: theme.colors.text }]}>
+                Finans & Satış Analitiği
+              </Text>
+            </View>
+
+            {/* Tab Switcher Pills */}
+            <View
+              style={[
+                styles.biTabsRow,
+                { backgroundColor: theme.colors.background, borderColor: theme.colors.borderSubtle },
+              ]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.biTabBtn,
+                  activeBiTab === 'SALES' && [
+                    styles.biTabBtnActive,
+                    { backgroundColor: theme.colors.surfaceCard },
+                  ],
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setActiveBiTab('SALES');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.biTabText,
+                    {
+                      color:
+                        activeBiTab === 'SALES' ? theme.colors.primary : theme.colors.textMuted,
+                      fontWeight: activeBiTab === 'SALES' ? '700' : '500',
+                    },
+                  ]}
+                >
+                  Satış
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.biTabBtn,
+                  activeBiTab === 'CASHFLOW' && [
+                    styles.biTabBtnActive,
+                    { backgroundColor: theme.colors.surfaceCard },
+                  ],
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setActiveBiTab('CASHFLOW');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.biTabText,
+                    {
+                      color:
+                        activeBiTab === 'CASHFLOW' ? theme.colors.primary : theme.colors.textMuted,
+                      fontWeight: activeBiTab === 'CASHFLOW' ? '700' : '500',
+                    },
+                  ]}
+                >
+                  Nakit
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.biTabBtn,
+                  activeBiTab === 'CATEGORY' && [
+                    styles.biTabBtnActive,
+                    { backgroundColor: theme.colors.surfaceCard },
+                  ],
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setActiveBiTab('CATEGORY');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.biTabText,
+                    {
+                      color:
+                        activeBiTab === 'CATEGORY' ? theme.colors.primary : theme.colors.textMuted,
+                      fontWeight: activeBiTab === 'CATEGORY' ? '700' : '500',
+                    },
+                  ]}
+                >
+                  Kategori
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Active Chart Display */}
+          <View style={styles.chartContainer}>
+            {activeBiTab === 'SALES' && (
+              <SalesTrendChart data={dashboardData?.analytics?.salesTrend ?? []} />
+            )}
+            {activeBiTab === 'CASHFLOW' && (
+              <CashFlowBarChart data={dashboardData?.analytics?.cashFlowTrend ?? []} />
+            )}
+            {activeBiTab === 'CATEGORY' && (
+              <CategoryDonutChart data={dashboardData?.analytics?.categoryDistribution ?? []} />
+            )}
+          </View>
+        </View>
+        </>
+        )}
 
         {/* ── Quick Actions Bar ── */}
         <QuickActionsBar
@@ -621,14 +841,16 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* ── Live Activity Stream ── */}
-        <ActivityStream
-          activities={activities}
-          onActivityPress={handleActivityPress}
-          onViewAllPress={() => {
-            navigation.navigate('SalesTab');
-          }}
-        />
+        {/* ── Live Activity Stream (Phone) ── */}
+        {!isTablet && (
+          <ActivityStream
+            activities={activities}
+            onActivityPress={handleActivityPress}
+            onViewAllPress={() => {
+              navigation.navigate('SalesTab');
+            }}
+          />
+        )}
 
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: theme.colors.textMuted }]}>
@@ -639,6 +861,36 @@ export default function DashboardScreen() {
 
       {/* Floating AI ChatBot Assistant */}
       <ChatBot />
+
+      {/* ── Global Spotlight Search Modal (FAZ 17) ── */}
+      <SpotlightSearchModal
+        visible={isSearchModalVisible}
+        onClose={() => setIsSearchModalVisible(false)}
+        onNavigateToEntity={(type, id, extra) => {
+          setIsSearchModalVisible(false);
+          if (type === 'contact') {
+            navigation.navigate('SalesTab');
+          } else if (type === 'product' || type === 'stock_movement') {
+            navigation.navigate('InventoryTab');
+          } else if (type === 'sales_order' || type === 'sales_quote') {
+            navigation.navigate('SalesTab');
+          } else if (type === 'purchase_order') {
+            navigation.navigate('Procurement', { initialTab: 'ORDERS' });
+          } else if (type === 'invoice' || type === 'payment') {
+            navigation.navigate('Finance', { initialTab: 'payments' });
+          } else if (type === 'service_request') {
+            navigation.navigate('FieldService');
+          } else if (type === 'work_order') {
+            navigation.navigate('ProductionShopFloor');
+          } else if (type === 'employee') {
+            navigation.navigate('EmployeePortal', { initialTab: 'leaves' });
+          } else if (extra?.module === 'inventory') {
+            navigation.navigate('InventoryTab');
+          } else {
+            navigation.navigate('SalesTab');
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -818,5 +1070,83 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  spotlightTriggerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    gap: 10,
+  },
+  spotlightPlaceholder: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  spotlightShortcut: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  spotlightShortcutText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  analyticsCard: {
+    padding: 14,
+    borderWidth: 1,
+    gap: 12,
+  },
+  analyticsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  analyticsTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  analyticsIconBg: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  analyticsTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  biTabsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  biTabBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  biTabBtnActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  biTabText: {
+    fontSize: 11,
+  },
+  chartContainer: {
+    width: '100%',
+    paddingTop: 4,
   },
 });
