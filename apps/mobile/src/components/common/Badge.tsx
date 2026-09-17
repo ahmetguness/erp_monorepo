@@ -128,7 +128,9 @@ export const Badge: React.FC<BadgeProps> = ({
           style={{ marginRight: 6 }}
         />
       )}
-      <Text style={textStyle}>{label}</Text>
+      <Text style={textStyle} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 };

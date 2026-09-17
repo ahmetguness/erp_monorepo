@@ -23,6 +23,43 @@ export const FlatList = 'FlatList';
 export const Alert = {
   alert: () => {},
 };
+export const Dimensions = {
+  get: () => ({ width: 390, height: 844 }),
+  addEventListener: () => ({ remove: () => {} }),
+};
+
+export const Animated = {
+  Value: function (val: number) {
+    return {
+      setValue: () => {},
+      interpolate: () => 0,
+      current: val,
+    };
+  },
+  timing: () => ({
+    start: (cb?: () => void) => cb && cb(),
+  }),
+  spring: () => ({
+    start: (cb?: () => void) => cb && cb(),
+  }),
+  parallel: () => ({
+    start: (cb?: () => void) => cb && cb(),
+  }),
+  sequence: () => ({
+    start: (cb?: () => void) => cb && cb(),
+  }),
+  View: 'Animated.View',
+  Text: 'Animated.Text',
+  createAnimatedComponent: (comp: any) => comp,
+};
+
+export const ScrollView = 'ScrollView';
+export const Pressable = 'Pressable';
+export const TextInput = 'TextInput';
+export const Modal = 'Modal';
+export const Share = {
+  share: async () => ({ action: 'sharedAction' }),
+};
 
 export default {
   Platform,
@@ -33,4 +70,12 @@ export default {
   ActivityIndicator,
   FlatList,
   Alert,
+  Dimensions,
+  Animated,
+  ScrollView,
+  Pressable,
+  TextInput,
+  Modal,
+  Share,
 };
+

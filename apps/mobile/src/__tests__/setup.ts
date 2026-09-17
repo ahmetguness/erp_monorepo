@@ -138,6 +138,42 @@ vi.mock('expo-camera', () => ({
   useCameraPermissions: vi.fn(() => [{ granted: true }, vi.fn()]),
 }));
 
+// ─────────────────────────────────────────────
+// 10. React Native Safe Area Context Mock
+// ─────────────────────────────────────────────
+vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: vi.fn(() => ({ top: 0, right: 0, bottom: 0, left: 0 })),
+  SafeAreaView: ({ children }: { children: any }) => children,
+  SafeAreaProvider: ({ children }: { children: any }) => children,
+  SafeAreaConsumer: ({ children }: { children: any }) =>
+    children({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+
+// ─────────────────────────────────────────────
+// 11. React Native SVG Mock
+// ─────────────────────────────────────────────
+vi.mock('react-native-svg', () => {
+  const React = require('react');
+  const Component = ({ children }: any) => children ?? null;
+  return {
+    default: Component,
+    Svg: Component,
+    Path: Component,
+    Rect: Component,
+    Circle: Component,
+    Line: Component,
+    Polyline: Component,
+    Polygon: Component,
+    G: Component,
+    Defs: Component,
+    LinearGradient: Component,
+    Stop: Component,
+    ClipPath: Component,
+    Text: Component,
+  };
+});
+
+
 // Global cleanup before each test
 beforeEach(() => {
   storageCache.clear();

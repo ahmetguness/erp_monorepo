@@ -15,6 +15,7 @@ export interface SpringPressableProps extends PressableProps {
   scaleTo?: number;
   hapticFeedback?: Haptics.ImpactFeedbackStyle | false;
   style?: StyleProp<ViewStyle>;
+  containerStyle?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }
 
@@ -22,6 +23,7 @@ export const SpringPressable: React.FC<SpringPressableProps> = ({
   scaleTo = 0.97,
   hapticFeedback = Haptics.ImpactFeedbackStyle.Light,
   style,
+  containerStyle,
   children,
   onPress,
   onPressIn,
@@ -60,6 +62,7 @@ export const SpringPressable: React.FC<SpringPressableProps> = ({
       onPressOut={handlePressOut}
       onPress={onPress}
       disabled={disabled}
+      style={containerStyle}
       {...rest}
     >
       <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, style]}>
@@ -68,3 +71,4 @@ export const SpringPressable: React.FC<SpringPressableProps> = ({
     </Pressable>
   );
 };
+

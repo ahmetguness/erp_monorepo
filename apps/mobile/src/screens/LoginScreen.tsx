@@ -16,6 +16,8 @@ import { z } from 'zod';
 import { Input, Button, Card } from '../components/common';
 import { Logo } from '../components/Logo';
 import { useTheme } from '../theme';
+import { useResponsive } from '../design-system/hooks/useResponsive';
+import { SplitAuthLayout } from '../features/auth';
 import { login } from '../services/auth.service';
 import { useAuthStore } from '../store/auth.store';
 import { getAuthToken } from '../lib/token-storage';
@@ -38,6 +40,7 @@ interface Props {
 
 export default function LoginScreen({ navigation, onBack }: Props) {
   const { theme } = useTheme();
+  const { isTablet } = useResponsive();
   const setAuthData = useAuthStore((state) => state.login);
   const isBiometricEnabled = useAuthStore((state) => state.isBiometricEnabled);
   const savedUser = useAuthStore((state) => state.user);
@@ -141,6 +144,136 @@ export default function LoginScreen({ navigation, onBack }: Props) {
     );
   };
 
+  const loginCard = (
+    <Card variant="elevated" style={styles.card}>
+      <View style={styles.header}>
+        <View style={styles.logoWrapper}>
+          <Logo size="md" />
+        </View>
+        <Text style={[styles.title, { color: theme.colors.text }]}>
+          Tenant Girişi
+        </Text>
+        <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>
+          İşletme hesabınıza güvenle giriş yapın
+        </Text>
+      </View>
+
+      {errors.form ? (
+        <View style={[styles.errorBox, { backgroundColor: theme.colors.dangerMuted }]}>
+          <Ionicons name="alert-circle" size={18} color={theme.colors.danger} />
+          <Text style={[styles.errorText, { color: theme.colors.danger }]}>
+            {errors.form}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Quick Biometric Button */}
+      {canUseQuickBio && (
+        <View style={styles.bioContainer}>
+          <Button
+            title={`${biometrics?.biometricTypeName || 'Face ID'} ile Hızlı Giriş`}
+            variant="outline"
+            leftIcon={
+              <Ionicons
+                name={biometrics?.biometricType === 'FaceID' ? 'scan-outline' : 'finger-print-outline'}
+                size={20}
+                color={theme.colors.primary}
+              />
+            }
+            onPress={handleQuickBiometricLogin}
+            style={styles.bioButton}
+          />
+          <View style={styles.dividerRow}>
+            <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+            <Text style={[styles.dividerText, { color: theme.colors.textMuted }]}>veya e-posta ile</Text>
+            <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+          </View>
+        </View>
+      )}
+
+      <View style={styles.form}>
+        <Input
+          label="E-posta Adresi"
+          placeholder="ad.soyad@sirket.com"
+          value={email}
+          onChangeText={(val) => {
+            setEmail(val);
+            if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+          }}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!isLoading}
+          errorText={errors.email}
+          leftIcon={<Ionicons name="mail-outline" size={18} color={theme.colors.textMuted} />}
+        />
+
+        <Input
+          label="Şifre"
+          placeholder="••••••••"
+          value={password}
+          onChangeText={(val) => {
+            setPassword(val);
+            if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
+          }}
+          isPassword
+          editable={!isLoading}
+          errorText={errors.password}
+          leftIcon={<Ionicons name="lock-closed-outline" size={18} color={theme.colors.textMuted} />}
+        />
+
+        {showSlugInput ? (
+          <Input
+            label="Şirket Kısa Kodu (İsteğe Bağlı)"
+            placeholder="ornek-holding"
+            value={tenantSlug}
+            onChangeText={setTenantSlug}
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!isLoading}
+            helperText="Birden çok şirketiniz varsa doğrudan ilgili şirkete girmek için yazabilirsiniz"
+            leftIcon={<Ionicons name="business-outline" size={18} color={theme.colors.textMuted} />}
+          />
+        ) : (
+          <TouchableOpacity
+            onPress={() => setShowSlugInput(true)}
+            style={styles.slugToggle}
+          >
+            <Ionicons name="add-circle-outline" size={16} color={theme.colors.primary} />
+            <Text style={[styles.slugToggleText, { color: theme.colors.primary }]}>
+              Şirket kodu belirt
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={styles.actionRow}>
+          <TouchableOpacity onPress={handleForgotPassword} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={[styles.forgotText, { color: theme.colors.primary }]}>
+              Şifremi Unuttum
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <Button
+          title="Giriş Yap"
+          variant="primary"
+          size="lg"
+          isLoading={isLoading}
+          onPress={handleLogin}
+          style={styles.submitButton}
+        />
+      </View>
+    </Card>
+  );
+
+  if (isTablet) {
+    return (
+      <SplitAuthLayout>
+        {loginCard}
+      </SplitAuthLayout>
+    );
+  }
+
   return (
     <View style={[styles.mainContainer, { backgroundColor: theme.colors.background }]}>
       {/* Top Header Background */}
@@ -167,130 +300,7 @@ export default function LoginScreen({ navigation, onBack }: Props) {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.cardContainer}>
-            <Card variant="elevated" style={styles.card}>
-              <View style={styles.header}>
-                <View style={styles.logoWrapper}>
-                  <Logo size="md" />
-                </View>
-                <Text style={[styles.title, { color: theme.colors.text }]}>
-                  Tenant Girişi
-                </Text>
-                <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>
-                  İşletme hesabınıza güvenle giriş yapın
-                </Text>
-              </View>
-
-              {errors.form ? (
-                <View style={[styles.errorBox, { backgroundColor: theme.colors.dangerMuted }]}>
-                  <Ionicons name="alert-circle" size={18} color={theme.colors.danger} />
-                  <Text style={[styles.errorText, { color: theme.colors.danger }]}>
-                    {errors.form}
-                  </Text>
-                </View>
-              ) : null}
-
-              {/* Quick Biometric Button */}
-              {canUseQuickBio && (
-                <View style={styles.bioContainer}>
-                  <Button
-                    title={`${biometrics?.biometricTypeName || 'Face ID'} ile Hızlı Giriş`}
-                    variant="outline"
-                    leftIcon={
-                      <Ionicons
-                        name={biometrics?.biometricType === 'FaceID' ? 'scan-outline' : 'finger-print-outline'}
-                        size={20}
-                        color={theme.colors.primary}
-                      />
-                    }
-                    onPress={handleQuickBiometricLogin}
-                    style={styles.bioButton}
-                  />
-                  <View style={styles.dividerRow}>
-                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
-                    <Text style={[styles.dividerText, { color: theme.colors.textMuted }]}>veya e-posta ile</Text>
-                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
-                  </View>
-                </View>
-              )}
-
-              <View style={styles.form}>
-                <Input
-                  label="E-posta Adresi"
-                  placeholder="ad.soyad@sirket.com"
-                  value={email}
-                  onChangeText={(val) => {
-                    setEmail(val);
-                    if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
-                  }}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isLoading}
-                  errorText={errors.email}
-                  leftIcon={<Ionicons name="mail-outline" size={18} color={theme.colors.textMuted} />}
-                />
-
-                <Input
-                  label="Şifre"
-                  placeholder="••••••••"
-                  value={password}
-                  onChangeText={(val) => {
-                    setPassword(val);
-                    if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
-                  }}
-                  isPassword
-                  editable={!isLoading}
-                  errorText={errors.password}
-                  leftIcon={<Ionicons name="lock-closed-outline" size={18} color={theme.colors.textMuted} />}
-                  helperText={
-                    showSlugInput
-                      ? undefined
-                      : undefined
-                  }
-                />
-
-                {showSlugInput ? (
-                  <Input
-                    label="Şirket Kısa Kodu (İsteğe Bağlı)"
-                    placeholder="ornek-holding"
-                    value={tenantSlug}
-                    onChangeText={setTenantSlug}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!isLoading}
-                    helperText="Birden çok şirketiniz varsa doğrudan ilgili şirkete girmek için yazabilirsiniz"
-                    leftIcon={<Ionicons name="business-outline" size={18} color={theme.colors.textMuted} />}
-                  />
-                ) : (
-                  <TouchableOpacity
-                    onPress={() => setShowSlugInput(true)}
-                    style={styles.slugToggle}
-                  >
-                    <Ionicons name="add-circle-outline" size={16} color={theme.colors.primary} />
-                    <Text style={[styles.slugToggleText, { color: theme.colors.primary }]}>
-                      Şirket kodu belirt
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                <View style={styles.actionRow}>
-                  <TouchableOpacity onPress={handleForgotPassword} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Text style={[styles.forgotText, { color: theme.colors.primary }]}>
-                      Şifremi Unuttum
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <Button
-                  title="Giriş Yap"
-                  variant="primary"
-                  size="lg"
-                  isLoading={isLoading}
-                  onPress={handleLogin}
-                  style={styles.submitButton}
-                />
-              </View>
-            </Card>
+            {loginCard}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

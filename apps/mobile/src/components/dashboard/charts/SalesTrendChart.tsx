@@ -8,6 +8,8 @@ import Svg, {
   Circle,
   Text as SvgText,
   Line,
+  Rect,
+  G,
 } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../theme';
@@ -155,6 +157,20 @@ export const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ data }) => {
             />
           ) : null}
 
+          {/* Vertical Interactive Crosshair Line */}
+          {activePoint && (
+            <Line
+              x1={activePoint.x}
+              y1={padTop}
+              x2={activePoint.x}
+              y2={baselineY}
+              stroke={theme.colors.primary}
+              strokeWidth="1.5"
+              strokeDasharray="3,3"
+              opacity={0.85}
+            />
+          )}
+
           {/* Points & Day labels */}
           {points.map((pt) => {
             const isSelected = selectedPointIndex === pt.idx;
@@ -200,6 +216,43 @@ export const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ data }) => {
               </React.Fragment>
             );
           })}
+
+          {/* Floating Glass Tooltip Bubble */}
+          {activePoint && (
+            <G
+              x={Math.max(padLeft, Math.min(chartWidth - padRight - 96, activePoint.x - 48))}
+              y={Math.max(4, activePoint.y - 42)}
+            >
+              <Rect
+                width="96"
+                height="32"
+                rx="6"
+                fill="rgba(19, 25, 38, 0.94)"
+                stroke={theme.colors.primary}
+                strokeWidth="1"
+              />
+              <SvgText
+                x="48"
+                y="13"
+                fontSize="8.5"
+                fontWeight="700"
+                fill={theme.colors.textMuted}
+                textAnchor="middle"
+              >
+                {activePoint.item.dayLabel} • {activePoint.item.count} FATURA
+              </SvgText>
+              <SvgText
+                x="48"
+                y="26"
+                fontSize="11"
+                fontWeight="800"
+                fill="#FFFFFF"
+                textAnchor="middle"
+              >
+                {formatCurrency(activePoint.item.amount)}
+              </SvgText>
+            </G>
+          )}
         </Svg>
       </View>
     </View>

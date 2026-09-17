@@ -15,10 +15,12 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore } from '../store/auth.store';
 import { useNotificationStore } from '../store/notification.store';
-import { useAppDispatch } from '../store/redux';
+import { useAppDispatch, useAppSelector } from '../store/redux';
+import { selectPendingMutationsCount } from '../store/redux/offlineOutboxSlice';
 import { setMode } from '../store/redux/warehouseSessionSlice';
 import { useTheme } from '../theme';
 import { useResponsive } from '../design-system/hooks/useResponsive';
+import { DynamicIslandToast, ToastVariant } from '../design-system/feedback/DynamicIslandToast';
 import { HeroRevenueCard, BentoGridContainer } from '../features/dashboard';
 import { KpiCard } from '../components/dashboard/KpiCard';
 import { QuickActionsBar } from '../components/dashboard/QuickActionsBar';
@@ -80,6 +82,20 @@ export default function DashboardScreen() {
   const [isSearchModalVisible, setIsSearchModalVisible] = useState(false);
   const [activeBiTab, setActiveBiTab] = useState<'SALES' | 'CASHFLOW' | 'CATEGORY'>('SALES');
 
+  const pendingOutboxCount = useAppSelector(selectPendingMutationsCount);
+  const [toastState, setToastState] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    variant: ToastVariant;
+    actionText?: string;
+    onAction?: () => void;
+  }>({
+    visible: false,
+    title: '',
+    variant: 'info',
+  });
+
   const fetchDashboard = useCallback(async () => {
     try {
       setError(null);
@@ -108,6 +124,21 @@ export default function DashboardScreen() {
     getCacheMetadata().then(setCacheMeta).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (pendingOutboxCount > 0) {
+      setToastState({
+        visible: true,
+        title: 'Çevrimdışı Kuyruğu',
+        message: `${pendingOutboxCount} işlem sunucuya senkronize edilmeyi bekliyor.`,
+        variant: 'warning',
+        actionText: 'Kuyruk',
+        onAction: () => {
+          setToastState((prev) => ({ ...prev, visible: false }));
+        },
+      });
+    }
+  }, [pendingOutboxCount]);
+
   const handleSyncOfflineCache = async () => {
     if (isCaching) return;
     setIsCaching(true);
@@ -116,8 +147,20 @@ export default function DashboardScreen() {
       const meta = await syncAllMasterData();
       setCacheMeta(meta);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      setToastState({
+        visible: true,
+        title: 'Çevrimdışı Önbellek Güncellendi',
+        message: 'Müşteriler, ürünler ve ana veriler başarıyla eşitlendi.',
+        variant: 'success',
+      });
     } catch (err) {
       console.warn('[DashboardScreen] Failed to cache master data:', err);
+      setToastState({
+        visible: true,
+        title: 'Önbellek Hatası',
+        message: 'Çevrimdışı veriler eşitlenirken bir sorun meydana geldi.',
+        variant: 'error',
+      });
     } finally {
       setIsCaching(false);
     }
@@ -442,6 +485,10 @@ export default function DashboardScreen() {
             icon="cart-outline"
             iconColor="#10b981"
             iconBg="#ecfdf5"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              navigation.navigate('SalesTab');
+            }}
           />
 
           {/* Kritik Stok */}
@@ -456,6 +503,10 @@ export default function DashboardScreen() {
             icon="cube-outline"
             iconColor="#f59e0b"
             iconBg="#fffbeb"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              navigation.navigate('InventoryTab');
+            }}
           />
         </View>
 
@@ -890,6 +941,16 @@ export default function DashboardScreen() {
             navigation.navigate('SalesTab');
           }
         }}
+      />
+      {/* Dynamic Island Toast (FAZ 21.3) */}
+      <DynamicIslandToast
+        visible={toastState.visible}
+        title={toastState.title}
+        message={toastState.message}
+        variant={toastState.variant}
+        actionText={toastState.actionText}
+        onAction={toastState.onAction}
+        onDismiss={() => setToastState((prev) => ({ ...prev, visible: false }))}
       />
     </SafeAreaView>
   );

@@ -160,12 +160,11 @@ export const KpiCard: React.FC<KpiCardProps> = ({
 
   if (onPress) {
     return (
-      <SpringPressable
-        onPress={onPress}
-        style={fullWidth ? styles.fullWidthContainer : styles.halfWidthContainer}
-      >
-        {cardContent}
-      </SpringPressable>
+      <View style={fullWidth ? styles.fullWidthContainer : styles.halfWidthContainer}>
+        <SpringPressable onPress={onPress} style={styles.pressableContainer}>
+          {cardContent}
+        </SpringPressable>
+      </View>
     );
   }
 
@@ -179,7 +178,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    padding: 16,
+    padding: 14,
     justifyContent: 'space-between',
   },
   halfWidth: {
@@ -195,6 +194,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   fullWidthContainer: {
+    width: '100%',
+  },
+  pressableContainer: {
     width: '100%',
   },
   topRow: {

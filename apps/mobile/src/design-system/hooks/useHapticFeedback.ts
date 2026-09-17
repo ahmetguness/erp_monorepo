@@ -1,7 +1,10 @@
-// apps/mobile/src/design-system/hooks/useHapticFeedback.ts
-
 import { useCallback } from 'react';
 import * as Haptics from 'expo-haptics';
+import {
+  hapticSuccessDoublePulse,
+  hapticWarningTriplePulse,
+  hapticBarcodeScan,
+} from '../utils/haptics';
 
 export function useHapticFeedback() {
   const impactLight = useCallback(() => {
@@ -36,6 +39,18 @@ export function useHapticFeedback() {
     Haptics.selectionAsync().catch(() => {});
   }, []);
 
+  const successDoublePulse = useCallback(() => {
+    hapticSuccessDoublePulse().catch(() => {});
+  }, []);
+
+  const warningTriplePulse = useCallback(() => {
+    hapticWarningTriplePulse().catch(() => {});
+  }, []);
+
+  const barcodeScan = useCallback(() => {
+    hapticBarcodeScan().catch(() => {});
+  }, []);
+
   return {
     impactLight,
     impactMedium,
@@ -45,5 +60,9 @@ export function useHapticFeedback() {
     notifyWarning,
     notifyError,
     selection,
+    successDoublePulse,
+    warningTriplePulse,
+    barcodeScan,
   };
 }
+

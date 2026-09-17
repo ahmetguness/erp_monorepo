@@ -15,7 +15,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme';
+import { useResponsive } from '../design-system/hooks/useResponsive';
+import { MasterDetailContainer } from '../navigation/MasterDetailContainer';
+import { ProcurementInspectionPane } from '../features/procurement';
 import { RootStackParamList } from '../types/navigation.types';
 import {
   PurchaseOrder,
@@ -58,7 +62,8 @@ const SEGMENT_OPTIONS: SegmentOption[] = [
 
 export default function ProcurementScreen() {
   const { theme } = useTheme();
-  const navigation = useNavigation<any>();
+  const { showMasterDetail } = useResponsive();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'Procurement'>>();
 
   const [activeTab, setActiveTab] = useState<ProcurementTab>(
@@ -78,6 +83,7 @@ export default function ProcurementScreen() {
   const [isLoadingRequests, setIsLoadingRequests] = useState(false);
   const [requestSearchQuery, setRequestSearchQuery] = useState('');
   const [requestStatusFilter, setRequestStatusFilter] = useState<'ALL' | PurchaseRequestStatus>('ALL');
+  const [selectedRequestForDetail, setSelectedRequestForDetail] = useState<PurchaseRequest | null>(null);
   const [createRequestVisible, setCreateRequestVisible] = useState(false);
   const [targetSupplierForRequest, setTargetSupplierForRequest] = useState<string | undefined>();
   const [requestToConvert, setRequestToConvert] = useState<PurchaseRequest | null>(null);
@@ -233,11 +239,8 @@ export default function ProcurementScreen() {
     loadOrders();
   };
 
-  return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      edges={['top']}
-    >
+  const masterContent = (
+    <View style={{ flex: 1 }}>
       {/* ── Screen Header ── */}
       <View
         style={[
@@ -423,16 +426,32 @@ export default function ProcurementScreen() {
                 refreshControl={
                   <RefreshControl refreshing={isLoadingOrders} onRefresh={loadOrders} tintColor={theme.colors.primary} />
                 }
-                renderItem={({ item }) => (
-                  <PurchaseOrderCard
-                    order={item}
-                    onPress={(ord) => {
-                      setSelectedOrderForDetail(ord);
-                      setOrderDetailVisible(true);
-                    }}
-                    onReceive={handleOpenGoodsReceipt}
-                  />
-                )}
+                renderItem={({ item }) => {
+                  const isSelected = (selectedOrderForDetail?.id || orders[0]?.id) === item.id;
+                  return (
+                    <View
+                      style={[
+                        showMasterDetail && isSelected && {
+                          borderLeftWidth: 3,
+                          borderLeftColor: theme.colors.primary,
+                          borderRadius: 12,
+                          backgroundColor: theme.colors.surface2,
+                        },
+                      ]}
+                    >
+                      <PurchaseOrderCard
+                        order={item}
+                        onPress={(ord) => {
+                          setSelectedOrderForDetail(ord);
+                          if (!showMasterDetail) {
+                            setOrderDetailVisible(true);
+                          }
+                        }}
+                        onReceive={handleOpenGoodsReceipt}
+                      />
+                    </View>
+                  );
+                }}
                 ListEmptyComponent={
                   <View style={styles.emptyContainer}>
                     <Ionicons name="cart-outline" size={48} color={theme.colors.textMuted} />
@@ -545,14 +564,30 @@ export default function ProcurementScreen() {
                 refreshControl={
                   <RefreshControl refreshing={isLoadingRequests} onRefresh={loadRequests} tintColor={theme.colors.primary} />
                 }
-                renderItem={({ item }) => (
-                  <PurchaseRequestCard
-                    request={item}
-                    onPress={() => {}}
-                    onApprove={handleApproveRequest}
-                    onConvert={handleConvertRequest}
-                  />
-                )}
+                renderItem={({ item }) => {
+                  const isSelected = (selectedRequestForDetail?.id || requests[0]?.id) === item.id;
+                  return (
+                    <View
+                      style={[
+                        showMasterDetail && isSelected && {
+                          borderLeftWidth: 3,
+                          borderLeftColor: theme.colors.primary,
+                          borderRadius: 12,
+                          backgroundColor: theme.colors.surface2,
+                        },
+                      ]}
+                    >
+                      <PurchaseRequestCard
+                        request={item}
+                        onPress={() => {
+                          setSelectedRequestForDetail(item);
+                        }}
+                        onApprove={handleApproveRequest}
+                        onConvert={handleConvertRequest}
+                      />
+                    </View>
+                  );
+                }}
                 ListEmptyComponent={
                   <View style={styles.emptyContainer}>
                     <Ionicons name="clipboard-outline" size={48} color={theme.colors.textMuted} />
@@ -740,6 +775,30 @@ export default function ProcurementScreen() {
           </View>
         )}
       </View>
+    </View>
+  );
+
+  const detailContent = (
+    <ProcurementInspectionPane
+      mode={activeTab === 'REQUESTS' ? 'REQUEST' : 'ORDER'}
+      order={selectedOrderForDetail || orders[0] || null}
+      request={selectedRequestForDetail || requests[0] || null}
+      onReceiveGoods={handleOpenGoodsReceipt}
+      onApproveRequest={handleApproveRequest}
+      onConvertToOrder={handleConvertRequest}
+    />
+  );
+
+  return (
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
+    >
+      {showMasterDetail && (activeTab === 'ORDERS' || activeTab === 'REQUESTS' || activeTab === 'RECEIPT') ? (
+        <MasterDetailContainer masterView={masterContent} detailView={detailContent} />
+      ) : (
+        masterContent
+      )}
 
       {/* ── Modals ── */}
       {/* Tedarikçi 360 Detay Modalı */}

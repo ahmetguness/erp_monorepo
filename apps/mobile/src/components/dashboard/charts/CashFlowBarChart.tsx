@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, LayoutChangeEvent, TouchableOpacity } from 'react-native';
-import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
+import Svg, { Rect, Line, Text as SvgText, G } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../theme';
 import { CashFlowTrendPoint } from '../../../services/dashboard.service';
@@ -192,6 +192,47 @@ export const CashFlowBarChart: React.FC<CashFlowBarChartProps> = ({ data }) => {
             </React.Fragment>
           );
         })}
+
+        {/* Floating Breakdown Popover Tooltip for Active Bar Group */}
+        {selectedIndex !== null && data[selectedIndex] && (() => {
+          const item = data[selectedIndex];
+          const groupLeft = padLeft + selectedIndex * groupWidth;
+          const groupCenterX = groupLeft + groupWidth / 2;
+          const tipW = 108;
+          const tipX = Math.max(padLeft, Math.min(chartWidth - padRight - tipW, groupCenterX - tipW / 2));
+          return (
+            <G x={tipX} y={2}>
+              <Rect
+                width={tipW}
+                height="32"
+                rx="6"
+                fill="rgba(19, 25, 38, 0.95)"
+                stroke={theme.colors.border}
+                strokeWidth="1"
+              />
+              <SvgText
+                x={tipW / 2}
+                y="13"
+                fontSize="8.5"
+                fontWeight="700"
+                fill="#10B981"
+                textAnchor="middle"
+              >
+                +{formatCurrency(item.inflow)} Giriş
+              </SvgText>
+              <SvgText
+                x={tipW / 2}
+                y="26"
+                fontSize="8.5"
+                fontWeight="700"
+                fill="#EF4444"
+                textAnchor="middle"
+              >
+                -{formatCurrency(item.outflow)} Çıkış
+              </SvgText>
+            </G>
+          );
+        })()}
       </Svg>
 
       {/* Interactive touch targets */}
