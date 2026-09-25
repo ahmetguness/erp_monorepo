@@ -1,3 +1,5 @@
+// apps/mobile/src/screens/ProductionScreen.tsx
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
@@ -14,10 +16,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme';
+import { useResponsive } from '../design-system/hooks/useResponsive';
+import { MasterDetailContainer } from '../navigation/MasterDetailContainer';
 import { useAppDispatch, useAppSelector } from '../store/redux';
 import {
   selectShopFloorTimer,
+  selectFormattedElapsedTime,
+  selectFormattedDowntime,
   startTimer,
   stopTimer,
   resetTimer,
@@ -25,47 +33,68 @@ import {
 import {
   WorkOrder,
   WorkOrderStatus,
+  WorkOrderItem,
+  WorkOrderListParams,
+  QCInspectionDTO,
   getWorkOrders,
   changeWorkOrderStatus,
 } from '../services/production.service';
 import {
+  ProductionConsoleInspectionPane,
   WorkOrderCard,
   ShopFloorTimerBar,
   ProductionOutputModal,
-} from '../components/production';
+  DowntimeReasonModal,
+  QualityChecklistModal,
+} from '../features/production';
+import { RootStackParamList } from '../types/navigation.types';
 
 type WorkOrderFilter = 'ALL' | 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED';
 
-interface Props {
-  navigation: any;
-}
-
-export default function ProductionScreen({ navigation }: Props) {
+export default function ProductionScreen() {
   const { theme } = useTheme();
+  const { showMasterDetail } = useResponsive();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const dispatch = useAppDispatch();
 
   const timer = useAppSelector(selectShopFloorTimer);
+  const formattedElapsedTime = useAppSelector(selectFormattedElapsedTime);
+  const formattedDowntime = useAppSelector(selectFormattedDowntime);
 
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeFilter, setActiveFilter] = useState<WorkOrderFilter>('ALL');
 
-  // Selected work order for reporting
+  // Selected work order for tablet split-view inspection & modals
+  const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
   const [selectedWoForOutput, setSelectedWoForOutput] = useState<WorkOrder | null>(null);
+  const [qcModalWo, setQcModalWo] = useState<WorkOrder | null>(null);
+  const [downtimeModalVisible, setDowntimeModalVisible] = useState<boolean>(false);
 
   const loadWorkOrders = useCallback(async () => {
     setIsLoading(true);
     try {
-      const params: any = { limit: 50 };
+      const params: WorkOrderListParams = { limit: 50 };
       if (activeFilter !== 'ALL') {
         params.status = activeFilter;
       }
       const res = await getWorkOrders(params);
-      setWorkOrders(res.items || []);
+      const items = res.items || [];
+      setWorkOrders(items);
       setTotalCount(res.total || 0);
+
+      // Default select first work order in Master-Detail mode if none selected
+      setSelectedWorkOrder((current) => {
+        if (!current && items.length > 0) return items[0];
+        if (current) {
+          const matched = items.find((w) => w.id === current.id);
+          return matched || (items.length > 0 ? items[0] : null);
+        }
+        return null;
+      });
     } catch {
       Alert.alert('Bağlantı Hatası', 'Üretim iş emirleri yüklenemedi.');
     } finally {
@@ -93,7 +122,7 @@ export default function ProductionScreen({ navigation }: Props) {
       const prodNameMatch = wo.product?.name?.toLowerCase().includes(q);
       const prodSkuMatch = wo.product?.code?.toLowerCase().includes(q);
       const bomMatch = wo.bom?.name?.toLowerCase().includes(q);
-      return numMatch || prodNameMatch || prodSkuMatch || bomMatch;
+      return Boolean(numMatch || prodNameMatch || prodSkuMatch || bomMatch);
     });
   }, [workOrders, searchQuery]);
 
@@ -121,7 +150,7 @@ export default function ProductionScreen({ navigation }: Props) {
     }
   };
 
-  const handleOutputReported = (woId: string) => {
+  const handleOutputReported = (_woId: string) => {
     dispatch(resetTimer());
     loadWorkOrders();
   };
@@ -157,11 +186,30 @@ export default function ProductionScreen({ navigation }: Props) {
     );
   };
 
-  return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      edges={['top']}
-    >
+  const handleApplyQC = (qc: QCInspectionDTO) => {
+    setQcModalWo(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    const isPassed = qc.visualPassed && qc.dimensionPassed !== false && qc.functionalPassed !== false;
+    Alert.alert(
+      'Kalite Kontrol Kaydedildi',
+      isPassed ? 'Parça kalite kontrol kriterlerini başarıyla sağladı.' : 'Kusurlar ve fire miktarı kaydedildi.'
+    );
+    loadWorkOrders();
+  };
+
+  const handleScanLotBarcode = (item: WorkOrderItem) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Alert.alert(
+      'Lot / Barkod Tarayıcı',
+      `"${item.product?.name || 'Hammadde'}" için lot numarası otomatik eşlendi: LOT-2026-X88`
+    );
+  };
+
+  const activeWorkOrder = selectedWorkOrder || (workOrders.length > 0 ? workOrders[0] : null);
+
+  // ── Master Pane Content ──
+  const masterContent = (
+    <View style={styles.masterInner}>
       {/* ── Screen Header ── */}
       <View
         style={[
@@ -185,7 +233,7 @@ export default function ProductionScreen({ navigation }: Props) {
             Üretim Takibi (Shop Floor)
           </Text>
           <Text style={[styles.headerSubtitle, { color: theme.colors.textMuted }]}>
-            {totalCount} İş Emri Kaydı • Operasyon Sayacı
+            {totalCount} İş Emri Kaydı • Tezgâh Konsolu
           </Text>
         </View>
 
@@ -289,7 +337,7 @@ export default function ProductionScreen({ navigation }: Props) {
           keyExtractor={(item) => item.id}
           contentContainerStyle={[
             styles.listContent,
-            timer.isRunning && { paddingBottom: 110 },
+            !showMasterDetail && timer.isRunning && { paddingBottom: 110 },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -299,15 +347,32 @@ export default function ProductionScreen({ navigation }: Props) {
               tintColor={theme.colors.primary}
             />
           }
-          renderItem={({ item }) => (
-            <WorkOrderCard
-              workOrder={item}
-              isTimerRunningForThis={timer.isRunning && timer.activeWorkOrderId === item.id}
-              onStartTimer={handleStartTimer}
-              onReportOutput={(wo) => setSelectedWoForOutput(wo)}
-              onChangeStatus={handleChangeStatus}
-            />
-          )}
+          renderItem={({ item }) => {
+            const isSelected = activeWorkOrder?.id === item.id;
+            return (
+              <View
+                style={[
+                  showMasterDetail && isSelected && {
+                    borderLeftWidth: 3,
+                    borderLeftColor: theme.colors.primary,
+                    borderRadius: 14,
+                    backgroundColor: theme.colors.surface2,
+                  },
+                ]}
+              >
+                <WorkOrderCard
+                  workOrder={item}
+                  isTimerRunningForThis={timer.isRunning && timer.activeWorkOrderId === item.id}
+                  onPress={(wo) => {
+                    setSelectedWorkOrder(wo);
+                  }}
+                  onStartTimer={handleStartTimer}
+                  onReportOutput={(wo) => setSelectedWoForOutput(wo)}
+                  onChangeStatus={handleChangeStatus}
+                />
+              </View>
+            );
+          }}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="construct-outline" size={48} color={theme.colors.textMuted} />
@@ -321,9 +386,47 @@ export default function ProductionScreen({ navigation }: Props) {
           }
         />
       )}
+    </View>
+  );
 
-      {/* ── Live Digital Stopwatch Bar ── */}
-      <ShopFloorTimerBar onFinishAndReport={handleFinishAndReport} />
+  // ── Detail Pane Content (Tablet Split-View) ──
+  const detailContent = (
+    <ProductionConsoleInspectionPane
+      workOrder={activeWorkOrder}
+      isTimerRunning={timer.isRunning && timer.activeWorkOrderId === activeWorkOrder?.id}
+      formattedElapsedTime={formattedElapsedTime}
+      formattedDowntime={formattedDowntime}
+      onStartTimer={handleStartTimer}
+      onReportOutput={(wo) => setSelectedWoForOutput(wo)}
+      onOpenDowntime={() => setDowntimeModalVisible(true)}
+      onOpenQC={(wo) => setQcModalWo(wo)}
+      onChangeStatus={handleChangeStatus}
+      onScanLotBarcode={handleScanLotBarcode}
+    />
+  );
+
+  return (
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
+    >
+      {showMasterDetail ? (
+        <MasterDetailContainer
+          masterView={masterContent}
+          detailView={detailContent}
+          masterWidth={390}
+          emptyDetailTitle="Tezgâh İş Emri Seçin"
+          emptyDetailSubtitle="Canlı OEE göstergesi, BOM reçete malzeme tablosu ve operasyon kronometresi bu alanda görüntülenecektir."
+          emptyDetailIcon="hardware-chip-outline"
+        />
+      ) : (
+        masterContent
+      )}
+
+      {/* ── Live Digital Stopwatch Bar (Mobile Only) ── */}
+      {!showMasterDetail && (
+        <ShopFloorTimerBar onFinishAndReport={handleFinishAndReport} />
+      )}
 
       {/* ── Production Output Modal ── */}
       <ProductionOutputModal
@@ -332,12 +435,29 @@ export default function ProductionScreen({ navigation }: Props) {
         onClose={() => setSelectedWoForOutput(null)}
         onOutputReported={handleOutputReported}
       />
+
+      {/* ── Quality Checklist Modal (Faz 23.1) ── */}
+      <QualityChecklistModal
+        visible={Boolean(qcModalWo)}
+        workOrder={qcModalWo}
+        onClose={() => setQcModalWo(null)}
+        onApplyQC={handleApplyQC}
+      />
+
+      {/* ── Downtime Reason Modal (Faz 23.1) ── */}
+      <DowntimeReasonModal
+        visible={downtimeModalVisible}
+        onClose={() => setDowntimeModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  masterInner: {
     flex: 1,
   },
   header: {

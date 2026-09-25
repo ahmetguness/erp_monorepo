@@ -1,3 +1,5 @@
+// apps/mobile/src/screens/FieldServiceScreen.tsx
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
@@ -14,7 +16,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme';
+import { useResponsive } from '../design-system/hooks/useResponsive';
+import { MasterDetailContainer } from '../navigation/MasterDetailContainer';
 import {
   FieldServiceJob,
   FieldServiceSummary,
@@ -22,6 +28,7 @@ import {
   getFieldServiceFlow,
 } from '../services/field-service.service';
 import {
+  FieldServiceInspectionPane,
   ServiceJobCard,
   ServiceStatusSelectorModal,
   ServicePartsModal,
@@ -29,30 +36,30 @@ import {
   ServiceReportModal,
   FieldServiceRouteMapModal,
   ServiceReportPdfModal,
-} from '../components/field-service';
+} from '../features/field-service';
+import { RootStackParamList } from '../types/navigation.types';
 
 type StatusFilter = 'ALL' | 'IN_PROGRESS' | 'WAITING_PARTS' | 'OPEN' | 'COMPLETED';
 
-interface Props {
-  navigation: any;
-}
-
-export default function FieldServiceScreen({ navigation }: Props) {
+export default function FieldServiceScreen() {
   const { theme } = useTheme();
+  const { showMasterDetail } = useResponsive();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [jobs, setJobs] = useState<FieldServiceJob[]>([]);
   const [summary, setSummary] = useState<FieldServiceSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('ALL');
 
-  // Modal states
+  // Selected job for master-detail inspection & modals
+  const [selectedJob, setSelectedJob] = useState<FieldServiceJob | null>(null);
   const [selectedJobForStatus, setSelectedJobForStatus] = useState<FieldServiceJob | null>(null);
   const [selectedJobForParts, setSelectedJobForParts] = useState<FieldServiceJob | null>(null);
   const [selectedJobForSignature, setSelectedJobForSignature] = useState<FieldServiceJob | null>(null);
   const [selectedJobForReport, setSelectedJobForReport] = useState<FieldServiceJob | null>(null);
-  const [routeMapVisible, setRouteMapVisible] = useState(false);
+  const [routeMapVisible, setRouteMapVisible] = useState<boolean>(false);
   const [reportPdfJob, setReportPdfJob] = useState<FieldServiceJob | null>(null);
   const [signaturesByJobId, setSignaturesByJobId] = useState<Record<string, string[]>>({});
   const [reportDetailsByJobId, setReportDetailsByJobId] = useState<
@@ -63,8 +70,18 @@ export default function FieldServiceScreen({ navigation }: Props) {
     setIsLoading(true);
     try {
       const res = await getFieldServiceFlow();
-      setJobs(res.jobs || []);
+      const jobList = res.jobs || [];
+      setJobs(jobList);
       setSummary(res.summary || null);
+
+      setSelectedJob((current) => {
+        if (!current && jobList.length > 0) return jobList[0];
+        if (current) {
+          const matched = jobList.find((j) => j.id === current.id);
+          return matched || (jobList.length > 0 ? jobList[0] : null);
+        }
+        return null;
+      });
     } catch {
       Alert.alert('Bağlantı Hatası', 'Saha servis çağrıları yüklenemedi.');
     } finally {
@@ -96,9 +113,9 @@ export default function FieldServiceScreen({ navigation }: Props) {
         const q = searchQuery.toLowerCase().trim();
         const numMatch = job.number.toLowerCase().includes(q);
         const subjMatch = job.subject.toLowerCase().includes(q);
-        const custMatch = job.contact?.name.toLowerCase().includes(q);
+        const custMatch = job.contact?.name?.toLowerCase().includes(q);
         const cityMatch = job.contact?.city?.toLowerCase().includes(q);
-        const assetMatch = job.asset?.name.toLowerCase().includes(q);
+        const assetMatch = job.asset?.name?.toLowerCase().includes(q);
         if (!numMatch && !subjMatch && !custMatch && !cityMatch && !assetMatch) {
           return false;
         }
@@ -112,6 +129,7 @@ export default function FieldServiceScreen({ navigation }: Props) {
     setJobs((prev) =>
       prev.map((j) => (j.id === jobId ? { ...j, status: newStatus } : j))
     );
+    setSelectedJob((current) => (current && current.id === jobId ? { ...current, status: newStatus } : current));
   };
 
   const handleSignatureSaved = (jobId: string, signatureSvgPaths?: string[]) => {
@@ -122,6 +140,11 @@ export default function FieldServiceScreen({ navigation }: Props) {
       prev.map((j) =>
         j.id === jobId ? { ...j, customerApproved: true, signatureCount: (j.signatureCount || 0) + 1 } : j
       )
+    );
+    setSelectedJob((current) =>
+      current && current.id === jobId
+        ? { ...current, customerApproved: true, signatureCount: (current.signatureCount || 0) + 1 }
+        : current
     );
   };
 
@@ -142,13 +165,18 @@ export default function FieldServiceScreen({ navigation }: Props) {
           : j
       )
     );
+    setSelectedJob((current) =>
+      current && current.id === jobId
+        ? { ...current, serviceFormSubmitted: true, status: 'COMPLETED' }
+        : current
+    );
   };
 
-  return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      edges={['top']}
-    >
+  const activeJob = selectedJob || (jobs.length > 0 ? jobs[0] : null);
+
+  // ── Master Pane Content ──
+  const masterContent = (
+    <View style={styles.masterInner}>
       {/* ── Screen Header ── */}
       <View
         style={[
@@ -298,17 +326,36 @@ export default function FieldServiceScreen({ navigation }: Props) {
               tintColor={theme.colors.primary}
             />
           }
-          renderItem={({ item }) => (
-            <ServiceJobCard
-              job={item}
-              onPress={() => setSelectedJobForStatus(item)}
-              onChangeStatus={(j) => setSelectedJobForStatus(j)}
-              onAddParts={(j) => setSelectedJobForParts(j)}
-              onCaptureSignature={(j) => setSelectedJobForSignature(j)}
-              onSubmitReport={(j) => setSelectedJobForReport(j)}
-              onViewReportPdf={(j) => setReportPdfJob(j)}
-            />
-          )}
+          renderItem={({ item }) => {
+            const isSelected = activeJob?.id === item.id;
+            return (
+              <View
+                style={[
+                  showMasterDetail && isSelected && {
+                    borderLeftWidth: 3,
+                    borderLeftColor: theme.colors.primary,
+                    borderRadius: 14,
+                    backgroundColor: theme.colors.surface2,
+                  },
+                ]}
+              >
+                <ServiceJobCard
+                  job={item}
+                  onPress={() => {
+                    setSelectedJob(item);
+                    if (!showMasterDetail) {
+                      setSelectedJobForStatus(item);
+                    }
+                  }}
+                  onChangeStatus={(j) => setSelectedJobForStatus(j)}
+                  onAddParts={(j) => setSelectedJobForParts(j)}
+                  onCaptureSignature={(j) => setSelectedJobForSignature(j)}
+                  onSubmitReport={(j) => setSelectedJobForReport(j)}
+                  onViewReportPdf={(j) => setReportPdfJob(j)}
+                />
+              </View>
+            );
+          }}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="build-outline" size={48} color={theme.colors.textMuted} />
@@ -321,6 +368,41 @@ export default function FieldServiceScreen({ navigation }: Props) {
             </View>
           }
         />
+      )}
+    </View>
+  );
+
+  // ── Detail Pane Content (Tablet Split-View) ──
+  const detailContent = (
+    <FieldServiceInspectionPane
+      job={activeJob}
+      signatureSvgPaths={activeJob ? signaturesByJobId[activeJob.id] || [] : []}
+      reportDetails={activeJob ? reportDetailsByJobId[activeJob.id] : undefined}
+      onStatusChange={(j) => setSelectedJobForStatus(j)}
+      onAddParts={(j) => setSelectedJobForParts(j)}
+      onCaptureSignature={(j) => setSelectedJobForSignature(j)}
+      onSubmitReport={(j) => setSelectedJobForReport(j)}
+      onViewReportPdf={(j) => setReportPdfJob(j)}
+      onOpenRouteMap={() => setRouteMapVisible(true)}
+    />
+  );
+
+  return (
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
+    >
+      {showMasterDetail ? (
+        <MasterDetailContainer
+          masterView={masterContent}
+          detailView={detailContent}
+          masterWidth={390}
+          emptyDetailTitle="Servis Biletini Seçin"
+          emptyDetailSubtitle="Saha rota haritası, cihaz teşhis bilgisi ve dijital müşteri imzası bu alanda görüntülenecektir."
+          emptyDetailIcon="navigate-outline"
+        />
+      ) : (
+        masterContent
       )}
 
       {/* ── Modals ── */}
@@ -352,17 +434,18 @@ export default function FieldServiceScreen({ navigation }: Props) {
         onReportSubmitted={handleReportSubmitted}
       />
 
-      {/* 16.4: Field Service Route Map Modal */}
+      {/* Field Service Route Map Modal */}
       <FieldServiceRouteMapModal
         visible={routeMapVisible}
         jobs={jobs}
         onClose={() => setRouteMapVisible(false)}
         onSelectJob={(j) => {
+          setSelectedJob(j);
           setSelectedJobForStatus(j);
         }}
       />
 
-      {/* 16.5: Signed Corporate Service Report PDF Modal */}
+      {/* Signed Corporate Service Report PDF Modal */}
       <ServiceReportPdfModal
         visible={Boolean(reportPdfJob)}
         job={reportPdfJob}
@@ -377,6 +460,9 @@ export default function FieldServiceScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  masterInner: {
     flex: 1,
   },
   header: {

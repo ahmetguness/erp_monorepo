@@ -1,3 +1,5 @@
+// apps/mobile/src/screens/EmployeePortalScreen.tsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -12,7 +14,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme';
+import { useResponsive } from '../design-system/hooks/useResponsive';
+import { MasterDetailContainer } from '../navigation/MasterDetailContainer';
 import { useAuthStore } from '../store/auth.store';
 import {
   Employee,
@@ -30,63 +36,60 @@ import {
   getPayrolls,
 } from '../services/hr.service';
 import {
+  EmployeePortalInspectionPane,
+  EmployeePortalTab,
   LeaveBalanceCards,
   NewLeaveRequestModal,
   LeaveRequestCard,
   ShiftCalendarView,
   PayrollSlipModal,
-} from '../components/hr';
+} from '../features/employee-portal';
 import { Badge } from '../components/common/Badge';
 import { useScreenCaptureProtection } from '../hooks';
 import { formatCurrency, formatDate } from '../lib/utils';
+import { RootStackParamList } from '../types/navigation.types';
 
-export type EmployeePortalTab = 'leaves' | 'shifts' | 'payrolls';
-
-interface Props {
-  navigation: any;
-  route?: {
-    params?: {
-      initialTab?: EmployeePortalTab;
-    };
-  };
-}
-
-export default function EmployeePortalScreen({ navigation, route }: Props) {
+export default function EmployeePortalScreen() {
   const { theme } = useTheme();
+  const { showMasterDetail } = useResponsive();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'EmployeePortal'>>();
   const user = useAuthStore((s) => s.user);
 
   // Screen capture & recording protection for sensitive employee payroll and personal data (KVKK/GDPR)
   useScreenCaptureProtection({ enabled: true, screenName: 'EmployeePortalScreen' });
 
   const [activeTab, setActiveTab] = useState<EmployeePortalTab>(
-    route?.params?.initialTab || 'leaves',
+    route.params?.initialTab || 'leaves',
   );
 
   // Common Employee state
   const [employee, setEmployee] = useState<Employee | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   // Tab 1: Leaves
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalanceSummary | null>(null);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
-  const [isNewLeaveModalOpen, setIsNewLeaveModalOpen] = useState(false);
+  const [selectedLeaveRequest, setSelectedLeaveRequest] = useState<LeaveRequest | null>(null);
+  const [isNewLeaveModalOpen, setIsNewLeaveModalOpen] = useState<boolean>(false);
   const [cancellingRequestId, setCancellingRequestId] = useState<string | null>(null);
 
   // Tab 2: Shifts & Attendances
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
-  const [isClocking, setIsClocking] = useState(false);
+  const [isClocking, setIsClocking] = useState<boolean>(false);
 
   // Tab 3: Payrolls
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
   const [selectedPayroll, setSelectedPayroll] = useState<PayrollRecord | null>(null);
+  const [payrollModalVisible, setPayrollModalVisible] = useState<boolean>(false);
 
   // Initial Load: Resolve employee
   const loadEmployeeAndData = useCallback(async () => {
     try {
       let currentEmp = employee;
       if (!currentEmp) {
-        currentEmp = await getCurrentEmployee(user?.email);
+        currentEmp = await getCurrentEmployee(user?.email || undefined);
         if (currentEmp) {
           setEmployee(currentEmp);
         } else {
@@ -116,10 +119,16 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
           getPayrolls({ employeeId: currentEmp.id, limit: 24 }),
         ]);
 
-        setLeaveRequests(leavesRes.requests);
+        const requests = leavesRes.requests || [];
+        setLeaveRequests(requests);
         setLeaveBalance(balanceRes);
-        setAttendances(attsRes);
-        setPayrolls(payrollsRes.payrolls);
+        setAttendances(attsRes || []);
+        const payList = payrollsRes.payrolls || [];
+        setPayrolls(payList);
+
+        // Auto select first items in master-detail view
+        setSelectedLeaveRequest((curr) => curr || (requests.length > 0 ? requests[0] : null));
+        setSelectedPayroll((curr) => curr || (payList.length > 0 ? payList[0] : null));
       }
     } catch (err) {
       console.warn('[EmployeePortal] Load error:', err);
@@ -127,7 +136,7 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [user?.email, user?.name]);
+  }, [employee, user?.email, user?.name]);
 
   useEffect(() => {
     loadEmployeeAndData();
@@ -147,9 +156,10 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
       Alert.alert('Başarılı', 'İzin talebiniz iptal edildi.');
       await loadEmployeeAndData();
     } catch (err) {
+      const errorObj = err as { response?: { data?: { error?: { message?: string }; message?: string } } };
       const serverMsg =
-        (err as any)?.response?.data?.error?.message ||
-        (err as any)?.response?.data?.message ||
+        errorObj?.response?.data?.error?.message ||
+        errorObj?.response?.data?.message ||
         'İzin talebi iptal edilirken bir sorun oluştu.';
       Alert.alert('Hata', serverMsg);
     } finally {
@@ -168,9 +178,10 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
       const updated = await getAttendances({ employeeId: employee.id });
       setAttendances(updated);
     } catch (err) {
+      const errorObj = err as { response?: { data?: { error?: { message?: string }; message?: string } } };
       const serverMsg =
-        (err as any)?.response?.data?.error?.message ||
-        (err as any)?.response?.data?.message ||
+        errorObj?.response?.data?.error?.message ||
+        errorObj?.response?.data?.message ||
         'Giriş damgası kaydedilemedi.';
       Alert.alert('Hata', serverMsg);
     } finally {
@@ -188,9 +199,10 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
       const updated = await getAttendances({ employeeId: employee.id });
       setAttendances(updated);
     } catch (err) {
+      const errorObj = err as { response?: { data?: { error?: { message?: string }; message?: string } } };
       const serverMsg =
-        (err as any)?.response?.data?.error?.message ||
-        (err as any)?.response?.data?.message ||
+        errorObj?.response?.data?.error?.message ||
+        errorObj?.response?.data?.message ||
         'Çıkış damgası kaydedilemedi.';
       Alert.alert('Hata', serverMsg);
     } finally {
@@ -198,8 +210,9 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
     }
   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
+  // ── Master View Content ──
+  const masterContent = (
+    <View style={styles.masterInner}>
       {/* Top App Bar */}
       <View
         style={[
@@ -369,13 +382,34 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
                   </View>
                 ) : null
               }
-              renderItem={({ item }) => (
-                <LeaveRequestCard
-                  request={item}
-                  onCancel={handleCancelLeave}
-                  isCancelling={cancellingRequestId === item.id}
-                />
-              )}
+              renderItem={({ item }) => {
+                const isSelected = selectedLeaveRequest?.id === item.id;
+                return (
+                  <View
+                    style={[
+                      showMasterDetail && isSelected && {
+                        borderLeftWidth: 3,
+                        borderLeftColor: theme.colors.primary,
+                        borderRadius: 14,
+                        backgroundColor: theme.colors.surface2,
+                      },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSelectedLeaveRequest(item);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <LeaveRequestCard
+                        request={item}
+                        onCancel={handleCancelLeave}
+                        isCancelling={cancellingRequestId === item.id}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                );
+              }}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
                   <Ionicons name="calendar-outline" size={48} color={theme.colors.textMuted} />
@@ -433,40 +467,57 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
                   </View>
                 </View>
               }
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.payrollCard,
-                    { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
-                  ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    setSelectedPayroll(item);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.payrollCardLeft}>
-                    <View style={[styles.payrollIconWrap, { backgroundColor: theme.colors.primaryMuted }]}>
-                      <Ionicons name="document-text-outline" size={20} color={theme.colors.primary} />
-                    </View>
-                    <View>
-                      <Text style={[styles.payrollPeriod, { color: theme.colors.text }]}>
-                        {item.period} Maaş Bordrosu
-                      </Text>
-                      <Text style={[styles.payrollDate, { color: theme.colors.textMuted }]}>
-                        {item.paidAt ? `Ödeme Tarihi: ${formatDate(item.paidAt)}` : 'Hazırlandı'}
-                      </Text>
-                    </View>
-                  </View>
+              renderItem={({ item }) => {
+                const isSelected = selectedPayroll?.id === item.id;
+                return (
+                  <View
+                    style={[
+                      showMasterDetail && isSelected && {
+                        borderLeftWidth: 3,
+                        borderLeftColor: theme.colors.primary,
+                        borderRadius: 14,
+                        backgroundColor: theme.colors.surface2,
+                      },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.payrollCard,
+                        { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+                      ]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setSelectedPayroll(item);
+                        if (!showMasterDetail) {
+                          setPayrollModalVisible(true);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.payrollCardLeft}>
+                        <View style={[styles.payrollIconWrap, { backgroundColor: theme.colors.primaryMuted }]}>
+                          <Ionicons name="document-text-outline" size={20} color={theme.colors.primary} />
+                        </View>
+                        <View>
+                          <Text style={[styles.payrollPeriod, { color: theme.colors.text }]}>
+                            {item.period} Maaş Bordrosu
+                          </Text>
+                          <Text style={[styles.payrollDate, { color: theme.colors.textMuted }]}>
+                            {item.paidAt ? `Ödeme Tarihi: ${formatDate(item.paidAt)}` : 'Hazırlandı'}
+                          </Text>
+                        </View>
+                      </View>
 
-                  <View style={styles.payrollCardRight}>
-                    <Text style={[styles.payrollNet, { color: theme.colors.text }]}>
-                      {formatCurrency(item.netSalary)}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+                      <View style={styles.payrollCardRight}>
+                        <Text style={[styles.payrollNet, { color: theme.colors.text }]}>
+                          {formatCurrency(item.netSalary)}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+                      </View>
+                    </TouchableOpacity>
                   </View>
-                </TouchableOpacity>
-              )}
+                );
+              }}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
                   <Ionicons name="receipt-outline" size={48} color={theme.colors.textMuted} />
@@ -481,6 +532,44 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
             />
           )}
         </View>
+      )}
+    </View>
+  );
+
+  // ── Detail View Content ──
+  const detailContent = (
+    <EmployeePortalInspectionPane
+      activeTab={activeTab}
+      employee={employee}
+      selectedLeaveRequest={selectedLeaveRequest}
+      leaveBalance={leaveBalance}
+      selectedPayroll={selectedPayroll}
+      attendances={attendances}
+      onCancelLeave={handleCancelLeave}
+      onOpenNewLeaveModal={() => setIsNewLeaveModalOpen(true)}
+      onOpenPayrollSlipModal={(pay) => {
+        setSelectedPayroll(pay);
+        setPayrollModalVisible(true);
+      }}
+      onClockIn={handleClockIn}
+      onClockOut={handleClockOut}
+      isClocking={isClocking}
+    />
+  );
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
+      {showMasterDetail ? (
+        <MasterDetailContainer
+          masterView={masterContent}
+          detailView={detailContent}
+          masterWidth={390}
+          emptyDetailTitle="İK Kaydı Seçin"
+          emptyDetailSubtitle="İzin detayları, mesai kayıtları ve resmi maaş bordrosu dökümü bu alanda görüntülenecektir."
+          emptyDetailIcon="person-circle-outline"
+        />
+      ) : (
+        masterContent
       )}
 
       {/* New Leave Request Modal */}
@@ -508,10 +597,10 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
 
       {/* Biometric-Protected Payslip Modal */}
       <PayrollSlipModal
-        visible={Boolean(selectedPayroll)}
+        visible={payrollModalVisible}
         payroll={selectedPayroll}
         employee={employee}
-        onClose={() => setSelectedPayroll(null)}
+        onClose={() => setPayrollModalVisible(false)}
       />
     </SafeAreaView>
   );
@@ -519,6 +608,9 @@ export default function EmployeePortalScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  masterInner: {
     flex: 1,
   },
   appBar: {

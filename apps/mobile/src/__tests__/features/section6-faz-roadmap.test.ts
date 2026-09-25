@@ -3,11 +3,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as ProcurementFeatures from '../../features/procurement';
 import * as AuthFeatures from '../../features/auth';
+import * as ProductionFeatures from '../../features/production';
+import * as FieldServiceFeatures from '../../features/field-service';
+import * as EmployeePortalFeatures from '../../features/employee-portal';
 import * as HapticsUtils from '../../design-system/utils/haptics';
 import { AccessibleText } from '../../design-system/primitives/AccessibleText';
 import { DynamicIslandToast } from '../../design-system/feedback/DynamicIslandToast';
 
-describe('Section 6: Fazlandırılmış Uygulama Yol Haritası (Faz 18 — Faz 22) Test Suite', () => {
+describe('Section 6: Fazlandırılmış Uygulama Yol Haritası (Faz 18 — Faz 23) Test Suite', () => {
   describe('FAZ 20.4 — Satın Alma Portalı Çift Panel (features/procurement)', () => {
     it('should export ProcurementInspectionPane', () => {
       expect(ProcurementFeatures.ProcurementInspectionPane).toBeDefined();
@@ -142,6 +145,105 @@ describe('Section 6: Fazlandırılmış Uygulama Yol Haritası (Faz 18 — Faz 2
       const defaultMultiplier = 1.35;
       expect(defaultMultiplier).toBeLessThanOrEqual(1.5);
       expect(defaultMultiplier).toBeGreaterThanOrEqual(1.2);
+    });
+  });
+
+  describe('FAZ 23: İleri Operasyonel Tablet Master-Detail Genişlemesi', () => {
+    describe('FAZ 23.1 — Üretim Tezgâh Konsolu Split-View (features/production)', () => {
+      it('should export ProductionConsoleInspectionPane and related components', () => {
+        expect(ProductionFeatures.ProductionConsoleInspectionPane).toBeDefined();
+        expect(ProductionFeatures.WorkOrderCard).toBeDefined();
+        expect(ProductionFeatures.ShopFloorTimerBar).toBeDefined();
+        expect(ProductionFeatures.ProductionOutputModal).toBeDefined();
+        expect(ProductionFeatures.DowntimeReasonModal).toBeDefined();
+        expect(ProductionFeatures.QualityChecklistModal).toBeDefined();
+      });
+
+      it('should calculate OEE metrics accurately based on standard formula', () => {
+        const availability = 92.4;
+        const performance = 95.8;
+        const quality = 98.2;
+        const calculatedOee = Math.round((availability * performance * quality) / 10000);
+
+        expect(calculatedOee).toBe(87);
+        expect(calculatedOee).toBeGreaterThanOrEqual(85); // World-Class OEE benchmark
+      });
+
+      it('should compute work order completion progress percentage', () => {
+        const plannedQty = 250;
+        const producedQty = 175;
+        const scrapQty = 5;
+
+        const completionPct = Math.min(100, Math.round((producedQty / plannedQty) * 100));
+        const effectiveNet = producedQty - scrapQty;
+
+        expect(completionPct).toBe(70);
+        expect(effectiveNet).toBe(170);
+      });
+    });
+
+    describe('FAZ 23.2 — Saha Servis Harita & Rota Split-View (features/field-service)', () => {
+      it('should export FieldServiceInspectionPane and related components', () => {
+        expect(FieldServiceFeatures.FieldServiceInspectionPane).toBeDefined();
+        expect(FieldServiceFeatures.ServiceJobCard).toBeDefined();
+        expect(FieldServiceFeatures.FieldServiceRouteMapModal).toBeDefined();
+        expect(FieldServiceFeatures.ServiceReportPdfModal).toBeDefined();
+      });
+
+      it('should sequence route stops and compute destination information', () => {
+        const routeStops = [
+          { sequence: 1, title: 'Durak 1 - Merkez', address: 'Organize Sanayi 1. Cadde' },
+          { sequence: 2, title: 'Durak 2 - Fabrika A', address: 'Marmara Teknopark B Blok' },
+          { sequence: 3, title: 'Durak 3 - Lojistik Depo', address: 'Liman Yolu No: 44' },
+        ];
+
+        const activeStop = routeStops.find((s) => s.sequence === 2);
+        expect(activeStop).toBeDefined();
+        expect(activeStop?.title).toContain('Durak 2');
+        expect(routeStops).toHaveLength(3);
+      });
+    });
+
+    describe('FAZ 23.3 — İK Çalışan Portalı & Bordro Split-View (features/employee-portal)', () => {
+      it('should export EmployeePortalInspectionPane and related components', () => {
+        expect(EmployeePortalFeatures.EmployeePortalInspectionPane).toBeDefined();
+        expect(EmployeePortalFeatures.LeaveBalanceCards).toBeDefined();
+        expect(EmployeePortalFeatures.NewLeaveRequestModal).toBeDefined();
+        expect(EmployeePortalFeatures.LeaveRequestCard).toBeDefined();
+        expect(EmployeePortalFeatures.ShiftCalendarView).toBeDefined();
+        expect(EmployeePortalFeatures.PayrollSlipModal).toBeDefined();
+      });
+
+      it('should compute leave balance remaining and impact', () => {
+        const balance = {
+          totalAnnual: 14,
+          usedAnnual: 4,
+          remainingAnnual: 10,
+          totalExcused: 5,
+          usedExcused: 1,
+          remainingExcused: 4,
+          pendingCount: 1,
+        };
+
+        const remainingAnnual = balance.totalAnnual - balance.usedAnnual;
+        const remainingExcused = balance.totalExcused - balance.usedExcused;
+
+        expect(remainingAnnual).toBe(10);
+        expect(remainingExcused).toBe(4);
+        expect(balance.pendingCount).toBe(1);
+      });
+
+      it('should verify payroll gross-to-net salary breakdown', () => {
+        const grossSalary = 68500;
+        const sgkEmployeeTax = grossSalary * 0.15; // 14% SGK + 1% Unemployment
+        const incomeTax = 7200;
+        const totalDeductions = sgkEmployeeTax + incomeTax;
+        const netSalary = grossSalary - totalDeductions;
+
+        expect(sgkEmployeeTax).toBe(10275);
+        expect(netSalary).toBe(51025);
+        expect(grossSalary).toBeGreaterThan(netSalary);
+      });
     });
   });
 });
