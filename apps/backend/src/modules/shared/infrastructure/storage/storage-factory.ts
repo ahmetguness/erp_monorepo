@@ -45,6 +45,9 @@ class LegacyFallbackStorage implements ObjectStorage {
     // authenticated proxy until migration is complete to avoid false 404s.
     return Promise.resolve(null);
   }
+  createSignedPutUrl(key: string, contentType: string, expiresInSeconds: number): Promise<SignedObjectUrl | null> {
+    return this.primary.createSignedPutUrl(key, contentType, expiresInSeconds);
+  }
 }
 
 let singleton: ObjectStorage | null = null;

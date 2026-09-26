@@ -11,6 +11,9 @@ import { bufferToArrayBuffer,storageService } from '../../../../../services/stor
 import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../../utils/context.js';
 import { canAccessConfidentialDocuments,ensureAttachmentConfidentialityAccess,ensureEntityBelongsToTenant,findEntityOptions,getAttachmentIdFromAuditValues,isEntityType,sanitizeFileName } from './shared.js';
+import { StorageReservationService } from '../../../../storage-accounting/index.js';
+
+const storageAccounting = new StorageReservationService(prisma);
 
 export const queryAttachmentController = {
   async library(c: Context): Promise<Response> {
@@ -93,6 +96,7 @@ export const queryAttachmentController = {
     if (!storedObject) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
 
     const body = new Blob([bufferToArrayBuffer(storedObject.body)]);
+    await storageAccounting.recordTraffic(tenantId, 'download', storedObject.contentLength);
 
     await createAuditLog(prisma, {
       tenantId,
@@ -125,6 +129,7 @@ export const queryAttachmentController = {
     const configuredTtl = Number.parseInt(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? '300', 10);
     const expiresInSeconds = Number.isFinite(configuredTtl) ? Math.min(3_600, Math.max(30, configuredTtl)) : 300;
     const signed = await storageService.createSignedGetUrl(attachment.storagePath, expiresInSeconds);
+    if (signed) await storageAccounting.recordTraffic(tenantId, 'download', attachment.fileSize ?? 0);
     const expiresAt = signed?.expiresAt ?? new Date(Date.now() + expiresInSeconds * 1_000);
     await createAuditLog(prisma, {
       tenantId,

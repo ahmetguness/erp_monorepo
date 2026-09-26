@@ -8,6 +8,8 @@ export type {
   PaginatedResponse,
 } from "./contracts/common.js";
 
+export * from "./chat.js";
+
 // ─────────────────────────────────────────────
 // ENUMS
 // ─────────────────────────────────────────────

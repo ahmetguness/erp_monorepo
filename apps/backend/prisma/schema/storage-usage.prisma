@@ -1,0 +1,66 @@
+enum StorageReservationSource {
+  CHAT_ATTACHMENT
+  ERP_ATTACHMENT
+}
+
+enum StorageReservationStatus {
+  RESERVED
+  UPLOADED
+  SCANNING
+  COMMITTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+model TenantStorageUsage {
+  tenantId      String   @id
+  usedBytes     BigInt   @default(0)
+  reservedBytes BigInt   @default(0)
+  version       Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_storage_usage")
+}
+
+model StorageReservation {
+  id            String                   @id @default(cuid())
+  tenantId      String
+  source        StorageReservationSource
+  status        StorageReservationStatus @default(RESERVED)
+  objectKey     String                   @unique
+  originalName  String
+  contentType   String
+  createdById   String
+  expectedBytes BigInt
+  resourceId    String?
+  expiresAt     DateTime
+  uploadedAt    DateTime?
+  finalizedAt   DateTime?
+  failureReason String?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  tenant        Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, expiresAt])
+  @@index([status, updatedAt])
+  @@map("storage_reservations")
+}
+
+model StorageTrafficDaily {
+  tenantId        String
+  day             DateTime @db.Date
+  uploadedBytes   BigInt   @default(0)
+  downloadedBytes BigInt   @default(0)
+  uploadCount     Int      @default(0)
+  downloadCount   Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, day])
+  @@index([day, downloadedBytes])
+  @@map("storage_traffic_daily")
+}

@@ -23,6 +23,7 @@ export interface ObjectStorage {
   get(key: string): Promise<StoredObject | null>;
   delete(key: string): Promise<void>;
   createSignedGetUrl(key: string, expiresInSeconds: number): Promise<SignedObjectUrl | null>;
+  createSignedPutUrl(key: string, contentType: string, expiresInSeconds: number): Promise<SignedObjectUrl | null>;
 }
 
 export interface StorageStatus {

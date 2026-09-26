@@ -2,14 +2,6 @@ import { FeatureKey, Plan, PrismaClient } from '@prisma/client';
 import { parseBooleanValue, parseLimitValue } from '../utils/feature-parser';
 import { TenantFeatureService } from './tenant-feature.service';
 
-const BYTES_IN_GB = 1024 * 1024 * 1024;
-
-const STORAGE_LIMIT_BYTES: Record<Plan, number | null> = {
-  [Plan.STARTER]: BYTES_IN_GB,
-  [Plan.PROFESSIONAL]: 10 * BYTES_IN_GB,
-  [Plan.ENTERPRISE]: null,
-};
-
 export type PlanUsageMetricKey = 'users' | 'products' | 'warehouses' | 'apiKeys' | 'storage';
 export type PlanUsageUnit = 'count' | 'bytes';
 export type PlanUsageStatus = 'ok' | 'warning' | 'full' | 'unlimited';
@@ -54,12 +46,13 @@ export class PlanUsageService {
       select: { plan: true },
     });
 
-    const [counts, maxUsers, maxProducts, multiWarehouse, apiAccess] = await Promise.all([
+    const [counts, maxUsers, maxProducts, multiWarehouse, apiAccess, storageLimit] = await Promise.all([
       this.getCountSnapshot(tenantId),
       this.getLimit(tenantId, FeatureKey.MAX_USERS),
       this.getLimit(tenantId, FeatureKey.MAX_PRODUCTS),
       this.getBoolean(tenantId, FeatureKey.MULTI_WAREHOUSE),
       this.getBoolean(tenantId, FeatureKey.API_ACCESS),
+      this.getLimit(tenantId, FeatureKey.STORAGE_LIMIT_BYTES),
     ]);
 
     return {
@@ -103,24 +96,21 @@ export class PlanUsageService {
           key: 'storage',
           label: 'Storage',
           used: counts.storageBytes,
-          limit: STORAGE_LIMIT_BYTES[tenant.plan],
+          limit: storageLimit,
           unit: 'bytes',
-          reason: STORAGE_LIMIT_BYTES[tenant.plan] === null ? null : 'Storage kotasi doldu.',
+          reason: storageLimit === null ? null : 'Storage kotasi doldu.',
         }),
       ],
     };
   }
 
   private async getCountSnapshot(tenantId: string): Promise<CountSnapshot> {
-    const [users, products, warehouses, apiKeys, attachmentSize] = await this.prisma.$transaction([
+    const [users, products, warehouses, apiKeys, usage] = await this.prisma.$transaction([
       this.prisma.tenantUser.count({ where: { tenantId, isActive: true } }),
       this.prisma.product.count({ where: { tenantId, deletedAt: null } }),
       this.prisma.warehouse.count({ where: { tenantId } }),
       this.prisma.apiKey.count({ where: { tenantId, deletedAt: null, isActive: true } }),
-      this.prisma.attachment.aggregate({
-        where: { tenantId },
-        _sum: { fileSize: true },
-      }),
+      this.prisma.tenantStorageUsage.findUnique({ where: { tenantId }, select: { usedBytes: true, reservedBytes: true } }),
     ]);
 
     return {
@@ -128,7 +118,7 @@ export class PlanUsageService {
       products,
       warehouses,
       apiKeys,
-      storageBytes: attachmentSize._sum.fileSize ?? 0,
+      storageBytes: Number((usage?.usedBytes ?? 0n) + (usage?.reservedBytes ?? 0n)),
     };
   }
 

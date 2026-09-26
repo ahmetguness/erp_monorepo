@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { registerDomainEventListeners } from '../../domain-events/index.js';
+import { registerChatWebSocket } from '../../modules/collaboration/index.js';
 import type { RuntimeConfig } from '../runtime-config.js';
 import { registerErrorHandlers } from './error-handlers.js';
 import { registerPreRoutingMiddleware } from './middleware.js';
@@ -15,6 +16,7 @@ export function createApp(config: RuntimeConfig): Hono {
 
   const app = new Hono();
   registerPreRoutingMiddleware(app, config);
+  registerChatWebSocket(app, config.allowedOrigins, config.isProduction);
   registerPublicRoutes(app);
   registerTenantRoutes(app);
   registerErrorHandlers(app, config.isProduction);

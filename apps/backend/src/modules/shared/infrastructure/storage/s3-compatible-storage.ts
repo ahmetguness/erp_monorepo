@@ -53,6 +53,14 @@ export class S3CompatibleObjectStorage implements ObjectStorage {
   }
 
   async createSignedGetUrl(key: string, expiresInSeconds: number): Promise<SignedObjectUrl> {
+    return this.createSignedUrl('GET', key, expiresInSeconds);
+  }
+
+  async createSignedPutUrl(key: string, _contentType: string, expiresInSeconds: number): Promise<SignedObjectUrl> {
+    return this.createSignedUrl('PUT', key, expiresInSeconds);
+  }
+
+  private async createSignedUrl(method: 'GET' | 'PUT', key: string, expiresInSeconds: number): Promise<SignedObjectUrl> {
     const expires = Math.min(3_600, Math.max(30, Math.trunc(expiresInSeconds)));
     const now = new Date();
     const { dateStamp, value: dateValue } = amzDate(now);
@@ -71,7 +79,7 @@ export class S3CompatibleObjectStorage implements ObjectStorage {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([name, value]) => `${encodeQueryValue(name)}=${encodeQueryValue(value)}`)
       .join('&');
-    const canonicalRequest = ['GET', canonicalUri, canonicalQuery, `host:${host}\n`, 'host', 'UNSIGNED-PAYLOAD'].join('\n');
+    const canonicalRequest = [method, canonicalUri, canonicalQuery, `host:${host}\n`, 'host', 'UNSIGNED-PAYLOAD'].join('\n');
     const stringToSign = ['AWS4-HMAC-SHA256', dateValue, scope, hashHex(canonicalRequest)].join('\n');
     const signature = hmacHex(signingKey(this.config.secretAccessKey, dateStamp, this.config.region, service), stringToSign);
     return {

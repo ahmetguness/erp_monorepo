@@ -21,6 +21,7 @@ export const storageService: ObjectStorage = {
   get(key) { return getObjectStorage().get(key); },
   delete(key) { return getObjectStorage().delete(key); },
   createSignedGetUrl(key, expiresInSeconds) { return getObjectStorage().createSignedGetUrl(key, expiresInSeconds); },
+  createSignedPutUrl(key, contentType, expiresInSeconds) { return getObjectStorage().createSignedPutUrl(key, contentType, expiresInSeconds); },
 };
 
 export function getStorageStatus(): StorageStatus {

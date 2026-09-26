@@ -40,6 +40,10 @@ export class LocalObjectStorage implements ObjectStorage {
     return null;
   }
 
+  async createSignedPutUrl(_key: string, _contentType: string, _expiresInSeconds: number): Promise<SignedObjectUrl | null> {
+    return null;
+  }
+
   private resolvePath(key: string): string {
     const root = resolve(this.rootDirectory);
     const filePath = resolve(root, validateObjectKey(key));

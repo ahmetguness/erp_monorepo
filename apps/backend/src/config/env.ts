@@ -78,6 +78,7 @@ export const ENV_REGISTRY: readonly EnvVarDefinition[] = [
   { name: 'TRUSTED_PROXY_CIDRS', kind: 'csv', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Comma-separated IPv4 CIDR allow-list for trusted reverse proxies.' },
   { name: 'MARKETPLACE_WORKER_ENABLED', kind: 'boolean', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Explicit marketplace worker switch.' },
   { name: 'DOMAIN_EVENT_OUTBOX_WORKER_ENABLED', kind: 'boolean', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Explicit domain event worker switch.' },
+  { name: 'CHAT_ATTACHMENT_WORKER_ENABLED', kind: 'boolean', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Runs asynchronous chat attachment scanning and reservation cleanup.' },
   { name: 'DOMAIN_EVENT_OUTBOX_WORKER_INTERVAL_MS', kind: 'number', required: false, runtime: 'all', defaultValue: '10000', secretClass: 'internal', securityNote: 'Domain event worker polling interval.' },
   { name: 'DOMAIN_EVENT_OUTBOX_PROCESSING_TIMEOUT_MS', kind: 'number', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Domain event processing timeout override.' },
   { name: 'WORKER_CONCURRENCY', kind: 'number', required: false, runtime: 'all', defaultValue: '2', secretClass: 'internal', securityNote: 'Background worker concurrency.' },

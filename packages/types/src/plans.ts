@@ -37,6 +37,13 @@ export const FEATURE_KEY = {
   CASHFLOW_FORECAST: "CASHFLOW_FORECAST",
   BANK_RECONCILIATION: "BANK_RECONCILIATION",
   LOT_SERIAL_TRACKING: "LOT_SERIAL_TRACKING",
+  CHAT_ENABLED: "CHAT_ENABLED",
+  STORAGE_LIMIT_BYTES: "STORAGE_LIMIT_BYTES",
+  CHAT_FILE_MAX_BYTES: "CHAT_FILE_MAX_BYTES",
+  CHAT_ATTACHMENTS_PER_MESSAGE: "CHAT_ATTACHMENTS_PER_MESSAGE",
+  CHAT_MAX_GROUP_MEMBERS: "CHAT_MAX_GROUP_MEMBERS",
+  CHAT_RETENTION_DAYS: "CHAT_RETENTION_DAYS",
+  CHAT_AUDIT_LEVEL: "CHAT_AUDIT_LEVEL",
 } as const;
 
 export type FeatureKeyName = (typeof FEATURE_KEY)[keyof typeof FEATURE_KEY];
@@ -108,6 +115,13 @@ export interface PlanFeatureFlags {
   cashflowForecast: boolean;
   bankReconciliation: boolean;
   lotSerialTracking: boolean;
+  chatEnabled: boolean;
+  storageLimitBytes: number;
+  chatFileMaxBytes: number;
+  chatAttachmentsPerMessage: number;
+  chatMaxGroupMembers: number;
+  chatRetentionDays: number | null;
+  chatAuditLevel: "basic" | "advanced" | "enterprise";
 }
 
 export const PLAN_FEATURES: Record<PlanName, PlanFeatureFlags> = {
@@ -136,6 +150,13 @@ export const PLAN_FEATURES: Record<PlanName, PlanFeatureFlags> = {
     cashflowForecast: false,
     bankReconciliation: false,
     lotSerialTracking: false,
+    chatEnabled: true,
+    storageLimitBytes: 500 * 1024 * 1024,
+    chatFileMaxBytes: 5 * 1024 * 1024,
+    chatAttachmentsPerMessage: 3,
+    chatMaxGroupMembers: 20,
+    chatRetentionDays: 90,
+    chatAuditLevel: "basic",
   },
   [PLAN.PROFESSIONAL]: {
     maxUsers: 25,
@@ -162,6 +183,13 @@ export const PLAN_FEATURES: Record<PlanName, PlanFeatureFlags> = {
     cashflowForecast: true,
     bankReconciliation: true,
     lotSerialTracking: true,
+    chatEnabled: true,
+    storageLimitBytes: 10 * 1024 * 1024 * 1024,
+    chatFileMaxBytes: 25 * 1024 * 1024,
+    chatAttachmentsPerMessage: 5,
+    chatMaxGroupMembers: 100,
+    chatRetentionDays: 365,
+    chatAuditLevel: "advanced",
   },
   [PLAN.ENTERPRISE]: {
     maxUsers: null,
@@ -188,6 +216,13 @@ export const PLAN_FEATURES: Record<PlanName, PlanFeatureFlags> = {
     cashflowForecast: true,
     bankReconciliation: true,
     lotSerialTracking: true,
+    chatEnabled: true,
+    storageLimitBytes: 100 * 1024 * 1024 * 1024,
+    chatFileMaxBytes: 100 * 1024 * 1024,
+    chatAttachmentsPerMessage: 10,
+    chatMaxGroupMembers: 250,
+    chatRetentionDays: null,
+    chatAuditLevel: "enterprise",
   },
 };
 
@@ -256,6 +291,12 @@ type LimitPlanFeatureFlag = {
     : never;
 }[keyof PlanFeatureFlags];
 
+type EnumPlanFeatureFlag = {
+  [Key in keyof PlanFeatureFlags]: PlanFeatureFlags[Key] extends string
+    ? Key
+    : never;
+}[keyof PlanFeatureFlags];
+
 export interface PlanFeatureDefinition {
   flag: keyof PlanFeatureFlags;
   key: string;
@@ -313,6 +354,24 @@ function limitFeature(
     label,
     pricingVisible,
     value: (features) => serializeLimit(features[flag]),
+  };
+}
+
+function enumFeature(
+  flag: EnumPlanFeatureFlag,
+  key: string,
+  featureKey: FeatureKeyName,
+  label: string,
+  pricingVisible = true,
+): PlanFeatureDefinition {
+  return {
+    flag,
+    key,
+    featureKey,
+    type: FEATURE_TYPE.ENUM,
+    label,
+    pricingVisible,
+    value: (features) => String(features[flag]),
   };
 }
 
@@ -437,6 +496,13 @@ export const PLAN_FEATURE_DEFINITIONS: readonly PlanFeatureDefinition[] = [
     FEATURE_KEY.LOT_SERIAL_TRACKING,
     "Lot / seri no takibi",
   ),
+  booleanFeature("chatEnabled", "chat_enabled", FEATURE_KEY.CHAT_ENABLED, "Tenant içi sohbet"),
+  limitFeature("storageLimitBytes", "storage_limit_bytes", FEATURE_KEY.STORAGE_LIMIT_BYTES, "Ortak depolama", false),
+  limitFeature("chatFileMaxBytes", "chat_file_max_bytes", FEATURE_KEY.CHAT_FILE_MAX_BYTES, "Sohbet dosya boyutu", false),
+  limitFeature("chatAttachmentsPerMessage", "chat_attachments_per_message", FEATURE_KEY.CHAT_ATTACHMENTS_PER_MESSAGE, "Mesaj başına dosya", false),
+  limitFeature("chatMaxGroupMembers", "chat_max_group_members", FEATURE_KEY.CHAT_MAX_GROUP_MEMBERS, "Sohbet grup üyesi", false),
+  limitFeature("chatRetentionDays", "chat_retention_days", FEATURE_KEY.CHAT_RETENTION_DAYS, "Sohbet saklama günü", false),
+  enumFeature("chatAuditLevel", "chat_audit_level", FEATURE_KEY.CHAT_AUDIT_LEVEL, "Sohbet audit seviyesi", false),
 ] as const;
 
 type DefinedPlanFeatureFlag = (typeof PLAN_FEATURE_DEFINITIONS)[number]["flag"];

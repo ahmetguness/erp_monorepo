@@ -63,6 +63,13 @@ export const STARTER_FEATURE_DEFAULTS: Record<FeatureKey, string> = {
   [FeatureKey.CASHFLOW_FORECAST]: 'false',
   [FeatureKey.BANK_RECONCILIATION]: 'false',
   [FeatureKey.LOT_SERIAL_TRACKING]: 'false',
+  [FeatureKey.CHAT_ENABLED]: 'true',
+  [FeatureKey.STORAGE_LIMIT_BYTES]: String(500 * 1024 * 1024),
+  [FeatureKey.CHAT_FILE_MAX_BYTES]: String(5 * 1024 * 1024),
+  [FeatureKey.CHAT_ATTACHMENTS_PER_MESSAGE]: '3',
+  [FeatureKey.CHAT_MAX_GROUP_MEMBERS]: '20',
+  [FeatureKey.CHAT_RETENTION_DAYS]: '90',
+  [FeatureKey.CHAT_AUDIT_LEVEL]: 'basic',
 };
 
 export const UNLIMITED_VALUE = 'unlimited';

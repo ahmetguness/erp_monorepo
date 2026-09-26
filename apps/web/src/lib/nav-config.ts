@@ -54,6 +54,7 @@ import {
   ListChecks,
   Tag,
   LifeBuoy,
+  MessagesSquare,
   type LucideIcon,
 } from 'lucide-react';
 import { ACCESS_POLICIES, type PlanName } from './plans';
@@ -78,6 +79,9 @@ const ENTERPRISE_PLAN = ACCESS_POLICIES.production.minPlan as NavItem['plan'];
 export const NAV_GROUPS: NavGroup[] = [
   {
     items: [{ label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }],
+  },
+  {
+    items: [{ label: 'Sohbet', href: '/dashboard/chat', icon: MessagesSquare }],
   },
   {
     label: 'Ticaret',

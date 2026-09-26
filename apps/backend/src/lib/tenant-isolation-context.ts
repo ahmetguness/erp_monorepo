@@ -16,6 +16,9 @@ export const TENANT_ISOLATION_BYPASS_REASONS = [
   "domain-event-outbox-worker-atomic-claim",
   "marketplace-worker-atomic-claim",
   "credential-migration",
+  "storage-reservation-worker-claim",
+  "storage-reservation-worker-expiry",
+  "chat-retention-worker-tenants",
 ] as const;
 
 export type TenantIsolationBypassReason =

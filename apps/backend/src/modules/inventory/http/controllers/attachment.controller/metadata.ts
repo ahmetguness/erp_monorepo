@@ -6,6 +6,9 @@ import { storageService } from '../../../../../services/storage.service.js';
 import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../../utils/context.js';
 import { ensureEntityBelongsToTenant,isRecord,parseAttachmentMetadataUpdate,parseCategoryInput,parseConfidentialityInput,parseDateField,parseKindInput,parsePositiveVersion,readBodyString,readRecord,readStringArray,readStringArrayRequired,sanitizeFileName,validateDocumentDates } from './shared.js';
+import { StorageReservationService } from '../../../../storage-accounting/index.js';
+
+const storageAccounting = new StorageReservationService(prisma);
 
 export const metadataAttachmentController = {
   async rename(c: Context): Promise<Response> {
@@ -188,6 +191,7 @@ export const metadataAttachmentController = {
     await storageService.delete(attachment.storagePath);
 
     await prisma.attachment.delete({ where: { id } });
+    await storageAccounting.releaseUsedBytes(tenantId, attachment.fileSize ?? 0);
 
     await createAuditLog(prisma, {
       tenantId,

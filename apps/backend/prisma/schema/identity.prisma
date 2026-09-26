@@ -62,6 +62,13 @@ enum FeatureKey {
   CASHFLOW_FORECAST
   BANK_RECONCILIATION
   LOT_SERIAL_TRACKING
+  CHAT_ENABLED
+  STORAGE_LIMIT_BYTES
+  CHAT_FILE_MAX_BYTES
+  CHAT_ATTACHMENTS_PER_MESSAGE
+  CHAT_MAX_GROUP_MEMBERS
+  CHAT_RETENTION_DAYS
+  CHAT_AUDIT_LEVEL
 }
 
 enum AppModule {
@@ -250,6 +257,25 @@ model Tenant {
   collectionReminders         CollectionReminder[]
   collaborationEntries        RecordCollaborationEntry[]
   recordFollowers             RecordFollower[]
+  chatConversations           ChatConversation[]
+  chatConversationMembers     ChatConversationMember[]
+  chatMessages                ChatMessage[]
+  chatMessageRevisions        ChatMessageRevision[]
+  chatMessageMentions         ChatMessageMention[]
+  chatMessageStars            ChatMessageStar[]
+  chatMessageReactions        ChatMessageReaction[]
+  chatPinnedMessages          ChatPinnedMessage[]
+  chatAttachments             ChatAttachment[]
+  chatGroupInvites            ChatGroupInvite[]
+  chatPolls                   ChatPoll[]
+  chatPollOptions             ChatPollOption[]
+  chatPollVotes               ChatPollVote[]
+  chatEvents                  ChatEvent[]
+  chatEventResponses          ChatEventResponse[]
+  chatRealtimeEvents          ChatRealtimeOutbox[]
+  storageUsage                TenantStorageUsage?
+  storageReservations         StorageReservation[]
+  storageTraffic              StorageTrafficDaily[]
 
   @@index([status])
   @@index([deletedAt])
@@ -275,13 +301,28 @@ model User {
   passwordResetToken  String?
   passwordResetExpiry DateTime?
 
-  tenants              TenantUser[]
-  approvalSteps        ApprovalStep[]             @relation("StepApproverUser")
-  sentInvitations      Invitation[]               @relation("InvitationInviter")
-  sentMailMessages     MailMessage[]              @relation("MailMessageSender")
-  aiRequestLogs        AiRequestLog[]
-  collaborationEntries RecordCollaborationEntry[] @relation("RecordCollaborationEntryCreator")
-  followedRecords      RecordFollower[]           @relation("RecordFollowerUser")
+  tenants                  TenantUser[]
+  approvalSteps            ApprovalStep[]             @relation("StepApproverUser")
+  sentInvitations          Invitation[]               @relation("InvitationInviter")
+  sentMailMessages         MailMessage[]              @relation("MailMessageSender")
+  aiRequestLogs            AiRequestLog[]
+  collaborationEntries     RecordCollaborationEntry[] @relation("RecordCollaborationEntryCreator")
+  followedRecords          RecordFollower[]           @relation("RecordFollowerUser")
+  createdChatConversations ChatConversation[]         @relation("ChatConversationCreator")
+  chatMemberships          ChatConversationMember[]
+  sentChatMessages         ChatMessage[]              @relation("ChatMessageSender")
+  chatMessageRevisions     ChatMessageRevision[]      @relation("ChatMessageRevisionEditor")
+  chatMentions             ChatMessageMention[]       @relation("ChatMentionedUser")
+  chatStars                ChatMessageStar[]
+  chatReactions            ChatMessageReaction[]
+  chatPins                 ChatPinnedMessage[]
+  chatAttachments          ChatAttachment[]
+  sentChatInvites          ChatGroupInvite[]          @relation("ChatInviteInviter")
+  receivedChatInvites      ChatGroupInvite[]          @relation("ChatInviteInvitee")
+  createdChatPolls         ChatPoll[]
+  chatPollVotes            ChatPollVote[]
+  createdChatEvents        ChatEvent[]
+  chatEventResponses       ChatEventResponse[]
 
   @@index([email])
   @@index([deletedAt])

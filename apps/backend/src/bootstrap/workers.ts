@@ -5,6 +5,7 @@ import { TrendyolWorker } from "../services/trendyol-worker.service.js";
 import type { AppRole } from "./runtime-config.js";
 import { prisma } from "../lib/prisma.js";
 import { PersistentObservabilityWorker } from "../modules/platform/index.js";
+import { ChatAttachmentWorker, ChatRetentionWorker } from "../modules/storage-accounting/index.js";
 
 let shutdownRegistered = false;
 let shuttingDown = false;
@@ -34,6 +35,12 @@ export function startWorkers(
       "[TrendyolWorker] Disabled. Set MARKETPLACE_WORKER_ENABLED=true or APP_ROLE=worker/all to enable.",
     );
 
+  const chatAttachmentWorkerEnabled = env.CHAT_ATTACHMENT_WORKER_ENABLED === 'true'
+    || (env.CHAT_ATTACHMENT_WORKER_ENABLED !== 'false' && (role === 'worker' || role === 'all' || env.NODE_ENV !== 'production'));
+  if (chatAttachmentWorkerEnabled) ChatAttachmentWorker.start();
+  else logger.info('[ChatAttachmentWorker] Disabled. Set CHAT_ATTACHMENT_WORKER_ENABLED=true or APP_ROLE=worker/all to enable.');
+  if (chatAttachmentWorkerEnabled) ChatRetentionWorker.start();
+
   startMarketplaceMocks();
   registerWorkerShutdown();
 }
@@ -43,6 +50,8 @@ export async function stopWorkers(): Promise<void> {
     DomainEventOutboxWorker.stop(),
     TrendyolWorker.stop(),
     PersistentObservabilityWorker.stop(),
+    ChatAttachmentWorker.stop(),
+    ChatRetentionWorker.stop(),
   ]);
   stopAllMocks();
 }

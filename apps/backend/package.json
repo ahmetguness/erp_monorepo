@@ -16,6 +16,7 @@
     "test:module-boundaries": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-module-boundaries.ts",
     "test:contracts": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-api-contracts.ts",
     "test:integration": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/run-integration-tests.ts",
+    "test:chat-integration": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-chat-integration.ts",
     "test:web-smoke": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-web-smoke-flows.ts",
     "test:e2e": "npm run test:web-smoke",
     "test:tenant-isolation": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-tenant-isolation.ts",
@@ -67,6 +68,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
+    "@hono/node-ws": "^1.2.0",
     "@prisma/client": "^6.19.0",
     "@repo/types": "*",
     "@types/bcryptjs": "^2.4.6",

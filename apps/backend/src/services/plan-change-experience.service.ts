@@ -73,6 +73,7 @@ const FEATURE_LABELS: Record<BooleanFeatureFlag, string> = {
   cashflowForecast: 'Nakit akisi tahmini',
   bankReconciliation: 'Banka mutabakati',
   lotSerialTracking: 'Lot / seri no takibi',
+  chatEnabled: 'Tenant ici sohbet',
 };
 
 const MODULE_LABELS: Record<ModuleKey, string> = {

@@ -1,13 +1,16 @@
-import { AuditAction } from '@prisma/client';
+import { AuditAction, StorageReservationSource } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { Context } from 'hono';
 import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
 import { storageService } from '../../../../../services/storage.service.js';
-import { enforceFileSecurity,persistWithObject } from '../../../../shared/index.js';
+import { enforceFileSecurity } from '../../../../shared/index.js';
+import { AccountedObjectService } from '../../../../storage-accounting/index.js';
 import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../../utils/context.js';
 import { ensureEntityBelongsToTenant,isEntityType,parseCategoryInput,parseConfidentialityInput,parseDateField,parseKindInput,parsePositiveVersion,parseTagList,readFormString,validateDocumentDates,validateFile } from './shared.js';
+
+const accountedStorage = new AccountedObjectService(prisma, storageService);
 
 export const uploadAttachmentController = {
   async upload(c: Context): Promise<Response> {
@@ -40,7 +43,11 @@ export const uploadAttachmentController = {
     const storagePath = `${tenantId}/${storageName}`;
     const buffer = Buffer.from(await fileValue.arrayBuffer());
     await enforceFileSecurity({ body: buffer, fileName: safeName, contentType: mimeType });
-    const attachment = await persistWithObject(storageService, { key: storagePath, body: buffer, contentType: mimeType }, () => prisma.attachment.create({
+    const attachment = await accountedStorage.store({
+      tenantId, userId, source: StorageReservationSource.ERP_ATTACHMENT,
+      originalName: safeName,
+      object: { key: storagePath, body: buffer, contentType: mimeType },
+      persistMetadata: () => prisma.attachment.create({
       data: {
         tenantId,
         entityType: rawEntityType,
@@ -58,7 +65,12 @@ export const uploadAttachmentController = {
         version,
         uploadedById: userId,
       },
-    }));
+    }),
+      rollbackMetadata: async (value) => {
+        await prisma.attachment.deleteMany({ where: { id: value.id, tenantId } });
+      },
+      resourceId: (value) => value.id,
+    });
 
     await createAuditLog(prisma, {
       tenantId,
@@ -114,7 +126,11 @@ export const uploadAttachmentController = {
     const storagePath = `${tenantId}/${storageName}`;
     const buffer = Buffer.from(await fileValue.arrayBuffer());
     await enforceFileSecurity({ body: buffer, fileName: safeName, contentType: mimeType });
-    const attachment = await persistWithObject(storageService, { key: storagePath, body: buffer, contentType: mimeType }, () => prisma.attachment.create({
+    const attachment = await accountedStorage.store({
+      tenantId, userId, source: StorageReservationSource.ERP_ATTACHMENT,
+      originalName: safeName,
+      object: { key: storagePath, body: buffer, contentType: mimeType },
+      persistMetadata: () => prisma.attachment.create({
       data: {
         tenantId,
         entityType: current.entityType,
@@ -132,7 +148,12 @@ export const uploadAttachmentController = {
         version,
         uploadedById: userId,
       },
-    }));
+    }),
+      rollbackMetadata: async (value) => {
+        await prisma.attachment.deleteMany({ where: { id: value.id, tenantId } });
+      },
+      resourceId: (value) => value.id,
+    });
 
     await createAuditLog(prisma, {
       tenantId,

@@ -1,0 +1,389 @@
+enum ChatConversationType {
+  DIRECT
+  GROUP
+}
+
+enum ChatMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum ChatHistoryVisibility {
+  ALL
+  FROM_JOIN
+}
+
+enum ChatNotificationLevel {
+  ALL
+  MENTIONS
+  NONE
+}
+
+enum ChatMessageType {
+  TEXT
+  FILE
+  IMAGE
+  SYSTEM
+  POLL
+  EVENT
+}
+
+enum ChatAttachmentKind {
+  IMAGE
+  DOCUMENT
+  OTHER
+}
+
+enum ChatAttachmentStatus {
+  PENDING_UPLOAD
+  UPLOADED
+  SCANNING
+  READY
+  REJECTED
+  EXPIRED
+  DELETED
+}
+
+enum ChatInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+  EXPIRED
+}
+
+enum ChatEventResponseStatus {
+  GOING
+  MAYBE
+  DECLINED
+}
+
+model ChatConversation {
+  id                String                   @id @default(cuid())
+  tenantId          String
+  type              ChatConversationType
+  title             String?
+  description       String?
+  directKey         String?
+  historyVisibility ChatHistoryVisibility    @default(FROM_JOIN)
+  retentionDays     Int?
+  createdById       String
+  lastMessageAt     DateTime?
+  archivedAt        DateTime?
+  deletedAt         DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  tenant            Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy         User                     @relation("ChatConversationCreator", fields: [createdById], references: [id])
+  members           ChatConversationMember[]
+  messages          ChatMessage[]
+  pinnedMessages    ChatPinnedMessage[]
+  invites           ChatGroupInvite[]
+  polls             ChatPoll[]
+  events            ChatEvent[]
+  realtimeEvents    ChatRealtimeOutbox[]
+
+  @@unique([tenantId, directKey])
+  @@index([tenantId, lastMessageAt])
+  @@index([tenantId, type, deletedAt])
+  @@map("chat_conversations")
+}
+
+model ChatRealtimeOutbox {
+  id             String           @id @default(cuid())
+  tenantId       String
+  conversationId String
+  type           String
+  payload        Json
+  createdAt      DateTime         @default(now())
+  processedAt    DateTime?
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, conversationId, createdAt])
+  @@index([processedAt, createdAt])
+  @@map("chat_realtime_outbox")
+}
+
+model ChatConversationMember {
+  id                String                @id @default(cuid())
+  tenantId          String
+  conversationId    String
+  userId            String
+  role              ChatMemberRole        @default(MEMBER)
+  joinedAt          DateTime              @default(now())
+  leftAt            DateTime?
+  visibleFrom       DateTime              @default(now())
+  lastReadMessageId String?
+  lastReadAt        DateTime?
+  clearedAt         DateTime?
+  mutedUntil        DateTime?
+  pinnedAt          DateTime?
+  archivedAt        DateTime?
+  notificationLevel ChatNotificationLevel @default(ALL)
+  tenant            Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation      ChatConversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([tenantId, userId, pinnedAt])
+  @@index([tenantId, conversationId, leftAt])
+  @@map("chat_conversation_members")
+}
+
+model ChatMessage {
+  id                     String                @id @default(cuid())
+  tenantId               String
+  conversationId         String
+  senderId               String
+  clientMessageId        String
+  type                   ChatMessageType       @default(TEXT)
+  content                String?
+  replyToMessageId       String?
+  forwardedFromMessageId String?
+  forwardedSnapshot      Json?
+  editedAt               DateTime?
+  deletedAt              DateTime?
+  deletedById            String?
+  deleteReason           String?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  tenant                 Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation           ChatConversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender                 User                  @relation("ChatMessageSender", fields: [senderId], references: [id])
+  replyTo                ChatMessage?          @relation("ChatMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies                ChatMessage[]         @relation("ChatMessageReplies")
+  revisions              ChatMessageRevision[]
+  mentions               ChatMessageMention[]
+  stars                  ChatMessageStar[]
+  reactions              ChatMessageReaction[]
+  attachments            ChatAttachment[]
+  pinnedIn               ChatPinnedMessage[]
+  poll                   ChatPoll?
+  event                  ChatEvent?
+
+  @@unique([tenantId, conversationId, senderId, clientMessageId])
+  @@index([tenantId, conversationId, createdAt, id])
+  @@index([tenantId, senderId, createdAt])
+  @@map("chat_messages")
+}
+
+model ChatMessageRevision {
+  id              String      @id @default(cuid())
+  tenantId        String
+  messageId       String
+  editorId        String
+  previousContent String?
+  createdAt       DateTime    @default(now())
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  message         ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  editor          User        @relation("ChatMessageRevisionEditor", fields: [editorId], references: [id])
+
+  @@index([tenantId, messageId, createdAt])
+  @@map("chat_message_revisions")
+}
+
+model ChatMessageMention {
+  tenantId        String
+  messageId       String
+  mentionedUserId String
+  createdAt       DateTime    @default(now())
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  message         ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  mentionedUser   User        @relation("ChatMentionedUser", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, mentionedUserId])
+  @@index([tenantId, mentionedUserId, createdAt])
+  @@map("chat_message_mentions")
+}
+
+model ChatMessageStar {
+  tenantId  String
+  messageId String
+  userId    String
+  createdAt DateTime    @default(now())
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([tenantId, userId, createdAt])
+  @@map("chat_message_stars")
+}
+
+model ChatMessageReaction {
+  tenantId  String
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime    @default(now())
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId, emoji])
+  @@index([tenantId, messageId])
+  @@map("chat_message_reactions")
+}
+
+model ChatPinnedMessage {
+  tenantId       String
+  conversationId String
+  messageId      String
+  pinnedById     String
+  pinnedAt       DateTime         @default(now())
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        ChatMessage      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  pinnedBy       User             @relation(fields: [pinnedById], references: [id])
+
+  @@id([conversationId, messageId])
+  @@index([tenantId, conversationId, pinnedAt])
+  @@map("chat_pinned_messages")
+}
+
+model ChatAttachment {
+  id                  String               @id @default(cuid())
+  tenantId            String
+  uploaderId          String
+  messageId           String?
+  storageKey          String               @unique
+  originalName        String
+  safeDisplayName     String
+  mimeType            String
+  sizeBytes           Int
+  sha256              String?
+  kind                ChatAttachmentKind
+  status              ChatAttachmentStatus @default(PENDING_UPLOAD)
+  width               Int?
+  height              Int?
+  thumbnailStorageKey String?
+  rejectionReason     String?
+  expiresAt           DateTime?
+  deletedAt           DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploader            User                 @relation(fields: [uploaderId], references: [id])
+  message             ChatMessage?         @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, uploaderId, status])
+  @@index([tenantId, messageId])
+  @@index([tenantId, expiresAt])
+  @@map("chat_attachments")
+}
+
+model ChatGroupInvite {
+  id             String           @id @default(cuid())
+  tenantId       String
+  conversationId String
+  inviterId      String
+  inviteeId      String
+  status         ChatInviteStatus @default(PENDING)
+  expiresAt      DateTime
+  respondedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  inviter        User             @relation("ChatInviteInviter", fields: [inviterId], references: [id])
+  invitee        User             @relation("ChatInviteInvitee", fields: [inviteeId], references: [id])
+
+  @@unique([conversationId, inviteeId, status])
+  @@index([tenantId, inviteeId, status])
+  @@map("chat_group_invites")
+}
+
+model ChatPoll {
+  id             String           @id @default(cuid())
+  tenantId       String
+  conversationId String
+  messageId      String           @unique
+  question       String
+  multiple       Boolean          @default(false)
+  anonymous      Boolean          @default(false)
+  closesAt       DateTime?
+  closedAt       DateTime?
+  createdById    String
+  createdAt      DateTime         @default(now())
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        ChatMessage      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdBy      User             @relation(fields: [createdById], references: [id])
+  options        ChatPollOption[]
+  votes          ChatPollVote[]
+
+  @@index([tenantId, conversationId, createdAt])
+  @@map("chat_polls")
+}
+
+model ChatPollOption {
+  id        String         @id @default(cuid())
+  tenantId  String
+  pollId    String
+  label     String
+  sortOrder Int
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  poll      ChatPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes     ChatPollVote[]
+
+  @@unique([pollId, sortOrder])
+  @@index([tenantId, pollId])
+  @@map("chat_poll_options")
+}
+
+model ChatPollVote {
+  tenantId  String
+  pollId    String
+  optionId  String
+  userId    String
+  createdAt DateTime       @default(now())
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  poll      ChatPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option    ChatPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([pollId, optionId, userId])
+  @@index([tenantId, userId])
+  @@map("chat_poll_votes")
+}
+
+model ChatEvent {
+  id             String              @id @default(cuid())
+  tenantId       String
+  conversationId String
+  messageId      String              @unique
+  title          String
+  description    String?
+  startsAt       DateTime
+  endsAt         DateTime
+  timezone       String
+  location       String?
+  onlineUrl      String?
+  createdById    String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   ChatConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        ChatMessage         @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdBy      User                @relation(fields: [createdById], references: [id])
+  responses      ChatEventResponse[]
+
+  @@index([tenantId, conversationId, startsAt])
+  @@map("chat_events")
+}
+
+model ChatEventResponse {
+  tenantId    String
+  eventId     String
+  userId      String
+  status      ChatEventResponseStatus
+  respondedAt DateTime                @updatedAt
+  tenant      Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  event       ChatEvent               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user        User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+  @@index([tenantId, userId])
+  @@map("chat_event_responses")
+}
