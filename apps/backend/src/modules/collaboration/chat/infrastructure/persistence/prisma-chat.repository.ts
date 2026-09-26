@@ -88,6 +88,22 @@ type ConversationRow = Prisma.ChatConversationGetPayload<{
 }>;
 type Transaction = Prisma.TransactionClient;
 
+function forwardedContent(source: MessageRow): string {
+  const content = source.content?.trim();
+  if (source.poll) {
+    return `Anket: ${source.poll.question}\n${source.poll.options.map((option) => `• ${option.label}`).join('\n')}`;
+  }
+  if (source.event) {
+    return `Etkinlik: ${source.event.title}\n${source.event.startsAt.toLocaleString('tr-TR')}`;
+  }
+  if (source.attachments.length > 0) {
+    const files = `Dosya: ${source.attachments.map((attachment) => attachment.originalName).join(', ')}`;
+    return content ? `${content}\n${files}` : files;
+  }
+  if (content) return content;
+  return 'İletilen mesaj';
+}
+
 function messageView(row: MessageRow, viewerId: string): ChatMessage {
   const reactionMap = new Map<
     string,
@@ -679,16 +695,22 @@ export class PrismaChatRepository implements ChatRepository {
     const source = await requireMessage(this.db, context, messageId);
     if (source.deletedAt)
       throw new ValidationError("Silinmiş mesaj iletilemez.");
+    const snapshotContent = forwardedContent(source);
     return Promise.all(
       conversationIds.map((conversationId) =>
         this.sendMessage(context, conversationId, {
           clientMessageId: crypto.randomUUID(),
-          content: source.content,
-          type: source.type,
+          content: snapshotContent,
+          type: ChatMessageType.TEXT,
           attachmentIds: [],
           mentionUserIds: [],
           forwardedFromMessageId: source.id,
-          forwardedSnapshot: { senderName: source.sender.name, content: source.content, createdAt: source.createdAt.toISOString() },
+          forwardedSnapshot: {
+            senderName: source.sender.name,
+            content: snapshotContent,
+            sourceType: source.type,
+            createdAt: source.createdAt.toISOString(),
+          },
         }),
       ),
     );

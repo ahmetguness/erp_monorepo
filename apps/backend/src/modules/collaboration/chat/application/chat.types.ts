@@ -30,7 +30,12 @@ export interface SendMessageInput {
   attachmentIds: string[];
   mentionUserIds: string[];
   forwardedFromMessageId?: string;
-  forwardedSnapshot?: { senderName: string; content: string | null; createdAt: string };
+  forwardedSnapshot?: {
+    senderName: string;
+    content: string | null;
+    sourceType: ChatMessageType;
+    createdAt: string;
+  };
 }
 export interface ConversationPreferencesInput {
   pinned?: boolean;

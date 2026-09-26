@@ -117,6 +117,8 @@ async function check(): Promise<void> {
       question: 'Ready?', options: ['Yes', 'No'], multiple: false, anonymous: false,
     });
     assert.equal(pollMessage.poll?.options.length, 2, 'Anket ayrintilari mesaj sozlesmesinde donmeli.');
+    const forwardedPoll = await service.forwardMessage(owner, pollMessage.id, [direct.id]);
+    assert.match(forwardedPoll[0]?.content ?? '', /^Anket: Ready\?/, 'Anket iletimi okunabilir bir snapshot olusturmali.');
     const poll = await prisma.chatPoll.findFirstOrThrow({
       where: { tenantId, messageId: pollMessage.id }, include: { options: true },
     });
