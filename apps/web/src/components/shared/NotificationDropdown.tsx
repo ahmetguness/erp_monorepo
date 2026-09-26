@@ -58,6 +58,12 @@ const SMART_TONE: Record<SmartNotification['severity'], { icon: ReactNode; text:
 
 type DropdownTab = 'all' | 'unread' | 'smart';
 
+function isChatNotification(notification: { module: string | null; entityType: string | null }): boolean {
+  const moduleName = notification.module?.toLocaleLowerCase('tr-TR');
+  const entityType = notification.entityType?.toLocaleLowerCase('tr-TR');
+  return moduleName === 'chat' || moduleName === 'collaboration/chat' || entityType?.startsWith('chat') === true;
+}
+
 export function NotificationDropdown() {
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<DropdownTab>('all');
@@ -71,8 +77,8 @@ export function NotificationDropdown() {
   const deleteAll = useDeleteAllNotifications();
   const smartAction = useSmartNotificationAction();
 
-  const notifications = data?.data ?? [];
-  const unreadCount = data?.meta.unreadCount ?? 0;
+  const notifications = (data?.data ?? []).filter((notification) => !isChatNotification(notification));
+  const unreadCount = notifications.filter((notification) => notification.status === 'UNREAD').length;
   const smartItems = smartSummary?.items ?? [];
   const totalAlertCount = unreadCount + smartItems.length;
 

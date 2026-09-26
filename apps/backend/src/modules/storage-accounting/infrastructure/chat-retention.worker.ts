@@ -9,9 +9,11 @@ const plans = new StoragePlanResolver(prisma);
 const loop = new WorkerLoop('ChatRetentionWorker', 60 * 60 * 1_000, async () => { await processRetentionBatch(); });
 
 async function tenantCandidates(): Promise<Array<{ id: string; legalHold: boolean }>> {
-  return runWithTenantIsolationBypass('chat-retention-worker-tenants', () => prisma.tenant.findMany({
-    where: { deletedAt: null }, select: { id: true, legalHold: true }, take: 1000,
-  }));
+  return runWithTenantIsolationBypass('chat-retention-worker-tenants', async () => {
+    return await prisma.tenant.findMany({
+      where: { deletedAt: null }, select: { id: true, legalHold: true }, take: 1000,
+    });
+  });
 }
 
 async function retainTenant(tenantId: string, legalHold: boolean): Promise<number> {

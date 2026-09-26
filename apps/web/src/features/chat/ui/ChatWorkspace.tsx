@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BellOff, CalendarPlus, Eraser, ListPlus, Pin, Search, Users } from 'lucide-react';
 import type { ChatMessage } from '@repo/types/chat';
 import { Button } from '@/components/ui/Button';
@@ -10,15 +10,15 @@ import { useTenantUsers } from '@/hooks/useUsers';
 import { useAuthStore } from '@/store/auth.store';
 import { toast } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
-import { useChatMutations, useChatRealtime, useChatSearch, useConversations, useCreateConversation, useMessages } from '../model/use-chat';
+import { useChatMutations, useChatSearch, useConversations, useCreateConversation, useMessages } from '../model/use-chat';
 import { ConversationList } from './ConversationList';
 import { EventDialog, PollDialog } from './ChatHeaderDialogs';
+import { ForwardMessageModal } from './ForwardMessageModal';
 import { MessageComposer } from './MessageComposer';
 import { MessageList } from './MessageList';
 import { NewConversationModal } from './NewConversationModal';
 
 export function ChatWorkspace() {
-  useChatRealtime();
   const me = useAuthStore((state) => state.user);
   const conversationsQuery = useConversations();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -28,15 +28,30 @@ export function ChatWorkspace() {
   const [pollOpen, setPollOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
+  const [forwardMessage, setForwardMessage] = useState<ChatMessage | null>(null);
   const conversations = conversationsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const selected = conversations.find((item) => item.id === selectedId) ?? null;
   const messagesQuery = useMessages(selectedId);
   const actions = useChatMutations(selectedId);
   const messages = useMemo(() => (messagesQuery.data?.pages.flatMap((page) => page.items) ?? []).reverse(), [messagesQuery.data]);
+  const lastMarkedReadRef = useRef<string | null>(null);
   const searchQuery = useChatSearch(search, selectedId ?? undefined);
   const shownMessages = search.trim().length >= 2 ? (searchQuery.data?.items ?? []).slice().reverse() : messages;
   const users = useTenantUsers();
   const create = useCreateConversation();
+
+  useEffect(() => {
+    const latestMessage = messages.at(-1);
+    if (!selected || selected.unreadCount === 0 || !latestMessage || actions.read.isPending) return;
+    const marker = `${selected.id}:${latestMessage.id}`;
+    if (lastMarkedReadRef.current === marker) return;
+    lastMarkedReadRef.current = marker;
+    actions.read.mutate(latestMessage.id, {
+      onError: () => {
+        if (lastMarkedReadRef.current === marker) lastMarkedReadRef.current = null;
+      },
+    });
+  }, [actions.read, messages, selected]);
 
   const send = async (content: string, files: File[]) => {
     try {
@@ -54,11 +69,15 @@ export function ChatWorkspace() {
     const content = window.prompt('Mesajı düzenleyin', message.content ?? '');
     if (content?.trim()) actions.edit.mutate({ messageId: message.id, content, expectedUpdatedAt: message.updatedAt });
   };
-  const forward = (message: ChatMessage) => {
-    const choices = conversations.filter((conversation) => conversation.id !== message.conversationId);
-    const title = window.prompt(`İletilecek sohbet adı:\n${choices.map((conversation) => conversation.title).join('\n')}`);
-    const target = choices.find((conversation) => conversation.title === title);
-    if (target) actions.forward.mutate({ messageId: message.id, conversationIds: [target.id] });
+  const forward = async (conversationIds: string[]): Promise<void> => {
+    if (!forwardMessage) return;
+    try {
+      await actions.forward.mutateAsync({ messageId: forwardMessage.id, conversationIds });
+      toast.success(conversationIds.length === 1 ? 'Mesaj iletildi.' : `Mesaj ${conversationIds.length} sohbete iletildi.`);
+      setForwardMessage(null);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
+    }
   };
 
   const headerMutationError = (error: unknown) => toast.error(getErrorMessage(error));
@@ -78,7 +97,7 @@ export function ChatWorkspace() {
           <Button title={selected.pinnedAt ? 'Sabitlemeyi kaldır' : 'Sohbeti sabitle'} variant="ghost" size="sm" loading={actions.pinConversation.isPending} className={selected.pinnedAt ? 'bg-sky-500/15 text-sky-300' : undefined} onClick={() => actions.pinConversation.mutate(!selected.pinnedAt, { onSuccess: () => toast.success(selected.pinnedAt ? 'Sohbet sabitlemesi kaldırıldı.' : 'Sohbet sabitlendi.'), onError: headerMutationError })} aria-label={selected.pinnedAt ? 'Sabitlemeyi kaldır' : 'Sohbeti sabitle'}><Pin className={`h-4 w-4 ${selected.pinnedAt ? 'fill-current' : ''}`} /></Button>
           <Button title="Geçmişi temizle" variant="ghost" size="sm" onClick={() => setClearOpen(true)} aria-label="Geçmişi temizle"><Eraser className="h-4 w-4" /></Button>
         </header>
-        <MessageList messages={shownMessages} currentUserId={me?.id} onReply={setReply} onDelete={(id) => actions.remove.mutate(id)} onEdit={edit} onForward={forward} onReaction={(message, emoji) => actions.reaction.mutate({ messageId: message.id, emoji, reacted: !message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe) })} onStar={(message) => actions.star.mutate({ messageId: message.id, starred: !message.starredByMe })} onPin={(message) => actions.pinMessage.mutate({ messageId: message.id, pinned: !message.pinned })} onVote={(pollId, optionId) => actions.votePoll.mutate({ pollId, optionIds: [optionId] })} onEventResponse={(eventId, status) => actions.respondEvent.mutate({ eventId, status })} />
+        <MessageList messages={shownMessages} currentUserId={me?.id} onReply={setReply} onDelete={(id) => actions.remove.mutate(id)} onEdit={edit} onForward={setForwardMessage} onReaction={(message, emoji) => actions.reaction.mutate({ messageId: message.id, emoji, reacted: !message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe) })} onStar={(message) => actions.star.mutate({ messageId: message.id, starred: !message.starredByMe })} onPin={(message) => actions.pinMessage.mutate({ messageId: message.id, pinned: !message.pinned })} onVote={(pollId, optionId) => actions.votePoll.mutate({ pollId, optionIds: [optionId] })} onEventResponse={(eventId, status) => actions.respondEvent.mutate({ eventId, status })} />
         <MessageComposer disabled={actions.send.isPending} replyLabel={reply?.content ?? undefined} onCancelReply={() => setReply(null)} onSend={send} />
       </>}
     </main>
@@ -86,5 +105,6 @@ export function ChatWorkspace() {
     <PollDialog isOpen={pollOpen} isPending={actions.createPoll.isPending} onClose={() => setPollOpen(false)} onSubmit={async (input) => { try { await actions.createPoll.mutateAsync(input); setPollOpen(false); toast.success('Anket yayınlandı.'); } catch (error: unknown) { headerMutationError(error); } }} />
     <EventDialog isOpen={eventOpen} isPending={actions.createEvent.isPending} onClose={() => setEventOpen(false)} onSubmit={async (input) => { try { await actions.createEvent.mutateAsync(input); setEventOpen(false); toast.success('Etkinlik yayınlandı.'); } catch (error: unknown) { headerMutationError(error); } }} />
     <ConfirmDialog isOpen={clearOpen} onClose={() => setClearOpen(false)} title="Sohbet geçmişini temizle" message="Bu işlem mesajları yalnızca sizin görünümünüzden kaldırır ve geri alınamaz." confirmLabel="Geçmişi temizle" isLoading={actions.clear.isPending} onConfirm={() => actions.clear.mutate(undefined, { onSuccess: () => { setClearOpen(false); setSearch(''); toast.success('Sohbet geçmişi temizlendi.'); }, onError: headerMutationError })} />
+    <ForwardMessageModal isOpen={Boolean(forwardMessage)} message={forwardMessage} conversations={conversations} pending={actions.forward.isPending} onClose={() => setForwardMessage(null)} onSubmit={forward} />
   </div>;
 }

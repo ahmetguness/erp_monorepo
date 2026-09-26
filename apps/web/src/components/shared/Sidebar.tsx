@@ -20,6 +20,7 @@ import {
   type NavigationPersona,
   type NavigationWorkspace,
 } from '@/features/navigation';
+import { useChatRealtime, useChatUnreadCount } from '@/features/chat';
 
 // ─────────────────────────────────────────────
 // Types
@@ -117,6 +118,7 @@ interface NavItemRowProps {
   favoriteHrefs: readonly string[];
   onNavigate: (href: string) => void;
   onToggleFavorite: (href: string) => void;
+  badgeCount?: number;
 }
 
 function NavItemRow({
@@ -126,6 +128,7 @@ function NavItemRow({
   favoriteHrefs,
   onNavigate,
   onToggleFavorite,
+  badgeCount = 0,
 }: NavItemRowProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -168,7 +171,12 @@ function NavItemRow({
           )}
           aria-label={item.label}
         >
-          <Icon className="w-4 h-4 shrink-0" />
+          <span className="relative">
+            <Icon className="w-4 h-4 shrink-0" />
+            {badgeCount > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 h-2 w-2 rounded-full bg-sky-400 ring-2 ring-slate-900" />
+            )}
+          </span>
         </Link>
       </Tooltip>
     );
@@ -206,6 +214,7 @@ function NavItemRow({
                 favoriteHrefs={favoriteHrefs}
                 onNavigate={onNavigate}
                 onToggleFavorite={onToggleFavorite}
+                badgeCount={child.href === '/dashboard/chat' ? badgeCount : 0}
               />
             ))}
           </div>
@@ -230,6 +239,14 @@ function NavItemRow({
       >
         <Icon className="w-4 h-4 shrink-0" />
         <span className="flex-1 truncate">{item.label}</span>
+        {badgeCount > 0 && (
+          <span
+            className="flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-500 px-1.5 text-[10px] font-bold text-white"
+            aria-label={`${badgeCount} okunmamış sohbet mesajı`}
+          >
+            {badgeCount > 99 ? '99+' : badgeCount}
+          </span>
+        )}
       </Link>
       <button
         type="button"
@@ -339,6 +356,8 @@ const SIDEBAR_WIDTH: Record<SidebarMode, string> = {
 // ─────────────────────────────────────────────
 
 export function Sidebar() {
+  useChatRealtime();
+  const unreadCountQuery = useChatUnreadCount();
   const { user, tenant } = useCurrentUser();
   const logout = useLogout();
   const sidebarMode = useUIStore((s) => s.sidebarMode);
@@ -350,6 +369,7 @@ export function Sidebar() {
   const recordActivity = useRecordNavigationActivity();
 
   const collapsed = sidebarMode === 'collapsed';
+  const chatUnreadCount = unreadCountQuery.data ?? 0;
 
   const effectiveWorkspace = useMemo<NavigationWorkspace>(() => {
     if (workspace) return workspace;
@@ -512,6 +532,7 @@ export function Sidebar() {
                   favoriteHrefs={workspace?.favoriteHrefs ?? []}
                   onNavigate={navigate}
                   onToggleFavorite={toggleFavorite}
+                  badgeCount={item.href === '/dashboard/chat' ? chatUnreadCount : 0}
                 />
               ))}
             </div>
@@ -535,6 +556,7 @@ export function Sidebar() {
                   favoriteHrefs={workspace?.favoriteHrefs ?? []}
                   onNavigate={navigate}
                   onToggleFavorite={toggleFavorite}
+                  badgeCount={item.href === '/dashboard/chat' ? chatUnreadCount : 0}
                 />
               ))}
             </div>

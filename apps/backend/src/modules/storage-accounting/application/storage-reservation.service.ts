@@ -77,7 +77,16 @@ export class StorageReservationService {
         data: { reservedBytes: { increment: expectedBytes }, version: { increment: 1 } },
       });
       const reservation = await tx.storageReservation.create({
-        data: { ...input, expectedBytes, expiresAt },
+        data: {
+          tenantId: input.tenantId,
+          source: input.source,
+          objectKey: input.objectKey,
+          originalName: input.originalName,
+          contentType: input.contentType,
+          createdById: input.createdById,
+          expectedBytes,
+          expiresAt,
+        },
         select: { id: true, objectKey: true, expiresAt: true, expectedBytes: true },
       });
       return { ...reservation, expectedBytes: Number(reservation.expectedBytes) };

@@ -91,7 +91,9 @@ async function check(): Promise<void> {
       mentionUserIds: [ownerId],
     });
     assert.equal(reply.replyTo?.id, first.id);
+    assert.equal(await service.getUnreadCount(owner), 1, 'Karsi taraftan gelen mesaj sol menu rozetine yansimali.');
     await service.markRead(owner, direct.id, reply.id);
+    assert.equal(await service.getUnreadCount(owner), 0, 'Okunan mesaj sol menu rozetinden dusmeli.');
     await service.setStar(owner, reply.id, true);
     await service.setReaction(owner, reply.id, '✅', true);
     await service.setMessagePin(owner, reply.id, true);
@@ -119,6 +121,8 @@ async function check(): Promise<void> {
       where: { tenantId, messageId: pollMessage.id }, include: { options: true },
     });
     await service.votePoll(member, poll.id, [poll.options[0]!.id]);
+    const pollAfterVote = (await service.listMessages(owner, group.id)).items.find((item) => item.id === pollMessage.id)?.poll;
+    assert.equal(pollAfterVote?.options[0]?.voters[0]?.name, 'Chat Test 2', 'Acik ankette oy veren kullanici gorunmeli.');
     await service.closePoll(owner, poll.id);
 
     const now = Date.now();

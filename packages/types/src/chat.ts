@@ -75,6 +75,7 @@ export const ChatPollViewSchema = z.object({
     sortOrder: z.number().int(),
     voteCount: z.number().int().nonnegative(),
     selectedByMe: z.boolean(),
+    voters: z.array(z.object({ id: z.string(), name: z.string() })),
   })),
 });
 

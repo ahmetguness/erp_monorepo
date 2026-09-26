@@ -74,6 +74,7 @@ export interface ConversationCreateRecord {
 }
 
 export interface ChatRepository {
+  getUnreadCount(context: ChatContext): Promise<number>;
   listConversations(
     context: ChatContext,
     cursor: string | undefined,

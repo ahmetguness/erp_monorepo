@@ -15,6 +15,7 @@ chatRoutes.post('/uploads/:reservationId/complete', ChatUploadController.complet
 chatRoutes.get('/uploads/:reservationId/status', ChatUploadController.status);
 chatRoutes.get('/attachments/:attachmentId/url', ChatUploadController.url);
 chatRoutes.get('/attachments/:attachmentId/download', ChatUploadController.download);
+chatRoutes.get('/conversations/unread-count', ChatController.unreadCount);
 chatRoutes.get('/conversations', ChatController.listConversations);
 chatRoutes.post('/conversations/direct', ChatController.createDirect);
 chatRoutes.post('/conversations/groups', ChatController.createGroup);

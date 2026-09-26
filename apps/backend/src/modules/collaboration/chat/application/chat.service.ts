@@ -22,6 +22,10 @@ export class ChatService {
     private readonly planResolver: StoragePlanResolver,
   ) {}
 
+  getUnreadCount(context: ChatContext) {
+    return this.repository.getUnreadCount(context);
+  }
+
   listConversations(context: ChatContext, cursor?: string, limit = 30) {
     return this.repository.listConversations(
       context,

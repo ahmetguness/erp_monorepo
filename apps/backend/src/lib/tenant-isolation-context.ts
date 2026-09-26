@@ -30,21 +30,27 @@ export type TenantIsolationContext =
 
 const tenantIsolationContext = new AsyncLocalStorage<TenantIsolationContext>();
 
-export function runWithTenantScope<T>(
+export async function runWithTenantScope<T>(
   tenantId: string,
   callback: () => Promise<T>,
 ): Promise<T> {
   if (!tenantId.trim())
     throw new Error("Tenant isolation scope requires a non-empty tenantId.");
-  return tenantIsolationContext.run({ mode: "tenant", tenantId }, callback);
+  return tenantIsolationContext.run(
+    { mode: "tenant", tenantId },
+    async () => await callback(),
+  );
 }
 
-export function runWithTenantIsolationBypass<T>(
+export async function runWithTenantIsolationBypass<T>(
   reason: TenantIsolationBypassReason,
   callback: () => Promise<T>,
 ): Promise<T> {
   logger.warn("[TenantIsolation] Explicit bypass entered", { reason });
-  return tenantIsolationContext.run({ mode: "bypass", reason }, callback);
+  return tenantIsolationContext.run(
+    { mode: "bypass", reason },
+    async () => await callback(),
+  );
 }
 
 export function getTenantIsolationContext():

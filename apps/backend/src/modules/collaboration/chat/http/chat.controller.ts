@@ -17,6 +17,9 @@ const numberQuery = (value: string | undefined, fallback: number): number => {
 const optionalDate = (value: string | undefined): Date | undefined => value ? new Date(value) : undefined;
 
 export const ChatController = {
+  async unreadCount(c: Context): Promise<Response> {
+    return c.json({ data: { count: await service.getUnreadCount(contextOf(c)) } });
+  },
   async listConversations(c: Context): Promise<Response> {
     return c.json({ data: await service.listConversations(contextOf(c), c.req.query('cursor'), numberQuery(c.req.query('limit'), 30)) });
   },

@@ -79,11 +79,13 @@ async function processReservation(reservation: NonNullable<Awaited<ReturnType<ty
 }
 
 async function expireReservations(): Promise<void> {
-  const expired = await runWithTenantIsolationBypass('storage-reservation-worker-expiry', () => prisma.storageReservation.findMany({
-    where: { status: { in: [StorageReservationStatus.RESERVED, StorageReservationStatus.UPLOADED] }, expiresAt: { lte: new Date() } },
-    take: 25,
-    orderBy: { expiresAt: 'asc' },
-  }));
+  const expired = await runWithTenantIsolationBypass('storage-reservation-worker-expiry', async () => {
+    return await prisma.storageReservation.findMany({
+      where: { status: { in: [StorageReservationStatus.RESERVED, StorageReservationStatus.UPLOADED] }, expiresAt: { lte: new Date() } },
+      take: 25,
+      orderBy: { expiresAt: 'asc' },
+    });
+  });
   for (const reservation of expired) {
     await runWithTenantScope(reservation.tenantId, async () => {
       const released = await accounting.release(reservation.tenantId, reservation.id, 'EXPIRED', 'Upload reservation expired');

@@ -20,6 +20,7 @@ import {
   createEvent,
   respondEvent,
   editMessage,
+  getChatUnreadCount,
   listConversations,
   listMessages,
   markConversationRead,
@@ -33,12 +34,21 @@ import {
   uploadChatAttachment,
 } from "../api/chat.api";
 
+export function useChatUnreadCount() {
+  return useQuery({
+    queryKey: chatKeys.unreadCount(),
+    queryFn: getChatUnreadCount,
+    refetchInterval: 30_000,
+  });
+}
+
 export function useConversations() {
   return useInfiniteQuery({
     queryKey: chatKeys.conversations(),
     queryFn: ({ pageParam }) => listConversations(pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
+    refetchInterval: 30_000,
   });
 }
 
@@ -113,8 +123,12 @@ export function useChatMutations(conversationId: string | null) {
     read: useMutation({
       mutationFn: (messageId: string) =>
         markConversationRead(conversationId ?? "", messageId),
-      onSuccess: () =>
-        client.invalidateQueries({ queryKey: chatKeys.conversations() }),
+      onSuccess: async () => {
+        await Promise.all([
+          client.invalidateQueries({ queryKey: chatKeys.conversations() }),
+          client.invalidateQueries({ queryKey: chatKeys.unreadCount() }),
+        ]);
+      },
     }),
     clear: useMutation({
       mutationFn: () => clearConversation(conversationId ?? ""),

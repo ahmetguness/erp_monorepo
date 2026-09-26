@@ -52,7 +52,14 @@ const messageInclude = {
     include: {
       options: {
         orderBy: { sortOrder: "asc" },
-        include: { votes: { select: { userId: true } } },
+        include: {
+          votes: {
+            select: {
+              userId: true,
+              user: { select: { id: true, name: true } },
+            },
+          },
+        },
       },
     },
   },
@@ -130,6 +137,9 @@ function messageView(row: MessageRow, viewerId: string): ChatMessage {
             sortOrder: option.sortOrder,
             voteCount: option.votes.length,
             selectedByMe: option.votes.some((vote) => vote.userId === viewerId),
+            voters: row.poll?.anonymous !== false
+              ? []
+              : option.votes.map((vote) => vote.user),
           })),
         }
       : null,
@@ -275,6 +285,45 @@ async function emit(
 
 export class PrismaChatRepository implements ChatRepository {
   constructor(private readonly db: PrismaClient) {}
+
+  async getUnreadCount(context: ChatContext): Promise<number> {
+    const memberships = await this.db.chatConversationMember.findMany({
+      where: {
+        tenantId: context.tenantId,
+        userId: context.userId,
+        leftAt: null,
+        archivedAt: null,
+        notificationLevel: { not: 'NONE' },
+        conversation: { deletedAt: null },
+      },
+      select: {
+        conversationId: true,
+        lastReadAt: true,
+        clearedAt: true,
+        visibleFrom: true,
+      },
+    });
+    const counts = await Promise.all(
+      memberships.map((membership) =>
+        this.db.chatMessage.count({
+          where: {
+            tenantId: context.tenantId,
+            conversationId: membership.conversationId,
+            senderId: { not: context.userId },
+            deletedAt: null,
+            createdAt: {
+              gt: latestDate(
+                membership.lastReadAt,
+                membership.clearedAt,
+                membership.visibleFrom,
+              ),
+            },
+          },
+        }),
+      ),
+    );
+    return counts.reduce((total, count) => total + count, 0);
+  }
 
   async listConversations(
     context: ChatContext,

@@ -19,6 +19,13 @@ export interface CursorPage<T> {
   nextCursor: string | null;
 }
 
+const UnreadCountSchema = z.object({ count: z.number().int().nonnegative() });
+
+export async function getChatUnreadCount(): Promise<number> {
+  const response = await apiClient.get('/api/chat/conversations/unread-count');
+  return safeParse(UnreadCountSchema, response.data.data, 'getChatUnreadCount').count;
+}
+
 export async function listConversations(
   cursor?: string,
 ): Promise<CursorPage<ChatConversation>> {
