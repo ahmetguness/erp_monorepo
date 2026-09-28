@@ -65,8 +65,8 @@ export class SalesFulfillmentService {
     const order = await this.loadOrder(tenantId, input.orderId);
     const warehouseId = input.warehouseId ?? await this.resolveDefaultWarehouseId(tenantId);
 
-    const confirmedOrder = await this.ensureConfirmed(tenantId, order, input.userId);
     const reservation = await this.createReservation(tenantId, input, warehouseId);
+    const confirmedOrder = await this.ensureConfirmed(tenantId, order, input.userId);
     const deliveryDraft = input.createDeliveryDraft === false
       ? null
       : await this.ensureDeliveryDraft(tenantId, confirmedOrder, warehouseId, input.userId);

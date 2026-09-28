@@ -2,6 +2,7 @@ import {
   InvoiceStatus,
   InvoiceType,
   MovementType,
+  OrderStatus,
   PaymentMethod,
 } from "@prisma/client";
 import { z } from "zod";
@@ -97,40 +98,78 @@ export const fulfillSalesOrderBodySchema = z
   })
   .strict();
 
-const dateString = z.string().trim().refine((value) => !Number.isNaN(new Date(value).getTime()), 'Gecersiz tarih.');
-
-const salesQuoteItemBodySchema = z.object({
-  productId: nonEmptyString,
-  description: z.string().trim().max(500).optional(),
-  quantity: positiveNumber.max(999999999),
-  unitPrice: nonNegativeNumber.max(9999999999999999.99),
-  discount: z.number().finite().min(0).max(100).optional(),
-  taxRate: z.number().finite().min(0).max(100).optional(),
-}).strict();
-
-const salesQuoteBodySchema = z.object({
-  contactId: nonEmptyString,
-  number: z.string().trim().min(1).max(50).optional(),
-  date: dateString,
-  validUntil: dateString.optional(),
-  notes: z.string().trim().max(2000).optional(),
-  items: z.array(salesQuoteItemBodySchema).min(1).max(500),
-}).strict();
-
-function withQuoteDateValidation<T extends typeof salesQuoteBodySchema>(schema: T) {
-  return schema.refine(
-  (value) => !value.validUntil || new Date(value.validUntil) >= new Date(value.date),
-  { path: ['validUntil'], message: 'Gecerlilik tarihi teklif tarihinden once olamaz.' },
+const dateString = z
+  .string()
+  .trim()
+  .refine(
+    (value) => !Number.isNaN(new Date(value).getTime()),
+    "Gecersiz tarih.",
   );
-}
 
-export const createSalesQuoteBodySchema = withQuoteDateValidation(salesQuoteBodySchema);
+const salesQuoteItemBodySchema = z
+  .object({
+    productId: nonEmptyString,
+    description: z.string().trim().max(500).optional(),
+    quantity: positiveNumber.max(999999999),
+    unitPrice: nonNegativeNumber.max(9999999999999999.99),
+    discount: z.number().finite().min(0).max(100).optional(),
+    taxRate: z.number().finite().min(0).max(100).optional(),
+  })
+  .strict();
 
-export const updateSalesQuoteBodySchema = withQuoteDateValidation(salesQuoteBodySchema.omit({ number: true }));
+const salesQuoteBodySchema = z
+  .object({
+    contactId: nonEmptyString,
+    number: z.string().trim().min(1).max(50).optional(),
+    date: dateString,
+    validUntil: dateString.optional(),
+    notes: z.string().trim().max(2000).optional(),
+    items: z.array(salesQuoteItemBodySchema).min(1).max(500),
+  })
+  .strict();
 
-export const updateSalesQuoteStatusBodySchema = z.object({
-  status: z.enum(['SENT', 'REJECTED', 'CANCELLED']),
-}).strict();
+export const createSalesQuoteBodySchema = salesQuoteBodySchema.refine(
+  (value) => !value.validUntil || new Date(value.validUntil) >= new Date(value.date),
+  { path: ["validUntil"], message: "Gecerlilik tarihi teklif tarihinden once olamaz." },
+);
+
+export const updateSalesQuoteBodySchema = salesQuoteBodySchema.omit({ number: true }).refine(
+  (value) => !value.validUntil || new Date(value.validUntil) >= new Date(value.date),
+  { path: ["validUntil"], message: "Gecerlilik tarihi teklif tarihinden once olamaz." },
+);
+
+export const updateSalesQuoteStatusBodySchema = z
+  .object({
+    status: z.enum(["SENT", "REJECTED", "CANCELLED"]),
+  })
+  .strict();
+
+export const createSalesOrderBodySchema = z
+  .object({
+    contactId: nonEmptyString,
+    number: z.string().trim().min(1).max(50).optional(),
+    date: dateString,
+    dueDate: dateString.optional(),
+    notes: z.string().trim().max(2000).optional(),
+    items: z.array(salesQuoteItemBodySchema).min(1).max(500),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      !value.dueDate || new Date(value.dueDate) >= new Date(value.date),
+    {
+      path: ["dueDate"],
+      message: "Vade tarihi siparis tarihinden once olamaz.",
+    },
+  );
+
+export const updateSalesOrderBodySchema = z
+  .object({
+    dueDate: dateString.nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+    status: z.nativeEnum(OrderStatus).optional(),
+  })
+  .strict();
 
 export const createPaymentBodySchema = z
   .object({

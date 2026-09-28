@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   ClipboardList,
   Eye,
@@ -13,51 +13,72 @@ import {
   Search,
   Truck,
   X,
-} from 'lucide-react';
-import { PageHeader } from '@/components/shared/PageHeader';
-import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
-import { ListStandardControls } from '@/components/shared/ListStandardControls';
-import { RowActions, type RowAction } from '@/components/shared/RowActions';
-import { SearchInput } from '@/components/shared/SearchInput';
-import { OrderStatusBadge } from '@/components/shared/StatusBadge';
-import { Badge, type BadgeVariant } from '@/components/ui/Badge';
-import { Select } from '@/components/ui/Select';
-import { useSalesOrders } from '@/hooks/useSales';
-import { createListSavedViewState, getSavedViewPageSize, getVisibleColumns, normalizeColumnKeys } from '@/lib/list-standard';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import type { SalesOrder, OrderStatus } from '@/services/sales.service';
-import { getSavedViewFilterString, type SavedViewState } from '@/services/saved-view.service';
+} from "lucide-react";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { ListStandardControls } from "@/components/shared/ListStandardControls";
+import { RowActions, type RowAction } from "@/components/shared/RowActions";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { OrderStatusBadge } from "@/components/shared/StatusBadge";
+import { Badge, type BadgeVariant } from "@/components/ui/Badge";
+import { Select } from "@/components/ui/Select";
+import { useSalesOrders } from "@/hooks/useSales";
+import {
+  createListSavedViewState,
+  getSavedViewPageSize,
+  getVisibleColumns,
+  normalizeColumnKeys,
+} from "@/lib/list-standard";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import type {
+  SalesOrder,
+  OrderStatus,
+  SalesOrderSummary,
+} from "@/services/sales.service";
+import {
+  getSavedViewFilterString,
+  type SavedViewState,
+} from "@/services/saved-view.service";
 
-const STATUS_OPTIONS: Array<{ value: OrderStatus | ''; label: string }> = [
-  { value: '', label: 'Tüm Durumlar' },
-  { value: 'DRAFT', label: 'Taslak' },
-  { value: 'CONFIRMED', label: 'Onaylandı' },
-  { value: 'PARTIALLY_DELIVERED', label: 'Kısmi Teslimat' },
-  { value: 'DELIVERED', label: 'Teslim Edildi' },
-  { value: 'CANCELLED', label: 'İptal' },
+const STATUS_OPTIONS: Array<{ value: OrderStatus | ""; label: string }> = [
+  { value: "", label: "Tüm Durumlar" },
+  { value: "DRAFT", label: "Taslak" },
+  { value: "CONFIRMED", label: "Onaylandı" },
+  { value: "PARTIALLY_DELIVERED", label: "Kısmi Teslimat" },
+  { value: "DELIVERED", label: "Teslim Edildi" },
+  { value: "CANCELLED", label: "İptal" },
 ];
 
-const QUICK_STATUSES: Array<{ value: OrderStatus | ''; label: string }> = [
-  { value: '', label: 'Tümü' },
-  { value: 'DRAFT', label: 'Taslak' },
-  { value: 'CONFIRMED', label: 'Onaylandı' },
-  { value: 'PARTIALLY_DELIVERED', label: 'Kısmi Teslimat' },
-  { value: 'DELIVERED', label: 'Teslim Edildi' },
-  { value: 'CANCELLED', label: 'İptal' },
+const QUICK_STATUSES: Array<{ value: OrderStatus | ""; label: string }> = [
+  { value: "", label: "Tümü" },
+  { value: "DRAFT", label: "Taslak" },
+  { value: "CONFIRMED", label: "Onaylandı" },
+  { value: "PARTIALLY_DELIVERED", label: "Kısmi Teslimat" },
+  { value: "DELIVERED", label: "Teslim Edildi" },
+  { value: "CANCELLED", label: "İptal" },
 ];
 
 const DEFAULT_PAGE_SIZE = 20;
-const ORDER_COLUMN_KEYS = ['number', 'contact', 'dueDate', 'status', 'invoiceFlow', 'totalGross', 'actions'] as const;
+const ORDER_COLUMN_KEYS = [
+  "number",
+  "contact",
+  "dueDate",
+  "status",
+  "invoiceFlow",
+  "totalGross",
+  "actions",
+] as const;
 
-function parseOrderStatus(value: string): OrderStatus | '' {
+function parseOrderStatus(value: string): OrderStatus | "" {
   if (
-    value === 'DRAFT'
-    || value === 'CONFIRMED'
-    || value === 'PARTIALLY_DELIVERED'
-    || value === 'DELIVERED'
-    || value === 'CANCELLED'
-  ) return value;
-  return '';
+    value === "DRAFT" ||
+    value === "CONFIRMED" ||
+    value === "PARTIALLY_DELIVERED" ||
+    value === "DELIVERED" ||
+    value === "CANCELLED"
+  )
+    return value;
+  return "";
 }
 
 function daysUntil(value: string | null): number | null {
@@ -73,10 +94,15 @@ function invoiceProgress(order: SalesOrder) {
   const total = Math.max(0, Number(order.totalGross) || 0);
   const invoiced = Math.max(0, Number(order.invoicedAmount) || 0);
   const remaining = Math.max(0, total - invoiced);
-  const percent = total > 0 ? Math.min(100, Math.round((invoiced / total) * 100)) : 0;
+  const percent =
+    total > 0 ? Math.min(100, Math.round((invoiced / total) * 100)) : 0;
   const complete = remaining <= 0;
   const partial = !complete && invoiced > 0;
-  const label = complete ? 'Tamamlandı' : partial ? `%${percent} faturalandı` : 'Faturalanmadı';
+  const label = complete
+    ? "Tamamlandı"
+    : partial
+      ? `%${percent} faturalandı`
+      : "Faturalanmadı";
   return { total, invoiced, remaining, percent, complete, partial, label };
 }
 
@@ -85,24 +111,26 @@ function DueDateBadge({ order }: { order: SalesOrder }) {
   if (days === null) return <span className="text-xs text-slate-600">—</span>;
 
   let label = formatDate(order.dueDate);
-  let variant: BadgeVariant = 'neutral';
-  if (order.status !== 'DELIVERED' && order.status !== 'CANCELLED') {
+  let variant: BadgeVariant = "neutral";
+  if (order.status !== "DELIVERED" && order.status !== "CANCELLED") {
     if (days < 0) {
-      label = 'Gecikti';
-      variant = 'danger';
+      label = "Gecikti";
+      variant = "danger";
     } else if (days === 0) {
-      label = 'Bugün';
-      variant = 'warning';
+      label = "Bugün";
+      variant = "warning";
     } else if (days <= 7) {
       label = `${days} gün kaldı`;
-      variant = 'warning';
+      variant = "warning";
     }
   }
 
   return (
     <div className="flex flex-col gap-1">
       <Badge variant={variant}>{label}</Badge>
-      <span className="text-[11px] text-slate-500">{formatDate(order.dueDate)}</span>
+      <span className="text-[11px] text-slate-500">
+        {formatDate(order.dueDate)}
+      </span>
     </div>
   );
 }
@@ -112,49 +140,66 @@ function InvoiceProgressCell({ order }: { order: SalesOrder }) {
   return (
     <div className="min-w-32">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className={progress.complete ? 'text-xs font-medium text-emerald-300' : 'text-xs font-medium text-amber-300'}>
+        <span
+          className={
+            progress.complete
+              ? "text-xs font-medium text-emerald-300"
+              : "text-xs font-medium text-amber-300"
+          }
+        >
           {progress.label}
         </span>
         <span className="text-[11px] text-slate-500">%{progress.percent}</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
         <div
-          className={progress.complete ? 'h-full bg-emerald-400' : 'h-full bg-amber-400'}
+          className={
+            progress.complete ? "h-full bg-emerald-400" : "h-full bg-amber-400"
+          }
           style={{ width: `${progress.percent}%` }}
         />
       </div>
-      {!progress.complete && <p className="mt-1 text-[11px] text-slate-500">Kalan {formatCurrency(progress.remaining)}</p>}
+      {!progress.complete && (
+        <p className="mt-1 text-[11px] text-slate-500">
+          Kalan {formatCurrency(progress.remaining)}
+        </p>
+      )}
     </div>
   );
 }
 
-function SalesOrderKpis({ orders, total }: { orders: SalesOrder[]; total: number }) {
-  const confirmed = orders.filter((order) => order.status === 'CONFIRMED').length;
-  const waitingDelivery = orders.filter((order) => order.status === 'CONFIRMED' || order.status === 'PARTIALLY_DELIVERED').length;
-  const uninvoiced = orders.reduce((sum, order) => sum + invoiceProgress(order).remaining, 0);
-  const gross = orders.reduce((sum, order) => sum + (Number(order.totalGross) || 0), 0);
-
+function SalesOrderKpis({ summary }: { summary: SalesOrderSummary }) {
   return (
     <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-5">
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
         <p className="text-[10px] uppercase text-slate-500">Toplam sipariş</p>
-        <p className="mt-1 text-lg font-semibold text-white">{total}</p>
+        <p className="mt-1 text-lg font-semibold text-white">{summary.total}</p>
       </div>
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
         <p className="text-[10px] uppercase text-slate-500">Onaylanan</p>
-        <p className="mt-1 text-lg font-semibold text-sky-300">{confirmed}</p>
+        <p className="mt-1 text-lg font-semibold text-sky-300">
+          {summary.confirmedCount}
+        </p>
       </div>
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
         <p className="text-[10px] uppercase text-slate-500">Teslim bekleyen</p>
-        <p className="mt-1 text-lg font-semibold text-amber-300">{waitingDelivery}</p>
+        <p className="mt-1 text-lg font-semibold text-amber-300">
+          {summary.waitingDeliveryCount}
+        </p>
       </div>
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
         <p className="text-[10px] uppercase text-slate-500">Faturalanmamış</p>
-        <p className="mt-1 text-lg font-semibold text-red-300">{formatCurrency(uninvoiced)}</p>
+        <p className="mt-1 text-lg font-semibold text-red-300">
+          {formatCurrency(summary.uninvoicedAmount)}
+        </p>
       </div>
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
-        <p className="text-[10px] uppercase text-slate-500">Sayfa toplamı</p>
-        <p className="mt-1 text-lg font-semibold text-emerald-300">{formatCurrency(gross)}</p>
+        <p className="text-[10px] uppercase text-slate-500">
+          Filtrelenmiş toplam
+        </p>
+        <p className="mt-1 text-lg font-semibold text-emerald-300">
+          {formatCurrency(summary.totalGross)}
+        </p>
       </div>
     </div>
   );
@@ -164,10 +209,14 @@ export function SalesOrdersListPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [status, setStatus] = useState<OrderStatus | ''>('');
-  const [search, setSearch] = useState('');
-  const [tableDensity, setTableDensity] = useState<'comfortable' | 'compact'>('compact');
-  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>([...ORDER_COLUMN_KEYS]);
+  const [status, setStatus] = useState<OrderStatus | "">("");
+  const [search, setSearch] = useState("");
+  const [tableDensity, setTableDensity] = useState<"comfortable" | "compact">(
+    "compact",
+  );
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>([
+    ...ORDER_COLUMN_KEYS,
+  ]);
 
   const { data, isLoading } = useSalesOrders({
     page,
@@ -177,45 +226,51 @@ export function SalesOrdersListPage() {
   });
 
   const orders = data?.data ?? [];
-  const viewState = useMemo<SavedViewState>(() => createListSavedViewState({
-    filters: { status, search, density: tableDensity },
-    columns: visibleColumnKeys,
-    pageSize,
-  }), [pageSize, search, status, tableDensity, visibleColumnKeys]);
+  const viewState = useMemo<SavedViewState>(
+    () =>
+      createListSavedViewState({
+        filters: { status, search, density: tableDensity },
+        columns: visibleColumnKeys,
+        pageSize,
+      }),
+    [pageSize, search, status, tableDensity, visibleColumnKeys],
+  );
 
   const applyView = (state: SavedViewState) => {
-    setStatus(parseOrderStatus(getSavedViewFilterString(state, 'status')));
-    setSearch(getSavedViewFilterString(state, 'search'));
-    const density = getSavedViewFilterString(state, 'density');
-    setTableDensity(density === 'comfortable' ? 'comfortable' : 'compact');
+    setStatus(parseOrderStatus(getSavedViewFilterString(state, "status")));
+    setSearch(getSavedViewFilterString(state, "search"));
+    const density = getSavedViewFilterString(state, "density");
+    setTableDensity(density === "comfortable" ? "comfortable" : "compact");
     setPageSize(getSavedViewPageSize(state, DEFAULT_PAGE_SIZE));
     setVisibleColumnKeys(normalizeColumnKeys(columns, state.columns));
     setPage(1);
   };
 
-  const setQuickStatus = (nextStatus: OrderStatus | '') => {
+  const setQuickStatus = (nextStatus: OrderStatus | "") => {
     setStatus(nextStatus);
     setPage(1);
   };
 
   const getRowActions = (order: SalesOrder): RowAction[] => [
     {
-      label: 'Görüntüle',
+      label: "Görüntüle",
       icon: <Eye className="h-4 w-4" />,
       onClick: () => router.push(`/dashboard/sales-orders/${order.id}`),
     },
     {
-      label: 'Fatura oluştur',
+      label: "Fatura oluştur",
       icon: <Receipt className="h-4 w-4" />,
-      onClick: () => router.push(`/dashboard/invoices/new?salesOrderId=${order.id}`),
+      onClick: () =>
+        router.push(`/dashboard/invoices/new?salesOrderId=${order.id}`),
     },
     {
-      label: 'Teslimat fişi',
+      label: "Teslimat fişi",
       icon: <Truck className="h-4 w-4" />,
-      onClick: () => router.push(`/dashboard/delivery-notes?salesOrderId=${order.id}`),
+      onClick: () =>
+        router.push(`/dashboard/delivery-notes?salesOrderId=${order.id}`),
     },
     {
-      label: 'Mail gönder',
+      label: "Mail gönder",
       icon: <Mail className="h-4 w-4" />,
       separator: true,
       onClick: () => router.push(`/dashboard/sales-orders/${order.id}`),
@@ -224,24 +279,30 @@ export function SalesOrdersListPage() {
 
   const columns: ColumnDef<SalesOrder>[] = [
     {
-      key: 'number',
-      header: 'Sipariş',
-      width: '150px',
+      key: "number",
+      header: "Sipariş",
+      width: "150px",
       exportValue: (order) => order.number,
       render: (order) => (
         <div>
-          <span className="font-mono text-sm font-semibold text-sky-300">{order.number}</span>
-          <p className="mt-1 text-[11px] text-slate-500">{formatDate(order.date)}</p>
+          <span className="font-mono text-sm font-semibold text-sky-300">
+            {order.number}
+          </span>
+          <p className="mt-1 text-[11px] text-slate-500">
+            {formatDate(order.date)}
+          </p>
         </div>
       ),
     },
     {
-      key: 'contact',
-      header: 'Cari',
-      exportValue: (order) => order.contact?.name ?? '',
+      key: "contact",
+      header: "Cari",
+      exportValue: (order) => order.contact?.name ?? "",
       render: (order) => (
         <div className="min-w-0">
-          <span className="block truncate text-sm font-medium text-slate-200">{order.contact?.name ?? '—'}</span>
+          <span className="block truncate text-sm font-medium text-slate-200">
+            {order.contact?.name ?? "—"}
+          </span>
           <span className="block truncate text-[11px] text-slate-500">
             {order.quoteId ? `Tekliften dönüştü` : invoiceProgress(order).label}
           </span>
@@ -249,47 +310,51 @@ export function SalesOrdersListPage() {
       ),
     },
     {
-      key: 'dueDate',
-      header: 'Vade',
-      width: '130px',
-      exportValue: (order) => order.dueDate ?? '',
+      key: "dueDate",
+      header: "Vade",
+      width: "130px",
+      exportValue: (order) => order.dueDate ?? "",
       render: (order) => <DueDateBadge order={order} />,
     },
     {
-      key: 'status',
-      header: 'Durum',
-      width: '145px',
+      key: "status",
+      header: "Durum",
+      width: "145px",
       exportValue: (order) => order.status,
       render: (order) => <OrderStatusBadge status={order.status} />,
     },
     {
-      key: 'invoiceFlow',
-      header: 'Faturalama',
-      width: '180px',
+      key: "invoiceFlow",
+      header: "Faturalama",
+      width: "180px",
       exportValue: (order) => invoiceProgress(order).label,
       render: (order) => <InvoiceProgressCell order={order} />,
     },
     {
-      key: 'totalGross',
-      header: 'Toplam',
-      width: '150px',
-      align: 'right',
+      key: "totalGross",
+      header: "Toplam",
+      width: "150px",
+      align: "right",
       exportValue: (order) => Number(order.totalGross) || 0,
       render: (order) => {
         const progress = invoiceProgress(order);
         return (
           <div className="text-right">
-            <span className="font-semibold text-slate-100">{formatCurrency(order.totalGross)}</span>
-            <p className="text-[11px] text-slate-500">Faturalanan {formatCurrency(progress.invoiced)}</p>
+            <span className="font-semibold text-slate-100">
+              {formatCurrency(order.totalGross)}
+            </span>
+            <p className="text-[11px] text-slate-500">
+              Faturalanan {formatCurrency(progress.invoiced)}
+            </p>
           </div>
         );
       },
     },
     {
-      key: 'actions',
-      header: '',
-      width: '42px',
-      align: 'center',
+      key: "actions",
+      header: "",
+      width: "42px",
+      align: "center",
       hideable: false,
       render: (order) => <RowActions actions={getRowActions(order)} />,
     },
@@ -301,32 +366,48 @@ export function SalesOrdersListPage() {
       <PageHeader
         title="Satış Siparişleri"
         subtitle="Müşteri siparişlerinizi teslimat, faturalama ve tahsilat akışıyla takip edin."
-        action={(
+        action={
           <div className="flex flex-wrap gap-2">
-            <Link href="/dashboard/sales-orders/quotes" className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 text-sm font-medium text-slate-300 hover:border-slate-700 hover:text-white">
+            <Link
+              href="/dashboard/sales-orders/quotes"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 text-sm font-medium text-slate-300 hover:border-slate-700 hover:text-white"
+            >
               <FileText className="h-4 w-4" />
               Teklifler
             </Link>
-            <Link href="/dashboard/sales-orders/new" className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-medium text-white hover:bg-sky-500">
+            <Link
+              href="/dashboard/sales-orders/new"
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-medium text-white hover:bg-sky-500"
+            >
               <Plus className="h-4 w-4" />
               Yeni Sipariş
             </Link>
           </div>
-        )}
+        }
       />
 
-      <SalesOrderKpis orders={orders} total={data?.meta.total ?? 0} />
+      <SalesOrderKpis
+        summary={
+          data?.summary ?? {
+            total: 0,
+            confirmedCount: 0,
+            waitingDeliveryCount: 0,
+            totalGross: 0,
+            uninvoicedAmount: 0,
+          }
+        }
+      />
 
       <div className="mb-3 flex flex-wrap gap-2">
         {QUICK_STATUSES.map((option) => (
           <button
-            key={option.value || 'all'}
+            key={option.value || "all"}
             type="button"
             onClick={() => setQuickStatus(option.value)}
             className={`h-8 rounded-lg border px-3 text-xs font-medium transition-colors ${
               status === option.value
-                ? 'border-sky-500/40 bg-sky-500/15 text-sky-200'
-                : 'border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                ? "border-sky-500/40 bg-sky-500/15 text-sky-200"
+                : "border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700 hover:text-slate-200"
             }`}
           >
             {option.label}
@@ -347,7 +428,9 @@ export function SalesOrdersListPage() {
         <Select
           options={STATUS_OPTIONS}
           value={status}
-          onChange={(event) => setQuickStatus(parseOrderStatus(event.target.value))}
+          onChange={(event) =>
+            setQuickStatus(parseOrderStatus(event.target.value))
+          }
           className="w-48"
         />
         <ListStandardControls
@@ -369,15 +452,15 @@ export function SalesOrdersListPage() {
         <div className="flex rounded-lg border border-slate-800 bg-slate-900/60 p-0.5">
           <button
             type="button"
-            onClick={() => setTableDensity('compact')}
-            className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${tableDensity === 'compact' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+            onClick={() => setTableDensity("compact")}
+            className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${tableDensity === "compact" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-slate-200"}`}
           >
             Kompakt
           </button>
           <button
             type="button"
-            onClick={() => setTableDensity('comfortable')}
-            className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${tableDensity === 'comfortable' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+            onClick={() => setTableDensity("comfortable")}
+            className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${tableDensity === "comfortable" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-slate-200"}`}
           >
             Rahat
           </button>
@@ -389,7 +472,7 @@ export function SalesOrdersListPage() {
           {status && (
             <button
               type="button"
-              onClick={() => setQuickStatus('')}
+              onClick={() => setQuickStatus("")}
               className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-sky-500/25 bg-sky-500/10 px-2.5 text-xs font-medium text-sky-200 hover:border-sky-400/40"
             >
               {STATUS_OPTIONS.find((option) => option.value === status)?.label}
@@ -400,7 +483,7 @@ export function SalesOrdersListPage() {
             <button
               type="button"
               onClick={() => {
-                setSearch('');
+                setSearch("");
                 setPage(1);
               }}
               className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-sky-500/25 bg-sky-500/10 px-2.5 text-xs font-medium text-sky-200 hover:border-sky-400/40"
@@ -419,10 +502,30 @@ export function SalesOrdersListPage() {
         keyExtractor={(order) => order.id}
         isLoading={isLoading}
         density={tableDensity}
-        onRowClick={(order) => router.push(`/dashboard/sales-orders/${order.id}`)}
-        emptyTitle={search || status ? 'Filtreye uygun sipariş bulunamadı' : 'Sipariş bulunamadı'}
-        emptyDescription={search || status ? 'Arama veya durum filtresini temizleyerek tekrar deneyin.' : 'Tekliften siparişe dönüştürün veya yeni satış siparişi oluşturun.'}
-        pagination={data ? { page, pageSize, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
+        onRowClick={(order) =>
+          router.push(`/dashboard/sales-orders/${order.id}`)
+        }
+        emptyTitle={
+          search || status
+            ? "Filtreye uygun sipariş bulunamadı"
+            : "Sipariş bulunamadı"
+        }
+        emptyDescription={
+          search || status
+            ? "Arama veya durum filtresini temizleyerek tekrar deneyin."
+            : "Tekliften siparişe dönüştürün veya yeni satış siparişi oluşturun."
+        }
+        pagination={
+          data
+            ? {
+                page,
+                pageSize,
+                total: data.meta.total,
+                totalPages: data.meta.totalPages,
+                onChange: setPage,
+              }
+            : undefined
+        }
       />
 
       {!isLoading && orders.length === 0 && !search && !status && (
@@ -431,7 +534,10 @@ export function SalesOrdersListPage() {
             <ClipboardList className="h-4 w-4 text-sky-300" />
             Satış siparişi akışı
           </div>
-          <p>Tekliften sipariş oluşturun, teslimatı takip edin ve faturalanmamış tutarları kapatın.</p>
+          <p>
+            Tekliften sipariş oluşturun, teslimatı takip edin ve faturalanmamış
+            tutarları kapatın.
+          </p>
         </div>
       )}
     </div>

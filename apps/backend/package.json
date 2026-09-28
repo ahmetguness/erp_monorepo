@@ -25,6 +25,7 @@
     "test:permission-gating": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-permission-gating.ts",
     "test:contacts-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-contacts-assurance.ts",
     "test:sales-quotes-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-sales-quotes-assurance.ts",
+    "test:sales-orders-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-sales-orders-assurance.ts",
     "test:admin-approval": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/admin-assurance/check-two-person-approval.ts",
     "test:admin-audit-identity": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-admin-audit-identity.ts",
     "test:admin-auth": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/admin-assurance/check-auth-sessions.ts",

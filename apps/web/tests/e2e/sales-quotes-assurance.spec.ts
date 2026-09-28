@@ -107,19 +107,31 @@ test("sales quote UI create, read, filter, navigation and conversion flow", asyn
     const quoteUrl = page.url();
     await page.reload();
     await expect(page.locator("body")).toContainText("3.810,00");
-    await expect(page.getByRole("button", { name: "Yazdır / PDF" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Yazdır / PDF" }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Düzenle" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/sales-orders\/quotes\/[a-z0-9]+\/edit$/);
+    await expect(page).toHaveURL(
+      /\/dashboard\/sales-orders\/quotes\/[a-z0-9]+\/edit$/,
+    );
     const editNumbers = page.locator('input[type="number"]');
     await editNumbers.nth(0).fill("1");
     await editNumbers.nth(1).fill("2000");
-    await page.getByPlaceholder("Teklif ile ilgili notlar…").fill("TEST_E2E_UPDATED Türkçe not");
+    await page
+      .getByPlaceholder("Teklif ile ilgili notlar…")
+      .fill("TEST_E2E_UPDATED Türkçe not");
     await page.getByRole("button", { name: "Değişiklikleri Kaydet" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/sales-orders\/quotes\/[a-z0-9]+$/);
-    await expect(page.locator("body")).toContainText("TEST_E2E_UPDATED Türkçe not");
+    await expect(page).toHaveURL(
+      /\/dashboard\/sales-orders\/quotes\/[a-z0-9]+$/,
+    );
+    await expect(page.locator("body")).toContainText(
+      "TEST_E2E_UPDATED Türkçe not",
+    );
     await expect(page.locator("body")).toContainText("3.810,00");
     await page.reload();
-    await expect(page.locator("body")).toContainText("TEST_E2E_UPDATED Türkçe not");
+    await expect(page.locator("body")).toContainText(
+      "TEST_E2E_UPDATED Türkçe not",
+    );
 
     await page.goto("/dashboard/sales-orders/quotes");
     const search = page.getByPlaceholder(/Teklif no veya cari/);

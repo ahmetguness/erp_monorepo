@@ -1,19 +1,42 @@
-import { AuditAction,EntityType,OrderStatus,QuoteStatus,ReservationRefType } from '@prisma/client';
-import { Context } from 'hono';
-import { createEventContext,domainEvents } from '../../../../domain-events/index.js';
-import { ConflictError,NotFoundError,ValidationError } from '../../../../errors/index.js';
-import { prisma } from '../../../../lib/prisma.js';
-import { getValidatedBody } from '../../../../middleware/validateBody.js';
-import { createSalesQuoteBodySchema,fulfillSalesOrderBodySchema,updateSalesQuoteBodySchema,updateSalesQuoteStatusBodySchema } from '../../../../schemas/request-body.schemas.js';
-import { BusinessRulesService } from '../../../../services/business-rules.service.js';
-import { assertSalesOrderStatusTransition } from '../../../../services/financial/status-transition.service.js';
-import { releaseInventoryReservations } from '../../../../services/inventory-rules.service.js';
-import { SalesFulfillmentService } from '../../../../services/sales-fulfillment.service.js';
-import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
-import { requireParam,requireTenantId } from '../../../../utils/context.js';
-import { generateDocumentNumber } from '../../../../utils/generate-number.js';
-import { buildOwnershipChecks,validateTenantOwnership } from '../../../../utils/validateTenantOwnership.js';
-import { salesApplication } from '../../composition.js';
+import {
+  AuditAction,
+  EntityType,
+  OrderStatus,
+  QuoteStatus,
+  ReservationRefType,
+} from "@prisma/client";
+import { Context } from "hono";
+import {
+  createEventContext,
+  domainEvents,
+} from "../../../../domain-events/index.js";
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from "../../../../errors/index.js";
+import { prisma } from "../../../../lib/prisma.js";
+import { getValidatedBody } from "../../../../middleware/validateBody.js";
+import {
+  createSalesOrderBodySchema,
+  createSalesQuoteBodySchema,
+  fulfillSalesOrderBodySchema,
+  updateSalesOrderBodySchema,
+  updateSalesQuoteBodySchema,
+  updateSalesQuoteStatusBodySchema,
+} from "../../../../schemas/request-body.schemas.js";
+import { BusinessRulesService } from "../../../../services/business-rules.service.js";
+import { assertSalesOrderStatusTransition } from "../../../../services/financial/status-transition.service.js";
+import { releaseInventoryReservations } from "../../../../services/inventory-rules.service.js";
+import { SalesFulfillmentService } from "../../../../services/sales-fulfillment.service.js";
+import { createAuditLog, getRequestMeta } from "../../../../utils/audit.js";
+import { requireParam, requireTenantId } from "../../../../utils/context.js";
+import { generateDocumentNumber } from "../../../../utils/generate-number.js";
+import {
+  buildOwnershipChecks,
+  validateTenantOwnership,
+} from "../../../../utils/validateTenantOwnership.js";
+import { salesApplication } from "../../composition.js";
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -143,19 +166,25 @@ export const SalesOrderController = {
     const tenantId = requireTenantId(c);
 
     const query = c.req.query() as OrderListQuery;
-    return c.json(await salesApplication.salesQuoteQueries.list(tenantId, {
-      ...query,
-      status: parseQuoteStatus(c.req.query('status')),
-    }));
+    return c.json(
+      await salesApplication.salesQuoteQueries.list(tenantId, {
+        ...query,
+        status: parseQuoteStatus(c.req.query("status")),
+      }),
+    );
   },
 
   async getQuoteById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const quoteId = requireParam(c, 'id');
+    const quoteId = requireParam(c, "id");
 
-    const quote = await salesApplication.salesQuoteQueries.getById(tenantId, quoteId);
+    const quote = await salesApplication.salesQuoteQueries.getById(
+      tenantId,
+      quoteId,
+    );
 
-    if (!quote) return c.json(new NotFoundError('Teklif', quoteId).toJSON(), 404);
+    if (!quote)
+      return c.json(new NotFoundError("Teklif", quoteId).toJSON(), 404);
     return c.json({ data: quote });
   },
 
@@ -164,22 +193,45 @@ export const SalesOrderController = {
 
     const body = getValidatedBody(c, createSalesQuoteBodySchema);
 
-    await validateTenantOwnership(tenantId, buildOwnershipChecks([
-      { model: 'contact', id: body.contactId, label: 'Teklif carisi' },
-      ...body.items.map((item, index) => ({ model: 'product' as const, id: item.productId, label: `Teklif kalemi ${index + 1} urunu` })),
-    ]));
+    await validateTenantOwnership(
+      tenantId,
+      buildOwnershipChecks([
+        { model: "contact", id: body.contactId, label: "Teklif carisi" },
+        ...body.items.map((item, index) => ({
+          model: "product" as const,
+          id: item.productId,
+          label: `Teklif kalemi ${index + 1} urunu`,
+        })),
+      ]),
+    );
 
-    const { lineData, totalNet, totalTax, totalGross } = computeItems(body.items);
+    const { lineData, totalNet, totalTax, totalGross } = computeItems(
+      body.items,
+    );
 
     let number = body.number;
     if (!number) {
-      number = await generateDocumentNumber(tenantId, 'sales_quote', 'TKL-', 'salesQuote');
+      number = await generateDocumentNumber(
+        tenantId,
+        "sales_quote",
+        "TKL-",
+        "salesQuote",
+      );
     } else {
-      const duplicate = await prisma.salesQuote.findUnique({ where: { tenantId_number: { tenantId, number } }, select: { id: true } });
-      if (duplicate) throw new ConflictError(`"${number}" teklif numarasi zaten kullaniliyor.`);
+      const duplicate = await prisma.salesQuote.findUnique({
+        where: { tenantId_number: { tenantId, number } },
+        select: { id: true },
+      });
+      if (duplicate)
+        throw new ConflictError(
+          `"${number}" teklif numarasi zaten kullaniliyor.`,
+        );
     }
     const quoteDate = new Date(body.date);
-    const quoteValidityDays = await businessRulesService.getNumber(tenantId, 'sales.quote_validity_days');
+    const quoteValidityDays = await businessRulesService.getNumber(
+      tenantId,
+      "sales.quote_validity_days",
+    );
 
     const quote = await prisma.salesQuote.create({
       data: {
@@ -187,7 +239,9 @@ export const SalesOrderController = {
         contactId: body.contactId,
         number,
         date: quoteDate,
-        validUntil: body.validUntil ? new Date(body.validUntil) : addDays(quoteDate, quoteValidityDays),
+        validUntil: body.validUntil
+          ? new Date(body.validUntil)
+          : addDays(quoteDate, quoteValidityDays),
         notes: body.notes ?? null,
         totalNet,
         totalTax,
@@ -202,21 +256,39 @@ export const SalesOrderController = {
 
   async updateQuote(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const quoteId = requireParam(c, 'id');
+    const quoteId = requireParam(c, "id");
     const body = getValidatedBody(c, updateSalesQuoteBodySchema);
     const existing = await prisma.salesQuote.findFirst({
       where: { id: quoteId, tenantId, deletedAt: null },
       include: { _count: { select: { salesOrders: true } } },
     });
-    if (!existing) return c.json(new NotFoundError('Teklif', quoteId).toJSON(), 404);
-    if (existing.status !== QuoteStatus.DRAFT || existing._count.salesOrders > 0) {
-      return c.json(new ValidationError('Yalnizca siparise donusturulmemis taslak teklifler duzenlenebilir.').toJSON(), 400);
+    if (!existing)
+      return c.json(new NotFoundError("Teklif", quoteId).toJSON(), 404);
+    if (
+      existing.status !== QuoteStatus.DRAFT ||
+      existing._count.salesOrders > 0
+    ) {
+      return c.json(
+        new ValidationError(
+          "Yalnizca siparise donusturulmemis taslak teklifler duzenlenebilir.",
+        ).toJSON(),
+        400,
+      );
     }
-    await validateTenantOwnership(tenantId, buildOwnershipChecks([
-      { model: 'contact', id: body.contactId, label: 'Teklif carisi' },
-      ...body.items.map((item, index) => ({ model: 'product' as const, id: item.productId, label: `Teklif kalemi ${index + 1} urunu` })),
-    ]));
-    const { lineData, totalNet, totalTax, totalGross } = computeItems(body.items);
+    await validateTenantOwnership(
+      tenantId,
+      buildOwnershipChecks([
+        { model: "contact", id: body.contactId, label: "Teklif carisi" },
+        ...body.items.map((item, index) => ({
+          model: "product" as const,
+          id: item.productId,
+          label: `Teklif kalemi ${index + 1} urunu`,
+        })),
+      ]),
+    );
+    const { lineData, totalNet, totalTax, totalGross } = computeItems(
+      body.items,
+    );
     const quote = await prisma.$transaction(async (tx) => {
       await tx.salesQuoteItem.deleteMany({ where: { quoteId, tenantId } });
       return tx.salesQuote.update({
@@ -226,10 +298,15 @@ export const SalesOrderController = {
           date: new Date(body.date),
           validUntil: body.validUntil ? new Date(body.validUntil) : null,
           notes: body.notes ?? null,
-          totalNet, totalTax, totalGross,
+          totalNet,
+          totalTax,
+          totalGross,
           items: { create: lineData.map((line) => ({ ...line, tenantId })) },
         },
-        include: { items: true, contact: { select: { id: true, name: true, email: true } } },
+        include: {
+          items: true,
+          contact: { select: { id: true, name: true, email: true } },
+        },
       });
     });
     return c.json({ data: quote });
@@ -237,59 +314,106 @@ export const SalesOrderController = {
 
   async updateQuoteStatus(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const quoteId = requireParam(c, 'id');
+    const quoteId = requireParam(c, "id");
     const { status } = getValidatedBody(c, updateSalesQuoteStatusBodySchema);
-    const quote = await prisma.salesQuote.findFirst({ where: { id: quoteId, tenantId, deletedAt: null } });
-    if (!quote) return c.json(new NotFoundError('Teklif', quoteId).toJSON(), 404);
+    const quote = await prisma.salesQuote.findFirst({
+      where: { id: quoteId, tenantId, deletedAt: null },
+    });
+    if (!quote)
+      return c.json(new NotFoundError("Teklif", quoteId).toJSON(), 404);
     const allowed: Partial<Record<QuoteStatus, QuoteStatus[]>> = {
       [QuoteStatus.DRAFT]: [QuoteStatus.SENT, QuoteStatus.CANCELLED],
       [QuoteStatus.SENT]: [QuoteStatus.REJECTED, QuoteStatus.CANCELLED],
     };
     if (!(allowed[quote.status] ?? []).includes(status as QuoteStatus)) {
-      return c.json(new ValidationError(`${quote.status} durumundan ${status} durumuna gecis desteklenmiyor.`).toJSON(), 400);
+      return c.json(
+        new ValidationError(
+          `${quote.status} durumundan ${status} durumuna gecis desteklenmiyor.`,
+        ).toJSON(),
+        400,
+      );
     }
-    const updated = await prisma.salesQuote.update({ where: { id: quoteId }, data: { status }, include: { items: true, contact: true } });
+    const updated = await prisma.salesQuote.update({
+      where: { id: quoteId },
+      data: { status },
+      include: { items: true, contact: true },
+    });
     return c.json({ data: updated });
   },
 
   async deleteQuote(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const quoteId = requireParam(c, 'id');
+    const quoteId = requireParam(c, "id");
     const quote = await prisma.salesQuote.findFirst({
       where: { id: quoteId, tenantId, deletedAt: null },
       include: { _count: { select: { salesOrders: true } } },
     });
-    if (!quote) return c.json(new NotFoundError('Teklif', quoteId).toJSON(), 404);
-    if (quote._count.salesOrders > 0 || quote.status === QuoteStatus.ACCEPTED || quote.status === QuoteStatus.SENT) {
-      return c.json(new ValidationError('Gonderilmis veya siparise donusturulmus teklif silinemez; once uygun lifecycle islemini tamamlayin.').toJSON(), 400);
+    if (!quote)
+      return c.json(new NotFoundError("Teklif", quoteId).toJSON(), 404);
+    if (
+      quote._count.salesOrders > 0 ||
+      quote.status === QuoteStatus.ACCEPTED ||
+      quote.status === QuoteStatus.SENT
+    ) {
+      return c.json(
+        new ValidationError(
+          "Gonderilmis veya siparise donusturulmus teklif silinemez; once uygun lifecycle islemini tamamlayin.",
+        ).toJSON(),
+        400,
+      );
     }
-    await prisma.salesQuote.update({ where: { id: quoteId }, data: { deletedAt: new Date() } });
+    await prisma.salesQuote.update({
+      where: { id: quoteId },
+      data: { deletedAt: new Date() },
+    });
     return c.body(null, 204);
   },
 
   async convertQuoteToOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const userId = c.get('userId') as string | undefined;
-    const quoteId = c.req.param('id');
+    const userId = c.get("userId") as string | undefined;
+    const quoteId = c.req.param("id");
 
     const quote = await prisma.salesQuote.findFirst({
       where: { id: quoteId, tenantId, deletedAt: null },
       include: { items: true },
     });
 
-    if (!quote) return c.json(new NotFoundError('Teklif', quoteId).toJSON(), 404);
+    if (!quote)
+      return c.json(new NotFoundError("Teklif", quoteId).toJSON(), 404);
 
-    if (quote.status !== QuoteStatus.SENT && quote.status !== QuoteStatus.DRAFT) {
-      return c.json(new ValidationError('Sadece taslak veya kabul edilmiş teklifler siparişe dönüştürülebilir.').toJSON(), 400);
+    if (
+      quote.status !== QuoteStatus.SENT &&
+      quote.status !== QuoteStatus.DRAFT
+    ) {
+      return c.json(
+        new ValidationError(
+          "Sadece taslak veya kabul edilmiş teklifler siparişe dönüştürülebilir.",
+        ).toJSON(),
+        400,
+      );
     }
-    const number = await generateDocumentNumber(tenantId, 'sales_order', 'SIP-', 'salesOrder');
+    const number = await generateDocumentNumber(
+      tenantId,
+      "sales_order",
+      "SIP-",
+      "salesOrder",
+    );
 
     const order = await prisma.$transaction(async (tx) => {
       const claimed = await tx.salesQuote.updateMany({
-        where: { id: quoteId, tenantId, status: { in: [QuoteStatus.DRAFT, QuoteStatus.SENT] }, deletedAt: null },
+        where: {
+          id: quoteId,
+          tenantId,
+          status: { in: [QuoteStatus.DRAFT, QuoteStatus.SENT] },
+          deletedAt: null,
+        },
         data: { status: QuoteStatus.ACCEPTED },
       });
-      if (claimed.count !== 1) throw new ConflictError('Teklif daha once siparise donusturulmus veya es zamanli olarak degistirilmis.');
+      if (claimed.count !== 1)
+        throw new ConflictError(
+          "Teklif daha once siparise donusturulmus veya es zamanli olarak degistirilmis.",
+        );
 
       const newOrder = await tx.salesOrder.create({
         data: {
@@ -324,11 +448,16 @@ export const SalesOrderController = {
     });
 
     await prisma.salesOrderHistory.create({
-      data: { tenantId, orderId: order.id, toStatus: 'DRAFT', notes: `Tekliften dönüştürüldü: ${quote.number}` },
+      data: {
+        tenantId,
+        orderId: order.id,
+        toStatus: "DRAFT",
+        notes: `Tekliften dönüştürüldü: ${quote.number}`,
+      },
     });
 
     await domainEvents.publish({
-      name: 'salesQuote.accepted',
+      name: "salesQuote.accepted",
       context: createEventContext({ tenantId, userId }),
       payload: {
         quoteId: quote.id,
@@ -349,10 +478,13 @@ export const SalesOrderController = {
     const tenantId = requireTenantId(c);
 
     const query = c.req.query() as OrderListQuery;
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
+    const page = Math.max(1, parseInt(query.page ?? "1", 10));
+    const pageSize = Math.min(
+      100,
+      Math.max(1, parseInt(query.limit ?? "20", 10)),
+    );
     const search = query.search?.trim();
-    const status = parseOrderStatus(c.req.query('status'));
+    const status = parseOrderStatus(c.req.query("status"));
 
     const where = {
       tenantId,
@@ -361,64 +493,117 @@ export const SalesOrderController = {
       ...(query.contactId && { contactId: query.contactId }),
       ...(search && {
         OR: [
-          { number: { contains: search, mode: 'insensitive' as const } },
-          { contact: { name: { contains: search, mode: 'insensitive' as const } } },
+          { number: { contains: search, mode: "insensitive" as const } },
+          {
+            contact: {
+              name: { contains: search, mode: "insensitive" as const },
+            },
+          },
         ],
       }),
       ...(query.dateFrom || query.dateTo
-        ? { date: { ...(query.dateFrom && { gte: new Date(query.dateFrom) }), ...(query.dateTo && { lte: new Date(query.dateTo) }) } }
+        ? {
+            date: {
+              ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
+              ...(query.dateTo && { lte: new Date(query.dateTo) }),
+            },
+          }
         : {}),
     };
 
-    const [total, orders] = await prisma.$transaction([
-      prisma.salesOrder.count({ where }),
-      prisma.salesOrder.findMany({
-        where,
-        include: { contact: { select: { id: true, name: true } } },
-        orderBy: { date: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-    ]);
+    const [total, orders, confirmedCount, waitingDeliveryCount, financials] =
+      await prisma.$transaction([
+        prisma.salesOrder.count({ where }),
+        prisma.salesOrder.findMany({
+          where,
+          include: { contact: { select: { id: true, name: true } } },
+          orderBy: { date: "desc" },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        prisma.salesOrder.count({
+          where: { ...where, status: OrderStatus.CONFIRMED },
+        }),
+        prisma.salesOrder.count({
+          where: {
+            ...where,
+            status: {
+              in: [OrderStatus.CONFIRMED, OrderStatus.PARTIALLY_DELIVERED],
+            },
+          },
+        }),
+        prisma.salesOrder.aggregate({
+          where,
+          _sum: { totalGross: true, invoicedAmount: true },
+        }),
+      ]);
 
-    return c.json({ data: orders, meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) } });
+    const totalGross = Number(financials._sum.totalGross ?? 0);
+    const invoicedAmount = Number(financials._sum.invoicedAmount ?? 0);
+    return c.json({
+      data: orders,
+      meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
+      summary: {
+        total,
+        confirmedCount,
+        waitingDeliveryCount,
+        totalGross,
+        uninvoicedAmount: Math.max(0, totalGross - invoicedAmount),
+      },
+    });
   },
 
   async getOrderById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const orderId = requireParam(c, 'id');
+    const orderId = requireParam(c, "id");
 
     const order = await prisma.salesOrder.findFirst({
       where: { id: orderId, tenantId, deletedAt: null },
       include: {
-        contact: { select: { id: true, name: true, taxNumber: true, email: true } },
-        items: { include: { product: { select: { id: true, code: true, name: true } } } },
-        invoices: { select: { id: true, number: true, status: true, totalGross: true } },
+        contact: {
+          select: { id: true, name: true, taxNumber: true, email: true },
+        },
+        items: {
+          include: {
+            product: { select: { id: true, code: true, name: true } },
+          },
+        },
+        invoices: {
+          select: { id: true, number: true, status: true, totalGross: true },
+        },
       },
     });
 
-    if (!order) return c.json(new NotFoundError('Sipariş', orderId).toJSON(), 404);
+    if (!order)
+      return c.json(new NotFoundError("Sipariş", orderId).toJSON(), 404);
     return c.json({ data: order });
   },
 
   async getProcessWorkspace(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const orderId = requireParam(c, 'id');
-    const workspace = await salesApplication.salesProcessQueries.getWorkspace(tenantId, orderId);
-    if (!workspace) return c.json(new NotFoundError('Sipariş', orderId).toJSON(), 404);
+    const orderId = requireParam(c, "id");
+    const workspace = await salesApplication.salesProcessQueries.getWorkspace(
+      tenantId,
+      orderId,
+    );
+    if (!workspace)
+      return c.json(new NotFoundError("Sipariş", orderId).toJSON(), 404);
     return c.json({ data: workspace });
   },
 
   async getOrderHistory(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const orderId = c.req.param('id');
+    const orderId = c.req.param("id");
 
-    const order = await prisma.salesOrder.findFirst({ where: { id: orderId, tenantId, deletedAt: null } });
-    if (!order) return c.json(new NotFoundError('Sipariş', orderId).toJSON(), 404);
+    const order = await prisma.salesOrder.findFirst({
+      where: { id: orderId, tenantId, deletedAt: null },
+    });
+    if (!order)
+      return c.json(new NotFoundError("Sipariş", orderId).toJSON(), 404);
 
     const history = await prisma.salesOrderHistory.findMany({
       where: { tenantId, orderId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
 
     return c.json({ data: history });
@@ -426,27 +611,51 @@ export const SalesOrderController = {
 
   async createOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const userId = c.get('userId') as string | undefined;
+    const userId = c.get("userId") as string | undefined;
     const { ipAddress, userAgent } = getRequestMeta(c);
 
-    const body = await c.req.json<CreateSalesOrderDTO>();
+    const body = getValidatedBody(c, createSalesOrderBodySchema);
 
-    if (!body.contactId || !body.date || !body.items?.length) {
-      return c.json(new ValidationError('contactId, date ve en az bir kalem zorunludur.').toJSON(), 400);
-    }
+    await validateTenantOwnership(
+      tenantId,
+      buildOwnershipChecks([
+        { model: "contact", id: body.contactId, label: "Siparis carisi" },
+        ...body.items.map((item, index) => ({
+          model: "product" as const,
+          id: item.productId,
+          label: `Siparis kalemi ${index + 1} urunu`,
+        })),
+      ]),
+    );
 
-    const { lineData, totalNet, totalTax, totalGross } = computeItems(body.items);
+    const { lineData, totalNet, totalTax, totalGross } = computeItems(
+      body.items,
+    );
 
     let number = body.number;
     if (!number) {
-      number = await generateDocumentNumber(tenantId, 'sales_order', 'SIP-', 'salesOrder');
+      number = await generateDocumentNumber(
+        tenantId,
+        "sales_order",
+        "SIP-",
+        "salesOrder",
+      );
+    } else {
+      const duplicate = await prisma.salesOrder.findUnique({
+        where: { tenantId_number: { tenantId, number } },
+        select: { id: true },
+      });
+      if (duplicate)
+        throw new ConflictError(
+          `"${number}" siparis numarasi zaten kullaniliyor.`,
+        );
     }
 
     const order = await prisma.salesOrder.create({
       data: {
         tenantId,
         contactId: body.contactId,
-        quoteId: body.quoteId ?? null,
+        quoteId: null,
         number,
         date: new Date(body.date),
         dueDate: body.dueDate ? new Date(body.dueDate) : null,
@@ -460,15 +669,28 @@ export const SalesOrderController = {
     });
 
     await prisma.salesOrderHistory.create({
-      data: { tenantId, orderId: order.id, toStatus: 'DRAFT', notes: 'Sipariş oluşturuldu' },
+      data: {
+        tenantId,
+        orderId: order.id,
+        toStatus: "DRAFT",
+        notes: "Sipariş oluşturuldu",
+      },
     });
 
     await createAuditLog(prisma, {
-      tenantId, userId, module: 'invoicing',
-      entityType: EntityType.SALES_ORDER, entityId: order.id,
+      tenantId,
+      userId,
+      module: "invoicing",
+      entityType: EntityType.SALES_ORDER,
+      entityId: order.id,
       action: AuditAction.CREATE,
-      newValues: { number: order.number, contactId: body.contactId, totalGross },
-      ipAddress, userAgent,
+      newValues: {
+        number: order.number,
+        contactId: body.contactId,
+        totalGross,
+      },
+      ipAddress,
+      userAgent,
     });
 
     return c.json({ data: order }, 201);
@@ -476,16 +698,25 @@ export const SalesOrderController = {
 
   async updateOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const orderId = c.req.param('id');
+    const orderId = c.req.param("id");
 
-    const order = await prisma.salesOrder.findFirst({ where: { id: orderId, tenantId, deletedAt: null } });
-    if (!order) return c.json(new NotFoundError('Sipariş', orderId).toJSON(), 404);
+    const order = await prisma.salesOrder.findFirst({
+      where: { id: orderId, tenantId, deletedAt: null },
+    });
+    if (!order)
+      return c.json(new NotFoundError("Sipariş", orderId).toJSON(), 404);
 
-    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.DELIVERED) {
-      return c.json(new ValidationError('Bu sipariş artık düzenlenemez.').toJSON(), 400);
+    if (
+      order.status === OrderStatus.CANCELLED ||
+      order.status === OrderStatus.DELIVERED
+    ) {
+      return c.json(
+        new ValidationError("Bu sipariş artık düzenlenemez.").toJSON(),
+        400,
+      );
     }
 
-    const body = await c.req.json<UpdateOrderDTO>();
+    const body = getValidatedBody(c, updateSalesOrderBodySchema);
     if (body.status !== undefined) {
       assertSalesOrderStatusTransition(order.status, body.status);
     }
@@ -493,7 +724,9 @@ export const SalesOrderController = {
     const updated = await prisma.salesOrder.update({
       where: { id: orderId },
       data: {
-        ...(body.dueDate !== undefined && { dueDate: body.dueDate ? new Date(body.dueDate) : null }),
+        ...(body.dueDate !== undefined && {
+          dueDate: body.dueDate ? new Date(body.dueDate) : null,
+        }),
         ...(body.notes !== undefined && { notes: body.notes }),
         ...(body.status !== undefined && { status: body.status }),
       },
@@ -501,7 +734,12 @@ export const SalesOrderController = {
 
     if (body.status && body.status !== order.status) {
       await prisma.salesOrderHistory.create({
-        data: { tenantId, orderId: orderId!, fromStatus: order.status, toStatus: body.status },
+        data: {
+          tenantId,
+          orderId: orderId!,
+          fromStatus: order.status,
+          toStatus: body.status,
+        },
       });
     }
 
@@ -510,12 +748,15 @@ export const SalesOrderController = {
 
   async fulfillOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const userId = c.get('userId') as string | undefined;
-    const orderId = requireParam(c, 'id');
+    const userId = c.get("userId") as string | undefined;
+    const orderId = requireParam(c, "id");
     const body = getValidatedBody(c, fulfillSalesOrderBodySchema);
 
     if (!userId) {
-      return c.json(new ValidationError('Kullanici kimligi bulunamadi.').toJSON(), 403);
+      return c.json(
+        new ValidationError("Kullanici kimligi bulunamadi.").toJSON(),
+        403,
+      );
     }
 
     const result = await salesFulfillmentService.fulfill(tenantId, {
@@ -533,15 +774,49 @@ export const SalesOrderController = {
 
   async cancelOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const userId = c.get('userId') as string | undefined;
+    const userId = c.get("userId") as string | undefined;
     const { ipAddress, userAgent } = getRequestMeta(c);
-    const orderId = requireParam(c, 'id');
+    const orderId = requireParam(c, "id");
 
-    const order = await prisma.salesOrder.findFirst({ where: { id: orderId, tenantId, deletedAt: null } });
-    if (!order) return c.json(new NotFoundError('Sipariş', orderId).toJSON(), 404);
+    const order = await prisma.salesOrder.findFirst({
+      where: { id: orderId, tenantId, deletedAt: null },
+    });
+    if (!order)
+      return c.json(new NotFoundError("Sipariş", orderId).toJSON(), 404);
 
     if (order.status === OrderStatus.CANCELLED) {
-      return c.json(new ValidationError('Sipariş zaten iptal edilmiş.').toJSON(), 400);
+      return c.json(
+        new ValidationError("Sipariş zaten iptal edilmiş.").toJSON(),
+        400,
+      );
+    }
+
+    assertSalesOrderStatusTransition(order.status, OrderStatus.CANCELLED);
+    const linkedDocuments = await prisma.salesOrder.findFirst({
+      where: { id: orderId, tenantId },
+      select: {
+        invoices: {
+          where: { deletedAt: null, status: { not: "CANCELLED" } },
+          select: { id: true },
+          take: 1,
+        },
+        deliveryNotes: {
+          where: { deletedAt: null, status: { not: "CANCELLED" } },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    });
+    if (
+      linkedDocuments?.invoices.length ||
+      linkedDocuments?.deliveryNotes.length
+    ) {
+      return c.json(
+        new ValidationError(
+          "Aktif irsaliye veya faturasi bulunan siparis iptal edilemez. Once bagli belgeleri iptal edin.",
+        ).toJSON(),
+        400,
+      );
     }
 
     const updated = await prisma.salesOrder.update({
@@ -549,22 +824,36 @@ export const SalesOrderController = {
       data: { status: OrderStatus.CANCELLED },
     });
 
-    const releasedReservationCount = await releaseInventoryReservations(prisma, tenantId, {
-      refType: ReservationRefType.SALES_ORDER,
-      refId: orderId,
-    });
+    const releasedReservationCount = await releaseInventoryReservations(
+      prisma,
+      tenantId,
+      {
+        refType: ReservationRefType.SALES_ORDER,
+        refId: orderId,
+      },
+    );
 
     await prisma.salesOrderHistory.create({
-      data: { tenantId, orderId: orderId!, fromStatus: order.status, toStatus: OrderStatus.CANCELLED, notes: 'Sipariş iptal edildi' },
+      data: {
+        tenantId,
+        orderId: orderId!,
+        fromStatus: order.status,
+        toStatus: OrderStatus.CANCELLED,
+        notes: "Sipariş iptal edildi",
+      },
     });
 
     await createAuditLog(prisma, {
-      tenantId, userId, module: 'invoicing',
-      entityType: EntityType.SALES_ORDER, entityId: orderId!,
+      tenantId,
+      userId,
+      module: "invoicing",
+      entityType: EntityType.SALES_ORDER,
+      entityId: orderId!,
       action: AuditAction.UPDATE,
       oldValues: { status: order.status },
       newValues: { status: OrderStatus.CANCELLED, releasedReservationCount },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return c.json({ data: updated });

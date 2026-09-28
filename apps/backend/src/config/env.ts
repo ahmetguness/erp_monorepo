@@ -1,7 +1,13 @@
-export type EnvRuntime = 'all' | 'development' | 'test' | 'production';
-export type EnvValueKind = 'string' | 'number' | 'boolean' | 'url' | 'csv' | 'enum';
-export type EnvSecretClass = 'secret' | 'sensitive' | 'public' | 'internal';
-export type RuntimeConfigStatus = 'ok' | 'warn' | 'error' | 'disabled';
+export type EnvRuntime = "all" | "development" | "test" | "production";
+export type EnvValueKind =
+  | "string"
+  | "number"
+  | "boolean"
+  | "url"
+  | "csv"
+  | "enum";
+export type EnvSecretClass = "secret" | "sensitive" | "public" | "internal";
+export type RuntimeConfigStatus = "ok" | "warn" | "error" | "disabled";
 
 export interface EnvVarDefinition {
   name: string;
@@ -18,7 +24,7 @@ export interface EnvVarDefinition {
 
 export interface EnvValidationIssue {
   name: string;
-  severity: 'error' | 'warn';
+  severity: "error" | "warn";
   message: string;
 }
 
@@ -30,118 +36,646 @@ export interface RuntimeConfigCheck {
   details: string[];
 }
 
-const MARKETPLACE_MOCK_CHANNELS = ['trendyol', 'hepsiburada', 'n11', 'amazon', 'ciceksepeti'] as const;
+const MARKETPLACE_MOCK_CHANNELS = [
+  "trendyol",
+  "hepsiburada",
+  "n11",
+  "amazon",
+  "ciceksepeti",
+] as const;
 
 export const ENV_REGISTRY: readonly EnvVarDefinition[] = [
-  { name: 'DATABASE_URL', kind: 'url', required: true, runtime: 'all', secretClass: 'secret', securityNote: 'Database credentials; never expose in logs or client bundles.' },
-  { name: 'PORT', kind: 'number', required: false, runtime: 'all', defaultValue: '3001', secretClass: 'internal', securityNote: 'Runtime port only.' },
-  { name: 'NODE_ENV', kind: 'string', required: false, runtime: 'all', defaultValue: 'development', secretClass: 'internal', securityNote: 'Controls production-safe defaults.' },
-  { name: 'APP_ROLE', kind: 'string', required: false, runtime: 'all', defaultValue: 'api', secretClass: 'internal', securityNote: 'Controls API versus worker process behavior.' },
-  { name: 'JWT_SECRET', kind: 'string', required: true, runtime: 'all', secretClass: 'secret', securityNote: 'Tenant JWT signing secret.' },
-  { name: 'JWT_EXPIRES_IN', kind: 'string', required: false, runtime: 'all', defaultValue: '7d', secretClass: 'internal', securityNote: 'Token lifetime; not a secret.' },
-  { name: 'ADMIN_JWT_SECRET', kind: 'string', required: true, runtime: 'all', secretClass: 'secret', securityNote: 'Admin JWT signing secret.' },
-  { name: 'ENCRYPTION_KEY', kind: 'string', required: true, runtime: 'all', secretClass: 'secret', securityNote: 'Application encryption key for marketplace credentials and other encrypted fields.' },
-  { name: 'API_KEY_PEPPER', kind: 'string', required: false, requiredInProduction: true, runtime: 'all', secretClass: 'secret', securityNote: 'Pepper for HMAC-SHA256 hashing of external API keys; store in secret manager.' },
-  { name: 'RESEND_API_KEY', kind: 'string', required: false, runtime: 'all', secretClass: 'secret', securityNote: 'Mail provider API key; optional but required for outbound mail.' },
-  { name: 'RESEND_FROM_EMAIL', kind: 'string', required: false, runtime: 'all', defaultValue: 'Axon ERP <noreply@axonerp.com>', secretClass: 'internal', securityNote: 'Mail sender identity; not a secret.' },
-  { name: 'APP_URL', kind: 'url', required: false, runtime: 'all', defaultValue: 'http://localhost:3000', secretClass: 'public', securityNote: 'Public web origin used in links.' },
-  { name: 'SALES_NOTIFICATION_EMAIL', kind: 'string', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'Operational notification recipient.' },
-  { name: 'ALLOWED_ORIGINS', kind: 'csv', required: false, requiredInProduction: true, runtime: 'all', defaultValue: 'http://localhost:3000', secretClass: 'internal', securityNote: 'CORS allow-list; production should contain only approved origins.' },
-  { name: 'CONTENT_SECURITY_POLICY_MODE', kind: 'string', required: false, runtime: 'all', defaultValue: 'both', secretClass: 'internal', securityNote: 'Controls CSP headers: report-only, enforce, or both.' },
-  { name: 'OPENAI_API_KEY', kind: 'string', required: false, runtime: 'all', secretClass: 'secret', securityNote: 'Optional AI provider key; absence disables AI chat features.' },
-  { name: 'DOCUMENT_OCR_URL', kind: 'url', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'Optional document OCR provider endpoint for PDF and image extraction.' },
-  { name: 'DOCUMENT_OCR_TOKEN', kind: 'string', required: false, runtime: 'all', secretClass: 'secret', securityNote: 'Bearer token for the configured document OCR provider.' },
-  { name: 'PUBLIC_CHAT_SESSION_DAILY_LIMIT', kind: 'number', required: false, runtime: 'all', defaultValue: '30', secretClass: 'internal', securityNote: 'Public chat abuse control.' },
-  { name: 'PUBLIC_CHAT_DAILY_REQUEST_BUDGET', kind: 'number', required: false, runtime: 'all', defaultValue: '1000', secretClass: 'internal', securityNote: 'Public chat cost control.' },
-  { name: 'STORAGE_DRIVER', kind: 'string', required: false, runtime: 'all', defaultValue: 'local in dev, r2 in production', secretClass: 'internal', securityNote: 'Attachment storage backend selector.' },
-  { name: 'R2_ACCOUNT_ID', kind: 'string', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'R2 account identifier; needed when R2 storage is active.' },
-  { name: 'R2_ACCESS_KEY_ID', kind: 'string', required: false, runtime: 'all', secretClass: 'secret', securityNote: 'R2 access key id; needed when R2 storage is active.' },
-  { name: 'R2_SECRET_ACCESS_KEY', kind: 'string', required: false, runtime: 'all', secretClass: 'secret', securityNote: 'R2 secret access key; needed when R2 storage is active.' },
-  { name: 'R2_BUCKET', kind: 'string', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'R2 bucket name; needed when R2 storage is active.' },
-  { name: 'R2_ENDPOINT', kind: 'url', required: false, runtime: 'all', defaultValue: 'https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com', secretClass: 'sensitive', securityNote: 'R2 endpoint; may reveal account identifier.' },
-  { name: 'ALLOW_LOCAL_UPLOADS_IN_PRODUCTION', kind: 'boolean', required: false, runtime: 'production', defaultValue: 'false', secretClass: 'internal', securityNote: 'Exception switch for production local upload fallback.' },
-  { name: 'S3_ENDPOINT', kind: 'url', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'S3-compatible object storage endpoint.' },
-  { name: 'S3_REGION', kind: 'string', required: false, runtime: 'all', defaultValue: 'auto', secretClass: 'internal', securityNote: 'S3 signing region.' },
-  { name: 'S3_ACCESS_KEY_ID', kind: 'string', required: false, runtime: 'all', secretClass: 'secret', securityNote: 'S3-compatible access key.' },
-  { name: 'S3_SECRET_ACCESS_KEY', kind: 'string', required: false, runtime: 'all', secretClass: 'secret', securityNote: 'S3-compatible secret key.' },
-  { name: 'S3_BUCKET', kind: 'string', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'S3-compatible bucket.' },
-  { name: 'STORAGE_LEGACY_LOCAL_READ', kind: 'boolean', required: false, runtime: 'all', defaultValue: 'false', secretClass: 'internal', securityNote: 'Temporarily reads missing S3 objects from legacy local storage during migration.' },
-  { name: 'STORAGE_SIGNED_URL_TTL_SECONDS', kind: 'number', required: false, runtime: 'all', defaultValue: '300', secretClass: 'internal', securityNote: 'Short-lived object download URL lifetime.' },
-  { name: 'MALWARE_SCAN_MODE', kind: 'enum', values: ['disabled', 'monitor', 'enforce'], required: false, runtime: 'all', defaultValue: 'disabled', secretClass: 'internal', securityNote: 'Controls upload malware scanning behavior.' },
-  { name: 'MALWARE_SCAN_ENDPOINT', kind: 'url', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'Multipart malware scanning service endpoint.' },
-  { name: 'MARKETPLACE_MOCK', kind: 'csv', required: false, runtime: 'development', secretClass: 'internal', securityNote: 'Canonical marketplace mock selector.' },
-  { name: 'TRENDYOL_MOCK', kind: 'boolean', required: false, runtime: 'development', secretClass: 'internal', legacyAliasFor: 'MARKETPLACE_MOCK', securityNote: 'Legacy alias; prefer MARKETPLACE_MOCK=trendyol.' },
-  { name: 'REDIS_URL', kind: 'url', required: false, requiredInProduction: true, runtime: 'all', secretClass: 'secret', securityNote: 'Redis connection string for production-safe rate limiting and multi-process coordination.' },
-  { name: 'GLOBAL_RATE_LIMIT_PER_MINUTE', kind: 'number', required: false, runtime: 'all', defaultValue: '300', secretClass: 'internal', securityNote: 'Global public API rate limit.' },
-  { name: 'GLOBAL_WRITE_RATE_LIMIT_PER_MINUTE', kind: 'number', required: false, runtime: 'all', defaultValue: '120', secretClass: 'internal', securityNote: 'Global write API rate limit.' },
-  { name: 'TRUSTED_PROXY_IPS', kind: 'csv', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Comma-separated reverse proxy IP allow-list. X-Forwarded-For/X-Real-IP are trusted only when the direct peer matches this list.' },
-  { name: 'TRUSTED_PROXY_CIDRS', kind: 'csv', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Comma-separated IPv4 CIDR allow-list for trusted reverse proxies.' },
-  { name: 'MARKETPLACE_WORKER_ENABLED', kind: 'boolean', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Explicit marketplace worker switch.' },
-  { name: 'DOMAIN_EVENT_OUTBOX_WORKER_ENABLED', kind: 'boolean', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Explicit domain event worker switch.' },
-  { name: 'CHAT_ATTACHMENT_WORKER_ENABLED', kind: 'boolean', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Runs asynchronous chat attachment scanning and reservation cleanup.' },
-  { name: 'DOMAIN_EVENT_OUTBOX_WORKER_INTERVAL_MS', kind: 'number', required: false, runtime: 'all', defaultValue: '10000', secretClass: 'internal', securityNote: 'Domain event worker polling interval.' },
-  { name: 'DOMAIN_EVENT_OUTBOX_PROCESSING_TIMEOUT_MS', kind: 'number', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Domain event processing timeout override.' },
-  { name: 'WORKER_CONCURRENCY', kind: 'number', required: false, runtime: 'all', defaultValue: '2', secretClass: 'internal', securityNote: 'Background worker concurrency.' },
-  { name: 'EXTERNAL_API_KEY_RATE_LIMIT_PER_MINUTE', kind: 'number', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'External API key per-minute rate limit override.' },
-  { name: 'PRISMA_QUERY_LOG', kind: 'boolean', required: false, runtime: 'all', defaultValue: 'false', secretClass: 'internal', securityNote: 'Enables verbose Prisma query logs; keep disabled in normal production.' },
-  { name: 'LOG_FORMAT', kind: 'enum', values: ['pretty', 'json'], required: false, runtime: 'all', defaultValue: 'pretty', secretClass: 'internal', securityNote: 'Use json in production for centralized log ingestion.' },
-  { name: 'METRICS_ENABLED', kind: 'boolean', required: false, runtime: 'all', defaultValue: 'true', secretClass: 'internal', securityNote: 'Enables the Prometheus-compatible metrics endpoint.' },
-  { name: 'METRICS_BEARER_TOKEN', kind: 'string', required: false, runtime: 'production', secretClass: 'secret', securityNote: 'Protects the metrics scrape endpoint in production.' },
-  { name: 'OBSERVABILITY_ERROR_RATE_ALERT_PCT', kind: 'number', required: false, runtime: 'all', defaultValue: '5', secretClass: 'internal', securityNote: 'HTTP error-rate alert threshold.' },
-  { name: 'OBSERVABILITY_P95_ALERT_MS', kind: 'number', required: false, runtime: 'all', defaultValue: '1500', secretClass: 'internal', securityNote: 'HTTP p95 latency alert threshold.' },
-  { name: 'OBSERVABILITY_OUTBOX_BACKLOG_ALERT', kind: 'number', required: false, runtime: 'all', defaultValue: '100', secretClass: 'internal', securityNote: 'Outbox backlog alert threshold.' },
-  { name: 'PILOT_RETRY_VERIFIED_AT', kind: 'string', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'ISO timestamp of the approved retry and idempotency verification evidence.' },
-  { name: 'PILOT_TENANT_ISOLATION_VERIFIED_AT', kind: 'string', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'ISO timestamp of the approved tenant-isolation verification evidence.' },
-  { name: 'PILOT_DETERMINISM_VERIFIED_AT', kind: 'string', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'ISO timestamp of the approved end-to-end deterministic pilot verification.' },
-  { name: 'PILOT_DETERMINISM_RUNS', kind: 'number', required: false, runtime: 'all', defaultValue: '0', secretClass: 'internal', securityNote: 'Number of successful deterministic pilot flow runs; GO requires at least three.' },
-  { name: 'SENTRY_DSN', kind: 'url', required: false, runtime: 'production', secretClass: 'sensitive', securityNote: 'Optional error telemetry DSN.' },
-  { name: 'OTEL_EXPORTER_OTLP_ENDPOINT', kind: 'url', required: false, runtime: 'production', secretClass: 'sensitive', securityNote: 'Optional OpenTelemetry endpoint.' },
-  { name: 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', kind: 'url', required: false, runtime: 'production', secretClass: 'sensitive', securityNote: 'Optional OpenTelemetry traces endpoint.' },
-  { name: 'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', kind: 'url', required: false, runtime: 'production', secretClass: 'sensitive', securityNote: 'Optional OpenTelemetry metrics endpoint.' },
+  {
+    name: "DATABASE_URL",
+    kind: "url",
+    required: true,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote:
+      "Database credentials; never expose in logs or client bundles.",
+  },
+  {
+    name: "PORT",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    defaultValue: "3001",
+    secretClass: "internal",
+    securityNote: "Runtime port only.",
+  },
+  {
+    name: "NODE_ENV",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    defaultValue: "development",
+    secretClass: "internal",
+    securityNote: "Controls production-safe defaults.",
+  },
+  {
+    name: "APP_ROLE",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    defaultValue: "api",
+    secretClass: "internal",
+    securityNote: "Controls API versus worker process behavior.",
+  },
+  {
+    name: "JWT_SECRET",
+    kind: "string",
+    required: true,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote: "Tenant JWT signing secret.",
+  },
+  {
+    name: "JWT_EXPIRES_IN",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    defaultValue: "7d",
+    secretClass: "internal",
+    securityNote: "Token lifetime; not a secret.",
+  },
+  {
+    name: "ADMIN_JWT_SECRET",
+    kind: "string",
+    required: true,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote: "Admin JWT signing secret.",
+  },
+  {
+    name: "ENCRYPTION_KEY",
+    kind: "string",
+    required: true,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote:
+      "Application encryption key for marketplace credentials and other encrypted fields.",
+  },
+  {
+    name: "API_KEY_PEPPER",
+    kind: "string",
+    required: false,
+    requiredInProduction: true,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote:
+      "Pepper for HMAC-SHA256 hashing of external API keys; store in secret manager.",
+  },
+  {
+    name: "RESEND_API_KEY",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote:
+      "Mail provider API key; optional but required for outbound mail.",
+  },
+  {
+    name: "RESEND_FROM_EMAIL",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    defaultValue: "Axon ERP <noreply@axonerp.com>",
+    secretClass: "internal",
+    securityNote: "Mail sender identity; not a secret.",
+  },
+  {
+    name: "APP_URL",
+    kind: "url",
+    required: false,
+    runtime: "all",
+    defaultValue: "http://localhost:3000",
+    secretClass: "public",
+    securityNote: "Public web origin used in links.",
+  },
+  {
+    name: "SALES_NOTIFICATION_EMAIL",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "sensitive",
+    securityNote: "Operational notification recipient.",
+  },
+  {
+    name: "ALLOWED_ORIGINS",
+    kind: "csv",
+    required: false,
+    requiredInProduction: true,
+    runtime: "all",
+    defaultValue: "http://localhost:3000",
+    secretClass: "internal",
+    securityNote:
+      "CORS allow-list; production should contain only approved origins.",
+  },
+  {
+    name: "CONTENT_SECURITY_POLICY_MODE",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    defaultValue: "both",
+    secretClass: "internal",
+    securityNote: "Controls CSP headers: report-only, enforce, or both.",
+  },
+  {
+    name: "OPENAI_API_KEY",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote:
+      "Optional AI provider key; absence disables AI chat features.",
+  },
+  {
+    name: "DOCUMENT_OCR_URL",
+    kind: "url",
+    required: false,
+    runtime: "all",
+    secretClass: "sensitive",
+    securityNote:
+      "Optional document OCR provider endpoint for PDF and image extraction.",
+  },
+  {
+    name: "DOCUMENT_OCR_TOKEN",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote: "Bearer token for the configured document OCR provider.",
+  },
+  {
+    name: "PUBLIC_CHAT_SESSION_DAILY_LIMIT",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    defaultValue: "30",
+    secretClass: "internal",
+    securityNote: "Public chat abuse control.",
+  },
+  {
+    name: "PUBLIC_CHAT_DAILY_REQUEST_BUDGET",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    defaultValue: "1000",
+    secretClass: "internal",
+    securityNote: "Public chat cost control.",
+  },
+  {
+    name: "STORAGE_DRIVER",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    defaultValue: "local in dev, r2 in production",
+    secretClass: "internal",
+    securityNote: "Attachment storage backend selector.",
+  },
+  {
+    name: "R2_ACCOUNT_ID",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "sensitive",
+    securityNote: "R2 account identifier; needed when R2 storage is active.",
+  },
+  {
+    name: "R2_ACCESS_KEY_ID",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote: "R2 access key id; needed when R2 storage is active.",
+  },
+  {
+    name: "R2_SECRET_ACCESS_KEY",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote: "R2 secret access key; needed when R2 storage is active.",
+  },
+  {
+    name: "R2_BUCKET",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "sensitive",
+    securityNote: "R2 bucket name; needed when R2 storage is active.",
+  },
+  {
+    name: "R2_ENDPOINT",
+    kind: "url",
+    required: false,
+    runtime: "all",
+    defaultValue: "https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+    secretClass: "sensitive",
+    securityNote: "R2 endpoint; may reveal account identifier.",
+  },
+  {
+    name: "ALLOW_LOCAL_UPLOADS_IN_PRODUCTION",
+    kind: "boolean",
+    required: false,
+    runtime: "production",
+    defaultValue: "false",
+    secretClass: "internal",
+    securityNote: "Exception switch for production local upload fallback.",
+  },
+  {
+    name: "S3_ENDPOINT",
+    kind: "url",
+    required: false,
+    runtime: "all",
+    secretClass: "sensitive",
+    securityNote: "S3-compatible object storage endpoint.",
+  },
+  {
+    name: "S3_REGION",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    defaultValue: "auto",
+    secretClass: "internal",
+    securityNote: "S3 signing region.",
+  },
+  {
+    name: "S3_ACCESS_KEY_ID",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote: "S3-compatible access key.",
+  },
+  {
+    name: "S3_SECRET_ACCESS_KEY",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote: "S3-compatible secret key.",
+  },
+  {
+    name: "S3_BUCKET",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "sensitive",
+    securityNote: "S3-compatible bucket.",
+  },
+  {
+    name: "STORAGE_LEGACY_LOCAL_READ",
+    kind: "boolean",
+    required: false,
+    runtime: "all",
+    defaultValue: "false",
+    secretClass: "internal",
+    securityNote:
+      "Temporarily reads missing S3 objects from legacy local storage during migration.",
+  },
+  {
+    name: "STORAGE_SIGNED_URL_TTL_SECONDS",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    defaultValue: "300",
+    secretClass: "internal",
+    securityNote: "Short-lived object download URL lifetime.",
+  },
+  {
+    name: "MALWARE_SCAN_MODE",
+    kind: "enum",
+    values: ["disabled", "monitor", "enforce"],
+    required: false,
+    runtime: "all",
+    defaultValue: "disabled",
+    secretClass: "internal",
+    securityNote: "Controls upload malware scanning behavior.",
+  },
+  {
+    name: "MALWARE_SCAN_ENDPOINT",
+    kind: "url",
+    required: false,
+    runtime: "all",
+    secretClass: "sensitive",
+    securityNote: "Multipart malware scanning service endpoint.",
+  },
+  {
+    name: "MARKETPLACE_MOCK",
+    kind: "csv",
+    required: false,
+    runtime: "development",
+    secretClass: "internal",
+    securityNote: "Canonical marketplace mock selector.",
+  },
+  {
+    name: "TRENDYOL_MOCK",
+    kind: "boolean",
+    required: false,
+    runtime: "development",
+    secretClass: "internal",
+    legacyAliasFor: "MARKETPLACE_MOCK",
+    securityNote: "Legacy alias; prefer MARKETPLACE_MOCK=trendyol.",
+  },
+  {
+    name: "REDIS_URL",
+    kind: "url",
+    required: false,
+    requiredInProduction: true,
+    runtime: "all",
+    secretClass: "secret",
+    securityNote:
+      "Redis connection string for production-safe rate limiting and multi-process coordination.",
+  },
+  {
+    name: "GLOBAL_RATE_LIMIT_PER_MINUTE",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    defaultValue: "300",
+    secretClass: "internal",
+    securityNote: "Global public API rate limit.",
+  },
+  {
+    name: "GLOBAL_WRITE_RATE_LIMIT_PER_MINUTE",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    defaultValue: "120",
+    secretClass: "internal",
+    securityNote: "Global write API rate limit.",
+  },
+  {
+    name: "TRUSTED_PROXY_IPS",
+    kind: "csv",
+    required: false,
+    runtime: "all",
+    secretClass: "internal",
+    securityNote:
+      "Comma-separated reverse proxy IP allow-list. X-Forwarded-For/X-Real-IP are trusted only when the direct peer matches this list.",
+  },
+  {
+    name: "TRUSTED_PROXY_CIDRS",
+    kind: "csv",
+    required: false,
+    runtime: "all",
+    secretClass: "internal",
+    securityNote:
+      "Comma-separated IPv4 CIDR allow-list for trusted reverse proxies.",
+  },
+  {
+    name: "MARKETPLACE_WORKER_ENABLED",
+    kind: "boolean",
+    required: false,
+    runtime: "all",
+    secretClass: "internal",
+    securityNote: "Explicit marketplace worker switch.",
+  },
+  {
+    name: "DOMAIN_EVENT_OUTBOX_WORKER_ENABLED",
+    kind: "boolean",
+    required: false,
+    runtime: "all",
+    secretClass: "internal",
+    securityNote: "Explicit domain event worker switch.",
+  },
+  {
+    name: "CHAT_ATTACHMENT_WORKER_ENABLED",
+    kind: "boolean",
+    required: false,
+    runtime: "all",
+    secretClass: "internal",
+    securityNote:
+      "Runs asynchronous chat attachment scanning and reservation cleanup.",
+  },
+  {
+    name: "DOMAIN_EVENT_OUTBOX_WORKER_INTERVAL_MS",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    defaultValue: "10000",
+    secretClass: "internal",
+    securityNote: "Domain event worker polling interval.",
+  },
+  {
+    name: "DOMAIN_EVENT_OUTBOX_PROCESSING_TIMEOUT_MS",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    secretClass: "internal",
+    securityNote: "Domain event processing timeout override.",
+  },
+  {
+    name: "WORKER_CONCURRENCY",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    defaultValue: "2",
+    secretClass: "internal",
+    securityNote: "Background worker concurrency.",
+  },
+  {
+    name: "EXTERNAL_API_KEY_RATE_LIMIT_PER_MINUTE",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    secretClass: "internal",
+    securityNote: "External API key per-minute rate limit override.",
+  },
+  {
+    name: "PRISMA_QUERY_LOG",
+    kind: "boolean",
+    required: false,
+    runtime: "all",
+    defaultValue: "false",
+    secretClass: "internal",
+    securityNote:
+      "Enables verbose Prisma query logs; keep disabled in normal production.",
+  },
+  {
+    name: "LOG_FORMAT",
+    kind: "enum",
+    values: ["pretty", "json"],
+    required: false,
+    runtime: "all",
+    defaultValue: "pretty",
+    secretClass: "internal",
+    securityNote: "Use json in production for centralized log ingestion.",
+  },
+  {
+    name: "METRICS_ENABLED",
+    kind: "boolean",
+    required: false,
+    runtime: "all",
+    defaultValue: "true",
+    secretClass: "internal",
+    securityNote: "Enables the Prometheus-compatible metrics endpoint.",
+  },
+  {
+    name: "METRICS_BEARER_TOKEN",
+    kind: "string",
+    required: false,
+    runtime: "production",
+    secretClass: "secret",
+    securityNote: "Protects the metrics scrape endpoint in production.",
+  },
+  {
+    name: "OBSERVABILITY_ERROR_RATE_ALERT_PCT",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    defaultValue: "5",
+    secretClass: "internal",
+    securityNote: "HTTP error-rate alert threshold.",
+  },
+  {
+    name: "OBSERVABILITY_P95_ALERT_MS",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    defaultValue: "1500",
+    secretClass: "internal",
+    securityNote: "HTTP p95 latency alert threshold.",
+  },
+  {
+    name: "OBSERVABILITY_OUTBOX_BACKLOG_ALERT",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    defaultValue: "100",
+    secretClass: "internal",
+    securityNote: "Outbox backlog alert threshold.",
+  },
+  {
+    name: "PILOT_RETRY_VERIFIED_AT",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "internal",
+    securityNote:
+      "ISO timestamp of the approved retry and idempotency verification evidence.",
+  },
+  {
+    name: "PILOT_TENANT_ISOLATION_VERIFIED_AT",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "internal",
+    securityNote:
+      "ISO timestamp of the approved tenant-isolation verification evidence.",
+  },
+  {
+    name: "PILOT_DETERMINISM_VERIFIED_AT",
+    kind: "string",
+    required: false,
+    runtime: "all",
+    secretClass: "internal",
+    securityNote:
+      "ISO timestamp of the approved end-to-end deterministic pilot verification.",
+  },
+  {
+    name: "PILOT_DETERMINISM_RUNS",
+    kind: "number",
+    required: false,
+    runtime: "all",
+    defaultValue: "0",
+    secretClass: "internal",
+    securityNote:
+      "Number of successful deterministic pilot flow runs; GO requires at least three.",
+  },
+  {
+    name: "SENTRY_DSN",
+    kind: "url",
+    required: false,
+    runtime: "production",
+    secretClass: "sensitive",
+    securityNote: "Optional error telemetry DSN.",
+  },
+  {
+    name: "OTEL_EXPORTER_OTLP_ENDPOINT",
+    kind: "url",
+    required: false,
+    runtime: "production",
+    secretClass: "sensitive",
+    securityNote: "Optional OpenTelemetry endpoint.",
+  },
+  {
+    name: "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+    kind: "url",
+    required: false,
+    runtime: "production",
+    secretClass: "sensitive",
+    securityNote: "Optional OpenTelemetry traces endpoint.",
+  },
+  {
+    name: "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+    kind: "url",
+    required: false,
+    runtime: "production",
+    secretClass: "sensitive",
+    securityNote: "Optional OpenTelemetry metrics endpoint.",
+  },
 ] as const;
 
 export function isProductionEnv(): boolean {
-  return process.env.NODE_ENV === 'production';
+  return process.env.NODE_ENV === "production";
 }
 
 export function isPresent(name: string): boolean {
   const value = process.env[name];
-  return typeof value === 'string' && value.trim().length > 0;
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function readEnv(name: string): string | undefined {
   const value = process.env[name];
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
 }
 
-function validateKind(definition: EnvVarDefinition, value: string): string | null {
-  if (definition.kind === 'enum') {
-    return definition.values?.includes(value) ? null : `must be one of: ${(definition.values ?? []).join(', ')}`;
+function validateKind(
+  definition: EnvVarDefinition,
+  value: string,
+): string | null {
+  if (definition.kind === "enum") {
+    return definition.values?.includes(value)
+      ? null
+      : `must be one of: ${(definition.values ?? []).join(", ")}`;
   }
-  if (definition.kind === 'number') {
+  if (definition.kind === "number") {
     const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed >= 0 ? null : 'must be a non-negative number';
+    return Number.isFinite(parsed) && parsed >= 0
+      ? null
+      : "must be a non-negative number";
   }
-  if (definition.kind === 'boolean') {
-    return value === 'true' || value === 'false' ? null : 'must be true or false';
+  if (definition.kind === "boolean") {
+    return value === "true" || value === "false"
+      ? null
+      : "must be true or false";
   }
-  if (definition.kind === 'url') {
+  if (definition.kind === "url") {
     try {
       new URL(value);
       return null;
     } catch {
-      return 'must be a valid URL';
+      return "must be a valid URL";
     }
   }
   return null;
 }
 
 function isRequired(definition: EnvVarDefinition): boolean {
-  return definition.required || (definition.requiredInProduction === true && isProductionEnv());
+  return (
+    definition.required ||
+    (definition.requiredInProduction === true && isProductionEnv())
+  );
 }
 
 function shouldValidateInRuntime(definition: EnvVarDefinition): boolean {
-  return definition.runtime === 'all' || definition.runtime === process.env.NODE_ENV;
+  return (
+    definition.runtime === "all" || definition.runtime === process.env.NODE_ENV
+  );
 }
 
 export function validateEnvRegistry(): EnvValidationIssue[] {
@@ -155,7 +689,7 @@ export function validateEnvRegistry(): EnvValidationIssue[] {
       if (isRequired(definition)) {
         issues.push({
           name: definition.name,
-          severity: 'error',
+          severity: "error",
           message: `${definition.name} is required for this runtime.`,
         });
       }
@@ -164,46 +698,94 @@ export function validateEnvRegistry(): EnvValidationIssue[] {
 
     const kindIssue = validateKind(definition, value);
     if (kindIssue) {
-      issues.push({ name: definition.name, severity: 'error', message: `${definition.name} ${kindIssue}.` });
+      issues.push({
+        name: definition.name,
+        severity: "error",
+        message: `${definition.name} ${kindIssue}.`,
+      });
     }
   }
 
-  if (isProductionEnv() && readEnv('TRENDYOL_MOCK') === 'true') {
-    issues.push({ name: 'TRENDYOL_MOCK', severity: 'error', message: 'TRENDYOL_MOCK must not be enabled in production.' });
-  }
-
-  const marketplaceMock = readEnv('MARKETPLACE_MOCK');
-  if (isProductionEnv() && marketplaceMock) {
-    issues.push({ name: 'MARKETPLACE_MOCK', severity: 'error', message: 'MARKETPLACE_MOCK must not be enabled in production.' });
-  }
-
-  const storageDriver = readEnv('STORAGE_DRIVER')?.toLowerCase();
-  const objectStorageActive = storageDriver === 's3' || storageDriver === 'r2' || (isProductionEnv() && storageDriver !== 'local');
-  if (objectStorageActive) {
-    const requirements = [
-      { name: 'S3_ENDPOINT', available: isPresent('S3_ENDPOINT') || isPresent('R2_ENDPOINT') || isPresent('R2_ACCOUNT_ID') },
-      { name: 'S3_ACCESS_KEY_ID', available: isPresent('S3_ACCESS_KEY_ID') || isPresent('R2_ACCESS_KEY_ID') },
-      { name: 'S3_SECRET_ACCESS_KEY', available: isPresent('S3_SECRET_ACCESS_KEY') || isPresent('R2_SECRET_ACCESS_KEY') },
-      { name: 'S3_BUCKET', available: isPresent('S3_BUCKET') || isPresent('R2_BUCKET') },
-    ];
-    for (const requirement of requirements.filter(({ available }) => !available)) {
-      issues.push({ name: requirement.name, severity: 'error', message: `${requirement.name} (or its legacy R2 alias) is required when object storage is active.` });
-    }
-  }
-
-  if (isProductionEnv() && readEnv('MALWARE_SCAN_MODE') === 'enforce' && !isPresent('MALWARE_SCAN_ENDPOINT')) {
+  if (isProductionEnv() && readEnv("TRENDYOL_MOCK") === "true") {
     issues.push({
-      name: 'MALWARE_SCAN_ENDPOINT',
-      severity: 'error',
-      message: 'MALWARE_SCAN_ENDPOINT is required when production malware scanning is enforced.',
+      name: "TRENDYOL_MOCK",
+      severity: "error",
+      message: "TRENDYOL_MOCK must not be enabled in production.",
     });
   }
 
-  if (isProductionEnv() && process.env.METRICS_ENABLED !== 'false' && !isPresent('METRICS_BEARER_TOKEN')) {
+  const marketplaceMock = readEnv("MARKETPLACE_MOCK");
+  if (isProductionEnv() && marketplaceMock) {
     issues.push({
-      name: 'METRICS_BEARER_TOKEN',
-      severity: 'error',
-      message: 'is required in production when METRICS_ENABLED is not false',
+      name: "MARKETPLACE_MOCK",
+      severity: "error",
+      message: "MARKETPLACE_MOCK must not be enabled in production.",
+    });
+  }
+
+  const storageDriver = readEnv("STORAGE_DRIVER")?.toLowerCase();
+  const objectStorageActive =
+    storageDriver === "s3" ||
+    storageDriver === "r2" ||
+    (isProductionEnv() && storageDriver !== "local");
+  if (objectStorageActive) {
+    const requirements = [
+      {
+        name: "S3_ENDPOINT",
+        available:
+          isPresent("S3_ENDPOINT") ||
+          isPresent("R2_ENDPOINT") ||
+          isPresent("R2_ACCOUNT_ID"),
+      },
+      {
+        name: "S3_ACCESS_KEY_ID",
+        available:
+          isPresent("S3_ACCESS_KEY_ID") || isPresent("R2_ACCESS_KEY_ID"),
+      },
+      {
+        name: "S3_SECRET_ACCESS_KEY",
+        available:
+          isPresent("S3_SECRET_ACCESS_KEY") ||
+          isPresent("R2_SECRET_ACCESS_KEY"),
+      },
+      {
+        name: "S3_BUCKET",
+        available: isPresent("S3_BUCKET") || isPresent("R2_BUCKET"),
+      },
+    ];
+    for (const requirement of requirements.filter(
+      ({ available }) => !available,
+    )) {
+      issues.push({
+        name: requirement.name,
+        severity: "error",
+        message: `${requirement.name} (or its legacy R2 alias) is required when object storage is active.`,
+      });
+    }
+  }
+
+  if (
+    isProductionEnv() &&
+    readEnv("MALWARE_SCAN_MODE") === "enforce" &&
+    !isPresent("MALWARE_SCAN_ENDPOINT")
+  ) {
+    issues.push({
+      name: "MALWARE_SCAN_ENDPOINT",
+      severity: "error",
+      message:
+        "MALWARE_SCAN_ENDPOINT is required when production malware scanning is enforced.",
+    });
+  }
+
+  if (
+    isProductionEnv() &&
+    process.env.METRICS_ENABLED !== "false" &&
+    !isPresent("METRICS_BEARER_TOKEN")
+  ) {
+    issues.push({
+      name: "METRICS_BEARER_TOKEN",
+      severity: "error",
+      message: "is required in production when METRICS_ENABLED is not false",
     });
   }
 
@@ -211,91 +793,140 @@ export function validateEnvRegistry(): EnvValidationIssue[] {
 }
 
 export function assertValidStartupEnv(): void {
-  const errors = validateEnvRegistry().filter((issue) => issue.severity === 'error');
+  const errors = validateEnvRegistry().filter(
+    (issue) => issue.severity === "error",
+  );
   if (errors.length === 0) return;
 
-  throw new Error(`Runtime env validation failed: ${errors.map((issue) => issue.message).join(' ')}`);
+  throw new Error(
+    `Runtime env validation failed: ${errors.map((issue) => issue.message).join(" ")}`,
+  );
 }
 
 function readConfiguredMarketplaceMockChannels(): readonly string[] {
-  const marketplaceMock = readEnv('MARKETPLACE_MOCK')?.toLowerCase();
+  const marketplaceMock = readEnv("MARKETPLACE_MOCK")?.toLowerCase();
   if (marketplaceMock) {
-    if (marketplaceMock === 'all') return MARKETPLACE_MOCK_CHANNELS;
-    return marketplaceMock.split(',').map((channel) => channel.trim()).filter(Boolean);
+    if (marketplaceMock === "all") return MARKETPLACE_MOCK_CHANNELS;
+    return marketplaceMock
+      .split(",")
+      .map((channel) => channel.trim())
+      .filter(Boolean);
   }
 
-  if (readEnv('TRENDYOL_MOCK') === 'true') return ['trendyol'];
+  if (readEnv("TRENDYOL_MOCK") === "true") return ["trendyol"];
   return [];
 }
 
 export function getMarketplaceMockChannels(): readonly string[] {
   const configuredChannels = readConfiguredMarketplaceMockChannels();
   if (configuredChannels.length > 0) return configuredChannels;
-  if (!isProductionEnv()) return ['trendyol'];
+  if (!isProductionEnv()) return ["trendyol"];
   return [];
 }
 
 export function isMarketplaceMockChannelEnabled(channel: string): boolean {
-  return readConfiguredMarketplaceMockChannels().some((enabledChannel) => enabledChannel === 'all' || enabledChannel === channel.toLowerCase());
+  return readConfiguredMarketplaceMockChannels().some(
+    (enabledChannel) =>
+      enabledChannel === "all" || enabledChannel === channel.toLowerCase(),
+  );
 }
 
 export function getRuntimeConfigChecks(): RuntimeConfigCheck[] {
-  const storageDriver = readEnv('STORAGE_DRIVER')?.toLowerCase() ?? (isProductionEnv() ? 's3' : 'local');
+  const storageDriver =
+    readEnv("STORAGE_DRIVER")?.toLowerCase() ??
+    (isProductionEnv() ? "s3" : "local");
   const objectStorageMissing = [
-    !isPresent('S3_ENDPOINT') && !isPresent('R2_ENDPOINT') && !isPresent('R2_ACCOUNT_ID') ? 'S3_ENDPOINT' : null,
-    !isPresent('S3_ACCESS_KEY_ID') && !isPresent('R2_ACCESS_KEY_ID') ? 'S3_ACCESS_KEY_ID' : null,
-    !isPresent('S3_SECRET_ACCESS_KEY') && !isPresent('R2_SECRET_ACCESS_KEY') ? 'S3_SECRET_ACCESS_KEY' : null,
-    !isPresent('S3_BUCKET') && !isPresent('R2_BUCKET') ? 'S3_BUCKET' : null,
+    !isPresent("S3_ENDPOINT") &&
+    !isPresent("R2_ENDPOINT") &&
+    !isPresent("R2_ACCOUNT_ID")
+      ? "S3_ENDPOINT"
+      : null,
+    !isPresent("S3_ACCESS_KEY_ID") && !isPresent("R2_ACCESS_KEY_ID")
+      ? "S3_ACCESS_KEY_ID"
+      : null,
+    !isPresent("S3_SECRET_ACCESS_KEY") && !isPresent("R2_SECRET_ACCESS_KEY")
+      ? "S3_SECRET_ACCESS_KEY"
+      : null,
+    !isPresent("S3_BUCKET") && !isPresent("R2_BUCKET") ? "S3_BUCKET" : null,
   ].filter((name): name is string => name !== null);
   const marketplaceChannels = getMarketplaceMockChannels();
 
   return [
     {
-      key: 'integration:openai',
-      label: 'OpenAI',
-      status: isPresent('OPENAI_API_KEY') ? 'ok' : 'disabled',
-      message: isPresent('OPENAI_API_KEY') ? 'AI chat features are configured.' : 'AI chat features are disabled because OPENAI_API_KEY is not set.',
-      details: ['secretValue=redacted'],
+      key: "integration:openai",
+      label: "OpenAI",
+      status: isPresent("OPENAI_API_KEY") ? "ok" : "disabled",
+      message: isPresent("OPENAI_API_KEY")
+        ? "AI chat features are configured."
+        : "AI chat features are disabled because OPENAI_API_KEY is not set.",
+      details: ["secretValue=redacted"],
     },
     {
-      key: 'integration:mail',
-      label: 'Mail/Resend',
-      status: isPresent('RESEND_API_KEY') ? 'ok' : 'disabled',
-      message: isPresent('RESEND_API_KEY') ? 'Outbound mail provider is configured.' : 'Outbound mail is disabled because RESEND_API_KEY is not set.',
-      details: [`from=${readEnv('RESEND_FROM_EMAIL') ?? 'Axon ERP <noreply@axonerp.com>'}`],
-    },
-    {
-      key: 'integration:redis',
-      label: 'Redis',
-      status: isPresent('REDIS_URL') ? 'ok' : isProductionEnv() ? 'error' : 'disabled',
-      message: isPresent('REDIS_URL')
-        ? 'Redis-backed rate limiting is configured.'
-        : isProductionEnv()
-          ? 'REDIS_URL is required in production for multi-process rate limiting.'
-          : 'Redis is disabled; development uses in-memory fallbacks.',
-      details: ['connectionString=redacted'],
-    },
-    {
-      key: 'integration:object-storage',
-      label: 'S3-compatible object storage',
-      status: storageDriver === 's3' || storageDriver === 'r2' ? objectStorageMissing.length === 0 ? 'ok' : 'error' : isProductionEnv() ? 'warn' : 'disabled',
-      message: storageDriver === 's3' || storageDriver === 'r2'
-        ? objectStorageMissing.length === 0 ? 'Object storage is configured.' : 'Object storage is selected but required env values are missing.'
-        : isProductionEnv()
-          ? 'Production is using local attachment storage; this should be an explicit exception.'
-          : 'Local attachment storage is active for development.',
-      details: [`driver=${storageDriver}`, `missing=${objectStorageMissing.join(', ') || 'none'}`],
-    },
-    {
-      key: 'integration:marketplace-mock',
-      label: 'Marketplace mock',
-      status: marketplaceChannels.length > 0 ? isProductionEnv() ? 'error' : 'warn' : 'ok',
-      message: marketplaceChannels.length > 0
-        ? `Marketplace mocks enabled for: ${marketplaceChannels.join(', ')}.`
-        : 'Marketplace mocks are disabled.',
+      key: "integration:mail",
+      label: "Mail/Resend",
+      status: isPresent("RESEND_API_KEY") ? "ok" : "disabled",
+      message: isPresent("RESEND_API_KEY")
+        ? "Outbound mail provider is configured."
+        : "Outbound mail is disabled because RESEND_API_KEY is not set.",
       details: [
-        `MARKETPLACE_MOCK=${readEnv('MARKETPLACE_MOCK') ?? 'unset'}`,
-        `TRENDYOL_MOCK=${readEnv('TRENDYOL_MOCK') ?? 'unset'} (legacy alias)`,
+        `from=${readEnv("RESEND_FROM_EMAIL") ?? "Axon ERP <noreply@axonerp.com>"}`,
+      ],
+    },
+    {
+      key: "integration:redis",
+      label: "Redis",
+      status: isPresent("REDIS_URL")
+        ? "ok"
+        : isProductionEnv()
+          ? "error"
+          : "disabled",
+      message: isPresent("REDIS_URL")
+        ? "Redis-backed rate limiting is configured."
+        : isProductionEnv()
+          ? "REDIS_URL is required in production for multi-process rate limiting."
+          : "Redis is disabled; development uses in-memory fallbacks.",
+      details: ["connectionString=redacted"],
+    },
+    {
+      key: "integration:object-storage",
+      label: "S3-compatible object storage",
+      status:
+        storageDriver === "s3" || storageDriver === "r2"
+          ? objectStorageMissing.length === 0
+            ? "ok"
+            : "error"
+          : isProductionEnv()
+            ? "warn"
+            : "disabled",
+      message:
+        storageDriver === "s3" || storageDriver === "r2"
+          ? objectStorageMissing.length === 0
+            ? "Object storage is configured."
+            : "Object storage is selected but required env values are missing."
+          : isProductionEnv()
+            ? "Production is using local attachment storage; this should be an explicit exception."
+            : "Local attachment storage is active for development.",
+      details: [
+        `driver=${storageDriver}`,
+        `missing=${objectStorageMissing.join(", ") || "none"}`,
+      ],
+    },
+    {
+      key: "integration:marketplace-mock",
+      label: "Marketplace mock",
+      status:
+        marketplaceChannels.length > 0
+          ? isProductionEnv()
+            ? "error"
+            : "warn"
+          : "ok",
+      message:
+        marketplaceChannels.length > 0
+          ? `Marketplace mocks enabled for: ${marketplaceChannels.join(", ")}.`
+          : "Marketplace mocks are disabled.",
+      details: [
+        `MARKETPLACE_MOCK=${readEnv("MARKETPLACE_MOCK") ?? "unset"}`,
+        `TRENDYOL_MOCK=${readEnv("TRENDYOL_MOCK") ?? "unset"} (legacy alias)`,
       ],
     },
   ];

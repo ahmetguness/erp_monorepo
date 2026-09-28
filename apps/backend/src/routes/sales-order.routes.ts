@@ -4,7 +4,13 @@ import { requirePermission } from "../middleware/requirePermission";
 import { validateBody } from "../middleware/validateBody";
 import { SalesOrderController } from "../modules/sales/http/controllers/index.js";
 import { fulfillSalesOrderBodySchema } from "../schemas/request-body.schemas";
-import { createSalesQuoteBodySchema, updateSalesQuoteBodySchema, updateSalesQuoteStatusBodySchema } from "../schemas/request-body.schemas";
+import {
+  createSalesOrderBodySchema,
+  createSalesQuoteBodySchema,
+  updateSalesOrderBodySchema,
+  updateSalesQuoteBodySchema,
+  updateSalesQuoteStatusBodySchema,
+} from "../schemas/request-body.schemas";
 import { MODULE_KEYS } from "../types/module.types";
 
 const salesOrderRoutes = new Hono();
@@ -73,11 +79,13 @@ salesOrderRoutes.get(
 salesOrderRoutes.post(
   "/",
   requirePermission("invoicing", "CREATE"),
+  validateBody(createSalesOrderBodySchema),
   SalesOrderController.createOrder,
 );
 salesOrderRoutes.patch(
   "/:id",
   requirePermission("invoicing", "UPDATE"),
+  validateBody(updateSalesOrderBodySchema),
   SalesOrderController.updateOrder,
 );
 salesOrderRoutes.post(
