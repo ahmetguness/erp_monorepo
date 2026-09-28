@@ -41,6 +41,12 @@ export type DeliveryNoteItem = z.infer<typeof DeliveryNoteItemSchema>;
 export type DeliveryNoteType = DeliveryNote['type'];
 export type DeliveryNoteStatus = DeliveryNote['status'];
 
+const DeliveryNoteSummarySchema = z.object({
+  DRAFT: z.coerce.number(), CONFIRMED: z.coerce.number(), PARTIALLY_SHIPPED: z.coerce.number(),
+  SHIPPED: z.coerce.number(), DELIVERED: z.coerce.number(), CANCELLED: z.coerce.number(),
+});
+const DeliveryNoteListResponseSchema = PaginatedResponseSchema(DeliveryNoteSchema).extend({ summary: DeliveryNoteSummarySchema });
+
 export interface CreateDeliveryNoteDTO {
   type: DeliveryNoteType;
   salesOrderId?: string; purchaseOrderId?: string; contactId?: string;
@@ -62,7 +68,7 @@ export interface ListParams extends PaginationParams, DateRangeParams {
 
 export async function getDeliveryNotes(params: ListParams) {
   const res = await apiClient.get('/api/delivery-notes', { params });
-  return safeParse(PaginatedResponseSchema(DeliveryNoteSchema), res.data, 'getDeliveryNotes');
+  return safeParse(DeliveryNoteListResponseSchema, res.data, 'getDeliveryNotes');
 }
 
 export async function getDeliveryNoteById(id: string): Promise<DeliveryNote> {
@@ -82,4 +88,8 @@ export async function updateDeliveryNoteStatus(
 ): Promise<DeliveryNote> {
   const res = await apiClient.patch(`/api/delivery-notes/${id}/status`, { status, ...dates });
   return safeParse(SingleResponseSchema(DeliveryNoteSchema), res.data, 'updateDeliveryNoteStatus').data;
+}
+
+export async function deleteDeliveryNote(id: string): Promise<void> {
+  await apiClient.delete(`/api/delivery-notes/${id}`);
 }

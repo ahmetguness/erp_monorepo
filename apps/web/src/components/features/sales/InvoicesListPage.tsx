@@ -33,7 +33,7 @@ import { useInvoices, useRecomputeInvoiceStatuses } from '@/hooks/useSales';
 import { useUIStore } from '@/store/ui.store';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { createListSavedViewState, getSavedViewPageSize, getVisibleColumns, normalizeColumnKeys } from '@/lib/list-standard';
-import type { Invoice, InvoiceType, InvoiceStatus } from '@/services/sales.service';
+import type { Invoice, InvoiceType, InvoiceStatus, InvoiceSummary } from '@/services/sales.service';
 import { getSavedViewFilterString, type SavedViewState } from '@/services/saved-view.service';
 
 const TYPE_OPTIONS: Array<{ value: InvoiceType | ''; label: string }> = [
@@ -128,8 +128,10 @@ function dueDateState(invoice: Invoice): { label: string; variant: BadgeVariant;
 
 function paymentState(invoice: Invoice): { label: string; percent: number; variant: BadgeVariant; openAmount: number } {
   const total = Math.max(0, Number(invoice.totalGross) || 0);
+  const paid = Math.max(0, Number(invoice.paidAmount) || 0);
+  const openAmount = Math.max(0, total - paid);
   if (invoice.status === 'PAID') return { label: 'Ödendi', percent: 100, variant: 'success', openAmount: 0 };
-  if (invoice.status === 'PARTIALLY_PAID') return { label: 'Kısmi ödeme', percent: 50, variant: 'warning', openAmount: total };
+  if (invoice.status === 'PARTIALLY_PAID') return { label: 'Kısmi ödeme', percent: total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0, variant: 'warning', openAmount };
   if (invoice.status === 'CANCELLED') return { label: 'İptal', percent: 0, variant: 'neutral', openAmount: 0 };
   if (invoice.status === 'OVERDUE') return { label: 'Gecikmiş açık', percent: 0, variant: 'danger', openAmount: total };
   return { label: 'Açık', percent: 0, variant: 'warning', openAmount: total };
@@ -164,33 +166,29 @@ function PaymentStateCell({ invoice }: { invoice: Invoice }) {
   );
 }
 
-function InvoiceKpis({ invoices, total }: { invoices: Invoice[]; total: number }) {
-  const paid = invoices.filter((invoice) => invoice.status === 'PAID').length;
-  const overdue = invoices.filter((invoice) => invoice.status === 'OVERDUE' || dueDateState(invoice).label === 'Gecikti').length;
-  const openAmount = invoices.reduce((sum, invoice) => sum + paymentState(invoice).openAmount, 0);
-  const gross = invoices.reduce((sum, invoice) => sum + (Number(invoice.totalGross) || 0), 0);
+function InvoiceKpis({ summary }: { summary: InvoiceSummary }) {
 
   return (
     <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-5">
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
         <p className="text-[10px] uppercase text-slate-500">Toplam fatura</p>
-        <p className="mt-1 text-lg font-semibold text-white">{total}</p>
+        <p className="mt-1 text-lg font-semibold text-white">{summary.total}</p>
       </div>
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
         <p className="text-[10px] uppercase text-slate-500">Ödenmiş</p>
-        <p className="mt-1 text-lg font-semibold text-emerald-300">{paid}</p>
+        <p className="mt-1 text-lg font-semibold text-emerald-300">{summary.paidCount}</p>
       </div>
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
         <p className="text-[10px] uppercase text-slate-500">Gecikmiş</p>
-        <p className="mt-1 text-lg font-semibold text-red-300">{overdue}</p>
+        <p className="mt-1 text-lg font-semibold text-red-300">{summary.overdueCount}</p>
       </div>
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
         <p className="text-[10px] uppercase text-slate-500">Açık tutar</p>
-        <p className="mt-1 text-lg font-semibold text-amber-300">{formatCurrency(openAmount)}</p>
+        <p className="mt-1 text-lg font-semibold text-amber-300">{formatCurrency(summary.openAmount)}</p>
       </div>
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
-        <p className="text-[10px] uppercase text-slate-500">Sayfa toplamı</p>
-        <p className="mt-1 text-lg font-semibold text-sky-300">{formatCurrency(gross)}</p>
+        <p className="text-[10px] uppercase text-slate-500">Filtrelenmiş toplam</p>
+        <p className="mt-1 text-lg font-semibold text-sky-300">{formatCurrency(summary.totalGross)}</p>
       </div>
     </div>
   );
@@ -380,7 +378,7 @@ export function InvoicesListPage() {
 
       <SalesConversionFlowCard stage="invoice" compact />
 
-      <InvoiceKpis invoices={invoices} total={data?.meta.total ?? 0} />
+      <InvoiceKpis summary={data?.summary ?? { total: 0, paidCount: 0, overdueCount: 0, openAmount: 0, totalGross: 0 }} />
 
       <div className="mb-3 flex flex-wrap gap-2">
         {QUICK_STATUSES.map((option) => (

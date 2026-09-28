@@ -1,5 +1,5 @@
-import { prisma } from '../lib/prisma';
-import { ValidationError } from '../errors';
+import { prisma } from "../lib/prisma";
+import { ValidationError } from "../errors";
 
 /**
  * Body'den gelen ilişkili ID'lerin (productId, contactId, warehouseId vb.)
@@ -11,25 +11,33 @@ import { ValidationError } from '../errors';
 
 interface OwnershipCheck {
   /** Prisma model delegate adı */
-  model: 'product' | 'contact' | 'warehouse' | 'unit' | 'category' | 'taxRate';
+  model: "product" | "contact" | "warehouse" | "unit" | "category" | "taxRate";
   /** Doğrulanacak ID */
   id: string;
   /** Hata mesajında kullanılacak label */
   label: string;
 }
 
-import { Prisma } from '@prisma/client';
+import { Prisma } from "@prisma/client";
 
 type PrismaCountDelegate = {
-  count: (args: { where: { id: string; tenantId: string; deletedAt?: null } }) => Promise<number>;
+  count: (args: {
+    where: { id: string; tenantId: string; deletedAt?: null };
+  }) => Promise<number>;
 };
 
 /** Soft-delete destekleyen modeller */
-const SOFT_DELETE_MODELS = new Set<OwnershipCheck['model']>(['product', 'contact', 'warehouse']);
+const SOFT_DELETE_MODELS = new Set<OwnershipCheck["model"]>([
+  "product",
+  "contact",
+]);
 
-function getDelegate(model: OwnershipCheck['model'], tx?: Prisma.TransactionClient): PrismaCountDelegate {
+function getDelegate(
+  model: OwnershipCheck["model"],
+  tx?: Prisma.TransactionClient,
+): PrismaCountDelegate {
   const db = tx || prisma;
-  const delegates: Record<OwnershipCheck['model'], PrismaCountDelegate> = {
+  const delegates: Record<OwnershipCheck["model"], PrismaCountDelegate> = {
     product: db.product,
     contact: db.contact,
     warehouse: db.warehouse,
@@ -68,8 +76,12 @@ export async function validateTenantOwnership(
 
   const failures = results.filter((r) => !r.exists);
   if (failures.length > 0) {
-    const labels = failures.map((f) => `${f.check.label} (${f.check.id})`).join(', ');
-    throw new ValidationError(`Belirtilen kayıtlar bu tenant'a ait değil: ${labels}`);
+    const labels = failures
+      .map((f) => `${f.check.label} (${f.check.id})`)
+      .join(", ");
+    throw new ValidationError(
+      `Belirtilen kayıtlar bu tenant'a ait değil: ${labels}`,
+    );
   }
 }
 
@@ -78,10 +90,14 @@ export async function validateTenantOwnership(
  * undefined/null olan ID'ler atlanır.
  */
 export function buildOwnershipChecks(
-  entries: Array<{ model: OwnershipCheck['model']; id: string | undefined | null; label: string }>,
+  entries: Array<{
+    model: OwnershipCheck["model"];
+    id: string | undefined | null;
+    label: string;
+  }>,
 ): OwnershipCheck[] {
-  return entries
-    .filter((e): e is { model: OwnershipCheck['model']; id: string; label: string } =>
-      typeof e.id === 'string' && e.id.length > 0,
-    );
+  return entries.filter(
+    (e): e is { model: OwnershipCheck["model"]; id: string; label: string } =>
+      typeof e.id === "string" && e.id.length > 0,
+  );
 }

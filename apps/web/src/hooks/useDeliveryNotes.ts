@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
-  getDeliveryNotes, getDeliveryNoteById, createDeliveryNote, updateDeliveryNoteStatus,
+  getDeliveryNotes, getDeliveryNoteById, createDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
   type ListParams, type CreateDeliveryNoteDTO, type DeliveryNoteStatus,
 } from '@/services/delivery-note.service';
 
@@ -14,6 +14,14 @@ const KEYS = {
 
 export function useDeliveryNotes(params: ListParams) {
   return useQuery({ queryKey: KEYS.list(params), queryFn: () => getDeliveryNotes(params) });
+}
+export function useDeleteDeliveryNote() {
+  const qc = useQueryClient(); const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: deleteDeliveryNote,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['delivery-notes'] }); toast.success('Irsaliye silindi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
 }
 export function useDeliveryNote(id: string) {
   return useQuery({ queryKey: KEYS.detail(id), queryFn: () => getDeliveryNoteById(id), enabled: !!id });

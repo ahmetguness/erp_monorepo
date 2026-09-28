@@ -117,6 +117,7 @@ export const InvoiceSchema = z.object({
   totalNet: z.coerce.number(),
   totalTax: z.coerce.number(),
   totalGross: z.coerce.number(),
+  paidAmount: z.coerce.number().optional().default(0),
   notes: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -540,7 +541,15 @@ export async function fulfillSalesOrder(
 // Invoices
 // ─────────────────────────────────────────────
 
-const InvoiceListSchema = PaginatedResponseSchema(InvoiceSchema);
+export const InvoiceSummarySchema = z.object({
+  total: z.coerce.number(),
+  paidCount: z.coerce.number(),
+  overdueCount: z.coerce.number(),
+  openAmount: z.coerce.number(),
+  totalGross: z.coerce.number(),
+});
+export type InvoiceSummary = z.infer<typeof InvoiceSummarySchema>;
+const InvoiceListSchema = PaginatedResponseSchema(InvoiceSchema).extend({ summary: InvoiceSummarySchema });
 
 export async function getInvoices(params: ListParams) {
   const res = await apiClient.get("/api/invoices", { params });
@@ -586,8 +595,8 @@ export async function updateInvoice(
   ).data;
 }
 
-export async function cancelInvoice(id: string): Promise<Invoice> {
-  const res = await apiClient.post(`/api/invoices/${id}/cancel`);
+export async function cancelInvoice(id: string, reason: string): Promise<Invoice> {
+  const res = await apiClient.post(`/api/invoices/${id}/cancel`, { reason });
   return safeParse(
     SingleResponseSchema(InvoiceSchema),
     res.data,

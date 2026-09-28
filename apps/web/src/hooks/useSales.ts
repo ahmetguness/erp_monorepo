@@ -215,7 +215,7 @@ export function useCancelInvoice(id: string) {
   const qc = useQueryClient();
   const { toast } = useUIStore();
   return useMutation({
-    mutationFn: () => cancelInvoice(id),
+    mutationFn: (reason: string) => cancelInvoice(id, reason),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: INVOICE_KEYS.all });
       qc.invalidateQueries({ queryKey: INVOICE_KEYS.detail(id) });

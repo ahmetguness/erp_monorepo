@@ -1,6 +1,8 @@
 import {
   InvoiceStatus,
   InvoiceType,
+  DeliveryNoteStatus,
+  DeliveryNoteType,
   MovementType,
   OrderStatus,
   PaymentMethod,
@@ -59,12 +61,20 @@ export const invoiceLineBodySchema = z
     productId: optionalString,
     taxRateId: optionalString,
     withholdingRateId: optionalString,
-    description: nonEmptyString,
-    quantity: positiveNumber,
-    unitPrice: nonNegativeNumber,
+    description: nonEmptyString.max(500),
+    quantity: positiveNumber.max(999999999),
+    unitPrice: nonNegativeNumber.max(9999999999999999.99),
     discount: z.number().finite().min(0).max(100).optional(),
   })
   .strict();
+
+const invoiceDateString = z
+  .string()
+  .trim()
+  .refine(
+    (value) => !Number.isNaN(new Date(value).getTime()),
+    "Gecersiz tarih.",
+  );
 
 export const createInvoiceBodySchema = z
   .object({
@@ -72,18 +82,29 @@ export const createInvoiceBodySchema = z
     type: z.nativeEnum(InvoiceType),
     salesOrderId: optionalString,
     purchaseOrderId: optionalString,
-    number: optionalString,
-    date: nonEmptyString,
-    dueDate: optionalString,
-    notes: optionalString,
-    lines: z.array(invoiceLineBodySchema).min(1, "En az bir satir zorunludur."),
+    number: z.string().trim().min(1).max(50).optional(),
+    date: invoiceDateString,
+    dueDate: invoiceDateString.optional(),
+    notes: z.string().trim().max(2000).optional(),
+    lines: z
+      .array(invoiceLineBodySchema)
+      .min(1, "En az bir satir zorunludur.")
+      .max(500),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) =>
+      !value.dueDate || new Date(value.dueDate) >= new Date(value.date),
+    {
+      path: ["dueDate"],
+      message: "Vade tarihi fatura tarihinden once olamaz.",
+    },
+  );
 
 export const updateInvoiceBodySchema = z
   .object({
-    dueDate: optionalString,
-    notes: optionalString,
+    dueDate: invoiceDateString.nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
     status: z.nativeEnum(InvoiceStatus).optional(),
   })
   .strict();
@@ -97,6 +118,35 @@ export const fulfillSalesOrderBodySchema = z
     reservationExpiresAt: optionalString,
   })
   .strict();
+
+const deliveryNoteItemBodySchema = z.object({
+  productId: nonEmptyString,
+  description: z.string().trim().max(500).optional(),
+  orderedQty: positiveNumber.max(999999999),
+  deliveredQty: nonNegativeNumber.max(999999999),
+  locationId: optionalString, lotId: optionalString, batchId: optionalString,
+  salesOrderItemId: optionalString, purchaseOrderItemId: optionalString,
+  sortOrder: z.number().int().nonnegative().max(100000).optional(),
+}).strict().refine((value) => value.deliveredQty <= value.orderedQty, {
+  path: ['deliveredQty'], message: 'Teslim miktari siparis miktarini asamaz.',
+});
+
+export const createDeliveryNoteBodySchema = z.object({
+  type: z.nativeEnum(DeliveryNoteType),
+  salesOrderId: optionalString, purchaseOrderId: optionalString, contactId: optionalString,
+  warehouseId: nonEmptyString, date: invoiceDateString,
+  trackingNumber: z.string().trim().max(100).optional(),
+  carrier: z.string().trim().max(200).optional(),
+  notes: z.string().trim().max(2000).optional(),
+  items: z.array(deliveryNoteItemBodySchema).min(1).max(500),
+}).strict().refine((value) => !(value.salesOrderId && value.purchaseOrderId), {
+  path: ['salesOrderId'], message: 'Irsaliye ayni anda satis ve alis siparisine baglanamaz.',
+});
+
+export const updateDeliveryNoteStatusBodySchema = z.object({
+  status: z.nativeEnum(DeliveryNoteStatus),
+  shippedAt: invoiceDateString.optional(), deliveredAt: invoiceDateString.optional(),
+}).strict();
 
 const dateString = z
   .string()
@@ -129,14 +179,24 @@ const salesQuoteBodySchema = z
   .strict();
 
 export const createSalesQuoteBodySchema = salesQuoteBodySchema.refine(
-  (value) => !value.validUntil || new Date(value.validUntil) >= new Date(value.date),
-  { path: ["validUntil"], message: "Gecerlilik tarihi teklif tarihinden once olamaz." },
+  (value) =>
+    !value.validUntil || new Date(value.validUntil) >= new Date(value.date),
+  {
+    path: ["validUntil"],
+    message: "Gecerlilik tarihi teklif tarihinden once olamaz.",
+  },
 );
 
-export const updateSalesQuoteBodySchema = salesQuoteBodySchema.omit({ number: true }).refine(
-  (value) => !value.validUntil || new Date(value.validUntil) >= new Date(value.date),
-  { path: ["validUntil"], message: "Gecerlilik tarihi teklif tarihinden once olamaz." },
-);
+export const updateSalesQuoteBodySchema = salesQuoteBodySchema
+  .omit({ number: true })
+  .refine(
+    (value) =>
+      !value.validUntil || new Date(value.validUntil) >= new Date(value.date),
+    {
+      path: ["validUntil"],
+      message: "Gecerlilik tarihi teklif tarihinden once olamaz.",
+    },
+  );
 
 export const updateSalesQuoteStatusBodySchema = z
   .object({
@@ -333,6 +393,8 @@ export const updateProductBodySchema = createProductBodySchema
 export type CreateInvoiceBody = z.infer<typeof createInvoiceBodySchema>;
 export type UpdateInvoiceBody = z.infer<typeof updateInvoiceBodySchema>;
 export type FulfillSalesOrderBody = z.infer<typeof fulfillSalesOrderBodySchema>;
+export type CreateDeliveryNoteBody = z.infer<typeof createDeliveryNoteBodySchema>;
+export type UpdateDeliveryNoteStatusBody = z.infer<typeof updateDeliveryNoteStatusBodySchema>;
 export type CreateSalesQuoteBody = z.infer<typeof createSalesQuoteBodySchema>;
 export type UpdateSalesQuoteBody = z.infer<typeof updateSalesQuoteBodySchema>;
 export type CreatePaymentBody = z.infer<typeof createPaymentBodySchema>;

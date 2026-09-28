@@ -1,7 +1,7 @@
 import { AuditAction, EntityType, InvoiceStatus, InvoiceType } from '@prisma/client';
 import { Context } from 'hono';
 import { createEventContext, domainEvents } from '../../../../domain-events/index.js';
-import { NotFoundError, ValidationError } from '../../../../errors/index.js';
+import { ConflictError, NotFoundError, ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { getValidatedBody } from '../../../../middleware/validateBody.js';
 import {
@@ -186,6 +186,7 @@ export const InvoiceController = {
 
     const where = {
       tenantId,
+      deletedAt: null,
       ...(type && { type }),
       ...(status && { status }),
       ...(query.contactId && { contactId: query.contactId }),
@@ -207,22 +208,41 @@ export const InvoiceController = {
         : {}),
     };
 
-    const [total, invoices] = await prisma.$transaction([
+    const [total, invoices, summaryRows] = await prisma.$transaction([
       prisma.invoice.count({ where }),
       prisma.invoice.findMany({
         where,
         include: {
           contact: { select: { id: true, name: true, code: true, phone: true } },
+          payments: { select: { amount: true } },
         },
         orderBy: { date: 'desc' },
         skip,
         take: pageSize,
       }),
+      prisma.invoice.findMany({ where, select: { status: true, dueDate: true, totalGross: true, payments: { select: { amount: true } } } }),
     ]);
 
+    const now = new Date();
+    const data = invoices.map((invoice) => ({
+      ...invoice,
+      paidAmount: invoice.payments.reduce((sum, allocation) => sum + Number(allocation.amount), 0),
+      payments: undefined,
+    }));
+    const summary = summaryRows.reduce((acc, invoice) => {
+      const gross = Number(invoice.totalGross);
+      const paid = invoice.payments.reduce((sum, allocation) => sum + Number(allocation.amount), 0);
+      acc.totalGross += gross;
+      if (invoice.status === InvoiceStatus.PAID) acc.paidCount += 1;
+      if (invoice.status === InvoiceStatus.OVERDUE || (invoice.status !== InvoiceStatus.PAID && invoice.status !== InvoiceStatus.CANCELLED && invoice.dueDate && invoice.dueDate < now)) acc.overdueCount += 1;
+      if (invoice.status !== InvoiceStatus.CANCELLED) acc.openAmount += Math.max(0, gross - paid);
+      return acc;
+    }, { total, paidCount: 0, overdueCount: 0, openAmount: 0, totalGross: 0 });
+
     return c.json({
-      data: invoices,
+      data,
       meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
+      summary,
     });
   },
 
@@ -231,7 +251,7 @@ export const InvoiceController = {
     const invoiceId = requireParam(c, 'id');
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceId, tenantId },
+      where: { id: invoiceId, tenantId, deletedAt: null },
       include: {
         contact: { select: { id: true, name: true, taxNumber: true, address: true, email: true, phone: true } },
         lines: {
@@ -276,7 +296,7 @@ export const InvoiceController = {
     const tenantId = requireTenantId(c);
     const invoiceId = c.req.param('id');
 
-    const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, tenantId } });
+    const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, tenantId, deletedAt: null } });
     if (!invoice) return c.json(new NotFoundError('Fatura', invoiceId).toJSON(), 404);
 
     const history = await prisma.invoiceHistory.findMany({
@@ -308,6 +328,26 @@ export const InvoiceController = {
       return c.json(new NotFoundError('Cari hesap', body.contactId).toJSON(), 404);
     }
 
+    if (body.salesOrderId && body.purchaseOrderId) {
+      return c.json(new ValidationError('Fatura ayni anda hem satis hem alis siparisine baglanamaz.').toJSON(), 400);
+    }
+    if (body.salesOrderId) {
+      if (body.type !== InvoiceType.SALES) {
+        return c.json(new ValidationError('Satis siparisine yalnizca SALES faturasi baglanabilir.').toJSON(), 400);
+      }
+      const order = await prisma.salesOrder.findFirst({ where: { id: body.salesOrderId, tenantId, deletedAt: null } });
+      if (!order) return c.json(new NotFoundError('Satis siparisi', body.salesOrderId).toJSON(), 404);
+      if (order.contactId !== body.contactId) return c.json(new ValidationError('Fatura carisi bagli satis siparisi carisi ile ayni olmalidir.').toJSON(), 400);
+    }
+    if (body.purchaseOrderId) {
+      if (body.type !== InvoiceType.PURCHASE) {
+        return c.json(new ValidationError('Alis siparisine yalnizca PURCHASE faturasi baglanabilir.').toJSON(), 400);
+      }
+      const order = await prisma.purchaseOrder.findFirst({ where: { id: body.purchaseOrderId, tenantId, deletedAt: null } });
+      if (!order) return c.json(new NotFoundError('Alis siparisi', body.purchaseOrderId).toJSON(), 404);
+      if (order.contactId !== body.contactId) return c.json(new ValidationError('Fatura carisi bagli alis siparisi carisi ile ayni olmalidir.').toJSON(), 400);
+    }
+
     await validateTenantOwnership(
       tenantId,
       buildOwnershipChecks(body.lines.flatMap((line, index) => [
@@ -322,9 +362,24 @@ export const InvoiceController = {
       tenantId,
     );
 
+    if (body.salesOrderId) {
+      const order = await prisma.salesOrder.findFirstOrThrow({ where: { id: body.salesOrderId, tenantId }, select: { totalGross: true } });
+      const existing = await prisma.invoice.aggregate({
+        where: { tenantId, salesOrderId: body.salesOrderId, deletedAt: null, status: { not: InvoiceStatus.CANCELLED } },
+        _sum: { totalGross: true },
+      });
+      const remaining = Number(order.totalGross) - Number(existing._sum.totalGross ?? 0);
+      if (totalGross > remaining + 0.005) {
+        return c.json(new ValidationError(`Fatura tutari siparisin kalan faturalanabilir tutarini asamaz (${remaining.toFixed(2)}).`).toJSON(), 400);
+      }
+    }
+
     let number = body.number;
     if (!number) {
       number = await generateDocumentNumber(tenantId, 'invoice', 'INV-', 'invoice');
+    } else {
+      const duplicate = await prisma.invoice.findUnique({ where: { tenantId_number: { tenantId, number } }, select: { id: true } });
+      if (duplicate) throw new ConflictError(`"${number}" fatura numarasi zaten kullaniliyor.`);
     }
     const invoiceDate = new Date(body.date);
     const invoiceDueDays = await businessRulesService.getNumber(tenantId, 'invoicing.invoice_due_days');
@@ -422,7 +477,7 @@ export const InvoiceController = {
       ipAddress, userAgent,
     });
     const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceId, tenantId },
+      where: { id: invoiceId, tenantId, deletedAt: null },
       include: {
         contact: { select: { id: true, name: true, taxNumber: true, email: true } },
         lines: { include: { product: { select: { id: true, code: true, name: true } }, taxRate: true } },
@@ -459,7 +514,7 @@ export const InvoiceController = {
     const invoiceId = c.req.param('id');
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceId, tenantId },
+      where: { id: invoiceId, tenantId, deletedAt: null },
     });
     if (!invoice) {
       return c.json(new NotFoundError('Fatura', invoiceId).toJSON(), 404);
@@ -517,7 +572,7 @@ export const InvoiceController = {
     const invoiceId = c.req.param('id');
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceId, tenantId },
+      where: { id: invoiceId, tenantId, deletedAt: null },
     });
     if (!invoice) {
       return c.json(new NotFoundError('Fatura', invoiceId).toJSON(), 404);
@@ -525,6 +580,10 @@ export const InvoiceController = {
 
     // Central guards & reason parse
     assertInvoiceCancelable(invoice, 'Fatura iptali');
+    const allocationCount = await prisma.paymentAllocation.count({ where: { tenantId, invoiceId } });
+    if (allocationCount > 0) {
+      return c.json(new ValidationError('Tahsilat veya odeme kaydi bulunan fatura iptal edilemez. Once bagli odemeyi ters cevirin.').toJSON(), 400);
+    }
 
     let body: Record<string, unknown> = {};
     try {
@@ -557,18 +616,23 @@ export const InvoiceController = {
         data: { tenantId, invoiceId: invoiceId!, fromStatus: invoice.status, toStatus: InvoiceStatus.CANCELLED, notes: `İptal nedeni: ${reason}` },
       });
 
-      // AccountEntry: ters kayıt
-      await reverseInvoiceAccountEntry(tx, {
-        tenantId,
-        contactId: invoice.contactId,
-        invoiceId: invoiceId!,
-        invoiceNumber: invoice.number,
-        invoiceType: invoice.type,
-        totalGross: Number(invoice.totalGross),
-        date: cancellationDate,
-        reason,
-        userId,
+      const postedEntry = await tx.accountEntry.findFirst({
+        where: { tenantId, refType: 'INVOICE', refId: invoiceId! },
+        select: { id: true },
       });
+      if (postedEntry) {
+        await reverseInvoiceAccountEntry(tx, {
+          tenantId,
+          contactId: invoice.contactId,
+          invoiceId: invoiceId!,
+          invoiceNumber: invoice.number,
+          invoiceType: invoice.type,
+          totalGross: Number(invoice.totalGross),
+          date: cancellationDate,
+          reason,
+          userId,
+        });
+      }
 
       // SalesOrder.invoicedAmount geri al
       if (invoice.salesOrderId && (invoice.type === 'SALES' || invoice.type === 'RETURN_SALES')) {

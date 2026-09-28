@@ -86,15 +86,44 @@ async function main(): Promise<void> {
       return c.body(null, 204);
     });
     const httpKey = `${key}:http`;
-    const headers = { "content-type": "application/json", "idempotency-key": httpKey };
-    const firstResponse = await app.request("/mutation", { method: "POST", headers, body: '{"value":1}' });
-    const replayResponse = await app.request("/mutation", { method: "POST", headers, body: '{"value":1}' });
-    const conflictResponse = await app.request("/mutation", { method: "POST", headers, body: '{"value":2}' });
-    const missingKeyResponse = await app.request("/mutation", { method: "POST", headers: { "content-type": "application/json" }, body: '{"value":1}' });
-    const invalidBodyResponse = await app.request("/mutation", { method: "POST", headers: { ...headers, "idempotency-key": `${httpKey}:invalid` }, body: "[]" });
+    const headers = {
+      "content-type": "application/json",
+      "idempotency-key": httpKey,
+    };
+    const firstResponse = await app.request("/mutation", {
+      method: "POST",
+      headers,
+      body: '{"value":1}',
+    });
+    const replayResponse = await app.request("/mutation", {
+      method: "POST",
+      headers,
+      body: '{"value":1}',
+    });
+    const conflictResponse = await app.request("/mutation", {
+      method: "POST",
+      headers,
+      body: '{"value":2}',
+    });
+    const missingKeyResponse = await app.request("/mutation", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: '{"value":1}',
+    });
+    const invalidBodyResponse = await app.request("/mutation", {
+      method: "POST",
+      headers: { ...headers, "idempotency-key": `${httpKey}:invalid` },
+      body: "[]",
+    });
     const deleteHeaders = { "idempotency-key": `${httpKey}:delete` };
-    const deleteResponse = await app.request("/mutation", { method: "DELETE", headers: deleteHeaders });
-    const deleteReplay = await app.request("/mutation", { method: "DELETE", headers: deleteHeaders });
+    const deleteResponse = await app.request("/mutation", {
+      method: "DELETE",
+      headers: deleteHeaders,
+    });
+    const deleteReplay = await app.request("/mutation", {
+      method: "DELETE",
+      headers: deleteHeaders,
+    });
     assert.equal(firstResponse.status, 200);
     assert.equal(replayResponse.headers.get("idempotency-replayed"), "true");
     assert.equal(conflictResponse.status, 409);
@@ -105,17 +134,39 @@ async function main(): Promise<void> {
     assert.equal(deleteReplay.headers.get("idempotency-replayed"), "true");
     assert.equal(executions, 2);
     const failingApp = new Hono();
-    failingApp.use("*", async (c, next) => { c.set("adminId", admin.id); await next(); });
+    failingApp.use("*", async (c, next) => {
+      c.set("adminId", admin.id);
+      await next();
+    });
     failingApp.use("*", adminIdempotency);
-    failingApp.use("*", async (_c, next) => { await next(); throw new Error("audit failure"); });
+    failingApp.use("*", async (_c, next) => {
+      await next();
+      throw new Error("audit failure");
+    });
     failingApp.post("/mutation", (c) => c.json({ data: true }));
-    failingApp.onError((_error, c) => c.json({ error: { code: "TEST_FAILURE", message: "failure" } }, 500));
+    failingApp.onError((_error, c) =>
+      c.json({ error: { code: "TEST_FAILURE", message: "failure" } }, 500),
+    );
     const failingKey = `${httpKey}:failure`;
-    const failingResponse = await failingApp.request("/mutation", { method: "POST", headers: { "content-type": "application/json", "idempotency-key": failingKey }, body: "{}" });
+    const failingResponse = await failingApp.request("/mutation", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": failingKey,
+      },
+      body: "{}",
+    });
     assert.equal(failingResponse.status, 500);
-    assert.equal(await prisma.adminIdempotencyRecord.count({ where: { adminId: admin.id, key: failingKey } }), 0);
+    assert.equal(
+      await prisma.adminIdempotencyRecord.count({
+        where: { adminId: admin.id, key: failingKey },
+      }),
+      0,
+    );
   } finally {
-    await prisma.adminIdempotencyRecord.deleteMany({ where: { adminId: admin.id, key: { startsWith: key } } });
+    await prisma.adminIdempotencyRecord.deleteMany({
+      where: { adminId: admin.id, key: { startsWith: key } },
+    });
     await prisma.tenant.delete({ where: { id: tenant.id } });
   }
   console.log(

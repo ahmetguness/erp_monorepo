@@ -281,6 +281,7 @@ export function InvoiceDetailPage({ id }: Props) {
   const [approvalIdempotencyKey] = useState(() => createClientIdempotencyKey('invoice-posting'));
   const approveInvoice = useApproveInvoice(id, approvalIdempotencyKey);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
 
   const lineColumns: ColumnDef<LineRow>[] = [
     {
@@ -420,6 +421,10 @@ export function InvoiceDetailPage({ id }: Props) {
         </div>
       </div>
       <p className="text-slate-500">Ödenmiş faturalar iptal edilemez. Devam etmeden önce bağlı ödeme ve e-belge kayıtlarını kontrol edin.</p>
+      <label className="block space-y-1.5">
+        <span className="text-xs font-medium text-slate-300">İptal gerekçesi</span>
+        <textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} rows={3} maxLength={500} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-red-500/60" placeholder="İptal nedenini yazın" />
+      </label>
     </div>
   );
 
@@ -515,8 +520,8 @@ export function InvoiceDetailPage({ id }: Props) {
 
       <ConfirmDialog
         isOpen={cancelOpen}
-        onClose={() => setCancelOpen(false)}
-        onConfirm={() => cancelInvoice.mutate(undefined, { onSuccess: () => setCancelOpen(false) })}
+        onClose={() => { setCancelOpen(false); setCancelReason(''); }}
+        onConfirm={() => { if (cancelReason.trim()) cancelInvoice.mutate(cancelReason.trim(), { onSuccess: () => { setCancelOpen(false); setCancelReason(''); } }); }}
         title="Faturayı iptal et"
         message={cancelMessage}
         confirmLabel="Evet, iptal et"
