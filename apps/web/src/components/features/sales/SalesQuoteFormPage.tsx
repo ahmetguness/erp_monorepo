@@ -18,7 +18,7 @@ import { ContactSelect, ProductSelect } from '@/components/shared/EntitySelect';
 import { SmartFormSidePanel, type SmartFormLine } from '@/components/shared/SmartFormSidePanel';
 import { useContacts } from '@/hooks/useContacts';
 import { useProducts } from '@/hooks/useProducts';
-import { useCreateSalesQuote, useSalesOrders, useSalesQuotes } from '@/hooks/useSales';
+import { useCreateSalesQuote, useSalesQuote, useUpdateSalesQuote, useSalesOrders, useSalesQuotes } from '@/hooks/useSales';
 import { useStockLevels } from '@/hooks/useStock';
 import { useBusinessRules } from '@/hooks/useSettings';
 import { cn, formatCurrency } from '@/lib/utils';
@@ -30,19 +30,22 @@ import type { BusinessRule } from '@/services/settings.service';
 
 const lineSchema = z.object({
   productId: z.string().min(1, 'Ürün seçiniz'),
-  description: z.string().optional(),
-  quantity: z.string().min(1, 'Zorunlu'),
-  unitPrice: z.string().min(1, 'Zorunlu'),
-  discount: z.string().optional(),
-  taxRate: z.string().optional(),
+  description: z.string().max(500, 'Maksimum 500 karakter').optional(),
+  quantity: z.string().min(1, 'Zorunlu').refine((value) => Number.isFinite(Number(value)) && Number(value) > 0, 'Miktar 0dan büyük olmalıdır'),
+  unitPrice: z.string().min(1, 'Zorunlu').refine((value) => Number.isFinite(Number(value)) && Number(value) >= 0, 'Birim fiyat negatif olamaz'),
+  discount: z.string().optional().refine((value) => !value || (Number(value) >= 0 && Number(value) <= 100), 'İskonto 0-100 arasında olmalıdır'),
+  taxRate: z.string().optional().refine((value) => !value || (Number(value) >= 0 && Number(value) <= 100), 'KDV 0-100 arasında olmalıdır'),
 });
 
 const quoteSchema = z.object({
   contactId: z.string().min(1, 'Cari seçiniz'),
   date: z.string().min(1, 'Tarih zorunlu'),
   validUntil: z.string().optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(2000, 'Maksimum 2000 karakter').optional(),
   items: z.array(lineSchema).min(1, 'En az bir kalem ekleyin'),
+}).refine((value) => !value.validUntil || !value.date || new Date(value.validUntil) >= new Date(value.date), {
+  path: ['validUntil'],
+  message: 'Geçerlilik tarihi teklif tarihinden önce olamaz',
 });
 
 type QuoteForm = z.infer<typeof quoteSchema>;
@@ -62,9 +65,11 @@ function getNumberRule(rules: BusinessRule[], key: BusinessRule['key'], fallback
 // Component
 // ─────────────────────────────────────────────
 
-export function SalesQuoteFormPage() {
+export function SalesQuoteFormPage({ editId }: { editId?: string } = {}) {
   const router = useRouter();
   const createQuote = useCreateSalesQuote();
+  const updateQuote = useUpdateSalesQuote(editId ?? '');
+  const { data: existingQuote } = useSalesQuote(editId ?? '');
   const { data: businessRules = [] } = useBusinessRules();
 
   const { data: contactsData } = useContacts({ page: 1, limit: 200 });
@@ -84,10 +89,28 @@ export function SalesQuoteFormPage() {
     };
   });
 
-  const { register, handleSubmit, control, setValue, formState: { errors, dirtyFields } } = useForm<QuoteForm>({
+  const { register, handleSubmit, control, setValue, reset, formState: { errors, dirtyFields } } = useForm<QuoteForm>({
     resolver: zodResolver(quoteSchema),
     defaultValues: { contactId: '', date: defaultDates.today, validUntil: defaultDates.validUntil, notes: '', items: [{ productId: '', quantity: '1', unitPrice: '0', discount: '0', taxRate: '0' }] },
   });
+
+  useEffect(() => {
+    if (!existingQuote || !editId) return;
+    reset({
+      contactId: existingQuote.contactId,
+      date: existingQuote.date.slice(0, 10),
+      validUntil: existingQuote.validUntil?.slice(0, 10) ?? '',
+      notes: existingQuote.notes ?? '',
+      items: (existingQuote.items ?? []).map((item) => ({
+        productId: item.productId,
+        description: item.description ?? '',
+        quantity: String(item.quantity),
+        unitPrice: String(item.unitPrice),
+        discount: String(item.discount),
+        taxRate: String(item.taxRate),
+      })),
+    });
+  }, [editId, existingQuote, reset]);
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const watchItems = useWatch({ control, name: 'items' }) ?? [];
@@ -144,8 +167,7 @@ export function SalesQuoteFormPage() {
   const selectedContact = contacts.find((c) => c.id === watchContact);
 
   const onSubmit = (data: QuoteForm) => {
-    createQuote.mutate(
-      {
+    const payload = {
         contactId: data.contactId,
         date: data.date,
         validUntil: data.validUntil || undefined,
@@ -158,7 +180,10 @@ export function SalesQuoteFormPage() {
           discount: item.discount ? Number(item.discount) : undefined,
           taxRate: item.taxRate ? Number(item.taxRate) : undefined,
         })),
-      },
+      };
+    const mutation = editId ? updateQuote : createQuote;
+    mutation.mutate(
+      payload,
       { onSuccess: (q) => router.push(`/dashboard/sales-orders/quotes/${q.id}`) },
     );
   };
@@ -177,7 +202,7 @@ export function SalesQuoteFormPage() {
             <div>
               <h1 className="text-lg font-semibold text-white flex items-center gap-2.5">
                 <div className="p-1.5 rounded-lg bg-sky-500/10"><FileSignature className="w-4 h-4 text-sky-400" /></div>
-                Yeni Teklif Oluştur
+                {editId ? 'Teklifi Düzenle' : 'Yeni Teklif Oluştur'}
               </h1>
               <p className="text-xs text-slate-500 mt-1 ml-[38px]">Müşterinize fiyat teklifi hazırlayın. Kabul edilirse siparişe dönüştürebilirsiniz.</p>
             </div>
@@ -341,9 +366,9 @@ export function SalesQuoteFormPage() {
                 <div className="flex items-center gap-2.5">
                   <Button type="button" variant="ghost" size="sm" leftIcon={<X className="w-3.5 h-3.5" />}
                     onClick={() => router.back()}>İptal</Button>
-                  <Button type="submit" size="sm" loading={createQuote.isPending} leftIcon={<Save className="w-3.5 h-3.5" />}
+                  <Button type="submit" size="sm" loading={createQuote.isPending || updateQuote.isPending} leftIcon={<Save className="w-3.5 h-3.5" />}
                     className="bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 shadow-lg shadow-sky-500/20">
-                    Teklifi Kaydet
+                    {editId ? 'Değişiklikleri Kaydet' : 'Teklifi Kaydet'}
                   </Button>
                 </div>
               </div>

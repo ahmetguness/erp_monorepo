@@ -276,6 +276,42 @@ export const DeliveryNoteController = {
       },
       });
 
+      // Fulfillment creates a draft with deliveredQty=0. Activating that draft
+      // represents shipping its ordered quantities; without this step no stock
+      // movement was produced and the linked invoice could never be approved.
+      if (
+        existing.status === DeliveryNoteStatus.DRAFT
+        && (body.status === DeliveryNoteStatus.CONFIRMED
+          || body.status === DeliveryNoteStatus.SHIPPED
+          || body.status === DeliveryNoteStatus.DELIVERED)
+      ) {
+        const items = await tx.deliveryNoteItem.findMany({ where: { tenantId, deliveryNoteId: id } });
+        for (const item of items) {
+          const remaining = Number(item.orderedQty) - Number(item.deliveredQty);
+          if (remaining <= 0) continue;
+          await tx.deliveryNoteItem.update({ where: { id: item.id }, data: { deliveredQty: item.orderedQty } });
+          if (item.salesOrderItemId) {
+            await tx.salesOrderItem.updateMany({
+              where: { id: item.salesOrderItemId, tenantId },
+              data: { delivered: { increment: remaining } },
+            });
+          }
+        }
+
+        if (existing.salesOrderId) {
+          const orderItems = await tx.salesOrderItem.findMany({
+            where: { tenantId, orderId: existing.salesOrderId },
+            select: { quantity: true, delivered: true },
+          });
+          const allDelivered = orderItems.length > 0
+            && orderItems.every((item) => Number(item.delivered) >= Number(item.quantity));
+          await tx.salesOrder.updateMany({
+            where: { id: existing.salesOrderId, tenantId },
+            data: { status: allDelivered ? 'DELIVERED' : 'PARTIALLY_DELIVERED' },
+          });
+        }
+      }
+
       await processDeliveryNoteStock(tx, tenantId, id);
       return up;
     });

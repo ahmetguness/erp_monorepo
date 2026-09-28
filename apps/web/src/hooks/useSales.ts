@@ -4,10 +4,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
-  getSalesQuotes, getSalesQuoteById, createSalesQuote, convertQuoteToOrder,
+  getSalesQuotes, getSalesQuoteById, createSalesQuote, updateSalesQuote, updateSalesQuoteStatus, deleteSalesQuote, convertQuoteToOrder,
   getSalesOrders, getSalesOrderById, getSalesOrderHistory, getSalesProcessWorkspace, createSalesOrder, updateSalesOrder, cancelSalesOrder, fulfillSalesOrder,
   getInvoices, getInvoiceById, getInvoiceHistory, createInvoice, approveInvoice, cancelInvoice, recomputeInvoiceStatuses,
-  type ListParams, type CreateSalesQuoteDTO, type CreateSalesOrderDTO,
+  type ListParams, type CreateSalesQuoteDTO, type UpdateSalesQuoteDTO, type CreateSalesOrderDTO, type QuoteStatus,
   type CreateInvoiceDTO, type FulfillSalesOrderDTO, type OrderStatus,
 } from '@/features/sales/api';
 
@@ -86,6 +86,36 @@ export function useSalesOrder(id: string) {
 
 export function useSalesOrderHistory(id: string) {
   return useQuery({ queryKey: ORDER_KEYS.history(id), queryFn: () => getSalesOrderHistory(id), enabled: !!id });
+}
+
+export function useUpdateSalesQuote(id: string) {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (data: UpdateSalesQuoteDTO) => updateSalesQuote(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: QUOTE_KEYS.all }); toast.success('Teklif guncellendi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useUpdateSalesQuoteStatus(id: string) {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: (status: Extract<QuoteStatus, 'SENT' | 'REJECTED' | 'CANCELLED'>) => updateSalesQuoteStatus(id, status),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: QUOTE_KEYS.all }); toast.success('Teklif durumu guncellendi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useDeleteSalesQuote(id: string) {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: () => deleteSalesQuote(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: QUOTE_KEYS.all }); toast.success('Teklif silindi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
 }
 
 export function useSalesProcessWorkspace(id: string) {

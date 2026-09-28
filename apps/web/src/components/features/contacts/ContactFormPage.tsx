@@ -53,8 +53,29 @@ const contactSchema = z.object({
   address: z.string().optional(),
   city: z.string().optional(),
   country: z.string().optional(),
-  creditLimit: z.string().optional(),
-  paymentTermDays: z.string().optional(),
+  creditLimit: z
+    .string()
+    .optional()
+    .refine(
+      (value) =>
+        !value || (Number.isFinite(Number(value)) && Number(value) >= 0),
+      {
+        message: "Kredi limiti negatif olamaz",
+      },
+    ),
+  paymentTermDays: z
+    .string()
+    .optional()
+    .refine(
+      (value) =>
+        !value ||
+        (Number.isInteger(Number(value)) &&
+          Number(value) >= 0 &&
+          Number(value) <= 3650),
+      {
+        message: "Ödeme vadesi 0-3650 gün arasında tam sayı olmalıdır",
+      },
+    ),
   notes: z.string().max(1000, "Maksimum 1000 karakter").optional(),
 });
 
@@ -106,7 +127,9 @@ export function ContactFormPage({ editId }: Props) {
 
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
-  const [paymentTermMode, setPaymentTermMode] = useState<"preset" | "custom" | null>(null);
+  const [paymentTermMode, setPaymentTermMode] = useState<
+    "preset" | "custom" | null
+  >(null);
 
   const {
     register,
@@ -126,12 +149,17 @@ export function ContactFormPage({ editId }: Props) {
   const watchEmail = useWatch({ control, name: "email" });
   const watchPhone = useWatch({ control, name: "phone" });
   const watchPaymentTerm = useWatch({ control, name: "paymentTermDays" });
-  const isPresetPaymentTerm = PAYMENT_TERM_PRESETS.some((p) => p.value === (watchPaymentTerm ?? ""));
-  const usePresetTerm = paymentTermMode ? paymentTermMode === "preset" : isPresetPaymentTerm;
+  const isPresetPaymentTerm = PAYMENT_TERM_PRESETS.some(
+    (p) => p.value === (watchPaymentTerm ?? ""),
+  );
+  const usePresetTerm = paymentTermMode
+    ? paymentTermMode === "preset"
+    : isPresetPaymentTerm;
 
   // Populate form when editing
   useEffect(() => {
     if (existing) {
+      setTags(existing.tags);
       const termStr =
         existing.paymentTermDays != null
           ? String(existing.paymentTermDays)
@@ -166,8 +194,21 @@ export function ContactFormPage({ editId }: Props) {
   const removeTag = (tag: string) => setTags(tags.filter((t) => t !== tag));
 
   const applyEnrichment = (item: MasterDataSuggestion): void => {
-    if (item.field === "code" || item.field === "name" || item.field === "taxNumber" || item.field === "taxOffice" || item.field === "email" || item.field === "phone" || item.field === "address" || item.field === "city" || item.field === "country") {
-      setValue(item.field, item.value, { shouldDirty: true, shouldValidate: true });
+    if (
+      item.field === "code" ||
+      item.field === "name" ||
+      item.field === "taxNumber" ||
+      item.field === "taxOffice" ||
+      item.field === "email" ||
+      item.field === "phone" ||
+      item.field === "address" ||
+      item.field === "city" ||
+      item.field === "country"
+    ) {
+      setValue(item.field, item.value, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
     }
   };
 
@@ -282,9 +323,23 @@ export function ContactFormPage({ editId }: Props) {
                 />
               </FormRow>
               {!isEdit && (
-                <Button type="button" variant="outline" size="sm" leftIcon={<Sparkles className="w-3.5 h-3.5" />}
-                  loading={enrichment.isPending} disabled={!watchTaxNumber && !watchEmail && !watchPhone}
-                  onClick={() => enrichment.mutate({ entityType: "contact", taxNumber: watchTaxNumber, email: watchEmail, phone: watchPhone, name: watchName })}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<Sparkles className="w-3.5 h-3.5" />}
+                  loading={enrichment.isPending}
+                  disabled={!watchTaxNumber && !watchEmail && !watchPhone}
+                  onClick={() =>
+                    enrichment.mutate({
+                      entityType: "contact",
+                      taxNumber: watchTaxNumber,
+                      email: watchEmail,
+                      phone: watchPhone,
+                      name: watchName,
+                    })
+                  }
+                >
                   Bilgileri doğrula ve tamamla
                 </Button>
               )}
@@ -383,7 +438,9 @@ export function ContactFormPage({ editId }: Props) {
                         onClick={() => {
                           setPaymentTermMode("preset");
                           if (!isPresetPaymentTerm) {
-                            setValue("paymentTermDays", "30", { shouldDirty: true });
+                            setValue("paymentTermDays", "30", {
+                              shouldDirty: true,
+                            });
                           }
                         }}
                         className="text-[10px] text-sky-400 hover:text-sky-300 mt-1"
@@ -411,7 +468,12 @@ export function ContactFormPage({ editId }: Props) {
 
           {/* Sidebar — 1 col */}
           <div className="space-y-5">
-            {!isEdit && <MasterDataSuggestionsPanel result={enrichment.data} onApply={applyEnrichment} />}
+            {!isEdit && (
+              <MasterDataSuggestionsPanel
+                result={enrichment.data}
+                onApply={applyEnrichment}
+              />
+            )}
             {/* Tags */}
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">

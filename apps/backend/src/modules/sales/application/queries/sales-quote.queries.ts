@@ -1,5 +1,5 @@
 import { parsePageRequest, type PageResult } from '../../../shared/index.js';
-import type { SalesQuoteFilters, SalesQuoteReadRepository } from '../ports/sales-quote-read.repository.js';
+import type { SalesQuoteFilters, SalesQuoteReadRepository, SalesQuoteSummary } from '../ports/sales-quote-read.repository.js';
 
 export interface ListSalesQuotesQuery extends SalesQuoteFilters {
   page?: string;
@@ -9,7 +9,7 @@ export interface ListSalesQuotesQuery extends SalesQuoteFilters {
 export class SalesQuoteQueries<TListItem extends object, TDetail extends object> {
   constructor(private readonly repository: SalesQuoteReadRepository<TListItem, TDetail>) {}
 
-  list(tenantId: string, query: ListSalesQuotesQuery): Promise<PageResult<TListItem>> {
+  list(tenantId: string, query: ListSalesQuotesQuery): Promise<PageResult<TListItem> & { summary: SalesQuoteSummary }> {
     return this.repository.list(tenantId, query, parsePageRequest(query.page, query.limit));
   }
 

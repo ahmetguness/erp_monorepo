@@ -74,6 +74,7 @@ model Contact {
   city      String?
   country   String  @default("TR")
   notes     String?
+  tags      String[] @default([])
   isActive  Boolean @default(true)
 
   creditLimit     Decimal? @db.Decimal(18, 2)

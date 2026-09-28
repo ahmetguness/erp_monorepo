@@ -39,7 +39,10 @@ implements SalesQuoteReadRepository<SalesQuoteListRecord, SalesQuoteDetailRecord
         ? { date: { ...(filters.dateFrom && { gte: new Date(filters.dateFrom) }), ...(filters.dateTo && { lte: new Date(filters.dateTo) }) } }
         : {}),
     };
-    const [total, data] = await this.db.$transaction([
+    const attentionUntil = new Date();
+    attentionUntil.setHours(23, 59, 59, 999);
+    attentionUntil.setDate(attentionUntil.getDate() + 7);
+    const [total, data, sentCount, attentionCount, gross] = await this.db.$transaction([
       this.db.salesQuote.count({ where }),
       this.db.salesQuote.findMany({
         where,
@@ -48,8 +51,14 @@ implements SalesQuoteReadRepository<SalesQuoteListRecord, SalesQuoteDetailRecord
         skip: (page.page - 1) * page.pageSize,
         take: page.pageSize,
       }),
+      this.db.salesQuote.count({ where: { ...where, status: QuoteStatus.SENT } }),
+      this.db.salesQuote.count({ where: { ...where, status: QuoteStatus.SENT, validUntil: { lte: attentionUntil } } }),
+      this.db.salesQuote.aggregate({ where, _sum: { totalGross: true } }),
     ]);
-    return createPageResult(data, total, page);
+    return {
+      ...createPageResult(data, total, page),
+      summary: { total, sentCount, attentionCount, totalGross: Number(gross._sum.totalGross ?? 0) },
+    };
   }
 
   findById(tenantId: string, quoteId: string): Promise<SalesQuoteDetailRecord | null> {

@@ -52,7 +52,11 @@ import {
 } from "@/hooks/useContacts";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { RecommendedEntityAction } from "@/components/shared/RecommendedActionsPanel";
-import type { AccountEntry, ContactMissingInfoKey, OpenInvoice } from "@/services/contact.service";
+import type {
+  AccountEntry,
+  ContactMissingInfoKey,
+  OpenInvoice,
+} from "@/services/contact.service";
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -70,7 +74,13 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function MissingInfoPanel({ keys, onEdit }: { keys: ContactMissingInfoKey[]; onEdit: () => void }) {
+function MissingInfoPanel({
+  keys,
+  onEdit,
+}: {
+  keys: ContactMissingInfoKey[];
+  onEdit: () => void;
+}) {
   if (keys.length === 0) return null;
 
   return (
@@ -332,32 +342,46 @@ export function ContactDetailPage({ id }: Props) {
   const openInvoices = contact.openInvoices ?? [];
   const creditLimit = contact.creditLimit ? Number(contact.creditLimit) : 0;
   const creditUsed = Math.max(Number(fin.currentBalance) || 0, 0);
-  const hasFinancialRisk = (fin.overdueInvoiceCount ?? 0) > 0 || fin.riskLevel === "exceeded" || fin.riskLevel === "warning";
+  const hasFinancialRisk =
+    (fin.overdueInvoiceCount ?? 0) > 0 ||
+    fin.riskLevel === "exceeded" ||
+    fin.riskLevel === "warning";
   const recommendedActions: RecommendedEntityAction[] = hasFinancialRisk
-    ? [{
-        id: `contact-${id}-risk-followup`,
-        kind: "task",
-        title: "Cari risk takip görevi oluştur",
-        summary: `${contact.name} için ${fin.overdueInvoiceCount ?? 0} gecikmiş fatura ve ${formatCurrency(fin.currentBalance)} bakiye görünüyor.`,
-        priority: fin.riskLevel === "exceeded" ? "CRITICAL" : "HIGH",
-        entityType: "CONTACT",
-        entityId: id,
-        module: "contacts",
-        href: `/dashboard/contacts/${id}`,
-        steps: ["Öneriyi gör", "Görev taslağını incele", "Onayla", "Workflow’da takip et"],
-        draft: {
-          title: `${contact.name} cari risk takibi`,
-          detail: [
-            `Cari: ${contact.name}`,
-            `Güncel bakiye: ${formatCurrency(fin.currentBalance)}`,
-            `Açık fatura: ${fin.openInvoiceCount ?? 0}`,
-            `Gecikmiş fatura: ${fin.overdueInvoiceCount ?? 0}`,
-            creditLimit > 0 ? `Kredi limiti: ${formatCurrency(creditLimit)}` : null,
-          ].filter((line): line is string => line !== null).join("\n"),
-          type: "COLLECTION",
-          dueAt: addDays(1),
+    ? [
+        {
+          id: `contact-${id}-risk-followup`,
+          kind: "task",
+          title: "Cari risk takip görevi oluştur",
+          summary: `${contact.name} için ${fin.overdueInvoiceCount ?? 0} gecikmiş fatura ve ${formatCurrency(fin.currentBalance)} bakiye görünüyor.`,
+          priority: fin.riskLevel === "exceeded" ? "CRITICAL" : "HIGH",
+          entityType: "CONTACT",
+          entityId: id,
+          module: "contacts",
+          href: `/dashboard/contacts/${id}`,
+          steps: [
+            "Öneriyi gör",
+            "Görev taslağını incele",
+            "Onayla",
+            "Workflow’da takip et",
+          ],
+          draft: {
+            title: `${contact.name} cari risk takibi`,
+            detail: [
+              `Cari: ${contact.name}`,
+              `Güncel bakiye: ${formatCurrency(fin.currentBalance)}`,
+              `Açık fatura: ${fin.openInvoiceCount ?? 0}`,
+              `Gecikmiş fatura: ${fin.overdueInvoiceCount ?? 0}`,
+              creditLimit > 0
+                ? `Kredi limiti: ${formatCurrency(creditLimit)}`
+                : null,
+            ]
+              .filter((line): line is string => line !== null)
+              .join("\n"),
+            type: "COLLECTION",
+            dueAt: addDays(1),
+          },
         },
-      }]
+      ]
     : [];
 
   return (
@@ -495,273 +519,294 @@ export function ContactDetailPage({ id }: Props) {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="space-y-5">
-      {/* Info + Credit + Open Invoices — 3 column */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Contact Info */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <Badge variant={CONTACT_TYPE_VARIANTS[contact.type]}>
-              {CONTACT_TYPE_LABELS[contact.type]}
-            </Badge>
-            <Badge variant={CONTACT_RISK_SCORE_VARIANTS[fin.riskScoreLevel]}>
-              Risk skoru: %{fin.riskScore} - {CONTACT_RISK_SCORE_LABELS[fin.riskScoreLevel]}
-            </Badge>
-          </div>
-          <MissingInfoPanel
-            keys={contact.missingInfoKeys ?? []}
-            onEdit={() => router.push(`/dashboard/contacts/${id}/edit`)}
-          />
-          <div className="flex items-center gap-2 mb-4">
-            <ActiveBadge isActive={contact.isActive} />
-            {contact.paymentTermDays != null && (
-              <Badge variant="neutral" dot>
-                <Clock className="w-3 h-3 mr-0.5" />
-                {contact.paymentTermDays} gün vade
-              </Badge>
-            )}
-            {fin.lastTransactionDate && (
-              <Badge variant="neutral">
-                <Calendar className="w-3 h-3 mr-0.5" />
-                Son: {formatDate(fin.lastTransactionDate)}
-              </Badge>
-            )}
-          </div>
+          {/* Info + Credit + Open Invoices — 3 column */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Contact Info */}
+            <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <Badge variant={CONTACT_TYPE_VARIANTS[contact.type]}>
+                  {CONTACT_TYPE_LABELS[contact.type]}
+                </Badge>
+                <Badge
+                  variant={CONTACT_RISK_SCORE_VARIANTS[fin.riskScoreLevel]}
+                >
+                  Risk skoru: %{fin.riskScore} -{" "}
+                  {CONTACT_RISK_SCORE_LABELS[fin.riskScoreLevel]}
+                </Badge>
+              </div>
+              <MissingInfoPanel
+                keys={contact.missingInfoKeys ?? []}
+                onEdit={() => router.push(`/dashboard/contacts/${id}/edit`)}
+              />
+              <div className="flex items-center gap-2 mb-4">
+                <ActiveBadge isActive={contact.isActive} />
+                {contact.paymentTermDays != null && (
+                  <Badge variant="neutral" dot>
+                    <Clock className="w-3 h-3 mr-0.5" />
+                    {contact.paymentTermDays} gün vade
+                  </Badge>
+                )}
+                {fin.lastTransactionDate && (
+                  <Badge variant="neutral">
+                    <Calendar className="w-3 h-3 mr-0.5" />
+                    Son: {formatDate(fin.lastTransactionDate)}
+                  </Badge>
+                )}
+              </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-0.5">
-            <InfoRow label="Vergi No" value={contact.taxNumber} />
-            <InfoRow label="Vergi Dairesi" value={contact.taxOffice} />
-            <InfoRow
-              label="E-posta"
-              value={
-                contact.email && (
-                  <span className="flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-slate-500" />
-                    {contact.email}
-                  </span>
-                )
-              }
-            />
-            <InfoRow
-              label="Telefon"
-              value={
-                contact.phone && (
-                  <span className="flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-slate-500" />
-                    {contact.phone}
-                  </span>
-                )
-              }
-            />
-            <InfoRow
-              label="Website"
-              value={
-                contact.website && (
-                  <span className="flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5 text-slate-500" />
-                    {contact.website}
-                  </span>
-                )
-              }
-            />
-            <InfoRow
-              label="Adres"
-              value={
-                contact.address && (
-                  <span className="flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-slate-500" />
-                    {[contact.address, contact.city, contact.country]
-                      .filter(Boolean)
-                      .join(", ")}
-                  </span>
-                )
-              }
-            />
-          </div>
-
-          {contact.notes && (
-            <div className="mt-4 pt-3 border-t border-slate-800">
-              <p className="text-[11px] text-slate-500 uppercase tracking-wider mb-1">
-                Notlar
-              </p>
-              <p className="text-sm text-slate-400">{contact.notes}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Right sidebar: Credit + Open Invoices */}
-        <div className="space-y-4">
-          {(contact.type === 'SUPPLIER' || contact.type === 'BOTH') && (
-            <SupplierPerformanceCard contactId={id} />
-          )}
-
-          {creditLimit > 0 && (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                Kredi Limiti
-              </h3>
-              <CreditLimitBar used={creditUsed} limit={creditLimit} />
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-[10px] text-slate-500 uppercase">
-                    Kullanılan
-                  </p>
-                  <p className="text-sm font-medium text-slate-200">
-                    {formatCurrency(creditUsed)}
-                  </p>
+              {contact.tags.length > 0 && (
+                <div
+                  className="mb-4 flex flex-wrap gap-2"
+                  aria-label="Cari etiketleri"
+                >
+                  {contact.tags.map((tag) => (
+                    <Badge key={tag} variant="neutral">
+                      {tag}
+                    </Badge>
+                  ))}
                 </div>
-                <div>
-                  <p className="text-[10px] text-slate-500 uppercase">Kalan</p>
-                  <p className="text-sm font-medium text-emerald-400">
-                    {formatCurrency(Math.max(creditLimit - creditUsed, 0))}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <OpenInvoicesPanel
-            invoices={openInvoices}
-            onNavigate={(invId) => router.push(`/dashboard/invoices/${invId}`)}
-          />
-
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-              Özet
-            </h3>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Toplam Hareket</span>
-                <span className="text-slate-300 font-medium">
-                  {fin.transactionCount}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Oluşturulma</span>
-                <span className="text-slate-300">
-                  {formatDate(contact.createdAt)}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Son Güncelleme</span>
-                <span className="text-slate-300">
-                  {formatDate(contact.updatedAt)}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Account Statement */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-white">Hesap Ekstresi</h2>
-            <span className="text-xs text-slate-500">
-              {entriesData?.meta.total ?? 0} hareket
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            {periodTotals && (entriesData?.meta.total ?? 0) > 0 && (
-              <div className="flex items-center gap-3 mr-3 text-xs">
-                <span className="text-slate-500">Dönem:</span>
-                <span className="text-red-400 font-medium tabular-nums">
-                  {formatCurrency(periodTotals.debit)} B
-                </span>
-                <span className="text-emerald-400 font-medium tabular-nums">
-                  {formatCurrency(periodTotals.credit)} A
-                </span>
-              </div>
-            )}
-            <Button
-              variant={showEntryFilters ? "secondary" : "ghost"}
-              size="sm"
-              leftIcon={<Filter className="w-3 h-3" />}
-              onClick={() => setShowEntryFilters((o) => !o)}
-            >
-              Filtre
-              {hasEntryFilters && (
-                <span className="ml-1 w-3.5 h-3.5 rounded-full bg-sky-500 text-white text-[9px] flex items-center justify-center">
-                  {[dateFrom, dateTo, refType].filter(Boolean).length}
-                </span>
               )}
-            </Button>
-            {hasEntryFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={<X className="w-3 h-3" />}
-                onClick={clearEntryFilters}
-              >
-                Temizle
-              </Button>
-            )}
-          </div>
-        </div>
 
-        {showEntryFilters && (
-          <div className="flex flex-wrap gap-2 mb-3 p-3 bg-slate-900/50 border border-slate-800/60 rounded-xl">
-            <DatePicker
-              value={dateFrom}
-              onValueChange={(value) => {
-                setDateFrom(value ?? "");
-                setEntryPage(1);
-              }}
-              aria-label="Başlangıç"
-              className="w-40"
-            />
-            <DatePicker
-              value={dateTo}
-              onValueChange={(value) => {
-                setDateTo(value ?? "");
-                setEntryPage(1);
-              }}
-              aria-label="Bitiş"
-              className="w-40"
-            />
-            <Select
-              options={REF_TYPE_OPTIONS}
-              value={refType}
-              onChange={(e) => {
-                setRefType(e.target.value);
-                setEntryPage(1);
-              }}
-              className="w-40 !py-1.5 text-xs"
-            />
-          </div>
-        )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-0.5">
+                <InfoRow label="Vergi No" value={contact.taxNumber} />
+                <InfoRow label="Vergi Dairesi" value={contact.taxOffice} />
+                <InfoRow
+                  label="E-posta"
+                  value={
+                    contact.email && (
+                      <span className="flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-slate-500" />
+                        {contact.email}
+                      </span>
+                    )
+                  }
+                />
+                <InfoRow
+                  label="Telefon"
+                  value={
+                    contact.phone && (
+                      <span className="flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-slate-500" />
+                        {contact.phone}
+                      </span>
+                    )
+                  }
+                />
+                <InfoRow
+                  label="Website"
+                  value={
+                    contact.website && (
+                      <span className="flex items-center gap-1.5">
+                        <Globe className="w-3.5 h-3.5 text-slate-500" />
+                        {contact.website}
+                      </span>
+                    )
+                  }
+                />
+                <InfoRow
+                  label="Adres"
+                  value={
+                    contact.address && (
+                      <span className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-slate-500" />
+                        {[contact.address, contact.city, contact.country]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </span>
+                    )
+                  }
+                />
+              </div>
 
-        <DataTable
-          columns={entryColumns}
-          data={entries}
-          keyExtractor={(r) => r.id}
-          isLoading={loadingEntries}
-          emptyTitle="Henüz hareket yok"
-          emptyDescription="Bu cari hesaba ait hareket bulunmuyor."
-          pagination={
-            entriesData
-              ? {
-                  page: entryPage,
-                  pageSize: 25,
-                  total: entriesData.meta.total,
-                  totalPages: entriesData.meta.totalPages,
-                  onChange: setEntryPage,
+              {contact.notes && (
+                <div className="mt-4 pt-3 border-t border-slate-800">
+                  <p className="text-[11px] text-slate-500 uppercase tracking-wider mb-1">
+                    Notlar
+                  </p>
+                  <p className="text-sm text-slate-400">{contact.notes}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Right sidebar: Credit + Open Invoices */}
+            <div className="space-y-4">
+              {(contact.type === "SUPPLIER" || contact.type === "BOTH") && (
+                <SupplierPerformanceCard contactId={id} />
+              )}
+
+              {creditLimit > 0 && (
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                    Kredi Limiti
+                  </h3>
+                  <CreditLimitBar used={creditUsed} limit={creditLimit} />
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase">
+                        Kullanılan
+                      </p>
+                      <p className="text-sm font-medium text-slate-200">
+                        {formatCurrency(creditUsed)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase">
+                        Kalan
+                      </p>
+                      <p className="text-sm font-medium text-emerald-400">
+                        {formatCurrency(Math.max(creditLimit - creditUsed, 0))}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <OpenInvoicesPanel
+                invoices={openInvoices}
+                onNavigate={(invId) =>
+                  router.push(`/dashboard/invoices/${invId}`)
                 }
-              : undefined
-          }
-        />
-      </div>
+              />
 
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                  Özet
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Toplam Hareket</span>
+                    <span className="text-slate-300 font-medium">
+                      {fin.transactionCount}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Oluşturulma</span>
+                    <span className="text-slate-300">
+                      {formatDate(contact.createdAt)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Son Güncelleme</span>
+                    <span className="text-slate-300">
+                      {formatDate(contact.updatedAt)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Account Statement */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-semibold text-white">
+                  Hesap Ekstresi
+                </h2>
+                <span className="text-xs text-slate-500">
+                  {entriesData?.meta.total ?? 0} hareket
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {periodTotals && (entriesData?.meta.total ?? 0) > 0 && (
+                  <div className="flex items-center gap-3 mr-3 text-xs">
+                    <span className="text-slate-500">Dönem:</span>
+                    <span className="text-red-400 font-medium tabular-nums">
+                      {formatCurrency(periodTotals.debit)} B
+                    </span>
+                    <span className="text-emerald-400 font-medium tabular-nums">
+                      {formatCurrency(periodTotals.credit)} A
+                    </span>
+                  </div>
+                )}
+                <Button
+                  variant={showEntryFilters ? "secondary" : "ghost"}
+                  size="sm"
+                  leftIcon={<Filter className="w-3 h-3" />}
+                  onClick={() => setShowEntryFilters((o) => !o)}
+                >
+                  Filtre
+                  {hasEntryFilters && (
+                    <span className="ml-1 w-3.5 h-3.5 rounded-full bg-sky-500 text-white text-[9px] flex items-center justify-center">
+                      {[dateFrom, dateTo, refType].filter(Boolean).length}
+                    </span>
+                  )}
+                </Button>
+                {hasEntryFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<X className="w-3 h-3" />}
+                    onClick={clearEntryFilters}
+                  >
+                    Temizle
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {showEntryFilters && (
+              <div className="flex flex-wrap gap-2 mb-3 p-3 bg-slate-900/50 border border-slate-800/60 rounded-xl">
+                <DatePicker
+                  value={dateFrom}
+                  onValueChange={(value) => {
+                    setDateFrom(value ?? "");
+                    setEntryPage(1);
+                  }}
+                  aria-label="Başlangıç"
+                  className="w-40"
+                />
+                <DatePicker
+                  value={dateTo}
+                  onValueChange={(value) => {
+                    setDateTo(value ?? "");
+                    setEntryPage(1);
+                  }}
+                  aria-label="Bitiş"
+                  className="w-40"
+                />
+                <Select
+                  options={REF_TYPE_OPTIONS}
+                  value={refType}
+                  onChange={(e) => {
+                    setRefType(e.target.value);
+                    setEntryPage(1);
+                  }}
+                  className="w-40 !py-1.5 text-xs"
+                />
+              </div>
+            )}
+
+            <DataTable
+              columns={entryColumns}
+              data={entries}
+              keyExtractor={(r) => r.id}
+              isLoading={loadingEntries}
+              emptyTitle="Henüz hareket yok"
+              emptyDescription="Bu cari hesaba ait hareket bulunmuyor."
+              pagination={
+                entriesData
+                  ? {
+                      page: entryPage,
+                      pageSize: 25,
+                      total: entriesData.meta.total,
+                      totalPages: entriesData.meta.totalPages,
+                      onChange: setEntryPage,
+                    }
+                  : undefined
+              }
+            />
+          </div>
         </main>
 
-      <EntityActionPanel
-        entityType="CONTACT"
-        entityId={id}
-        displayName={contact.name}
-        module="contacts"
-        primaryEmail={contact.email}
-        recommendedActions={recommendedActions}
-      />
+        <EntityActionPanel
+          entityType="CONTACT"
+          entityId={id}
+          displayName={contact.name}
+          module="contacts"
+          primaryEmail={contact.email}
+          recommendedActions={recommendedActions}
+        />
       </div>
 
       <ConfirmDialog

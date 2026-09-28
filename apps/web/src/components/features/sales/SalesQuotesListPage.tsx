@@ -23,7 +23,7 @@ import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { useSalesQuotes } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import type { SalesQuote, QuoteStatus } from '@/services/sales.service';
+import type { SalesQuote, QuoteStatus, SalesQuoteSummary } from '@/services/sales.service';
 import { getSavedViewFilterString, type SavedViewState } from '@/services/saved-view.service';
 
 const STATUS_OPTIONS: Array<{ value: QuoteStatus | ''; label: string }> = [
@@ -95,31 +95,25 @@ function ValidityBadge({ quote }: { quote: SalesQuote }) {
   );
 }
 
-function QuoteKpiCards({ quotes, total }: { quotes: SalesQuote[]; total: number }) {
-  const sent = quotes.filter((quote) => quote.status === 'SENT').length;
-  const attention = quotes.filter((quote) => {
-    const days = daysUntil(quote.validUntil);
-    return quote.status === 'SENT' && days !== null && days <= 7;
-  }).length;
-  const gross = quotes.reduce((sum, quote) => sum + Number(quote.totalGross || 0), 0);
+function QuoteKpiCards({ summary }: { summary: SalesQuoteSummary }) {
 
   return (
     <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
         <p className="text-[10px] uppercase text-slate-500">Toplam teklif</p>
-        <p className="mt-1 text-lg font-semibold text-white">{total}</p>
+        <p className="mt-1 text-lg font-semibold text-white">{summary.total}</p>
       </div>
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
         <p className="text-[10px] uppercase text-slate-500">Gönderilen</p>
-        <p className="mt-1 text-lg font-semibold text-sky-300">{sent}</p>
+        <p className="mt-1 text-lg font-semibold text-sky-300">{summary.sentCount}</p>
       </div>
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
         <p className="text-[10px] uppercase text-slate-500">Takip gerektiren</p>
-        <p className="mt-1 text-lg font-semibold text-amber-300">{attention}</p>
+        <p className="mt-1 text-lg font-semibold text-amber-300">{summary.attentionCount}</p>
       </div>
       <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
-        <p className="text-[10px] uppercase text-slate-500">Sayfa toplamı</p>
-        <p className="mt-1 text-lg font-semibold text-emerald-300">{formatCurrency(gross)}</p>
+        <p className="text-[10px] uppercase text-slate-500">Filtrelenmiş toplam</p>
+        <p className="mt-1 text-lg font-semibold text-emerald-300">{formatCurrency(summary.totalGross)}</p>
       </div>
     </div>
   );
@@ -252,7 +246,7 @@ export function SalesQuotesListPage() {
         }
       />
 
-      <QuoteKpiCards quotes={quotes} total={data?.meta.total ?? 0} />
+      <QuoteKpiCards summary={data?.summary ?? { total: 0, sentCount: 0, attentionCount: 0, totalGross: 0 }} />
 
       <div className="mb-3 flex flex-wrap gap-2">
         {QUICK_STATUSES.map((option) => (

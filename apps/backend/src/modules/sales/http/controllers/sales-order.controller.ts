@@ -1,10 +1,10 @@
 import { AuditAction,EntityType,OrderStatus,QuoteStatus,ReservationRefType } from '@prisma/client';
 import { Context } from 'hono';
 import { createEventContext,domainEvents } from '../../../../domain-events/index.js';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
+import { ConflictError,NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { getValidatedBody } from '../../../../middleware/validateBody.js';
-import { fulfillSalesOrderBodySchema } from '../../../../schemas/request-body.schemas.js';
+import { createSalesQuoteBodySchema,fulfillSalesOrderBodySchema,updateSalesQuoteBodySchema,updateSalesQuoteStatusBodySchema } from '../../../../schemas/request-body.schemas.js';
 import { BusinessRulesService } from '../../../../services/business-rules.service.js';
 import { assertSalesOrderStatusTransition } from '../../../../services/financial/status-transition.service.js';
 import { releaseInventoryReservations } from '../../../../services/inventory-rules.service.js';
@@ -12,6 +12,7 @@ import { SalesFulfillmentService } from '../../../../services/sales-fulfillment.
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId } from '../../../../utils/context.js';
 import { generateDocumentNumber } from '../../../../utils/generate-number.js';
+import { buildOwnershipChecks,validateTenantOwnership } from '../../../../utils/validateTenantOwnership.js';
 import { salesApplication } from '../../composition.js';
 
 // ─────────────────────────────────────────────
@@ -161,17 +162,21 @@ export const SalesOrderController = {
   async createQuote(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<CreateSalesQuoteDTO>();
+    const body = getValidatedBody(c, createSalesQuoteBodySchema);
 
-    if (!body.contactId || !body.date || !body.items?.length) {
-      return c.json(new ValidationError('contactId, date ve en az bir kalem zorunludur.').toJSON(), 400);
-    }
+    await validateTenantOwnership(tenantId, buildOwnershipChecks([
+      { model: 'contact', id: body.contactId, label: 'Teklif carisi' },
+      ...body.items.map((item, index) => ({ model: 'product' as const, id: item.productId, label: `Teklif kalemi ${index + 1} urunu` })),
+    ]));
 
     const { lineData, totalNet, totalTax, totalGross } = computeItems(body.items);
 
     let number = body.number;
     if (!number) {
       number = await generateDocumentNumber(tenantId, 'sales_quote', 'TKL-', 'salesQuote');
+    } else {
+      const duplicate = await prisma.salesQuote.findUnique({ where: { tenantId_number: { tenantId, number } }, select: { id: true } });
+      if (duplicate) throw new ConflictError(`"${number}" teklif numarasi zaten kullaniliyor.`);
     }
     const quoteDate = new Date(body.date);
     const quoteValidityDays = await businessRulesService.getNumber(tenantId, 'sales.quote_validity_days');
@@ -195,6 +200,73 @@ export const SalesOrderController = {
     return c.json({ data: quote }, 201);
   },
 
+  async updateQuote(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const quoteId = requireParam(c, 'id');
+    const body = getValidatedBody(c, updateSalesQuoteBodySchema);
+    const existing = await prisma.salesQuote.findFirst({
+      where: { id: quoteId, tenantId, deletedAt: null },
+      include: { _count: { select: { salesOrders: true } } },
+    });
+    if (!existing) return c.json(new NotFoundError('Teklif', quoteId).toJSON(), 404);
+    if (existing.status !== QuoteStatus.DRAFT || existing._count.salesOrders > 0) {
+      return c.json(new ValidationError('Yalnizca siparise donusturulmemis taslak teklifler duzenlenebilir.').toJSON(), 400);
+    }
+    await validateTenantOwnership(tenantId, buildOwnershipChecks([
+      { model: 'contact', id: body.contactId, label: 'Teklif carisi' },
+      ...body.items.map((item, index) => ({ model: 'product' as const, id: item.productId, label: `Teklif kalemi ${index + 1} urunu` })),
+    ]));
+    const { lineData, totalNet, totalTax, totalGross } = computeItems(body.items);
+    const quote = await prisma.$transaction(async (tx) => {
+      await tx.salesQuoteItem.deleteMany({ where: { quoteId, tenantId } });
+      return tx.salesQuote.update({
+        where: { id: quoteId },
+        data: {
+          contactId: body.contactId,
+          date: new Date(body.date),
+          validUntil: body.validUntil ? new Date(body.validUntil) : null,
+          notes: body.notes ?? null,
+          totalNet, totalTax, totalGross,
+          items: { create: lineData.map((line) => ({ ...line, tenantId })) },
+        },
+        include: { items: true, contact: { select: { id: true, name: true, email: true } } },
+      });
+    });
+    return c.json({ data: quote });
+  },
+
+  async updateQuoteStatus(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const quoteId = requireParam(c, 'id');
+    const { status } = getValidatedBody(c, updateSalesQuoteStatusBodySchema);
+    const quote = await prisma.salesQuote.findFirst({ where: { id: quoteId, tenantId, deletedAt: null } });
+    if (!quote) return c.json(new NotFoundError('Teklif', quoteId).toJSON(), 404);
+    const allowed: Partial<Record<QuoteStatus, QuoteStatus[]>> = {
+      [QuoteStatus.DRAFT]: [QuoteStatus.SENT, QuoteStatus.CANCELLED],
+      [QuoteStatus.SENT]: [QuoteStatus.REJECTED, QuoteStatus.CANCELLED],
+    };
+    if (!(allowed[quote.status] ?? []).includes(status as QuoteStatus)) {
+      return c.json(new ValidationError(`${quote.status} durumundan ${status} durumuna gecis desteklenmiyor.`).toJSON(), 400);
+    }
+    const updated = await prisma.salesQuote.update({ where: { id: quoteId }, data: { status }, include: { items: true, contact: true } });
+    return c.json({ data: updated });
+  },
+
+  async deleteQuote(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const quoteId = requireParam(c, 'id');
+    const quote = await prisma.salesQuote.findFirst({
+      where: { id: quoteId, tenantId, deletedAt: null },
+      include: { _count: { select: { salesOrders: true } } },
+    });
+    if (!quote) return c.json(new NotFoundError('Teklif', quoteId).toJSON(), 404);
+    if (quote._count.salesOrders > 0 || quote.status === QuoteStatus.ACCEPTED || quote.status === QuoteStatus.SENT) {
+      return c.json(new ValidationError('Gonderilmis veya siparise donusturulmus teklif silinemez; once uygun lifecycle islemini tamamlayin.').toJSON(), 400);
+    }
+    await prisma.salesQuote.update({ where: { id: quoteId }, data: { deletedAt: new Date() } });
+    return c.body(null, 204);
+  },
+
   async convertQuoteToOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = c.get('userId') as string | undefined;
@@ -207,12 +279,18 @@ export const SalesOrderController = {
 
     if (!quote) return c.json(new NotFoundError('Teklif', quoteId).toJSON(), 404);
 
-    if (quote.status !== QuoteStatus.ACCEPTED && quote.status !== QuoteStatus.DRAFT) {
+    if (quote.status !== QuoteStatus.SENT && quote.status !== QuoteStatus.DRAFT) {
       return c.json(new ValidationError('Sadece taslak veya kabul edilmiş teklifler siparişe dönüştürülebilir.').toJSON(), 400);
     }
     const number = await generateDocumentNumber(tenantId, 'sales_order', 'SIP-', 'salesOrder');
 
     const order = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.salesQuote.updateMany({
+        where: { id: quoteId, tenantId, status: { in: [QuoteStatus.DRAFT, QuoteStatus.SENT] }, deletedAt: null },
+        data: { status: QuoteStatus.ACCEPTED },
+      });
+      if (claimed.count !== 1) throw new ConflictError('Teklif daha once siparise donusturulmus veya es zamanli olarak degistirilmis.');
+
       const newOrder = await tx.salesOrder.create({
         data: {
           tenantId,
@@ -240,11 +318,6 @@ export const SalesOrderController = {
           },
         },
         include: { items: true },
-      });
-
-      await tx.salesQuote.update({
-        where: { id: quoteId },
-        data: { status: QuoteStatus.ACCEPTED },
       });
 
       return newOrder;

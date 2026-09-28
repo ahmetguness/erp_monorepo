@@ -4,6 +4,7 @@ import { requirePermission } from "../middleware/requirePermission";
 import { validateBody } from "../middleware/validateBody";
 import { SalesOrderController } from "../modules/sales/http/controllers/index.js";
 import { fulfillSalesOrderBodySchema } from "../schemas/request-body.schemas";
+import { createSalesQuoteBodySchema, updateSalesQuoteBodySchema, updateSalesQuoteStatusBodySchema } from "../schemas/request-body.schemas";
 import { MODULE_KEYS } from "../types/module.types";
 
 const salesOrderRoutes = new Hono();
@@ -23,7 +24,25 @@ salesOrderRoutes.get(
 salesOrderRoutes.post(
   "/quotes",
   requirePermission("invoicing", "CREATE"),
+  validateBody(createSalesQuoteBodySchema),
   SalesOrderController.createQuote,
+);
+salesOrderRoutes.patch(
+  "/quotes/:id",
+  requirePermission("invoicing", "UPDATE"),
+  validateBody(updateSalesQuoteBodySchema),
+  SalesOrderController.updateQuote,
+);
+salesOrderRoutes.patch(
+  "/quotes/:id/status",
+  requirePermission("invoicing", "UPDATE"),
+  validateBody(updateSalesQuoteStatusBodySchema),
+  SalesOrderController.updateQuoteStatus,
+);
+salesOrderRoutes.delete(
+  "/quotes/:id",
+  requirePermission("invoicing", "DELETE"),
+  SalesOrderController.deleteQuote,
 );
 salesOrderRoutes.post(
   "/quotes/:id/convert",

@@ -1,8 +1,11 @@
-import { z } from 'zod';
-import { apiClient } from '@/lib/api-client';
-import { safeParse } from '@/lib/safe-parse';
-import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
-import type { PaginationParams } from '@/types/api.types';
+import { z } from "zod";
+import { apiClient } from "@/lib/api-client";
+import { safeParse } from "@/lib/safe-parse";
+import {
+  SingleResponseSchema,
+  PaginatedResponseSchema,
+} from "@/types/api.types";
+import type { PaginationParams } from "@/types/api.types";
 
 // ─────────────────────────────────────────────
 // Schemas
@@ -11,7 +14,7 @@ import type { PaginationParams } from '@/types/api.types';
 export const ContactSchema = z.object({
   id: z.string(),
   tenantId: z.string(),
-  type: z.enum(['CUSTOMER', 'SUPPLIER', 'BOTH']),
+  type: z.enum(["CUSTOMER", "SUPPLIER", "BOTH"]),
   name: z.string(),
   code: z.string().nullable(),
   taxNumber: z.string().nullable(),
@@ -23,6 +26,7 @@ export const ContactSchema = z.object({
   city: z.string().nullable(),
   country: z.string(),
   notes: z.string().nullable(),
+  tags: z.array(z.string()),
   creditLimit: z.coerce.number().nullable(),
   paymentTermDays: z.coerce.number().nullable(),
   isActive: z.boolean(),
@@ -38,11 +42,26 @@ export const ContactListItemSchema = ContactSchema.extend({
   lastTransactionDate: z.string().nullable().optional().default(null),
   openInvoiceCount: z.coerce.number().optional().default(0),
   overdueInvoiceCount: z.coerce.number().optional().default(0),
-  riskLevel: z.enum(['safe', 'warning', 'exceeded', 'none']).optional().default('none'),
+  riskLevel: z
+    .enum(["safe", "warning", "exceeded", "none"])
+    .optional()
+    .default("none"),
   riskRatio: z.coerce.number().optional().default(0),
   riskScore: z.coerce.number().optional().default(0),
-  riskScoreLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional().default('LOW'),
-  missingInfoKeys: z.array(z.enum(['taxNumber', 'taxOffice', 'email', 'phone', 'address', 'paymentTermDays'])).optional().default([]),
+  riskScoreLevel: z.enum(["LOW", "MEDIUM", "HIGH"]).optional().default("LOW"),
+  missingInfoKeys: z
+    .array(
+      z.enum([
+        "taxNumber",
+        "taxOffice",
+        "email",
+        "phone",
+        "address",
+        "paymentTermDays",
+      ]),
+    )
+    .optional()
+    .default([]),
   missingInfoCount: z.coerce.number().optional().default(0),
   hasMissingInfo: z.boolean().optional().default(false),
 });
@@ -67,10 +86,10 @@ export const FinancialsSchema = z.object({
   transactionCount: z.coerce.number(),
   openInvoiceCount: z.coerce.number(),
   overdueInvoiceCount: z.coerce.number(),
-  riskLevel: z.enum(['safe', 'warning', 'exceeded', 'none']),
+  riskLevel: z.enum(["safe", "warning", "exceeded", "none"]),
   riskRatio: z.coerce.number(),
   riskScore: z.coerce.number().optional().default(0),
-  riskScoreLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional().default('LOW'),
+  riskScoreLevel: z.enum(["LOW", "MEDIUM", "HIGH"]).optional().default("LOW"),
 });
 
 export const OpenInvoiceSchema = z.object({
@@ -87,7 +106,19 @@ export const OpenInvoiceSchema = z.object({
 /** Detail endpoint returns contact + financials + openInvoices */
 export const ContactDetailSchema = ContactSchema.extend({
   financials: FinancialsSchema.optional(),
-  missingInfoKeys: z.array(z.enum(['taxNumber', 'taxOffice', 'email', 'phone', 'address', 'paymentTermDays'])).optional().default([]),
+  missingInfoKeys: z
+    .array(
+      z.enum([
+        "taxNumber",
+        "taxOffice",
+        "email",
+        "phone",
+        "address",
+        "paymentTermDays",
+      ]),
+    )
+    .optional()
+    .default([]),
   missingInfoCount: z.coerce.number().optional().default(0),
   hasMissingInfo: z.boolean().optional().default(false),
   openInvoices: z.array(OpenInvoiceSchema).optional(),
@@ -115,9 +146,10 @@ const CustomerTrackingMoneyDocumentSchema = z.object({
   totalGross: z.coerce.number(),
 });
 
-const CustomerTrackingInvoiceSchema = CustomerTrackingMoneyDocumentSchema.extend({
-  dueDate: z.string().nullable(),
-});
+const CustomerTrackingInvoiceSchema =
+  CustomerTrackingMoneyDocumentSchema.extend({
+    dueDate: z.string().nullable(),
+  });
 
 const CustomerTrackingReminderSchema = z.object({
   id: z.string(),
@@ -131,7 +163,7 @@ export const CustomerTrackingRowSchema = z.object({
   contact: z.object({
     id: z.string(),
     name: z.string(),
-    type: z.enum(['CUSTOMER', 'SUPPLIER', 'BOTH']),
+    type: z.enum(["CUSTOMER", "SUPPLIER", "BOTH"]),
     email: z.string().nullable(),
     phone: z.string().nullable(),
   }),
@@ -158,15 +190,17 @@ export const CustomerTrackingDashboardSchema = z.object({
 export type Contact = z.infer<typeof ContactSchema>;
 export type ContactListItem = z.infer<typeof ContactListItemSchema>;
 export type ContactDetail = z.infer<typeof ContactDetailSchema>;
-export type ContactType = Contact['type'];
+export type ContactType = Contact["type"];
 export type AccountEntry = z.infer<typeof AccountEntrySchema>;
 export type OpenInvoice = z.infer<typeof OpenInvoiceSchema>;
 export type ContactFinancials = z.infer<typeof FinancialsSchema>;
 export type ListSummary = z.infer<typeof ListSummarySchema>;
-export type RiskLevel = ContactListItem['riskLevel'];
-export type ContactRiskScoreLevel = ContactListItem['riskScoreLevel'];
-export type ContactMissingInfoKey = ContactListItem['missingInfoKeys'][number];
-export type CustomerTrackingDashboard = z.infer<typeof CustomerTrackingDashboardSchema>;
+export type RiskLevel = ContactListItem["riskLevel"];
+export type ContactRiskScoreLevel = ContactListItem["riskScoreLevel"];
+export type ContactMissingInfoKey = ContactListItem["missingInfoKeys"][number];
+export type CustomerTrackingDashboard = z.infer<
+  typeof CustomerTrackingDashboardSchema
+>;
 export type CustomerTrackingRow = z.infer<typeof CustomerTrackingRowSchema>;
 
 // ─────────────────────────────────────────────
@@ -177,9 +211,9 @@ export interface ContactListParams extends PaginationParams {
   search?: string;
   type?: ContactType;
   isActive?: boolean;
-  balanceFilter?: 'receivable' | 'payable' | 'risky';
+  balanceFilter?: "receivable" | "payable" | "risky";
   sortBy?: string;
-  sortDir?: 'asc' | 'desc';
+  sortDir?: "asc" | "desc";
 }
 
 export interface CreateContactDTO {
@@ -200,7 +234,9 @@ export interface CreateContactDTO {
   tags?: string[];
 }
 
-export type UpdateContactDTO = Partial<Omit<CreateContactDTO, 'type'>> & { isActive?: boolean };
+export type UpdateContactDTO = Partial<Omit<CreateContactDTO, "type">> & {
+  isActive?: boolean;
+};
 
 export interface AccountEntryListParams extends PaginationParams {
   dateFrom?: string;
@@ -212,53 +248,90 @@ export interface AccountEntryListParams extends PaginationParams {
 // Response schemas
 // ─────────────────────────────────────────────
 
-const ContactListResponseSchema = PaginatedResponseSchema(ContactListItemSchema).extend({
+const ContactListResponseSchema = PaginatedResponseSchema(
+  ContactListItemSchema,
+).extend({
   summary: ListSummarySchema.optional(),
 });
 
-const AccountEntryListSchema = PaginatedResponseSchema(AccountEntrySchema).extend({
-  periodTotals: z.object({
-    debit: z.coerce.number(),
-    credit: z.coerce.number(),
-  }).optional(),
+const AccountEntryListSchema = PaginatedResponseSchema(
+  AccountEntrySchema,
+).extend({
+  periodTotals: z
+    .object({
+      debit: z.coerce.number(),
+      credit: z.coerce.number(),
+    })
+    .optional(),
 });
-const CustomerTrackingDashboardResponseSchema = SingleResponseSchema(CustomerTrackingDashboardSchema);
+const CustomerTrackingDashboardResponseSchema = SingleResponseSchema(
+  CustomerTrackingDashboardSchema,
+);
 
 // ─────────────────────────────────────────────
 // Service functions
 // ─────────────────────────────────────────────
 
 export async function getContacts(params: ContactListParams) {
-  const res = await apiClient.get('/api/contacts', { params });
-  return safeParse(ContactListResponseSchema, res.data, 'getContacts');
+  const res = await apiClient.get("/api/contacts", { params });
+  return safeParse(ContactListResponseSchema, res.data, "getContacts");
 }
 
-export async function getCustomerTrackingDashboard(limit = 8): Promise<CustomerTrackingDashboard> {
-  const res = await apiClient.get('/api/contacts/tracking-dashboard', { params: { limit } });
-  return safeParse(CustomerTrackingDashboardResponseSchema, res.data, 'getCustomerTrackingDashboard').data;
+export async function getCustomerTrackingDashboard(
+  limit = 8,
+): Promise<CustomerTrackingDashboard> {
+  const res = await apiClient.get("/api/contacts/tracking-dashboard", {
+    params: { limit },
+  });
+  return safeParse(
+    CustomerTrackingDashboardResponseSchema,
+    res.data,
+    "getCustomerTrackingDashboard",
+  ).data;
 }
 
 export async function getContactById(id: string) {
   const res = await apiClient.get(`/api/contacts/${id}`);
-  return safeParse(SingleResponseSchema(ContactDetailSchema), res.data, 'getContactById').data;
-}
-export async function createContact(data: CreateContactDTO): Promise<Contact> {
-  const res = await apiClient.post('/api/contacts', data);
-  return safeParse(SingleResponseSchema(ContactSchema), res.data, 'createContact').data;
+  return safeParse(
+    SingleResponseSchema(ContactDetailSchema),
+    res.data,
+    "getContactById",
+  ).data;
 }
 
-export async function updateContact(id: string, data: UpdateContactDTO): Promise<Contact> {
+export async function createContact(data: CreateContactDTO): Promise<Contact> {
+  const res = await apiClient.post("/api/contacts", data);
+  return safeParse(
+    SingleResponseSchema(ContactSchema),
+    res.data,
+    "createContact",
+  ).data;
+}
+
+export async function updateContact(
+  id: string,
+  data: UpdateContactDTO,
+): Promise<Contact> {
   const res = await apiClient.patch(`/api/contacts/${id}`, data);
-  return safeParse(SingleResponseSchema(ContactSchema), res.data, 'updateContact').data;
+  return safeParse(
+    SingleResponseSchema(ContactSchema),
+    res.data,
+    "updateContact",
+  ).data;
 }
 
 export async function deleteContact(id: string): Promise<void> {
   await apiClient.delete(`/api/contacts/${id}`);
 }
 
-export async function getAccountEntries(contactId: string, params: AccountEntryListParams) {
-  const res = await apiClient.get(`/api/contacts/${contactId}/entries`, { params });
-  return safeParse(AccountEntryListSchema, res.data, 'getAccountEntries');
+export async function getAccountEntries(
+  contactId: string,
+  params: AccountEntryListParams,
+) {
+  const res = await apiClient.get(`/api/contacts/${contactId}/entries`, {
+    params,
+  });
+  return safeParse(AccountEntryListSchema, res.data, "getAccountEntries");
 }
 
 export const SupplierPerformanceSchema = z.object({
@@ -280,7 +353,13 @@ export const SupplierPerformanceSchema = z.object({
 });
 export type SupplierPerformance = z.infer<typeof SupplierPerformanceSchema>;
 
-export async function getSupplierPerformance(contactId: string): Promise<SupplierPerformance> {
+export async function getSupplierPerformance(
+  contactId: string,
+): Promise<SupplierPerformance> {
   const res = await apiClient.get(`/api/contacts/${contactId}/performance`);
-  return safeParse(SingleResponseSchema(SupplierPerformanceSchema), res.data, 'getSupplierPerformance').data;
+  return safeParse(
+    SingleResponseSchema(SupplierPerformanceSchema),
+    res.data,
+    "getSupplierPerformance",
+  ).data;
 }

@@ -232,6 +232,7 @@ export interface CreateSalesQuoteDTO {
   notes?: string;
   items: OrderItemDTO[];
 }
+export type UpdateSalesQuoteDTO = CreateSalesQuoteDTO;
 
 export interface CreateSalesOrderDTO {
   contactId: string;
@@ -282,7 +283,14 @@ export interface ListParams extends PaginationParams, DateRangeParams {
 // Sales Quotes
 // ─────────────────────────────────────────────
 
-const QuoteListSchema = PaginatedResponseSchema(SalesQuoteSchema);
+export const SalesQuoteSummarySchema = z.object({
+  total: z.coerce.number(),
+  sentCount: z.coerce.number(),
+  attentionCount: z.coerce.number(),
+  totalGross: z.coerce.number(),
+});
+export type SalesQuoteSummary = z.infer<typeof SalesQuoteSummarySchema>;
+const QuoteListSchema = PaginatedResponseSchema(SalesQuoteSchema).extend({ summary: SalesQuoteSummarySchema });
 
 export async function getSalesQuotes(params: ListParams) {
   const res = await apiClient.get('/api/sales-orders/quotes', { params });
@@ -384,6 +392,20 @@ export async function updateInvoice(id: string, data: { dueDate?: string; notes?
 export async function cancelInvoice(id: string): Promise<Invoice> {
   const res = await apiClient.post(`/api/invoices/${id}/cancel`);
   return safeParse(SingleResponseSchema(InvoiceSchema), res.data, 'cancelInvoice').data;
+}
+
+export async function updateSalesQuote(id: string, data: UpdateSalesQuoteDTO): Promise<SalesQuote> {
+  const res = await apiClient.patch(`/api/sales-orders/quotes/${id}`, data);
+  return safeParse(SingleResponseSchema(SalesQuoteSchema), res.data, 'updateSalesQuote').data;
+}
+
+export async function updateSalesQuoteStatus(id: string, status: Extract<QuoteStatus, 'SENT' | 'REJECTED' | 'CANCELLED'>): Promise<SalesQuote> {
+  const res = await apiClient.patch(`/api/sales-orders/quotes/${id}/status`, { status });
+  return safeParse(SingleResponseSchema(SalesQuoteSchema), res.data, 'updateSalesQuoteStatus').data;
+}
+
+export async function deleteSalesQuote(id: string): Promise<void> {
+  await apiClient.delete(`/api/sales-orders/quotes/${id}`);
 }
 
 export async function approveInvoice(id: string, idempotencyKey: string): Promise<Invoice> {

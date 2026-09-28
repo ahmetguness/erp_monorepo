@@ -1,5 +1,6 @@
 import { AuditAction,ContactType,EntityType,Prisma,type Contact } from '@prisma/client';
 import { Context } from 'hono';
+import { z } from 'zod';
 import { NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { getContactInsights } from '../../../../services/contact-insights.service.js';
@@ -34,6 +35,34 @@ interface UpdateContactDTO extends Partial<Omit<CreateContactDTO, 'type'>> {
   isActive?: boolean;
 }
 
+const optionalTrimmedString = (max: number) => z.string().trim().max(max).optional();
+
+const contactCreateSchema = z.object({
+  type: z.nativeEnum(ContactType),
+  name: z.string().trim().min(1, 'Ad / unvan zorunludur.').max(200),
+  code: optionalTrimmedString(50),
+  taxNumber: z.string().trim().regex(/^\d{10,11}$/, 'Vergi / TC kimlik no 10 veya 11 haneli olmalıdır.').optional(),
+  taxOffice: optionalTrimmedString(100),
+  email: z.string().trim().email('Geçerli bir e-posta adresi girilmelidir.').max(254).optional(),
+  phone: z.string().trim().regex(/^[\d\s+\-()]{7,20}$/, 'Geçerli bir telefon numarası girilmelidir.').optional(),
+  website: z.string().trim().url('Geçerli bir web adresi girilmelidir.').max(2048).optional(),
+  address: optionalTrimmedString(1000),
+  city: optionalTrimmedString(100),
+  country: z.string().trim().length(2).optional(),
+  notes: optionalTrimmedString(1000),
+  creditLimit: z.number().finite().min(0, 'Kredi limiti negatif olamaz.').max(9999999999999999.99).optional(),
+  paymentTermDays: z.number().int().min(0, 'Ödeme vadesi negatif olamaz.').max(3650).optional(),
+  tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+}).strict();
+
+const contactUpdateSchema = contactCreateSchema.omit({ type: true }).partial().extend({
+  isActive: z.boolean().optional(),
+});
+
+function validationMessage(error: z.ZodError): string {
+  return error.issues.map((issue) => `${issue.path.join('.') || 'body'}: ${issue.message}`).join('; ');
+}
+
 interface ContactListQuery {
   page?: string;
   limit?: string;
@@ -63,6 +92,7 @@ function toContactAuditSnapshot(contact: Contact): Prisma.InputJsonObject {
     city: contact.city,
     country: contact.country,
     notes: contact.notes,
+    tags: contact.tags,
     creditLimit: contact.creditLimit === null ? null : Number(contact.creditLimit),
     paymentTermDays: contact.paymentTermDays,
     isActive: contact.isActive,
@@ -121,17 +151,12 @@ export const ContactController = {
       ? { [sortBy]: sortDir }
       : { name: 'asc' as const };
 
-    const [total, contacts] = await prisma.$transaction([
-      prisma.contact.count({ where }),
-      prisma.contact.findMany({
-        where,
-        orderBy,
-        skip,
-        take: pageSize,
-      }),
-    ]);
+    // Balance/risk values are derived from account entries, so they must be
+    // calculated before filtering and pagination. Fetching only one page here
+    // caused matching rows on later pages to disappear from filtered page 1.
+    const contacts = await prisma.contact.findMany({ where, orderBy });
 
-    // Aggregate financial data for all contacts in this page
+    // Aggregate financial data for every contact matching the base filters.
     const contactIds = contacts.map((c) => c.id);
 
     // Balance aggregation: SUM(debit) - SUM(credit) per contact
@@ -213,7 +238,7 @@ export const ContactController = {
       };
     });
 
-    // Post-filter by balance (can't do in Prisma where clause)
+    // Filtering -> sorting (the Prisma result is already ordered) -> pagination.
     let filtered = enriched;
     if (query.balanceFilter === 'receivable') {
       filtered = enriched.filter((c) => c.currentBalance > 0);
@@ -222,75 +247,23 @@ export const ContactController = {
     } else if (query.balanceFilter === 'risky') {
       filtered = enriched.filter((c) => c.riskLevel === 'exceeded' || c.riskLevel === 'warning');
     }
-
-    // Summary totals for the entire filtered set (across all pages)
-    const summaryContactWhere: Prisma.ContactWhereInput = {
-      tenantId,
-      deletedAt: null,
-      ...(query.type ? { type: query.type } : {}),
-    };
-
-    const [summaryAgg, typeAgg, missingInfoCount] = await Promise.all([
-      prisma.accountEntry.aggregate({
-        where: { tenantId, contact: summaryContactWhere },
-        _sum: { debit: true, credit: true },
-      }),
-      prisma.contact.groupBy({
-        by: ['type'],
-        where: { ...summaryContactWhere, tenantId },
-        _count: true,
-      }),
-      prisma.contact.count({
-        where: {
-          ...summaryContactWhere,
-          tenantId,
-          OR: [
-            { taxNumber: null },
-            { taxNumber: '' },
-            { taxOffice: null },
-            { taxOffice: '' },
-            { email: null },
-            { email: '' },
-            { phone: null },
-            { phone: '' },
-            { address: null },
-            { address: '' },
-            { type: { in: [ContactType.CUSTOMER, ContactType.BOTH] }, paymentTermDays: null },
-          ],
-        },
-      }),
-    ]);
-
-    const riskyCount = await prisma.$queryRaw<[{ count: bigint }]>`
-      SELECT COUNT(DISTINCT c.id)::bigint as count
-      FROM contacts c
-      LEFT JOIN (
-        SELECT "contactId", SUM(debit) - SUM(credit) as balance
-        FROM account_entries
-        WHERE "tenantId" = ${tenantId}
-        GROUP BY "contactId"
-      ) ae ON ae."contactId" = c.id
-      WHERE c."tenantId" = ${tenantId}
-        AND c."deletedAt" IS NULL
-        AND c."creditLimit" IS NOT NULL
-        AND c."creditLimit" > 0
-        AND COALESCE(ae.balance, 0) > c."creditLimit" * 0.8
-    `;
+    const total = filtered.length;
+    const paginated = filtered.slice(skip, skip + pageSize);
 
     const summary = {
-      totalReceivable: Number(summaryAgg._sum.debit ?? 0),
-      totalPayable: Number(summaryAgg._sum.credit ?? 0),
-      netBalance: Number(summaryAgg._sum.debit ?? 0) - Number(summaryAgg._sum.credit ?? 0),
-      riskyAccountCount: Number(riskyCount[0]?.count ?? 0),
-      missingInfoCount,
-      customerCount: typeAgg.find((item) => item.type === ContactType.CUSTOMER)?._count ?? 0,
-      supplierCount: typeAgg.find((item) => item.type === ContactType.SUPPLIER)?._count ?? 0,
-      bothCount: typeAgg.find((item) => item.type === ContactType.BOTH)?._count ?? 0,
+      totalReceivable: filtered.reduce((sum, item) => sum + item.totalDebit, 0),
+      totalPayable: filtered.reduce((sum, item) => sum + item.totalCredit, 0),
+      netBalance: filtered.reduce((sum, item) => sum + item.currentBalance, 0),
+      riskyAccountCount: filtered.filter((item) => item.riskLevel === 'exceeded' || item.riskLevel === 'warning').length,
+      missingInfoCount: filtered.filter((item) => item.hasMissingInfo).length,
+      customerCount: filtered.filter((item) => item.type === ContactType.CUSTOMER).length,
+      supplierCount: filtered.filter((item) => item.type === ContactType.SUPPLIER).length,
+      bothCount: filtered.filter((item) => item.type === ContactType.BOTH).length,
       totalAccounts: total,
     };
 
     return c.json({
-      data: filtered,
+      data: paginated,
       meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
       summary,
     });
@@ -385,7 +358,11 @@ export const ContactController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
 
-    const body = await c.req.json<CreateContactDTO>();
+    const parsedBody = contactCreateSchema.safeParse(await c.req.json<unknown>());
+    if (!parsedBody.success) {
+      return c.json(new ValidationError(validationMessage(parsedBody.error)).toJSON(), 400);
+    }
+    const body: CreateContactDTO = parsedBody.data;
 
     if (!body.type || !body.name) {
       return c.json(new ValidationError('type ve name alanları zorunludur.').toJSON(), 400);
@@ -434,6 +411,7 @@ export const ContactController = {
         city: body.city ?? null,
         country: body.country ?? 'TR',
         notes: body.notes ?? null,
+        tags: body.tags ?? [],
         creditLimit: body.creditLimit ?? null,
         paymentTermDays: body.paymentTermDays ?? null,
       },
@@ -468,7 +446,21 @@ export const ContactController = {
       return c.json(new NotFoundError('Cari hesap', contactId).toJSON(), 404);
     }
 
-    const body = await c.req.json<UpdateContactDTO>();
+    const parsedBody = contactUpdateSchema.safeParse(await c.req.json<unknown>());
+    if (!parsedBody.success) {
+      return c.json(new ValidationError(validationMessage(parsedBody.error)).toJSON(), 400);
+    }
+    const body: UpdateContactDTO = parsedBody.data;
+
+    if (body.code !== undefined && body.code !== contact.code) {
+      const duplicate = await prisma.contact.findUnique({
+        where: { tenantId_code: { tenantId, code: body.code } },
+        select: { id: true },
+      });
+      if (duplicate) {
+        return c.json(new ValidationError(`"${body.code}" kodu zaten kullanımda.`).toJSON(), 400);
+      }
+    }
 
     const updated = await prisma.contact.update({
       where: { id: contactId },
@@ -484,6 +476,7 @@ export const ContactController = {
         ...(body.city !== undefined && { city: body.city }),
         ...(body.country !== undefined && { country: body.country }),
         ...(body.notes !== undefined && { notes: body.notes }),
+        ...(body.tags !== undefined && { tags: body.tags }),
         ...(body.creditLimit !== undefined && { creditLimit: body.creditLimit }),
         ...(body.paymentTermDays !== undefined && { paymentTermDays: body.paymentTermDays }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),

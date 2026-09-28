@@ -10,6 +10,10 @@ import {
   PackageCheck,
   Percent,
   Printer,
+  Pencil,
+  Send,
+  Ban,
+  Trash2,
 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
@@ -19,7 +23,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FullPageSpinner } from '@/components/ui/Spinner';
-import { useSalesQuote, useConvertQuoteToOrder } from '@/hooks/useSales';
+import { useSalesQuote, useConvertQuoteToOrder, useUpdateSalesQuoteStatus, useDeleteSalesQuote } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { DocumentPdfThemePanel } from '@/components/features/sales/DocumentPdfThemePanel';
 import { SalesConversionFlowCard } from '@/components/features/sales/SalesConversionFlowCard';
@@ -227,7 +231,10 @@ export function SalesQuoteDetailPage({ id }: Props) {
   const router = useRouter();
   const { data: quote, isLoading } = useSalesQuote(id);
   const convertToOrder = useConvertQuoteToOrder(id);
+  const updateStatus = useUpdateSalesQuoteStatus(id);
+  const deleteQuote = useDeleteSalesQuote(id);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const actionPanelRef = useRef<HTMLDivElement>(null);
 
   if (isLoading) return <FullPageSpinner />;
@@ -349,8 +356,23 @@ export function SalesQuoteDetailPage({ id }: Props) {
         action={(
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" leftIcon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
-              PDF Kaydet
+              Yazdır / PDF
             </Button>
+            {quote.status === 'DRAFT' && (
+              <Button variant="outline" leftIcon={<Pencil className="h-4 w-4" />} onClick={() => router.push(`/dashboard/sales-orders/quotes/${id}/edit`)}>Düzenle</Button>
+            )}
+            {quote.status === 'DRAFT' && (
+              <Button variant="outline" leftIcon={<Send className="h-4 w-4" />} onClick={() => updateStatus.mutate('SENT')}>Gönderildi İşaretle</Button>
+            )}
+            {quote.status === 'SENT' && (
+              <Button variant="outline" leftIcon={<Ban className="h-4 w-4" />} onClick={() => updateStatus.mutate('REJECTED')}>Reddedildi İşaretle</Button>
+            )}
+            {(quote.status === 'DRAFT' || quote.status === 'SENT') && (
+              <Button variant="ghost" onClick={() => updateStatus.mutate('CANCELLED')}>İptal Et</Button>
+            )}
+            {['DRAFT', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(quote.status) && (
+              <Button variant="ghost" leftIcon={<Trash2 className="h-4 w-4" />} onClick={() => setDeleteOpen(true)}>Sil</Button>
+            )}
             <Button variant="outline" leftIcon={<Mail className="h-4 w-4" />} onClick={() => actionPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
               Mail Gönder
             </Button>
@@ -433,6 +455,16 @@ export function SalesQuoteDetailPage({ id }: Props) {
         confirmLabel="Dönüştür"
         isLoading={convertToOrder.isPending}
         variant="warning"
+      />
+      <ConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => deleteQuote.mutate(undefined, { onSuccess: () => router.push('/dashboard/sales-orders/quotes') })}
+        title="Teklifi Sil"
+        message="Bu teklif listeden kaldırılacak. İşlem soft-delete olarak uygulanır."
+        confirmLabel="Sil"
+        isLoading={deleteQuote.isPending}
+        variant="danger"
       />
     </div>
   );
