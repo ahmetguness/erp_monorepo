@@ -1,8 +1,9 @@
 import type { ChatMemberRole } from '@prisma/client';
+import { CHAT_MESSAGE_MAX_LENGTH } from '@repo/types/chat';
 import { ForbiddenError, ValidationError } from '../../../../errors/index.js';
 
 export const CHAT_LIMITS = Object.freeze({
-  messageLength: 10_000,
+  messageLength: CHAT_MESSAGE_MAX_LENGTH,
   groupMembers: 250,
   mentions: 50,
   attachments: 10,

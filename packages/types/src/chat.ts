@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const CHAT_MESSAGE_MAX_LENGTH = 10_000;
+
 export const ChatConversationTypeSchema = z.enum(["DIRECT", "GROUP"]);
 export const ChatMemberRoleSchema = z.enum(["OWNER", "ADMIN", "MEMBER"]);
 export const ChatMessageTypeSchema = z.enum([
@@ -162,7 +164,7 @@ export const UpdateConversationSchema = z
 export const SendChatMessageSchema = z
   .object({
     clientMessageId: z.string().uuid(),
-    content: z.string().trim().max(10_000).nullable().default(null),
+    content: z.string().trim().max(CHAT_MESSAGE_MAX_LENGTH).nullable().default(null),
     type: ChatMessageTypeSchema.default("TEXT"),
     replyToMessageId: z.string().nullable().optional(),
     attachmentIds: z.array(z.string()).max(10).default([]),
@@ -175,7 +177,7 @@ export const SendChatMessageSchema = z
   );
 export const EditChatMessageSchema = z
   .object({
-    content: z.string().trim().min(1).max(10_000),
+    content: z.string().trim().min(1).max(CHAT_MESSAGE_MAX_LENGTH),
     expectedUpdatedAt: z.string().datetime().optional(),
   })
   .strict();
