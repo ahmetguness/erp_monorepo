@@ -290,14 +290,19 @@ export const createStockMovementBodySchema = z
     idempotencyKey: nonEmptyString,
     productId: nonEmptyString,
     type: z.nativeEnum(MovementType),
-    quantity: positiveNumber,
+    quantity: nonNegativeNumber,
     warehouseId: nonEmptyString,
     unitCost: nonNegativeNumber.optional(),
     lotId: optionalString,
     batchId: optionalString,
     notes: optionalString,
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.type !== MovementType.ADJUSTMENT && value.quantity <= 0) {
+      context.addIssue({ code: "custom", path: ["quantity"], message: "0dan buyuk olmalidir." });
+    }
+  });
 
 export const createStockCountBodySchema = z
   .object({

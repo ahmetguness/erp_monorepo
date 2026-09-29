@@ -4,6 +4,17 @@ import { DEFAULT_STOCK_LOCATION_CODE } from './types.js';
 import type { InventoryDbClient, InventoryRules, StockPosition, StockConsumptionCheck } from './types.js';
 import { quantityValue, getInventoryRules } from './policy.js';
 
+/** Serialize availability decisions for one tenant/product/warehouse inside a DB transaction. */
+export async function lockInventoryPosition(
+  db: InventoryDbClient,
+  tenantId: string,
+  productId: string,
+  warehouseId: string,
+): Promise<void> {
+  const key = `${tenantId}:${productId}:${warehouseId}`;
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+}
+
 export async function resolveStockLevelLocationId(
   db: InventoryDbClient,
   tenantId: string,
@@ -174,6 +185,65 @@ export async function releaseInventoryReservations(
   });
 
   return result.count;
+}
+
+export async function releaseInventoryReservationQuantity(
+  db: InventoryDbClient,
+  tenantId: string,
+  input: {
+    refType: ReservationRefType;
+    refId: string;
+    productId: string;
+    warehouseId: string;
+    quantity: number;
+    releasedAt?: Date;
+  },
+): Promise<number> {
+  let remaining = input.quantity;
+  if (remaining <= 0) return 0;
+  const releasedAt = input.releasedAt ?? new Date();
+  const reservations = await db.inventoryReservation.findMany({
+    where: {
+      tenantId,
+      refType: input.refType,
+      refId: input.refId,
+      productId: input.productId,
+      warehouseId: input.warehouseId,
+      releasedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: releasedAt } }],
+    },
+    orderBy: { reservedAt: 'asc' },
+  });
+
+  let releasedQuantity = 0;
+  for (const reservation of reservations) {
+    if (remaining <= 0) break;
+    const quantity = quantityValue(reservation.quantity);
+    const consumed = Math.min(quantity, remaining);
+    if (consumed === quantity) {
+      await db.inventoryReservation.update({ where: { id: reservation.id }, data: { releasedAt } });
+    } else {
+      await db.inventoryReservation.update({ where: { id: reservation.id }, data: { quantity: quantity - consumed } });
+      await db.inventoryReservation.create({
+        data: {
+          tenantId,
+          productId: reservation.productId,
+          warehouseId: reservation.warehouseId,
+          quantity: consumed,
+          refType: reservation.refType,
+          refId: reservation.refId,
+          notes: reservation.notes,
+          reservedAt: reservation.reservedAt,
+          expiresAt: reservation.expiresAt,
+          releasedAt,
+          createdById: reservation.createdById,
+        },
+      });
+    }
+    releasedQuantity += consumed;
+    remaining -= consumed;
+  }
+  return releasedQuantity;
 }
 
 export async function releaseExpiredInventoryReservations(

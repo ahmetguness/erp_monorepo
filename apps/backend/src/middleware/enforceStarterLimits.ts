@@ -40,7 +40,7 @@ export function enforceStarterLimits(limitType: StarterLimitType) {
           break;
         case 'warehouse_transfer': {
           try {
-            const body = await c.req.json();
+            const body = await c.req.raw.clone().json();
             if (
               body &&
               typeof body === 'object' &&

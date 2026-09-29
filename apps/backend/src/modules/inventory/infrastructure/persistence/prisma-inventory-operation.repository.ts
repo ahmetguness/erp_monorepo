@@ -21,6 +21,7 @@ import {
   assertCanReserveStock,
   getInventoryRules,
   getStockPosition,
+  lockInventoryPosition,
   recordInventoryCosting,
   resolveStockLevelLocationId,
 } from "../../../../services/inventory-rules.service.js";
@@ -54,30 +55,6 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
   async recordStockMovement(
     command: RecordStockMovementInput,
   ): Promise<RecordStockMovementResult<StockMovement>> {
-    const existing = await this.db.stockMovement.findFirst({
-      where: {
-        tenantId: command.tenantId,
-        idempotencyKey: command.idempotencyKey,
-      },
-    });
-    if (existing) {
-      const sameCommand =
-        existing.refType === MovementRefType.MANUAL &&
-        existing.productId === command.productId &&
-        (existing.fromWarehouseId === command.warehouseId ||
-          existing.toWarehouseId === command.warehouseId) &&
-        existing.type === command.type &&
-        Number(existing.quantity) === command.quantity &&
-        Number(existing.unitCost ?? 0) === Number(command.unitCost ?? 0) &&
-        (existing.lotId ?? undefined) === command.lotId &&
-        (existing.batchId ?? undefined) === command.batchId;
-      if (!sameCommand)
-        throw new ConflictError(
-          "idempotencyKey baska bir stok islemi icin kullanilmis.",
-        );
-      return { movement: existing, replayed: true };
-    }
-
     const [product, warehouse, rules] = await Promise.all([
       this.db.product.findFirst({
         where: {
@@ -98,19 +75,37 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     if (!product) throw new NotFoundError("Urun", command.productId);
     if (!warehouse) throw new NotFoundError("Depo", command.warehouseId);
 
-    const consumption =
-      command.type === MovementType.OUT
-        ? await assertCanConsumeStock(this.db, command.tenantId, {
+    const transactionResult = await this.db.$transaction(async (tx) => {
+      await lockInventoryPosition(tx, command.tenantId, `movement:${command.idempotencyKey}`, 'operation');
+      const existing = await tx.stockMovement.findFirst({
+        where: { tenantId: command.tenantId, idempotencyKey: command.idempotencyKey },
+      });
+      if (existing) {
+        const sameCommand =
+          existing.refType === MovementRefType.MANUAL &&
+          existing.productId === command.productId &&
+          (existing.fromWarehouseId === command.warehouseId || existing.toWarehouseId === command.warehouseId) &&
+          existing.type === command.type &&
+          Number(existing.quantity) === command.quantity &&
+          Number(existing.unitCost ?? 0) === Number(command.unitCost ?? 0) &&
+          (existing.lotId ?? undefined) === command.lotId &&
+          (existing.batchId ?? undefined) === command.batchId;
+        if (!sameCommand) throw new ConflictError('idempotencyKey baska bir stok islemi icin kullanilmis.');
+        return { movement: existing, replayed: true, consumption: null };
+      }
+      await lockInventoryPosition(tx, command.tenantId, command.productId, command.warehouseId);
+      const consumption = command.type === MovementType.OUT
+        ? await assertCanConsumeStock(tx, command.tenantId, {
             productId: command.productId,
             warehouseId: command.warehouseId,
             quantity: command.quantity,
             lotId: command.lotId ?? null,
           })
         : null;
-
-    const movement = await this.db.$transaction((tx) =>
-      this.writeMovement(tx, command),
-    );
+      return { movement: await this.writeMovement(tx, command), replayed: false, consumption };
+    });
+    if (transactionResult.replayed) return { movement: transactionResult.movement, replayed: true };
+    const { movement, consumption } = transactionResult;
     const updatedProduct = await this.db.product.findFirst({
       where: {
         id: command.productId,
@@ -175,6 +170,28 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     if (!warehouse) throw new NotFoundError("Depo", command.warehouseId);
 
     return this.db.$transaction(async (tx) => {
+      await lockInventoryPosition(tx, command.tenantId, command.productId, command.warehouseId);
+      const existing = await tx.inventoryReservation.findFirst({
+        where: {
+          tenantId: command.tenantId,
+          productId: command.productId,
+          warehouseId: command.warehouseId,
+          refType: command.refType,
+          refId: command.refId,
+          releasedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+        include: {
+          product: { select: { id: true, code: true, name: true } },
+          warehouse: { select: { id: true, name: true } },
+        },
+      });
+      if (existing) {
+        if (Number(existing.quantity) !== command.quantity) {
+          throw new ConflictError("Ayni kaynak icin farkli miktarda aktif rezervasyon zaten var.");
+        }
+        return existing;
+      }
       const position = await getStockPosition(
         tx,
         command.tenantId,
@@ -395,14 +412,15 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     tx: DbTransaction,
     command: RecordStockMovementInput,
   ): Promise<StockMovement> {
-    const level = await tx.stockLevel.findFirst({
+    const levels = await tx.stockLevel.findMany({
       where: {
         tenantId: command.tenantId,
         productId: command.productId,
         warehouseId: command.warehouseId,
       },
+      orderBy: { id: 'asc' },
     });
-    const previousQuantity = Number(level?.quantity ?? 0);
+    const previousQuantity = levels.reduce((sum, level) => sum + Number(level.quantity), 0);
     const resultingQuantity =
       command.type === MovementType.ADJUSTMENT
         ? command.quantity
@@ -414,7 +432,7 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
       tx,
       command.tenantId,
       command.warehouseId,
-      level?.locationId,
+      undefined,
     );
     const movement = await tx.stockMovement.create({
       data: {
@@ -435,28 +453,37 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
         idempotencyKey: command.idempotencyKey,
       },
     });
-    await tx.stockLevel.upsert({
-      where: {
-        productId_warehouseId_locationId: {
-          productId: command.productId,
-          warehouseId: command.warehouseId,
-          locationId,
-        },
-      },
-      create: {
-        tenantId: command.tenantId,
-        productId: command.productId,
-        warehouseId: command.warehouseId,
-        locationId,
-        quantity: resultingQuantity,
-      },
-      update:
-        command.type === MovementType.ADJUSTMENT
-          ? { quantity: command.quantity }
-          : command.type === MovementType.OUT
-            ? { quantity: { decrement: command.quantity } }
-            : { quantity: { increment: command.quantity } },
+    const applyIncrease = async (quantity: number) => tx.stockLevel.upsert({
+      where: { productId_warehouseId_locationId: { productId: command.productId, warehouseId: command.warehouseId, locationId } },
+      create: { tenantId: command.tenantId, productId: command.productId, warehouseId: command.warehouseId, locationId, quantity },
+      update: { quantity: { increment: quantity } },
     });
+    const applyDecrease = async (quantity: number) => {
+      let remaining = quantity;
+      for (const level of levels) {
+        if (remaining <= 0) break;
+        const available = Math.max(0, Number(level.quantity));
+        const decrement = Math.min(available, remaining);
+        if (decrement > 0) await tx.stockLevel.update({ where: { id: level.id }, data: { quantity: { decrement } } });
+        remaining -= decrement;
+      }
+      if (remaining > 0) {
+        await tx.stockLevel.upsert({
+          where: { productId_warehouseId_locationId: { productId: command.productId, warehouseId: command.warehouseId, locationId } },
+          create: { tenantId: command.tenantId, productId: command.productId, warehouseId: command.warehouseId, locationId, quantity: -remaining },
+          update: { quantity: { decrement: remaining } },
+        });
+      }
+    };
+    if (command.type === MovementType.ADJUSTMENT) {
+      const delta = command.quantity - previousQuantity;
+      if (delta > 0) await applyIncrease(delta);
+      if (delta < 0) await applyDecrease(-delta);
+    } else if (command.type === MovementType.OUT) {
+      await applyDecrease(command.quantity);
+    } else {
+      await applyIncrease(command.quantity);
+    }
     await recordInventoryCosting(tx, command.tenantId, {
       movementId: movement.id,
       productId: command.productId,

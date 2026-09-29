@@ -3,7 +3,7 @@ import type { DeliveryNoteStatus } from '@prisma/client';
 import { ValidationError } from '../../errors';
 import type { InventoryDbClient } from './types.js';
 import { getInventoryRules } from './policy.js';
-import { resolveStockLevelLocationId, assertCanConsumeStock, releaseInventoryReservations } from './availability.js';
+import { resolveStockLevelLocationId, assertCanConsumeStock, releaseInventoryReservationQuantity } from './availability.js';
 import { recordInventoryCosting } from './costing.js';
 
 export async function processDeliveryNoteStock(
@@ -105,12 +105,15 @@ export async function processDeliveryNoteStock(
       resultingQuantity: previousQuantity + qtyChange,
       date: movement.createdAt,
     });
-  }
 
-  if (note.salesOrderId && isOutbound) {
-    await releaseInventoryReservations(db, tenantId, {
-      refType: ReservationRefType.SALES_ORDER,
-      refId: note.salesOrderId,
-    });
+    if (note.salesOrderId && isOutbound) {
+      await releaseInventoryReservationQuantity(db, tenantId, {
+        refType: ReservationRefType.SALES_ORDER,
+        refId: note.salesOrderId,
+        productId: item.productId,
+        warehouseId,
+        quantity: qty,
+      });
+    }
   }
 }

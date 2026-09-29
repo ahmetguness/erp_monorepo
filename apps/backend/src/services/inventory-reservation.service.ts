@@ -1,6 +1,6 @@
 import { OrderStatus, ReservationRefType, type Prisma, type PrismaClient } from '@prisma/client';
 import { NotFoundError, ValidationError } from '../errors';
-import { assertCanReserveStock, getStockPosition } from './inventory-rules.service';
+import { assertCanReserveStock, getStockPosition, lockInventoryPosition } from './inventory-rules.service';
 
 export interface SalesOrderReservationInput {
   orderId: string;
@@ -154,7 +154,8 @@ export class InventoryReservationService {
     }
 
     await this.db.$transaction(async (tx) => {
-      for (const item of productLines.values()) {
+      for (const item of [...productLines.values()].sort((a, b) => a.productId.localeCompare(b.productId))) {
+        await lockInventoryPosition(tx, tenantId, item.productId, input.warehouseId);
         const activeSameRef = await tx.inventoryReservation.aggregate({
           where: {
             tenantId,

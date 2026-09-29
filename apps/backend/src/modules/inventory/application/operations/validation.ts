@@ -68,7 +68,13 @@ export function parseRecordStockMovement(
     productId: requiredString(value.productId, "productId"),
     warehouseId: requiredString(value.warehouseId, "warehouseId"),
     type,
-    quantity: positiveNumber(Number(value.quantity), "quantity"),
+    quantity: type === "ADJUSTMENT"
+      ? (() => {
+          const quantity = Number(value.quantity);
+          if (!Number.isFinite(quantity) || quantity < 0) throw new ValidationError("quantity negatif olmayan sonlu bir sayi olmalidir.");
+          return quantity;
+        })()
+      : positiveNumber(Number(value.quantity), "quantity"),
     ...(unitCost !== undefined ? { unitCost } : {}),
     ...(optionalString(value.lotId, "lotId")
       ? { lotId: String(value.lotId) }

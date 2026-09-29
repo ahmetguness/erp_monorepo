@@ -2,11 +2,18 @@ import { Hono } from "hono";
 import { enforceStarterLimits } from "../middleware/enforceStarterLimits";
 import { requireModule } from "../middleware/requireModule";
 import { requirePermission } from "../middleware/requirePermission";
+import { validateBody } from "../middleware/validateBody";
 import {
   LocationController,
   WarehouseController,
 } from "../modules/inventory/http/controllers/index.js";
 import { MODULE_KEYS } from "../types/module.types";
+import {
+  createLocationBodySchema,
+  createWarehouseBodySchema,
+  transferStockBodySchema,
+  updateWarehouseBodySchema,
+} from "../modules/inventory/http/schemas/warehouse.schema.js";
 
 const warehouseRoutes = new Hono();
 
@@ -17,6 +24,7 @@ warehouseRoutes.post(
   "/transfer",
   requirePermission("inventory", "UPDATE"),
   enforceStarterLimits("warehouse_transfer"),
+  validateBody(transferStockBodySchema),
   WarehouseController.transfer,
 );
 
@@ -29,6 +37,7 @@ warehouseRoutes.post(
   "/",
   requirePermission("inventory", "CREATE"),
   enforceStarterLimits("warehouse"),
+  validateBody(createWarehouseBodySchema),
   WarehouseController.create,
 );
 warehouseRoutes.get(
@@ -39,6 +48,7 @@ warehouseRoutes.get(
 warehouseRoutes.patch(
   "/:id",
   requirePermission("inventory", "UPDATE"),
+  validateBody(updateWarehouseBodySchema),
   WarehouseController.update,
 );
 
@@ -54,6 +64,7 @@ warehouseRoutes.get(
 warehouseRoutes.post(
   "/:warehouseId/locations",
   requirePermission("inventory", "CREATE"),
+  validateBody(createLocationBodySchema),
   LocationController.create,
 );
 warehouseRoutes.delete(

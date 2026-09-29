@@ -1,42 +1,30 @@
-import { MovementType } from '@prisma/client';
-import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
-import { prisma } from '../../../../lib/prisma.js';
-import { assertCanConsumeStock,recordInventoryCosting,resolveStockLevelLocationId } from '../../../../services/inventory-rules.service.js';
-import { WarehouseInsightsService } from '../../../../services/warehouse-insights.service.js';
-import { requireTenantId } from '../../../../utils/context.js';
-import { getPaginationParams } from '../../../../utils/pagination.js';
+import { MovementType } from "@prisma/client";
+import { Context } from "hono";
+import { NotFoundError, ValidationError } from "../../../../errors/index.js";
+import { prisma } from "../../../../lib/prisma.js";
+import {
+  assertCanConsumeStock,
+  recordInventoryCosting,
+  resolveStockLevelLocationId,
+} from "../../../../services/inventory-rules.service.js";
+import { WarehouseInsightsService } from "../../../../services/warehouse-insights.service.js";
+import { requireTenantId } from "../../../../utils/context.js";
+import { getPaginationParams } from "../../../../utils/pagination.js";
+import { getValidatedBody } from "../../../../middleware/validateBody.js";
+import {
+  createLocationBodySchema,
+  createWarehouseBodySchema,
+  transferStockBodySchema,
+  updateWarehouseBodySchema,
+  type CreateLocationBody,
+  type CreateWarehouseBody,
+  type TransferStockBody,
+  type UpdateWarehouseBody,
+} from "../schemas/warehouse.schema.js";
 
 // ─────────────────────────────────────────────
 // DTOs
 // ─────────────────────────────────────────────
-
-interface CreateWarehouseDTO {
-  code: string;
-  name: string;
-  address?: string;
-}
-
-interface UpdateWarehouseDTO {
-  name?: string;
-  address?: string;
-  isActive?: boolean;
-}
-
-interface TransferStockDTO {
-  productId: string;
-  fromWarehouseId: string;
-  toWarehouseId: string;
-  quantity: number;
-  fromLocationId?: string;
-  toLocationId?: string;
-  notes?: string;
-}
-
-interface CreateLocationDTO {
-  name: string;
-  code: string;
-}
 
 // ─────────────────────────────────────────────
 // Warehouse Controller
@@ -65,16 +53,27 @@ export const WarehouseController = {
           },
           _count: { select: { stockLevels: true } },
         },
-        orderBy: { name: 'asc' },
+        orderBy: { name: "asc" },
         skip,
         take: limit,
       }),
     ]);
-    const insights = await new WarehouseInsightsService(prisma).getInsights(tenantId, warehouses.map((warehouse) => warehouse.id));
+    const insights = await new WarehouseInsightsService(prisma).getInsights(
+      tenantId,
+      warehouses.map((warehouse) => warehouse.id),
+    );
 
     return c.json({
-      data: warehouses.map((warehouse) => ({ ...warehouse, insight: insights.get(warehouse.id) ?? null })),
-      meta: { total, page, pageSize: limit, totalPages: Math.ceil(total / limit) },
+      data: warehouses.map((warehouse) => ({
+        ...warehouse,
+        insight: insights.get(warehouse.id) ?? null,
+      })),
+      meta: {
+        total,
+        page,
+        pageSize: limit,
+        totalPages: Math.ceil(total / limit),
+      },
     });
   },
 
@@ -84,7 +83,7 @@ export const WarehouseController = {
    */
   async getById(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const warehouseId = c.req.param('id');
+    const warehouseId = c.req.param("id");
 
     const warehouse = await prisma.warehouse.findFirst({
       where: { id: warehouseId, tenantId },
@@ -99,11 +98,16 @@ export const WarehouseController = {
     });
 
     if (!warehouse) {
-      return c.json(new NotFoundError('Depo', warehouseId).toJSON(), 404);
+      return c.json(new NotFoundError("Depo", warehouseId).toJSON(), 404);
     }
 
-    const insights = await new WarehouseInsightsService(prisma).getInsights(tenantId, [warehouse.id]);
-    return c.json({ data: { ...warehouse, insight: insights.get(warehouse.id) ?? null } });
+    const insights = await new WarehouseInsightsService(prisma).getInsights(
+      tenantId,
+      [warehouse.id],
+    );
+    return c.json({
+      data: { ...warehouse, insight: insights.get(warehouse.id) ?? null },
+    });
   },
 
   /**
@@ -114,11 +118,14 @@ export const WarehouseController = {
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<CreateWarehouseDTO>();
+    const body = getValidatedBody<CreateWarehouseBody>(
+      c,
+      createWarehouseBodySchema,
+    );
 
     if (!body.code || !body.name) {
       return c.json(
-        new ValidationError('code ve name alanları zorunludur.').toJSON(),
+        new ValidationError("code ve name alanları zorunludur.").toJSON(),
         400,
       );
     }
@@ -152,17 +159,20 @@ export const WarehouseController = {
    */
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const warehouseId = c.req.param('id');
+    const warehouseId = c.req.param("id");
 
     const warehouse = await prisma.warehouse.findFirst({
       where: { id: warehouseId, tenantId },
     });
 
     if (!warehouse) {
-      return c.json(new NotFoundError('Depo', warehouseId).toJSON(), 404);
+      return c.json(new NotFoundError("Depo", warehouseId).toJSON(), 404);
     }
 
-    const body = await c.req.json<UpdateWarehouseDTO>();
+    const body = getValidatedBody<UpdateWarehouseBody>(
+      c,
+      updateWarehouseBodySchema,
+    );
 
     const updated = await prisma.warehouse.update({
       where: { id: warehouseId },
@@ -184,12 +194,20 @@ export const WarehouseController = {
   async transfer(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<TransferStockDTO>();
+    const body = getValidatedBody<TransferStockBody>(
+      c,
+      transferStockBodySchema,
+    );
 
-    if (!body.productId || !body.fromWarehouseId || !body.toWarehouseId || !body.quantity) {
+    if (
+      !body.productId ||
+      !body.fromWarehouseId ||
+      !body.toWarehouseId ||
+      !body.quantity
+    ) {
       return c.json(
         new ValidationError(
-          'productId, fromWarehouseId, toWarehouseId ve quantity alanları zorunludur.',
+          "productId, fromWarehouseId, toWarehouseId ve quantity alanları zorunludur.",
         ).toJSON(),
         400,
       );
@@ -197,17 +215,21 @@ export const WarehouseController = {
 
     if (body.quantity <= 0) {
       return c.json(
-        new ValidationError('Miktar 0\'dan büyük olmalıdır.').toJSON(),
+        new ValidationError("Miktar 0'dan büyük olmalıdır.").toJSON(),
         400,
       );
     }
 
     const isSameWarehouse = body.fromWarehouseId === body.toWarehouseId;
     if (isSameWarehouse) {
-      if (!body.fromLocationId || !body.toLocationId || body.fromLocationId === body.toLocationId) {
+      if (
+        !body.fromLocationId ||
+        !body.toLocationId ||
+        body.fromLocationId === body.toLocationId
+      ) {
         return c.json(
           new ValidationError(
-            'Aynı depo içinde transfer için farklı kaynak ve hedef raf/lokasyon belirtilmelidir.',
+            "Aynı depo içinde transfer için farklı kaynak ve hedef raf/lokasyon belirtilmelidir.",
           ).toJSON(),
           400,
         );
@@ -215,6 +237,71 @@ export const WarehouseController = {
     }
 
     // Kaynak depoda yeterli stok var mı?
+    const [
+      product,
+      sourceWarehouse,
+      targetWarehouse,
+      sourceLocation,
+      targetLocation,
+    ] = await Promise.all([
+      prisma.product.findFirst({
+        where: { id: body.productId, tenantId, deletedAt: null },
+        select: { id: true },
+      }),
+      prisma.warehouse.findFirst({
+        where: { id: body.fromWarehouseId, tenantId, isActive: true },
+        select: { id: true },
+      }),
+      prisma.warehouse.findFirst({
+        where: { id: body.toWarehouseId, tenantId, isActive: true },
+        select: { id: true },
+      }),
+      body.fromLocationId
+        ? prisma.location.findFirst({
+            where: {
+              id: body.fromLocationId,
+              warehouseId: body.fromWarehouseId,
+              tenantId,
+              isActive: true,
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      body.toLocationId
+        ? prisma.location.findFirst({
+            where: {
+              id: body.toLocationId,
+              warehouseId: body.toWarehouseId,
+              tenantId,
+              isActive: true,
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    if (!product)
+      return c.json(new ValidationError("Geçersiz ürün seçimi.").toJSON(), 400);
+    if (!sourceWarehouse)
+      return c.json(
+        new ValidationError("Geçersiz veya pasif kaynak depo.").toJSON(),
+        400,
+      );
+    if (!targetWarehouse)
+      return c.json(
+        new ValidationError("Geçersiz veya pasif hedef depo.").toJSON(),
+        400,
+      );
+    if (body.fromLocationId && !sourceLocation)
+      return c.json(
+        new ValidationError("Geçersiz kaynak lokasyon.").toJSON(),
+        400,
+      );
+    if (body.toLocationId && !targetLocation)
+      return c.json(
+        new ValidationError("Geçersiz hedef lokasyon.").toJSON(),
+        400,
+      );
+
     await assertCanConsumeStock(prisma, tenantId, {
       productId: body.productId,
       warehouseId: body.fromWarehouseId,
@@ -231,18 +318,28 @@ export const WarehouseController = {
           ...(body.fromLocationId ? { locationId: body.fromLocationId } : {}),
           quantity: { gte: body.quantity },
         },
-        orderBy: { quantity: 'desc' },
+        orderBy: { quantity: "desc" },
       });
       if (!sourceStock) {
         throw new ValidationError(
           body.fromLocationId
-            ? 'Kaynak rafta/lokasyonda yeterli stok bulunamadı.'
-            : 'Kaynak depoda tek lokasyonda yeterli stok bulunamadı.',
+            ? "Kaynak rafta/lokasyonda yeterli stok bulunamadı."
+            : "Kaynak depoda tek lokasyonda yeterli stok bulunamadı.",
         );
       }
       const sourceLocationId = body.fromLocationId
-        ? await resolveStockLevelLocationId(tx, tenantId, body.fromWarehouseId, body.fromLocationId)
-        : await resolveStockLevelLocationId(tx, tenantId, body.fromWarehouseId, sourceStock.locationId);
+        ? await resolveStockLevelLocationId(
+            tx,
+            tenantId,
+            body.fromWarehouseId,
+            body.fromLocationId,
+          )
+        : await resolveStockLevelLocationId(
+            tx,
+            tenantId,
+            body.fromWarehouseId,
+            sourceStock.locationId,
+          );
 
       const targetStock = await tx.stockLevel.findFirst({
         where: {
@@ -253,8 +350,18 @@ export const WarehouseController = {
         },
       });
       const targetLocationId = body.toLocationId
-        ? await resolveStockLevelLocationId(tx, tenantId, body.toWarehouseId, body.toLocationId)
-        : await resolveStockLevelLocationId(tx, tenantId, body.toWarehouseId, targetStock?.locationId);
+        ? await resolveStockLevelLocationId(
+            tx,
+            tenantId,
+            body.toWarehouseId,
+            body.toLocationId,
+          )
+        : await resolveStockLevelLocationId(
+            tx,
+            tenantId,
+            body.toWarehouseId,
+            targetStock?.locationId,
+          );
 
       // Stok hareketi oluştur
       const stockMovement = await tx.stockMovement.create({
@@ -277,10 +384,12 @@ export const WarehouseController = {
           productId: body.productId,
           warehouseId: body.fromWarehouseId,
           locationId: sourceLocationId,
+          quantity: { gte: body.quantity },
         },
         data: { quantity: { decrement: body.quantity } },
       });
-      if (sourceUpdate.count !== 1) throw new ValidationError('Kaynak depo stok guncellenemedi.');
+      if (sourceUpdate.count !== 1)
+        throw new ValidationError("Kaynak depo stok guncellenemedi.");
 
       // Hedef depo stok artır (yoksa oluştur)
       await tx.stockLevel.upsert({
@@ -345,14 +454,17 @@ export const WarehouseController = {
 export const LocationController = {
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const warehouseId = c.req.param('warehouseId');
+    const warehouseId = c.req.param("warehouseId");
 
-    const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, tenantId } });
-    if (!warehouse) return c.json(new NotFoundError('Depo', warehouseId).toJSON(), 404);
+    const warehouse = await prisma.warehouse.findFirst({
+      where: { id: warehouseId, tenantId },
+    });
+    if (!warehouse)
+      return c.json(new NotFoundError("Depo", warehouseId).toJSON(), 404);
 
     const locations = await prisma.location.findMany({
       where: { warehouseId, tenantId, isActive: true },
-      orderBy: { code: 'asc' },
+      orderBy: { code: "asc" },
     });
 
     return c.json({ data: locations });
@@ -360,25 +472,42 @@ export const LocationController = {
 
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const warehouseId = c.req.param('warehouseId');
+    const warehouseId = c.req.param("warehouseId");
     if (!warehouseId) {
-      return c.json(new ValidationError('warehouseId zorunludur.').toJSON(), 400);
+      return c.json(
+        new ValidationError("warehouseId zorunludur.").toJSON(),
+        400,
+      );
     }
 
-    const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, tenantId } });
-    if (!warehouse) return c.json(new NotFoundError('Depo', warehouseId).toJSON(), 404);
+    const warehouse = await prisma.warehouse.findFirst({
+      where: { id: warehouseId, tenantId },
+    });
+    if (!warehouse)
+      return c.json(new NotFoundError("Depo", warehouseId).toJSON(), 404);
 
-    const body = await c.req.json<CreateLocationDTO>();
+    const body = getValidatedBody<CreateLocationBody>(
+      c,
+      createLocationBodySchema,
+    );
 
     if (!body.name || !body.code) {
-      return c.json(new ValidationError('name ve code alanları zorunludur.').toJSON(), 400);
+      return c.json(
+        new ValidationError("name ve code alanları zorunludur.").toJSON(),
+        400,
+      );
     }
 
     const existing = await prisma.location.findUnique({
       where: { warehouseId_code: { warehouseId, code: body.code } },
     });
     if (existing) {
-      return c.json(new ValidationError(`"${body.code}" kodu bu depoda zaten kullanımda.`).toJSON(), 400);
+      return c.json(
+        new ValidationError(
+          `"${body.code}" kodu bu depoda zaten kullanımda.`,
+        ).toJSON(),
+        400,
+      );
     }
 
     const location = await prisma.location.create({
@@ -390,15 +519,32 @@ export const LocationController = {
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const warehouseId = c.req.param('warehouseId');
-    const locationId = c.req.param('locationId');
+    const warehouseId = c.req.param("warehouseId");
+    const locationId = c.req.param("locationId");
 
     const location = await prisma.location.findFirst({
       where: { id: locationId, warehouseId, tenantId },
     });
-    if (!location) return c.json(new NotFoundError('Lokasyon', locationId).toJSON(), 404);
+    if (!location)
+      return c.json(new NotFoundError("Lokasyon", locationId).toJSON(), 404);
 
-    await prisma.location.update({ where: { id: locationId }, data: { isActive: false } });
+    const occupiedStock = await prisma.stockLevel.findFirst({
+      where: { tenantId, warehouseId, locationId, quantity: { not: 0 } },
+      select: { id: true },
+    });
+    if (occupiedStock) {
+      return c.json(
+        new ValidationError(
+          "Stok bulunan lokasyon silinemez. Önce stoğu başka bir lokasyona aktarın.",
+        ).toJSON(),
+        409,
+      );
+    }
+
+    await prisma.location.update({
+      where: { id: locationId },
+      data: { isActive: false },
+    });
     return c.json({ data: { success: true } });
   },
 };

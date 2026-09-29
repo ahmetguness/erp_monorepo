@@ -102,8 +102,26 @@ export const StockController = {
     const tenantId = requireTenantId(c);
 
     const query = c.req.query() as StockMovementListQuery;
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
+    const parsedPage = Number(query.page ?? '1');
+    const parsedLimit = Number(query.limit ?? '20');
+    if (!Number.isInteger(parsedPage) || parsedPage < 1 || !Number.isInteger(parsedLimit) || parsedLimit < 1) {
+      throw new ValidationError('page ve limit pozitif tam sayi olmalidir.');
+    }
+    if (query.type && !Object.values(MovementType).includes(query.type)) {
+      throw new ValidationError('Gecersiz stok hareketi tipi.');
+    }
+    const parseMovementDate = (value: string | undefined, endOfDay = false) => {
+      if (!value) return undefined;
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) throw new ValidationError('Gecersiz tarih filtresi.');
+      if (endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(value)) date.setUTCHours(23, 59, 59, 999);
+      return date;
+    };
+    const dateFrom = parseMovementDate(query.dateFrom);
+    const dateTo = parseMovementDate(query.dateTo, true);
+    if (dateFrom && dateTo && dateFrom > dateTo) throw new ValidationError('dateFrom dateTo degerinden sonra olamaz.');
+    const page = parsedPage;
+    const pageSize = Math.min(100, parsedLimit);
     const skip = (page - 1) * pageSize;
 
     const where = {
@@ -116,11 +134,11 @@ export const StockController = {
         ],
       }),
       ...(query.type && { type: query.type }),
-      ...(query.dateFrom || query.dateTo
+      ...(dateFrom || dateTo
         ? {
             createdAt: {
-              ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
-              ...(query.dateTo && { lte: new Date(query.dateTo) }),
+              ...(dateFrom && { gte: dateFrom }),
+              ...(dateTo && { lte: dateTo }),
             },
           }
         : {}),
@@ -153,7 +171,7 @@ export const StockController = {
 
     const body = getValidatedBody(c, createStockMovementBodySchema);
 
-    if (!body.productId || !body.type || !body.quantity || !body.warehouseId) {
+    if (!body.productId || !body.type || body.quantity === undefined || !body.warehouseId) {
       return c.json(
         new ValidationError('productId, type, quantity ve warehouseId zorunludur.').toJSON(),
         400,
