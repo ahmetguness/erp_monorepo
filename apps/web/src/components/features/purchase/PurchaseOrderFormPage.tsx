@@ -20,18 +20,22 @@ import { cn, formatCurrency } from '@/lib/utils';
 
 const lineSchema = z.object({
   productId: z.string().min(1, 'Ürün seçiniz'),
-  description: z.string().optional(),
-  quantity: z.string().min(1, 'Zorunlu'),
-  unitPrice: z.string().min(1, 'Zorunlu'),
-  discount: z.string().optional(),
-  taxRate: z.string().optional(),
+  description: z.string().max(500).optional(),
+  quantity: z.string().min(1, 'Zorunlu').refine((value) => Number.isFinite(Number(value)) && Number(value) > 0, 'Pozitif miktar giriniz'),
+  unitPrice: z.string().min(1, 'Zorunlu').refine((value) => Number.isFinite(Number(value)) && Number(value) >= 0, 'Geçerli fiyat giriniz'),
+  discount: z.string().optional().refine((value) => !value || (Number(value) >= 0 && Number(value) <= 100), 'İskonto 0-100 arasında olmalı'),
+  taxRate: z.string().optional().refine((value) => !value || (Number(value) >= 0 && Number(value) <= 100), 'KDV 0-100 arasında olmalı'),
 });
 const orderSchema = z.object({
   contactId: z.string().min(1, 'Tedarikçi seçiniz'),
-  date: z.string().min(1, 'Tarih zorunlu'),
+  date: z.string().min(1, 'Tarih zorunlu').refine((value) => !Number.isNaN(new Date(value).getTime()), 'Geçerli tarih giriniz'),
   dueDate: z.string().optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(2000, 'Not en fazla 2000 karakter olabilir').optional(),
   items: z.array(lineSchema).min(1, 'En az bir kalem'),
+}).superRefine((value, context) => {
+  if (value.dueDate && (Number.isNaN(new Date(value.dueDate).getTime()) || new Date(value.dueDate) < new Date(value.date))) context.addIssue({ code: 'custom', path: ['dueDate'], message: 'Teslim tarihi sipariş tarihinden önce olamaz' });
+  const productIds = value.items.map((item) => item.productId).filter(Boolean);
+  if (new Set(productIds).size !== productIds.length) context.addIssue({ code: 'custom', path: ['items'], message: 'Aynı ürün yalnızca bir kez eklenebilir' });
 });
 type OrderForm = z.infer<typeof orderSchema>;
 

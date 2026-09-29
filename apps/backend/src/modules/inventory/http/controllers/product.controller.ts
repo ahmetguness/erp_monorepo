@@ -1,4 +1,4 @@
-import { AuditAction, EntityType } from "@prisma/client";
+import { AuditAction, EntityType, Prisma } from "@prisma/client";
 import { Context } from "hono";
 import { NotFoundError, ValidationError } from "../../../../errors/index.js";
 import { prisma } from "../../../../lib/prisma.js";
@@ -29,6 +29,27 @@ interface ProductListQuery {
   maxMargin?: string;
 }
 
+async function validateProductRelations(
+  tenantId: string,
+  input: { unitId?: string; categoryId?: string | null; taxRateId?: string | null },
+): Promise<void> {
+  const [unit, category, taxRate] = await Promise.all([
+    input.unitId
+      ? prisma.unit.findFirst({ where: { id: input.unitId, tenantId }, select: { id: true } })
+      : Promise.resolve(null),
+    input.categoryId
+      ? prisma.category.findFirst({ where: { id: input.categoryId, tenantId }, select: { id: true } })
+      : Promise.resolve(null),
+    input.taxRateId
+      ? prisma.taxRate.findFirst({ where: { id: input.taxRateId, tenantId }, select: { id: true } })
+      : Promise.resolve(null),
+  ]);
+
+  if (input.unitId && !unit) throw new ValidationError("Geçersiz birim seçimi.");
+  if (input.categoryId && !category) throw new ValidationError("Geçersiz kategori seçimi.");
+  if (input.taxRateId && !taxRate) throw new ValidationError("Geçersiz vergi oranı seçimi.");
+}
+
 // ─────────────────────────────────────────────
 // Product Controller
 // Ürün CRUD işlemleri — limit kontrolü middleware'de yapılır
@@ -54,24 +75,26 @@ export const ProductController = {
     const marginFilterEnabled =
       Number.isFinite(minMargin) || Number.isFinite(maxMargin);
 
-    const where = {
+    const where: Prisma.ProductWhereInput = {
       tenantId,
       deletedAt: null,
-      ...(query.search && {
-        OR: [
-          { name: { contains: query.search, mode: "insensitive" as const } },
-          { code: { contains: query.search, mode: "insensitive" as const } },
-          { barcode: { contains: query.search, mode: "insensitive" as const } },
-        ],
-      }),
+      AND: [
+        ...(query.search ? [{
+          OR: [
+            { name: { contains: query.search, mode: "insensitive" as const } },
+            { code: { contains: query.search, mode: "insensitive" as const } },
+            { barcode: { contains: query.search, mode: "insensitive" as const } },
+          ],
+        }] : []),
+        ...(query.missingPrice === "true" ? [{
+          OR: [{ salesPrice: { lte: 0 } }, { purchasePrice: { lte: 0 } }],
+        }] : []),
+      ],
       ...(query.categoryId && { categoryId: query.categoryId }),
       ...(query.isActive !== undefined && {
         isActive: query.isActive === "true",
       }),
       ...(query.noCategory === "true" && { categoryId: null }),
-      ...(query.missingPrice === "true" && {
-        OR: [{ salesPrice: { lte: 0 } }, { purchasePrice: { lte: 0 } }],
-      }),
       ...(query.missingMinStock === "true" && { minStockLevel: { lte: 0 } }),
     };
 
@@ -169,6 +192,8 @@ export const ProductController = {
       );
     }
 
+    await validateProductRelations(tenantId, body);
+
     // Kod benzersizlik kontrolü
     const existing = await prisma.product.findUnique({
       where: { tenantId_code: { tenantId, code: body.code } },
@@ -229,6 +254,8 @@ export const ProductController = {
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const productId = c.req.param("id");
+    const userId = c.get("userId") as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
 
     const product = await prisma.product.findFirst({
       where: { id: productId, tenantId, deletedAt: null },
@@ -242,6 +269,8 @@ export const ProductController = {
       c,
       updateProductBodySchema,
     );
+
+    await validateProductRelations(tenantId, body);
 
     const updated = await prisma.product.update({
       where: { id: productId },
@@ -280,6 +309,19 @@ export const ProductController = {
       },
     });
 
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: "inventory",
+      entityType: EntityType.PRODUCT,
+      entityId: updated.id,
+      action: AuditAction.UPDATE,
+      oldValues: { name: product.name, isActive: product.isActive },
+      newValues: { name: updated.name, isActive: updated.isActive },
+      ipAddress,
+      userAgent,
+    });
+
     return c.json({ data: updated });
   },
 
@@ -290,6 +332,8 @@ export const ProductController = {
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const productId = c.req.param("id");
+    const userId = c.get("userId") as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
 
     const product = await prisma.product.findFirst({
       where: { id: productId, tenantId, deletedAt: null },
@@ -302,6 +346,18 @@ export const ProductController = {
     await prisma.product.update({
       where: { id: productId },
       data: { deletedAt: new Date() },
+    });
+
+    await createAuditLog(prisma, {
+      tenantId,
+      userId,
+      module: "inventory",
+      entityType: EntityType.PRODUCT,
+      entityId: product.id,
+      action: AuditAction.DELETE,
+      oldValues: { code: product.code, name: product.name },
+      ipAddress,
+      userAgent,
     });
 
     return c.json({ data: { success: true } });

@@ -410,7 +410,14 @@ export const createProductBodySchema = z
 export const updateProductBodySchema = createProductBodySchema
   .omit({ code: true, unitId: true })
   .partial()
-  .extend({ isActive: z.boolean().optional() })
+  .extend({
+    categoryId: z.string().nullable().optional(),
+    taxRateId: z.string().nullable().optional(),
+    barcode: z.string().nullable().optional(),
+    description: z.string().nullable().optional(),
+    imageUrl: z.string().nullable().optional(),
+    isActive: z.boolean().optional(),
+  })
   .strict();
 
 export type CreateInvoiceBody = z.infer<typeof createInvoiceBodySchema>;

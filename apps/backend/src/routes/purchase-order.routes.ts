@@ -24,10 +24,35 @@ purchaseOrderRoutes.post(
   requirePermission("purchasing", "CREATE"),
   PurchaseOrderController.createRequest,
 );
+purchaseOrderRoutes.patch(
+  "/requests/:id",
+  requirePermission("purchasing", "UPDATE"),
+  PurchaseOrderController.updateRequest,
+);
+purchaseOrderRoutes.get(
+  "/requests/:id/history",
+  requirePermission("purchasing", "READ"),
+  PurchaseOrderController.getRequestHistory,
+);
+purchaseOrderRoutes.post(
+  "/requests/:id/submit",
+  requirePermission("purchasing", "UPDATE"),
+  PurchaseOrderController.submitRequest,
+);
 purchaseOrderRoutes.post(
   "/requests/:id/approve",
   requirePermission("purchasing", "UPDATE"),
   PurchaseOrderController.approveRequest,
+);
+purchaseOrderRoutes.post(
+  "/requests/:id/reject",
+  requirePermission("purchasing", "UPDATE"),
+  PurchaseOrderController.rejectRequest,
+);
+purchaseOrderRoutes.post(
+  "/requests/:id/cancel",
+  requirePermission("purchasing", "UPDATE"),
+  PurchaseOrderController.cancelRequest,
 );
 purchaseOrderRoutes.post(
   "/requests/:id/convert",

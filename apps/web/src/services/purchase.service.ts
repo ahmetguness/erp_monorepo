@@ -221,6 +221,15 @@ export type ThreeWayMatchResult = z.infer<typeof ThreeWayMatchResultSchema>;
 export type ThreeWayMatchLine = z.infer<typeof ThreeWayMatchLineSchema>;
 export type ThreeWayMatchStatus = z.infer<typeof ThreeWayMatchStatusSchema>;
 export type PurchaseRequestStatus = PurchaseRequest['status'];
+export interface PurchaseRequestHistoryEntry {
+  id: string;
+  userId: string | null;
+  action: 'CREATE' | 'UPDATE' | 'APPROVE' | 'REJECT' | string;
+  oldValues: unknown;
+  newValues: unknown;
+  reason: string | null;
+  createdAt: string;
+}
 export type PurchaseOrderStatus = PurchaseOrder['status'];
 
 // ─────────────────────────────────────────────
@@ -264,6 +273,25 @@ export async function createPurchaseRequest(data: CreatePurchaseRequestDTO): Pro
   const res = await apiClient.post('/api/purchase-orders/requests', data);
   return safeParse(SingleResponseSchema(PurchaseRequestSchema), res.data, 'createPurchaseRequest').data;
 }
+
+export async function updatePurchaseRequest(id: string, data: CreatePurchaseRequestDTO): Promise<PurchaseRequest> {
+  const res = await apiClient.patch(`/api/purchase-orders/requests/${id}`, data);
+  return safeParse(SingleResponseSchema(PurchaseRequestSchema), res.data, 'updatePurchaseRequest').data;
+}
+
+export async function getPurchaseRequestHistory(id: string): Promise<PurchaseRequestHistoryEntry[]> {
+  const res = await apiClient.get(`/api/purchase-orders/requests/${id}/history`);
+  return Array.isArray(res.data?.data) ? res.data.data as PurchaseRequestHistoryEntry[] : [];
+}
+
+async function transitionPurchaseRequest(id: string, action: 'submit' | 'reject' | 'cancel', reason?: string): Promise<PurchaseRequest> {
+  const res = await apiClient.post(`/api/purchase-orders/requests/${id}/${action}`, reason ? { reason } : {});
+  return safeParse(SingleResponseSchema(PurchaseRequestSchema), res.data, `transitionPurchaseRequest:${action}`).data;
+}
+
+export const submitPurchaseRequest = (id: string) => transitionPurchaseRequest(id, 'submit');
+export const rejectPurchaseRequest = (id: string, reason?: string) => transitionPurchaseRequest(id, 'reject', reason);
+export const cancelPurchaseRequest = (id: string, reason?: string) => transitionPurchaseRequest(id, 'cancel', reason);
 
 export async function approvePurchaseRequest(id: string): Promise<PurchaseRequest> {
   const res = await apiClient.post(`/api/purchase-orders/requests/${id}/approve`);

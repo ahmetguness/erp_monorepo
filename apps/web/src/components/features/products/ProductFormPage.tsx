@@ -489,7 +489,14 @@ export function ProductFormPage({ editId }: Props) {
     const payload = toProductPayload(data);
 
     if (isEdit) {
-      updateProduct.mutate(payload, {
+      const { code: _immutableCode, unitId: _immutableUnitId, ...editablePayload } = payload;
+      updateProduct.mutate({
+        ...editablePayload,
+        categoryId: data.categoryId?.trim() || null,
+        taxRateId: data.taxRateId?.trim() || null,
+        barcode: data.barcode?.trim() || null,
+        description: data.description?.trim() || null,
+      }, {
         onSuccess: async () => {
           if (editId && imageFile) {
             try {

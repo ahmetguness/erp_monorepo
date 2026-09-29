@@ -145,7 +145,13 @@ export interface CreateProductDTO {
   leadTimeDays?: number | null;
 }
 
-export type UpdateProductDTO = Partial<CreateProductDTO> & { isActive?: boolean };
+export type UpdateProductDTO = Omit<Partial<CreateProductDTO>, 'categoryId' | 'taxRateId' | 'barcode' | 'description'> & {
+  categoryId?: string | null;
+  taxRateId?: string | null;
+  barcode?: string | null;
+  description?: string | null;
+  isActive?: boolean;
+};
 
 export interface ProductQuickImportInput {
   csv: string;

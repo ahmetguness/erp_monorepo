@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import {
-  getPurchaseRequests, createPurchaseRequest, approvePurchaseRequest, convertRequestToOrder,
+  getPurchaseRequests, createPurchaseRequest, updatePurchaseRequest, getPurchaseRequestHistory,
+  submitPurchaseRequest, approvePurchaseRequest, rejectPurchaseRequest, cancelPurchaseRequest, convertRequestToOrder,
   getPurchaseOrders, getPurchaseOrderById, getPurchaseOrderHistory, createPurchaseOrder,
   sendPurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder, runPurchaseReorderAutomation, getPurchaseOrderThreeWayMatch,
   type ListParams, type CreatePurchaseRequestDTO, type CreatePurchaseOrderDTO, type ReceiveOrderDTO,
@@ -12,6 +13,7 @@ import {
 
 const KEYS = {
   requests: (p: ListParams) => ['purchase', 'requests', p] as const,
+  requestHistory: (id: string) => ['purchase', 'requests', id, 'history'] as const,
   orders: (p: ListParams) => ['purchase', 'orders', p] as const,
   order: (id: string) => ['purchase', 'orders', id] as const,
   orderHistory: (id: string) => ['purchase', 'orders', id, 'history'] as const,
@@ -34,12 +36,67 @@ export function useCreatePurchaseRequest() {
   });
 }
 
+export function useUpdatePurchaseRequest() {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: CreatePurchaseRequestDTO }) => updatePurchaseRequest(id, data),
+    onSuccess: (_result, variables) => {
+      qc.invalidateQueries({ queryKey: ['purchase', 'requests'] });
+      qc.invalidateQueries({ queryKey: KEYS.requestHistory(variables.id) });
+      toast.success('Talep güncellendi.');
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function usePurchaseRequestHistory(id?: string) {
+  return useQuery({
+    queryKey: KEYS.requestHistory(id ?? ''),
+    queryFn: () => getPurchaseRequestHistory(id!),
+    enabled: Boolean(id),
+  });
+}
+
+function useRequestTransition(
+  mutationFn: ({ id, reason }: { id: string; reason?: string }) => Promise<unknown>,
+  successMessage: string,
+) {
+  const qc = useQueryClient();
+  const { toast } = useUIStore();
+  return useMutation({
+    mutationFn,
+    onSuccess: (_result, variables) => {
+      qc.invalidateQueries({ queryKey: ['purchase', 'requests'] });
+      qc.invalidateQueries({ queryKey: KEYS.requestHistory(variables.id) });
+      toast.success(successMessage);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
+  });
+}
+
+export function useSubmitPurchaseRequest() {
+  return useRequestTransition(({ id }) => submitPurchaseRequest(id), 'Talep onaya gönderildi.');
+}
+
+export function useRejectPurchaseRequest() {
+  return useRequestTransition(({ id, reason }) => rejectPurchaseRequest(id, reason), 'Talep reddedildi.');
+}
+
+export function useCancelPurchaseRequest() {
+  return useRequestTransition(({ id, reason }) => cancelPurchaseRequest(id, reason), 'Talep iptal edildi.');
+}
+
 export function useApprovePurchaseRequest() {
   const qc = useQueryClient();
   const { toast } = useUIStore();
   return useMutation({
     mutationFn: (id: string) => approvePurchaseRequest(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['purchase', 'requests'] }); toast.success('Talep onaylandı.'); },
+    onSuccess: (_result, id) => {
+      qc.invalidateQueries({ queryKey: ['purchase', 'requests'] });
+      qc.invalidateQueries({ queryKey: KEYS.requestHistory(id) });
+      toast.success('Talep onaylandı.');
+    },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }

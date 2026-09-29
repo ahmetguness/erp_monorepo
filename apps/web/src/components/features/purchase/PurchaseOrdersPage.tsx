@@ -188,10 +188,10 @@ export function PurchaseOrdersPage() {
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <KpiCard label="Toplam" value={String(kpis.total)} detail="Filtre sonucu" icon={ShoppingCart} />
-        <KpiCard label="Taslak" value={String(kpis.draft)} detail="Gönderim bekliyor" icon={ClipboardList} tone="warning" />
-        <KpiCard label="Gönderilen" value={String(kpis.sent)} detail="Tedarikçide" icon={Send} />
-        <KpiCard label="Kısmi" value={String(kpis.partial)} detail="Teslimat sürüyor" icon={Truck} tone="warning" />
-        <KpiCard label="Teslim" value={String(kpis.received)} detail="Kapanan sipariş" icon={PackageCheck} tone="success" />
+        <KpiCard label="Taslak" value={String(kpis.draft)} detail="Bu sayfada gönderim bekliyor" icon={ClipboardList} tone="warning" />
+        <KpiCard label="Gönderilen" value={String(kpis.sent)} detail="Bu sayfada tedarikçide" icon={Send} />
+        <KpiCard label="Kısmi" value={String(kpis.partial)} detail="Bu sayfada teslimat sürüyor" icon={Truck} tone="warning" />
+        <KpiCard label="Teslim" value={String(kpis.received)} detail="Bu sayfada kapanan sipariş" icon={PackageCheck} tone="success" />
         <KpiCard label="Tutar" value={formatCurrency(kpis.amount)} detail="Bu sayfadaki toplam" icon={FileDown} />
       </div>
 

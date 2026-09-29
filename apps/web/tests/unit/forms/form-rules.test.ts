@@ -5,6 +5,8 @@ import { getPasswordPolicyError, isPasswordStrong, PASSWORD_POLICY_MESSAGE } fro
 describe('form rules', () => {
   it('normalizes decimal values', () => {
     expect(parseDecimalInput('12,50')).toBe(12.5);
+    expect(parseDecimalInput('12.50')).toBe(12.5);
+    expect(parseDecimalInput('1.234,50')).toBe(1234.5);
     expect(parseDecimalInput('invalid')).toBe(0);
     expect(parseOptionalDecimalInput('')).toBeUndefined();
     expect(parseOptionalDecimalInput('4,25')).toBe(4.25);

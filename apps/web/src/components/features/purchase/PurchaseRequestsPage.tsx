@@ -20,7 +20,12 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { compareSupplierQuotes, type QuoteComparisonResult, type SupplierQuoteDraft } from '@/components/features/purchase/purchase-quote-comparison';
-import { useApprovePurchaseRequest, useConvertRequestToOrder, useCreatePurchaseRequest, usePurchaseRequests, useRunPurchaseReorderAutomation } from '@/hooks/usePurchase';
+import {
+  useApprovePurchaseRequest, useCancelPurchaseRequest, useConvertRequestToOrder,
+  useCreatePurchaseRequest, usePurchaseRequestHistory, usePurchaseRequests,
+  useRejectPurchaseRequest, useRunPurchaseReorderAutomation, useSubmitPurchaseRequest,
+  useUpdatePurchaseRequest,
+} from '@/hooks/usePurchase';
 import { useProducts } from '@/hooks/useProducts';
 import { cn, formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import type { PurchaseRequest, PurchaseRequestStatus } from '@/services/purchase.service';
@@ -49,13 +54,13 @@ const QUICK_STATUSES: Array<{ value: PurchaseRequestStatus | ''; label: string }
 
 const itemSchema = z.object({
   productId: z.string().min(1, 'Ürün seçiniz'),
-  quantity: z.string().min(1, 'Zorunlu'),
-  unitPrice: z.string().optional(),
+  quantity: z.string().min(1, 'Zorunlu').refine((value) => Number.isFinite(Number(value)) && Number(value) > 0, 'Pozitif miktar giriniz'),
+  unitPrice: z.string().optional().refine((value) => !value || (Number.isFinite(Number(value)) && Number(value) >= 0), 'Geçerli fiyat giriniz'),
 });
 
 const requestSchema = z.object({
-  date: z.string().min(1, 'Tarih zorunlu'),
-  notes: z.string().optional(),
+  date: z.string().min(1, 'Tarih zorunlu').refine((value) => !Number.isNaN(new Date(value).getTime()), 'Geçerli tarih giriniz'),
+  notes: z.string().max(2000, 'Not en fazla 2000 karakter olabilir').optional(),
   items: z.array(itemSchema).min(1, 'En az bir kalem'),
 });
 
@@ -108,13 +113,18 @@ function KpiCard({ label, value, detail, icon: Icon, tone = 'neutral' }: { label
   );
 }
 
-function DetailModal({ request, onClose, onApprove, onCompare, onConvert }: {
+function DetailModal({ request, onClose, onEdit, onSubmit, onApprove, onReject, onCancel, onCompare, onConvert }: {
   request: PurchaseRequest | null;
   onClose: () => void;
+  onEdit: (request: PurchaseRequest) => void;
+  onSubmit: (request: PurchaseRequest) => void;
   onApprove: (request: PurchaseRequest) => void;
+  onReject: (request: PurchaseRequest) => void;
+  onCancel: (request: PurchaseRequest) => void;
   onCompare: (request: PurchaseRequest) => void;
   onConvert: (request: PurchaseRequest) => void;
 }) {
+  const { data: history = [] } = usePurchaseRequestHistory(request?.id);
   if (!request) return null;
   const flags = requestFlags(request);
 
@@ -176,8 +186,20 @@ function DetailModal({ request, onClose, onApprove, onCompare, onConvert }: {
 
         {request.notes && <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300">{request.notes}</div>}
 
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <h3 className="text-sm font-semibold text-slate-200">Geçmiş</h3>
+          <div className="mt-3 space-y-2">
+            {history.length === 0 && <p className="text-xs text-slate-500">Geçmiş kaydı bulunamadı.</p>}
+            {history.map((entry) => <div key={entry.id} className="flex justify-between gap-3 text-xs text-slate-400"><span>{entry.action}{entry.reason ? ` · ${entry.reason}` : ''}</span><span>{formatDateTime(entry.createdAt)}</span></div>)}
+          </div>
+        </div>
+
         <div className="flex flex-wrap justify-end gap-2">
-          {(request.status === 'DRAFT' || request.status === 'PENDING_APPROVAL') && <Button size="sm" leftIcon={<CheckCircle className="h-3.5 w-3.5" />} onClick={() => onApprove(request)}>Onayla</Button>}
+          {request.status === 'DRAFT' && <Button variant="outline" size="sm" onClick={() => onEdit(request)}>Düzenle</Button>}
+          {request.status === 'DRAFT' && <Button size="sm" leftIcon={<ClipboardCheck className="h-3.5 w-3.5" />} onClick={() => onSubmit(request)}>Onaya gönder</Button>}
+          {request.status === 'PENDING_APPROVAL' && <Button size="sm" leftIcon={<CheckCircle className="h-3.5 w-3.5" />} onClick={() => onApprove(request)}>Onayla</Button>}
+          {request.status === 'PENDING_APPROVAL' && <Button variant="danger" size="sm" onClick={() => onReject(request)}>Reddet</Button>}
+          {(request.status === 'DRAFT' || request.status === 'PENDING_APPROVAL') && <Button variant="ghost" size="sm" onClick={() => onCancel(request)}>İptal et</Button>}
           {request.status === 'APPROVED' && <Button variant="outline" size="sm" leftIcon={<TrendingDown className="h-3.5 w-3.5" />} onClick={() => onCompare(request)}>Teklif karşılaştır</Button>}
           {request.status === 'APPROVED' && <Button size="sm" leftIcon={<ArrowRight className="h-3.5 w-3.5" />} onClick={() => onConvert(request)}>Siparişe dönüştür</Button>}
         </div>
@@ -198,8 +220,10 @@ export function PurchaseRequestsPage() {
   const [maxTotal, setMaxTotal] = useState('');
   const [tableDensity, setTableDensity] = useState<'comfortable' | 'compact'>('compact');
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<PurchaseRequest | null>(null);
   const [detailTarget, setDetailTarget] = useState<PurchaseRequest | null>(null);
   const [approveTarget, setApproveTarget] = useState<PurchaseRequest | null>(null);
+  const [transitionTarget, setTransitionTarget] = useState<{ request: PurchaseRequest; action: 'submit' | 'reject' | 'cancel' } | null>(null);
   const [convertTarget, setConvertTarget] = useState<PurchaseRequest | null>(null);
   const [convertContactId, setConvertContactId] = useState('');
   const [compareTarget, setCompareTarget] = useState<PurchaseRequest | null>(null);
@@ -217,7 +241,11 @@ export function PurchaseRequestsPage() {
     maxTotal: maxTotal || undefined,
   });
   const createReq = useCreatePurchaseRequest();
+  const updateReq = useUpdatePurchaseRequest();
+  const submitReq = useSubmitPurchaseRequest();
   const approveReq = useApprovePurchaseRequest();
+  const rejectReq = useRejectPurchaseRequest();
+  const cancelReq = useCancelPurchaseRequest();
   const convertReq = useConvertRequestToOrder();
   const reorderAutomation = useRunPurchaseReorderAutomation();
   const { data: productsData } = useProducts({ page: 1, limit: 200 });
@@ -253,7 +281,22 @@ export function PurchaseRequestsPage() {
 
   const closeCreate = () => {
     setCreateOpen(false);
+    setEditTarget(null);
     reset({ date: today, items: [{ productId: '', quantity: '1', unitPrice: '' }] });
+  };
+
+  const openEdit = (request: PurchaseRequest) => {
+    setDetailTarget(null);
+    setEditTarget(request);
+    reset({
+      date: request.date.slice(0, 10),
+      notes: request.notes ?? '',
+      items: (request.items ?? []).map((item) => ({
+        productId: item.productId,
+        quantity: String(item.quantity),
+        unitPrice: item.unitPrice === null ? '' : String(item.unitPrice),
+      })),
+    });
   };
 
   const clearFilters = () => {
@@ -267,15 +310,26 @@ export function PurchaseRequestsPage() {
   };
 
   const onSubmit = (formData: RequestForm) => {
-    createReq.mutate({
+    const payload = {
       date: formData.date,
       notes: formData.notes || undefined,
       items: formData.items.map((item) => ({
         productId: item.productId,
         quantity: Number(item.quantity),
-        unitPrice: item.unitPrice ? Number(item.unitPrice) : undefined,
+        unitPrice: item.unitPrice ? Number(item.unitPrice) : Number(products.find((product) => product.id === item.productId)?.purchasePrice ?? 0),
       })),
-    }, { onSuccess: closeCreate });
+    };
+    if (editTarget) updateReq.mutate({ id: editTarget.id, data: payload }, { onSuccess: closeCreate });
+    else createReq.mutate(payload, { onSuccess: closeCreate });
+  };
+
+  const runTransition = () => {
+    if (!transitionTarget) return;
+    const variables = { id: transitionTarget.request.id };
+    const options = { onSuccess: () => { setTransitionTarget(null); setDetailTarget(null); } };
+    if (transitionTarget.action === 'submit') submitReq.mutate(variables, options);
+    else if (transitionTarget.action === 'reject') rejectReq.mutate(variables, options);
+    else cancelReq.mutate(variables, options);
   };
 
   const exportCsv = () => {
@@ -294,7 +348,16 @@ export function PurchaseRequestsPage() {
   const getRowActions = (request: PurchaseRequest): RowAction[] => [
     { label: 'Detay görüntüle', icon: <Eye className="h-4 w-4" />, onClick: () => setDetailTarget(request) },
     ...(request.purchaseOrder ? [{ label: 'Siparişi aç', icon: <ShoppingCart className="h-4 w-4" />, onClick: () => router.push(`/dashboard/purchase-orders/${request.purchaseOrder!.id}`) }] : []),
-    ...((request.status === 'DRAFT' || request.status === 'PENDING_APPROVAL') ? [{ label: 'Onayla', icon: <CheckCircle className="h-4 w-4" />, onClick: () => setApproveTarget(request), separator: true }] : []),
+    ...(request.status === 'DRAFT' ? [
+      { label: 'Düzenle', icon: <Save className="h-4 w-4" />, onClick: () => openEdit(request), separator: true },
+      { label: 'Onaya gönder', icon: <ClipboardCheck className="h-4 w-4" />, onClick: () => setTransitionTarget({ request, action: 'submit' }) },
+      { label: 'İptal et', icon: <X className="h-4 w-4" />, onClick: () => setTransitionTarget({ request, action: 'cancel' }) },
+    ] : []),
+    ...(request.status === 'PENDING_APPROVAL' ? [
+      { label: 'Onayla', icon: <CheckCircle className="h-4 w-4" />, onClick: () => setApproveTarget(request), separator: true },
+      { label: 'Reddet', icon: <X className="h-4 w-4" />, onClick: () => setTransitionTarget({ request, action: 'reject' }) },
+      { label: 'İptal et', icon: <X className="h-4 w-4" />, onClick: () => setTransitionTarget({ request, action: 'cancel' }) },
+    ] : []),
     ...(request.status === 'APPROVED' ? [
       { label: 'Teklif karşılaştır', icon: <TrendingDown className="h-4 w-4" />, onClick: () => setCompareTarget(request), separator: true },
       { label: 'Siparişe dönüştür', icon: <ArrowRight className="h-4 w-4" />, onClick: () => { setConvertContactId(''); setConvertTarget(request); } },
@@ -327,9 +390,9 @@ export function PurchaseRequestsPage() {
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <KpiCard label="Toplam" value={String(kpis.total)} detail="Filtre sonucu toplam" icon={ClipboardList} />
-        <KpiCard label="Onay bekleyen" value={String(kpis.pending)} detail="Taslak ve onay bekleyen" icon={ClipboardCheck} tone="warning" />
-        <KpiCard label="Onaylı" value={String(kpis.approved)} detail="Siparişe hazır" icon={CheckCircle} tone="success" />
-        <KpiCard label="Siparişe dönen" value={String(kpis.ordered)} detail="Süreç kapanmış" icon={ShoppingCart} />
+        <KpiCard label="Onay bekleyen" value={String(kpis.pending)} detail="Bu sayfadaki taslak ve onay bekleyen" icon={ClipboardCheck} tone="warning" />
+        <KpiCard label="Onaylı" value={String(kpis.approved)} detail="Bu sayfada siparişe hazır" icon={CheckCircle} tone="success" />
+        <KpiCard label="Siparişe dönen" value={String(kpis.ordered)} detail="Bu sayfada süreci kapanmış" icon={ShoppingCart} />
         <KpiCard label="Tahmini toplam" value={formatCurrency(kpis.amount)} detail="Bu sayfadaki kayıtlar" icon={Package} />
       </div>
 
@@ -354,7 +417,7 @@ export function PurchaseRequestsPage() {
             <Select aria-label="Sayfa boyutu" options={[20, 50, 100].map((value) => ({ value: String(value), label: `${value} / sayfa` }))} value={String(pageSize)} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} className="w-32" />
             <Button variant={tableDensity === 'compact' ? 'secondary' : 'ghost'} size="sm" onClick={() => setTableDensity('compact')}>Sıkı</Button>
             <Button variant={tableDensity === 'comfortable' ? 'secondary' : 'ghost'} size="sm" onClick={() => setTableDensity('comfortable')}>Rahat</Button>
-            <Button variant="outline" size="sm" leftIcon={<FileDown className="h-3.5 w-3.5" />} disabled={requests.length === 0} onClick={exportCsv}>Dışa aktar</Button>
+            <Button variant="outline" size="sm" leftIcon={<FileDown className="h-3.5 w-3.5" />} disabled={requests.length === 0} onClick={exportCsv}>Sayfayı dışa aktar</Button>
           </div>
         </div>
         {activeFilters.length > 0 && (
@@ -377,13 +440,31 @@ export function PurchaseRequestsPage() {
         density={tableDensity}
       />
 
-      <DetailModal request={detailTarget} onClose={() => setDetailTarget(null)} onApprove={setApproveTarget} onCompare={setCompareTarget} onConvert={(request) => { setConvertContactId(''); setConvertTarget(request); }} />
+      <DetailModal
+        request={detailTarget} onClose={() => setDetailTarget(null)} onEdit={openEdit}
+        onSubmit={(request) => setTransitionTarget({ request, action: 'submit' })}
+        onApprove={setApproveTarget}
+        onReject={(request) => setTransitionTarget({ request, action: 'reject' })}
+        onCancel={(request) => setTransitionTarget({ request, action: 'cancel' })}
+        onCompare={setCompareTarget}
+        onConvert={(request) => { setConvertContactId(''); setConvertTarget(request); }}
+      />
 
-      <Modal isOpen={!!approveTarget} onClose={() => setApproveTarget(null)} title="Talebi onayla" description={approveTarget ? `${approveTarget.number} siparişe dönüşmeye hazır hale gelecek.` : undefined} footer={<><Button variant="ghost" size="sm" onClick={() => setApproveTarget(null)}>Vazgeç</Button><Button size="sm" loading={approveReq.isPending} onClick={() => { if (approveTarget) approveReq.mutate(approveTarget.id, { onSuccess: () => setApproveTarget(null) }); }}>Onayla</Button></>}>
+      <Modal isOpen={!!approveTarget} onClose={() => setApproveTarget(null)} title="Talebi onayla" description={approveTarget ? `${approveTarget.number} siparişe dönüşmeye hazır hale gelecek.` : undefined} footer={<><Button variant="ghost" size="sm" onClick={() => setApproveTarget(null)}>Vazgeç</Button><Button size="sm" loading={approveReq.isPending} onClick={() => { if (approveTarget) approveReq.mutate(approveTarget.id, { onSuccess: () => { setApproveTarget(null); setDetailTarget(null); } }); }}>Onayla</Button></>}>
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">Onay sonrası talep, tedarikçi seçilerek satın alma siparişine dönüştürülebilir.</div>
       </Modal>
 
-      <Modal isOpen={createOpen} onClose={closeCreate} title="Yeni satın alma talebi" description="Satın alınacak ürünleri ve tahmini miktarları belirleyin." size="xl" footer={<><Button variant="ghost" size="sm" leftIcon={<X className="h-3.5 w-3.5" />} onClick={closeCreate}>İptal</Button><Button size="sm" loading={createReq.isPending} leftIcon={<Save className="h-3.5 w-3.5" />} onClick={handleSubmit(onSubmit)}>Talebi oluştur</Button></>}>
+      <Modal
+        isOpen={!!transitionTarget}
+        onClose={() => setTransitionTarget(null)}
+        title={transitionTarget?.action === 'submit' ? 'Onaya gönder' : transitionTarget?.action === 'reject' ? 'Talebi reddet' : 'Talebi iptal et'}
+        description={transitionTarget ? `${transitionTarget.request.number} için durum değişikliği uygulanacak.` : undefined}
+        footer={<><Button variant="ghost" size="sm" onClick={() => setTransitionTarget(null)}>Vazgeç</Button><Button variant={transitionTarget?.action === 'submit' ? 'primary' : 'danger'} size="sm" loading={submitReq.isPending || rejectReq.isPending || cancelReq.isPending} onClick={runTransition}>Devam et</Button></>}
+      >
+        <p className="text-sm text-slate-300">Bu işlem backend lifecycle kurallarıyla doğrulanır ve talep geçmişine kaydedilir.</p>
+      </Modal>
+
+      <Modal isOpen={createOpen || !!editTarget} onClose={closeCreate} title={editTarget ? 'Satın alma talebini düzenle' : 'Yeni satın alma talebi'} description="Satın alınacak ürünleri ve tahmini miktarları belirleyin." size="xl" footer={<><Button variant="ghost" size="sm" leftIcon={<X className="h-3.5 w-3.5" />} onClick={closeCreate}>İptal</Button><Button size="sm" loading={createReq.isPending || updateReq.isPending} leftIcon={<Save className="h-3.5 w-3.5" />} onClick={handleSubmit(onSubmit)}>{editTarget ? 'Değişiklikleri kaydet' : 'Talebi oluştur'}</Button></>}>
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
           <form className="space-y-5">
             <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">

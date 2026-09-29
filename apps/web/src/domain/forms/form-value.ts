@@ -3,7 +3,12 @@ const NUMBER_NORMALIZATION_PATTERN = /[^0-9,.-]/g;
 export function parseDecimalInput(value: string | number | null | undefined): number {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (!value) return 0;
-  const normalized = value.replace(NUMBER_NORMALIZATION_PATTERN, '').replace(/\./g, '').replace(',', '.');
+  const cleaned = value.replace(NUMBER_NORMALIZATION_PATTERN, '');
+  // Native number inputs serialize decimals with a dot, while Turkish free-text
+  // inputs commonly use a comma and optional dot thousands separators.
+  const normalized = cleaned.includes(',')
+    ? cleaned.replace(/\./g, '').replace(',', '.')
+    : cleaned;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 }

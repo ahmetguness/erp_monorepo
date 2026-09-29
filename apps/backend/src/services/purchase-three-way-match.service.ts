@@ -236,6 +236,12 @@ export class PurchaseThreeWayMatchService {
       if (invoices.length === 0) {
         issues.push({ code: 'NO_INVOICE', severity: 'WARNING', message: 'Bağlı tedarikçi faturası yok.' });
       }
+      if (receivedQuantity < orderedQuantity) {
+        issues.push({ code: 'RECEIPT_PENDING', severity: 'WARNING', message: 'Sipariş miktarının tamamı henüz teslim alınmadı.' });
+      }
+      if (invoicedQuantity < receivedQuantity) {
+        issues.push({ code: 'RECEIPT_NOT_INVOICED', severity: 'WARNING', message: 'Teslim alınan miktarın tamamı henüz faturalanmadı.' });
+      }
       if (invoicedQuantity > receivedQuantity * (1 + QUANTITY_TOLERANCE_PERCENT / 100)) {
         issues.push({ code: 'INVOICE_QTY_GT_RECEIVED', severity: 'ERROR', message: 'Fatura miktarı teslim alınan miktardan fazla.' });
       }

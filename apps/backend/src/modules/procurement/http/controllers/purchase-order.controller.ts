@@ -1,7 +1,8 @@
-import { AuditAction,EntityType,PurchaseOrderStatus,PurchaseRequestStatus } from '@prisma/client';
+import { AuditAction,ContactType,EntityType,PurchaseOrderStatus,PurchaseRequestStatus } from '@prisma/client';
 import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
+import { ConflictError,NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
+import { getAccessContext } from '../../../../middleware/access-context.js';
 import { PurchaseAutomationService } from '../../../../services/purchase-automation.service.js';
 import { PurchaseThreeWayMatchService } from '../../../../services/purchase-three-way-match.service.js';
 import { PurchaseTraceService } from '../../../../services/purchase-trace.service.js';
@@ -9,6 +10,8 @@ import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
 import { generateDocumentNumber } from '../../../../utils/generate-number.js';
 import { inventoryApplication,parseConfirmGoodsReceipt } from '../../../inventory/index.js';
+import { parsePurchaseRequestConvert,parsePurchaseRequestCreate,parsePurchaseRequestList,parsePurchaseRequestTransition } from '../schemas/purchase-request.schema.js';
+import { parsePurchaseOrderCreate,parsePurchaseOrderList } from '../schemas/purchase-order.schema.js';
 
 // ---------------------------------------------
 // DTOs
@@ -75,6 +78,45 @@ function computeItems(items: OrderItemDTO[]) {
   return { lineData, totalNet, totalTax, totalGross: totalNet + totalTax };
 }
 
+const PURCHASE_REQUEST_AUDIT_MODULE = 'purchasing.purchase-request';
+
+async function transitionPurchaseRequest(
+  c: Context,
+  allowedFrom: PurchaseRequestStatus[],
+  toStatus: PurchaseRequestStatus,
+  action: AuditAction,
+): Promise<Response> {
+  const tenantId = requireTenantId(c);
+  const userId = requireUserId(c);
+  const id = requireParam(c, 'id');
+  const body = parsePurchaseRequestTransition(await c.req.json<unknown>().catch(() => ({})));
+  if (!body) return c.json(new ValidationError('Durum değişikliği isteği geçersiz.').toJSON(), 400);
+  const meta = getRequestMeta(c);
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${id}))`;
+    const request = await tx.purchaseRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
+    if (!request) throw new NotFoundError('Satın alma talebi', id);
+    if (!allowedFrom.includes(request.status)) {
+      throw new ConflictError(`${request.status} durumundaki talep ${toStatus} durumuna geçirilemez.`);
+    }
+    const result = await tx.purchaseRequest.update({
+      where: { id },
+      data: { status: toStatus },
+      include: { items: { include: { product: { select: { id: true, code: true, name: true } } } } },
+    });
+    await createAuditLog(tx, {
+      tenantId, userId, module: PURCHASE_REQUEST_AUDIT_MODULE,
+      entityType: EntityType.OTHER, entityId: id, action,
+      oldValues: { status: request.status }, newValues: { status: toStatus },
+      reason: body.reason ?? null, ...meta,
+    });
+    return result;
+  });
+
+  return c.json({ data: updated });
+}
+
 // ---------------------------------------------
 // Purchase Order Controller
 // ---------------------------------------------
@@ -86,12 +128,13 @@ export const PurchaseOrderController = {
   async listRequests(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const query = c.req.query() as ListQuery;
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
+    const query = parsePurchaseRequestList(c.req.query());
+    if (!query) return c.json(new ValidationError('Satın alma talebi filtreleri geçersiz.').toJSON(), 400);
+    const page = query.page ?? 1;
+    const pageSize = query.limit ?? 20;
     const search = query.search?.trim();
-    const minTotal = query.minTotal ? Number(query.minTotal) : undefined;
-    const maxTotal = query.maxTotal ? Number(query.maxTotal) : undefined;
+    const minTotal = query.minTotal;
+    const maxTotal = query.maxTotal;
     const dateWhere = query.dateFrom || query.dateTo
       ? {
           ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
@@ -138,20 +181,25 @@ export const PurchaseOrderController = {
   async createRequest(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<CreatePurchaseRequestDTO>();
-    if (!body.date || !body.items?.length) {
-      return c.json(new ValidationError('date ve en az bir kalem zorunludur.').toJSON(), 400);
-    }
-    const number = await generateDocumentNumber(tenantId, 'purchase_request', 'PR-', 'purchaseRequest');
+    const userId = requireUserId(c);
+    const body = parsePurchaseRequestCreate(await c.req.json<unknown>().catch(() => null));
+    if (!body) return c.json(new ValidationError('Talep tarihi, ürünler, pozitif miktarlar ve geçerli fiyatlar zorunludur.').toJSON(), 400);
+    const productIds = body.items.map((item) => item.productId);
+    const productCount = await prisma.product.count({ where: { tenantId, id: { in: productIds }, deletedAt: null, isActive: true } });
+    if (productCount !== productIds.length) return c.json(new ValidationError('Bir veya daha fazla ürün bu tenant içinde bulunamadı ya da aktif değil.').toJSON(), 400);
 
     const totalEstimated = body.items.reduce((s, i) => s + (i.unitPrice ?? 0) * i.quantity, 0);
 
-    const request = await prisma.purchaseRequest.create({
+    const request = await prisma.$transaction(async (tx) => {
+      const number = await generateDocumentNumber(tenantId, 'purchase_request', 'PR-', 'purchaseRequest', tx);
+      const created = await tx.purchaseRequest.create({
       data: {
         tenantId, number, date: new Date(body.date),
         status: PurchaseRequestStatus.DRAFT,
         notes: body.notes ?? null,
         totalEstimated: totalEstimated > 0 ? totalEstimated : null,
+        requestedBy: userId,
+        createdById: userId,
         items: {
           create: body.items.map((i) => ({
             tenantId, productId: i.productId,
@@ -162,48 +210,134 @@ export const PurchaseOrderController = {
         },
       },
       include: { items: { include: { product: { select: { id: true, code: true, name: true } } } } },
+      });
+      await createAuditLog(tx, {
+        tenantId, userId, module: PURCHASE_REQUEST_AUDIT_MODULE,
+        entityType: EntityType.OTHER, entityId: created.id, action: AuditAction.CREATE,
+        newValues: { status: created.status, number: created.number }, ...getRequestMeta(c),
+      });
+      return created;
     });
 
     return c.json({ data: request }, 201);
   },
 
+  async updateRequest(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
+    const id = requireParam(c, 'id');
+    const body = parsePurchaseRequestCreate(await c.req.json<unknown>().catch(() => null));
+    if (!body) return c.json(new ValidationError('Talep tarihi, ürünler, pozitif miktarlar ve geçerli fiyatlar zorunludur.').toJSON(), 400);
+    const productIds = body.items.map((item) => item.productId);
+    const productCount = await prisma.product.count({ where: { tenantId, id: { in: productIds }, deletedAt: null, isActive: true } });
+    if (productCount !== productIds.length) return c.json(new ValidationError('Bir veya daha fazla ürün bu tenant içinde bulunamadı ya da aktif değil.').toJSON(), 400);
+    const totalEstimated = body.items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0);
+    const meta = getRequestMeta(c);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${id}))`;
+      const request = await tx.purchaseRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
+      if (!request) throw new NotFoundError('Satın alma talebi', id);
+      if (request.status !== PurchaseRequestStatus.DRAFT) throw new ConflictError('Yalnızca taslak satın alma talepleri düzenlenebilir.');
+      await tx.purchaseRequestItem.deleteMany({ where: { tenantId, requestId: id } });
+      const result = await tx.purchaseRequest.update({
+        where: { id },
+        data: {
+          date: new Date(body.date), notes: body.notes ?? null,
+          totalEstimated: totalEstimated > 0 ? totalEstimated : null,
+          items: { create: body.items.map((item) => ({
+            tenantId, productId: item.productId, description: item.description ?? null,
+            quantity: item.quantity, unitPrice: item.unitPrice ?? null,
+          })) },
+        },
+        include: { items: { include: { product: { select: { id: true, code: true, name: true } } } } },
+      });
+      await createAuditLog(tx, {
+        tenantId, userId, module: PURCHASE_REQUEST_AUDIT_MODULE,
+        entityType: EntityType.OTHER, entityId: id, action: AuditAction.UPDATE,
+        oldValues: { status: request.status, totalEstimated: request.totalEstimated?.toString() ?? null },
+        newValues: { status: result.status, totalEstimated: result.totalEstimated?.toString() ?? null }, ...meta,
+      });
+      return result;
+    });
+    return c.json({ data: updated });
+  },
+
+  async getRequestHistory(c: Context): Promise<Response> {
+    const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
+    const exists = await prisma.purchaseRequest.count({ where: { id, tenantId, deletedAt: null } });
+    if (!exists) return c.json(new NotFoundError('Satın alma talebi', id).toJSON(), 404);
+    const history = await prisma.auditLog.findMany({
+      where: { tenantId, module: PURCHASE_REQUEST_AUDIT_MODULE, entityId: id },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, userId: true, action: true, oldValues: true, newValues: true, reason: true, createdAt: true },
+    });
+    return c.json({ data: history });
+  },
+
+  async submitRequest(c: Context): Promise<Response> {
+    return transitionPurchaseRequest(c, [PurchaseRequestStatus.DRAFT], PurchaseRequestStatus.PENDING_APPROVAL, AuditAction.UPDATE);
+  },
+
   async approveRequest(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id');
+    const userId = requireUserId(c);
+    const id = requireParam(c, 'id');
+    const access = getAccessContext(c);
+    const meta = getRequestMeta(c);
 
-    const request = await prisma.purchaseRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
-    if (!request) return c.json(new NotFoundError('Satin alma talebi', id).toJSON(), 404);
-
-    if (request.status !== PurchaseRequestStatus.DRAFT && request.status !== PurchaseRequestStatus.PENDING_APPROVAL) {
-      return c.json(new ValidationError('Sadece taslak veya onay bekleyen talepler onaylanabilir.').toJSON(), 400);
-    }
-
-    const updated = await prisma.purchaseRequest.update({
-      where: { id },
-      data: { status: PurchaseRequestStatus.APPROVED, approvedAt: new Date() },
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${id}))`;
+      const request = await tx.purchaseRequest.findFirst({ where: { id, tenantId, deletedAt: null } });
+      if (!request) throw new NotFoundError('Satın alma talebi', id);
+      if (request.status !== PurchaseRequestStatus.PENDING_APPROVAL) {
+        throw new ConflictError('Yalnızca onay bekleyen talepler onaylanabilir.');
+      }
+      if (!access?.membership.isOwner && (request.requestedBy === userId || request.createdById === userId)) {
+        throw new ValidationError('Talebi oluşturan kullanıcı aynı talebi onaylayamaz.');
+      }
+      const result = await tx.purchaseRequest.update({
+        where: { id },
+        data: { status: PurchaseRequestStatus.APPROVED, approvedAt: new Date(), approvedBy: userId },
+      });
+      await createAuditLog(tx, {
+        tenantId, userId, module: PURCHASE_REQUEST_AUDIT_MODULE,
+        entityType: EntityType.OTHER, entityId: id, action: AuditAction.APPROVE,
+        oldValues: { status: request.status }, newValues: { status: result.status }, ...meta,
+      });
+      return result;
     });
 
     return c.json({ data: updated });
   },
 
+  async rejectRequest(c: Context): Promise<Response> {
+    return transitionPurchaseRequest(c, [PurchaseRequestStatus.PENDING_APPROVAL], PurchaseRequestStatus.REJECTED, AuditAction.REJECT);
+  },
+
+  async cancelRequest(c: Context): Promise<Response> {
+    return transitionPurchaseRequest(c, [PurchaseRequestStatus.DRAFT, PurchaseRequestStatus.PENDING_APPROVAL], PurchaseRequestStatus.CANCELLED, AuditAction.UPDATE);
+  },
+
   async convertRequestToOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const id = c.req.param('id');
+    const userId = requireUserId(c);
+    const id = requireParam(c, 'id');
 
-    const body = await c.req.json<{ contactId: string; items?: { productId: string; unitPrice: number }[] }>();
-    if (!body.contactId) return c.json(new ValidationError('contactId zorunludur.').toJSON(), 400);
+    const body = parsePurchaseRequestConvert(await c.req.json<unknown>().catch(() => null));
+    if (!body) return c.json(new ValidationError('Geçerli bir tedarikçi ve ürün fiyatları zorunludur.').toJSON(), 400);
+    const supplier = await prisma.contact.findFirst({ where: { id: body.contactId, tenantId, deletedAt: null, isActive: true, type: { in: [ContactType.SUPPLIER, ContactType.BOTH] } }, select: { id: true } });
+    if (!supplier) return c.json(new ValidationError('Seçilen tedarikçi bu tenant içinde bulunamadı veya satın almaya uygun değil.').toJSON(), 400);
 
-    const request = await prisma.purchaseRequest.findFirst({
-      where: { id, tenantId, deletedAt: null },
-      include: { items: true },
-    });
-    if (!request) return c.json(new NotFoundError('Satin alma talebi', id).toJSON(), 404);
-    if (request.status !== PurchaseRequestStatus.APPROVED) {
-      return c.json(new ValidationError('Sadece onayli talepler siparise donusturulebilir.').toJSON(), 400);
-    }
-    const number = await generateDocumentNumber(tenantId, 'purchase_order', 'PO-', 'purchaseOrder');
-
-    const items: OrderItemDTO[] = request.items.map((i) => {
+    const order = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${id}))`;
+      const request = await tx.purchaseRequest.findFirst({ where: { id, tenantId, deletedAt: null }, include: { items: true } });
+      if (!request) throw new NotFoundError('Satın alma talebi', id);
+      if (request.status !== PurchaseRequestStatus.APPROVED || request.purchaseOrderId) throw new ConflictError('Yalnızca onaylı ve daha önce dönüştürülmemiş talepler siparişe dönüştürülebilir.');
+      const requestProductIds = new Set(request.items.map((item) => item.productId));
+      if (body.items?.some((item) => !requestProductIds.has(item.productId))) throw new ValidationError('Fiyat verilen ürün satın alma talebinde bulunmuyor.');
+      const items: OrderItemDTO[] = request.items.map((i) => {
       const customPrice = body.items?.find((item) => item.productId === i.productId)?.unitPrice;
       return {
         productId: i.productId,
@@ -211,16 +345,16 @@ export const PurchaseOrderController = {
         quantity: Number(i.quantity),
         unitPrice: customPrice !== undefined ? Number(customPrice) : Number(i.unitPrice ?? 0),
       };
-    });
-    const { lineData, totalNet, totalTax, totalGross } = computeItems(items);
-
-    const order = await prisma.$transaction(async (tx) => {
+      });
+      const { lineData, totalNet, totalTax, totalGross } = computeItems(items);
+      const number = await generateDocumentNumber(tenantId, 'purchase_order', 'PO-', 'purchaseOrder', tx);
       const po = await tx.purchaseOrder.create({
         data: {
           tenantId, contactId: body.contactId, number,
           date: new Date(), status: PurchaseOrderStatus.DRAFT,
           totalNet, totalTax, totalGross,
           notes: `Talepten donusturuldu: ${request.number}`,
+          createdById: userId,
           items: { create: lineData.map((l) => ({ tenantId, ...l })) },
         },
         include: { items: true, contact: { select: { id: true, name: true } } },
@@ -231,8 +365,15 @@ export const PurchaseOrderController = {
         data: { status: PurchaseRequestStatus.ORDERED, purchaseOrderId: po.id },
       });
 
+      await createAuditLog(tx, {
+        tenantId, userId, module: PURCHASE_REQUEST_AUDIT_MODULE,
+        entityType: EntityType.OTHER, entityId: id, action: AuditAction.UPDATE,
+        oldValues: { status: request.status, purchaseOrderId: request.purchaseOrderId },
+        newValues: { status: PurchaseRequestStatus.ORDERED, purchaseOrderId: po.id }, ...getRequestMeta(c),
+      });
+
       await tx.purchaseOrderHistory.create({
-        data: { tenantId, orderId: po.id, toStatus: PurchaseOrderStatus.DRAFT, notes: `Talepten olusturuldu: ${request.number}` },
+        data: { tenantId, orderId: po.id, toStatus: PurchaseOrderStatus.DRAFT, notes: `Talepten olusturuldu: ${request.number}`, createdById: userId },
       });
 
       return po;
@@ -258,12 +399,13 @@ export const PurchaseOrderController = {
   async listOrders(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const query = c.req.query() as ListQuery;
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
+    const query = parsePurchaseOrderList(c.req.query());
+    if (!query) return c.json(new ValidationError('Satın alma siparişi filtreleri geçersiz.').toJSON(), 400);
+    const page = query.page ?? 1;
+    const pageSize = query.limit ?? 20;
     const search = query.search?.trim();
-    const minTotal = query.minTotal ? Number(query.minTotal) : undefined;
-    const maxTotal = query.maxTotal ? Number(query.maxTotal) : undefined;
+    const minTotal = query.minTotal;
+    const maxTotal = query.maxTotal;
     const dateWhere = query.dateFrom || query.dateTo
       ? {
           ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
@@ -372,18 +514,22 @@ export const PurchaseOrderController = {
 
   async createOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const userId = c.get('userId') as string | undefined;
+    const userId = requireUserId(c);
     const { ipAddress, userAgent } = getRequestMeta(c);
 
-    const body = await c.req.json<CreatePurchaseOrderDTO>();
-    if (!body.contactId || !body.date || !body.items?.length) {
-      return c.json(new ValidationError('contactId, date ve en az bir kalem zorunludur.').toJSON(), 400);
-    }
-    const number = await generateDocumentNumber(tenantId, 'purchase_order', 'PO-', 'purchaseOrder');
+    const body = parsePurchaseOrderCreate(await c.req.json<unknown>().catch(() => null));
+    if (!body) return c.json(new ValidationError('Tedarikçi, geçerli tarihler ve geçerli sipariş kalemleri zorunludur.').toJSON(), 400);
+    const [supplier, productCount] = await Promise.all([
+      prisma.contact.findFirst({ where: { id: body.contactId, tenantId, deletedAt: null, isActive: true, type: { in: [ContactType.SUPPLIER, ContactType.BOTH] } }, select: { id: true } }),
+      prisma.product.count({ where: { tenantId, id: { in: body.items.map((item) => item.productId) }, deletedAt: null, isActive: true } }),
+    ]);
+    if (!supplier) return c.json(new ValidationError('Seçilen tedarikçi bu tenant içinde bulunamadı veya satın almaya uygun değil.').toJSON(), 400);
+    if (productCount !== body.items.length) return c.json(new ValidationError('Bir veya daha fazla ürün bu tenant içinde bulunamadı ya da aktif değil.').toJSON(), 400);
 
     const { lineData, totalNet, totalTax, totalGross } = computeItems(body.items);
 
     const order = await prisma.$transaction(async (tx) => {
+      const number = await generateDocumentNumber(tenantId, 'purchase_order', 'PO-', 'purchaseOrder', tx);
       const po = await tx.purchaseOrder.create({
         data: {
           tenantId, contactId: body.contactId, number,
@@ -392,6 +538,7 @@ export const PurchaseOrderController = {
           status: PurchaseOrderStatus.DRAFT,
           totalNet, totalTax, totalGross,
           notes: body.notes ?? null,
+          createdById: userId,
           items: { create: lineData.map((l) => ({ tenantId, ...l })) },
         },
         include: {
@@ -401,7 +548,7 @@ export const PurchaseOrderController = {
       });
 
       await tx.purchaseOrderHistory.create({
-        data: { tenantId, orderId: po.id, toStatus: PurchaseOrderStatus.DRAFT },
+        data: { tenantId, orderId: po.id, toStatus: PurchaseOrderStatus.DRAFT, createdById: userId },
       });
 
       return po;
@@ -420,20 +567,19 @@ export const PurchaseOrderController = {
 
   async sendOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = requireParam(c, 'id');
 
-    const order = await prisma.purchaseOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
-    if (!order) return c.json(new NotFoundError('Satin alma siparisi', id).toJSON(), 404);
-    if (order.status !== PurchaseOrderStatus.DRAFT) {
-      return c.json(new ValidationError('Sadece taslak siparisler gonderilebilir.').toJSON(), 400);
-    }
-
     const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${id}))`;
+      const order = await tx.purchaseOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
+      if (!order) throw new NotFoundError('Satın alma siparişi', id);
+      if (order.status !== PurchaseOrderStatus.DRAFT) throw new ConflictError('Sadece taslak siparişler gönderilebilir.');
       const po = await tx.purchaseOrder.update({
         where: { id }, data: { status: PurchaseOrderStatus.SENT },
       });
       await tx.purchaseOrderHistory.create({
-        data: { tenantId, orderId: id, fromStatus: PurchaseOrderStatus.DRAFT, toStatus: PurchaseOrderStatus.SENT },
+        data: { tenantId, orderId: id, fromStatus: PurchaseOrderStatus.DRAFT, toStatus: PurchaseOrderStatus.SENT, createdById: userId },
       });
       return po;
     });
@@ -457,21 +603,19 @@ export const PurchaseOrderController = {
 
   async cancelOrder(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = requireParam(c, 'id');
 
-    const order = await prisma.purchaseOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
-    if (!order) return c.json(new NotFoundError('Satin alma siparisi', id).toJSON(), 404);
-
-    if (order.status === PurchaseOrderStatus.RECEIVED || order.status === PurchaseOrderStatus.CANCELLED) {
-      return c.json(new ValidationError('Teslim alinmis veya iptal edilmis siparisler iptal edilemez.').toJSON(), 400);
-    }
-
     const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${id}))`;
+      const order = await tx.purchaseOrder.findFirst({ where: { id, tenantId, deletedAt: null } });
+      if (!order) throw new NotFoundError('Satın alma siparişi', id);
+      if (order.status === PurchaseOrderStatus.RECEIVED || order.status === PurchaseOrderStatus.CANCELLED) throw new ConflictError('Teslim alınmış veya iptal edilmiş siparişler iptal edilemez.');
       const po = await tx.purchaseOrder.update({
         where: { id }, data: { status: PurchaseOrderStatus.CANCELLED },
       });
       await tx.purchaseOrderHistory.create({
-        data: { tenantId, orderId: id, fromStatus: order.status, toStatus: PurchaseOrderStatus.CANCELLED },
+        data: { tenantId, orderId: id, fromStatus: order.status, toStatus: PurchaseOrderStatus.CANCELLED, createdById: userId },
       });
       return po;
     });
