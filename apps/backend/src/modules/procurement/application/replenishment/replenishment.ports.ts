@@ -20,5 +20,5 @@ export interface ReplenishmentRepository {
       quantity: number;
       unitPrice: number;
     },
-  ): Promise<{ purchaseOrderId: string; purchaseOrderNumber: string }>;
+  ): Promise<{ purchaseOrderId: string; purchaseOrderNumber: string; created: boolean }>;
 }

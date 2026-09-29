@@ -3,6 +3,8 @@ import {
   InvoiceType,
   DeliveryNoteStatus,
   DeliveryNoteType,
+  EDocumentStatus,
+  EDocumentType,
   MovementType,
   OrderStatus,
   PaymentMethod,
@@ -146,6 +148,27 @@ export const createDeliveryNoteBodySchema = z.object({
 export const updateDeliveryNoteStatusBodySchema = z.object({
   status: z.nativeEnum(DeliveryNoteStatus),
   shippedAt: invoiceDateString.optional(), deliveredAt: invoiceDateString.optional(),
+}).strict();
+
+export const createEDocumentBodySchema = z.object({
+  invoiceId: optionalString,
+  deliveryNoteId: optionalString,
+  type: z.nativeEnum(EDocumentType),
+  submissionIdempotencyKey: z.string().trim().min(8).max(160).optional(),
+}).strict();
+
+export const updateEDocumentStatusBodySchema = z.object({
+  status: z.nativeEnum(EDocumentStatus),
+  providerMessage: z.string().trim().max(2000).optional(),
+  responsePayload: jsonValue.optional(),
+}).strict();
+
+export const eDocumentCallbackBodySchema = z.object({
+  edocumentId: nonEmptyString,
+  status: z.enum([EDocumentStatus.SENT, EDocumentStatus.ACCEPTED, EDocumentStatus.REJECTED, EDocumentStatus.ERROR]),
+  providerCode: z.string().trim().max(100).optional(),
+  message: z.string().trim().max(2000).optional(),
+  responsePayload: jsonValue.optional(),
 }).strict();
 
 const dateString = z
@@ -395,6 +418,7 @@ export type UpdateInvoiceBody = z.infer<typeof updateInvoiceBodySchema>;
 export type FulfillSalesOrderBody = z.infer<typeof fulfillSalesOrderBodySchema>;
 export type CreateDeliveryNoteBody = z.infer<typeof createDeliveryNoteBodySchema>;
 export type UpdateDeliveryNoteStatusBody = z.infer<typeof updateDeliveryNoteStatusBodySchema>;
+export type CreateEDocumentBody = z.infer<typeof createEDocumentBodySchema>;
 export type CreateSalesQuoteBody = z.infer<typeof createSalesQuoteBodySchema>;
 export type UpdateSalesQuoteBody = z.infer<typeof updateSalesQuoteBodySchema>;
 export type CreatePaymentBody = z.infer<typeof createPaymentBodySchema>;

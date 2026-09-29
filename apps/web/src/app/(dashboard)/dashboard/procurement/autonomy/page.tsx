@@ -3,7 +3,7 @@ import { ProcurementAutonomyCenter } from '@/components/features/procurement/Pro
 
 export const metadata: Metadata = {
   title: 'Otonom Satın Alma & Tedarik Zinciri | AXON ERP',
-  description: 'Stok projeksiyonları, tedarikçi güvenilirlik indeksleri ve sıfır dokunuşlu satın alma sipariş gönderimi',
+  description: 'Stok projeksiyonları, tedarikçi güvenilirlik indeksleri ve kullanıcı onaylı satın alma taslakları',
 };
 
 export default function ProcurementAutonomyPage() {

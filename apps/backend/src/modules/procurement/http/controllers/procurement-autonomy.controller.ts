@@ -3,7 +3,7 @@ import { prisma } from '../../../../lib/prisma.js';
 import { ProcurementAutonomyService } from '../../../../services/procurement-autonomy.service.js';
 import { ReplenishmentPlanningService } from '../../application/replenishment/index.js';
 import { PrismaReplenishmentRepository } from '../../infrastructure/persistence/index.js';
-import { parseReplenishmentPolicy } from '../schemas/replenishment-policy.schema.js';
+import { parseProcurementDispatch, parseProcurementScan, parseReplenishmentPolicy } from '../schemas/replenishment-policy.schema.js';
 import { requireTenantId,requireUserId } from '../../../../utils/context.js';
 import { ValidationError } from '../../../../errors/index.js';
 
@@ -33,13 +33,14 @@ export const ProcurementAutonomyController = {
   async dispatchPo(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const body = await c.req.json<{ productId: string; autoDispatch?: boolean }>();
+    const body = parseProcurementDispatch(await c.req.json<unknown>().catch(() => null));
+    if (!body) return c.json(new ValidationError('Geçerli bir productId zorunludur; otomatik gönderim desteklenmez.').toJSON(), 400);
 
     const data = await procurementService.dispatchZeroTouchPurchaseOrder(
       tenantId,
       userId,
       body.productId,
-      body.autoDispatch ?? false,
+      false,
     );
     return c.json({ data });
   },
@@ -47,12 +48,13 @@ export const ProcurementAutonomyController = {
   async runScan(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const body = await c.req.json<{ autoDispatch?: boolean }>().catch(() => ({ autoDispatch: false }));
+    const body = parseProcurementScan(await c.req.json<unknown>().catch(() => ({})));
+    if (!body) return c.json(new ValidationError('Otomatik gönderim desteklenmez; siparişler taslak oluşturulur.').toJSON(), 400);
 
     const data = await procurementService.runAutonomousProcurementScan(
       tenantId,
       userId,
-      body.autoDispatch ?? false,
+      false,
     );
     return c.json({ data });
   },

@@ -19,6 +19,7 @@ import { createClientIdempotencyKey } from '@/lib/idempotency';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import type { EDocument, EDocumentStatus, EDocumentType } from '@/services/e-document.service';
 import { EDocumentExceptionCenter } from '../e-documents/EDocumentExceptionCenter';
+import { useRetryEDocument } from '@/hooks/useEDocumentAutomation';
 
 const TYPE_MAP: Record<EDocumentType, { label: string; variant: BadgeVariant }> = {
   E_INVOICE: { label: 'E-Fatura', variant: 'info' },
@@ -204,6 +205,7 @@ export function EDocumentsPage() {
     () => createClientIdempotencyKey('edocument-submit'),
   );
   const updateStatus = useUpdateEDocumentStatus();
+  const retryMutation = useRetryEDocument();
   const documents = data?.data ?? [];
   const filteredTypeOptions = TYPE_OPTIONS.filter((option) => option.value && (!isStarter || option.value !== 'E_WAYBILL')) as Array<{ value: EDocumentType; label: string }>;
   const canCreate = form.type === 'E_WAYBILL' ? Boolean(form.deliveryNoteId) : Boolean(form.invoiceId);
@@ -245,7 +247,7 @@ export function EDocumentsPage() {
 
   const retry = () => {
     if (!retryDocument) return;
-    updateStatus.mutate({ id: retryDocument.id, status: 'PENDING', providerMessage: 'Yeniden gönderim kuyruğuna alındı.' }, { onSuccess: () => setRetryDocument(null) });
+    retryMutation.mutate(retryDocument.id, { onSuccess: () => setRetryDocument(null) });
   };
 
   const getRowActions = (document: EDocument): RowAction[] => [
@@ -450,7 +452,7 @@ export function EDocumentsPage() {
         footer={
           <>
             <Button variant="ghost" size="sm" onClick={() => setRetryDocument(null)}>Vazgeç</Button>
-            <Button size="sm" leftIcon={<RefreshCw className="h-3.5 w-3.5" />} loading={updateStatus.isPending} onClick={retry}>Onayla</Button>
+            <Button size="sm" leftIcon={<RefreshCw className="h-3.5 w-3.5" />} loading={retryMutation.isPending} onClick={retry}>Onayla</Button>
           </>
         }
       >

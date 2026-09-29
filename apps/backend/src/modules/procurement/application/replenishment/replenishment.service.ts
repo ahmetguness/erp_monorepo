@@ -83,7 +83,8 @@ export class ReplenishmentPlanningService {
       if (!item.supplierId || !selected) { result.skipped.push({ productId: item.productId, reason: 'Uygun tedarikçi veya senaryo bulunamadı.' }); continue; }
       if (selected.estimatedCost > workspace.policy.maximumDraftValue) { result.skipped.push({ productId: item.productId, reason: 'Taslak tutarı politika limitini aşıyor.' }); continue; }
       const row = await this.repository.createDraft(tenantId, userId, { productId: item.productId, supplierId: item.supplierId, quantity: selected.quantity, unitPrice: selected.quantity > 0 ? selected.estimatedCost / selected.quantity : 0 });
-      result.createdDrafts.push({ ...row, productId: item.productId, amount: selected.estimatedCost });
+      if (row.created) result.createdDrafts.push({ purchaseOrderId: row.purchaseOrderId, purchaseOrderNumber: row.purchaseOrderNumber, productId: item.productId, amount: selected.estimatedCost });
+      else result.skipped.push({ productId: item.productId, reason: `Açık satın alma siparişi zaten mevcut: ${row.purchaseOrderNumber}` });
     }
     return result;
   }

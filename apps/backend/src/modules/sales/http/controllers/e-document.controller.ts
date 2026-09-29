@@ -1,10 +1,13 @@
 import { EDocumentStatus,EDocumentType,Prisma } from '@prisma/client';
 import { Context } from 'hono';
+import { randomUUID,timingSafeEqual } from 'node:crypto';
 import { ConflictError,NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { EDocumentAutomationService } from '../../../../services/edocument-automation.service.js';
 import { requireParam,requireTenantId } from '../../../../utils/context.js';
 import { parseIdempotencyKey } from '../../application/operations/idempotency-key.js';
+import { getValidatedBody } from '../../../../middleware/validateBody.js';
+import { createEDocumentBodySchema,eDocumentCallbackBodySchema,updateEDocumentStatusBodySchema } from '../../../../schemas/request-body.schemas.js';
 
 const automationService = new EDocumentAutomationService(prisma);
 
@@ -185,14 +188,21 @@ export const EDocumentController = {
     const tenantId = requireTenantId(c);
 
     const query = c.req.query() as EDocumentListQuery;
+    if (query.type && !Object.values(EDocumentType).includes(query.type)) throw new ValidationError('Gecersiz e-belge tipi.');
+    if (query.status && !Object.values(EDocumentStatus).includes(query.status)) throw new ValidationError('Gecersiz e-belge durumu.');
+    if (query.source && query.source !== 'invoice' && query.source !== 'delivery-note') throw new ValidationError('Gecersiz kaynak filtresi.');
+    const fromDate = query.dateFrom ? new Date(query.dateFrom) : undefined;
+    const toDate = query.dateTo ? new Date(query.dateTo) : undefined;
+    if ((fromDate && Number.isNaN(fromDate.getTime())) || (toDate && Number.isNaN(toDate.getTime()))) throw new ValidationError('Gecersiz tarih filtresi.');
+    if (fromDate && toDate && fromDate > toDate) throw new ValidationError('Baslangic tarihi bitis tarihinden sonra olamaz.');
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
     const skip = (page - 1) * pageSize;
     const search = query.search?.trim();
     const dateWhere = query.dateFrom || query.dateTo
       ? {
-          ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
-          ...(query.dateTo && { lte: new Date(query.dateTo) }),
+          ...(fromDate && { gte: fromDate }),
+          ...(toDate && { lte: toDate }),
         }
       : undefined;
 
@@ -258,7 +268,7 @@ export const EDocumentController = {
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<CreateEDocumentDTO>();
+    const body = getValidatedBody(c, createEDocumentBodySchema);
 
     if (!body.type) {
       return c.json(new ValidationError('type alanı zorunludur.').toJSON(), 400);
@@ -330,7 +340,15 @@ export const EDocumentController = {
       }
     }
 
+    const duplicateSource = await prisma.eDocument.findFirst({
+      where: { tenantId, type: body.type, invoiceId: body.invoiceId ?? null, deliveryNoteId: body.deliveryNoteId ?? null, status: { not: EDocumentStatus.CANCELLED } },
+      select: { id: true },
+    });
+    if (duplicateSource) throw new ConflictError('Bu kaynak belge icin aktif bir e-belge zaten bulunuyor.');
+
     let doc;
+    const uuid = randomUUID();
+    const providerCode = `GIB-${body.type}-${uuid.slice(0, 8).toUpperCase()}`;
     try {
       doc = await prisma.eDocument.create({
         data: {
@@ -338,9 +356,8 @@ export const EDocumentController = {
           invoiceId: body.invoiceId ?? null,
           deliveryNoteId: body.deliveryNoteId ?? null,
           type: body.type,
-          uuid: body.uuid ?? null,
-          providerCode: body.providerCode ?? null,
-          requestPayload: body.requestPayload as Prisma.InputJsonValue ?? undefined,
+          uuid,
+          providerCode,
           submissionIdempotencyKey: submissionIdempotencyKey ?? null,
         },
         include: {
@@ -364,7 +381,12 @@ export const EDocumentController = {
       return c.json({ data: replay });
     }
 
-    return c.json({ data: doc }, 201);
+    await automationService.submitEDocument(tenantId, doc.id);
+    const submitted = await prisma.eDocument.findUniqueOrThrow({
+      where: { id: doc.id },
+      include: { invoice: { select: { id: true, number: true } }, deliveryNote: { select: { id: true, number: true } } },
+    });
+    return c.json({ data: submitted }, 201);
   },
 
   async updateStatus(c: Context): Promise<Response> {
@@ -374,7 +396,14 @@ export const EDocumentController = {
     const existing = await prisma.eDocument.findFirst({ where: { id, tenantId } });
     if (!existing) return c.json(new NotFoundError('E-Belge', id).toJSON(), 404);
 
-    const body = await c.req.json<UpdateEDocumentStatusDTO>();
+    const body = getValidatedBody(c, updateEDocumentStatusBodySchema);
+
+    if (body.status !== EDocumentStatus.CANCELLED) {
+      throw new ValidationError('Belge durumu kullanici tarafindan yalnizca CANCELLED olarak degistirilebilir. Provider durumlari callback ile guncellenir.');
+    }
+    if (existing.status === EDocumentStatus.ACCEPTED || existing.status === EDocumentStatus.CANCELLED) {
+      throw new ValidationError(`${existing.status} durumundaki e-belge iptal edilemez.`);
+    }
 
     if (!body.status) {
       return c.json(new ValidationError('status alanı zorunludur.').toJSON(), 400);
@@ -389,18 +418,18 @@ export const EDocumentController = {
 
     const dateField = statusDateMap[body.status];
 
-    const updated = await prisma.eDocument.update({
+    const updated = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.eDocument.updateMany({ where: { id, tenantId, status: existing.status }, data: { status: body.status } });
+      if (claimed.count !== 1) throw new ConflictError('E-belge durumu es zamanli olarak degisti.');
+      return tx.eDocument.update({
       where: { id },
       data: {
         status: body.status,
         providerMessage: body.providerMessage ?? existing.providerMessage,
         responsePayload: body.responsePayload as Prisma.InputJsonValue ?? undefined,
         ...(dateField && { [dateField]: new Date() }),
-        ...(body.status === EDocumentStatus.ERROR && {
-          retryCount: { increment: 1 },
-          lastRetryAt: new Date(),
-        }),
       },
+      });
     });
 
     return c.json({ data: updated });
@@ -423,13 +452,15 @@ export const EDocumentController = {
 
   async processCallback(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const body = await c.req.json<{
-      edocumentId: string;
-      status: EDocumentStatus;
-      providerCode?: string;
-      message?: string;
-      responsePayload?: unknown;
-    }>();
+    const expectedSecret = process.env.EDOCUMENT_WEBHOOK_SECRET?.trim();
+    const suppliedSecret = c.req.header('x-edocument-webhook-secret')?.trim();
+    if (!expectedSecret) return c.json({ error: { code: 'WEBHOOK_NOT_CONFIGURED', message: 'E-belge webhook secret tanimli degil.' } }, 503);
+    const expectedBuffer = Buffer.from(expectedSecret);
+    const suppliedBuffer = Buffer.from(suppliedSecret ?? '');
+    if (expectedBuffer.length !== suppliedBuffer.length || !timingSafeEqual(expectedBuffer, suppliedBuffer)) {
+      return c.json({ error: { code: 'INVALID_WEBHOOK_SIGNATURE', message: 'Gecersiz webhook kimlik bilgisi.' } }, 401);
+    }
+    const body = getValidatedBody(c, eDocumentCallbackBodySchema);
 
     if (!body.edocumentId || !body.status) {
       return c.json(new ValidationError('edocumentId ve status alanları zorunludur.').toJSON(), 400);

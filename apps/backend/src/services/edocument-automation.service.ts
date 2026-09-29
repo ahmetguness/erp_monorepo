@@ -7,6 +7,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { logger } from '../lib/logger.js';
+import { ValidationError } from '../errors/index.js';
 
 export interface ProviderCallbackPayload {
   status: EDocumentStatus;
@@ -150,6 +151,14 @@ export class EDocumentAutomationService {
     }
 
     const newStatus = payload.status;
+    const providerTransitions: Partial<Record<EDocumentStatus, EDocumentStatus[]>> = {
+      [EDocumentStatus.PENDING]: [EDocumentStatus.PROCESSING, EDocumentStatus.SENT, EDocumentStatus.ACCEPTED, EDocumentStatus.REJECTED, EDocumentStatus.ERROR],
+      [EDocumentStatus.PROCESSING]: [EDocumentStatus.SENT, EDocumentStatus.ACCEPTED, EDocumentStatus.REJECTED, EDocumentStatus.ERROR],
+      [EDocumentStatus.SENT]: [EDocumentStatus.ACCEPTED, EDocumentStatus.REJECTED, EDocumentStatus.ERROR],
+    };
+    if (!(providerTransitions[doc.status] ?? []).includes(newStatus)) {
+      throw new ValidationError(`${doc.status} durumundan ${newStatus} provider gecisi gecersizdir.`);
+    }
     let invoiceUpdated = false;
 
     const dateData: Record<string, Date> = {};
@@ -165,27 +174,24 @@ export class EDocumentAutomationService {
       ? (payload.responsePayload as Prisma.InputJsonValue)
       : doc.responsePayload ? (doc.responsePayload as Prisma.InputJsonValue) : undefined;
 
-    await this.db.eDocument.update({
-      where: { id: doc.id },
-      data: {
-        status: newStatus,
-        providerMessage: payload.message ?? doc.providerMessage,
-        providerCode: payload.providerCode ?? doc.providerCode,
-        ...(responsePayloadValue !== undefined && { responsePayload: responsePayloadValue }),
-        ...dateData,
-      },
-    });
-
-    // If ACCEPTED -> Update Invoice Status to SENT
-    if (newStatus === EDocumentStatus.ACCEPTED && doc.invoiceId) {
-      await this.db.invoice.update({
-        where: { id: doc.invoiceId },
+    await this.db.$transaction(async (tx) => {
+      const claimed = await tx.eDocument.updateMany({
+        where: { id: doc.id, tenantId, status: doc.status },
         data: {
-          status: InvoiceStatus.SENT,
+          status: newStatus,
+          providerMessage: payload.message ?? doc.providerMessage,
+          providerCode: payload.providerCode ?? doc.providerCode,
+          ...(responsePayloadValue !== undefined && { responsePayload: responsePayloadValue }),
+          ...dateData,
         },
       });
-      invoiceUpdated = true;
-    }
+      if (claimed.count !== 1) throw new ValidationError('E-belge durumu es zamanli olarak degisti.');
+
+      if (newStatus === EDocumentStatus.ACCEPTED && doc.invoiceId) {
+        await tx.invoice.update({ where: { id: doc.invoiceId }, data: { status: InvoiceStatus.SENT } });
+        invoiceUpdated = true;
+      }
+    });
 
     logger.info(`[EDocumentAutomation] Processed provider callback for ${doc.id}: ${newStatus}`);
     return { edocumentId: doc.id, status: newStatus, invoiceUpdated };
@@ -249,6 +255,10 @@ export class EDocumentAutomationService {
 
     if (!doc) throw new Error(`E-Belge bulunamadı: ${edocumentId}`);
 
+    if (doc.status !== EDocumentStatus.ERROR && doc.status !== EDocumentStatus.REJECTED) {
+      throw new ValidationError('Yalnizca ERROR veya REJECTED durumundaki e-belgeler yeniden denenebilir.');
+    }
+
     const updated = await this.db.eDocument.update({
       where: { id: doc.id },
       data: {
@@ -275,9 +285,26 @@ export class EDocumentAutomationService {
     return { id: updated.id, status: EDocumentStatus.PROCESSING };
   }
 
+  async submitEDocument(tenantId: string, edocumentId: string): Promise<{ id: string; status: EDocumentStatus }> {
+    const doc = await this.db.eDocument.findFirst({ where: { id: edocumentId, tenantId } });
+    if (!doc) throw new Error(`E-Belge bulunamadi: ${edocumentId}`);
+    if (doc.status !== EDocumentStatus.PENDING) throw new ValidationError('Yalnizca PENDING e-belge gonderilebilir.');
+    const updated = await this.db.eDocument.update({ where: { id: doc.id }, data: { status: EDocumentStatus.PROCESSING } });
+    try {
+      await this.dispatchToProvider(tenantId, doc.id, doc.providerCode ?? `GIB-${doc.id.slice(0, 8)}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await this.db.eDocument.update({ where: { id: doc.id }, data: { status: EDocumentStatus.ERROR, providerMessage: message } });
+    }
+    return { id: updated.id, status: updated.status };
+  }
+
   // ── Helper ────────────────────────────────────
 
   private async dispatchToProvider(tenantId: string, edocumentId: string, providerCode: string): Promise<void> {
+    if (process.env.NODE_ENV === 'production' && process.env.EDOCUMENT_PROVIDER_MODE !== 'mock') {
+      throw new Error('E-belge provider entegrasyonu yapilandirilmamis.');
+    }
     setTimeout(async () => {
       try {
         const doc = await this.db.eDocument.findFirst({ where: { id: edocumentId, tenantId } });

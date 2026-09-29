@@ -3,6 +3,8 @@ import { Hono } from "hono";
 import { requireAccess } from "../middleware/requireAccess";
 import { requirePermission } from "../middleware/requirePermission";
 import { EDocumentController } from "../modules/sales/http/controllers/index.js";
+import { validateBody } from "../middleware/validateBody";
+import { createEDocumentBodySchema, eDocumentCallbackBodySchema, updateEDocumentStatusBodySchema } from "../schemas/request-body.schemas";
 
 const eDocumentRoutes = new Hono();
 
@@ -23,7 +25,7 @@ eDocumentRoutes.post(
   requirePermission("invoicing", "UPDATE"),
   EDocumentController.retry,
 );
-eDocumentRoutes.post("/webhook/callback", EDocumentController.processCallback);
+eDocumentRoutes.post("/webhook/callback", validateBody(eDocumentCallbackBodySchema), EDocumentController.processCallback);
 eDocumentRoutes.get(
   "/",
   requirePermission("invoicing", "READ"),
@@ -37,11 +39,13 @@ eDocumentRoutes.get(
 eDocumentRoutes.post(
   "/",
   requirePermission("invoicing", "CREATE"),
+  validateBody(createEDocumentBodySchema),
   EDocumentController.create,
 );
 eDocumentRoutes.patch(
   "/:id/status",
   requirePermission("invoicing", "UPDATE"),
+  validateBody(updateEDocumentStatusBodySchema),
   EDocumentController.updateStatus,
 );
 

@@ -251,8 +251,18 @@ export class PrismaReplenishmentRepository implements ReplenishmentRepository {
       quantity: number;
       unitPrice: number;
     },
-  ): Promise<{ purchaseOrderId: string; purchaseOrderNumber: string }> {
+  ): Promise<{ purchaseOrderId: string; purchaseOrderNumber: string; created: boolean }> {
     return this.db.$transaction(async (tx) => {
+      const existing = await tx.purchaseOrder.findFirst({
+        where: {
+          tenantId,
+          deletedAt: null,
+          status: { in: [PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.SENT, PurchaseOrderStatus.PARTIALLY_RECEIVED] },
+          items: { some: { productId: input.productId } },
+        },
+        select: { id: true, number: true },
+      });
+      if (existing) return { purchaseOrderId: existing.id, purchaseOrderNumber: existing.number, created: false };
       const number = `PO-PLAN-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
       const total = input.quantity * input.unitPrice;
       const order = await tx.purchaseOrder.create({
@@ -279,7 +289,7 @@ export class PrismaReplenishmentRepository implements ReplenishmentRepository {
         },
         select: { id: true, number: true },
       });
-      return { purchaseOrderId: order.id, purchaseOrderNumber: order.number };
+      return { purchaseOrderId: order.id, purchaseOrderNumber: order.number, created: true };
     });
   }
 }

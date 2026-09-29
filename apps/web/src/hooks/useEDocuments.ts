@@ -14,10 +14,14 @@ const KEYS = {
 };
 
 export function useEDocuments(params: ListParams) {
-  return useQuery({ queryKey: KEYS.list(params), queryFn: () => getEDocuments(params) });
+  return useQuery({
+    queryKey: KEYS.list(params),
+    queryFn: () => getEDocuments(params),
+    refetchInterval: (query) => query.state.data?.data.some((document) => document.status === 'PENDING' || document.status === 'PROCESSING') ? 1500 : false,
+  });
 }
 export function useEDocument(id: string) {
-  return useQuery({ queryKey: KEYS.detail(id), queryFn: () => getEDocumentById(id), enabled: !!id });
+  return useQuery({ queryKey: KEYS.detail(id), queryFn: () => getEDocumentById(id), enabled: !!id, refetchInterval: (query) => query.state.data && (query.state.data.status === 'PENDING' || query.state.data.status === 'PROCESSING') ? 1500 : false });
 }
 
 export function useEDocumentSummary(options?: { enabled?: boolean }) {
