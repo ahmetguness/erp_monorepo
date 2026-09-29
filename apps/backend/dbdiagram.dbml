@@ -29,6 +29,67 @@ Enum CostingMethod {
   STANDARD
 }
 
+Enum ChatConversationType {
+  DIRECT
+  GROUP
+}
+
+Enum ChatMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+Enum ChatHistoryVisibility {
+  ALL
+  FROM_JOIN
+}
+
+Enum ChatNotificationLevel {
+  ALL
+  MENTIONS
+  NONE
+}
+
+Enum ChatMessageType {
+  TEXT
+  FILE
+  IMAGE
+  SYSTEM
+  POLL
+  EVENT
+}
+
+Enum ChatAttachmentKind {
+  IMAGE
+  DOCUMENT
+  OTHER
+}
+
+Enum ChatAttachmentStatus {
+  PENDING_UPLOAD
+  UPLOADED
+  SCANNING
+  READY
+  REJECTED
+  EXPIRED
+  DELETED
+}
+
+Enum ChatInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+  EXPIRED
+}
+
+Enum ChatEventResponseStatus {
+  GOING
+  MAYBE
+  DECLINED
+}
+
 Enum InvoiceType {
   SALES
   PURCHASE
@@ -214,6 +275,13 @@ Enum FeatureKey {
   CASHFLOW_FORECAST
   BANK_RECONCILIATION
   LOT_SERIAL_TRACKING
+  CHAT_ENABLED
+  STORAGE_LIMIT_BYTES
+  CHAT_FILE_MAX_BYTES
+  CHAT_ATTACHMENTS_PER_MESSAGE
+  CHAT_MAX_GROUP_MEMBERS
+  CHAT_RETENTION_DAYS
+  CHAT_AUDIT_LEVEL
 }
 
 Enum AppModule {
@@ -484,6 +552,49 @@ Enum ServiceActivityType {
   OTHER
 }
 
+Enum StorageReservationSource {
+  CHAT_ATTACHMENT
+  ERP_ATTACHMENT
+}
+
+Enum StorageReservationStatus {
+  RESERVED
+  UPLOADED
+  SCANNING
+  COMMITTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+Enum PlatformTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_TENANT
+  RESOLVED
+  CLOSED
+}
+
+Enum PlatformTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+Enum PlatformTicketCategory {
+  TECHNICAL
+  BILLING
+  ACCOUNT
+  FEATURE_REQUEST
+  OTHER
+}
+
+Enum PlatformTicketSender {
+  TENANT_USER
+  ADMIN_USER
+}
+
 Enum ApprovalStatus {
   PENDING
   APPROVED
@@ -583,6 +694,109 @@ Enum Priority {
 
 // TABLES
 
+Table admin_idempotency_records {
+  id varchar [pk, default: `cuid(1)`]
+  adminId varchar
+  method varchar
+  path varchar
+  key varchar
+  requestHash varchar
+  state varchar [default: 'PROCESSING']
+  statusCode integer [null]
+  contentType varchar [null]
+  responseBody varchar [null]
+  expiresAt timestamp
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (adminId, method, path, key) [unique]
+    (expiresAt)
+  }
+}
+
+Table admin_inbox_item_states {
+  id varchar [pk, default: `cuid(1)`]
+  adminId varchar
+  sourceType varchar
+  sourceId varchar
+  ownerId varchar [null]
+  readAt timestamp [null]
+  resolvedAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (adminId, sourceType, sourceId) [unique]
+    (adminId, resolvedAt, updatedAt)
+    (ownerId, resolvedAt)
+  }
+}
+
+Table admin_inbox_preferences {
+  adminId varchar [pk]
+  approvals boolean [default: true]
+  security boolean [default: true]
+  incidents boolean [default: true]
+  expirations boolean [default: true]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+}
+
+Table admin_inbox_task_states {
+  id varchar [pk, default: `cuid(1)`]
+  sourceType varchar
+  sourceId varchar
+  ownerId varchar [null]
+  resolvedAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (sourceType, sourceId) [unique]
+    (ownerId, resolvedAt)
+  }
+}
+
+Table admin_saved_list_views {
+  id varchar [pk, default: `cuid(1)`]
+  adminId varchar
+  name varchar
+  resource varchar
+  config jsonb
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (adminId, resource, name) [unique]
+    (adminId, resource, createdAt)
+  }
+}
+
+Table admin_sensitive_access_grants {
+  id varchar [pk, default: `cuid(1)`]
+  adminId varchar
+  tenantId varchar
+  fields varchar[]
+  purpose varchar
+  reason varchar
+  expiresAt timestamp
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (adminId, tenantId, expiresAt)
+    (expiresAt)
+  }
+}
+
+Table admin_ui_preferences {
+  adminId varchar [pk]
+  locale varchar [default: 'tr-TR']
+  highContrast boolean [default: false]
+  reduceMotion boolean [default: false]
+  density varchar [default: 'COMFORTABLE']
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+}
+
 Table units {
   id varchar [pk, default: `cuid(1)`]
   tenantId varchar
@@ -629,11 +843,12 @@ Table contacts {
   city varchar [null]
   country varchar [default: 'TR']
   notes varchar [null]
+  tags varchar[] [default: `ARRAY[]`]
   isActive boolean [default: true]
   creditLimit decimal [null]
   paymentTermDays integer [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
   updatedById varchar [null]
@@ -654,7 +869,7 @@ Table account_entries {
   date timestamp
   debit decimal [default: 0]
   credit decimal [default: 0]
-  balance decimal [default: 0]
+  balance decimal [default: 0, note: '@computed - must be updated within the same transaction as the parent write']
   description varchar [null]
   refType varchar [null]
   refId varchar [null]
@@ -682,11 +897,15 @@ Table products {
   purchasePrice decimal [default: 0]
   salesPrice decimal [default: 0]
   minStockLevel decimal [default: 0]
+  safetyStock decimal [null]
+  reorderPoint decimal [null]
+  reorderQty decimal [null]
+  leadTimeDays integer [null]
   costingMethod CostingMethod [default: 'MOVING_AVERAGE']
   averageCost decimal [default: 0]
   isActive boolean [default: true]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
   updatedById varchar [null]
@@ -697,6 +916,332 @@ Table products {
     (tenantId, categoryId)
     (deletedAt)
   }
+}
+
+Table chat_conversations {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  type ChatConversationType
+  title varchar [null]
+  description varchar [null]
+  directKey varchar [null]
+  historyVisibility ChatHistoryVisibility [default: 'FROM_JOIN']
+  retentionDays integer [null]
+  createdById varchar
+  lastMessageAt timestamp [null]
+  archivedAt timestamp [null]
+  deletedAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (tenantId, directKey) [unique]
+    (tenantId, lastMessageAt)
+    (tenantId, type, deletedAt)
+  }
+}
+
+Table chat_realtime_outbox {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  conversationId varchar
+  type varchar
+  payload jsonb
+  createdAt timestamp [default: `now()`]
+  processedAt timestamp [null]
+
+  indexes {
+    (tenantId, conversationId, createdAt)
+    (processedAt, createdAt)
+  }
+}
+
+Table chat_conversation_members {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  conversationId varchar
+  userId varchar
+  role ChatMemberRole [default: 'MEMBER']
+  joinedAt timestamp [default: `now()`]
+  leftAt timestamp [null]
+  visibleFrom timestamp [default: `now()`]
+  lastReadMessageId varchar [null]
+  lastReadAt timestamp [null]
+  clearedAt timestamp [null]
+  mutedUntil timestamp [null]
+  pinnedAt timestamp [null]
+  archivedAt timestamp [null]
+  notificationLevel ChatNotificationLevel [default: 'ALL']
+
+  indexes {
+    (conversationId, userId) [unique]
+    (tenantId, userId, pinnedAt)
+    (tenantId, conversationId, leftAt)
+  }
+}
+
+Table chat_messages {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  conversationId varchar
+  senderId varchar
+  clientMessageId varchar
+  type ChatMessageType [default: 'TEXT']
+  content varchar [null]
+  replyToMessageId varchar [null]
+  forwardedFromMessageId varchar [null]
+  forwardedSnapshot jsonb [null]
+  editedAt timestamp [null]
+  deletedAt timestamp [null]
+  deletedById varchar [null]
+  deleteReason varchar [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (tenantId, conversationId, senderId, clientMessageId) [unique]
+    (tenantId, conversationId, createdAt, id)
+    (tenantId, senderId, createdAt)
+  }
+}
+
+Table chat_message_revisions {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  messageId varchar
+  editorId varchar
+  previousContent varchar [null]
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (tenantId, messageId, createdAt)
+  }
+}
+
+Table chat_message_mentions {
+  tenantId varchar
+  messageId varchar
+  mentionedUserId varchar
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (messageId, mentionedUserId) [pk]
+    (tenantId, mentionedUserId, createdAt)
+  }
+}
+
+Table chat_message_stars {
+  tenantId varchar
+  messageId varchar
+  userId varchar
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (messageId, userId) [pk]
+    (tenantId, userId, createdAt)
+  }
+}
+
+Table chat_message_reactions {
+  tenantId varchar
+  messageId varchar
+  userId varchar
+  emoji varchar
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (messageId, userId, emoji) [pk]
+    (tenantId, messageId)
+  }
+}
+
+Table chat_pinned_messages {
+  tenantId varchar
+  conversationId varchar
+  messageId varchar
+  pinnedById varchar
+  pinnedAt timestamp [default: `now()`]
+
+  indexes {
+    (conversationId, messageId) [pk]
+    (tenantId, conversationId, pinnedAt)
+  }
+}
+
+Table chat_attachments {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  uploaderId varchar
+  messageId varchar [null]
+  storageKey varchar [unique]
+  originalName varchar
+  safeDisplayName varchar
+  mimeType varchar
+  sizeBytes integer
+  sha256 varchar [null]
+  kind ChatAttachmentKind
+  status ChatAttachmentStatus [default: 'PENDING_UPLOAD']
+  width integer [null]
+  height integer [null]
+  thumbnailStorageKey varchar [null]
+  rejectionReason varchar [null]
+  expiresAt timestamp [null]
+  deletedAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (tenantId, uploaderId, status)
+    (tenantId, messageId)
+    (tenantId, expiresAt)
+  }
+}
+
+Table chat_group_invites {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  conversationId varchar
+  inviterId varchar
+  inviteeId varchar
+  status ChatInviteStatus [default: 'PENDING']
+  expiresAt timestamp
+  respondedAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (conversationId, inviteeId, status) [unique]
+    (tenantId, inviteeId, status)
+  }
+}
+
+Table chat_polls {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  conversationId varchar
+  messageId varchar [unique]
+  question varchar
+  multiple boolean [default: false]
+  anonymous boolean [default: false]
+  closesAt timestamp [null]
+  closedAt timestamp [null]
+  createdById varchar
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (tenantId, conversationId, createdAt)
+  }
+}
+
+Table chat_poll_options {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  pollId varchar
+  label varchar
+  sortOrder integer
+
+  indexes {
+    (pollId, sortOrder) [unique]
+    (tenantId, pollId)
+  }
+}
+
+Table chat_poll_votes {
+  tenantId varchar
+  pollId varchar
+  optionId varchar
+  userId varchar
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (pollId, optionId, userId) [pk]
+    (tenantId, userId)
+  }
+}
+
+Table chat_events {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  conversationId varchar
+  messageId varchar [unique]
+  title varchar
+  description varchar [null]
+  startsAt timestamp
+  endsAt timestamp
+  timezone varchar
+  location varchar [null]
+  onlineUrl varchar [null]
+  createdById varchar
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (tenantId, conversationId, startsAt)
+  }
+}
+
+Table chat_event_responses {
+  tenantId varchar
+  eventId varchar
+  userId varchar
+  status ChatEventResponseStatus
+  respondedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (eventId, userId) [pk]
+    (tenantId, userId)
+  }
+}
+
+Table platform_backup_evidence {
+  id varchar [pk, default: `cuid(1)`]
+  providerRef varchar [unique]
+  status varchar
+  sizeBytes bigint
+  encrypted boolean
+  encryptionKeyRef varchar [null]
+  region varchar
+  replicaRegion varchar [null]
+  replicationLagSeconds integer [null]
+  startedAt timestamp
+  completedAt timestamp
+  recordedById varchar
+  recordedAt timestamp [default: `now()`]
+
+  indexes {
+    (status, completedAt)
+  }
+}
+
+Table platform_restore_drills {
+  id varchar [pk, default: `cuid(1)`]
+  backupId varchar
+  status varchar [default: 'PLANNED']
+  environment varchar
+  runbookUrl varchar
+  approvalId varchar
+  requestedById varchar
+  startedAt timestamp [null]
+  completedAt timestamp [null]
+  recoveryPointAt timestamp [null]
+  actualRpoMinutes integer [null]
+  actualRtoMinutes integer [null]
+  notes varchar [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (status, createdAt)
+    (backupId, createdAt)
+  }
+}
+
+Table platform_disaster_recovery_policies {
+  id varchar [pk, default: 'default']
+  targetRpoMinutes integer [default: 60]
+  targetRtoMinutes integer [default: 240]
+  maxReplicationLagSeconds integer [default: 300]
+  updatedById varchar [null]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 }
 
 Table invoices {
@@ -717,14 +1262,16 @@ Table invoices {
   totalGross decimal [default: 0]
   notes varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
   updatedById varchar [null]
   totalWithholding decimal [default: 0]
+  postingIdempotencyKey varchar [null]
 
   indexes {
     (tenantId, number) [unique]
+    (tenantId, postingIdempotencyKey) [unique]
     (tenantId, status)
     (tenantId, contactId)
     (tenantId, date)
@@ -792,9 +1339,11 @@ Table e_documents {
   rejectedAt timestamp [null]
   cancelledAt timestamp [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+  submissionIdempotencyKey varchar [null]
 
   indexes {
+    (tenantId, submissionIdempotencyKey) [unique]
     (tenantId, status)
     (tenantId, invoiceId)
     (tenantId, deliveryNoteId)
@@ -806,7 +1355,7 @@ Table bank_accounts {
   tenantId varchar
   name varchar
   accountNumber varchar [null]
-  iban varchar [null]
+  iban varchar [null, note: 'NULL values are excluded from the unique constraint in PostgreSQL (NULL != NULL), so multiple rows with NULL iban are allowed']
   bankName varchar [null]
   branchName varchar [null]
   branchCode varchar [null]
@@ -814,7 +1363,7 @@ Table bank_accounts {
   type BankAccountType [default: 'CHECKING']
   isActive boolean [default: true]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
 
@@ -832,7 +1381,7 @@ Table cash_accounts {
   currencyCode varchar [default: 'TRY']
   isActive boolean [default: true]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
 
@@ -879,7 +1428,7 @@ Table check_promissory_notes {
   notes varchar [null]
   deletedAt timestamp [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   createdById varchar [null]
 
   indexes {
@@ -907,7 +1456,7 @@ Table payments {
   status PaymentStatus [default: 'PENDING']
   notes varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
 
@@ -961,7 +1510,7 @@ Table fiscal_periods {
   closedAt timestamp [null]
   closedById varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, startDate, endDate) [unique]
@@ -983,11 +1532,13 @@ Table journal_entries {
   postedAt timestamp [null]
   postedById varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   createdById varchar [null]
+  idempotencyKey varchar [null]
 
   indexes {
     (tenantId, number) [unique]
+    (tenantId, idempotencyKey) [unique]
     (tenantId, date)
     (tenantId, isPosted)
     (refType, refId)
@@ -1020,7 +1571,7 @@ Table reconciliations {
   finalizedAt timestamp [null]
   finalizedById varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   createdById varchar [null]
 
   indexes {
@@ -1054,7 +1605,7 @@ Table collection_reminders {
   status varchar [default: 'PENDING']
   notes varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId)
@@ -1075,7 +1626,7 @@ Table employees {
   salary decimal [default: 0]
   isActive boolean [default: true]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
   updatedById varchar [null]
@@ -1100,7 +1651,7 @@ Table leave_requests {
   approvedBy varchar [null]
   approvedAt timestamp [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
 
   indexes {
@@ -1118,7 +1669,7 @@ Table attendances {
   checkOut timestamp [null]
   overtimeHours decimal [default: 0]
   notes varchar [null]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (employeeId, date) [unique]
@@ -1137,7 +1688,7 @@ Table payrolls {
   paidAt timestamp [null]
   notes varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
 
@@ -1168,7 +1719,7 @@ Table tenants {
   deletionNotBefore timestamp [null]
   id varchar [pk, default: `cuid(1)`]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   slug varchar [unique]
   companyName varchar
@@ -1184,13 +1735,13 @@ Table tenants {
   plan Plan [default: 'STARTER']
   status TenantStatus [default: 'TRIAL']
   deploymentType DeploymentType [default: 'CLOUD']
-  maxUsers integer [null]
-  userPrice decimal [null]
+  maxUsers integer [null, note: 'Null means unlimited users']
+  userPrice decimal [null, note: 'Price per user in the tenant\'s subscription (e.g. 10.00 = $10/user)']
   trialEndsAt timestamp [null]
   subscriptionStart timestamp [null]
   subscriptionEnd timestamp [null]
-  planChangedAt timestamp [null]
-  isCustomPricing boolean [default: false]
+  planChangedAt timestamp [null, note: 'DEĞİŞİKLİK 5: plan upgrade/downgrade zamanı']
+  isCustomPricing boolean [default: false, note: 'DEĞİŞİKLİK 5: Enterprise müşteriler için fiyat tablosunu bypass et']
   modules AppModule[] [default: `ARRAY[]`]
   notes varchar [null]
 
@@ -1203,7 +1754,7 @@ Table tenants {
 Table users {
   id varchar [pk, default: `cuid(1)`]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   email varchar [unique]
   name varchar
@@ -1228,7 +1779,7 @@ Table admin_users {
   lastFailedLoginAt timestamp [null]
   id varchar [pk, default: `cuid(1)`]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   email varchar [unique]
   name varchar
   password varchar
@@ -1314,7 +1865,7 @@ Table admin_role_permissions {
 Table tenant_users {
   id varchar [pk, default: `cuid(1)`]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   tenantId varchar
   userId varchar
   roleId varchar [null]
@@ -1336,7 +1887,7 @@ Table roles {
   description varchar [null]
   isSystem boolean [default: false]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, name) [unique]
@@ -1357,7 +1908,7 @@ Table role_permissions {
 Table plan_features {
   id varchar [pk, default: `cuid(1)`]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   plan Plan
   key varchar
   value varchar
@@ -1382,7 +1933,7 @@ Table tenant_feature_overrides {
   reason varchar [null]
   expiresAt timestamp [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   createdById varchar [null]
 
   indexes {
@@ -1417,7 +1968,7 @@ Table feature_rollouts {
   activatedAt timestamp [null]
   pausedAt timestamp [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (plan, featureKey, environment, version) [unique]
@@ -1438,7 +1989,7 @@ Table api_keys {
   scopes varchar[] [default: `ARRAY[]`]
   ipAllowlist varchar[] [default: `ARRAY[]`]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
   revokedAt timestamp [null]
@@ -1456,7 +2007,7 @@ Table api_keys {
 Table invitations {
   id varchar [pk, default: `cuid(1)`]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   tenantId varchar
   email varchar
   roleId varchar [null]
@@ -1472,6 +2023,71 @@ Table invitations {
     (roleId)
     (status)
     (tokenHash)
+  }
+}
+
+Table platform_incidents {
+  id varchar [pk, default: `cuid(1)`]
+  alertId varchar [null]
+  title varchar
+  summary varchar
+  severity varchar
+  status varchar [default: 'INVESTIGATING']
+  owner varchar
+  runbookUrl varchar
+  rootCause varchar [null]
+  resolution varchar [null]
+  createdById varchar
+  resolvedAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (status, severity, createdAt)
+    (alertId)
+  }
+}
+
+Table platform_incident_tenants {
+  incidentId varchar
+  tenantId varchar
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (incidentId, tenantId) [pk]
+    (tenantId)
+  }
+}
+
+Table platform_incident_timeline {
+  id varchar [pk, default: `cuid(1)`]
+  incidentId varchar
+  type varchar
+  message varchar
+  createdById varchar
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (incidentId, createdAt)
+  }
+}
+
+Table platform_incident_communications {
+  id varchar [pk, default: `cuid(1)`]
+  incidentId varchar
+  message varchar
+  status varchar [default: 'PENDING_APPROVAL']
+  recipientCount integer
+  requestedById varchar
+  approvedById varchar [null]
+  decisionNote varchar [null]
+  publishedAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (incidentId, status, createdAt)
+    (status, createdAt)
   }
 }
 
@@ -1510,7 +2126,7 @@ Table stock_levels {
   warehouseId varchar
   locationId varchar [default: '']
   quantity decimal [default: 0]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (productId, warehouseId, locationId) [unique]
@@ -1537,8 +2153,10 @@ Table stock_movements {
   notes varchar [null]
   createdAt timestamp [default: `now()`]
   createdById varchar [null]
+  idempotencyKey varchar [null]
 
   indexes {
+    (tenantId, idempotencyKey) [unique]
     (tenantId, productId)
     (tenantId, type)
     (tenantId, createdAt)
@@ -1576,7 +2194,7 @@ Table stock_counts {
   isFinalized boolean [default: false]
   notes varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   createdById varchar [null]
   finalizedById varchar [null]
   finalizedAt timestamp [null]
@@ -1668,7 +2286,7 @@ Table marketplace_integrations {
   lastSyncAt timestamp [null]
   syncErrors integer [default: 0]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, channel) [unique]
@@ -1708,7 +2326,7 @@ Table marketplace_orders {
   totalAmount decimal
   orderDate timestamp
   syncedAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (integrationId, externalId) [unique]
@@ -1741,23 +2359,23 @@ Table marketplace_sync_jobs {
   status SyncJobStatus [default: 'PENDING']
   startedAt timestamp [null]
   finishedAt timestamp [null]
-  processedCount integer [default: 0]
-  errorCount integer [default: 0]
-  errorMessage varchar [null]
+  processedCount integer [default: 0, note: 'Kaç kayıt işlendi']
+  errorCount integer [default: 0, note: 'Kaç kayıt hata verdi']
+  errorMessage varchar [null, note: 'Hata mesajı (varsa)']
   attempts integer [default: 0]
   maxAttempts integer [default: 5]
   nextRetryAt timestamp [null]
   leaseOwner varchar [null]
   leaseExpiresAt timestamp [null]
-  params jsonb [null]
-  result jsonb [null]
+  params jsonb [null, note: 'Job parametreleri (JSON): hoursBack, status filtresi vb.']
+  result jsonb [null, note: 'Sonuç özeti (JSON): created, updated, skipped, batchIds vb.']
   quarantinedAt timestamp [null]
   quarantinedById varchar [null]
   resolvedAt timestamp [null]
   resolvedById varchar [null]
   resolutionNote varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, integrationId, status)
@@ -1773,7 +2391,7 @@ Table marketplace_webhook_events {
   id varchar [pk, default: `cuid(1)`]
   tenantId varchar
   integrationId varchar
-  eventId varchar
+  eventId varchar [note: 'Trendyol\'un gönderdiği event ID (idempotency key)']
   eventType varchar
   payload jsonb
   processedAt timestamp [null]
@@ -1801,6 +2419,43 @@ Table marketplace_listing_snapshots {
   }
 }
 
+Table platform_admin_audit_logs {
+  id varchar [pk, default: `cuid(1)`]
+  actorId varchar [null]
+  action varchar
+  module varchar
+  targetType varchar
+  targetId varchar [null]
+  outcome varchar
+  reason varchar [null]
+  approvalId varchar [null]
+  ipAddress varchar [null]
+  device varchar [null]
+  requestId varchar [null]
+  correlationId varchar [null]
+  beforeValues jsonb [null]
+  afterValues jsonb [null]
+  changedFields jsonb
+  previousHash varchar [null]
+  hash varchar [unique]
+  retentionUntil timestamp
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (createdAt)
+    (actorId, createdAt)
+    (module, outcome, createdAt)
+    (targetType, targetId, createdAt)
+  }
+}
+
+Table platform_audit_policies {
+  id varchar [pk, default: 'default']
+  retentionDays integer [default: 2555]
+  updatedById varchar [null]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+}
+
 Table number_sequences {
   id varchar [pk, default: `cuid(1)`]
   tenantId varchar
@@ -1820,7 +2475,7 @@ Table tenant_settings {
   key varchar
   value varchar
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, key) [unique]
@@ -1835,7 +2490,7 @@ Table module_settings {
   key varchar
   value varchar
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, module, key) [unique]
@@ -1861,7 +2516,7 @@ Table admin_change_requests {
   ticketId varchar [null]
   rollbackOfId varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   decidedAt timestamp [null]
   appliedAt timestamp [null]
 
@@ -1902,7 +2557,7 @@ Table observability_slos {
   notificationChannel varchar
   isEnabled boolean [default: true]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (scope, scopeId, metricKey) [unique]
@@ -1928,7 +2583,7 @@ Table observability_alert_history {
   lastModifiedById varchar [null]
   openedAt timestamp [default: `now()`]
   resolvedAt timestamp [null]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (fingerprint, status)
@@ -2081,7 +2736,7 @@ Table tenant_provisioning_jobs {
   error varchar [null]
   createdById varchar
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, createdAt)
@@ -2095,7 +2750,7 @@ Table tenant_provisioning_steps {
   status varchar [default: 'PENDING']
   attempts integer [default: 0]
   error varchar [null]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (jobId, key) [unique]
@@ -2115,7 +2770,7 @@ Table billing_subscriptions {
   customUnitPrice decimal [null]
   customPricingExpiresAt timestamp [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 }
 
 Table billing_invoices {
@@ -2280,9 +2935,9 @@ Table currencies {
   code varchar
   name varchar
   symbol varchar
-  defaultRate decimal [default: 1]
+  defaultRate decimal [default: 1, note: 'Fallback rate when no CurrencyRate row exists for a given date']
   isBase boolean [default: false]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, code) [unique]
@@ -2305,6 +2960,60 @@ Table currency_rates {
   }
 }
 
+Table data_subject_requests {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  subjectEmail varchar
+  type varchar
+  status varchar [default: 'PENDING_VERIFICATION']
+  scope jsonb
+  reason varchar
+  ticketId varchar
+  requestedById varchar
+  verifiedById varchar [null]
+  approvedById varchar [null]
+  identityVerifiedAt timestamp [null]
+  approvedAt timestamp [null]
+  completedAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (tenantId, status, createdAt)
+    (subjectEmail, createdAt)
+  }
+}
+
+Table privacy_legal_holds {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  subjectEmail varchar [null]
+  reason varchar
+  active boolean [default: true]
+  createdById varchar
+  releasedById varchar [null]
+  createdAt timestamp [default: `now()`]
+  releasedAt timestamp [null]
+
+  indexes {
+    (tenantId, subjectEmail, active)
+  }
+}
+
+Table privacy_download_grants {
+  id varchar [pk, default: `cuid(1)`]
+  requestId varchar
+  tokenHash varchar [unique]
+  expiresAt timestamp
+  consumedAt timestamp [null]
+  createdById varchar
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (requestId, expiresAt)
+  }
+}
+
 Table purchase_requests {
   id varchar [pk, default: `cuid(1)`]
   tenantId varchar
@@ -2315,10 +3024,10 @@ Table purchase_requests {
   approvedBy varchar [null]
   approvedAt timestamp [null]
   notes varchar [null]
-  totalEstimated decimal [null]
+  totalEstimated decimal [null, note: 'Sum of (PurchaseRequestItem.unitPrice × quantity); nullable until items have estimated prices']
   purchaseOrderId varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
 
@@ -2358,7 +3067,7 @@ Table purchase_orders {
   totalTax decimal [default: 0]
   totalGross decimal [default: 0]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
   updatedById varchar [null]
@@ -2377,7 +3086,7 @@ Table purchase_order_items {
   productId varchar
   description varchar [null]
   quantity decimal
-  received decimal [default: 0]
+  received decimal [default: 0, note: '@computed - must be updated within the same transaction as the parent write']
   unitPrice decimal
   discount decimal [default: 0]
   taxRate decimal [default: 0]
@@ -2416,7 +3125,7 @@ Table work_centers {
   overheadRate decimal [null]
   isActive boolean [default: true]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, code) [unique]
@@ -2434,7 +3143,7 @@ Table boms {
   effectiveFrom timestamp [null]
   effectiveTo timestamp [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, productId, version) [unique]
@@ -2497,7 +3206,7 @@ Table work_orders {
   scrapQty decimal [null, default: 0]
   scrapReason varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
 
@@ -2570,7 +3279,7 @@ Table work_center_capacities {
   capacity decimal
   allocated decimal [default: 0]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, workCenterId, date) [unique]
@@ -2592,7 +3301,7 @@ Table saved_reports {
   pinnedToDashboard boolean [default: false]
   createdBy varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, module)
@@ -2613,7 +3322,7 @@ Table saved_views {
   isDefault boolean [default: false]
   createdById varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, listKey)
@@ -2648,7 +3357,7 @@ Table domain_event_outbox {
   resolvedById varchar [null]
   resolutionNote varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, idempotencyKey) [unique]
@@ -2664,26 +3373,41 @@ Table domain_event_outbox {
 Table demo_requests {
   id varchar [pk, default: `cuid(1)`]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   fullName varchar
   companyName varchar
   email varchar
   phone varchar [null]
   plan Plan [default: 'STARTER']
   status DemoRequestStatus [default: 'PENDING']
-  tenantId varchar [null]
-  setPasswordToken varchar [null]
+  tenantId varchar [null, note: 'Provisioning sonrası oluşturulan tenant']
+  setPasswordToken varchar [null, note: 'Şifre belirleme token\'ı']
   setPasswordExpiry timestamp [null]
   notes varchar [null]
   rejectedReason varchar [null]
   processedAt timestamp [null]
   processedBy varchar [null]
+  ownerId varchar [null]
+  slaDueAt timestamp [default: `dbgenerated((now() + '04:00:00'::interval))`]
 
   indexes {
     (email)
     (status)
     (tenantId)
     (createdAt)
+  }
+}
+
+Table demo_request_history {
+  id varchar [pk, default: `cuid(1)`]
+  demoRequestId varchar
+  action varchar
+  note varchar [null]
+  actorId varchar [null]
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (demoRequestId, createdAt)
   }
 }
 
@@ -2702,7 +3426,7 @@ Table sales_quotes {
   totalTax decimal [default: 0]
   totalGross decimal [default: 0]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
   updatedById varchar [null]
@@ -2748,9 +3472,9 @@ Table sales_orders {
   totalNet decimal [default: 0]
   totalTax decimal [default: 0]
   totalGross decimal [default: 0]
-  invoicedAmount decimal [default: 0]
+  invoicedAmount decimal [default: 0, note: '@computed - must be updated within the same transaction as the parent write\nUpdate this field whenever a PaymentAllocation or Invoice linked to this order changes (application layer responsibility)']
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
   updatedById varchar [null]
@@ -2770,7 +3494,7 @@ Table sales_order_items {
   productId varchar
   description varchar [null]
   quantity decimal
-  delivered decimal [default: 0]
+  delivered decimal [default: 0, note: '@computed - must be updated within the same transaction as the parent write']
   unitPrice decimal
   discount decimal [default: 0]
   taxRate decimal [default: 0]
@@ -2815,7 +3539,7 @@ Table delivery_notes {
   carrier varchar [null]
   notes varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
   updatedById varchar [null]
@@ -2848,6 +3572,31 @@ Table delivery_note_items {
   }
 }
 
+Table platform_security_findings {
+  id varchar [pk, default: `cuid(1)`]
+  key varchar [unique]
+  title varchar
+  category varchar
+  severity varchar
+  status varchar [default: 'OPEN']
+  verificationStatus varchar
+  owner varchar [null]
+  remediation varchar
+  evidence jsonb
+  ticketId varchar [null]
+  firstSeenAt timestamp [default: `now()`]
+  lastSeenAt timestamp [default: `now()`]
+  verifiedAt timestamp [null]
+  resolvedAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (status, severity, lastSeenAt)
+    (category, verificationStatus)
+  }
+}
+
 Table customer_assets {
   id varchar [pk, default: `cuid(1)`]
   tenantId varchar
@@ -2861,7 +3610,7 @@ Table customer_assets {
   notes varchar [null]
   isActive boolean [default: true]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
 
@@ -2885,7 +3634,7 @@ Table service_requests {
   priority Priority [default: 'MEDIUM']
   closedAt timestamp [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
   createdById varchar [null]
   updatedById varchar [null]
@@ -2942,6 +3691,93 @@ Table service_request_history {
   }
 }
 
+Table tenant_storage_usage {
+  tenantId varchar [pk]
+  usedBytes bigint [default: '0']
+  reservedBytes bigint [default: '0']
+  version integer [default: 0]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+}
+
+Table storage_reservations {
+  id varchar [pk, default: `cuid(1)`]
+  tenantId varchar
+  source StorageReservationSource
+  status StorageReservationStatus [default: 'RESERVED']
+  objectKey varchar [unique]
+  originalName varchar
+  contentType varchar
+  createdById varchar
+  expectedBytes bigint
+  resourceId varchar [null]
+  expiresAt timestamp
+  uploadedAt timestamp [null]
+  finalizedAt timestamp [null]
+  failureReason varchar [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (tenantId, status, expiresAt)
+    (status, updatedAt)
+  }
+}
+
+Table storage_traffic_daily {
+  tenantId varchar
+  day timestamp
+  uploadedBytes bigint [default: '0']
+  downloadedBytes bigint [default: '0']
+  uploadCount integer [default: 0]
+  downloadCount integer [default: 0]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (tenantId, day) [pk]
+    (day, downloadedBytes)
+  }
+}
+
+Table platform_support_tickets {
+  id varchar [pk, default: `cuid(1)`]
+  ticketNumber varchar [unique]
+  tenantId varchar
+  createdById varchar
+  title varchar
+  description varchar
+  category PlatformTicketCategory [default: 'TECHNICAL']
+  priority PlatformTicketPriority [default: 'MEDIUM']
+  status PlatformTicketStatus [default: 'OPEN']
+  assignedAdminId varchar [null]
+  resolvedAt timestamp [null]
+  closedAt timestamp [null]
+  createdAt timestamp [default: `now()`]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
+
+  indexes {
+    (tenantId, status, createdAt)
+    (status, priority, createdAt)
+    (assignedAdminId, status)
+  }
+}
+
+Table platform_ticket_messages {
+  id varchar [pk, default: `cuid(1)`]
+  ticketId varchar
+  senderType PlatformTicketSender
+  authorUserId varchar [null]
+  authorAdminId varchar [null]
+  message varchar
+  isInternal boolean [default: false]
+  createdAt timestamp [default: `now()`]
+
+  indexes {
+    (ticketId, createdAt)
+  }
+}
+
 Table record_collaboration_entries {
   id varchar [pk, default: `cuid(1)`]
   tenantId varchar
@@ -2953,7 +3789,7 @@ Table record_collaboration_entries {
   externalId varchar [null]
   createdById varchar
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, entityType, entityId, createdAt)
@@ -2995,7 +3831,7 @@ Table mail_messages {
   sentById varchar [null]
   sentAt timestamp [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, direction, createdAt)
@@ -3022,7 +3858,7 @@ Table tasks {
   dueAt timestamp [null]
   completedAt timestamp [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
 
   indexes {
     (tenantId, source) [unique]
@@ -3048,7 +3884,7 @@ Table automation_rules {
   createdById varchar [null]
   updatedById varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   deletedAt timestamp [null]
 
   indexes {
@@ -3091,7 +3927,7 @@ Table approval_flows {
   conditions jsonb [null]
   isActive boolean [default: true]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   createdById varchar [null]
 
   indexes {
@@ -3126,7 +3962,7 @@ Table approval_requests {
   requestedBy varchar [null]
   notes varchar [null]
   createdAt timestamp [default: `now()`]
-  updatedAt timestamp [note: "Automatically updated timestamp"]
+  updatedAt timestamp [note: 'Automatically updated timestamp']
   resolvedAt timestamp [null]
 
   indexes {
@@ -3154,6 +3990,11 @@ Table approval_actions {
 
 // RELATIONSHIPS
 
+Ref: admin_idempotency_records.adminId > admin_users.id [delete: cascade]
+Ref: admin_saved_list_views.adminId > admin_users.id [delete: cascade]
+Ref: admin_sensitive_access_grants.adminId > admin_users.id [delete: cascade]
+Ref: admin_sensitive_access_grants.tenantId > tenants.id [delete: cascade]
+Ref: admin_ui_preferences.adminId > admin_users.id [delete: cascade]
 Ref: units.tenantId > tenants.id [delete: cascade]
 Ref: categories.tenantId > tenants.id [delete: cascade]
 Ref: categories.parentId > categories.id
@@ -3165,6 +4006,58 @@ Ref: products.tenantId > tenants.id [delete: cascade]
 Ref: products.categoryId > categories.id
 Ref: products.unitId > units.id
 Ref: products.taxRateId > tax_rates.id
+Ref: chat_conversations.tenantId > tenants.id [delete: cascade]
+Ref: chat_conversations.createdById > users.id
+Ref: chat_realtime_outbox.tenantId > tenants.id [delete: cascade]
+Ref: chat_realtime_outbox.conversationId > chat_conversations.id [delete: cascade]
+Ref: chat_conversation_members.tenantId > tenants.id [delete: cascade]
+Ref: chat_conversation_members.conversationId > chat_conversations.id [delete: cascade]
+Ref: chat_conversation_members.userId > users.id [delete: cascade]
+Ref: chat_messages.tenantId > tenants.id [delete: cascade]
+Ref: chat_messages.conversationId > chat_conversations.id [delete: cascade]
+Ref: chat_messages.senderId > users.id
+Ref: chat_messages.replyToMessageId > chat_messages.id [delete: set null]
+Ref: chat_message_revisions.tenantId > tenants.id [delete: cascade]
+Ref: chat_message_revisions.messageId > chat_messages.id [delete: cascade]
+Ref: chat_message_revisions.editorId > users.id
+Ref: chat_message_mentions.tenantId > tenants.id [delete: cascade]
+Ref: chat_message_mentions.messageId > chat_messages.id [delete: cascade]
+Ref: chat_message_mentions.mentionedUserId > users.id [delete: cascade]
+Ref: chat_message_stars.tenantId > tenants.id [delete: cascade]
+Ref: chat_message_stars.messageId > chat_messages.id [delete: cascade]
+Ref: chat_message_stars.userId > users.id [delete: cascade]
+Ref: chat_message_reactions.tenantId > tenants.id [delete: cascade]
+Ref: chat_message_reactions.messageId > chat_messages.id [delete: cascade]
+Ref: chat_message_reactions.userId > users.id [delete: cascade]
+Ref: chat_pinned_messages.tenantId > tenants.id [delete: cascade]
+Ref: chat_pinned_messages.conversationId > chat_conversations.id [delete: cascade]
+Ref: chat_pinned_messages.messageId > chat_messages.id [delete: cascade]
+Ref: chat_pinned_messages.pinnedById > users.id
+Ref: chat_attachments.tenantId > tenants.id [delete: cascade]
+Ref: chat_attachments.uploaderId > users.id
+Ref: chat_attachments.messageId > chat_messages.id [delete: set null]
+Ref: chat_group_invites.tenantId > tenants.id [delete: cascade]
+Ref: chat_group_invites.conversationId > chat_conversations.id [delete: cascade]
+Ref: chat_group_invites.inviterId > users.id
+Ref: chat_group_invites.inviteeId > users.id
+Ref: chat_polls.tenantId > tenants.id [delete: cascade]
+Ref: chat_polls.conversationId > chat_conversations.id [delete: cascade]
+Ref: chat_polls.messageId - chat_messages.id [delete: cascade]
+Ref: chat_polls.createdById > users.id
+Ref: chat_poll_options.tenantId > tenants.id [delete: cascade]
+Ref: chat_poll_options.pollId > chat_polls.id [delete: cascade]
+Ref: chat_poll_votes.tenantId > tenants.id [delete: cascade]
+Ref: chat_poll_votes.pollId > chat_polls.id [delete: cascade]
+Ref: chat_poll_votes.optionId > chat_poll_options.id [delete: cascade]
+Ref: chat_poll_votes.userId > users.id [delete: cascade]
+Ref: chat_events.tenantId > tenants.id [delete: cascade]
+Ref: chat_events.conversationId > chat_conversations.id [delete: cascade]
+Ref: chat_events.messageId - chat_messages.id [delete: cascade]
+Ref: chat_events.createdById > users.id
+Ref: chat_event_responses.tenantId > tenants.id [delete: cascade]
+Ref: chat_event_responses.eventId > chat_events.id [delete: cascade]
+Ref: chat_event_responses.userId > users.id [delete: cascade]
+Ref: platform_restore_drills.backupId > platform_backup_evidence.id [delete: restrict]
 Ref: invoices.tenantId > tenants.id [delete: cascade]
 Ref: invoices.contactId > contacts.id
 Ref: invoices.salesOrderId > sales_orders.id
@@ -3232,6 +4125,9 @@ Ref: api_keys.tenantId > tenants.id [delete: cascade]
 Ref: invitations.tenantId > tenants.id [delete: cascade]
 Ref: invitations.roleId > roles.id
 Ref: invitations.invitedBy > users.id
+Ref: platform_incident_tenants.incidentId > platform_incidents.id [delete: cascade]
+Ref: platform_incident_timeline.incidentId > platform_incidents.id [delete: cascade]
+Ref: platform_incident_communications.incidentId > platform_incidents.id [delete: cascade]
 Ref: warehouses.tenantId > tenants.id [delete: cascade]
 Ref: locations.warehouseId > warehouses.id [delete: cascade]
 Ref: locations.tenantId > tenants.id [delete: cascade]
@@ -3344,6 +4240,7 @@ Ref: saved_reports.tenantId > tenants.id [delete: cascade]
 Ref: saved_views.tenantId > tenants.id [delete: cascade]
 Ref: domain_event_outbox.tenantId > tenants.id [delete: cascade]
 Ref: demo_requests.tenantId > tenants.id
+Ref: demo_request_history.demoRequestId > demo_requests.id [delete: cascade]
 Ref: sales_quotes.tenantId > tenants.id [delete: cascade]
 Ref: sales_quotes.contactId > contacts.id
 Ref: sales_quote_items.quoteId > sales_quotes.id [delete: cascade]
@@ -3381,6 +4278,15 @@ Ref: service_activities.serviceRequestId > service_requests.id [delete: cascade]
 Ref: service_activities.tenantId > tenants.id [delete: cascade]
 Ref: service_request_history.serviceRequestId > service_requests.id [delete: cascade]
 Ref: service_request_history.tenantId > tenants.id [delete: cascade]
+Ref: tenant_storage_usage.tenantId > tenants.id [delete: cascade]
+Ref: storage_reservations.tenantId > tenants.id [delete: cascade]
+Ref: storage_traffic_daily.tenantId > tenants.id [delete: cascade]
+Ref: platform_support_tickets.tenantId > tenants.id [delete: cascade]
+Ref: platform_support_tickets.createdById > users.id [delete: restrict]
+Ref: platform_support_tickets.assignedAdminId > admin_users.id [delete: set null]
+Ref: platform_ticket_messages.ticketId > platform_support_tickets.id [delete: cascade]
+Ref: platform_ticket_messages.authorUserId > users.id [delete: set null]
+Ref: platform_ticket_messages.authorAdminId > admin_users.id [delete: set null]
 Ref: record_collaboration_entries.tenantId > tenants.id [delete: cascade]
 Ref: record_collaboration_entries.createdById > users.id [delete: restrict]
 Ref: record_followers.tenantId > tenants.id [delete: cascade]
@@ -3399,3 +4305,244 @@ Ref: approval_requests.tenantId > tenants.id [delete: cascade]
 Ref: approval_requests.flowId > approval_flows.id
 Ref: approval_actions.requestId > approval_requests.id [delete: cascade]
 Ref: approval_actions.stepId > approval_steps.id
+
+
+
+// TABLE GROUPS (DOMAINS)
+
+TableGroup Identity_and_Access {
+  tenants
+  users
+  admin_users
+  admin_sessions
+  admin_security_events
+  admin_roles
+  admin_permissions
+  admin_user_roles
+  admin_role_permissions
+  tenant_users
+  roles
+  role_permissions
+  plan_features
+  tenant_feature_overrides
+  feature_rollouts
+  api_keys
+  invitations
+}
+
+TableGroup Admin_Operations {
+  admin_idempotency_records
+  admin_inbox_item_states
+  admin_inbox_preferences
+  admin_inbox_task_states
+  admin_saved_list_views
+  admin_sensitive_access_grants
+  admin_ui_preferences
+}
+
+TableGroup Platform_Core {
+  number_sequences
+  tenant_settings
+  module_settings
+  admin_change_requests
+  observability_metric_points
+  observability_slos
+  observability_alert_history
+  deployment_markers
+  observability_log_entries
+  audit_logs
+  tenant_support_notes
+  support_sessions
+  tenant_lifecycle_requests
+  tenant_lifecycle_exports
+  tenant_provisioning_jobs
+  tenant_provisioning_steps
+  billing_subscriptions
+  billing_invoices
+  billing_provider_events
+  billing_coupons
+  subscription_discounts
+  custom_price_requests
+  ai_request_logs
+  attachments
+  notifications
+  currencies
+  currency_rates
+}
+
+TableGroup Platform_Audit {
+  platform_admin_audit_logs
+  platform_audit_policies
+}
+
+TableGroup Security_Center {
+  platform_security_findings
+}
+
+TableGroup Disaster_Recovery {
+  platform_backup_evidence
+  platform_restore_drills
+  platform_disaster_recovery_policies
+}
+
+TableGroup Incident_Management {
+  platform_incidents
+  platform_incident_tenants
+  platform_incident_timeline
+  platform_incident_communications
+}
+
+TableGroup Support_Tickets {
+  platform_support_tickets
+  platform_ticket_messages
+}
+
+TableGroup Privacy_and_Compliance {
+  data_subject_requests
+  privacy_legal_holds
+  privacy_download_grants
+}
+
+TableGroup Storage_Accounting {
+  tenant_storage_usage
+  storage_reservations
+  storage_traffic_daily
+}
+
+TableGroup Catalog_and_Products {
+  units
+  categories
+  tax_rates
+  contacts
+  account_entries
+  products
+}
+
+TableGroup Sales_and_CRM {
+  sales_quotes
+  sales_quote_items
+  sales_orders
+  sales_order_items
+  sales_order_history
+  delivery_notes
+  delivery_note_items
+}
+
+TableGroup Procurement_and_Purchasing {
+  purchase_requests
+  purchase_request_items
+  purchase_orders
+  purchase_order_items
+  purchase_order_history
+}
+
+TableGroup Inventory_and_Warehousing {
+  warehouses
+  locations
+  stock_levels
+  stock_movements
+  stock_valuations
+  stock_counts
+  stock_count_items
+  inventory_reservations
+  product_batches
+  lot_serial_numbers
+}
+
+TableGroup Manufacturing_and_Production {
+  work_centers
+  boms
+  bom_items
+  routing_operations
+  work_orders
+  work_order_items
+  work_order_operations
+  work_order_history
+  work_center_capacities
+}
+
+TableGroup Finance_and_Accounting {
+  invoices
+  invoice_lines
+  invoice_history
+  e_documents
+  bank_accounts
+  cash_accounts
+  bank_transactions
+  check_promissory_notes
+  payments
+  payment_allocations
+  ledger_accounts
+  fiscal_periods
+  journal_entries
+  journal_entry_lines
+  reconciliations
+  reconciliation_lines
+  collection_reminders
+}
+
+TableGroup HR_and_Payroll {
+  employees
+  leave_requests
+  attendances
+  payrolls
+  payroll_items
+}
+
+TableGroup Field_Service {
+  customer_assets
+  service_requests
+  service_request_items
+  service_activities
+  service_request_history
+}
+
+TableGroup Marketplace_and_Integrations {
+  marketplace_integrations
+  marketplace_listings
+  marketplace_orders
+  marketplace_order_items
+  marketplace_sync_jobs
+  marketplace_webhook_events
+  marketplace_listing_snapshots
+}
+
+TableGroup Chat_and_Collaboration {
+  chat_conversations
+  chat_realtime_outbox
+  chat_conversation_members
+  chat_messages
+  chat_message_revisions
+  chat_message_mentions
+  chat_message_stars
+  chat_message_reactions
+  chat_pinned_messages
+  chat_attachments
+  chat_group_invites
+  chat_polls
+  chat_poll_options
+  chat_poll_votes
+  chat_events
+  chat_event_responses
+}
+
+TableGroup Workflow_and_Approvals {
+  record_collaboration_entries
+  record_followers
+  mail_messages
+  tasks
+  automation_rules
+  automation_executions
+  approval_flows
+  approval_steps
+  approval_requests
+  approval_actions
+}
+
+TableGroup Reporting_and_Analytics {
+  saved_reports
+  saved_views
+  domain_event_outbox
+  demo_requests
+  demo_request_history
+}

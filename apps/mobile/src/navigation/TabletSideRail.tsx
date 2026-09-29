@@ -12,9 +12,11 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../design-system/hooks/useTheme';
 import { useResponsive } from '../design-system/hooks/useResponsive';
 import { MainTabParamList } from '../types/navigation.types';
+import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '../store/auth.store';
 import { useNotificationStore } from '../store/notification.store';
 import { useApprovalStore } from '../store/approval.store';
+import { useTenantChatStore } from '../store/tenant-chat.store';
 
 export interface TabletSideRailProps {
   activeRouteName: keyof MainTabParamList;
@@ -35,8 +37,10 @@ export const TabletSideRail: React.FC<TabletSideRailProps> = ({
 }) => {
   const { theme, toggleTheme, isDark } = useTheme();
   const { isLandscape, insets } = useResponsive();
+  const rootNav = useNavigation<any>();
   const { tenant } = useAuthStore();
   const { unreadCount } = useNotificationStore();
+  const chatUnreadCount = useTenantChatStore((state) => state.unreadCount);
   const { requests } = useApprovalStore();
 
   const pendingApprovalsCount = requests.filter((r) => r.status === 'PENDING').length;
@@ -175,6 +179,38 @@ export const TabletSideRail: React.FC<TabletSideRailProps> = ({
 
       {/* Bottom Footer Actions */}
       <View style={styles.footerActions}>
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            rootNav.navigate('TenantChat');
+          }}
+          style={[
+            styles.footerBtn,
+            isExpanded && styles.footerBtnExpanded,
+            { backgroundColor: theme.colors.surface1, borderColor: theme.colors.borderSubtle, marginBottom: 6 },
+          ]}
+        >
+          <View style={styles.iconWrap}>
+            <Ionicons
+              name="chatbubbles-outline"
+              size={18}
+              color={theme.colors.textSecondary}
+            />
+            {chatUnreadCount > 0 && (
+              <View style={[styles.badgeDot, { backgroundColor: theme.colors.primary }]}>
+                <Text style={styles.badgeText}>
+                  {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                </Text>
+              </View>
+            )}
+          </View>
+          {isExpanded && (
+            <Text style={[styles.footerBtnText, { color: theme.colors.textSecondary }]}>
+              Tenant Sohbet
+            </Text>
+          )}
+        </TouchableOpacity>
+
         <TouchableOpacity
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});

@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore } from '../store/auth.store';
 import { useNotificationStore } from '../store/notification.store';
+import { useTenantChatStore } from '../store/tenant-chat.store';
 import { useAppDispatch, useAppSelector } from '../store/redux';
 import { selectPendingMutationsCount } from '../store/redux/offlineOutboxSlice';
 import { setMode } from '../store/redux/warehouseSessionSlice';
@@ -75,6 +76,8 @@ export default function DashboardScreen() {
     initializePushNotifications,
   } = useNotificationStore();
 
+  const chatUnreadCount = useTenantChatStore((state) => state.unreadCount);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,8 +104,9 @@ export default function DashboardScreen() {
       setError(null);
       const data = await getMobileDashboard();
       setDashboardData(data);
-      // Sync unread notification count
+      // Sync unread notification and chat counts
       useNotificationStore.getState().setUnreadCount(data.unreadNotificationCount);
+      void useTenantChatStore.getState().loadConversations(true);
     } catch (err: unknown) {
       console.warn('[DashboardScreen] Fetch error:', err);
       setError('Veriler yüklenirken bir sorun oluştu');
@@ -289,6 +293,36 @@ export default function DashboardScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="search-outline" size={20} color={theme.colors.text} />
+          </TouchableOpacity>
+
+          {/* Tenant Collaboration Chat Button with Badge */}
+          <TouchableOpacity
+            style={[
+              styles.iconBtn,
+              {
+                backgroundColor: theme.colors.borderSubtle,
+                borderColor: theme.colors.border,
+              },
+            ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              navigation.navigate('TenantChat');
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chatbubbles-outline" size={20} color={theme.colors.text} />
+            {chatUnreadCount > 0 && (
+              <View
+                style={[
+                  styles.bellBadge,
+                  { backgroundColor: theme.colors.primary },
+                ]}
+              >
+                <Text style={styles.bellBadgeText}>
+                  {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           {/* Notification Bell with Badge */}

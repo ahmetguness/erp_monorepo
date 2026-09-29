@@ -20,8 +20,9 @@ export function registerChatWebSocket(app: Hono, allowedOrigins: readonly string
   injectors.set(app, (server) => injectWebSocket(server));
   app.use('/api/chat/ws', async (context, next) => {
     const origin = context.req.header('Origin');
+    const isMobile = context.req.header('X-Client-Platform') === 'mobile' || !origin;
     const localOrigin = !isProduction && origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-    if (!origin || (!allowedOrigins.includes(origin) && !localOrigin)) {
+    if (!isMobile && (!allowedOrigins.includes(origin!) && !localOrigin)) {
       return context.json(new ForbiddenError('WebSocket origin reddedildi.').toJSON(), 403);
     }
     await next();

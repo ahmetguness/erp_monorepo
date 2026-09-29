@@ -39,7 +39,7 @@ export async function requireAuth(c: Context, next: Next) {
   }
   const auth = c.req.header('Authorization');
   const cookieToken = getCookie(c, 'axon_token');
-  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : cookieToken;
+  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : (cookieToken ?? c.req.query('token'));
 
   if (!token) {
     return c.json(new ForbiddenError('Yetkilendirme gerekli.').toJSON(), 401);

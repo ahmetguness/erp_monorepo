@@ -45,6 +45,9 @@ export type RootStackParamList = {
     initialPrompt?: string;
   } | undefined;
   GlobalSearch: undefined;
+  TenantChat: {
+    conversationId?: string;
+  } | undefined;
 };
 
 export type DashboardScreenNavigationProp = CompositeNavigationProp<

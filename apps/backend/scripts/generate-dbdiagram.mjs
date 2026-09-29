@@ -45,16 +45,48 @@ try {
   } catch {}
 }
 
+const DOMAIN_GROUPS = {
+  'identity.prisma': 'Identity_and_Access',
+  'admin-api-safety.prisma': 'Admin_Operations',
+  'admin-inbox.prisma': 'Admin_Operations',
+  'admin-list-operations.prisma': 'Admin_Operations',
+  'admin-sensitive-data.prisma': 'Admin_Operations',
+  'admin-ui-preferences.prisma': 'Admin_Operations',
+  'platform.prisma': 'Platform_Core',
+  'platform-audit.prisma': 'Platform_Audit',
+  'security-center.prisma': 'Security_Center',
+  'disaster-recovery.prisma': 'Disaster_Recovery',
+  'incidents.prisma': 'Incident_Management',
+  'support-tickets.prisma': 'Support_Tickets',
+  'privacy-operations.prisma': 'Privacy_and_Compliance',
+  'storage-usage.prisma': 'Storage_Accounting',
+  'catalog.prisma': 'Catalog_and_Products',
+  'sales.prisma': 'Sales_and_CRM',
+  'procurement.prisma': 'Procurement_and_Purchasing',
+  'inventory.prisma': 'Inventory_and_Warehousing',
+  'production.prisma': 'Manufacturing_and_Production',
+  'finance.prisma': 'Finance_and_Accounting',
+  'hr.prisma': 'HR_and_Payroll',
+  'service.prisma': 'Field_Service',
+  'marketplace.prisma': 'Marketplace_and_Integrations',
+  'chat.prisma': 'Chat_and_Collaboration',
+  'workflow.prisma': 'Workflow_and_Approvals',
+  'reporting.prisma': 'Reporting_and_Analytics',
+};
+
 const schemaIndexes = new Map();
+const modelDomainMap = new Map();
 for (const file of fs.readdirSync(schemaDirectory).filter((name) => name.endsWith('.prisma'))) {
   const source = fs.readFileSync(path.join(schemaDirectory, file), 'utf8');
   for (const match of source.matchAll(/model\s+(\w+)\s*\{([\s\S]*?)\n\}/g)) {
+    const modelName = match[1];
+    modelDomainMap.set(modelName, DOMAIN_GROUPS[file] ?? 'Other');
     const indexes = [...match[2].matchAll(/@@index\s*\(\s*\[([^\]]+)](?:\s*,\s*map:\s*"([^"]+)")?\s*\)/g)]
       .map((indexMatch) => ({
         fields: indexMatch[1].split(',').map((field) => field.trim().replace(/\(.+\)$/, '')),
         name: indexMatch[2] ?? null,
       }));
-    schemaIndexes.set(match[1], indexes);
+    schemaIndexes.set(modelName, indexes);
   }
 }
 
@@ -114,7 +146,10 @@ function fieldAttributes(field) {
     const renderedDefault = defaultValue(field.default);
     if (renderedDefault !== null) attributes.push(`default: ${renderedDefault}`);
   }
-  if (field.isUpdatedAt) attributes.push('note: "Automatically updated timestamp"');
+  const notes = [];
+  if (field.isUpdatedAt) notes.push('Automatically updated timestamp');
+  if (field.documentation) notes.push(field.documentation.replaceAll("'", "\\'").replaceAll(/\r?\n/g, ' '));
+  if (notes.length > 0) attributes.push(`note: '${notes.join('. ')}'`);
   return attributes.length > 0 ? ` [${attributes.join(', ')}]` : '';
 }
 
@@ -150,7 +185,10 @@ function renderTable(model) {
     .filter((field) => field.kind !== 'object')
     .map((field) => `  ${field.dbName ?? field.name} ${dbmlType(field)}${fieldAttributes(field)}`)
     .join('\n');
-  return `Table ${model.dbName ?? model.name} {\n${fields}${renderIndexes(model)}\n}`;
+  const note = model.documentation
+    ? `\n\n  Note: '${model.documentation.replaceAll("'", "\\'").replaceAll(/\r?\n/g, ' ')}'`
+    : '';
+  return `Table ${model.dbName ?? model.name} {\n${fields}${renderIndexes(model)}${note}\n}`;
 }
 
 function renderRelations() {
@@ -186,6 +224,53 @@ function renderRelations() {
   return relations.join('\n');
 }
 
+function renderTableGroups() {
+  const groupOrder = [
+    'Identity_and_Access',
+    'Admin_Operations',
+    'Platform_Core',
+    'Platform_Audit',
+    'Security_Center',
+    'Disaster_Recovery',
+    'Incident_Management',
+    'Support_Tickets',
+    'Privacy_and_Compliance',
+    'Storage_Accounting',
+    'Catalog_and_Products',
+    'Sales_and_CRM',
+    'Procurement_and_Purchasing',
+    'Inventory_and_Warehousing',
+    'Manufacturing_and_Production',
+    'Finance_and_Accounting',
+    'HR_and_Payroll',
+    'Field_Service',
+    'Marketplace_and_Integrations',
+    'Chat_and_Collaboration',
+    'Workflow_and_Approvals',
+    'Reporting_and_Analytics',
+  ];
+
+  const groups = new Map();
+  for (const name of groupOrder) {
+    groups.set(name, []);
+  }
+
+  for (const model of datamodel.models) {
+    const groupName = modelDomainMap.get(model.name) ?? 'Other';
+    if (!groups.has(groupName)) groups.set(groupName, []);
+    const tblName = model.dbName ?? model.name;
+    groups.get(groupName).push(tblName);
+  }
+
+  const tableGroups = [];
+  for (const [groupName, tables] of groups.entries()) {
+    if (tables.length === 0) continue;
+    const tableList = tables.map((t) => `  ${t}`).join('\n');
+    tableGroups.push(`TableGroup ${groupName} {\n${tableList}\n}`);
+  }
+  return tableGroups.join('\n\n');
+}
+
 const output = [
   '// Generated from apps/backend/prisma/schema. Do not edit manually.',
   '// Regenerate with: npm --workspace=@repo/backend run db:diagram',
@@ -203,6 +288,9 @@ const output = [
   '',
   '// RELATIONSHIPS',
   renderRelations(),
+  '',
+  '// TABLE GROUPS (DOMAINS)',
+  renderTableGroups(),
   '',
 ].join('\n\n');
 
