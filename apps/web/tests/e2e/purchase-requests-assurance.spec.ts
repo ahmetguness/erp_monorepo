@@ -72,8 +72,13 @@ test("purchase requests UI edits, submits, approves, audits and survives navigat
     await expect(
       page.getByRole("heading", { name: /Sat.*n Alma Talepleri/ }),
     ).toBeVisible();
-    const lateOnboardingClose = page.getByRole("button", { name: /Onboarding.*kapat/ });
-    await lateOnboardingClose.waitFor({ state: "visible", timeout: 2000 }).then(() => lateOnboardingClose.click()).catch(() => undefined);
+    const lateOnboardingClose = page.getByRole("button", {
+      name: /Onboarding.*kapat/,
+    });
+    await lateOnboardingClose
+      .waitFor({ state: "visible", timeout: 2000 })
+      .then(() => lateOnboardingClose.click())
+      .catch(() => undefined);
     await expect(page.getByPlaceholder(/Talep no/)).toBeVisible();
     await page.getByPlaceholder(/Talep no/).fill(marker);
     await expect(page.getByText(number, { exact: true })).toBeVisible();
@@ -85,25 +90,65 @@ test("purchase requests UI edits, submits, approves, audits and survives navigat
       .getByRole("dialog")
       .getByRole("button", { name: /Düzenle/, exact: true })
       .click();
-    await page.getByRole("dialog").getByLabel(/Notlar/).fill(`${marker}_UPDATED`);
-    await page.getByRole("dialog").getByLabel(/Miktar/).fill("3");
+    await page
+      .getByRole("dialog")
+      .getByLabel(/Notlar/)
+      .fill(`${marker}_UPDATED`);
+    await page
+      .getByRole("dialog")
+      .getByLabel(/Miktar/)
+      .fill("3");
     await page
       .getByRole("dialog")
       .getByRole("button", { name: /Değişiklikleri kaydet/ })
       .click();
     await expect(page.getByText(/Talep güncellendi/)).toBeVisible();
-    await expect.poll(async () => Number((await prisma.purchaseRequest.findUnique({ where: { id: requestId } }))?.totalEstimated)).toBe(52.5);
+    await expect
+      .poll(async () =>
+        Number(
+          (
+            await prisma.purchaseRequest.findUnique({
+              where: { id: requestId },
+            })
+          )?.totalEstimated,
+        ),
+      )
+      .toBe(52.5);
     await page.getByText(number, { exact: true }).click();
     await expect(page.getByRole("dialog")).toContainText(`${marker}_UPDATED`);
-    await page.getByRole("dialog").getByRole("button", { name: /Onaya gönder/, exact: true }).click({ force: true });
-    await page.getByRole("dialog").last().getByRole("button", { name: /Devam et/ }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /Onaya gönder/, exact: true })
+      .click({ force: true });
+    await page
+      .getByRole("dialog")
+      .last()
+      .getByRole("button", { name: /Devam et/ })
+      .click();
     await expect(page.getByText(/Talep onaya gönderildi/)).toBeVisible();
-    await expect.poll(async () => (await prisma.purchaseRequest.findUnique({ where: { id: requestId } }))?.status).toBe("PENDING_APPROVAL");
-    await page.getByRole("button", { name: "Tümü", exact: true }).click({ force: true });
+    await expect
+      .poll(
+        async () =>
+          (
+            await prisma.purchaseRequest.findUnique({
+              where: { id: requestId },
+            })
+          )?.status,
+      )
+      .toBe("PENDING_APPROVAL");
+    await page
+      .getByRole("button", { name: "Tümü", exact: true })
+      .click({ force: true });
     await page.getByText(number, { exact: true }).click();
     await expect(page.getByRole("dialog")).toContainText("Geçmiş");
-    await page.getByRole("dialog").getByRole("button", { name: /Onayla/, exact: true }).click();
-    await page.getByRole("button", { name: /Onayla/, exact: true }).last().click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /Onayla/, exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: /Onayla/, exact: true })
+      .last()
+      .click();
     await expect(page.getByText(/Talep onayland/)).toBeVisible();
     await expect
       .poll(
@@ -128,7 +173,9 @@ test("purchase requests UI edits, submits, approves, audits and survives navigat
       .getByRole("dialog")
       .getByRole("button", { name: /Talebi olu.*tur/ })
       .click({ force: true });
-    await expect(page.getByRole("dialog").getByText("Yeni satın alma talebi")).toBeVisible();
+    await expect(
+      page.getByRole("dialog").getByText("Yeni satın alma talebi"),
+    ).toBeVisible();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: /ptal/ })
@@ -154,7 +201,9 @@ test("purchase requests UI edits, submits, approves, audits and survives navigat
     ).toEqual([]);
   } finally {
     if (requestId) {
-      await prisma.auditLog.deleteMany({ where: { module: "purchasing.purchase-request", entityId: requestId } });
+      await prisma.auditLog.deleteMany({
+        where: { module: "purchasing.purchase-request", entityId: requestId },
+      });
       await prisma.purchaseRequest.deleteMany({ where: { id: requestId } });
     }
     if (productId)

@@ -17,7 +17,7 @@ export const StockValuationSchema = z.object({
 
 export type StockValuation = z.infer<typeof StockValuationSchema>;
 
-export interface ListParams extends PaginationParams { productId?: string; warehouseId?: string; dateFrom?: string; dateTo?: string }
+export interface ListParams extends PaginationParams { productId?: string; warehouseId?: string; dateFrom?: string; dateTo?: string; search?: string; movement?: 'in' | 'out' }
 
 export interface CreateStockValuationDTO {
   productId: string;
@@ -34,6 +34,11 @@ export interface CreateStockValuationDTO {
 export async function getStockValuations(params: ListParams) {
   const res = await apiClient.get('/api/stock-valuations', { params });
   return safeParse(PaginatedResponseSchema(StockValuationSchema), res.data, 'getStockValuations');
+}
+
+export async function getStockValuationSummary(params: Omit<ListParams, 'page' | 'limit'>) {
+  const res = await apiClient.get('/api/stock-valuations/summary', { params });
+  return safeParse(z.object({ data: z.array(StockValuationSchema) }), res.data, 'getStockValuationSummary').data;
 }
 
 export async function createStockValuation(data: CreateStockValuationDTO): Promise<StockValuation> {

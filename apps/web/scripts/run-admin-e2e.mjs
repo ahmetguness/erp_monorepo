@@ -6,7 +6,7 @@ import process from 'node:process';
 const port = 3100;
 const managedBaseUrl = `http://127.0.0.1:${port}`;
 const webRoot = process.cwd();
-const nextCli = path.resolve(webRoot, '../../node_modules/next/dist/bin/next');
+const nextCli = path.resolve(webRoot, 'node_modules/next/dist/bin/next');
 const playwrightCli = path.resolve(webRoot, '../../node_modules/@playwright/test/cli.js');
 
 async function available(baseUrl) {

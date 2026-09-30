@@ -121,55 +121,83 @@ export const fulfillSalesOrderBodySchema = z
   })
   .strict();
 
-const deliveryNoteItemBodySchema = z.object({
-  productId: nonEmptyString,
-  description: z.string().trim().max(500).optional(),
-  orderedQty: positiveNumber.max(999999999),
-  deliveredQty: nonNegativeNumber.max(999999999),
-  locationId: optionalString, lotId: optionalString, batchId: optionalString,
-  salesOrderItemId: optionalString, purchaseOrderItemId: optionalString,
-  sortOrder: z.number().int().nonnegative().max(100000).optional(),
-}).strict().refine((value) => value.deliveredQty <= value.orderedQty, {
-  path: ['deliveredQty'], message: 'Teslim miktari siparis miktarini asamaz.',
-});
+const deliveryNoteItemBodySchema = z
+  .object({
+    productId: nonEmptyString,
+    description: z.string().trim().max(500).optional(),
+    orderedQty: positiveNumber.max(999999999),
+    deliveredQty: nonNegativeNumber.max(999999999),
+    locationId: optionalString,
+    lotId: optionalString,
+    batchId: optionalString,
+    salesOrderItemId: optionalString,
+    purchaseOrderItemId: optionalString,
+    sortOrder: z.number().int().nonnegative().max(100000).optional(),
+  })
+  .strict()
+  .refine((value) => value.deliveredQty <= value.orderedQty, {
+    path: ["deliveredQty"],
+    message: "Teslim miktari siparis miktarini asamaz.",
+  });
 
-export const createDeliveryNoteBodySchema = z.object({
-  type: z.nativeEnum(DeliveryNoteType),
-  salesOrderId: optionalString, purchaseOrderId: optionalString, contactId: optionalString,
-  warehouseId: nonEmptyString, date: invoiceDateString,
-  trackingNumber: z.string().trim().max(100).optional(),
-  carrier: z.string().trim().max(200).optional(),
-  notes: z.string().trim().max(2000).optional(),
-  items: z.array(deliveryNoteItemBodySchema).min(1).max(500),
-}).strict().refine((value) => !(value.salesOrderId && value.purchaseOrderId), {
-  path: ['salesOrderId'], message: 'Irsaliye ayni anda satis ve alis siparisine baglanamaz.',
-});
+export const createDeliveryNoteBodySchema = z
+  .object({
+    type: z.nativeEnum(DeliveryNoteType),
+    salesOrderId: optionalString,
+    purchaseOrderId: optionalString,
+    contactId: optionalString,
+    warehouseId: nonEmptyString,
+    date: invoiceDateString,
+    trackingNumber: z.string().trim().max(100).optional(),
+    carrier: z.string().trim().max(200).optional(),
+    notes: z.string().trim().max(2000).optional(),
+    items: z.array(deliveryNoteItemBodySchema).min(1).max(500),
+  })
+  .strict()
+  .refine((value) => !(value.salesOrderId && value.purchaseOrderId), {
+    path: ["salesOrderId"],
+    message: "Irsaliye ayni anda satis ve alis siparisine baglanamaz.",
+  });
 
-export const updateDeliveryNoteStatusBodySchema = z.object({
-  status: z.nativeEnum(DeliveryNoteStatus),
-  shippedAt: invoiceDateString.optional(), deliveredAt: invoiceDateString.optional(),
-}).strict();
+export const updateDeliveryNoteStatusBodySchema = z
+  .object({
+    status: z.nativeEnum(DeliveryNoteStatus),
+    shippedAt: invoiceDateString.optional(),
+    deliveredAt: invoiceDateString.optional(),
+  })
+  .strict();
 
-export const createEDocumentBodySchema = z.object({
-  invoiceId: optionalString,
-  deliveryNoteId: optionalString,
-  type: z.nativeEnum(EDocumentType),
-  submissionIdempotencyKey: z.string().trim().min(8).max(160).optional(),
-}).strict();
+export const createEDocumentBodySchema = z
+  .object({
+    invoiceId: optionalString,
+    deliveryNoteId: optionalString,
+    type: z.nativeEnum(EDocumentType),
+    submissionIdempotencyKey: z.string().trim().min(8).max(160).optional(),
+  })
+  .strict();
 
-export const updateEDocumentStatusBodySchema = z.object({
-  status: z.nativeEnum(EDocumentStatus),
-  providerMessage: z.string().trim().max(2000).optional(),
-  responsePayload: jsonValue.optional(),
-}).strict();
+export const updateEDocumentStatusBodySchema = z
+  .object({
+    status: z.nativeEnum(EDocumentStatus),
+    providerMessage: z.string().trim().max(2000).optional(),
+    responsePayload: jsonValue.optional(),
+  })
+  .strict();
 
-export const eDocumentCallbackBodySchema = z.object({
-  edocumentId: nonEmptyString,
-  status: z.enum([EDocumentStatus.SENT, EDocumentStatus.ACCEPTED, EDocumentStatus.REJECTED, EDocumentStatus.ERROR]),
-  providerCode: z.string().trim().max(100).optional(),
-  message: z.string().trim().max(2000).optional(),
-  responsePayload: jsonValue.optional(),
-}).strict();
+export const eDocumentCallbackBodySchema = z
+  .object({
+    edocumentId: nonEmptyString,
+    status: z.enum([
+      EDocumentStatus.SENT,
+      EDocumentStatus.ACCEPTED,
+      EDocumentStatus.REJECTED,
+      EDocumentStatus.ERROR,
+    ]),
+    providerCode: z.string().trim().max(100).optional(),
+    message: z.string().trim().max(2000).optional(),
+    responsePayload: jsonValue.optional(),
+  })
+  .strict();
 
 const dateString = z
   .string()
@@ -300,15 +328,26 @@ export const createStockMovementBodySchema = z
   .strict()
   .superRefine((value, context) => {
     if (value.type !== MovementType.ADJUSTMENT && value.quantity <= 0) {
-      context.addIssue({ code: "custom", path: ["quantity"], message: "0dan buyuk olmalidir." });
+      context.addIssue({
+        code: "custom",
+        path: ["quantity"],
+        message: "0dan buyuk olmalidir.",
+      });
     }
   });
 
 export const createStockCountBodySchema = z
   .object({
     warehouseId: nonEmptyString,
-    date: nonEmptyString,
-    notes: optionalString,
+    date: nonEmptyString.refine(
+      (value) => !Number.isNaN(new Date(value).getTime()),
+      "Gecerli bir tarih girin.",
+    ),
+    notes: z
+      .string()
+      .trim()
+      .max(2000, "Not en fazla 2000 karakter olabilir.")
+      .optional(),
     items: z
       .array(
         z
@@ -320,14 +359,19 @@ export const createStockCountBodySchema = z
           })
           .strict(),
       )
-      .min(1, "En az bir kalem zorunludur."),
+      .min(1, "En az bir kalem zorunludur.")
+      .max(1000, "Bir sayimda en fazla 1000 kalem olabilir."),
   })
   .strict();
 
 export const finalizeStockCountBodySchema = z
   .object({
     applyAdjustments: z.boolean(),
-    approvalReason: optionalString,
+    approvalReason: z
+      .string()
+      .trim()
+      .max(1000, "Onay sebebi en fazla 1000 karakter olabilir.")
+      .optional(),
   })
   .strict();
 
@@ -428,8 +472,12 @@ export const updateProductBodySchema = createProductBodySchema
 export type CreateInvoiceBody = z.infer<typeof createInvoiceBodySchema>;
 export type UpdateInvoiceBody = z.infer<typeof updateInvoiceBodySchema>;
 export type FulfillSalesOrderBody = z.infer<typeof fulfillSalesOrderBodySchema>;
-export type CreateDeliveryNoteBody = z.infer<typeof createDeliveryNoteBodySchema>;
-export type UpdateDeliveryNoteStatusBody = z.infer<typeof updateDeliveryNoteStatusBodySchema>;
+export type CreateDeliveryNoteBody = z.infer<
+  typeof createDeliveryNoteBodySchema
+>;
+export type UpdateDeliveryNoteStatusBody = z.infer<
+  typeof updateDeliveryNoteStatusBodySchema
+>;
 export type CreateEDocumentBody = z.infer<typeof createEDocumentBodySchema>;
 export type CreateSalesQuoteBody = z.infer<typeof createSalesQuoteBodySchema>;
 export type UpdateSalesQuoteBody = z.infer<typeof updateSalesQuoteBodySchema>;

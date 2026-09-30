@@ -1,30 +1,42 @@
-import { AuditAction,EntityType,MovementType } from '@prisma/client';
-import { Context } from 'hono';
-import { createEventContext,domainEvents } from '../../../../domain-events/index.js';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
-import { prisma } from '../../../../lib/prisma.js';
-import { getValidatedBody } from '../../../../middleware/validateBody.js';
+import { AuditAction, EntityType, MovementType } from "@prisma/client";
+import { Context } from "hono";
 import {
-createStockCountBodySchema,
-createStockMovementBodySchema,
-finalizeStockCountBodySchema,
-} from '../../../../schemas/request-body.schemas.js';
+  createEventContext,
+  domainEvents,
+} from "../../../../domain-events/index.js";
 import {
-assertStockCountApproval,
-convertReorderSuggestionsToPurchaseRequest,
-getAdvancedStockSuggestions,
-getInventoryRules,
-getReorderSuggestions,
-recordInventoryCosting,
-releaseExpiredInventoryReservations,
-resolveStockLevelLocationId,
-} from '../../../../services/inventory-rules.service.js';
-import { StockAlertService } from '../../../../services/stock-alert.service.js';
-import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
-import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
-import { generateDocumentNumber } from '../../../../utils/generate-number.js';
-import { inventoryApplication } from '../../composition.js';
-import { parseRecordStockMovement } from '../../application/operations/index.js';
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from "../../../../errors/index.js";
+import { prisma } from "../../../../lib/prisma.js";
+import { getValidatedBody } from "../../../../middleware/validateBody.js";
+import {
+  createStockCountBodySchema,
+  createStockMovementBodySchema,
+  finalizeStockCountBodySchema,
+} from "../../../../schemas/request-body.schemas.js";
+import {
+  assertStockCountApproval,
+  convertReorderSuggestionsToPurchaseRequest,
+  getAdvancedStockSuggestions,
+  getInventoryRules,
+  getReorderSuggestions,
+  lockInventoryPosition,
+  recordInventoryCosting,
+  releaseExpiredInventoryReservations,
+  resolveStockLevelLocationId,
+} from "../../../../services/inventory-rules.service.js";
+import { StockAlertService } from "../../../../services/stock-alert.service.js";
+import { createAuditLog, getRequestMeta } from "../../../../utils/audit.js";
+import {
+  requireParam,
+  requireTenantId,
+  requireUserId,
+} from "../../../../utils/context.js";
+import { generateDocumentNumber } from "../../../../utils/generate-number.js";
+import { inventoryApplication } from "../../composition.js";
+import { parseRecordStockMovement } from "../../application/operations/index.js";
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -57,9 +69,14 @@ export const StockController = {
 
   async stockAlerts(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const requestedLimit = Number(c.req.query('limit') ?? 8);
-    const limit = Number.isFinite(requestedLimit) ? Math.min(25, Math.max(1, requestedLimit)) : 8;
-    const alerts = await new StockAlertService(prisma).dashboard(tenantId, limit);
+    const requestedLimit = Number(c.req.query("limit") ?? 8);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(25, Math.max(1, requestedLimit))
+      : 8;
+    const alerts = await new StockAlertService(prisma).dashboard(
+      tenantId,
+      limit,
+    );
     return c.json({ data: alerts });
   },
 
@@ -72,7 +89,7 @@ export const StockController = {
       warehouseId: query.warehouseId,
       productId: query.productId,
       locationId: query.locationId,
-      belowMinimum: query.belowMin === 'true',
+      belowMinimum: query.belowMin === "true",
     });
 
     return c.json({ data: result });
@@ -92,7 +109,10 @@ export const StockController = {
 
   async cleanupExpiredReservations(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const releasedCount = await releaseExpiredInventoryReservations(prisma, tenantId);
+    const releasedCount = await releaseExpiredInventoryReservations(
+      prisma,
+      tenantId,
+    );
     return c.json({ data: { releasedCount } });
   },
 
@@ -102,24 +122,32 @@ export const StockController = {
     const tenantId = requireTenantId(c);
 
     const query = c.req.query() as StockMovementListQuery;
-    const parsedPage = Number(query.page ?? '1');
-    const parsedLimit = Number(query.limit ?? '20');
-    if (!Number.isInteger(parsedPage) || parsedPage < 1 || !Number.isInteger(parsedLimit) || parsedLimit < 1) {
-      throw new ValidationError('page ve limit pozitif tam sayi olmalidir.');
+    const parsedPage = Number(query.page ?? "1");
+    const parsedLimit = Number(query.limit ?? "20");
+    if (
+      !Number.isInteger(parsedPage) ||
+      parsedPage < 1 ||
+      !Number.isInteger(parsedLimit) ||
+      parsedLimit < 1
+    ) {
+      throw new ValidationError("page ve limit pozitif tam sayi olmalidir.");
     }
     if (query.type && !Object.values(MovementType).includes(query.type)) {
-      throw new ValidationError('Gecersiz stok hareketi tipi.');
+      throw new ValidationError("Gecersiz stok hareketi tipi.");
     }
     const parseMovementDate = (value: string | undefined, endOfDay = false) => {
       if (!value) return undefined;
       const date = new Date(value);
-      if (Number.isNaN(date.getTime())) throw new ValidationError('Gecersiz tarih filtresi.');
-      if (endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(value)) date.setUTCHours(23, 59, 59, 999);
+      if (Number.isNaN(date.getTime()))
+        throw new ValidationError("Gecersiz tarih filtresi.");
+      if (endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(value))
+        date.setUTCHours(23, 59, 59, 999);
       return date;
     };
     const dateFrom = parseMovementDate(query.dateFrom);
     const dateTo = parseMovementDate(query.dateTo, true);
-    if (dateFrom && dateTo && dateFrom > dateTo) throw new ValidationError('dateFrom dateTo degerinden sonra olamaz.');
+    if (dateFrom && dateTo && dateFrom > dateTo)
+      throw new ValidationError("dateFrom dateTo degerinden sonra olamaz.");
     const page = parsedPage;
     const pageSize = Math.min(100, parsedLimit);
     const skip = (page - 1) * pageSize;
@@ -153,7 +181,7 @@ export const StockController = {
           fromWarehouse: { select: { id: true, name: true } },
           toWarehouse: { select: { id: true, name: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         skip,
         take: pageSize,
       }),
@@ -171,22 +199,32 @@ export const StockController = {
 
     const body = getValidatedBody(c, createStockMovementBodySchema);
 
-    if (!body.productId || !body.type || body.quantity === undefined || !body.warehouseId) {
+    if (
+      !body.productId ||
+      !body.type ||
+      body.quantity === undefined ||
+      !body.warehouseId
+    ) {
       return c.json(
-        new ValidationError('productId, type, quantity ve warehouseId zorunludur.').toJSON(),
+        new ValidationError(
+          "productId, type, quantity ve warehouseId zorunludur.",
+        ).toJSON(),
         400,
       );
     }
 
     const command = parseRecordStockMovement(body);
-    const result = await inventoryApplication.recordStockMovement.execute({ tenantId, userId }, command);
+    const result = await inventoryApplication.recordStockMovement.execute(
+      { tenantId, userId },
+      command,
+    );
     const { movement } = result;
 
     if (!result.replayed) {
       await createAuditLog(prisma, {
         tenantId,
         userId,
-        module: 'inventory',
+        module: "inventory",
         entityType: EntityType.PRODUCT,
         entityId: body.productId,
         action: AuditAction.CREATE,
@@ -202,17 +240,20 @@ export const StockController = {
 
       if (result.lowStockSignal) {
         await domainEvents.publish({
-          name: 'stock.low',
+          name: "stock.low",
           context: createEventContext({ tenantId, userId }),
           payload: result.lowStockSignal,
         });
       }
     }
 
-    return c.json({
-      data: movement,
-      ...(result.warning ? { meta: { warnings: [result.warning] } } : {}),
-    }, 201);
+    return c.json(
+      {
+        data: movement,
+        ...(result.warning ? { meta: { warnings: [result.warning] } } : {}),
+      },
+      201,
+    );
   },
 
   // ── Stock Counts ─────────────────────────────
@@ -226,7 +267,7 @@ export const StockController = {
         warehouse: { select: { id: true, name: true } },
         _count: { select: { items: true } },
       },
-      orderBy: { date: 'desc' },
+      orderBy: { date: "desc" },
     });
 
     return c.json({ data: stockCounts });
@@ -234,7 +275,7 @@ export const StockController = {
 
   async getStockCount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const countId = requireParam(c, 'id');
+    const countId = requireParam(c, "id");
 
     const stockCount = await prisma.stockCount.findFirst({
       where: { id: countId, tenantId },
@@ -248,7 +289,8 @@ export const StockController = {
       },
     });
 
-    if (!stockCount) return c.json(new NotFoundError('Sayım', countId).toJSON(), 404);
+    if (!stockCount)
+      return c.json(new NotFoundError("Sayım", countId).toJSON(), 404);
 
     return c.json({ data: stockCount });
   },
@@ -256,38 +298,130 @@ export const StockController = {
   async createStockCount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-
     const body = getValidatedBody(c, createStockCountBodySchema);
 
-    if (!body.warehouseId || !body.date || !body.items?.length) {
+    const countDate = new Date(body.date);
+    if (Number.isNaN(countDate.getTime())) {
       return c.json(
-        new ValidationError('warehouseId, date ve en az bir kalem zorunludur.').toJSON(),
+        new ValidationError("Geçerli bir sayım tarihi zorunludur.").toJSON(),
         400,
       );
     }
-    const number = await generateDocumentNumber(tenantId, 'stock_count', 'SC-', 'stockCount');
+
+    const warehouse = await prisma.warehouse.findFirst({
+      where: { id: body.warehouseId, tenantId, isActive: true },
+      select: { id: true },
+    });
+    if (!warehouse)
+      return c.json(new NotFoundError("Depo", body.warehouseId).toJSON(), 404);
+
+    const itemKeys = body.items.map(
+      (item) => `${item.productId}:${item.locationId ?? "*"}`,
+    );
+    if (new Set(itemKeys).size !== itemKeys.length) {
+      return c.json(
+        new ValidationError(
+          "Aynı ürün ve lokasyon sayımda birden fazla kez kullanılamaz.",
+        ).toJSON(),
+        400,
+      );
+    }
+
+    const productIds = [...new Set(body.items.map((item) => item.productId))];
+    const products = await prisma.product.findMany({
+      where: { tenantId, id: { in: productIds }, deletedAt: null },
+      select: { id: true },
+    });
+    if (products.length !== productIds.length) {
+      return c.json(
+        new ValidationError(
+          "Sayım kalemlerinden en az biri bu firmaya ait aktif bir ürün değildir.",
+        ).toJSON(),
+        400,
+      );
+    }
+
+    const requestedLocationIds = [
+      ...new Set(
+        body.items.flatMap((item) =>
+          item.locationId ? [item.locationId] : [],
+        ),
+      ),
+    ];
+    if (requestedLocationIds.length) {
+      const locations = await prisma.location.findMany({
+        where: {
+          tenantId,
+          warehouseId: body.warehouseId,
+          id: { in: requestedLocationIds },
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      if (locations.length !== requestedLocationIds.length) {
+        return c.json(
+          new ValidationError(
+            "Sayım lokasyonlarından en az biri seçilen depoya veya firmaya ait değildir.",
+          ).toJSON(),
+          400,
+        );
+      }
+    }
+
+    const levels = await prisma.stockLevel.findMany({
+      where: {
+        tenantId,
+        warehouseId: body.warehouseId,
+        productId: { in: productIds },
+      },
+      select: { productId: true, locationId: true, quantity: true },
+    });
+    const expectedQuantity = (productId: string, locationId?: string | null) =>
+      levels
+        .filter(
+          (level) =>
+            level.productId === productId &&
+            (!locationId || level.locationId === locationId),
+        )
+        .reduce((sum, level) => sum + Number(level.quantity), 0);
+
+    const number = await generateDocumentNumber(
+      tenantId,
+      "stock_count",
+      "SC-",
+      "stockCount",
+    );
 
     const stockCount = await prisma.stockCount.create({
       data: {
         tenantId,
         warehouseId: body.warehouseId,
         number,
-        date: new Date(body.date),
+        date: countDate,
         notes: body.notes ?? null,
+        createdById: userId,
         items: {
-          create: body.items.map((item) => ({
-            tenantId,
-            productId: item.productId,
-            locationId: item.locationId ?? null,
-            expectedQty: item.expectedQty,
-            countedQty: item.countedQty,
-            difference: item.countedQty - item.expectedQty,
-          })),
+          create: body.items.map((item) => {
+            const expectedQty = expectedQuantity(
+              item.productId,
+              item.locationId,
+            );
+            return {
+              tenantId,
+              productId: item.productId,
+              locationId: item.locationId ?? null,
+              expectedQty,
+              countedQty: item.countedQty,
+              difference: item.countedQty - expectedQty,
+            };
+          }),
         },
       },
       include: {
         items: {
-          include: { product: { select: { id: true, code: true, name: true } } },
+          include: {
+            product: { select: { id: true, code: true, name: true } },
+          },
         },
       },
     });
@@ -295,11 +429,16 @@ export const StockController = {
     await createAuditLog(prisma, {
       tenantId,
       userId,
-      module: 'inventory',
+      module: "inventory",
       entityType: EntityType.OTHER,
       entityId: stockCount.id,
       action: AuditAction.CREATE,
-      newValues: { id: stockCount.id, number: stockCount.number, warehouseId: stockCount.warehouseId, itemCount: stockCount.items.length },
+      newValues: {
+        id: stockCount.id,
+        number: stockCount.number,
+        warehouseId: stockCount.warehouseId,
+        itemCount: stockCount.items.length,
+      },
       ...getRequestMeta(c),
     });
 
@@ -309,29 +448,46 @@ export const StockController = {
   async finalizeStockCount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const countId = requireParam(c, 'id');
+    const countId = requireParam(c, "id");
 
     const stockCount = await prisma.stockCount.findFirst({
       where: { id: countId, tenantId },
       include: { items: true },
     });
 
-    if (!stockCount) return c.json(new NotFoundError('Sayım', countId).toJSON(), 404);
+    if (!stockCount)
+      return c.json(new NotFoundError("Sayım", countId).toJSON(), 404);
     if (stockCount.isFinalized) {
-      return c.json(new ValidationError('Sayım zaten tamamlandı.').toJSON(), 400);
+      return c.json(
+        new ValidationError("Sayım zaten tamamlandı.").toJSON(),
+        400,
+      );
     }
 
     const body = getValidatedBody(c, finalizeStockCountBodySchema);
     const inventoryRules = await getInventoryRules(prisma, tenantId);
-    const hasDifference = stockCount.items.some((item) => Number(item.difference) !== 0);
+    const hasDifference = stockCount.items.some(
+      (item) => Number(item.difference) !== 0,
+    );
 
     const thresholdSetting = await prisma.moduleSetting.findFirst({
-      where: { tenantId, module: 'inventory', key: 'stock_count_approval_threshold' },
+      where: {
+        tenantId,
+        module: "inventory",
+        key: "stock_count_approval_threshold",
+      },
     });
     const threshold = thresholdSetting ? Number(thresholdSetting.value) : 500;
-    const totalDiffQty = stockCount.items.reduce((sum, item) => sum + Math.abs(Number(item.difference)), 0);
+    const totalDiffQty = stockCount.items.reduce(
+      (sum, item) => sum + Math.abs(Number(item.difference)),
+      0,
+    );
 
-    if (hasDifference && totalDiffQty > threshold && !body.approvalReason?.trim()) {
+    if (
+      hasDifference &&
+      totalDiffQty > threshold &&
+      !body.approvalReason?.trim()
+    ) {
       return c.json(
         new ValidationError(
           `Sayım farkı toplamı (${totalDiffQty}) limit değeri (${threshold}) üzerinde olduğu için onay sebebi (approvalReason) zorunludur.`,
@@ -348,19 +504,47 @@ export const StockController = {
     });
 
     await prisma.$transaction(async (tx) => {
+      const claimed = await tx.stockCount.updateMany({
+        where: { id: countId, tenantId, isFinalized: false },
+        data: {
+          isFinalized: true,
+          finalizedAt: new Date(),
+          finalizedById: userId,
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictError(
+          "Sayım eş zamanlı olarak tamamlandı. Sayfayı yenileyin.",
+        );
+      }
+
       if (body.applyAdjustments) {
         // Fark olan kalemlere ADJUSTMENT hareketi oluştur
-        for (const item of stockCount.items) {
-          if (Number(item.difference) !== 0) {
-            const existing = await tx.stockLevel.findFirst({
-              where: {
-                tenantId,
-                productId: item.productId,
-                warehouseId: stockCount.warehouseId,
-              },
-            });
-            const previousQuantity = Number(existing?.quantity ?? 0);
-            const difference = Number(item.difference);
+        for (const item of [...stockCount.items].sort((a, b) =>
+          a.productId.localeCompare(b.productId),
+        )) {
+          await lockInventoryPosition(
+            tx,
+            tenantId,
+            item.productId,
+            stockCount.warehouseId,
+          );
+          const currentLevels = await tx.stockLevel.findMany({
+            where: {
+              tenantId,
+              productId: item.productId,
+              warehouseId: stockCount.warehouseId,
+              ...(item.locationId ? { locationId: item.locationId } : {}),
+            },
+            orderBy: { id: "asc" },
+          });
+          const previousQuantity = currentLevels.reduce(
+            (sum, level) => sum + Number(level.quantity),
+            0,
+          );
+          const targetQuantity = Number(item.countedQty);
+          const difference = targetQuantity - previousQuantity;
+          if (Math.abs(difference) > 0.000001) {
             const stockMovement = await tx.stockMovement.create({
               data: {
                 tenantId,
@@ -370,32 +554,77 @@ export const StockController = {
                 ...(difference > 0
                   ? { toWarehouseId: stockCount.warehouseId }
                   : { fromWarehouseId: stockCount.warehouseId }),
-                refType: 'STOCK_COUNT',
+                refType: "STOCK_COUNT",
                 refId: stockCount.id,
                 notes: `Sayım düzeltmesi: ${stockCount.number}`,
               },
             });
 
             // Mevcut stok seviyesini bul (locationId eşleşmesi için)
-            const locId = await resolveStockLevelLocationId(tx, tenantId, stockCount.warehouseId, item.locationId ?? existing?.locationId);
-
-            await tx.stockLevel.upsert({
-              where: {
-                productId_warehouseId_locationId: {
+            if (item.locationId) {
+              await tx.stockLevel.upsert({
+                where: {
+                  productId_warehouseId_locationId: {
+                    productId: item.productId,
+                    warehouseId: stockCount.warehouseId,
+                    locationId: item.locationId,
+                  },
+                },
+                create: {
+                  tenantId,
+                  productId: item.productId,
+                  warehouseId: stockCount.warehouseId,
+                  locationId: item.locationId,
+                  quantity: targetQuantity,
+                },
+                update: { quantity: targetQuantity },
+              });
+            } else if (difference > 0) {
+              const locId = await resolveStockLevelLocationId(
+                tx,
+                tenantId,
+                stockCount.warehouseId,
+                currentLevels[0]?.locationId,
+              );
+              await tx.stockLevel.upsert({
+                where: {
+                  productId_warehouseId_locationId: {
+                    productId: item.productId,
+                    warehouseId: stockCount.warehouseId,
+                    locationId: locId,
+                  },
+                },
+                create: {
+                  tenantId,
                   productId: item.productId,
                   warehouseId: stockCount.warehouseId,
                   locationId: locId,
+                  quantity: difference,
                 },
-              },
-              create: {
-                tenantId,
-                productId: item.productId,
-                warehouseId: stockCount.warehouseId,
-                locationId: locId,
-                quantity: item.countedQty,
-              },
-              update: { quantity: item.countedQty },
-            });
+                update: { quantity: { increment: difference } },
+              });
+            } else {
+              let remaining = Math.abs(difference);
+              for (const level of currentLevels) {
+                if (remaining <= 0.000001) break;
+                const decrement = Math.min(
+                  Math.max(0, Number(level.quantity)),
+                  remaining,
+                );
+                if (decrement > 0) {
+                  await tx.stockLevel.update({
+                    where: { id: level.id },
+                    data: { quantity: { decrement } },
+                  });
+                  remaining -= decrement;
+                }
+              }
+              if (remaining > 0.000001) {
+                throw new ConflictError(
+                  "Depo toplamı negatif stok üretmeden sayım miktarına uzlaştırılamadı.",
+                );
+              }
+            }
 
             await recordInventoryCosting(tx, tenantId, {
               movementId: stockMovement.id,
@@ -405,23 +634,18 @@ export const StockController = {
               quantity: Math.abs(difference),
               previousQuantity,
               quantityChange: difference,
-              resultingQuantity: Number(item.countedQty),
+              resultingQuantity: targetQuantity,
               date: stockMovement.createdAt,
             });
           }
         }
       }
-
-      await tx.stockCount.updateMany({
-        where: { id: countId, tenantId },
-        data: { isFinalized: true, finalizedAt: new Date() },
-      });
     });
 
     await createAuditLog(prisma, {
       tenantId,
       userId,
-      module: 'inventory',
+      module: "inventory",
       entityType: EntityType.OTHER,
       entityId: countId,
       action: AuditAction.UPDATE,
@@ -443,7 +667,11 @@ export const StockController = {
     const userId = requireUserId(c);
 
     const result = await prisma.$transaction(async (tx) => {
-      return await convertReorderSuggestionsToPurchaseRequest(tx, tenantId, userId);
+      return await convertReorderSuggestionsToPurchaseRequest(
+        tx,
+        tenantId,
+        userId,
+      );
     });
 
     return c.json({ data: result }, 201);
@@ -457,8 +685,9 @@ export const StockController = {
       include: { product: { select: { averageCost: true } } },
     });
     const totalInventoryValuation = stockLevels.reduce(
-      (sum, sl) => sum + Number(sl.quantity) * Number(sl.product.averageCost ?? 0),
-      0
+      (sum, sl) =>
+        sum + Number(sl.quantity) * Number(sl.product.averageCost ?? 0),
+      0,
     );
 
     const inventoryAccounts = await prisma.ledgerAccount.findMany({
@@ -467,9 +696,9 @@ export const StockController = {
         isActive: true,
         deletedAt: null,
         OR: [
-          { code: { startsWith: '15' } },
-          { name: { contains: 'Stok', mode: 'insensitive' } },
-          { name: { contains: 'Inventory', mode: 'insensitive' } },
+          { code: { startsWith: "15" } },
+          { name: { contains: "Stok", mode: "insensitive" } },
+          { name: { contains: "Inventory", mode: "insensitive" } },
         ],
       },
       select: { id: true, code: true, name: true },
@@ -478,7 +707,7 @@ export const StockController = {
     const accountIds = inventoryAccounts.map((acc) => acc.id);
 
     const lineSums = await prisma.journalEntryLine.groupBy({
-      by: ['accountId'],
+      by: ["accountId"],
       where: {
         tenantId,
         accountId: { in: accountIds },
@@ -508,7 +737,10 @@ export const StockController = {
       };
     });
 
-    const totalLedgerBalance = accountsWithBalance.reduce((sum, acc) => sum + acc.balance, 0);
+    const totalLedgerBalance = accountsWithBalance.reduce(
+      (sum, acc) => sum + acc.balance,
+      0,
+    );
     const discrepancy = totalInventoryValuation - totalLedgerBalance;
 
     return c.json({
@@ -516,7 +748,7 @@ export const StockController = {
         totalInventoryValuation,
         totalLedgerBalance,
         discrepancy,
-        status: Math.abs(discrepancy) < 0.01 ? 'RECONCILED' : 'DISCREPANCY',
+        status: Math.abs(discrepancy) < 0.01 ? "RECONCILED" : "DISCREPANCY",
         accounts: accountsWithBalance,
       },
     });

@@ -2,10 +2,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
-import { createStockValuation, getStockValuations, type CreateStockValuationDTO, type ListParams } from '@/services/stock-valuation.service';
+import { createStockValuation, getStockValuations, getStockValuationSummary, type CreateStockValuationDTO, type ListParams } from '@/services/stock-valuation.service';
 
 export function useStockValuations(params: ListParams) {
   return useQuery({ queryKey: ['stock-valuations', params], queryFn: () => getStockValuations(params) });
+}
+
+export function useStockValuationSummary(params: Omit<ListParams, 'page' | 'limit'>) {
+  return useQuery({ queryKey: ['stock-valuations', 'summary', params], queryFn: () => getStockValuationSummary(params) });
 }
 
 export function useCreateStockValuation() {

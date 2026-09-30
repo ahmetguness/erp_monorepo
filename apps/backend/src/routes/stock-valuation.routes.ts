@@ -9,6 +9,12 @@ const stockValuationRoutes = new Hono();
 stockValuationRoutes.use("*", requireAccess(ACCESS_POLICIES.stockValuations));
 
 stockValuationRoutes.get(
+  "/summary",
+  requirePermission("inventory", "READ"),
+  StockValuationController.summary,
+);
+
+stockValuationRoutes.get(
   "/",
   requirePermission("inventory", "READ"),
   StockValuationController.list,

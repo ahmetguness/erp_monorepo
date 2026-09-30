@@ -154,6 +154,7 @@ model StockValuation {
 
   @@index([tenantId, productId])
   @@index([tenantId, date])
+  @@unique([movementId, warehouseId])
   @@map("stock_valuations")
 }
 

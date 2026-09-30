@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { ProductSelect, WarehouseSelect } from '@/components/shared/EntitySelect';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { useStockValuations } from '@/hooks/useStockValuation';
+import { useStockValuations, useStockValuationSummary } from '@/hooks/useStockValuation';
 import { cn, formatCurrency } from '@/lib/utils';
 import type { StockValuation } from '@/services/stock-valuation.service';
 
@@ -14,7 +14,6 @@ type DatePreset = 'all' | 'today' | '7d' | '30d' | 'month';
 type MovementFilter = 'all' | 'in' | 'out';
 
 const PAGE_SIZE = 20;
-const SUMMARY_LIMIT = 100;
 const EMPTY_VALUATIONS: StockValuation[] = [];
 
 function formatQty(value: number): string {
@@ -43,12 +42,6 @@ function dateRangeForPreset(preset: DatePreset): { dateFrom?: string; dateTo?: s
     dateFrom: start.toISOString(),
     dateTo: end.toISOString(),
   };
-}
-
-function movementType(row: StockValuation): Exclude<MovementFilter, 'all'> | 'neutral' {
-  if (row.qtyIn > 0) return 'in';
-  if (row.qtyOut > 0) return 'out';
-  return 'neutral';
 }
 
 function MovementValue({ row }: { row: StockValuation }) {
@@ -93,21 +86,18 @@ export function StockValuationPage() {
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
   const [movement, setMovement] = useState<MovementFilter>('all');
   const dateRange = useMemo(() => dateRangeForPreset(datePreset), [datePreset]);
-  const queryParams = { productId: productId || undefined, warehouseId: warehouseId || undefined, ...dateRange };
+  const queryParams = {
+    productId: productId || undefined,
+    warehouseId: warehouseId || undefined,
+    search: search.trim() || undefined,
+    movement: movement === 'all' ? undefined : movement,
+    ...dateRange,
+  };
 
-  const { data, isLoading } = useStockValuations({ page, limit: PAGE_SIZE, ...queryParams });
-  const { data: summaryData, isLoading: isSummaryLoading } = useStockValuations({ page: 1, limit: SUMMARY_LIMIT, ...queryParams });
+  const { data, isLoading, isError, refetch } = useStockValuations({ page, limit: PAGE_SIZE, ...queryParams });
+  const { data: summaryRows = EMPTY_VALUATIONS, isLoading: isSummaryLoading } = useStockValuationSummary(queryParams);
 
   const rows = data?.data ?? EMPTY_VALUATIONS;
-  const summaryRows = summaryData?.data ?? EMPTY_VALUATIONS;
-  const q = search.trim().toLocaleLowerCase('tr-TR');
-
-  const visibleRows = useMemo(() => rows.filter((row) => {
-    const productText = `${row.product?.name ?? ''} ${row.product?.code ?? ''}`.toLocaleLowerCase('tr-TR');
-    const matchesSearch = !q || productText.includes(q);
-    const matchesMovement = movement === 'all' || movementType(row) === movement;
-    return matchesSearch && matchesMovement;
-  }), [movement, q, rows]);
 
   const currentByProduct = useMemo(() => {
     const map = new Map<string, StockValuation>();
@@ -153,9 +143,6 @@ export function StockValuationPage() {
             <span className="h-4 w-px bg-slate-800" />
             <span className="tabular-nums text-slate-200">{warehouseCount} <span className="text-[11px] font-medium uppercase text-slate-500">Depo</span></span>
           </div>
-          {summaryData && summaryData.meta.total > SUMMARY_LIMIT && (
-            <p className="mt-2 text-xs text-amber-300">Özet ilk {SUMMARY_LIMIT} değerleme kaydı üzerinden gösteriliyor; tam toplam için filtreleri daraltın.</p>
-          )}
         </div>
       )}
 
@@ -191,7 +178,7 @@ export function StockValuationPage() {
       <section>
         <div className="mb-3 rounded-xl border border-slate-800/80 bg-slate-950/35 p-3">
           <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_220px_180px_150px_150px_auto] lg:items-center">
-            <Input aria-label="Ürün adı veya kod ara" placeholder="Ürün adı veya kod ara..." value={search} onChange={(event) => setSearch(event.target.value)} prefixIcon={<Search className="h-4 w-4" />} />
+            <Input aria-label="Ürün adı veya kod ara" placeholder="Ürün adı veya kod ara..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} prefixIcon={<Search className="h-4 w-4" />} />
             <ProductSelect value={productId} onChange={(value) => { setProductId(value); setPage(1); }} placeholder="Ürün seçin veya arayın..." />
             <WarehouseSelect value={warehouseId} onChange={(value) => { setWarehouseId(value); setPage(1); }} placeholder="Tüm Depolar" />
             <select value={datePreset} onChange={(event) => { setDatePreset(event.target.value as DatePreset); setPage(1); }} aria-label="Tarih filtresi" className="h-10 rounded-xl border border-slate-700/75 bg-slate-950/35 px-3.5 text-sm text-slate-200 outline-none transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:border-sky-500/60 focus:ring-2 focus:ring-sky-500/35">
@@ -201,7 +188,7 @@ export function StockValuationPage() {
               <option value="30d">Son 30 Gün</option>
               <option value="all">Tüm Zamanlar</option>
             </select>
-            <select value={movement} onChange={(event) => setMovement(event.target.value as MovementFilter)} aria-label="Hareket filtresi" className="h-10 rounded-xl border border-slate-700/75 bg-slate-950/35 px-3.5 text-sm text-slate-200 outline-none transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:border-sky-500/60 focus:ring-2 focus:ring-sky-500/35">
+            <select value={movement} onChange={(event) => { setMovement(event.target.value as MovementFilter); setPage(1); }} aria-label="Hareket filtresi" className="h-10 rounded-xl border border-slate-700/75 bg-slate-950/35 px-3.5 text-sm text-slate-200 outline-none transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:border-sky-500/60 focus:ring-2 focus:ring-sky-500/35">
               <option value="all">Tüm Hareketler</option>
               <option value="in">Giriş</option>
               <option value="out">Çıkış</option>
@@ -225,7 +212,15 @@ export function StockValuationPage() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? <TableSkeleton /> : visibleRows.length === 0 ? (
+                {isLoading ? <TableSkeleton /> : isError ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-10 text-center">
+                      <p className="text-sm font-semibold text-red-200">Değerleme kayıtları yüklenemedi</p>
+                      <p className="mt-1 text-sm text-slate-500">Bağlantınızı kontrol edip yeniden deneyin.</p>
+                      <Button className="mt-4" size="sm" variant="secondary" onClick={() => void refetch()}>Yeniden Dene</Button>
+                    </td>
+                  </tr>
+                ) : rows.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center">
                       <p className="text-sm font-semibold text-slate-200">{hasFilters ? 'Bu filtreler için değerleme kaydı bulunamadı' : 'Değerleme kaydı bulunmuyor'}</p>
@@ -233,7 +228,7 @@ export function StockValuationPage() {
                       {hasFilters && <Button className="mt-4" size="sm" variant="secondary" leftIcon={<FilterX className="h-3.5 w-3.5" />} onClick={clearFilters}>Filtreleri Temizle</Button>}
                     </td>
                   </tr>
-                ) : visibleRows.map((row) => (
+                ) : rows.map((row) => (
                   <tr key={row.id} className="border-b border-slate-800/45 transition-colors duration-150 last:border-b-0 hover:bg-sky-500/[0.04]">
                     <td className="whitespace-nowrap px-4 py-3.5 text-slate-400">{formatLedgerDate(row.date)}</td>
                     <td className="px-4 py-3.5">

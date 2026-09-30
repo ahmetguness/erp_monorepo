@@ -37,6 +37,8 @@
     "test:warehouses-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-warehouses-assurance.ts",
     "test:stock-levels-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-stock-levels-assurance.ts",
     "test:stock-reservations-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-stock-reservations-assurance.ts",
+    "test:stock-counts-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-stock-counts-assurance.ts",
+    "test:stock-valuations-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-stock-valuations-assurance.ts",
     "test:admin-approval": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/admin-assurance/check-two-person-approval.ts",
     "test:admin-audit-identity": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-admin-audit-identity.ts",
     "test:admin-auth": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/admin-assurance/check-auth-sessions.ts",
