@@ -89,28 +89,22 @@ export function LotSerialsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ productId: '', batchId: '', serialNumber: '' });
   const [traceDraft, setTraceDraft] = useState({ productId: '', batchId: '', serialNumber: '' });
-  const [traceFilters, setTraceFilters] = useState({ productId: '', batchId: '', lotId: '' });
+  const [traceFilters, setTraceFilters] = useState({ productId: '', batchId: '', lotId: '', serialNumber: '' });
   const [traceLabel, setTraceLabel] = useState('');
 
-  const { data, isLoading } = useLotSerials({ page, limit: PAGE_SIZE, isUsed: usedFilter || undefined, batchId: listBatchId || undefined });
+  const { data, isLoading, isError, refetch } = useLotSerials({ page, limit: PAGE_SIZE, isUsed: usedFilter || undefined, batchId: listBatchId || undefined, search: listSearch.trim() || undefined });
   const lots = data?.data ?? EMPTY_LOTS;
   const traceability = useLotSerialTraceability({
     productId: traceFilters.productId || undefined,
     batchId: traceFilters.batchId || undefined,
     lotId: traceFilters.lotId || undefined,
+    serialNumber: traceFilters.serialNumber || undefined,
   });
   const report = traceability.data;
   const createLot = useCreateLotSerial();
-  const selectedFilters = Boolean(traceFilters.productId || traceFilters.batchId || traceFilters.lotId);
+  const selectedFilters = Boolean(traceFilters.productId || traceFilters.batchId || traceFilters.lotId || traceFilters.serialNumber);
 
-  const filteredLots = useMemo(() => {
-    const q = listSearch.trim().toLocaleLowerCase('tr-TR');
-    return lots.filter((lot) => {
-      if (!q) return true;
-      const haystack = `${lot.serialNumber} ${lot.product?.name ?? ''} ${lot.product?.code ?? ''} ${lot.batch?.batchNumber ?? ''}`.toLocaleLowerCase('tr-TR');
-      return haystack.includes(q);
-    });
-  }, [listSearch, lots]);
+  const filteredLots = lots;
 
   const traceItems = useMemo(
     () => [...(report?.items ?? [])].sort((a, b) => {
@@ -133,20 +127,21 @@ export function LotSerialsPage() {
     setTraceFilters({
       productId: traceDraft.productId,
       batchId: traceDraft.batchId,
-      lotId: matchingLot?.id ?? (serial ? traceDraft.serialNumber.trim() : ''),
+      lotId: matchingLot?.id ?? '',
+      serialNumber: matchingLot ? '' : traceDraft.serialNumber.trim(),
     });
     setTraceLabel(matchingLot?.serialNumber ?? traceDraft.serialNumber.trim());
   };
 
   const traceLot = (lot: LotSerial) => {
     setTraceDraft({ productId: lot.productId, batchId: lot.batchId ?? '', serialNumber: lot.serialNumber });
-    setTraceFilters({ productId: lot.productId, batchId: lot.batchId ?? '', lotId: lot.id });
+    setTraceFilters({ productId: lot.productId, batchId: lot.batchId ?? '', lotId: lot.id, serialNumber: '' });
     setTraceLabel(lot.serialNumber);
   };
 
   const clearTrace = () => {
     setTraceDraft({ productId: '', batchId: '', serialNumber: '' });
-    setTraceFilters({ productId: '', batchId: '', lotId: '' });
+    setTraceFilters({ productId: '', batchId: '', lotId: '', serialNumber: '' });
     setTraceLabel('');
   };
 
@@ -235,7 +230,12 @@ export function LotSerialsPage() {
               </tr>
             </thead>
             <tbody>
-              {traceability.isLoading ? <TableSkeleton rows={4} cols={6} /> : !selectedFilters ? (
+              {traceability.isLoading ? <TableSkeleton rows={4} cols={6} /> : traceability.isError ? (
+                <tr><td colSpan={6} className="px-4 py-10 text-center">
+                  <p className="text-sm font-semibold text-red-200">İzlenebilirlik yüklenemedi</p>
+                  <Button className="mt-4" size="sm" variant="secondary" onClick={() => void traceability.refetch()}>Yeniden Dene</Button>
+                </td></tr>
+              ) : !selectedFilters ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-10 text-center">
                     <FileSearch className="mx-auto h-8 w-8 text-slate-600" />
@@ -284,7 +284,7 @@ export function LotSerialsPage() {
         </div>
         <div className="mb-3 rounded-xl border border-slate-800/80 bg-slate-950/35 p-3">
           <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_auto_220px_auto] lg:items-center">
-            <Input aria-label="Seri no veya ürün ara" placeholder="Seri no veya ürün ara..." value={listSearch} onChange={(event) => setListSearch(event.target.value)} prefixIcon={<Search className="h-4 w-4" />} />
+            <Input aria-label="Seri no veya ürün ara" placeholder="Seri no veya ürün ara..." value={listSearch} onChange={(event) => { setListSearch(event.target.value); setPage(1); }} prefixIcon={<Search className="h-4 w-4" />} />
             <div className="inline-flex h-10 overflow-hidden rounded-xl border border-slate-700/75 bg-slate-950/35 p-1">
               {[
                 { value: '', label: 'Tümü' },
@@ -317,7 +317,12 @@ export function LotSerialsPage() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? <TableSkeleton rows={5} cols={7} /> : filteredLots.length === 0 ? (
+                {isLoading ? <TableSkeleton rows={5} cols={7} /> : isError ? (
+                  <tr><td colSpan={7} className="px-4 py-10 text-center">
+                    <p className="text-sm font-semibold text-red-200">Lot/Seri kayıtları yüklenemedi</p>
+                    <Button className="mt-4" size="sm" variant="secondary" onClick={() => void refetch()}>Yeniden Dene</Button>
+                  </td></tr>
+                ) : filteredLots.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center">
                       <Hash className="mx-auto h-8 w-8 text-slate-600" />

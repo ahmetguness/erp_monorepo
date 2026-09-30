@@ -82,8 +82,11 @@ export const useTenantChatStore = create<TenantChatStore>((set, get) => ({
   isSearching: false,
 
   loadConversations: async (refresh = false) => {
-    if (!refresh && get().conversations.length > 0) return;
-    set({ isLoadingConversations: true });
+    const existing = get().conversations;
+    if (!refresh && existing.length > 0) return;
+    if (existing.length === 0) {
+      set({ isLoadingConversations: true });
+    }
     try {
       const [page, count] = await Promise.all([
         tenantChatService.listConversations(),
@@ -131,8 +134,11 @@ export const useTenantChatStore = create<TenantChatStore>((set, get) => ({
   },
 
   loadMessages: async (conversationId: string, refresh = false) => {
-    if (!refresh && get().messages[conversationId]?.length) return;
-    set({ isLoadingMessages: true });
+    const existing = get().messages[conversationId] ?? [];
+    if (!refresh && existing.length > 0) return;
+    if (existing.length === 0) {
+      set({ isLoadingMessages: true });
+    }
     try {
       const page = await tenantChatService.listMessages(conversationId);
       // Items returned in desc, reverse to chronological (oldest to newest)
@@ -442,9 +448,18 @@ export const useTenantChatStore = create<TenantChatStore>((set, get) => ({
 
     switch (event.type) {
       case 'message.created': {
-        const message = event.payload?.message as ChatMessage | undefined;
+        const payload = event.payload as { message?: ChatMessage; messageId?: string } | undefined;
+        const message = payload?.message;
+        const messageId = payload?.messageId ?? message?.id;
+
+        // If we already have this message (e.g. sent locally by this client), skip redundant reload to prevent flicker
+        const currentMessages = get().messages[event.conversationId] ?? [];
+        if (messageId && currentMessages.some((m) => m.id === messageId)) {
+          return;
+        }
+
         if (!message) {
-          // If payload is partial, refresh conversations & active messages
+          // If payload is partial, refresh conversations & active messages silently
           void get().loadConversations(true);
           if (activeConversationId === event.conversationId) {
             void get().loadMessages(event.conversationId, true);

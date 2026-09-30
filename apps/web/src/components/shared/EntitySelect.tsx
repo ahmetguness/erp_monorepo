@@ -114,7 +114,7 @@ export function BomSelect(props: EntitySelectProps) {
 }
 
 export function ProductBatchSelect({ productId, ...props }: EntitySelectProps & { productId?: string }) {
-  const { data } = useProductBatches({ page: 1, limit: SELECT_LIMIT, ...(productId ? { productId } : {}) });
+  const { data } = useProductBatches({ page: 1, limit: 100, ...(productId ? { productId } : {}) });
   const options = useMemo(
     () => data?.data.map((batch) => option(batch.id, compactLabel([batch.batchNumber, batch.product?.name]))) ?? [],
     [data],

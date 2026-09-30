@@ -88,6 +88,8 @@ export function ProductionAutonomyCenter() {
             <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
             <span>İş Merkezi Kapasiteleri Hesaplanıyor...</span>
           </div>
+        ) : capacityQuery.isError ? (
+          <div className="p-8 text-center text-rose-300 text-xs">Kapasite verileri alınamadı. <button className="underline" onClick={() => capacityQuery.refetch()}>Tekrar dene</button></div>
         ) : capacityItems.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {capacityItems.map((item) => (
@@ -159,6 +161,8 @@ export function ProductionAutonomyCenter() {
             <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
             <span>Makine Sağlık Riskleri Analiz Ediliyor...</span>
           </div>
+        ) : maintenanceQuery.isError ? (
+          <div className="p-8 text-center text-rose-300 text-xs">Bakım verileri alınamadı. <button className="underline" onClick={() => maintenanceQuery.refetch()}>Tekrar dene</button></div>
         ) : maintenanceItems.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {maintenanceItems.map((m) => (
@@ -184,11 +188,11 @@ export function ProductionAutonomyCenter() {
                       <span className="text-slate-300 truncate">{sp.productName} ({sp.requiredQty} Adet)</span>
                       <button
                         onClick={() => handleReserveSpare(m.workCenterId, sp.productId, sp.requiredQty)}
-                        disabled={reserveMutation.isPending}
+                        disabled={reserveMutation.isPending || sp.isReserved}
                         className="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] transition-all shrink-0 flex items-center gap-1 shadow disabled:opacity-50"
                       >
                         {reserveMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldAlert className="w-3 h-3" />}
-                        <span>Stokta Kilitle</span>
+                        <span>{sp.isReserved ? 'Rezerve Edildi' : 'Stokta Kilitle'}</span>
                       </button>
                     </div>
                   ))}

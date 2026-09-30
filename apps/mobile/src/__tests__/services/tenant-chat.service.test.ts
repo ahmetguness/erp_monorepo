@@ -204,4 +204,52 @@ describe('tenant-chat.service & store (Mobile Tenant In-App Collaboration)', () 
     expect(updatedConv?.unreadCount).toBe(3);
     expect(updatedConv?.lastMessage?.content).toBe('Yeni bildirim geldi!');
   });
+
+  it('should silently refresh messages in background without toggling isLoadingMessages when cache exists', async () => {
+    useTenantChatStore.setState({
+      messages: { 'conv-1': [mockMessage] },
+      isLoadingMessages: false,
+    });
+
+    let loadingStateDuringFetch = false;
+    vi.mocked(apiClient.get).mockImplementationOnce(async () => {
+      loadingStateDuringFetch = useTenantChatStore.getState().isLoadingMessages;
+      return {
+        data: {
+          data: {
+            items: [mockMessage],
+            nextCursor: null,
+          },
+        },
+      };
+    });
+
+    await useTenantChatStore.getState().loadMessages('conv-1', true);
+    expect(loadingStateDuringFetch).toBe(false);
+    expect(useTenantChatStore.getState().isLoadingMessages).toBe(false);
+  });
+
+  it('should ignore message.created echo if message is already present in store', () => {
+    useTenantChatStore.setState({
+      activeConversationId: 'conv-1',
+      conversations: [mockConversation],
+      messages: { 'conv-1': [mockMessage] },
+    });
+
+    const loadMessagesSpy = vi.spyOn(useTenantChatStore.getState(), 'loadMessages');
+
+    useTenantChatStore.getState().handleRealtimeEvent({
+      id: 'evt-2',
+      type: 'message.created',
+      tenantId: 'tenant-1',
+      conversationId: 'conv-1',
+      occurredAt: new Date().toISOString(),
+      version: 1,
+      payload: { messageId: 'msg-1' },
+    });
+
+    expect(loadMessagesSpy).not.toHaveBeenCalled();
+    loadMessagesSpy.mockRestore();
+  });
 });
+

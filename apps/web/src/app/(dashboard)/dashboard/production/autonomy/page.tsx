@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import { ProductionAutonomyCenter } from '@/components/features/production/ProductionAutonomyCenter';
+import { FeatureGate } from '@/components/shared/FeatureGate';
 
 export const metadata: Metadata = {
   title: 'Otonom Üretim & Kapasite Çizelgeleme | AXON ERP',
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function ProductionAutonomyPage() {
-  return <ProductionAutonomyCenter />;
+  return <FeatureGate feature="production" plan="ENTERPRISE"><ProductionAutonomyCenter /></FeatureGate>;
 }

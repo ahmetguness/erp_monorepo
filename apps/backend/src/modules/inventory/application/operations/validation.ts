@@ -28,6 +28,22 @@ function positiveNumber(value: unknown, field: string): number {
   return value;
 }
 
+function reservationQuantity(value: unknown): number {
+  const quantity = positiveNumber(Number(value), "quantity");
+  if (quantity >= 1e15) throw new ValidationError("quantity desteklenen sayisal araligi asiyor.");
+  const scaled = quantity * 1000;
+  if (Math.abs(scaled - Math.round(scaled)) > 1e-7) throw new ValidationError("quantity en fazla 3 ondalik basamak icerebilir.");
+  return quantity;
+}
+
+function reservationExpiry(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T23:59:59.999Z`) : new Date(value);
+  if (Number.isNaN(date.getTime())) throw new ValidationError("expiresAt gecersiz.");
+  if (date <= new Date()) throw new ValidationError("expiresAt gelecekte olmalidir.");
+  return date.toISOString();
+}
+
 function optionalString(value: unknown, field: string): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   if (typeof value !== "string")
@@ -95,25 +111,24 @@ export function parseReserveStock(value: unknown): ReserveStockCommand {
   if (!isReservationRefType(refType)) {
     throw new ValidationError("Gecersiz rezervasyon referans tipi.");
   }
-  const expiresAt = optionalString(value.expiresAt, "expiresAt");
-  if (expiresAt && Number.isNaN(new Date(expiresAt).getTime())) {
-    throw new ValidationError("expiresAt gecersiz.");
-  }
+  const expiresAt = reservationExpiry(optionalString(value.expiresAt, "expiresAt"));
   if (
     value.allowPartial !== undefined &&
     typeof value.allowPartial !== "boolean"
   ) {
     throw new ValidationError("allowPartial boolean olmalidir.");
   }
+  const refId = requiredString(value.refId, "refId");
+  if (refId.length > 200) throw new ValidationError("refId en fazla 200 karakter olabilir.");
+  const notes = optionalString(value.notes, "notes")?.trim();
+  if (notes && notes.length > 2000) throw new ValidationError("notes en fazla 2000 karakter olabilir.");
   return {
     productId: requiredString(value.productId, "productId"),
     warehouseId: requiredString(value.warehouseId, "warehouseId"),
-    quantity: positiveNumber(Number(value.quantity), "quantity"),
+    quantity: reservationQuantity(value.quantity),
     refType,
-    refId: requiredString(value.refId, "refId"),
-    ...(optionalString(value.notes, "notes")
-      ? { notes: String(value.notes) }
-      : {}),
+    refId,
+    ...(notes ? { notes } : {}),
     ...(expiresAt ? { expiresAt } : {}),
     ...(typeof value.allowPartial === "boolean"
       ? { allowPartial: value.allowPartial }

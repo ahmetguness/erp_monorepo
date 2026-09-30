@@ -1,12 +1,15 @@
 import {
   AuditAction,
   EntityType,
+  Prisma,
   PrismaClient,
   ReservationRefType,
   WorkOrderStatus,
 } from "@prisma/client";
 import { logger } from "../../../../lib/logger.js";
 import { createAuditLog } from "../../../../utils/audit.js";
+import { ConflictError, NotFoundError } from "../../../../errors/index.js";
+import { assertCanReserveStock, lockInventoryPosition } from "../../../../services/inventory-rules/availability.js";
 
 export interface WorkCenterCapacityItem {
   workCenterId: string;
@@ -130,19 +133,21 @@ export class ProductionAutonomyService {
     const details: ScheduleOptimizationDetail[] = [];
     let rescheduledCount = 0;
 
+    await this.db.$transaction(async (tx) => {
     for (let i = 0; i < activeWorkOrders.length; i++) {
       const wo = activeWorkOrders[i];
       const oldStart = wo.startDate ?? wo.createdAt;
       const newStart = new Date(now.getTime() + i * 4 * 3600_000); // Sequence every 4 hours
 
       if (autoReschedule) {
-        await this.db.workOrder.update({
-          where: { id: wo.id },
+        const updated = await tx.workOrder.updateMany({
+          where: { id: wo.id, tenantId, deletedAt: null },
           data: {
             startDate: newStart,
             endDate: new Date(newStart.getTime() + 8 * 3600_000),
           },
         });
+        if (updated.count !== 1) throw new NotFoundError("İş Emri", wo.id);
         rescheduledCount++;
       }
 
@@ -158,6 +163,7 @@ export class ProductionAutonomyService {
         assignedWorkCenterName: assignedWc,
       });
     }
+    });
 
     logger.info(
       `[ProductionAutonomy] Optimized schedule for ${activeWorkOrders.length} work orders`,
@@ -182,14 +188,28 @@ export class ProductionAutonomyService {
     const workCenters = await this.db.workCenter.findMany({
       where: { tenantId, isActive: true },
       select: { id: true, name: true, code: true },
+      orderBy: { code: "asc" },
       take: 10,
     });
 
     const spareProducts = await this.db.product.findMany({
       where: { tenantId, deletedAt: null },
       select: { id: true, name: true },
+      orderBy: { code: "asc" },
       take: 5,
     });
+    const activeReservations = await this.db.inventoryReservation.findMany({
+      where: {
+        tenantId,
+        refType: ReservationRefType.WORK_ORDER,
+        refId: { in: workCenters.map((workCenter) => workCenter.id) },
+        productId: { in: spareProducts.map((product) => product.id) },
+        releasedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+      select: { refId: true, productId: true },
+    });
+    const reservedKeys = new Set(activeReservations.map((reservation) => `${reservation.refId}:${reservation.productId}`));
 
     const results: PredictiveMaintenanceItem[] = [];
 
@@ -219,7 +239,7 @@ export class ProductionAutonomyService {
                 productId: spare.id,
                 productName: spare.name,
                 requiredQty: 2,
-                isReserved: failureProb >= 70,
+                isReserved: reservedKeys.has(`${wc.id}:${spare.id}`),
               },
             ]
           : [],
@@ -239,38 +259,54 @@ export class ProductionAutonomyService {
     productId: string,
     quantity: number,
   ): Promise<{ success: boolean; message: string; reservationId: string }> {
-    const warehouse = await this.db.warehouse.findFirst({
-      where: { tenantId, isActive: true },
-    });
+    const res = await this.db.$transaction(async (tx) => {
+      const [workCenter, product, warehouse] = await Promise.all([
+        tx.workCenter.findFirst({ where: { id: workCenterId, tenantId, isActive: true }, select: { id: true } }),
+        tx.product.findFirst({ where: { id: productId, tenantId, deletedAt: null }, select: { id: true } }),
+        tx.warehouse.findFirst({ where: { tenantId, isActive: true }, orderBy: { code: "asc" }, select: { id: true } }),
+      ]);
+      if (!workCenter) throw new NotFoundError("İş Merkezi", workCenterId);
+      if (!product) throw new NotFoundError("Ürün", productId);
+      if (!warehouse) throw new NotFoundError("Aktif depo");
 
-    if (!warehouse) throw new Error("Sistemde varsayılan depo bulunamadı.");
+      await lockInventoryPosition(tx, tenantId, productId, warehouse.id);
+      const existing = await tx.inventoryReservation.findFirst({
+        where: {
+          tenantId, productId, warehouseId: warehouse.id,
+          refType: ReservationRefType.WORK_ORDER, refId: workCenterId,
+          releasedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+      });
+      if (existing) {
+        if (Number(existing.quantity) !== quantity) throw new ConflictError("Bu iş merkezi ve ürün için farklı miktarda aktif rezervasyon zaten var.");
+        return existing;
+      }
 
-    const res = await this.db.inventoryReservation.create({
-      data: {
-        tenantId,
-        productId,
-        warehouseId: warehouse.id,
-        quantity,
-        refType: ReservationRefType.WORK_ORDER,
-        refId: workCenterId,
-        notes: `Phase 20 Kestirimci Bakım Otomasyonu tarafından İş Merkezi (${workCenterId}) için kilitlendi.`,
-        createdById: userId,
-      },
+      await assertCanReserveStock(tx, tenantId, {
+        productId, warehouseId: warehouse.id, quantity,
+        refType: ReservationRefType.WORK_ORDER, refId: workCenterId,
+      });
+      const created = await tx.inventoryReservation.create({
+        data: {
+          tenantId, productId, warehouseId: warehouse.id,
+          quantity: new Prisma.Decimal(quantity),
+          refType: ReservationRefType.WORK_ORDER, refId: workCenterId,
+          notes: `Kestirimci bakım otomasyonu tarafından İş Merkezi (${workCenterId}) için kilitlendi.`,
+          createdById: userId,
+        },
+      });
+      await createAuditLog(tx, {
+        tenantId, userId, module: "production", entityType: EntityType.WORK_ORDER,
+        entityId: workCenterId, action: AuditAction.CREATE,
+        newValues: { reservationId: created.id, productId, quantity },
+      });
+      return created;
     });
 
     logger.info(
       `[ProductionAutonomy] Predictive maintenance reservation ${res.id} created for workCenter ${workCenterId}`,
     );
-
-    await createAuditLog(this.db, {
-      tenantId,
-      userId,
-      module: "production",
-      entityType: EntityType.WORK_ORDER,
-      entityId: workCenterId,
-      action: AuditAction.CREATE,
-      newValues: { reservationId: res.id, productId, quantity },
-    });
 
     return {
       success: true,

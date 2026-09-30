@@ -1,4 +1,5 @@
 import { Context } from 'hono';
+import { ValidationError } from '../../../../errors/index.js';
 import {
 createProductBatch,
 listProductBatches,
@@ -14,6 +15,8 @@ interface ProductBatchListQuery {
   page?: string;
   limit?: string;
   productId?: string;
+  search?: string;
+  status?: 'all' | 'active' | 'empty' | 'expiring' | 'expired' | 'noExpiry';
 }
 
 interface CreateProductBatchDTO {
@@ -41,9 +44,21 @@ export const ProductBatchController = {
     const tenantId = requireTenantId(c);
 
     const query = c.req.query() as ProductBatchListQuery;
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
-    const result = await listProductBatches({ tenantId, page, pageSize, productId: query.productId });
+    const integer = (value: string | undefined, fallback: number, maximum: number, field: string) => {
+      if (value === undefined) return fallback;
+      if (!/^\d+$/.test(value)) throw new ValidationError(`${field} pozitif bir tam sayi olmalidir.`);
+      const parsed = Number(value);
+      if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > maximum)
+        throw new ValidationError(`${field} 1-${maximum} araliginda olmalidir.`);
+      return parsed;
+    };
+    const page = integer(query.page, 1, 100_000, 'page');
+    const pageSize = integer(query.limit, 20, 100, 'limit');
+    if (query.status && !['all', 'active', 'empty', 'expiring', 'expired', 'noExpiry'].includes(query.status))
+      throw new ValidationError('Gecersiz parti durumu.');
+    const search = query.search?.trim();
+    if (search && search.length > 100) throw new ValidationError('search en fazla 100 karakter olabilir.');
+    const result = await listProductBatches({ tenantId, page, pageSize, productId: query.productId, search, status: query.status });
 
     return c.json(result);
   },

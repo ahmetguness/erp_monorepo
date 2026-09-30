@@ -18,6 +18,7 @@ export interface TraceabilityReportFilter {
   lotId?: string;
   batchId?: string;
   productId?: string;
+  serialNumber?: string;
 }
 
 export interface TraceabilityReportItem {
@@ -116,7 +117,7 @@ export class LotSerialTraceabilityService {
   constructor(private readonly db: PrismaClient) {}
 
   async getReport(tenantId: string, filters: TraceabilityReportFilter): Promise<TraceabilityReport> {
-    if (!filters.lotId && !filters.batchId && !filters.productId) {
+    if (!filters.lotId && !filters.batchId && !filters.productId && !filters.serialNumber) {
       return this.emptyReport(filters);
     }
 
@@ -125,12 +126,14 @@ export class LotSerialTraceabilityService {
       ...(filters.lotId ? { id: filters.lotId } : {}),
       ...(filters.batchId ? { batchId: filters.batchId } : {}),
       ...(filters.productId ? { productId: filters.productId } : {}),
+      ...(filters.serialNumber ? { serialNumber: { equals: filters.serialNumber, mode: 'insensitive' as const } } : {}),
     };
     const batchWhere = {
       tenantId,
       ...(filters.batchId ? { id: filters.batchId } : {}),
       ...(filters.productId ? { productId: filters.productId } : {}),
       ...(filters.lotId ? { lots: { some: { id: filters.lotId, tenantId } } } : {}),
+      ...(filters.serialNumber ? { lots: { some: { serialNumber: { equals: filters.serialNumber, mode: 'insensitive' as const }, tenantId } } } : {}),
     };
 
     const [lots, batches] = await this.db.$transaction([

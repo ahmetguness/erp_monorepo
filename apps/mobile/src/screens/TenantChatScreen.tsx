@@ -44,29 +44,29 @@ export default function TenantChatScreen() {
 
   const currentUserId = useAuthStore((state) => state.user?.id);
 
-  const {
-    conversations,
-    activeConversationId,
-    messages,
-    isLoadingConversations,
-    isLoadingMessages,
-    isRealtimeConnected,
-    loadConversations,
-    selectConversation,
-    loadMessages,
-    sendMessage,
-    editMessage,
-    deleteMessage,
-    toggleReaction,
-    votePoll,
-    respondEvent,
-    togglePin,
-    toggleMute,
-    clearHistory,
-    createDirectChat,
-    createGroupChat,
-    startRealtime,
-  } = useTenantChatStore();
+  const conversations = useTenantChatStore((state) => state.conversations);
+  const activeConversationId = useTenantChatStore((state) => state.activeConversationId);
+  const messages = useTenantChatStore((state) => state.messages);
+  const isLoadingConversations = useTenantChatStore((state) => state.isLoadingConversations);
+  const isLoadingMessages = useTenantChatStore((state) => state.isLoadingMessages);
+  const isRealtimeConnected = useTenantChatStore((state) => state.isRealtimeConnected);
+  const isSending = useTenantChatStore((state) => state.isSending);
+
+  const loadConversations = useTenantChatStore((state) => state.loadConversations);
+  const selectConversation = useTenantChatStore((state) => state.selectConversation);
+  const loadMessages = useTenantChatStore((state) => state.loadMessages);
+  const sendMessage = useTenantChatStore((state) => state.sendMessage);
+  const editMessage = useTenantChatStore((state) => state.editMessage);
+  const deleteMessage = useTenantChatStore((state) => state.deleteMessage);
+  const toggleReaction = useTenantChatStore((state) => state.toggleReaction);
+  const votePoll = useTenantChatStore((state) => state.votePoll);
+  const respondEvent = useTenantChatStore((state) => state.respondEvent);
+  const togglePin = useTenantChatStore((state) => state.togglePin);
+  const toggleMute = useTenantChatStore((state) => state.toggleMute);
+  const clearHistory = useTenantChatStore((state) => state.clearHistory);
+  const createDirectChat = useTenantChatStore((state) => state.createDirectChat);
+  const createGroupChat = useTenantChatStore((state) => state.createGroupChat);
+  const startRealtime = useTenantChatStore((state) => state.startRealtime);
 
   const [activeFilter, setActiveFilter] = useState<FilterTab>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,6 +77,11 @@ export default function TenantChatScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const messageListRef = useRef<FlatList<ChatMessage>>(null);
+  const hasInitiallyScrolledRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    hasInitiallyScrolledRef.current = null;
+  }, [activeConversationId]);
 
   // Initialize real-time WebSocket connection
   useEffect(() => {
@@ -133,11 +138,12 @@ export default function TenantChatScreen() {
 
   const handleSendMessage = async (content: string, replyToMessageId?: string) => {
     if (!activeConversationId) return;
-    await sendMessage(activeConversationId, content, replyToMessageId);
-    // Auto scroll to bottom
-    setTimeout(() => {
-      messageListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    const sent = await sendMessage(activeConversationId, content, replyToMessageId);
+    if (sent) {
+      setTimeout(() => {
+        messageListRef.current?.scrollToEnd({ animated: true });
+      }, 50);
+    }
   };
 
   const handleEditMessage = (msg: ChatMessage) => {
@@ -337,13 +343,17 @@ export default function TenantChatScreen() {
   // Conversation Detail View (Right Pane / Mobile Active)
   // ─────────────────────────────────────────────
   const renderDetailView = () => {
-    if (!activeConversation) {
+    if (!activeConversationId) {
       return null;
     }
 
-    const isGroup = activeConversation.type === 'GROUP';
-    const isPinned = Boolean(activeConversation.pinnedAt);
-    const isMuted = activeConversation.notificationLevel === 'NONE';
+    const isGroup = activeConversation?.type === 'GROUP';
+    const isPinned = Boolean(activeConversation?.pinnedAt);
+    const isMuted = activeConversation?.notificationLevel === 'NONE';
+    const headerTitle = activeConversation?.title ?? 'Sohbet';
+    const headerSubtitle = isGroup
+      ? `${activeConversation?.members?.length ?? 0} katılımcı`
+      : 'Birebir Sohbet';
 
     return (
       <KeyboardAvoidingView
@@ -364,12 +374,10 @@ export default function TenantChatScreen() {
 
           <View style={styles.detailTitleWrap}>
             <Text style={[styles.detailTitle, { color: theme.colors.textPrimary }]} numberOfLines={1}>
-              {activeConversation.title}
+              {headerTitle}
             </Text>
             <Text style={[styles.detailSubtitle, { color: theme.colors.textMuted }]}>
-              {isGroup
-                ? `${activeConversation.members.length} katılımcı`
-                : 'Birebir Sohbet'}
+              {headerSubtitle}
             </Text>
           </View>
 
@@ -377,7 +385,7 @@ export default function TenantChatScreen() {
             {/* Toggle Mute */}
             <TouchableOpacity
               style={styles.detailHeaderBtn}
-              onPress={() => toggleMute(activeConversation.id)}
+              onPress={() => toggleMute(activeConversation?.id ?? activeConversationId)}
             >
               <Ionicons
                 name={isMuted ? 'volume-mute' : 'notifications-outline'}
@@ -389,7 +397,7 @@ export default function TenantChatScreen() {
             {/* Toggle Pin */}
             <TouchableOpacity
               style={styles.detailHeaderBtn}
-              onPress={() => togglePin(activeConversation.id)}
+              onPress={() => togglePin(activeConversation?.id ?? activeConversationId)}
             >
               <Ionicons
                 name={isPinned ? 'pin' : 'pin-outline'}
@@ -406,7 +414,7 @@ export default function TenantChatScreen() {
         </View>
 
         {/* Messages List */}
-        {isLoadingMessages ? (
+        {isLoadingMessages && currentMessages.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
           </View>
@@ -416,7 +424,16 @@ export default function TenantChatScreen() {
             data={currentMessages}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messagesListContent}
-            onContentSizeChange={() => messageListRef.current?.scrollToEnd({ animated: false })}
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={20}
+            maxToRenderPerBatch={15}
+            windowSize={11}
+            onContentSizeChange={() => {
+              if (hasInitiallyScrolledRef.current !== activeConversationId && currentMessages.length > 0) {
+                hasInitiallyScrolledRef.current = activeConversationId;
+                messageListRef.current?.scrollToEnd({ animated: false });
+              }
+            }}
             renderItem={({ item }) => {
               const isMe = item.sender.id === currentUserId;
               return (
@@ -434,12 +451,18 @@ export default function TenantChatScreen() {
               );
             }}
             ListEmptyComponent={
-              <View style={styles.emptyMessagesContainer}>
-                <Ionicons name="chatbubble-ellipses-outline" size={36} color={theme.colors.textMuted} />
-                <Text style={[styles.emptyMessagesText, { color: theme.colors.textMuted }]}>
-                  Henüz bir mesaj yok. İlk mesajı siz yazın!
-                </Text>
-              </View>
+              isLoadingMessages ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={theme.colors.primary} />
+                </View>
+              ) : (
+                <View style={styles.emptyMessagesContainer}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={36} color={theme.colors.textMuted} />
+                  <Text style={[styles.emptyMessagesText, { color: theme.colors.textMuted }]}>
+                    Henüz bir mesaj yok. İlk mesajı siz yazın!
+                  </Text>
+                </View>
+              )
             }
           />
         )}
@@ -449,6 +472,7 @@ export default function TenantChatScreen() {
           replyMessage={replyMessage}
           onCancelReply={() => setReplyMessage(null)}
           onSend={handleSendMessage}
+          isSending={isSending}
         />
       </KeyboardAvoidingView>
     );

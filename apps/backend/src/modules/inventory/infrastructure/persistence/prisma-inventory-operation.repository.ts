@@ -74,6 +74,25 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     ]);
     if (!product) throw new NotFoundError("Urun", command.productId);
     if (!warehouse) throw new NotFoundError("Depo", command.warehouseId);
+    if (command.batchId) {
+      const batch = await this.db.productBatch.findFirst({
+        where: { id: command.batchId, tenantId: command.tenantId, productId: command.productId },
+        select: { id: true },
+      });
+      if (!batch) throw new ValidationError("batchId secilen tenant ve urun ile uyumlu degildir.");
+    }
+    if (command.lotId) {
+      const lot = await this.db.lotSerialNumber.findFirst({
+        where: {
+          id: command.lotId,
+          tenantId: command.tenantId,
+          productId: command.productId,
+          ...(command.batchId ? { batchId: command.batchId } : {}),
+        },
+        select: { id: true },
+      });
+      if (!lot) throw new ValidationError("lotId secilen tenant, urun ve parti ile uyumlu degildir.");
+    }
 
     const transactionResult = await this.db.$transaction(async (tx) => {
       await lockInventoryPosition(tx, command.tenantId, `movement:${command.idempotencyKey}`, 'operation');
@@ -168,6 +187,14 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     ]);
     if (!product) throw new NotFoundError("Urun", command.productId);
     if (!warehouse) throw new NotFoundError("Depo", command.warehouseId);
+    const referenceExists = command.refType === 'OTHER'
+      ? true
+      : command.refType === 'SALES_ORDER'
+        ? Boolean(await this.db.salesOrder.findFirst({ where: { id: command.refId, tenantId: command.tenantId, deletedAt: null }, select: { id: true } }))
+        : command.refType === 'WORK_ORDER'
+          ? Boolean(await this.db.workOrder.findFirst({ where: { id: command.refId, tenantId: command.tenantId, deletedAt: null }, select: { id: true } }))
+          : Boolean(await this.db.purchaseRequest.findFirst({ where: { id: command.refId, tenantId: command.tenantId }, select: { id: true } }));
+    if (!referenceExists) throw new NotFoundError("Rezervasyon kaynagi", command.refId);
 
     return this.db.$transaction(async (tx) => {
       await lockInventoryPosition(tx, command.tenantId, command.productId, command.warehouseId);

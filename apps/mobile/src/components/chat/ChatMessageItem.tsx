@@ -26,7 +26,7 @@ interface ChatMessageItemProps {
 
 const COMMON_REACTIONS = ['👍', '❤️', '👏', '🎉', '🚀', '👀'];
 
-export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
+export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({
   message,
   isMe,
   showSenderName = false,
@@ -505,7 +505,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       </Modal>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   row: {

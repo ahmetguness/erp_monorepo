@@ -38,7 +38,7 @@ export function useAssignLotToMovement() {
 }
 
 export function useLotSerialTraceability(params: TraceabilityParams) {
-  const enabled = Boolean(params.lotId || params.batchId || params.productId);
+  const enabled = Boolean(params.lotId || params.batchId || params.productId || params.serialNumber);
   return useQuery({
     queryKey: KEYS.traceability(params),
     queryFn: () => getLotSerialTraceability(params),

@@ -49,6 +49,7 @@ export const TraceabilityReportSchema = z.object({
     lotId: z.string().optional(),
     batchId: z.string().optional(),
     productId: z.string().optional(),
+    serialNumber: z.string().optional(),
   }),
   summary: z.object({
     lotCount: z.coerce.number(),
@@ -67,8 +68,8 @@ export type TraceabilityReportItem = z.infer<typeof TraceabilityReportItemSchema
 
 export interface CreateLotSerialDTO { productId: string; batchId?: string; serialNumber: string }
 
-export interface ListParams extends PaginationParams { productId?: string; batchId?: string; isUsed?: string }
-export interface TraceabilityParams { lotId?: string; batchId?: string; productId?: string }
+export interface ListParams extends PaginationParams { productId?: string; batchId?: string; isUsed?: string; search?: string }
+export interface TraceabilityParams { lotId?: string; batchId?: string; productId?: string; serialNumber?: string }
 
 export async function getLotSerials(params: ListParams) {
   const res = await apiClient.get('/api/lot-serials', { params });

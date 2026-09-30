@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { AlertTriangle, Boxes, ChevronRight, FilterX, Hash, Package, Plus, Search } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { ProductSelect } from '@/components/shared/EntitySelect';
@@ -109,28 +109,16 @@ export function ProductBatchesPage() {
   const [status, setStatus] = useState<BatchStatus>('all');
   const [form, setForm] = useState({ productId: '', batchNumber: '', expiryDate: '', manufacturedAt: '', quantity: '', notes: '' });
 
-  const { data, isLoading } = useProductBatches({ page, limit: PAGE_SIZE, productId: productId || undefined });
+  const { data, isLoading, isError, refetch } = useProductBatches({
+    page, limit: PAGE_SIZE, productId: productId || undefined,
+    search: search.trim() || undefined, status,
+  });
   const createBatch = useCreateProductBatch();
   const batches = data?.data ?? EMPTY_BATCHES;
 
-  const filteredBatches = useMemo(() => {
-    const q = search.trim().toLocaleLowerCase('tr-TR');
-    return batches.filter((batch) => {
-      const haystack = `${batch.batchNumber} ${batch.product?.name ?? ''} ${batch.product?.code ?? ''}`.toLocaleLowerCase('tr-TR');
-      const matchesSearch = !q || haystack.includes(q);
-      const batchStatus = getBatchStatus(batch);
-      const matchesStatus = status === 'all' || (status === 'noExpiry' ? !batch.expiryDate : batchStatus === status);
-      return matchesSearch && matchesStatus;
-    });
-  }, [batches, search, status]);
+  const filteredBatches = batches;
 
-  const summary = useMemo(() => ({
-    active: batches.filter((batch) => getBatchStatus(batch) === 'active' || getBatchStatus(batch) === 'expiring').length,
-    totalQty: batches.reduce((sum, batch) => sum + batch.quantity, 0),
-    lots: batches.reduce((sum, batch) => sum + (batch._count?.lots ?? 0), 0),
-    expiring: batches.filter((batch) => getBatchStatus(batch) === 'expiring').length,
-    expired: batches.filter((batch) => getBatchStatus(batch) === 'expired').length,
-  }), [batches]);
+  const summary = data?.summary ?? { active: 0, totalQty: 0, lots: 0, expiring: 0 };
 
   const hasFilters = Boolean(productId || search || status !== 'all');
   const clearFilters = () => {
@@ -180,9 +168,9 @@ export function ProductBatchesPage() {
       <section>
         <div className="mb-3 rounded-xl border border-slate-800/80 bg-slate-950/35 p-3">
           <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_240px_180px_auto] lg:items-center">
-            <Input aria-label="Parti no, ürün veya kod ara" placeholder="Parti no, ürün veya kod ara..." value={search} onChange={(event) => setSearch(event.target.value)} prefixIcon={<Search className="h-4 w-4" />} />
+            <Input aria-label="Parti no, ürün veya kod ara" placeholder="Parti no, ürün veya kod ara..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} prefixIcon={<Search className="h-4 w-4" />} />
             <ProductSelect value={productId} onChange={(value) => { setProductId(value); setPage(1); }} placeholder="Tüm Ürünler" />
-            <select value={status} onChange={(event) => setStatus(event.target.value as BatchStatus)} aria-label="Durum filtresi" className="h-10 rounded-xl border border-slate-700/75 bg-slate-950/35 px-3.5 text-sm text-slate-200 outline-none transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:border-sky-500/60 focus:ring-2 focus:ring-sky-500/35">
+            <select value={status} onChange={(event) => { setStatus(event.target.value as BatchStatus); setPage(1); }} aria-label="Durum filtresi" className="h-10 rounded-xl border border-slate-700/75 bg-slate-950/35 px-3.5 text-sm text-slate-200 outline-none transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:border-sky-500/60 focus:ring-2 focus:ring-sky-500/35">
               <option value="all">Tüm Durumlar</option>
               <option value="active">Aktif</option>
               <option value="empty">Tükendi</option>
@@ -205,7 +193,13 @@ export function ProductBatchesPage() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? <TableSkeleton /> : filteredBatches.length === 0 ? (
+                {isLoading ? <TableSkeleton /> : isError ? (
+                  <tr><td colSpan={8} className="px-4 py-10 text-center">
+                    <p className="text-sm font-semibold text-red-200">Partiler yüklenemedi</p>
+                    <p className="mt-1 text-sm text-slate-500">Bağlantınızı kontrol edip yeniden deneyin.</p>
+                    <Button className="mt-4" size="sm" variant="secondary" onClick={() => void refetch()}>Yeniden Dene</Button>
+                  </td></tr>
+                ) : filteredBatches.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-4 py-10 text-center">
                       <Boxes className="mx-auto h-8 w-8 text-slate-600" />

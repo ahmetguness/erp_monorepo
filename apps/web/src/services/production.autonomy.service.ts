@@ -52,17 +52,17 @@ export type PredictiveMaintenanceItem = z.infer<typeof PredictiveMaintenanceItem
 
 export async function getWorkCenterCapacity(): Promise<WorkCenterCapacityItem[]> {
   const res = await apiClient.get('/api/production-autonomy/work-center-capacity');
-  return res.data.data;
+  return z.array(WorkCenterCapacityItemSchema).parse(res.data.data);
 }
 
 export async function runScheduleOptimization(autoReschedule = true): Promise<ScheduleOptimizationResult> {
   const res = await apiClient.post('/api/production-autonomy/optimize-schedule', { autoReschedule });
-  return res.data.data;
+  return ScheduleOptimizationResultSchema.parse(res.data.data);
 }
 
 export async function getPredictiveMaintenance(): Promise<PredictiveMaintenanceItem[]> {
   const res = await apiClient.get('/api/production-autonomy/predictive-maintenance');
-  return res.data.data;
+  return z.array(PredictiveMaintenanceItemSchema).parse(res.data.data);
 }
 
 export async function reserveMaintenanceParts(

@@ -24,11 +24,24 @@ export interface CreateProductBatchDTO {
 
 export interface UpdateProductBatchDTO { expiryDate?: string; manufacturedAt?: string; quantity?: number; notes?: string }
 
-export interface ListParams extends PaginationParams { productId?: string }
+export interface ListParams extends PaginationParams {
+  productId?: string;
+  search?: string;
+  status?: 'all' | 'active' | 'empty' | 'expiring' | 'expired' | 'noExpiry';
+}
+
+const ProductBatchListResponseSchema = PaginatedResponseSchema(ProductBatchSchema).extend({
+  summary: z.object({
+    active: z.coerce.number(),
+    totalQty: z.coerce.number(),
+    lots: z.coerce.number(),
+    expiring: z.coerce.number(),
+  }),
+});
 
 export async function getProductBatches(params: ListParams) {
   const res = await apiClient.get('/api/product-batches', { params });
-  return safeParse(PaginatedResponseSchema(ProductBatchSchema), res.data, 'getProductBatches');
+  return safeParse(ProductBatchListResponseSchema, res.data, 'getProductBatches');
 }
 
 export async function createProductBatch(data: CreateProductBatchDTO): Promise<ProductBatch> {

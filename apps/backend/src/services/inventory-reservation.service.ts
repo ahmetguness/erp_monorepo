@@ -68,8 +68,9 @@ function numberValue(value: Prisma.Decimal | number | null | undefined): number 
 
 function parseOptionalDate(value: string | null | undefined, label: string): Date | null {
   if (!value) return null;
-  const date = new Date(value);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T23:59:59.999Z`) : new Date(value);
   if (Number.isNaN(date.getTime())) throw new ValidationError(`${label} gecersiz.`);
+  if (date <= new Date()) throw new ValidationError(`${label} gelecekte olmalidir.`);
   return date;
 }
 
@@ -106,6 +107,7 @@ export class InventoryReservationService {
     if (!input.orderId || !input.warehouseId) {
       throw new ValidationError('orderId ve warehouseId zorunludur.');
     }
+    if (typeof input.allowPartial !== 'boolean') throw new ValidationError('allowPartial boolean olmalidir.');
 
     const expiresAt = parseOptionalDate(input.expiresAt, 'expiresAt');
 
