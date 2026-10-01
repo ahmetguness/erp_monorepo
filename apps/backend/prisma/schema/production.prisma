@@ -69,6 +69,7 @@ model BOMItem {
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, bomId])
+  @@unique([bomId, productId])
   @@map("bom_items")
 }
 

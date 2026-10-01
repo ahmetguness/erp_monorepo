@@ -58,6 +58,15 @@ export class PrismaWorkOrderReadRepository implements WorkOrderReadRepository<
       tenantId: criteria.tenantId,
       deletedAt: null,
       ...(criteria.status ? { status: criteria.status } : {}),
+      ...(criteria.search ? {
+        OR: [
+          { number: { contains: criteria.search, mode: 'insensitive' as const } },
+          { product: { name: { contains: criteria.search, mode: 'insensitive' as const } } },
+          { product: { code: { contains: criteria.search, mode: 'insensitive' as const } } },
+          { bom: { name: { contains: criteria.search, mode: 'insensitive' as const } } },
+          { bom: { version: { contains: criteria.search, mode: 'insensitive' as const } } },
+        ],
+      } : {}),
     };
     const [total, items] = await this.db.$transaction([
       this.db.workOrder.count({ where }),

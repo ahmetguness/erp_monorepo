@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Package, Trash2, GitBranch, Route, Scale, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
@@ -39,7 +40,7 @@ function revisionLabel(status: BomRevisionRow["status"]): { label: string; varia
 
 export function BOMDetailPage({ id }: { id: string }) {
   const router = useRouter();
-  const { data: bom, isLoading } = useBOM(id);
+  const { data: bom, error, isError, isLoading, refetch } = useBOM(id);
   const { data: engineering, isLoading: engineeringLoading } = useBOMEngineering(id);
   const removeItem = useRemoveBOMItem();
   const removeRouting = useRemoveBOMRouting();
@@ -50,6 +51,7 @@ export function BOMDetailPage({ id }: { id: string }) {
         <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
+  if (isError) return <ApiErrorState error={error} onRetry={() => void refetch()} />;
   if (!bom)
     return (
       <div className="text-center py-20 text-slate-400">BOM bulunamadı.</div>
@@ -121,6 +123,9 @@ export function BOMDetailPage({ id }: { id: string }) {
                     </div>
                   </div>
                   <button
+                    type="button"
+                    aria-label={`${item.product?.name ?? "Malzeme"} malzemesini kaldır`}
+                    disabled={removeItem.isPending}
                     onClick={() =>
                       removeItem.mutate({ bomId: id, itemId: item.id })
                     }
@@ -156,6 +161,9 @@ export function BOMDetailPage({ id }: { id: string }) {
                     </span>
                   </div>
                   <button
+                    type="button"
+                    aria-label={`${r.name} operasyonunu kaldır`}
+                    disabled={removeRouting.isPending}
                     onClick={() =>
                       removeRouting.mutate({ bomId: id, routingId: r.id })
                     }

@@ -7,6 +7,7 @@ import {
   ServiceStatus,
 } from '@prisma/client';
 import { logger } from '../lib/logger.js';
+import { NotFoundError } from '../errors/index.js';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { EDocumentAutomationService } from './edocument-automation.service.js';
 
@@ -76,6 +77,9 @@ export class ServiceAutomationService {
     });
 
     if (!sr) throw new Error(`Servis Talebi bulunamadı: ${serviceRequestId}`);
+
+    const warehouse = await this.db.warehouse.findFirst({ where: { id: warehouseId, tenantId } });
+    if (!warehouse) throw new NotFoundError('Depo', warehouseId);
 
     let reservedItemCount = 0;
 

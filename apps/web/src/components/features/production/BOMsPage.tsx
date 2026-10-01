@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Eye, FilterX, Layers, Plus, Search, ToggleLeft, ToggleRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { ProductSelect } from "@/components/shared/EntitySelect";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -26,20 +27,17 @@ export function BOMsPage() {
   const [status, setStatus] = useState<StatusFilter>("all");
   const [form, setForm] = useState({ productId: "", name: "", version: "1.0" });
 
-  const { data, isLoading } = useBOMs({ page, limit: PAGE_SIZE });
+  const { data, error, isError, isLoading, refetch } = useBOMs({
+    page,
+    limit: PAGE_SIZE,
+    ...(search.trim() && { search: search.trim() }),
+    ...(status !== "all" && { status }),
+  });
   const create = useCreateBOM();
   const update = useUpdateBOM();
   const rows = data?.data ?? EMPTY_BOMS;
 
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLocaleLowerCase("tr-TR");
-    return rows.filter((bom) => {
-      const haystack = [bom.name, bom.version, bom.product?.name, bom.product?.code].filter(Boolean).join(" ").toLocaleLowerCase("tr-TR");
-      const matchesSearch = !q || haystack.includes(q);
-      const matchesStatus = status === "all" || (status === "active" ? bom.isActive : !bom.isActive);
-      return matchesSearch && matchesStatus;
-    });
-  }, [rows, search, status]);
+  const filteredRows = rows;
 
   const summary = useMemo(() => ({
     total: rows.length,
@@ -83,7 +81,7 @@ export function BOMsPage() {
       <section>
         <div className="mb-3 rounded-xl border border-slate-800/80 bg-slate-950/35 p-3">
           <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_auto_auto] lg:items-center">
-            <Input aria-label="BOM veya ürün ara" placeholder="BOM, ürün veya kod ara..." value={search} onChange={(event) => setSearch(event.target.value)} prefixIcon={<Search className="h-4 w-4" />} />
+            <Input aria-label="BOM veya ürün ara" placeholder="BOM, ürün veya kod ara..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} prefixIcon={<Search className="h-4 w-4" />} />
             <div className="inline-flex h-10 overflow-hidden rounded-xl border border-slate-700/75 bg-slate-950/35 p-1">
               {[
                 { value: "all", label: "Tümü" },
@@ -93,7 +91,7 @@ export function BOMsPage() {
                 <button
                   key={item.value}
                   type="button"
-                  onClick={() => setStatus(item.value as StatusFilter)}
+                  onClick={() => { setStatus(item.value as StatusFilter); setPage(1); }}
                   className={cn("rounded-lg px-3 text-xs font-medium transition-colors", status === item.value ? "bg-sky-500/15 text-sky-300" : "text-slate-500 hover:text-slate-200")}
                 >
                   {item.label}
@@ -104,7 +102,7 @@ export function BOMsPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40">
+        {isError ? <ApiErrorState error={error} onRetry={() => void refetch()} /> : <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[880px] text-sm">
               <thead className="sticky top-0 z-10 bg-slate-900/95">
@@ -197,7 +195,7 @@ export function BOMsPage() {
               </div>
             </div>
           )}
-        </div>
+        </div>}
       </section>
 
       <Modal

@@ -22,7 +22,7 @@ export default defineConfig({
     use: { ...devices['Desktop Chrome'], ...(executablePath ? { launchOptions: { executablePath } } : {}) },
   }],
   webServer: externalWebServer ? undefined : {
-    command: `node ../../node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port ${port}`,
+    command: `node node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port ${port}`,
     url: `http://127.0.0.1:${port}/admin/login`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

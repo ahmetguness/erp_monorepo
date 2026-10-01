@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, PackageX, RefreshCw, ShieldCheck, Star } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -147,7 +148,7 @@ function workOrderHref(id: string): string {
 
 export function QualityControlPage() {
   const [horizonDays, setHorizonDays] = useState(30);
-  const { data, isLoading, isFetching, refetch } = useQualityControl({ horizonDays });
+  const { data, error, isError, isLoading, isFetching, refetch } = useQualityControl({ horizonDays });
 
   const forms = useMemo(() => [...(data?.inputForms ?? []), ...(data?.outputForms ?? [])], [data?.inputForms, data?.outputForms]);
   const blockedForms = useMemo(() => forms.filter((row) => row.status === "blocked"), [forms]);
@@ -187,7 +188,9 @@ export function QualityControlPage() {
         }
       />
 
-      {isLoading || !data ? (
+      {isError ? (
+        <ApiErrorState error={error} onRetry={() => void refetch()} />
+      ) : isLoading || !data ? (
         <LoadingState />
       ) : (
         <>

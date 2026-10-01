@@ -44,11 +44,16 @@ export const WorkOrderController = {
     const tenantId = requireTenantId(c);
     const { page, limit } = getPaginationParams(c, 20);
     const status = c.req.query('status') as WorkOrderStatus | undefined;
+    if (status && !Object.values(WorkOrderStatus).includes(status)) {
+      return c.json(new ValidationError('Geçersiz iş emri durumu.').toJSON(), 400);
+    }
+    const search = c.req.query('search')?.trim();
     const result = await productionApplication.workOrderQueries.list({
       tenantId,
       page,
       pageSize: limit,
       ...(status ? { status } : {}),
+      ...(search ? { search } : {}),
     });
     return c.json(result);
   },
@@ -78,6 +83,18 @@ export const WorkOrderController = {
       if (error instanceof ValidationError) return c.json(error.toJSON(), 400);
       throw error;
     }
+
+    const [product, selectedBom, inputWarehouse, outputWarehouse] = await Promise.all([
+      prisma.product.findFirst({ where: { id: body.productId, tenantId, deletedAt: null }, select: { id: true } }),
+      body.bomId ? prisma.bOM.findFirst({ where: { id: body.bomId, tenantId }, select: { id: true, productId: true } }) : null,
+      body.inputWarehouseId ? prisma.warehouse.findFirst({ where: { id: body.inputWarehouseId, tenantId }, select: { id: true } }) : null,
+      body.outputWarehouseId ? prisma.warehouse.findFirst({ where: { id: body.outputWarehouseId, tenantId }, select: { id: true } }) : null,
+    ]);
+    if (!product) return c.json(new NotFoundError('Ürün', body.productId).toJSON(), 404);
+    if (body.bomId && !selectedBom) return c.json(new NotFoundError('BOM', body.bomId).toJSON(), 404);
+    if (selectedBom && selectedBom.productId !== body.productId) return c.json(new ValidationError('BOM seçilen ürüne ait olmalıdır.').toJSON(), 400);
+    if (body.inputWarehouseId && !inputWarehouse) return c.json(new NotFoundError('Girdi Deposu', body.inputWarehouseId).toJSON(), 404);
+    if (body.outputWarehouseId && !outputWarehouse) return c.json(new NotFoundError('Çıktı Deposu', body.outputWarehouseId).toJSON(), 404);
 
     // Numara üret
     const number = await generateDocumentNumber(tenantId, 'work_order', 'WO-', 'workOrder');
@@ -171,6 +188,7 @@ export const WorkOrderController = {
 
     const body = await c.req.json<{ status: WorkOrderStatus; notes?: string }>();
     if (!body.status) return c.json(new ValidationError('status zorunludur.').toJSON(), 400);
+    if (!Object.values(WorkOrderStatus).includes(body.status)) return c.json(new ValidationError('Geçersiz iş emri durumu.').toJSON(), 400);
 
     if (body.status === WorkOrderStatus.COMPLETED && decideWorkOrderCompletion(wo.status) === 'ALREADY_COMPLETED') {
       const { product: _product, items: _items, ...completedWorkOrder } = wo;
@@ -195,10 +213,10 @@ export const WorkOrderController = {
 
     const updated = await prisma.$transaction(async (tx) => {
       const updateResult = await tx.workOrder.updateMany({
-        where: { id, tenantId },
+        where: { id, tenantId, status: wo.status },
         data: { status: body.status },
       });
-      if (updateResult.count !== 1) throw new NotFoundError('İş Emri', id);
+      if (updateResult.count !== 1) throw new ConflictError('İş emri durumu eşzamanlı olarak değiştirildi. Güncel veriyi yenileyin.');
       await tx.workOrderHistory.create({
         data: { tenantId, workOrderId: id, fromStatus: wo.status, toStatus: body.status, notes: body.notes ?? null, createdById: userId },
       });
@@ -304,7 +322,7 @@ export const WorkOrderController = {
           productName: wo.product.name,
           plannedQty: Number(wo.plannedQty),
           producedQty: producedQuantity,
-          scrapQty: 0,
+          scrapQty: Number(wo.scrapQty ?? 0),
         });
       }
 
@@ -390,6 +408,11 @@ export const WorkOrderController = {
     } catch (error) {
       if (error instanceof ValidationError) return c.json(error.toJSON(), 400);
       throw error;
+    }
+
+    if (body.operationId) {
+      const operation = await prisma.workOrderOperation.findFirst({ where: { id: body.operationId, tenantId, workOrderId: id }, select: { id: true } });
+      if (!operation) return c.json(new NotFoundError('Operasyon', body.operationId).toJSON(), 404);
     }
 
     if (body.consumptions?.length) {
@@ -511,23 +534,19 @@ export const WorkOrderController = {
                 notes: `İş emri ${wo.number} malzeme tüketimi`,
               },
             });
-            await tx.stockLevel.upsert({
+            const stockUpdate = await tx.stockLevel.updateMany({
               where: {
-                productId_warehouseId_locationId: {
-                  productId: item.productId,
-                  warehouseId,
-                  locationId,
-                },
-              },
-              create: {
                 tenantId,
                 productId: item.productId,
                 warehouseId,
                 locationId,
-                quantity: -cons.quantity,
+                quantity: { gte: cons.quantity },
               },
-              update: { quantity: { decrement: cons.quantity } },
+              data: { quantity: { decrement: cons.quantity } },
             });
+            if (stockUpdate.count !== 1) {
+              throw new ConflictError('Stok eşzamanlı olarak değişti veya tüketim için yetersiz. Güncel veriyi yenileyin.');
+            }
             await recordInventoryCosting(tx, tenantId, {
               movementId: stockMovement.id,
               productId: item.productId,
@@ -595,6 +614,15 @@ export const WorkOrderController = {
       notes?: string | null;
     }>();
 
+    if (body.status !== undefined && !Object.values(WorkOrderStatus).includes(body.status)) {
+      return c.json(new ValidationError('Geçersiz operasyon durumu.').toJSON(), 400);
+    }
+    for (const [field, value] of [['actualStartAt', body.actualStartAt], ['actualEndAt', body.actualEndAt]] as const) {
+      if (value !== undefined && value !== null && Number.isNaN(new Date(value).getTime())) {
+        return c.json(new ValidationError(`${field} geçerli bir tarih olmalıdır.`).toJSON(), 400);
+      }
+    }
+
     const operation = await prisma.workOrderOperation.findFirst({
       where: { id: operationId, tenantId, workOrderId, workOrder: { tenantId, deletedAt: null } },
       select: { id: true, status: true, actualStartAt: true, actualEndAt: true, name: true },
@@ -602,12 +630,25 @@ export const WorkOrderController = {
     if (!operation) return c.json(new NotFoundError('Operasyon', operationId).toJSON(), 404);
 
     const nextStatus = body.status ?? operation.status;
+    if (nextStatus !== operation.status) {
+      try {
+        assertWorkOrderStatusTransition(operation.status, nextStatus);
+      } catch (error) {
+        if (error instanceof ValidationError) return c.json(error.toJSON(), 400);
+        throw error;
+      }
+    }
     const actualStartAt = body.actualStartAt === undefined
       ? (nextStatus === WorkOrderStatus.IN_PROGRESS && !operation.actualStartAt ? new Date() : undefined)
       : body.actualStartAt === null ? null : new Date(body.actualStartAt);
     const actualEndAt = body.actualEndAt === undefined
       ? (nextStatus === WorkOrderStatus.COMPLETED && !operation.actualEndAt ? new Date() : undefined)
       : body.actualEndAt === null ? null : new Date(body.actualEndAt);
+    const effectiveStartAt = actualStartAt === undefined ? operation.actualStartAt : actualStartAt;
+    const effectiveEndAt = actualEndAt === undefined ? operation.actualEndAt : actualEndAt;
+    if (effectiveStartAt && effectiveEndAt && effectiveEndAt < effectiveStartAt) {
+      return c.json(new ValidationError('Operasyon bitiş tarihi başlangıç tarihinden önce olamaz.').toJSON(), 400);
+    }
 
     const updated = await prisma.workOrderOperation.update({
       where: { id: operationId },
@@ -690,7 +731,7 @@ export const WorkOrderController = {
       sourceWarehouseId?: string;
     }>();
 
-    if (!body.productId || !body.requiredQty || body.requiredQty <= 0) {
+    if (!body.productId || typeof body.requiredQty !== 'number' || !Number.isFinite(body.requiredQty) || body.requiredQty <= 0) {
       return c.json(
         new ValidationError('productId ve pozitif bir requiredQty zorunludur.').toJSON(),
         400
@@ -698,10 +739,14 @@ export const WorkOrderController = {
     }
 
     const product = await prisma.product.findFirst({
-      where: { id: body.productId, tenantId },
+      where: { id: body.productId, tenantId, deletedAt: null },
       select: { id: true, name: true, code: true, purchasePrice: true, averageCost: true },
     });
     if (!product) return c.json(new NotFoundError('Ürün', body.productId).toJSON(), 404);
+    if (body.sourceWarehouseId) {
+      const warehouse = await prisma.warehouse.findFirst({ where: { id: body.sourceWarehouseId, tenantId }, select: { id: true } });
+      if (!warehouse) return c.json(new NotFoundError('Kaynak Depo', body.sourceWarehouseId).toJSON(), 404);
+    }
 
     const item = await prisma.workOrderItem.create({
       data: {
@@ -731,4 +776,3 @@ export const WorkOrderController = {
     return c.json({ data: item }, 201);
   },
 };
-

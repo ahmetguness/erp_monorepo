@@ -1,5 +1,5 @@
-import { Priority, TaskStatus, WorkOrderStatus } from '@prisma/client';
-import type { PrismaClient } from '@prisma/client';
+import { Priority, TaskStatus, WorkOrderStatus } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 
 type AdvancedProductionDbClient = PrismaClient;
 
@@ -49,8 +49,8 @@ export interface AdvancedQualitySignalRow {
   workOrderId: string;
   workOrderNumber: string;
   product: AdvancedProductionRef;
-  signal: 'scrap' | 'under_production' | 'material_shortage' | 'paused_order';
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  signal: "scrap" | "under_production" | "material_shortage" | "paused_order";
+  severity: "low" | "medium" | "high" | "critical";
   detail: string;
 }
 
@@ -58,7 +58,7 @@ export interface AdvancedMaintenanceRow {
   workCenter: AdvancedProductionRef;
   openTaskCount: number;
   utilizationPct: number;
-  priority: 'low' | 'medium' | 'high' | 'critical';
+  priority: "low" | "medium" | "high" | "critical";
   recommendation: string;
 }
 
@@ -179,50 +179,76 @@ function windowFor(horizonDays: number): { start: Date; end: Date } {
   return { start, end };
 }
 
-function plannedOperationHours(operation: WorkOrderLookup['operations'][number], plannedQty: number): number {
-  return Math.max(0, (numeric(operation.plannedSetupTime) + numeric(operation.plannedRunTime) * plannedQty) / 60);
+function plannedOperationHours(
+  operation: WorkOrderLookup["operations"][number],
+  plannedQty: number,
+): number {
+  return Math.max(
+    0,
+    (numeric(operation.plannedSetupTime) +
+      numeric(operation.plannedRunTime) * plannedQty) /
+      60,
+  );
 }
 
-function actualOperationHours(operation: WorkOrderLookup['operations'][number], plannedQty: number): number {
-  const explicit = numeric(operation.actualSetupTime) + numeric(operation.actualRunTime) * plannedQty;
+function actualOperationHours(
+  operation: WorkOrderLookup["operations"][number],
+  plannedQty: number,
+): number {
+  const explicit =
+    numeric(operation.actualSetupTime) +
+    numeric(operation.actualRunTime) * plannedQty;
   if (explicit > 0) return explicit / 60;
   if (operation.actualStartAt && operation.actualEndAt) {
-    return Math.max(0, (operation.actualEndAt.getTime() - operation.actualStartAt.getTime()) / 3_600_000);
+    return Math.max(
+      0,
+      (operation.actualEndAt.getTime() - operation.actualStartAt.getTime()) /
+        3_600_000,
+    );
   }
   return 0;
 }
 
 function materialCoverage(workOrder: WorkOrderLookup): number {
-  const required = workOrder.items.reduce((sum, item) => sum + numeric(item.requiredQty), 0);
-  const consumed = workOrder.items.reduce((sum, item) => sum + numeric(item.consumedQty), 0);
+  const required = workOrder.items.reduce(
+    (sum, item) => sum + numeric(item.requiredQty),
+    0,
+  );
+  const consumed = workOrder.items.reduce(
+    (sum, item) => sum + numeric(item.consumedQty),
+    0,
+  );
   return required > 0 ? pct(consumed, required) : 100;
 }
 
-function severityByPct(value: number): AdvancedQualitySignalRow['severity'] {
-  if (value >= 20) return 'critical';
-  if (value >= 10) return 'high';
-  if (value >= 5) return 'medium';
-  return 'low';
+function severityByPct(value: number): AdvancedQualitySignalRow["severity"] {
+  if (value >= 20) return "critical";
+  if (value >= 10) return "high";
+  if (value >= 5) return "medium";
+  return "low";
 }
 
-function taskPriority(priority: Priority): AdvancedMaintenanceRow['priority'] {
-  if (priority === Priority.CRITICAL) return 'critical';
-  if (priority === Priority.HIGH) return 'high';
-  if (priority === Priority.LOW) return 'low';
-  return 'medium';
+function taskPriority(priority: Priority): AdvancedMaintenanceRow["priority"] {
+  if (priority === Priority.CRITICAL) return "critical";
+  if (priority === Priority.HIGH) return "high";
+  if (priority === Priority.LOW) return "low";
+  return "medium";
 }
 
-function strongestPriority(values: AdvancedMaintenanceRow['priority'][]): AdvancedMaintenanceRow['priority'] {
-  if (values.includes('critical')) return 'critical';
-  if (values.includes('high')) return 'high';
-  if (values.includes('medium')) return 'medium';
-  return 'low';
+function strongestPriority(
+  values: AdvancedMaintenanceRow["priority"][],
+): AdvancedMaintenanceRow["priority"] {
+  if (values.includes("critical")) return "critical";
+  if (values.includes("high")) return "high";
+  if (values.includes("medium")) return "medium";
+  return "low";
 }
 
 function capacityRecommendation(utilizationPct: number): string {
-  if (utilizationPct >= 100) return 'Ek vardiya veya dis kaynak planla';
-  if (utilizationPct >= 85) return 'Vardiya dagilimini ve operasyon sirasini gozden gecir';
-  return 'Kapasite normal';
+  if (utilizationPct >= 100) return "Ek vardiya veya dis kaynak planla";
+  if (utilizationPct >= 85)
+    return "Vardiya dagilimini ve operasyon sirasini gozden gecir";
+  return "Kapasite normal";
 }
 
 function shiftCountFor(capacityHours: number): number {
@@ -237,80 +263,113 @@ export async function getAdvancedProduction(
   const { tenantId, horizonDays } = input;
   const { start, end } = windowFor(horizonDays);
 
-  const [workCenters, workOrders, capacities, maintenanceTasks] = await Promise.all([
-    db.workCenter.findMany({
-      where: { tenantId, isActive: true },
-      select: { id: true, code: true, name: true, capacity: true, laborRate: true, overheadRate: true },
-      orderBy: { code: 'asc' },
-    }),
-    db.workOrder.findMany({
-      where: {
-        tenantId,
-        deletedAt: null,
-        OR: [
-          { status: { in: [...OPEN_WORK_ORDER_STATUSES] } },
-          { updatedAt: { gte: start } },
-          { startDate: { lte: end }, endDate: null },
-          { startDate: { lte: end }, endDate: { gte: start } },
-        ],
-      },
-      select: {
-        id: true,
-        number: true,
-        status: true,
-        plannedQty: true,
-        producedQty: true,
-        scrapQty: true,
-        scrapCost: true,
-        scrapReason: true,
-        startDate: true,
-        endDate: true,
-        product: { select: { id: true, code: true, name: true } },
-        items: { select: { requiredQty: true, consumedQty: true } },
-        operations: {
-          select: {
-            id: true,
-            name: true,
-            status: true,
-            plannedSetupTime: true,
-            plannedRunTime: true,
-            actualSetupTime: true,
-            actualRunTime: true,
-            actualStartAt: true,
-            actualEndAt: true,
-            workCenter: { select: { id: true, code: true, name: true, capacity: true, laborRate: true, overheadRate: true } },
+  const [workCenters, workOrders, capacities, maintenanceTasks] =
+    await Promise.all([
+      db.workCenter.findMany({
+        where: { tenantId, isActive: true },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          capacity: true,
+          laborRate: true,
+          overheadRate: true,
+        },
+        orderBy: { code: "asc" },
+      }),
+      db.workOrder.findMany({
+        where: {
+          tenantId,
+          deletedAt: null,
+          OR: [
+            { status: { in: [...OPEN_WORK_ORDER_STATUSES] } },
+            { updatedAt: { gte: start } },
+            { startDate: { lte: end }, endDate: null },
+            { startDate: { lte: end }, endDate: { gte: start } },
+          ],
+        },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          plannedQty: true,
+          producedQty: true,
+          scrapQty: true,
+          scrapCost: true,
+          scrapReason: true,
+          startDate: true,
+          endDate: true,
+          product: { select: { id: true, code: true, name: true } },
+          items: { select: { requiredQty: true, consumedQty: true } },
+          operations: {
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              plannedSetupTime: true,
+              plannedRunTime: true,
+              actualSetupTime: true,
+              actualRunTime: true,
+              actualStartAt: true,
+              actualEndAt: true,
+              workCenter: {
+                select: {
+                  id: true,
+                  code: true,
+                  name: true,
+                  capacity: true,
+                  laborRate: true,
+                  overheadRate: true,
+                },
+              },
+            },
           },
         },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 100,
-    }),
-    db.workCenterCapacity.findMany({
-      where: { tenantId, date: { gte: start, lte: end } },
-      select: {
-        workCenterId: true,
-        date: true,
-        capacity: true,
-        allocated: true,
-        workCenter: { select: { id: true, code: true, name: true, capacity: true, laborRate: true, overheadRate: true } },
-      },
-      orderBy: [{ date: 'asc' }],
-    }),
-    db.task.findMany({
-      where: {
-        tenantId,
-        status: { in: [...OPEN_TASK_STATUSES] },
-        OR: [
-          { module: 'production' },
-          { module: 'service' },
-          { source: { startsWith: 'maintenance:' } },
-        ],
-      },
-      select: { entityId: true, priority: true },
-    }),
-  ]);
+        orderBy: { updatedAt: "desc" },
+      }),
+      db.workCenterCapacity.findMany({
+        where: { tenantId, date: { gte: start, lte: end } },
+        select: {
+          workCenterId: true,
+          date: true,
+          capacity: true,
+          allocated: true,
+          workCenter: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              capacity: true,
+              laborRate: true,
+              overheadRate: true,
+            },
+          },
+        },
+        orderBy: [{ date: "asc" }],
+      }),
+      db.task.findMany({
+        where: {
+          tenantId,
+          status: { in: [...OPEN_TASK_STATUSES] },
+          OR: [
+            { module: "production" },
+            { module: "service" },
+            { source: { startsWith: "maintenance:" } },
+          ],
+        },
+        select: { entityId: true, priority: true },
+      }),
+    ]);
 
-  const capacityTotals = new Map<string, { workCenter: WorkCenterLookup; capacityHours: number; allocatedHours: number; queuedHours: number }>();
+  const capacityTotals = new Map<
+    string,
+    {
+      workCenter: WorkCenterLookup;
+      capacityHours: number;
+      allocatedHours: number;
+      queuedHours: number;
+    }
+  >();
   const explicitCapacityDates = new Map<string, Set<string>>();
   for (const workCenter of workCenters) {
     capacityTotals.set(workCenter.id, {
@@ -322,7 +381,7 @@ export async function getAdvancedProduction(
     explicitCapacityDates.set(workCenter.id, new Set<string>());
   }
 
-  const shiftPlan = capacities.slice(0, 60).map((row): AdvancedShiftRow => {
+  const allShiftRows = capacities.map((row): AdvancedShiftRow => {
     const capacityHours = numeric(row.capacity);
     const allocatedHours = numeric(row.allocated);
     const shiftCount = shiftCountFor(capacityHours);
@@ -341,21 +400,29 @@ export async function getAdvancedProduction(
       utilizationPct: pct(allocatedHours, capacityHours),
     };
   });
+  const shiftPlan = allShiftRows.slice(0, 60);
 
   for (const [workCenterId, totals] of capacityTotals.entries()) {
     const explicitDays = explicitCapacityDates.get(workCenterId)?.size ?? 0;
     const missingDays = Math.max(horizonDays - explicitDays, 0);
-    totals.capacityHours += Math.max(numeric(totals.workCenter.capacity), 8) * missingDays;
+    totals.capacityHours +=
+      Math.max(numeric(totals.workCenter.capacity), 8) * missingDays;
   }
 
   const qualitySignals: AdvancedQualitySignalRow[] = [];
   const scrapAnalysis: AdvancedScrapRow[] = [];
   const operationCosts: AdvancedOperationCostRow[] = [];
+  let totalProducedQty = 0;
+  let totalScrapQty = 0;
+  let totalPlannedOperationCost = 0;
+  let totalActualOperationCost = 0;
 
   for (const workOrder of workOrders) {
     const plannedQty = numeric(workOrder.plannedQty);
     const producedQty = numeric(workOrder.producedQty);
     const scrapQty = numeric(workOrder.scrapQty);
+    totalProducedQty += producedQty;
+    totalScrapQty += scrapQty;
     const scrapRatePct = pct(scrapQty, producedQty + scrapQty);
     const product = ref(workOrder.product);
 
@@ -375,7 +442,7 @@ export async function getAdvancedProduction(
         workOrderId: workOrder.id,
         workOrderNumber: workOrder.number,
         product,
-        signal: 'scrap',
+        signal: "scrap",
         severity: severityByPct(scrapRatePct),
         detail: `${scrapRatePct}% fire orani`,
       });
@@ -387,8 +454,8 @@ export async function getAdvancedProduction(
         workOrderId: workOrder.id,
         workOrderNumber: workOrder.number,
         product,
-        signal: 'under_production',
-        severity: completionPct < 80 ? 'high' : 'medium',
+        signal: "under_production",
+        severity: completionPct < 80 ? "high" : "medium",
         detail: `${completionPct}% tamamlanma`,
       });
     }
@@ -399,8 +466,8 @@ export async function getAdvancedProduction(
         workOrderId: workOrder.id,
         workOrderNumber: workOrder.number,
         product,
-        signal: 'material_shortage',
-        severity: materialPct < 70 ? 'high' : 'medium',
+        signal: "material_shortage",
+        severity: materialPct < 70 ? "high" : "medium",
         detail: `${materialPct}% malzeme sarfi`,
       });
     }
@@ -410,9 +477,9 @@ export async function getAdvancedProduction(
         workOrderId: workOrder.id,
         workOrderNumber: workOrder.number,
         product,
-        signal: 'paused_order',
-        severity: 'medium',
-        detail: 'Is emri duraklatildi',
+        signal: "paused_order",
+        severity: "medium",
+        detail: "Is emri duraklatildi",
       });
     }
 
@@ -421,9 +488,16 @@ export async function getAdvancedProduction(
       const actualHours = actualOperationHours(operation, plannedQty);
       const hoursForCost = actualHours > 0 ? actualHours : plannedHours;
       const laborCost = hoursForCost * numeric(operation.workCenter.laborRate);
-      const overheadCost = hoursForCost * numeric(operation.workCenter.overheadRate);
+      const overheadCost =
+        hoursForCost * numeric(operation.workCenter.overheadRate);
+      const hourlyCost =
+        numeric(operation.workCenter.laborRate) +
+        numeric(operation.workCenter.overheadRate);
+      totalPlannedOperationCost += plannedHours * hourlyCost;
+      totalActualOperationCost += hoursForCost * hourlyCost;
       const totals = capacityTotals.get(operation.workCenter.id);
-      if (totals && workOrder.status !== WorkOrderStatus.COMPLETED) totals.queuedHours += plannedHours;
+      if (totals && workOrder.status !== WorkOrderStatus.COMPLETED)
+        totals.queuedHours += plannedHours;
 
       operationCosts.push({
         operationId: operation.id,
@@ -436,7 +510,10 @@ export async function getAdvancedProduction(
         laborCost: round(laborCost),
         overheadCost: round(overheadCost),
         totalCost: round(laborCost + overheadCost),
-        variancePct: plannedHours > 0 && actualHours > 0 ? pct(actualHours - plannedHours, plannedHours) : 0,
+        variancePct:
+          plannedHours > 0 && actualHours > 0
+            ? pct(actualHours - plannedHours, plannedHours)
+            : 0,
       });
     }
   }
@@ -457,7 +534,10 @@ export async function getAdvancedProduction(
     })
     .sort((left, right) => right.utilizationPct - left.utilizationPct);
 
-  const taskPrioritiesByEntity = new Map<string, AdvancedMaintenanceRow['priority'][]>();
+  const taskPrioritiesByEntity = new Map<
+    string,
+    AdvancedMaintenanceRow["priority"][]
+  >();
   for (const task of maintenanceTasks) {
     if (!task.entityId) continue;
     const current = taskPrioritiesByEntity.get(task.entityId) ?? [];
@@ -466,34 +546,52 @@ export async function getAdvancedProduction(
   }
 
   const maintenancePlan = capacityPlan
-    .filter((row) => row.utilizationPct >= 85 || (taskPrioritiesByEntity.get(row.workCenter.id)?.length ?? 0) > 0)
+    .filter(
+      (row) =>
+        row.utilizationPct >= 85 ||
+        (taskPrioritiesByEntity.get(row.workCenter.id)?.length ?? 0) > 0,
+    )
     .map((row): AdvancedMaintenanceRow => {
       const priorities = taskPrioritiesByEntity.get(row.workCenter.id) ?? [];
-      const utilizationPriority: AdvancedMaintenanceRow['priority'] = row.utilizationPct >= 100 ? 'high' : row.utilizationPct >= 85 ? 'medium' : 'low';
+      const utilizationPriority: AdvancedMaintenanceRow["priority"] =
+        row.utilizationPct >= 100
+          ? "high"
+          : row.utilizationPct >= 85
+            ? "medium"
+            : "low";
       return {
         workCenter: row.workCenter,
         openTaskCount: priorities.length,
         utilizationPct: row.utilizationPct,
         priority: strongestPriority([...priorities, utilizationPriority]),
-        recommendation: row.utilizationPct >= 100 ? 'Planli bakim penceresi ac' : 'Bakim ve temizlik kontrolu planla',
+        recommendation:
+          row.utilizationPct >= 100
+            ? "Planli bakim penceresi ac"
+            : "Bakim ve temizlik kontrolu planla",
       };
     })
     .slice(0, 12);
 
-  const totalScrapQty = scrapAnalysis.reduce((sum, row) => sum + row.scrapQty, 0);
-  const totalProducedQty = scrapAnalysis.reduce((sum, row) => sum + row.producedQty, 0);
-  const varianceRows = operationCosts.filter((row) => row.variancePct !== 0);
-  const operationCostVariancePct = varianceRows.length === 0
-    ? 0
-    : round(varianceRows.reduce((sum, row) => sum + row.variancePct, 0) / varianceRows.length, 1);
+  const operationCostVariancePct =
+    totalPlannedOperationCost > 0
+      ? pct(
+          totalActualOperationCost - totalPlannedOperationCost,
+          totalPlannedOperationCost,
+        )
+      : 0;
 
   return {
     generatedAt: new Date().toISOString(),
     summary: {
       horizonDays,
-      openWorkOrderCount: workOrders.filter((row) => OPEN_WORK_ORDER_STATUSES.includes(row.status)).length,
-      capacityRiskCount: capacityPlan.filter((row) => row.utilizationPct >= 85).length,
-      qualityRiskCount: qualitySignals.filter((row) => row.severity === 'high' || row.severity === 'critical').length,
+      openWorkOrderCount: workOrders.filter((row) =>
+        OPEN_WORK_ORDER_STATUSES.includes(row.status),
+      ).length,
+      capacityRiskCount: capacityPlan.filter((row) => row.utilizationPct >= 85)
+        .length,
+      qualityRiskCount: qualitySignals.filter(
+        (row) => row.severity === "high" || row.severity === "critical",
+      ).length,
       maintenanceActionCount: maintenancePlan.length,
       scrapRatePct: pct(totalScrapQty, totalProducedQty + totalScrapQty),
       operationCostVariancePct,
@@ -501,8 +599,12 @@ export async function getAdvancedProduction(
     capacityPlan: capacityPlan.slice(0, 12),
     qualitySignals: qualitySignals.slice(0, 20),
     maintenancePlan,
-    scrapAnalysis: scrapAnalysis.sort((a, b) => b.scrapRatePct - a.scrapRatePct).slice(0, 20),
+    scrapAnalysis: scrapAnalysis
+      .sort((a, b) => b.scrapRatePct - a.scrapRatePct)
+      .slice(0, 20),
     shiftPlan,
-    operationCosts: operationCosts.sort((a, b) => b.totalCost - a.totalCost).slice(0, 20),
+    operationCosts: operationCosts
+      .sort((a, b) => b.totalCost - a.totalCost)
+      .slice(0, 20),
   };
 }

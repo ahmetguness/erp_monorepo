@@ -472,7 +472,7 @@ export interface AdvancedProductionResult {
 // Work Centers
 // ─────────────────────────────────────────────
 
-export const getWorkCenters = (params?: { page?: number; limit?: number }) =>
+export const getWorkCenters = (params?: { page?: number; limit?: number; search?: string; status?: 'active' | 'passive' }) =>
   apiClient.get<{ data: WorkCenter[]; meta: { total: number; page: number; pageSize: number; totalPages: number } }>('/api/production/work-centers', { params }).then((r) => r.data);
 
 export const getWorkCenter = (id: string) =>
@@ -494,7 +494,7 @@ export const getAdvancedProduction = (params?: { horizonDays?: number }) =>
 // BOMs
 // ─────────────────────────────────────────────
 
-export const getBOMs = (params?: { page?: number; limit?: number }) =>
+export const getBOMs = (params?: { page?: number; limit?: number; search?: string; status?: 'active' | 'passive' }) =>
   apiClient.get<{ data: BOM[]; meta: { total: number; page: number; pageSize: number; totalPages: number } }>('/api/production/boms', { params }).then((r) => r.data);
 
 export const getBOM = (id: string) =>
@@ -525,7 +525,7 @@ export const removeBOMRouting = (bomId: string, routingId: string) =>
 // Work Orders
 // ─────────────────────────────────────────────
 
-export const getWorkOrders = (params?: { page?: number; limit?: number; status?: WorkOrderStatus }) =>
+export const getWorkOrders = (params?: { page?: number; limit?: number; status?: WorkOrderStatus; search?: string }) =>
   apiClient.get<{ data: WorkOrder[]; meta: { total: number; page: number; pageSize: number; totalPages: number } }>('/api/production/work-orders', { params }).then((r) => r.data);
 
 export const getWorkOrder = (id: string) =>

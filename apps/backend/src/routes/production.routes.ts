@@ -109,26 +109,6 @@ productionRoutes.post(
   requirePermission("production", "UPDATE"),
   BOMController.addRouting,
 );
-productionRoutes.patch(
-  "/boms/:id",
-  requirePermission("production", "UPDATE"),
-  BOMController.update,
-);
-productionRoutes.post(
-  "/boms/:id/items",
-  requirePermission("production", "UPDATE"),
-  BOMController.addItem,
-);
-productionRoutes.delete(
-  "/boms/:id/items/:itemId",
-  requirePermission("production", "UPDATE"),
-  BOMController.removeItem,
-);
-productionRoutes.post(
-  "/boms/:id/routings",
-  requirePermission("production", "UPDATE"),
-  BOMController.addRouting,
-);
 productionRoutes.delete(
   "/boms/:id/routings/:routingId",
   requirePermission("production", "UPDATE"),

@@ -345,8 +345,9 @@ function buildNonconformities(workOrder: QualityWorkOrderLookup): QualityNonconf
     });
   }
 
-  if (workOrder.status === WorkOrderStatus.COMPLETED && plannedQty > producedQty) {
-    const impactQty = plannedQty - producedQty;
+  const unaccountedOutputQty = Math.max(0, plannedQty - producedQty - scrapQty);
+  if (workOrder.status === WorkOrderStatus.COMPLETED && unaccountedOutputQty > 0) {
+    const impactQty = unaccountedOutputQty;
     rows.push({
       id: `${workOrder.id}:under-production`,
       type: 'under_production',
@@ -583,7 +584,6 @@ export async function getQualityControl(
       },
     },
     orderBy: [{ updatedAt: 'desc' }],
-    take: 100,
   });
 
   const inputForms = workOrders

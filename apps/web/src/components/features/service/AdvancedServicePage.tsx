@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { AlertTriangle, Gauge, PackageCheck, RefreshCw, Route, ShieldCheck, UserCheck } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -104,7 +105,7 @@ function requestHref(id: string): string {
 
 export function AdvancedServicePage() {
   const [horizonDays, setHorizonDays] = useState(30);
-  const { data, isLoading, isFetching, refetch } = useAdvancedService({ horizonDays });
+  const { data, error, isError, isLoading, isFetching, refetch } = useAdvancedService({ horizonDays });
 
   const riskyParts = useMemo(
     () => [...(data?.sparePartReservations ?? [])].sort((a, b) => b.shortageQty - a.shortageQty).slice(0, 10),
@@ -141,7 +142,9 @@ export function AdvancedServicePage() {
         }
       />
 
-      {isLoading || !data ? (
+      {isError ? (
+        <ApiErrorState error={error} onRetry={() => void refetch()} />
+      ) : isLoading || !data ? (
         <LoadingState />
       ) : (
         <>

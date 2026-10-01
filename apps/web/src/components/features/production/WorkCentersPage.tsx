@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Factory, FilterX, Pencil, Plus, Search, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -28,21 +29,13 @@ export function WorkCentersPage() {
   const [status, setStatus] = useState<StatusFilter>("all");
   const [form, setForm] = useState({ code: "", name: "", description: "", capacity: "" });
 
-  const { data, isLoading } = useWorkCenters({ page, limit: PAGE_SIZE });
+  const { data, error, isError, isLoading, refetch } = useWorkCenters({ page, limit: PAGE_SIZE, ...(search.trim() && { search: search.trim() }), ...(status !== "all" && { status }) });
   const create = useCreateWorkCenter();
   const update = useUpdateWorkCenter();
   const remove = useDeleteWorkCenter();
   const rows = data?.data ?? EMPTY_WORK_CENTERS;
 
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLocaleLowerCase("tr-TR");
-    return rows.filter((center) => {
-      const haystack = [center.code, center.name, center.description].filter(Boolean).join(" ").toLocaleLowerCase("tr-TR");
-      const matchesSearch = !q || haystack.includes(q);
-      const matchesStatus = status === "all" || (status === "active" ? center.isActive : !center.isActive);
-      return matchesSearch && matchesStatus;
-    });
-  }, [rows, search, status]);
+  const filteredRows = rows;
 
   const summary = useMemo(() => ({
     total: rows.length,
@@ -71,6 +64,7 @@ export function WorkCentersPage() {
   const clearFilters = () => {
     setSearch("");
     setStatus("all");
+    setPage(1);
   };
 
   return (
@@ -96,7 +90,7 @@ export function WorkCentersPage() {
       <section>
         <div className="mb-3 rounded-xl border border-slate-800/80 bg-slate-950/35 p-3">
           <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_auto_auto] lg:items-center">
-            <Input aria-label="İş merkezi ara" placeholder="Kod, ad veya açıklama ara..." value={search} onChange={(event) => setSearch(event.target.value)} prefixIcon={<Search className="h-4 w-4" />} />
+            <Input aria-label="İş merkezi ara" placeholder="Kod, ad veya açıklama ara..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} prefixIcon={<Search className="h-4 w-4" />} />
             <div className="inline-flex h-10 overflow-hidden rounded-xl border border-slate-700/75 bg-slate-950/35 p-1">
               {[
                 { value: "all", label: "Tümü" },
@@ -106,7 +100,7 @@ export function WorkCentersPage() {
                 <button
                   key={item.value}
                   type="button"
-                  onClick={() => setStatus(item.value as StatusFilter)}
+                  onClick={() => { setStatus(item.value as StatusFilter); setPage(1); }}
                   className={cn("rounded-lg px-3 text-xs font-medium transition-colors", status === item.value ? "bg-sky-500/15 text-sky-300" : "text-slate-500 hover:text-slate-200")}
                 >
                   {item.label}
@@ -117,7 +111,7 @@ export function WorkCentersPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40">
+        {isError ? <ApiErrorState error={error} onRetry={() => void refetch()} /> : <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/40">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-sm">
               <thead className="sticky top-0 z-10 bg-slate-900/95">
@@ -164,7 +158,7 @@ export function WorkCentersPage() {
                         <IconButton label="Durum değiştir" tone="sky" onClick={() => update.mutate({ id: center.id, data: { isActive: !center.isActive } })}>
                           {center.isActive ? <ToggleRight className="h-3.5 w-3.5" /> : <ToggleLeft className="h-3.5 w-3.5" />}
                         </IconButton>
-                        <IconButton label="Sil" tone="red" onClick={() => remove.mutate(center.id)}><Trash2 className="h-3.5 w-3.5" /></IconButton>
+                        <IconButton label="Sil" tone="red" onClick={() => { if (window.confirm(`${center.name} iş merkezi silinsin mi?`)) remove.mutate(center.id); }}><Trash2 className="h-3.5 w-3.5" /></IconButton>
                       </div>
                     </td>
                   </tr>
@@ -182,7 +176,7 @@ export function WorkCentersPage() {
               </div>
             </div>
           )}
-        </div>
+        </div>}
       </section>
 
       <WorkCenterModal

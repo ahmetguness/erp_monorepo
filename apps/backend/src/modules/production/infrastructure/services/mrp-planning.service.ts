@@ -5,6 +5,7 @@ import {
   WorkOrderStatus,
 } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
+import { ValidationError } from "../../../../errors/index.js";
 
 type MrpDbClient = PrismaClient;
 
@@ -21,14 +22,11 @@ const OPEN_WORK_ORDER_STATUSES: readonly WorkOrderStatus[] = [
 ];
 
 const OPEN_PURCHASE_ORDER_STATUSES: readonly PurchaseOrderStatus[] = [
-  PurchaseOrderStatus.DRAFT,
   PurchaseOrderStatus.SENT,
   PurchaseOrderStatus.PARTIALLY_RECEIVED,
 ];
 
 const OPEN_PURCHASE_REQUEST_STATUSES: readonly PurchaseRequestStatus[] = [
-  PurchaseRequestStatus.DRAFT,
-  PurchaseRequestStatus.PENDING_APPROVAL,
   PurchaseRequestStatus.APPROVED,
 ];
 
@@ -197,7 +195,7 @@ function getPlanningWindow(horizonDays: number): { start: Date; end: Date } {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
   const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + horizonDays);
+  end.setUTCDate(end.getUTCDate() + horizonDays - 1);
   end.setUTCHours(23, 59, 59, 999);
   return { start, end };
 }
@@ -206,14 +204,20 @@ async function getStockByProduct(
   db: MrpDbClient,
   tenantId: string,
 ): Promise<Map<string, number>> {
-  const rows = await db.stockLevel.groupBy({
-    by: ["productId"],
-    where: { tenantId },
-    _sum: { quantity: true },
-  });
-  return new Map(
-    rows.map((row) => [row.productId, decimalToNumber(row._sum.quantity)]),
-  );
+  const now = new Date();
+  const [rows, reservations] = await Promise.all([
+    db.stockLevel.groupBy({ by: ["productId"], where: { tenantId }, _sum: { quantity: true } }),
+    db.inventoryReservation.groupBy({
+      by: ["productId"],
+      where: { tenantId, releasedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      _sum: { quantity: true },
+    }),
+  ]);
+  const reservedByProduct = new Map(reservations.map((row) => [row.productId, decimalToNumber(row._sum.quantity)]));
+  return new Map(rows.map((row) => [
+    row.productId,
+    Math.max(0, decimalToNumber(row._sum.quantity) - (reservedByProduct.get(row.productId) ?? 0)),
+  ]));
 }
 
 async function getSalesDemandByProduct(
@@ -277,7 +281,6 @@ async function getHistoricalForecastByProduct(
       deletedAt: null,
       status: {
         in: [
-          OrderStatus.CONFIRMED,
           OrderStatus.PARTIALLY_DELIVERED,
           OrderStatus.DELIVERED,
         ],
@@ -285,14 +288,14 @@ async function getHistoricalForecastByProduct(
       date: { gte: start, lt: end },
     },
     select: {
-      items: { select: { productId: true, quantity: true } },
+      items: { select: { productId: true, delivered: true } },
     },
   });
 
   const historical = new Map<string, number>();
   for (const order of orders) {
     for (const item of order.items) {
-      addToMap(historical, item.productId, decimalToNumber(item.quantity));
+      addToMap(historical, item.productId, decimalToNumber(item.delivered));
     }
   }
 
@@ -594,6 +597,41 @@ function collectMaterialRequirement(
   }
 }
 
+function getBomPlanningOrder(
+  bomByProduct: Map<string, BomLookup>,
+  rootProductIds: Iterable<string>,
+): string[] {
+  const state = new Map<string, "visiting" | "visited">();
+  const postOrder: string[] = [];
+
+  const visit = (productId: string, path: string[]): void => {
+    const currentState = state.get(productId);
+    if (currentState === "visited") return;
+    if (currentState === "visiting") {
+      const cycleStart = path.indexOf(productId);
+      const cycle = [...path.slice(Math.max(0, cycleStart)), productId];
+      throw new ValidationError(
+        `Aktif BOM d\u00f6ng\u00fcs\u00fc tespit edildi: ${cycle.join(" -> ")}`,
+      );
+    }
+
+    state.set(productId, "visiting");
+    const bom = bomByProduct.get(productId);
+    if (bom) {
+      for (const item of bom.items) {
+        if (bomByProduct.has(item.productId)) {
+          visit(item.productId, [...path, productId]);
+        }
+      }
+    }
+    state.set(productId, "visited");
+    postOrder.push(productId);
+  };
+
+  for (const productId of rootProductIds) visit(productId, []);
+  return postOrder.reverse();
+}
+
 export async function getMrpPlanning(
   db: MrpDbClient,
   input: MrpPlanningInput,
@@ -634,6 +672,45 @@ export async function getMrpPlanning(
   >();
   const requiredCapacityByWorkCenter = new Map<string, number>();
   const workCenterRefs = new Map<string, WorkCenterLookup>();
+
+  const calculateCapacity = (
+    bom: BomLookup,
+    recommendedQty: number,
+  ): { required: number; available: number; gap: number } => {
+    let required = 0;
+    let available = 0;
+    let gap = 0;
+    const byWorkCenter = new Map<
+      string,
+      { required: number; available: number }
+    >();
+    for (const routing of bom.routings) {
+      const requiredHours =
+        decimalToNumber(routing.setupTime) / 60 +
+        (decimalToNumber(routing.runTime) * recommendedQty) / 60;
+      required += requiredHours;
+      addToMap(requiredCapacityByWorkCenter, routing.workCenterId, requiredHours);
+      workCenterRefs.set(routing.workCenterId, routing.workCenter);
+      const current = byWorkCenter.get(routing.workCenterId);
+      if (current) current.required += requiredHours;
+      else {
+        const capacity = capacityByWorkCenter.get(routing.workCenterId);
+        byWorkCenter.set(routing.workCenterId, {
+          required: requiredHours,
+          available: availableCapacityForWindow(
+            capacity,
+            workCenterDailyCapacity(routing.workCenter.capacity),
+            horizonDays,
+          ),
+        });
+      }
+    }
+    for (const row of byWorkCenter.values()) {
+      available += row.available;
+      gap += Math.max(0, row.required - row.available);
+    }
+    return { required, available, gap };
+  };
 
   for (const productId of demandProductIds) {
     const product = products.get(productId);
@@ -681,26 +758,7 @@ export async function getMrpPlanning(
       continue;
     }
 
-    let requiredCapacityHours = 0;
-    let availableCapacityHours = 0;
-    for (const routing of bom.routings) {
-      const setupHours = decimalToNumber(routing.setupTime) / 60;
-      const runHours = (decimalToNumber(routing.runTime) * recommendedQty) / 60;
-      const requiredHours = setupHours + runHours;
-      requiredCapacityHours += requiredHours;
-      addToMap(
-        requiredCapacityByWorkCenter,
-        routing.workCenterId,
-        requiredHours,
-      );
-      workCenterRefs.set(routing.workCenterId, routing.workCenter);
-      const capacity = capacityByWorkCenter.get(routing.workCenterId);
-      availableCapacityHours += availableCapacityForWindow(
-        capacity,
-        workCenterDailyCapacity(routing.workCenter.capacity),
-        horizonDays,
-      );
-    }
+    const capacity = calculateCapacity(bom, recommendedQty);
 
     for (const item of bom.items) {
       collectMaterialRequirement(
@@ -725,11 +783,69 @@ export async function getMrpPlanning(
       suggestedOrderDate,
       expectedAvailabilityDate,
       recommendedQty: roundQty(recommendedQty),
-      capacityHours: roundQty(requiredCapacityHours),
-      capacityAvailableHours: roundQty(availableCapacityHours),
-      capacityGapHours: roundQty(
-        Math.max(0, requiredCapacityHours - availableCapacityHours),
-      ),
+      capacityHours: roundQty(capacity.required),
+      capacityAvailableHours: roundQty(capacity.available),
+      capacityGapHours: roundQty(capacity.gap),
+    });
+  }
+
+  const bomPlanningOrder = getBomPlanningOrder(
+    bomByProduct,
+    demandProductIds,
+  );
+  const nestedProductIds = new Set<string>();
+  for (const bom of bomByProduct.values()) {
+    nestedProductIds.add(bom.productId);
+    for (const item of bom.items) nestedProductIds.add(item.productId);
+  }
+  const allBomProducts = await getProductsByIds(db, tenantId, nestedProductIds);
+
+  for (const productId of bomPlanningOrder) {
+    if (demandProductIds.has(productId)) continue;
+    const material = materialRequirements.get(productId);
+    const bom = bomByProduct.get(productId);
+    const product = allBomProducts.get(productId);
+    if (!material || !bom || !product) continue;
+
+    materialRequirements.delete(productId);
+    const productSafetyStockQty = safetyStockQty(product);
+    const demandQty = material.quantity + productSafetyStockQty;
+    const stockQty = stockByProduct.get(productId) ?? 0;
+    const openWorkOrderQty = openWorkOrderSupplyByProduct.get(productId) ?? 0;
+    const productMinOrderQty = minOrderQty(product, 0);
+    const leadTimeDays = leadTimeDaysByProduct.get(productId) ?? 7;
+    const recommendedQty = roundUpToLot(
+      Math.max(0, demandQty - stockQty - openWorkOrderQty),
+      productMinOrderQty,
+    );
+    if (recommendedQty <= 0) continue;
+
+    const capacity = calculateCapacity(bom, recommendedQty);
+    for (const item of bom.items) {
+      collectMaterialRequirement(
+        materialRequirements,
+        productId,
+        item.productId,
+        decimalToNumber(item.quantity) * recommendedQty,
+      );
+    }
+    productionRecommendations.push({
+      product: productRef(product),
+      bom: { id: bom.id, name: bom.name, version: bom.version },
+      demandQty: roundQty(demandQty),
+      openSalesOrderQty: 0,
+      forecastDemandQty: 0,
+      safetyStockQty: roundQty(productSafetyStockQty),
+      stockQty: roundQty(stockQty),
+      openWorkOrderQty: roundQty(openWorkOrderQty),
+      minOrderQty: productMinOrderQty,
+      leadTimeDays,
+      suggestedOrderDate: dateOnly(new Date()),
+      expectedAvailabilityDate: dateOnly(addDays(new Date(), leadTimeDays)),
+      recommendedQty: roundQty(recommendedQty),
+      capacityHours: roundQty(capacity.required),
+      capacityAvailableHours: roundQty(capacity.available),
+      capacityGapHours: roundQty(capacity.gap),
     });
   }
 
@@ -745,7 +861,7 @@ export async function getMrpPlanning(
         ? Array.from(row.parentProductIds)[0]
         : undefined;
     const parentProduct = parentProductId
-      ? products.get(parentProductId)
+      ? products.get(parentProductId) ?? allBomProducts.get(parentProductId)
       : undefined;
     if (!product) continue;
     const componentSafetyStockQty = safetyStockQty(product);

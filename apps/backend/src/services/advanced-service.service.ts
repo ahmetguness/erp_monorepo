@@ -1,4 +1,4 @@
-import { Priority, ServiceStatus } from '@prisma/client';
+import { Priority, ReservationRefType, ServiceStatus } from '@prisma/client';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { calculateServiceRequestSla as calculateSla } from '../modules/workforce-service/domain/index.js';
 
@@ -180,11 +180,8 @@ function customerActivityAt(request: ServiceRequestLookup): Date | null {
   return activities[0] ?? null;
 }
 
-function stockTotals(product: NonNullable<ServiceRequestLookup['items'][number]['product']>): { availableQty: number; reservedQty: number } {
-  return {
-    availableQty: product.stockLevels.reduce((sum, level) => sum + numeric(level.quantity), 0),
-    reservedQty: 0,
-  };
+function availableStock(product: NonNullable<ServiceRequestLookup['items'][number]['product']>): number {
+  return product.stockLevels.reduce((sum, level) => sum + numeric(level.quantity), 0);
 }
 
 function reservationStatus(input: {
@@ -320,12 +317,11 @@ function buildAutoAssignments(
     .slice(0, 12);
 }
 
-function buildSparePartReservations(requests: readonly ServiceRequestLookup[]): AdvancedSparePartReservationRow[] {
+function buildSparePartReservations(requests: readonly ServiceRequestLookup[], reservedByRequestProduct: ReadonlyMap<string, number>): AdvancedSparePartReservationRow[] {
   return requests.flatMap((request) => request.items.map((item): AdvancedSparePartReservationRow => {
     const requiredQty = numeric(item.quantity);
-    const totals = item.product ? stockTotals(item.product) : null;
-    const availableQty = totals?.availableQty ?? null;
-    const reservedQty = totals?.reservedQty ?? 0;
+    const availableQty = item.product ? availableStock(item.product) : null;
+    const reservedQty = item.productId ? (reservedByRequestProduct.get(`${request.id}:${item.productId}`) ?? 0) : 0;
     return {
       serviceRequestId: request.id,
       serviceRequestNumber: request.number,
@@ -404,10 +400,19 @@ export async function getAdvancedService(
   ]);
 
   const activeRequests = requests.filter((request) => ACTIVE_SERVICE_STATUSES.includes(request.status));
+  const reservations = activeRequests.length === 0 ? [] : await db.inventoryReservation.findMany({
+    where: { tenantId, refType: ReservationRefType.OTHER, refId: { in: activeRequests.map((request) => request.id) }, releasedAt: null },
+    select: { refId: true, productId: true, quantity: true },
+  });
+  const reservedByRequestProduct = new Map<string, number>();
+  for (const reservation of reservations) {
+    const key = `${reservation.refId}:${reservation.productId}`;
+    reservedByRequestProduct.set(key, (reservedByRequestProduct.get(key) ?? 0) + numeric(reservation.quantity));
+  }
   const slaContracts = buildSlaContracts(activeRequests);
   const technicianRoutes = buildTechnicianRoutes(activeRequests);
   const autoAssignments = buildAutoAssignments(activeRequests, technicianRoutes);
-  const sparePartReservations = buildSparePartReservations(activeRequests);
+  const sparePartReservations = buildSparePartReservations(activeRequests, reservedByRequestProduct);
   const portalContactIds = new Set(portalSettings.map((setting) => setting.key.replace('portal.token.', '')));
   const portalTracking = buildPortalTracking(requests, portalContactIds);
 

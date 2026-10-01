@@ -5,6 +5,7 @@ export interface WorkOrderListQuery {
   page: number;
   pageSize: number;
   status?: WorkOrderStatus;
+  search?: string;
 }
 
 export interface WorkOrderReadRepository<TListItem, TDetail> {

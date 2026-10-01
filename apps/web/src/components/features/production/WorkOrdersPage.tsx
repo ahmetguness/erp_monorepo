@@ -5,6 +5,7 @@ import { ClipboardList, Eye, FilterX, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -45,27 +46,15 @@ export function WorkOrdersPage() {
   const [statusFilter, setStatusFilter] = useState<WorkOrderStatus | "">("");
   const [search, setSearch] = useState("");
 
-  const { data, isLoading } = useWorkOrders({
+  const { data, error, isError, isLoading, refetch } = useWorkOrders({
     page,
     limit: PAGE_SIZE,
     ...(statusFilter && { status: statusFilter }),
+    ...(search.trim() && { search: search.trim() }),
   });
 
   const rows = data?.data ?? EMPTY_WORK_ORDERS;
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLocaleLowerCase("tr-TR");
-    if (!q) return rows;
-    return rows.filter((order) => {
-      const haystack = [
-        order.number,
-        order.product?.name,
-        order.product?.code,
-        order.bom?.name,
-        order.bom?.version,
-      ].filter(Boolean).join(" ").toLocaleLowerCase("tr-TR");
-      return haystack.includes(q);
-    });
-  }, [rows, search]);
+  const filteredRows = rows;
 
   const summary = useMemo(() => ({
     total: rows.length,
@@ -107,10 +96,10 @@ export function WorkOrdersPage() {
         </div>
       </div>
 
-      <section>
+      {isError ? <ApiErrorState error={error} onRetry={() => void refetch()} /> : <section>
         <div className="mb-3 rounded-xl border border-slate-800/80 bg-slate-950/35 p-3">
           <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_auto_auto] lg:items-center">
-            <Input aria-label="İş emri veya ürün ara" placeholder="İş emri, ürün veya BOM ara..." value={search} onChange={(event) => setSearch(event.target.value)} prefixIcon={<Search className="h-4 w-4" />} />
+            <Input aria-label="İş emri veya ürün ara" placeholder="İş emri, ürün veya BOM ara..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} prefixIcon={<Search className="h-4 w-4" />} />
             <div className="inline-flex h-10 overflow-hidden rounded-xl border border-slate-700/75 bg-slate-950/35 p-1">
               {STATUSES.map((status) => (
                 <button
@@ -217,7 +206,7 @@ export function WorkOrdersPage() {
             </div>
           )}
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

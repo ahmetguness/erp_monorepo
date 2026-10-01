@@ -7,7 +7,7 @@ import * as svc from '@/services/production.service';
 
 // ─── Work Centers ─────────────────────────────
 
-export function useWorkCenters(params?: { page?: number; limit?: number }) {
+export function useWorkCenters(params?: Parameters<typeof svc.getWorkCenters>[0]) {
   return useQuery({ queryKey: ['work-centers', params], queryFn: () => svc.getWorkCenters(params) });
 }
 
@@ -51,7 +51,7 @@ export function useAdvancedProduction(params?: { horizonDays?: number }) {
   return useQuery({ queryKey: ['production', 'advanced', params], queryFn: () => svc.getAdvancedProduction(params) });
 }
 
-export function useBOMs(params?: { page?: number; limit?: number }) {
+export function useBOMs(params?: Parameters<typeof svc.getBOMs>[0]) {
   return useQuery({ queryKey: ['boms', params], queryFn: () => svc.getBOMs(params) });
 }
 
@@ -89,33 +89,41 @@ export function useUpdateBOM() {
 
 export function useAddBOMItem() {
   const qc = useQueryClient();
+  const { toast } = useUIStore();
   return useMutation({
     mutationFn: ({ bomId, data }: { bomId: string; data: Parameters<typeof svc.addBOMItem>[1] }) => svc.addBOMItem(bomId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['boms'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['boms'] }); toast.success('BOM malzemesi eklendi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
 
 export function useRemoveBOMItem() {
   const qc = useQueryClient();
+  const { toast } = useUIStore();
   return useMutation({
     mutationFn: ({ bomId, itemId }: { bomId: string; itemId: string }) => svc.removeBOMItem(bomId, itemId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['boms'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['boms'] }); toast.success('BOM malzemesi kaldırıldı.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
 
 export function useAddBOMRouting() {
   const qc = useQueryClient();
+  const { toast } = useUIStore();
   return useMutation({
     mutationFn: ({ bomId, data }: { bomId: string; data: Parameters<typeof svc.addBOMRouting>[1] }) => svc.addBOMRouting(bomId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['boms'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['boms'] }); toast.success('BOM operasyonu eklendi.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
 
 export function useRemoveBOMRouting() {
   const qc = useQueryClient();
+  const { toast } = useUIStore();
   return useMutation({
     mutationFn: ({ bomId, routingId }: { bomId: string; routingId: string }) => svc.removeBOMRouting(bomId, routingId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['boms'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['boms'] }); toast.success('BOM operasyonu kaldırıldı.'); },
+    onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });
 }
 

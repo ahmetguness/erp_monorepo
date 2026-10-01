@@ -377,7 +377,7 @@ export async function getCapacityPlanning(
         capacityHours: roundHours(capacityHours),
         allocatedHours: roundHours(allocatedHours),
         availableHours: roundHours(availableHours),
-        utilizationPct: capacityHours > 0 ? roundPct((allocatedHours / capacityHours) * 100) : 0,
+        utilizationPct: capacityHours > 0 ? roundPct((allocatedHours / capacityHours) * 100) : allocatedHours > 0 ? 100 : 0,
         shifts,
         blockages,
       });
@@ -422,7 +422,7 @@ export async function getCapacityPlanning(
   const bottlenecks = Array.from(totalsByWorkCenter.entries()).map(([workCenterId, totals]) => {
     const workCenter = workCenters.find((item) => item.id === workCenterId);
     const totalLoadHours = totals.allocatedHours + totals.queuedHours;
-    const utilizationPct = totals.capacityHours > 0 ? (totalLoadHours / totals.capacityHours) * 100 : 0;
+    const utilizationPct = totals.capacityHours > 0 ? (totalLoadHours / totals.capacityHours) * 100 : totalLoadHours > 0 ? 100 : 0;
     return {
       workCenter: workCenter ? workCenterRef(workCenter) : { id: workCenterId, code: '-', name: '-' },
       capacityHours: roundHours(totals.capacityHours),
@@ -431,7 +431,7 @@ export async function getCapacityPlanning(
       blockedHours: roundHours(totals.blockedHours),
       maintenanceTaskCount: totals.maintenanceTaskCount,
       totalLoadHours: roundHours(totalLoadHours),
-      availableHours: roundHours(Math.max(0, totals.capacityHours - totals.allocatedHours)),
+      availableHours: roundHours(Math.max(0, totals.capacityHours - totalLoadHours)),
       utilizationPct: roundPct(utilizationPct),
       severity: severityOf(utilizationPct),
     };

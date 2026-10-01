@@ -46,7 +46,7 @@ function purchaseAvailableQty(row: MrpPurchaseRecommendation): number {
 
 export function MrpPlanningPage() {
   const [horizonDays, setHorizonDays] = useState(30);
-  const { data, isLoading, refetch, isFetching } = useMrpPlanning({ horizonDays });
+  const { data, isLoading, isError, refetch, isFetching } = useMrpPlanning({ horizonDays });
 
   const productionRows = useMemo(
     () => [...(data?.productionRecommendations ?? [])].sort((a, b) => b.recommendedQty - a.recommendedQty),
@@ -92,7 +92,11 @@ export function MrpPlanningPage() {
         }
       />
 
-      {isLoading || !data ? (
+      {isError ? (
+        <div className="rounded-xl border border-red-500/25 bg-red-500/[0.06] p-6 text-center text-sm text-red-200">
+          MRP planlama verileri alınamadı. <button className="font-semibold underline" onClick={() => void refetch()}>Tekrar dene</button>
+        </div>
+      ) : isLoading || !data ? (
         <LoadingState />
       ) : (
         <>

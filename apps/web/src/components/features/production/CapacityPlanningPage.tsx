@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AlertTriangle, CalendarDays, Gauge, ListOrdered, RefreshCw, ShieldAlert, Wrench } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -56,7 +57,7 @@ function workOrderHref(id: string): string {
 
 export function CapacityPlanningPage() {
   const [horizonDays, setHorizonDays] = useState(14);
-  const { data, isLoading, isFetching, refetch } = useCapacityPlanning({ horizonDays });
+  const { data, error, isError, isLoading, isFetching, refetch } = useCapacityPlanning({ horizonDays });
 
   const bottleneckRows = useMemo(
     () => [...(data?.bottlenecks ?? [])].sort((a, b) => b.utilizationPct - a.utilizationPct),
@@ -76,7 +77,7 @@ export function CapacityPlanningPage() {
   const summary = data?.summary;
   const totalLoadHours = bottleneckRows.reduce((sum, row) => sum + row.totalLoadHours, 0);
   const totalCapacityHours = bottleneckRows.reduce((sum, row) => sum + row.capacityHours, 0);
-  const avgUtilization = totalCapacityHours > 0 ? (totalLoadHours / totalCapacityHours) * 100 : 0;
+  const avgUtilization = totalCapacityHours > 0 ? (totalLoadHours / totalCapacityHours) * 100 : totalLoadHours > 0 ? 100 : 0;
 
   return (
     <div className="space-y-5">
@@ -104,7 +105,9 @@ export function CapacityPlanningPage() {
         }
       />
 
-      {isLoading || !data ? (
+      {isError ? (
+        <ApiErrorState error={error} onRetry={() => void refetch()} />
+      ) : isLoading || !data ? (
         <LoadingState />
       ) : (
         <>

@@ -2,11 +2,13 @@ import { Context } from "hono";
 import { prisma } from "../../../../lib/prisma.js";
 import { getAdvancedService } from "../../../../services/advanced-service.service.js";
 import { requireTenantId } from "../../../../utils/context.js";
+import { ValidationError } from "../../../../errors/index.js";
 
 function parseHorizonDays(value: string | undefined): number {
-  const parsed = Number(value ?? 30);
-  if (!Number.isFinite(parsed)) return 30;
-  return Math.min(180, Math.max(7, Math.trunc(parsed)));
+  if (value === undefined) return 30;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 7 || parsed > 180) throw new ValidationError("horizonDays 7 ile 180 arasında bir tam sayı olmalıdır.");
+  return parsed;
 }
 
 export const AdvancedServiceController = {

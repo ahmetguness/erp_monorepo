@@ -9,6 +9,7 @@ import {
   Package,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
 import { EntityActivityTimeline } from "@/components/shared/EntityActivityTimeline";
 import { EntityTaskActions } from "@/components/shared/EntityTaskActions";
@@ -38,7 +39,7 @@ const STATUS_MAP: Record<
 
 export function WorkOrderDetailPage({ id }: { id: string }) {
   const router = useRouter();
-  const { data: wo, isLoading } = useWorkOrder(id);
+  const { data: wo, error, isError, isLoading, refetch } = useWorkOrder(id);
   const changeStatus = useChangeWorkOrderStatus();
   const reportProduction = useReportProduction();
   const updateOperation = useUpdateWorkOrderOperation();
@@ -49,6 +50,7 @@ export function WorkOrderDetailPage({ id }: { id: string }) {
         <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
+  if (isError) return <ApiErrorState error={error} onRetry={() => void refetch()} />;
   if (!wo)
     return (
       <div className="text-center py-20 text-slate-400">
