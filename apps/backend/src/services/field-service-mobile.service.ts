@@ -1,5 +1,6 @@
 import { EntityType, ServiceActivityType, ServiceStatus } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
+import { ValidationError } from '../errors/index.js';
 
 type FieldServiceDbClient = PrismaClient;
 
@@ -231,9 +232,9 @@ export async function getFieldServiceMobileFlow(
       contact: { select: { id: true, code: true, name: true, phone: true, address: true, city: true } },
       customerAsset: { select: { id: true, name: true, brand: true, model: true, serialNo: true } },
       activities: {
+        where: { tenantId: input.tenantId, notes: { startsWith: 'FIELD_SERVICE:' } },
         select: { notes: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
-        take: 30,
       },
     },
     orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
@@ -341,14 +342,16 @@ export async function createFieldServiceCheckpoint(
   });
   if (!existing) throw new Error('SERVICE_REQUEST_NOT_FOUND');
 
-  const activity = await db.serviceActivity.create({
-    data: {
-      tenantId: input.tenantId,
-      serviceRequestId: input.serviceRequestId,
-      activityType: input.kind === 'VISIT_NOTE' ? ServiceActivityType.VISIT : ServiceActivityType.NOTE,
-      notes: checkpointNote(input),
-    },
-    select: { id: true },
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.tenantId}), hashtext(${`${input.serviceRequestId}:${input.kind}`}))`;
+    if (input.kind !== 'VISIT_NOTE') {
+      const prior = await tx.serviceActivity.findFirst({ where: { tenantId: input.tenantId, serviceRequestId: input.serviceRequestId, notes: { startsWith: `FIELD_SERVICE:${input.kind}` } }, select: { id: true } });
+      if (prior) return prior;
+    }
+    if (input.kind === 'CUSTOMER_APPROVAL') {
+      const form = await tx.serviceActivity.findFirst({ where: { tenantId: input.tenantId, serviceRequestId: input.serviceRequestId, notes: { startsWith: 'FIELD_SERVICE:SERVICE_FORM' } }, select: { id: true } });
+      if (!form) throw new ValidationError('Musteri onayindan once servis formu kaydedilmelidir.');
+    }
+    return tx.serviceActivity.create({ data: { tenantId: input.tenantId, serviceRequestId: input.serviceRequestId, activityType: input.kind === 'VISIT_NOTE' ? ServiceActivityType.VISIT : ServiceActivityType.NOTE, notes: checkpointNote(input) }, select: { id: true } });
   });
-  return activity;
 }

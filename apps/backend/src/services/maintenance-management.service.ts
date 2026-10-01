@@ -258,7 +258,7 @@ export async function getMaintenanceManagement(
         createdAt: true,
         contact: { select: { id: true, code: true, name: true } },
         serviceRequests: {
-          where: { deletedAt: null },
+          where: { tenantId, deletedAt: null },
           select: {
             id: true,
             status: true,
@@ -299,7 +299,7 @@ export async function getMaintenanceManagement(
                 code: true,
                 name: true,
                 minStockLevel: true,
-                stockLevels: { select: { quantity: true } },
+                stockLevels: { where: { tenantId }, select: { quantity: true } },
               },
             },
           },

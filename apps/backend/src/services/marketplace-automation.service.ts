@@ -10,6 +10,7 @@ import {
 } from '@prisma/client';
 import { logger } from '../lib/logger.js';
 import { TrendyolService, buildTrendyolCredentials } from './trendyol.service.js';
+import { InventoryReservationService } from './inventory-reservation.service.js';
 
 export interface MarketplaceAutomationPolicy {
   autoCreateContact: boolean;
@@ -51,6 +52,24 @@ export interface MarketplaceAutomationSummary {
 
 const POLICY_PREFIX = '[MARKETPLACE_POLICY]:';
 
+function policyFromNotes(notes: string | null | undefined): MarketplaceAutomationPolicy {
+  if (!notes) return { ...DEFAULT_AUTOMATION_POLICY };
+  const match = notes.split('\n').find((line) => line.startsWith(POLICY_PREFIX));
+  if (!match) return { ...DEFAULT_AUTOMATION_POLICY };
+  try {
+    const raw = JSON.parse(match.slice(POLICY_PREFIX.length));
+    return {
+      autoCreateContact: typeof raw.autoCreateContact === 'boolean' ? raw.autoCreateContact : DEFAULT_AUTOMATION_POLICY.autoCreateContact,
+      autoCreateSalesOrder: typeof raw.autoCreateSalesOrder === 'boolean' ? raw.autoCreateSalesOrder : DEFAULT_AUTOMATION_POLICY.autoCreateSalesOrder,
+      autoReserveStock: typeof raw.autoReserveStock === 'boolean' ? raw.autoReserveStock : DEFAULT_AUTOMATION_POLICY.autoReserveStock,
+      autoCreateInvoice: typeof raw.autoCreateInvoice === 'boolean' ? raw.autoCreateInvoice : DEFAULT_AUTOMATION_POLICY.autoCreateInvoice,
+      autoSyncErpStockToMarketplace: typeof raw.autoSyncErpStockToMarketplace === 'boolean' ? raw.autoSyncErpStockToMarketplace : DEFAULT_AUTOMATION_POLICY.autoSyncErpStockToMarketplace,
+    };
+  } catch {
+    return { ...DEFAULT_AUTOMATION_POLICY };
+  }
+}
+
 export class MarketplaceAutomationService {
   constructor(private readonly db: PrismaClient) {}
 
@@ -60,48 +79,19 @@ export class MarketplaceAutomationService {
       select: { notes: true },
     });
 
-    if (!tenant?.notes) {
-      return { ...DEFAULT_AUTOMATION_POLICY };
-    }
-
-    const match = tenant.notes.split('\n').find((line) => line.startsWith(POLICY_PREFIX));
-    if (!match) {
-      return { ...DEFAULT_AUTOMATION_POLICY };
-    }
-
-    try {
-      const raw = JSON.parse(match.slice(POLICY_PREFIX.length));
-      return {
-        autoCreateContact: typeof raw.autoCreateContact === 'boolean' ? raw.autoCreateContact : DEFAULT_AUTOMATION_POLICY.autoCreateContact,
-        autoCreateSalesOrder: typeof raw.autoCreateSalesOrder === 'boolean' ? raw.autoCreateSalesOrder : DEFAULT_AUTOMATION_POLICY.autoCreateSalesOrder,
-        autoReserveStock: typeof raw.autoReserveStock === 'boolean' ? raw.autoReserveStock : DEFAULT_AUTOMATION_POLICY.autoReserveStock,
-        autoCreateInvoice: typeof raw.autoCreateInvoice === 'boolean' ? raw.autoCreateInvoice : DEFAULT_AUTOMATION_POLICY.autoCreateInvoice,
-        autoSyncErpStockToMarketplace: typeof raw.autoSyncErpStockToMarketplace === 'boolean' ? raw.autoSyncErpStockToMarketplace : DEFAULT_AUTOMATION_POLICY.autoSyncErpStockToMarketplace,
-      };
-    } catch {
-      return { ...DEFAULT_AUTOMATION_POLICY };
-    }
+    return policyFromNotes(tenant?.notes);
   }
 
   async updatePolicy(tenantId: string, input: Partial<MarketplaceAutomationPolicy>): Promise<MarketplaceAutomationPolicy> {
-    const current = await this.getPolicy(tenantId);
-    const updated: MarketplaceAutomationPolicy = { ...current, ...input };
-
-    const tenant = await this.db.tenant.findUnique({
-      where: { id: tenantId },
-      select: { notes: true },
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext('marketplace-automation-policy'))`;
+      const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { notes: true } });
+      const updated: MarketplaceAutomationPolicy = { ...policyFromNotes(tenant?.notes), ...input };
+      const lines = (tenant?.notes ?? '').split('\n').filter((line) => !line.startsWith(POLICY_PREFIX));
+      lines.push(`${POLICY_PREFIX}${JSON.stringify(updated)}`);
+      await tx.tenant.update({ where: { id: tenantId }, data: { notes: lines.join('\n').trim() } });
+      return updated;
     });
-
-    const existingNotes = tenant?.notes ?? '';
-    const lines = existingNotes.split('\n').filter((l) => !l.startsWith(POLICY_PREFIX));
-    lines.push(`${POLICY_PREFIX}${JSON.stringify(updated)}`);
-
-    await this.db.tenant.update({
-      where: { id: tenantId },
-      data: { notes: lines.join('\n').trim() },
-    });
-
-    return updated;
   }
 
   /**
@@ -140,9 +130,10 @@ export class MarketplaceAutomationService {
     // Step 1: Contact Matching / Creation
     let contactId: string | null = null;
     try {
-      contactId = await this.matchOrCreateContact(tenantId, order, policy.autoCreateContact);
+      const contactMatch = await this.matchOrCreateContact(tenantId, order, policy.autoCreateContact);
+      contactId = contactMatch.id;
       result.contactId = contactId;
-      result.contactCreated = Boolean(contactId && !order.customerEmail);
+      result.contactCreated = contactMatch.created;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`Cari eşleştirme hatası: ${msg}`);
@@ -248,7 +239,10 @@ export class MarketplaceAutomationService {
 
       try {
         const creds = buildTrendyolCredentials(listing.integration);
-        if (!creds) continue;
+        if (!creds) {
+          errors.push(`Listing ${listing.id} (${barcode}) sync error: Marketplace credentials are missing`);
+          continue;
+        }
 
         const salePrice = Number(listing.price ?? product.salesPrice ?? 0);
         const listPrice = salePrice;
@@ -321,45 +315,36 @@ export class MarketplaceAutomationService {
     tenantId: string,
     order: MarketplaceOrder,
     autoCreate: boolean,
-  ): Promise<string | null> {
+  ): Promise<{ id: string | null; created: boolean }> {
     const name = order.customerName?.trim() || `Pazaryeri Müşterisi (${order.externalId})`;
     const email = order.customerEmail?.trim() || null;
     const phone = order.customerPhone?.trim() || null;
 
-    let contact = await this.db.contact.findFirst({
-      where: {
-        tenantId,
-        OR: [
-          ...(email ? [{ email }] : []),
-          ...(phone ? [{ phone }] : []),
-          { name: { equals: name, mode: 'insensitive' as Prisma.QueryMode } },
-        ],
-      },
-      select: { id: true },
+    const identityKey = email?.toLowerCase() ?? phone ?? name.toLowerCase();
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${'marketplace-contact:' + identityKey}))`;
+      const contact = await tx.contact.findFirst({
+        where: {
+          tenantId,
+          deletedAt: null,
+          OR: [
+            ...(email ? [{ email }] : []),
+            ...(phone ? [{ phone }] : []),
+            { name: { equals: name, mode: 'insensitive' as Prisma.QueryMode } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (contact) return { id: contact.id, created: false };
+      if (!autoCreate) return { id: null, created: false };
+      const count = await tx.contact.count({ where: { tenantId } });
+      const code = `CARİ-PAZAR-${String(count + 1).padStart(5, '0')}`;
+      const created = await tx.contact.create({
+        data: { tenantId, code, name, type: ContactType.CUSTOMER, email, phone, address: order.shippingAddress, notes: `Otomatik Pazaryeri Carisi (${order.channel} - Sipariş #${order.externalId})` },
+        select: { id: true },
+      });
+      return { id: created.id, created: true };
     });
-
-    if (contact) return contact.id;
-
-    if (!autoCreate) return null;
-
-    const count = await this.db.contact.count({ where: { tenantId } });
-    const code = `CARİ-PAZAR-${String(count + 1).padStart(5, '0')}`;
-
-    const newContact = await this.db.contact.create({
-      data: {
-        tenantId,
-        code,
-        name,
-        type: ContactType.CUSTOMER,
-        email,
-        phone,
-        address: order.shippingAddress,
-        notes: `Otomatik Pazaryeri Carisi (${order.channel} - Sipariş #${order.externalId})`,
-      },
-      select: { id: true },
-    });
-
-    return newContact.id;
   }
 
   private async matchOrderSkus(
@@ -416,9 +401,23 @@ export class MarketplaceAutomationService {
     contactId: string,
     matchedItems: Array<{ item: MarketplaceOrderItem; productId: string; price: number }>,
   ): Promise<{ id: string }> {
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${'marketplace-order:' + order.id}))`;
+      const scoped = new MarketplaceAutomationService(tx as unknown as PrismaClient);
+      return scoped.ensureSalesOrderUnlocked(tenantId, order, contactId, matchedItems);
+    });
+  }
+
+  private async ensureSalesOrderUnlocked(
+    tenantId: string,
+    order: MarketplaceOrder,
+    contactId: string,
+    matchedItems: Array<{ item: MarketplaceOrderItem; productId: string; price: number }>,
+  ): Promise<{ id: string }> {
     const existingRef = `Pazaryeri Siparişi #${order.externalId}`;
+    const orderReference = `${existingRef} (${order.channel})`;
     const existing = await this.db.salesOrder.findFirst({
-      where: { tenantId, notes: { contains: existingRef } },
+      where: { tenantId, notes: orderReference, deletedAt: null },
       select: { id: true },
     });
 
@@ -456,7 +455,7 @@ export class MarketplaceAutomationService {
         totalNet: new Prisma.Decimal(totalNet),
         totalTax: new Prisma.Decimal(totalTax),
         totalGross: new Prisma.Decimal(totalGross),
-        notes: `${existingRef} (${order.channel})`,
+        notes: orderReference,
         items: {
           create: items,
         },
@@ -468,6 +467,25 @@ export class MarketplaceAutomationService {
   }
 
   private async ensureInventoryReservations(
+    tenantId: string,
+    order: MarketplaceOrder,
+    salesOrderId: string,
+    matchedItems: Array<{ item: MarketplaceOrderItem; productId: string; price: number }>,
+  ): Promise<string[]> {
+    const warehouse = await this.db.warehouse.findFirst({ where: { tenantId, isActive: true, locations: { some: { isActive: true } } }, select: { id: true } });
+    if (!warehouse) return [];
+    const existing = await this.db.inventoryReservation.findMany({ where: { tenantId, refType: ReservationRefType.SALES_ORDER, refId: salesOrderId, releasedAt: null }, select: { id: true } });
+    if (existing.length >= new Set(matchedItems.map((entry) => entry.productId)).size) return existing.map((entry) => entry.id);
+    const service = new InventoryReservationService(this.db);
+    try {
+      await service.createSalesOrderReservations(tenantId, 'marketplace-automation', { orderId: salesOrderId, warehouseId: warehouse.id, allowPartial: false, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() });
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes('olusturulacak yeni rezervasyon bulunamadi')) throw error;
+    }
+    return (await this.db.inventoryReservation.findMany({ where: { tenantId, refType: ReservationRefType.SALES_ORDER, refId: salesOrderId, releasedAt: null }, select: { id: true } })).map((entry) => entry.id);
+  }
+
+  private async ensureInventoryReservationsUnlocked(
     tenantId: string,
     order: MarketplaceOrder,
     salesOrderId: string,
@@ -517,7 +535,7 @@ export class MarketplaceAutomationService {
   private async syncOrderStatusToErp(tenantId: string, order: MarketplaceOrder): Promise<void> {
     const existingRef = `Pazaryeri Siparişi #${order.externalId}`;
     const salesOrder = await this.db.salesOrder.findFirst({
-      where: { tenantId, notes: { contains: existingRef } },
+      where: { tenantId, notes: `${existingRef} (${order.channel})`, deletedAt: null },
       select: { id: true, status: true },
     });
 

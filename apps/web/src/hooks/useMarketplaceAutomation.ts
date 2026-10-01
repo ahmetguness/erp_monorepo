@@ -67,7 +67,8 @@ export function useTriggerStockSync() {
     mutationFn: (productId: string) => triggerStockSync(productId),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['marketplace'] });
-      toast.success(`${res.syncedListings} pazaryeri ilanının stoku güncellendi.`);
+      if (res.errors.length > 0) toast.warning(`Stok senkronizasyonu tamamlanamadı: ${res.errors.join(', ')}`);
+      else toast.success(`${res.syncedListings} pazaryeri ilanının stoku güncellendi.`);
     },
     onError: (err: unknown) => toast.error(getErrorMessage(err)),
   });

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { AlertTriangle, Eye, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
 import { EntityImage } from "@/components/shared/EntityImage";
@@ -55,7 +56,7 @@ export function CustomerAssetsPage() {
   const [detailAsset, setDetailAsset] = useState<CustomerAsset | null>(null);
   const [form, setForm] = useState({ contactId: "", name: "", brand: "", model: "", serialNo: "", purchaseDate: "", warrantyEnd: "", notes: "" });
 
-  const { data, isLoading, isFetching, refetch } = useCustomerAssets({ page, limit: 20 });
+  const { data, error, isError, isLoading, isFetching, refetch } = useCustomerAssets({ page, limit: 20 });
   const create = useCreateCustomerAsset();
   const remove = useDeleteCustomerAsset();
 
@@ -181,7 +182,9 @@ export function CustomerAssetsPage() {
         <AttentionBar expiring={summary.expiringWarranty} expired={summary.expiredWarranty} />
       )}
 
-      <section className="rounded-xl border border-slate-800/80 bg-slate-950/40">
+      {isError ? (
+        <ApiErrorState error={error} onRetry={() => void refetch()} />
+      ) : <section className="rounded-xl border border-slate-800/80 bg-slate-950/40">
         <div className="border-b border-slate-800/70 bg-slate-900/45 px-4 py-3">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-sky-300" />
@@ -202,7 +205,7 @@ export function CustomerAssetsPage() {
             pagination={data ? { page, pageSize: 20, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
           />
         </div>
-      </section>
+      </section>}
 
       <Modal
         isOpen={createOpen}

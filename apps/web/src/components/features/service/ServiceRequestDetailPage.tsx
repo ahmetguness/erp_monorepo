@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Play, CheckCircle } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import { EntityActionPanel } from '@/components/shared/EntityActionPanel';
 import { EntityImageManager } from '@/components/shared/EntityImageManager';
 import { Badge } from '@/components/ui/Badge';
@@ -39,10 +40,11 @@ function addDays(days: number): string {
 
 export function ServiceRequestDetailPage({ id }: { id: string }) {
   const router = useRouter();
-  const { data: sr, isLoading } = useServiceRequest(id);
+  const { data: sr, error, isError, isLoading, refetch } = useServiceRequest(id);
   const changeStatus = useChangeServiceRequestStatus();
 
   if (isLoading) return <div className="flex items-center justify-center py-20"><div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" /></div>;
+  if (isError) return <ApiErrorState error={error} onRetry={() => void refetch()} />;
   if (!sr) return <div className="text-center py-20 text-slate-400">Servis talebi bulunamadı.</div>;
 
   const s = STATUS_MAP[sr.status];

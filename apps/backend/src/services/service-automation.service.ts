@@ -7,9 +7,10 @@ import {
   ServiceStatus,
 } from '@prisma/client';
 import { logger } from '../lib/logger.js';
-import { NotFoundError } from '../errors/index.js';
+import { ConflictError, NotFoundError } from '../errors/index.js';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { EDocumentAutomationService } from './edocument-automation.service.js';
+import { assertCanReserveStock, lockInventoryPosition } from './inventory-rules.service.js';
 
 export interface ServiceAutomationResult {
   serviceRequestId: string;
@@ -81,48 +82,47 @@ export class ServiceAutomationService {
     const warehouse = await this.db.warehouse.findFirst({ where: { id: warehouseId, tenantId } });
     if (!warehouse) throw new NotFoundError('Depo', warehouseId);
 
-    let reservedItemCount = 0;
-
+    const requiredByProduct = new Map<string, number>();
     for (const item of sr.items) {
       if (!item.productId) continue;
+      const quantity = Number(item.quantity);
+      if (quantity > 0) requiredByProduct.set(item.productId, (requiredByProduct.get(item.productId) ?? 0) + quantity);
+    }
+    const productIds = [...requiredByProduct.keys()].sort();
+    const ownedProductCount = await this.db.product.count({ where: { id: { in: productIds }, tenantId, deletedAt: null } });
+    if (ownedProductCount !== productIds.length) throw new NotFoundError('Servis parcasi');
 
-      const qty = Number(item.quantity);
-      if (qty <= 0) continue;
-
-      const existing = await this.db.inventoryReservation.findFirst({
-        where: {
-          tenantId,
-          refType: ReservationRefType.OTHER,
-          refId: sr.id,
-          productId: item.productId,
-          warehouseId,
-          releasedAt: null,
-        },
-      });
-
-      if (existing) {
-        await this.db.inventoryReservation.update({
-          where: { id: existing.id },
-          data: { quantity: new Prisma.Decimal(qty) },
-        });
-      } else {
-        await this.db.inventoryReservation.create({
-          data: {
+    const reservedItemCount = await this.db.$transaction(async (tx) => {
+      let count = 0;
+      for (const productId of productIds) {
+        const requiredQuantity = requiredByProduct.get(productId) ?? 0;
+        await lockInventoryPosition(tx, tenantId, productId, warehouseId);
+        const active = await tx.inventoryReservation.findMany({
+          where: {
             tenantId,
             refType: ReservationRefType.OTHER,
             refId: sr.id,
-            productId: item.productId,
+            productId,
             warehouseId,
-            quantity: new Prisma.Decimal(qty),
+            releasedAt: null,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
           },
+          orderBy: { reservedAt: 'asc' },
         });
+        const alreadyReserved = active.reduce((sum, row) => sum + Number(row.quantity), 0);
+        const remaining = Math.max(0, requiredQuantity - alreadyReserved);
+        if (active[0]) {
+          if (remaining > 0) await assertCanReserveStock(tx, tenantId, { productId, warehouseId, quantity: remaining, refType: ReservationRefType.OTHER, refId: sr.id });
+          await tx.inventoryReservation.update({ where: { id: active[0].id }, data: { quantity: new Prisma.Decimal(requiredQuantity) } });
+          if (active.length > 1) await tx.inventoryReservation.updateMany({ where: { id: { in: active.slice(1).map((row) => row.id) } }, data: { releasedAt: new Date() } });
+        } else {
+          await assertCanReserveStock(tx, tenantId, { productId, warehouseId, quantity: requiredQuantity, refType: ReservationRefType.OTHER, refId: sr.id });
+          await tx.inventoryReservation.create({ data: { tenantId, refType: ReservationRefType.OTHER, refId: sr.id, productId, warehouseId, quantity: new Prisma.Decimal(requiredQuantity) } });
+        }
+        count++;
       }
-      reservedItemCount++;
-    }
-
-    await this.db.serviceRequest.update({
-      where: { id: serviceRequestId },
-      data: { status: ServiceStatus.WAITING_PARTS },
+      await tx.serviceRequest.update({ where: { id: serviceRequestId }, data: { status: ServiceStatus.WAITING_PARTS } });
+      return count;
     });
 
     logger.info(`[ServiceAutomation] Reserved ${reservedItemCount} parts for ServiceRequest ${serviceRequestId}`);
@@ -150,17 +150,25 @@ export class ServiceAutomationService {
       throw new Error(`Servis talebi için cari müşteri tanımlı değil.`);
     }
 
+    if (warehouseId) {
+      const warehouse = await this.db.warehouse.findFirst({ where: { id: warehouseId, tenantId, isActive: true }, select: { id: true } });
+      if (!warehouse) throw new NotFoundError('Depo', warehouseId);
+    }
+
     let invoiceId: string | undefined;
     let invoiceNumber: string | undefined;
     let eDocumentCreated = false;
 
     await this.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${serviceRequestId}))`;
       const targetSr = await tx.serviceRequest.findFirst({
         where: { id: serviceRequestId, tenantId },
       });
       if (!targetSr) {
         throw new Error(`Servis Talebi bulunamadı: ${serviceRequestId}`);
       }
+
+      if (targetSr.status === ServiceStatus.COMPLETED || targetSr.status === ServiceStatus.CANCELLED) throw new ConflictError('Servis talebi zaten terminal durumda; tekrar fatura olusturulamaz.');
 
       // 1. Update Service Request Status to COMPLETED
       await tx.serviceRequest.update({
@@ -228,7 +236,6 @@ export class ServiceAutomationService {
               description: item.description || item.product?.name || 'Servis Parça/İşçilik Kalemi',
               unitPrice: item.unitPrice,
               quantity: item.quantity,
-              taxRate: new Prisma.Decimal(20),
               taxAmount: new Prisma.Decimal(Number(item.lineTotal) * 0.20),
               lineTotal: item.lineTotal,
               sortOrder: idx + 1,

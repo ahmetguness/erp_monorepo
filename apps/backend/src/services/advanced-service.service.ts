@@ -401,7 +401,13 @@ export async function getAdvancedService(
 
   const activeRequests = requests.filter((request) => ACTIVE_SERVICE_STATUSES.includes(request.status));
   const reservations = activeRequests.length === 0 ? [] : await db.inventoryReservation.findMany({
-    where: { tenantId, refType: ReservationRefType.OTHER, refId: { in: activeRequests.map((request) => request.id) }, releasedAt: null },
+    where: {
+      tenantId,
+      refType: ReservationRefType.OTHER,
+      refId: { in: activeRequests.map((request) => request.id) },
+      releasedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
     select: { refId: true, productId: true, quantity: true },
   });
   const reservedByRequestProduct = new Map<string, number>();

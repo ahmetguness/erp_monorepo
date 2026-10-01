@@ -208,7 +208,14 @@ export const MarketplaceMonitoringController = {
 
   async updateAutomationPolicy(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const body = await c.req.json<Record<string, boolean>>().catch(() => ({}));
+    const body = await c.req.json<unknown>();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new ValidationError('Politika payload nesne olmalidir.');
+    const allowed = new Set(['autoCreateContact', 'autoCreateSalesOrder', 'autoReserveStock', 'autoCreateInvoice', 'autoSyncErpStockToMarketplace']);
+    for (const [key, value] of Object.entries(body)) {
+      if (!allowed.has(key)) throw new ValidationError(`Bilinmeyen politika alani: ${key}`);
+      if (typeof value !== 'boolean') throw new ValidationError(`${key} boolean olmalidir.`);
+    }
+    if (Object.keys(body).length === 0) throw new ValidationError('En az bir politika alani gonderilmelidir.');
     const updated = await marketplaceAutomationService.updatePolicy(tenantId, body);
     return c.json({ data: updated });
   },

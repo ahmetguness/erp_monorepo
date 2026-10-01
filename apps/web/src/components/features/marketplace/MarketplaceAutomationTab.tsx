@@ -20,11 +20,12 @@ import {
 } from '@/hooks/useMarketplaceAutomation';
 import { useMarketplaceOrders } from '@/hooks/useMarketplace';
 import { cn } from '@/lib/utils';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import type { MarketplaceAutomationPolicy } from '@/services/marketplace.automation.service';
 
 export function MarketplaceAutomationTab() {
-  const { data: summary, isLoading, refetch } = useMarketplaceAutomationSummary();
-  const { data: ordersData, isLoading: isOrdersLoading } = useMarketplaceOrders({ limit: 15 });
+  const { data: summary, error: summaryError, isError: isSummaryError, isLoading, refetch } = useMarketplaceAutomationSummary();
+  const { data: ordersData, error: ordersError, isError: isOrdersError, isLoading: isOrdersLoading, refetch: refetchOrders } = useMarketplaceOrders({ limit: 15 });
   const updatePolicy = useUpdateMarketplaceAutomationPolicy();
   const triggerAutomation = useTriggerOrderAutomation();
 
@@ -35,6 +36,10 @@ export function MarketplaceAutomationTab() {
     if (!policy) return;
     updatePolicy.mutate({ [key]: !policy[key] });
   };
+
+  if (isSummaryError || isOrdersError) {
+    return <ApiErrorState error={summaryError ?? ordersError} onRetry={() => { void refetch(); void refetchOrders(); }} />;
+  }
 
   return (
     <div className="space-y-6">
@@ -137,6 +142,10 @@ export function MarketplaceAutomationTab() {
                   <p className="text-[10px] text-slate-400 mt-0.5">E-posta/telefon eşleşmezse yeni cari aç</p>
                 </div>
                 <button
+                  type="button"
+                  role="switch"
+                  aria-label="Otomatik müşteri carisi oluştur"
+                  aria-checked={policy.autoCreateContact}
                   onClick={() => handleTogglePolicy('autoCreateContact')}
                   className={cn(
                     'w-11 h-6 rounded-full transition-colors relative p-0.5 shrink-0 focus:outline-none',
@@ -154,6 +163,10 @@ export function MarketplaceAutomationTab() {
                   <p className="text-[10px] text-slate-400 mt-0.5">MarketplaceOrder → SalesOrder (CONFIRMED)</p>
                 </div>
                 <button
+                  type="button"
+                  role="switch"
+                  aria-label="Otomatik satış siparişi oluştur"
+                  aria-checked={policy.autoCreateSalesOrder}
                   onClick={() => handleTogglePolicy('autoCreateSalesOrder')}
                   className={cn(
                     'w-11 h-6 rounded-full transition-colors relative p-0.5 shrink-0 focus:outline-none',
@@ -171,6 +184,10 @@ export function MarketplaceAutomationTab() {
                   <p className="text-[10px] text-slate-400 mt-0.5">Eşleşen ürünler için stok kilidi koy</p>
                 </div>
                 <button
+                  type="button"
+                  role="switch"
+                  aria-label="Otomatik stok rezerve et"
+                  aria-checked={policy.autoReserveStock}
                   onClick={() => handleTogglePolicy('autoReserveStock')}
                   className={cn(
                     'w-11 h-6 rounded-full transition-colors relative p-0.5 shrink-0 focus:outline-none',
@@ -188,6 +205,10 @@ export function MarketplaceAutomationTab() {
                   <p className="text-[10px] text-slate-400 mt-0.5">ERP stok değişince pazaryerine gönder</p>
                 </div>
                 <button
+                  type="button"
+                  role="switch"
+                  aria-label="Çift yönlü stok senkronizasyonu"
+                  aria-checked={policy.autoSyncErpStockToMarketplace}
                   onClick={() => handleTogglePolicy('autoSyncErpStockToMarketplace')}
                   className={cn(
                     'w-11 h-6 rounded-full transition-colors relative p-0.5 shrink-0 focus:outline-none',

@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, CalendarDays, PackageSearch, RefreshCw, Wrench } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -90,7 +91,7 @@ function assetSubtitle(asset: { brand: string | null; model: string | null; seri
 export function MaintenanceManagementPage() {
   const router = useRouter();
   const [horizonDays, setHorizonDays] = useState(90);
-  const { data, isLoading, isFetching, refetch } = useMaintenanceManagement({ horizonDays });
+  const { data, error, isError, isLoading, isFetching, refetch } = useMaintenanceManagement({ horizonDays });
   const summary = data?.summary;
 
   const duePlans = useMemo(
@@ -261,7 +262,9 @@ export function MaintenanceManagementPage() {
         }
       />
 
-      {isLoading && !data ? (
+      {isError ? (
+        <ApiErrorState error={error} onRetry={() => void refetch()} />
+      ) : isLoading && !data ? (
         <LoadingState />
       ) : (
         <>

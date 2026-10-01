@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Camera, CheckCircle2, ClipboardCheck, CloudOff, MapPinned, RefreshCw, Route, Signature } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -78,7 +79,7 @@ function progressPct(job: FieldServiceJobRow): number {
 
 export function FieldServiceMobileFlowPage() {
   const router = useRouter();
-  const { data, isLoading, isFetching, refetch } = useFieldServiceMobileFlow();
+  const { data, error, isError, isLoading, isFetching, refetch } = useFieldServiceMobileFlow();
   const checkpoint = useCreateFieldServiceCheckpoint();
   const [activeCheckpoint, setActiveCheckpoint] = useState<CheckpointState | null>(null);
   const [note, setNote] = useState("");
@@ -222,7 +223,9 @@ export function FieldServiceMobileFlowPage() {
         }
       />
 
-      {isLoading && !data ? (
+      {isError ? (
+        <ApiErrorState error={error} onRetry={() => void refetch()} />
+      ) : isLoading && !data ? (
         <LoadingState />
       ) : (
         <>

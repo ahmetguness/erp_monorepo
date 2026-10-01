@@ -2,11 +2,16 @@ import { Context } from "hono";
 import { prisma } from "../../../../lib/prisma.js";
 import { getMaintenanceManagement } from "../../../../services/maintenance-management.service.js";
 import { requireTenantId } from "../../../../utils/context.js";
+import { ValidationError } from "../../../../errors/index.js";
 
 function parseHorizonDays(value: string | undefined): number {
-  const parsed = Number.parseInt(value ?? "90", 10);
-  if (!Number.isFinite(parsed)) return 90;
-  return Math.min(365, Math.max(14, parsed));
+  if (value === undefined) return 90;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 14 || parsed > 365)
+    throw new ValidationError(
+      "horizonDays 14 ile 365 arasinda bir tam sayi olmalidir.",
+    );
+  return parsed;
 }
 
 export const MaintenanceManagementController = {

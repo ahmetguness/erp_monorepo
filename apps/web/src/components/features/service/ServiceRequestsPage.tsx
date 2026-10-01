@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, Eye, Plus, RefreshCw, Wrench } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { SavedViewControls } from "@/components/shared/SavedViewControls";
 import { ContactSelect, CustomerAssetSelect } from "@/components/shared/EntitySelect";
@@ -66,7 +67,7 @@ export function ServiceRequestsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ subject: "", description: "", priority: "MEDIUM", contactId: "", customerAssetId: "" });
 
-  const { data, isLoading, isFetching, refetch } = useServiceRequests({
+  const { data, error, isError, isLoading, isFetching, refetch } = useServiceRequests({
     page,
     limit: 20,
     ...(statusFilter && { status: statusFilter }),
@@ -193,7 +194,7 @@ export function ServiceRequestsPage() {
         }
       />
 
-      <SummaryStrip
+      {isError ? <ApiErrorState error={error} onRetry={() => void refetch()} /> : <><SummaryStrip
         metrics={[
           { label: "Toplam Talep", value: pageCounts.total, tone: "text-slate-50" },
           { label: "Bu Sayfa Açık", value: pageCounts.open, tone: pageCounts.open > 0 ? "text-sky-200" : "text-slate-200" },
@@ -262,7 +263,7 @@ export function ServiceRequestsPage() {
             pagination={data ? { page, pageSize: 20, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
           />
         </div>
-      </section>
+      </section></>}
 
       <Modal
         isOpen={createOpen}
