@@ -43,6 +43,8 @@
     "test:service-requests-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-service-requests-assurance.ts",
     "test:customer-assets-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-customer-assets-assurance.ts",
     "test:marketplace-automation-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-marketplace-automation-assurance.ts",
+    "test:marketplace-pricing-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-marketplace-pricing-assurance.ts",
+    "test:marketplace-pricing-batch-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-marketplace-pricing-batch-assurance.ts",
     "test:service-parts-reservation-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-service-parts-reservation-assurance.ts",
     "test:mrp-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-mrp-assurance.ts",
     "test:purchase-requests-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-purchase-requests-assurance.ts",
