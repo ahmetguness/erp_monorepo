@@ -155,7 +155,7 @@ export type PaymentDirection = 'RECEIVE' | 'SEND';
 // ─────────────────────────────────────────────
 
 export interface CreateLedgerAccountDTO { code: string; name: string; type: AccountType; parentId?: string; }
-export interface UpdateLedgerAccountDTO { code?: string; name?: string; type?: AccountType; parentId?: string | null; isActive?: boolean; }
+export interface UpdateLedgerAccountDTO { name?: string; isActive?: boolean; }
 export interface CreateFiscalPeriodDTO { name: string; startDate: string; endDate: string; }
 export interface JournalEntryLineDTO { accountId: string; debit: number; credit: number; description?: string; }
 export interface CreateJournalEntryDTO { date: string; description?: string; lines: JournalEntryLineDTO[]; }

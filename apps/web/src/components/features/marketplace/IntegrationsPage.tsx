@@ -26,6 +26,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUIStore } from "@/store/ui.store";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -888,7 +889,8 @@ export function IntegrationsPage() {
   const [healthFilter, setHealthFilter] = useState<HealthFilter>("ALL");
   const [form, setForm] = useState<IntegrationForm>(emptyForm);
 
-  const { data: integrations = [], isLoading } = useIntegrations();
+  const integrationsQuery = useIntegrations();
+  const { data: integrations = [], isLoading } = integrationsQuery;
   const create = useCreateIntegration();
   const update = useUpdateIntegration();
   const remove = useDeleteIntegration();
@@ -923,6 +925,10 @@ export function IntegrationsPage() {
       return matchesSearch && matchesChannel && matchesStatus && matchesHealth;
     });
   }, [channelFilter, healthFilter, integrations, search, statusFilter]);
+
+  if (integrationsQuery.isError) {
+    return <ApiErrorState error={integrationsQuery.error} onRetry={() => void integrationsQuery.refetch()} />;
+  }
 
   return (
     <div className="space-y-5">

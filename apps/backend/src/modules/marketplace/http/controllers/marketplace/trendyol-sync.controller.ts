@@ -44,6 +44,12 @@ export const TrendyolSyncController = {
     if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
 
     const body = await c.req.json<{ hoursBack?: number; status?: string }>().catch((): { hoursBack?: number; status?: string } => ({}));
+    if (body.hoursBack !== undefined && (!Number.isInteger(body.hoursBack) || body.hoursBack < 1 || body.hoursBack > 720)) {
+      return c.json(new ValidationError('hoursBack 1 ile 720 arasında tam sayı olmalıdır.').toJSON(), 400);
+    }
+    if (body.status !== undefined && (typeof body.status !== 'string' || body.status.length > 50)) {
+      return c.json(new ValidationError('status geçerli bir metin olmalıdır.').toJSON(), 400);
+    }
     const jobId = await TrendyolWorker.enqueue(tenantId, id, SyncJobType.SYNC_ORDERS, {
       hoursBack: body.hoursBack ?? 24,
       status: body.status,
@@ -66,6 +72,9 @@ export const TrendyolSyncController = {
     if (!integration) return c.json(new NotFoundError('Trendyol entegrasyonu', id).toJSON(), 404);
 
     const body = await c.req.json<{ force?: boolean }>().catch((): { force?: boolean } => ({}));
+    if (body.force !== undefined && typeof body.force !== 'boolean') {
+      return c.json(new ValidationError('force boolean olmalıdır.').toJSON(), 400);
+    }
     const jobId = await TrendyolWorker.enqueue(tenantId, id, SyncJobType.SYNC_STOCK, { force: body.force ?? false });
 
     return c.json({ data: { jobId, message: 'Stok senkronizasyonu kuyruğa alındı.' } }, 202);
@@ -74,10 +83,11 @@ export const TrendyolSyncController = {
   /** GET /marketplace/integrations/:id/trendyol/jobs/:jobId — job status */
   async getJobStatus(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const id = requireParam(c, 'id');
     const jobId = requireParam(c, 'jobId');
 
     const job = await TrendyolWorker.getJob(jobId, tenantId);
-    if (!job) return c.json(new NotFoundError('Job', jobId).toJSON(), 404);
+    if (!job || job.integrationId !== id) return c.json(new NotFoundError('Job', jobId).toJSON(), 404);
 
     return c.json({ data: job });
   },

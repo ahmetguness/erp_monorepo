@@ -399,12 +399,13 @@ model LedgerAccount {
   deletedAt   DateTime?
 
   tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  parent              LedgerAccount?       @relation("AccountTree", fields: [parentId], references: [id])
+  parent              LedgerAccount?       @relation("AccountTree", fields: [tenantId, parentId], references: [tenantId, id])
   children            LedgerAccount[]      @relation("AccountTree")
   lines               JournalEntryLine[]
   reconciliationLines ReconciliationLine[]
 
   @@unique([tenantId, code])
+  @@unique([tenantId, id])
   @@index([tenantId, isActive])
   @@index([deletedAt])
   @@map("ledger_accounts")

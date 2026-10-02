@@ -1,9 +1,10 @@
-import { MarketplaceChannel,MarketplaceOrderStatus } from '@prisma/client';
+import { AuditAction,EntityType,MarketplaceChannel,MarketplaceOrderStatus } from '@prisma/client';
 import { Context } from 'hono';
 import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
-import { requireParam,requireTenantId } from '../../../../../utils/context.js';
+import { requireParam,requireTenantId,requireUserId } from '../../../../../utils/context.js';
 import { getPaginationParams } from '../../../../../utils/pagination.js';
+import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
 
 export const MarketplaceOrderController = {
   async list(c: Context): Promise<Response> {
@@ -12,6 +13,8 @@ export const MarketplaceOrderController = {
     const { page, limit, skip } = getPaginationParams(c, 20);
     const status = c.req.query('status') as MarketplaceOrderStatus | undefined;
     const channel = c.req.query('channel') as MarketplaceChannel | undefined;
+    if (status && !Object.values(MarketplaceOrderStatus).includes(status)) return c.json(new ValidationError('Geçersiz status filtresi.').toJSON(), 400);
+    if (channel && !Object.values(MarketplaceChannel).includes(channel)) return c.json(new ValidationError('Geçersiz channel filtresi.').toJSON(), 400);
 
     const where = { tenantId, ...(status && { status }), ...(channel && { channel }) };
 
@@ -49,23 +52,27 @@ export const MarketplaceOrderController = {
 
   async changeStatus(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = requireParam(c, 'id');
 
     const order = await prisma.marketplaceOrder.findFirst({ where: { id, tenantId } });
     if (!order) return c.json(new NotFoundError('Pazaryeri Siparişi', id).toJSON(), 404);
 
-    const body = await c.req.json<{ status: MarketplaceOrderStatus }>();
-    if (!body.status) return c.json(new ValidationError('status zorunludur.').toJSON(), 400);
+    const body = await c.req.json<{ status: MarketplaceOrderStatus }>().catch(() => null);
+    if (!body?.status || !Object.values(MarketplaceOrderStatus).includes(body.status)) return c.json(new ValidationError('Geçerli bir status zorunludur.').toJSON(), 400);
+    if (order.status === body.status) return c.json({ data: order });
 
     const updated = await prisma.marketplaceOrder.update({
       where: { id },
       data: { status: body.status },
     });
+    await createAuditLog(prisma, { tenantId, userId, module: 'marketplace', entityType: EntityType.OTHER, entityId: id, action: AuditAction.UPDATE, oldValues: { status: order.status }, newValues: { status: updated.status }, ...getRequestMeta(c) });
     return c.json({ data: updated });
   },
 
   async remove(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const userId = requireUserId(c);
     const id = requireParam(c, 'id');
 
     const order = await prisma.marketplaceOrder.findFirst({ where: { id, tenantId } });
@@ -77,6 +84,7 @@ export const MarketplaceOrderController = {
     }
 
     await prisma.marketplaceOrder.delete({ where: { id } });
+    await createAuditLog(prisma, { tenantId, userId, module: 'marketplace', entityType: EntityType.OTHER, entityId: id, action: AuditAction.DELETE, oldValues: { externalId: order.externalId, status: order.status, totalAmount: Number(order.totalAmount) }, ...getRequestMeta(c) });
     return c.json({ data: { success: true } });
   },
 };

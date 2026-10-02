@@ -102,6 +102,14 @@ export function parseCreateIntegrationBody(value: unknown): CreateIntegrationBod
   const channel = value.channel;
   const name = readOptionalString(value, 'name') ?? '';
   if (!isMarketplaceChannel(channel) || !name) return new ValidationError('channel ve name zorunludur.');
+  for (const key of ['name', 'apiKey', 'apiSecret', 'storeId'] as const) {
+    if (key in value && typeof value[key] !== 'string') return new ValidationError(`${key} metin olmalıdır.`);
+  }
+  if (name.length > 200) return new ValidationError('name en fazla 200 karakter olabilir.');
+  for (const key of ['apiKey', 'apiSecret', 'storeId'] as const) {
+    const field = readOptionalString(value, key);
+    if (field && field.length > 1000) return new ValidationError(`${key} en fazla 1000 karakter olabilir.`);
+  }
   return {
     channel,
     name,
@@ -113,13 +121,24 @@ export function parseCreateIntegrationBody(value: unknown): CreateIntegrationBod
 
 export function parseUpdateIntegrationBody(value: unknown): UpdateIntegrationBody | ValidationError {
   if (!isJsonObject(value)) return new ValidationError('Geçersiz istek gövdesi.');
+  const allowed = ['name', 'apiKey', 'apiSecret', 'storeId', 'isActive'];
+  if (!Object.keys(value).some((key) => allowed.includes(key))) return new ValidationError('Güncellenecek alan zorunludur.');
   const body: UpdateIntegrationBody = {};
+  for (const key of ['name', 'apiKey', 'apiSecret', 'storeId'] as const) {
+    if (key in value && typeof value[key] !== 'string' && !(key === 'storeId' && value[key] === null)) return new ValidationError(`${key} metin olmalıdır.`);
+  }
+  if ('isActive' in value && typeof value.isActive !== 'boolean') return new ValidationError('isActive boolean olmalıdır.');
   if ('name' in value) body.name = readOptionalString(value, 'name') ?? '';
   if ('apiKey' in value) body.apiKey = readOptionalString(value, 'apiKey') ?? '';
   if ('apiSecret' in value) body.apiSecret = readOptionalString(value, 'apiSecret') ?? '';
   if ('storeId' in value) body.storeId = readOptionalString(value, 'storeId') ?? null;
   if ('isActive' in value && typeof value.isActive === 'boolean') body.isActive = value.isActive;
   if (body.name !== undefined && body.name.length === 0) return new ValidationError('name boş olamaz.');
+  if (body.name && body.name.length > 200) return new ValidationError('name en fazla 200 karakter olabilir.');
+  for (const key of ['apiKey', 'apiSecret', 'storeId'] as const) {
+    const field = body[key];
+    if (field && field.length > 1000) return new ValidationError(`${key} en fazla 1000 karakter olabilir.`);
+  }
   return body;
 }
 

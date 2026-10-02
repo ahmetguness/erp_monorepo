@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { AlertTriangle, PackagePlus, Pencil, Plus, RefreshCw, Send, Trash2, UploadCloud, XCircle } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { ProductSelect } from "@/components/shared/EntitySelect";
 import { Badge } from "@/components/ui/Badge";
@@ -183,7 +184,8 @@ export function ListingsPage() {
   const [brandQuery, setBrandQuery] = useState("");
   const [categoryQuery, setCategoryQuery] = useState("");
 
-  const { data, isLoading, isFetching, refetch } = useListings({ page, limit: 20 });
+  const listingsQuery = useListings({ page, limit: 20 });
+  const { data, isLoading, isFetching, refetch } = listingsQuery;
   const { data: integrations = [] } = useIntegrations();
   const { data: productsData } = useProducts({ page: 1, limit: 200, isActive: true });
   const create = useCreateListing();
@@ -336,6 +338,10 @@ export function ListingsPage() {
       ),
     },
   ];
+
+  if (listingsQuery.isError) {
+    return <ApiErrorState error={listingsQuery.error} onRetry={() => void refetch()} />;
+  }
 
   return (
     <div className="space-y-5">

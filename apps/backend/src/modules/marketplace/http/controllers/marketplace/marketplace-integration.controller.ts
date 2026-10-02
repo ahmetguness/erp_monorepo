@@ -1,6 +1,6 @@
-import { AuditAction,EntityType } from '@prisma/client';
+import { AuditAction,EntityType,Prisma } from '@prisma/client';
 import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
+import { ConflictError,NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
 import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../../utils/context.js';
@@ -47,12 +47,20 @@ export const MarketplaceIntegrationController = {
     });
     if (exists) return c.json(new ValidationError(`${body.channel} kanalı zaten bağlı.`).toJSON(), 400);
 
-    const integration = await prisma.marketplaceIntegration.create({
-      data: {
-        tenantId, channel: body.channel, name: body.name,
-        apiKey: body.apiKey ? encrypt(body.apiKey) : null, apiSecret: body.apiSecret ? encrypt(body.apiSecret) : null, storeId: body.storeId ?? null,
-      },
-    });
+    let integration;
+    try {
+      integration = await prisma.marketplaceIntegration.create({
+        data: {
+          tenantId, channel: body.channel, name: body.name,
+          apiKey: body.apiKey ? encrypt(body.apiKey) : null, apiSecret: body.apiSecret ? encrypt(body.apiSecret) : null, storeId: body.storeId ?? null,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return c.json(new ConflictError(`${body.channel} kanalı zaten bağlı.`).toJSON(), 409);
+      }
+      throw error;
+    }
 
     await createAuditLog(prisma, {
       tenantId,

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { AlertTriangle, Eye, RefreshCw, ShoppingCart } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -53,11 +54,12 @@ export function MarketplaceOrdersPage() {
   const [statusModal, setStatusModal] = useState<MarketplaceOrder | null>(null);
   const [newStatus, setNewStatus] = useState("");
 
-  const { data, isLoading, isFetching, refetch } = useMarketplaceOrders({
+  const ordersQuery = useMarketplaceOrders({
     page,
     limit: 20,
     ...(statusFilter && { status: statusFilter }),
   });
+  const { data, isLoading, isFetching, refetch } = ordersQuery;
   const { data: detail } = useMarketplaceOrder(detailId ?? "");
   const changeStatus = useChangeOrderStatus();
 
@@ -146,6 +148,10 @@ export function MarketplaceOrdersPage() {
       ),
     },
   ];
+
+  if (ordersQuery.isError) {
+    return <ApiErrorState error={ordersQuery.error} onRetry={() => void refetch()} />;
+  }
 
   return (
     <div className="space-y-5">

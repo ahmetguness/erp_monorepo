@@ -69,6 +69,24 @@ async function readOptionalJsonObject(c: Context): Promise<Record<string, unknow
   return parsed;
 }
 
+const ACCOUNT_TYPES = new Set<string>(Object.values(AccountType));
+const ACCOUNT_CODE_MAX_LENGTH = 50;
+const ACCOUNT_NAME_MAX_LENGTH = 200;
+
+function requiredTrimmedString(value: unknown, field: string, maxLength: number): string {
+  if (typeof value !== 'string' || !value.trim()) throw new ValidationError(`${field} alanı zorunludur.`);
+  const normalized = value.trim();
+  if (normalized.length > maxLength) throw new ValidationError(`${field} en fazla ${maxLength} karakter olabilir.`);
+  return normalized;
+}
+
+function parseAccountType(value: unknown): AccountType {
+  if (typeof value !== 'string' || !ACCOUNT_TYPES.has(value)) {
+    throw new ValidationError('Geçerli bir hesap tipi zorunludur.');
+  }
+  return value as AccountType;
+}
+
 
 
 // ─────────────────────────────────────────────
@@ -83,9 +101,17 @@ export const AccountingController = {
 
     const query = c.req.query() as LedgerAccountListQuery;
 
+    if (query.type !== undefined && !ACCOUNT_TYPES.has(query.type)) {
+      return c.json(new ValidationError('Geçersiz hesap tipi filtresi.').toJSON(), 400);
+    }
+    if (query.isActive !== undefined && query.isActive !== 'true' && query.isActive !== 'false') {
+      return c.json(new ValidationError('isActive true veya false olmalıdır.').toJSON(), 400);
+    }
+
     const where = {
       tenantId,
-      ...(query.type && { type: query.type }),
+      deletedAt: null,
+      ...(query.type && { accountType: query.type }),
       ...(query.isActive !== undefined && { isActive: query.isActive === 'true' }),
       ...(query.search && {
         OR: [
@@ -97,6 +123,13 @@ export const AccountingController = {
 
     const accounts = await prisma.ledgerAccount.findMany({
       where,
+      include: {
+        parent: { select: { id: true, code: true, name: true } },
+        children: {
+          where: { deletedAt: null },
+          select: { id: true, code: true, name: true },
+        },
+      },
       orderBy: { code: 'asc' },
     });
 
@@ -106,32 +139,42 @@ export const AccountingController = {
   async createAccount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<CreateLedgerAccountDTO>();
+    const body = await readOptionalJsonObject(c);
 
-    if (!body.code || !body.name || !body.type) {
-      return c.json(
-        new ValidationError('code, name ve type alanları zorunludur.').toJSON(),
-        400,
-      );
+    const code = requiredTrimmedString(body.code, 'code', ACCOUNT_CODE_MAX_LENGTH);
+    const name = requiredTrimmedString(body.name, 'name', ACCOUNT_NAME_MAX_LENGTH);
+    const accountType = parseAccountType(body.type);
+    const parentId = body.parentId === undefined || body.parentId === null || body.parentId === ''
+      ? null
+      : requiredTrimmedString(body.parentId, 'parentId', 191);
+
+    if (parentId) {
+      const parent = await prisma.ledgerAccount.findFirst({
+        where: { id: parentId, tenantId, deletedAt: null },
+        select: { accountType: true, isActive: true },
+      });
+      if (!parent) throw new ValidationError('Üst hesap bu tenant içinde bulunamadı.');
+      if (!parent.isActive) throw new ValidationError('Pasif bir hesap üst hesap olarak seçilemez.');
+      if (parent.accountType !== accountType) throw new ValidationError('Üst hesap ile alt hesap aynı hesap tipinde olmalıdır.');
     }
 
     const existing = await prisma.ledgerAccount.findFirst({
-      where: { tenantId, code: body.code },
+      where: { tenantId, code },
     });
     if (existing) {
       return c.json(
-        new ValidationError(`"${body.code}" hesap kodu zaten kullanımda.`).toJSON(),
-        400,
+        new ValidationError(`"${code}" hesap kodu zaten kullanımda.`).toJSON(),
+        409,
       );
     }
 
     const account = await prisma.ledgerAccount.create({
       data: {
         tenantId,
-        code: body.code,
-        name: body.name,
-        accountType: body.type,
-        parentId: body.parentId ?? null,
+        code,
+        name,
+        accountType,
+        parentId,
       },
     });
 
@@ -413,13 +456,26 @@ export const AccountingExtController = {
     });
     if (!account) return c.json(new NotFoundError('Hesap', accountId).toJSON(), 404);
 
-    const body = await c.req.json<UpdateLedgerAccountDTO>();
+    const body = await readOptionalJsonObject(c);
+    const allowedFields = new Set(['name', 'isActive']);
+    if (Object.keys(body).some((key) => !allowedFields.has(key))) {
+      return c.json(new ValidationError('Yalnızca name ve isActive alanları güncellenebilir.').toJSON(), 400);
+    }
+    if (body.name === undefined && body.isActive === undefined) {
+      return c.json(new ValidationError('Güncellenecek en az bir alan zorunludur.').toJSON(), 400);
+    }
+    const name = body.name === undefined
+      ? undefined
+      : requiredTrimmedString(body.name, 'name', ACCOUNT_NAME_MAX_LENGTH);
+    if (body.isActive !== undefined && typeof body.isActive !== 'boolean') {
+      return c.json(new ValidationError('isActive boolean olmalıdır.').toJSON(), 400);
+    }
 
     const updated = await prisma.ledgerAccount.update({
       where: { id: accountId },
       data: {
-        ...(body.name !== undefined && { name: body.name }),
-        ...(body.isActive !== undefined && { isActive: body.isActive }),
+        ...(name !== undefined && { name }),
+        ...(body.isActive !== undefined && { isActive: body.isActive as boolean }),
       },
     });
 

@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { ActiveBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/Button";
@@ -75,7 +76,8 @@ type FormData = z.infer<typeof schema>;
 type TypeFilter = "ALL" | AccountType;
 
 export function LedgerAccountsPage() {
-  const { data: accounts = [], isLoading } = useLedgerAccounts();
+  const accountsQuery = useLedgerAccounts();
+  const { data: accounts = [], isLoading } = accountsQuery;
   const createAccount = useCreateLedgerAccount();
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -185,6 +187,10 @@ export function LedgerAccountsPage() {
       render: (account) => <ActiveBadge isActive={account.isActive} />,
     },
   ];
+
+  if (accountsQuery.isError) {
+    return <ApiErrorState error={accountsQuery.error} onRetry={() => void accountsQuery.refetch()} />;
+  }
 
   return (
     <div className="space-y-5">
