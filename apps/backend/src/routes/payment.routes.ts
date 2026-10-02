@@ -5,7 +5,11 @@ import { validateBody } from "../middleware/validateBody";
 import { PaymentController } from "../modules/finance/http/controllers/index.js";
 import {
   cancelReasonBodySchema,
+  createBankAccountBodySchema,
+  createCashAccountBodySchema,
   createPaymentBodySchema,
+  updateBankAccountBodySchema,
+  updateCashAccountBodySchema,
 } from "../schemas/request-body.schemas";
 import { MODULE_KEYS } from "../types/module.types";
 
@@ -22,11 +26,13 @@ paymentRoutes.get(
 paymentRoutes.post(
   "/bank-accounts",
   requirePermission("accounting", "CREATE"),
+  validateBody(createBankAccountBodySchema),
   PaymentController.createBankAccount,
 );
 paymentRoutes.patch(
   "/bank-accounts/:id",
   requirePermission("accounting", "UPDATE"),
+  validateBody(updateBankAccountBodySchema),
   PaymentController.updateBankAccount,
 );
 paymentRoutes.delete(
@@ -44,11 +50,13 @@ paymentRoutes.get(
 paymentRoutes.post(
   "/cash-accounts",
   requirePermission("accounting", "CREATE"),
+  validateBody(createCashAccountBodySchema),
   PaymentController.createCashAccount,
 );
 paymentRoutes.patch(
   "/cash-accounts/:id",
   requirePermission("accounting", "UPDATE"),
+  validateBody(updateCashAccountBodySchema),
   PaymentController.updateCashAccount,
 );
 paymentRoutes.delete(

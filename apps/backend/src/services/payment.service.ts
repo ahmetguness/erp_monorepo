@@ -146,9 +146,16 @@ function parsePaymentDirection(value: unknown): PaymentDirection | undefined {
 }
 
 function parsePaymentDate(value: string): Date {
-  const paymentDate = new Date(value);
-  if (Number.isNaN(paymentDate.getTime())) throw new ValidationError('Gecersiz tarih.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new ValidationError('Tarih YYYY-MM-DD formatinda olmalidir.');
+  const paymentDate = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(paymentDate.getTime()) || paymentDate.toISOString().slice(0, 10) !== value) throw new ValidationError('Gecersiz tarih.');
   return paymentDate;
+}
+
+function assertMoney(value: number, label: string): void {
+  if (!Number.isFinite(value) || value <= 0 || value > 9_999_999_999_999_999 || Math.abs(value * 100 - Math.round(value * 100)) > 1e-7) {
+    throw new ValidationError(`${label} 0dan buyuk, sonlu ve en fazla iki ondalikli olmalidir.`);
+  }
 }
 
 function parseAllocations(value: unknown): PaymentAllocationInput[] | undefined {
@@ -274,9 +281,8 @@ export async function createPayment(options: {
   auditMeta?: RequestAuditMeta;
 }, db: PrismaClient) {
   const amount = Number(options.input.amount);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new ValidationError('Tutar 0dan buyuk olmalidir.');
-  }
+  assertMoney(amount, 'Tutar');
+  for (const allocation of options.input.allocations ?? []) assertMoney(Number(allocation.amount), 'Tahsisat tutari');
 
   const direction = options.input.direction ?? 'RECEIVE';
   const paymentDate = parsePaymentDate(options.input.date);
@@ -297,6 +303,11 @@ export async function createPayment(options: {
   let payment;
   try {
     payment = await db.$transaction(async (tx) => {
+    // Serialize balance checks for the same invoices. Without this lock two
+    // different payments can both observe the same remaining balance.
+    for (const invoiceId of [...new Set((options.input.allocations ?? []).map((item) => item.invoiceId))].sort()) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${options.tenantId}:${invoiceId}`}))`;
+    }
     await assertPaymentAllocationsWithinInvoiceBalance(tx, options.tenantId, options.input.allocations ?? []);
 
     const newPayment = await tx.payment.create({

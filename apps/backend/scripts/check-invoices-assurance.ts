@@ -76,7 +76,7 @@ async function main() {
       contactId,
       type: "SALES",
       number: `${prefix}_MAIN`,
-      date: date.toISOString(),
+      date: date.toISOString().slice(0, 10),
       dueDate: due.toISOString(),
       notes: "Türkçe fatura notu",
       lines: [
@@ -211,7 +211,7 @@ async function main() {
     );
     const payment = await api(owner, "POST", "/api/payments", {
       contactId,
-      date: date.toISOString(),
+      date: date.toISOString().slice(0, 10),
       amount: 1000,
       method: "BANK_TRANSFER",
       direction: "RECEIVE",
@@ -219,7 +219,7 @@ async function main() {
       idempotencyKey: `${prefix}_PAY`,
       allocations: [{ invoiceId, amount: 1000 }],
     });
-    assert.equal(payment.status, 201);
+    assert.equal(payment.status, 201, JSON.stringify(payment.body));
     assert.equal(
       (await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } }))
         .status,
@@ -243,7 +243,7 @@ async function main() {
     const order = await api(owner, "POST", "/api/sales-orders", {
       contactId,
       number: `${prefix}_ORDER`,
-      date: date.toISOString(),
+      date: date.toISOString().slice(0, 10),
       items: [
         {
           productId,

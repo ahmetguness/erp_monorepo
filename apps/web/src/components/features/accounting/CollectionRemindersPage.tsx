@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, RefreshCw, Trash2, Mail, Phone } from 'lucide-react';
+import { Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { FormRow } from '@/components/shared/FormField';
@@ -21,6 +21,8 @@ import { useInvoices } from '@/hooks/useSales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const reminderFormSchema = z.object({
   invoiceId: z.string().min(1, 'Fatura seçiniz'),
@@ -45,12 +47,13 @@ const STATUS_MAP: Record<string, { label: string; variant: 'warning' | 'success'
 
 export function CollectionRemindersPage() {
   const { toast } = useUIStore();
-  const { reminders, isLoading, createReminder, updateReminderStatus, deleteReminder, runAutomation } = useCollectionReminders();
+  const { reminders, isLoading, isError, error, refetch, createReminder, updateReminderStatus, deleteReminder, runAutomation } = useCollectionReminders();
   const { data: invoicesData } = useInvoices({ page: 1, limit: 100 });
   const invoices = invoicesData?.data ?? [];
 
   const [createOpen, setCreateOpen] = useState(false);
   const [automationResult, setAutomationResult] = useState<CollectionAutomationSnapshot | null>(null);
+  const [deleting, setDeleting] = useState<CollectionReminder | null>(null);
 
   const { register, handleSubmit, reset, setValue, control, formState: { errors } } = useForm<ReminderForm>({
     resolver: zodResolver(reminderFormSchema),
@@ -127,21 +130,6 @@ export function CollectionRemindersPage() {
       },
     },
     {
-      key: 'channels',
-      header: 'Kanallar',
-      width: '120px',
-      render: (r) => (
-        <div className="flex gap-2">
-          <Badge variant={r.emailSent === true ? 'success' : 'neutral'} className="gap-1 text-[10px]">
-            <Mail className="w-3 h-3" /> E-Posta
-          </Badge>
-          <Badge variant={r.smsSent === true ? 'success' : 'neutral'} className="gap-1 text-[10px]">
-            <Phone className="w-3 h-3" /> SMS
-          </Badge>
-        </div>
-      ),
-    },
-    {
       key: 'actions',
       header: '',
       width: '100px',
@@ -152,15 +140,17 @@ export function CollectionRemindersPage() {
             <button
               onClick={() => updateReminderStatus.mutate({ id: r.id, status: 'SENT' })}
               className="p-1.5 rounded-lg text-emerald-500 hover:bg-emerald-500/10 transition-colors"
-              title="Şimdi Gönder"
+              title="Gönderildi olarak işaretle"
+              aria-label={`${r.invoice?.number ?? 'Hatırlatıcı'} gönderildi olarak işaretle`}
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           )}
           <button
-            onClick={() => deleteReminder.mutate(r.id)}
+            onClick={() => setDeleting(r)}
             className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             title="Sil"
+            aria-label={`${r.invoice?.number ?? 'Hatırlatıcı'} sil`}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -223,14 +213,14 @@ export function CollectionRemindersPage() {
         )}
       </section>
 
-      <DataTable
+      {isError ? <ApiErrorState error={error} onRetry={() => void refetch()} /> : <DataTable
         columns={columns}
         data={reminders}
         keyExtractor={(r) => r.id}
         isLoading={isLoading}
         emptyTitle="Henüz hatırlatma kurulmamış"
         emptyDescription="Yaklaşan ödemeler için e-posta/sms hatırlatıcıları ekleyerek nakit akışınızı koruyun."
-      />
+      />}
 
       <Modal
         isOpen={createOpen}
@@ -284,7 +274,6 @@ export function CollectionRemindersPage() {
               value={watchAmount}
               {...register('amount')}
               error={errors.amount?.message}
-              disabled
             />
           </FormRow>
           <DatePicker
@@ -301,6 +290,15 @@ export function CollectionRemindersPage() {
           />
         </form>
       </Modal>
+      <ConfirmDialog
+        isOpen={Boolean(deleting)}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => deleting && deleteReminder.mutate(deleting.id, { onSuccess: () => setDeleting(null), onError: (err) => toast.error(getErrorMessage(err)) })}
+        title="Hatırlatıcıyı sil"
+        message={`${deleting?.invoice?.number ?? 'Seçili'} faturası için hatırlatıcı kalıcı olarak silinecek.`}
+        confirmLabel="Sil"
+        isLoading={deleteReminder.isPending}
+      />
     </div>
   );
 }

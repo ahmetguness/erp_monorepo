@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { FeaturePageShell } from "@/components/shared/FeaturePageShell";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -46,7 +47,10 @@ import {
 } from "@/lib/form-standard";
 import { useUIStore } from "@/store/ui.store";
 import { getErrorMessage } from "@/types/api.types";
-import type { JournalEntry, PostingEngineRunResult } from "@/services/accounting.service";
+import type {
+  JournalEntry,
+  PostingEngineRunResult,
+} from "@/services/accounting.service";
 import {
   JournalEntryStatusFilters,
   filterJournalEntries,
@@ -73,10 +77,12 @@ import { OpeningBalancesPanel } from "./opening-balances/OpeningBalancesPanel";
 export function JournalEntriesPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
-  const { data, isLoading } = useJournalEntries({ page, limit: 20 });
+  const entriesQuery = useJournalEntries({ page, limit: 20 });
+  const { data, isLoading } = entriesQuery;
   const createEntry = useCreateJournalEntry();
   const postingEngine = useRunPostingEngine();
-  const { data: accounts = [] } = useLedgerAccounts();
+  const accountsQuery = useLedgerAccounts({ isActive: true });
+  const { data: accounts = [] } = accountsQuery;
   const { toast } = useUIStore();
   const queryClient = useQueryClient();
 
@@ -131,7 +137,8 @@ export function JournalEntriesPage() {
   });
 
   const [editEntry, setEditEntry] = useState<JournalEntry | null>(null);
-  const [postingResult, setPostingResult] = useState<PostingEngineRunResult | null>(null);
+  const [postingResult, setPostingResult] =
+    useState<PostingEngineRunResult | null>(null);
 
   const accountOptions = [
     { value: "", label: "- Hesap seçin -" },
@@ -174,23 +181,41 @@ export function JournalEntriesPage() {
 
   const onSubmit = (data: JournalEntryForm) => {
     if (isSubmitLocked(isSubmitting, createEntry.isPending)) return;
-    createEntry.mutate(
-      toJournalEntryPayload(data),
-      {
-        onSuccess: closeModal,
-        onError: (error) => {
-          applyServerFieldErrors<JournalEntryForm>(error, setError, JOURNAL_ENTRY_SERVER_FIELDS);
-        },
+    createEntry.mutate(toJournalEntryPayload(data), {
+      onSuccess: closeModal,
+      onError: (error) => {
+        applyServerFieldErrors<JournalEntryForm>(
+          error,
+          setError,
+          JOURNAL_ENTRY_SERVER_FIELDS,
+        );
       },
-    );
+    });
   };
 
-  const [statusFilter, setStatusFilter] = useState<JournalEntryStatusFilter>("all");
+  const [statusFilter, setStatusFilter] =
+    useState<JournalEntryStatusFilter>("all");
   const allEntries = useMemo(() => data?.data ?? [], [data?.data]);
   const filteredEntries = filterJournalEntries(allEntries, statusFilter);
   const summary = useMemo(() => {
-    const debit = allEntries.reduce((sum, entry) => sum + (entry.lines?.reduce((lineSum, line) => lineSum + Number(line.debit), 0) ?? 0), 0);
-    const credit = allEntries.reduce((sum, entry) => sum + (entry.lines?.reduce((lineSum, line) => lineSum + Number(line.credit), 0) ?? 0), 0);
+    const debit = allEntries.reduce(
+      (sum, entry) =>
+        sum +
+        (entry.lines?.reduce(
+          (lineSum, line) => lineSum + Number(line.debit),
+          0,
+        ) ?? 0),
+      0,
+    );
+    const credit = allEntries.reduce(
+      (sum, entry) =>
+        sum +
+        (entry.lines?.reduce(
+          (lineSum, line) => lineSum + Number(line.credit),
+          0,
+        ) ?? 0),
+      0,
+    );
 
     return {
       total: data?.meta.total ?? allEntries.length,
@@ -215,43 +240,71 @@ export function JournalEntriesPage() {
     );
   };
 
+  if (entriesQuery.isError || accountsQuery.isError) {
+    return (
+      <ApiErrorState
+        error={entriesQuery.error ?? accountsQuery.error}
+        onRetry={() => {
+          void entriesQuery.refetch();
+          void accountsQuery.refetch();
+        }}
+      />
+    );
+  }
+
   return (
     <FeaturePageShell
-        title="Yevmiye fişleri"
-        subtitle="Manuel ve otomatik muhasebe kayıtlarını onay, ters kayıt ve kaynak belge durumuyla yönetin."
-        action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button variant="outline" leftIcon={<Wand2 className="h-4 w-4" />} loading={postingEngine.isPending} onClick={runAutomaticPosting}>
-              Otomatik posting
-            </Button>
-            <Link
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                setCreateOpen(true);
-              }}
-              className="group relative inline-flex items-center gap-2.5 h-10 px-5 rounded-xl font-medium text-sm text-white
+      title="Yevmiye fişleri"
+      subtitle="Manuel ve otomatik muhasebe kayıtlarını onay, ters kayıt ve kaynak belge durumuyla yönetin."
+      action={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            leftIcon={<Wand2 className="h-4 w-4" />}
+            loading={postingEngine.isPending}
+            onClick={runAutomaticPosting}
+          >
+            Otomatik posting
+          </Button>
+          <Link
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              setCreateOpen(true);
+            }}
+            className="group relative inline-flex items-center gap-2.5 h-10 px-5 rounded-xl font-medium text-sm text-white
                          bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500
                          shadow-lg shadow-sky-500/20 hover:shadow-sky-500/30
                          transition-all duration-200 active:scale-[0.97]"
-            >
-              <span className="flex items-center justify-center w-5 h-5 rounded-md bg-white/15 group-hover:bg-white/20 transition-colors">
-                <Plus className="w-3.5 h-3.5" />
-              </span>
-              Yeni fiş
-            </Link>
-          </div>
-        }
+          >
+            <span className="flex items-center justify-center w-5 h-5 rounded-md bg-white/15 group-hover:bg-white/20 transition-colors">
+              <Plus className="w-3.5 h-3.5" />
+            </span>
+            Yeni fiş
+          </Link>
+        </div>
+      }
     >
-
       <SummaryStrip
         metrics={[
           { label: "Toplam Fiş", value: summary.total, tone: "text-slate-50" },
           { label: "Gösterilen", value: summary.visible, tone: "text-sky-200" },
-          { label: "Taslak", value: summary.draft, tone: summary.draft > 0 ? "text-amber-300" : "text-slate-200" },
+          {
+            label: "Taslak",
+            value: summary.draft,
+            tone: summary.draft > 0 ? "text-amber-300" : "text-slate-200",
+          },
           { label: "Onaylı", value: summary.posted, tone: "text-emerald-300" },
-          { label: "Borç", value: formatCurrency(summary.debit), tone: "text-emerald-300" },
-          { label: "Alacak", value: formatCurrency(summary.credit), tone: "text-red-300" },
+          {
+            label: "Borç",
+            value: formatCurrency(summary.debit),
+            tone: "text-emerald-300",
+          },
+          {
+            label: "Alacak",
+            value: formatCurrency(summary.credit),
+            tone: "text-red-300",
+          },
         ]}
       />
 
@@ -264,9 +317,15 @@ export function JournalEntriesPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-white">Fiş listesi</h2>
-              <p className="mt-0.5 text-xs text-slate-500">Taslak, onaylı ve ters kayıt akışlarını tek tabloda takip edin.</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Taslak, onaylı ve ters kayıt akışlarını tek tabloda takip edin.
+              </p>
             </div>
-            <JournalEntryStatusFilters entries={allEntries} value={statusFilter} onChange={setStatusFilter} />
+            <JournalEntryStatusFilters
+              entries={allEntries}
+              value={statusFilter}
+              onChange={setStatusFilter}
+            />
           </div>
         </div>
         <div className="p-4">
@@ -285,9 +344,13 @@ export function JournalEntriesPage() {
       <div className="rounded-xl border border-sky-500/15 bg-sky-500/[0.04] p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-slate-100">Kaynak belge ve ters kayıt takibi</h2>
+            <h2 className="text-sm font-semibold text-slate-100">
+              Kaynak belge ve ters kayıt takibi
+            </h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              Otomatik yevmiye fişlerinde kaynak belge linki tabloda görünür. Onaylı fişler için ters kayıt aksiyonu ile storno oluşturabilirsiniz.
+              Otomatik yevmiye fişlerinde kaynak belge linki tabloda görünür.
+              Onaylı fişler için ters kayıt aksiyonu ile storno
+              oluşturabilirsiniz.
             </p>
           </div>
           <Badge variant="info">Starter</Badge>
@@ -352,7 +415,12 @@ export function JournalEntriesPage() {
                 required
                 value={watchedDate}
                 error={errors.date?.message}
-                onValueChange={(value) => setValue("date", value ?? "", { shouldDirty: true, shouldValidate: true })}
+                onValueChange={(value) =>
+                  setValue("date", value ?? "", {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
                 clearable={false}
               />
               <Input
@@ -704,7 +772,12 @@ function EditJournalEntryModal({
               required
               value={watchedDate}
               error={errors.date?.message}
-              onValueChange={(value) => setValue("date", value ?? "", { shouldDirty: true, shouldValidate: true })}
+              onValueChange={(value) =>
+                setValue("date", value ?? "", {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                })
+              }
               clearable={false}
             />
             <Input
@@ -925,26 +998,42 @@ function EditJournalEntryModal({
   );
 }
 
-function PostingEnginePanel({ result }: { result: PostingEngineRunResult | null }) {
-  const missingMappings = result?.mappings.filter((mapping) => !mapping.available) ?? [];
+function PostingEnginePanel({
+  result,
+}: {
+  result: PostingEngineRunResult | null;
+}) {
+  const missingMappings =
+    result?.mappings.filter((mapping) => !mapping.available) ?? [];
   return (
     <div className="rounded-xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <Wand2 className="h-4 w-4 text-sky-300" />
-            <h2 className="text-sm font-semibold text-slate-100">Accounting posting engine</h2>
+            <h2 className="text-sm font-semibold text-slate-100">
+              Accounting posting engine
+            </h2>
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            Fatura ve tamamlanan ödeme belgelerinden idempotent otomatik yevmiye fişi üretir.
+            Fatura ve tamamlanan ödeme belgelerinden idempotent otomatik yevmiye
+            fişi üretir.
           </p>
         </div>
         {result ? (
           <div className="flex flex-wrap gap-2">
             <Badge variant="success">{result.posted} fiş</Badge>
-            <Badge variant={result.skipped > 0 ? "warning" : "neutral"}>{result.skipped} atlandı</Badge>
-            <Badge variant={result.failed > 0 ? "danger" : "neutral"}>{result.failed} hata</Badge>
-            {missingMappings.length > 0 && <Badge variant="danger">{missingMappings.length} mapping eksik</Badge>}
+            <Badge variant={result.skipped > 0 ? "warning" : "neutral"}>
+              {result.skipped} atlandı
+            </Badge>
+            <Badge variant={result.failed > 0 ? "danger" : "neutral"}>
+              {result.failed} hata
+            </Badge>
+            {missingMappings.length > 0 && (
+              <Badge variant="danger">
+                {missingMappings.length} mapping eksik
+              </Badge>
+            )}
           </div>
         ) : (
           <Badge variant="info">Hazır</Badge>
@@ -953,12 +1042,29 @@ function PostingEnginePanel({ result }: { result: PostingEngineRunResult | null 
       {result && result.items.length > 0 && (
         <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {result.items.slice(0, 6).map((item) => (
-            <div key={`${item.refType}-${item.refId}`} className="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+            <div
+              key={`${item.refType}-${item.refId}`}
+              className="rounded-lg border border-slate-800 bg-slate-900/50 p-3"
+            >
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-xs font-medium text-slate-300">{item.refNumber}</span>
-                <Badge variant={item.status === "POSTED" ? "success" : item.status === "FAILED" ? "danger" : "warning"}>{item.status}</Badge>
+                <span className="truncate text-xs font-medium text-slate-300">
+                  {item.refNumber}
+                </span>
+                <Badge
+                  variant={
+                    item.status === "POSTED"
+                      ? "success"
+                      : item.status === "FAILED"
+                        ? "danger"
+                        : "warning"
+                  }
+                >
+                  {item.status}
+                </Badge>
               </div>
-              <p className="mt-1 line-clamp-2 text-xs text-slate-500">{item.message}</p>
+              <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                {item.message}
+              </p>
             </div>
           ))}
         </div>
@@ -967,7 +1073,11 @@ function PostingEnginePanel({ result }: { result: PostingEngineRunResult | null 
   );
 }
 
-function SummaryStrip({ metrics }: { metrics: Array<{ label: string; value: ReactNode; tone: string }> }) {
+function SummaryStrip({
+  metrics,
+}: {
+  metrics: Array<{ label: string; value: ReactNode; tone: string }>;
+}) {
   return (
     <div className="rounded-xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
@@ -975,7 +1085,10 @@ function SummaryStrip({ metrics }: { metrics: Array<{ label: string; value: Reac
           <div key={metric.label} className="flex items-center gap-x-4">
             {index > 0 && <span className="h-4 w-px bg-slate-800" />}
             <span className={cn("font-semibold tabular-nums", metric.tone)}>
-              {metric.value} <span className="text-[11px] font-medium uppercase text-slate-500">{metric.label}</span>
+              {metric.value}{" "}
+              <span className="text-[11px] font-medium uppercase text-slate-500">
+                {metric.label}
+              </span>
             </span>
           </div>
         ))}
@@ -983,6 +1096,3 @@ function SummaryStrip({ metrics }: { metrics: Array<{ label: string; value: Reac
     </div>
   );
 }
-
-
-

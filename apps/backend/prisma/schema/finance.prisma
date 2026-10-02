@@ -146,6 +146,7 @@ model Invoice {
 
   @@unique([tenantId, number])
   @@unique([tenantId, postingIdempotencyKey])
+  @@unique([tenantId, id])
   @@index([tenantId, status])
   @@index([tenantId, contactId])
   @@index([tenantId, date])
@@ -259,6 +260,7 @@ model BankAccount {
   payments     Payment[]
 
   @@unique([tenantId, iban])
+  @@unique([tenantId, id])
   @@index([tenantId, isActive])
   @@index([deletedAt])
   @@map("bank_accounts")
@@ -278,6 +280,7 @@ model CashAccount {
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   payments Payment[]
 
+  @@unique([tenantId, id])
   @@index([tenantId, isActive])
   @@index([deletedAt])
   @@map("cash_accounts")
@@ -299,8 +302,9 @@ model BankTransaction {
   createdById   String?
 
   tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id])
+  bankAccount BankAccount @relation(fields: [tenantId, bankAccountId], references: [tenantId, id])
 
+  @@unique([tenantId, id])
   @@index([tenantId, bankAccountId])
   @@index([tenantId, date])
   @@index([refType, refId])
@@ -326,9 +330,11 @@ model CheckPromissoryNote {
   createdById  String?
 
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact  Contact?  @relation(fields: [tenantId, contactId], references: [tenantId, id])
   payments Payment[]
 
   @@unique([tenantId, number])
+  @@unique([tenantId, id])
   @@index([tenantId, status])
   @@index([tenantId, dueDate])
   @@index([tenantId, contactId])
@@ -357,13 +363,14 @@ model Payment {
   createdById    String?
 
   tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  contact     Contact?             @relation(fields: [contactId], references: [id])
-  bankAccount BankAccount?         @relation(fields: [bankAccountId], references: [id])
-  cashAccount CashAccount?         @relation(fields: [cashAccountId], references: [id])
-  checkNote   CheckPromissoryNote? @relation(fields: [checkNoteId], references: [id])
+  contact     Contact?             @relation(fields: [tenantId, contactId], references: [tenantId, id])
+  bankAccount BankAccount?         @relation(fields: [tenantId, bankAccountId], references: [tenantId, id], onDelete: Restrict)
+  cashAccount CashAccount?         @relation(fields: [tenantId, cashAccountId], references: [tenantId, id], onDelete: Restrict)
+  checkNote   CheckPromissoryNote? @relation(fields: [tenantId, checkNoteId], references: [tenantId, id])
   allocations PaymentAllocation[]
 
   @@unique([tenantId, idempotencyKey])
+  @@unique([tenantId, id])
   @@index([tenantId, status])
   @@index([tenantId, date])
   @@index([tenantId, contactId])
@@ -378,8 +385,8 @@ model PaymentAllocation {
   amount    Decimal  @db.Decimal(18, 2)
   createdAt DateTime @default(now())
 
-  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  payment Payment @relation(fields: [tenantId, paymentId], references: [tenantId, id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [tenantId, invoiceId], references: [tenantId, id], onDelete: Cascade)
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([paymentId, invoiceId])
@@ -427,6 +434,8 @@ model FiscalPeriod {
   journalEntries JournalEntry[]
 
   @@unique([tenantId, startDate, endDate])
+  // Overlapping inclusive ranges per tenant are prevented by the
+  // fiscal_periods_tenant_date_range_excl migration constraint.
   @@index([tenantId, status])
   @@map("fiscal_periods")
 }
@@ -455,6 +464,7 @@ model JournalEntry {
 
   @@unique([tenantId, number])
   @@unique([tenantId, idempotencyKey])
+  @@unique([tenantId, refType, refId])
   @@index([tenantId, date])
   @@index([tenantId, isPosted])
   @@index([refType, refId])
@@ -472,7 +482,7 @@ model JournalEntryLine {
   sortOrder      Int     @default(0)
 
   journalEntry JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
-  account      LedgerAccount @relation(fields: [accountId], references: [id])
+  account      LedgerAccount @relation(fields: [tenantId, accountId], references: [tenantId, id])
   tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, journalEntryId])
@@ -496,6 +506,7 @@ model Reconciliation {
   tenant Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   lines  ReconciliationLine[]
 
+  @@unique([tenantId, id])
   @@index([tenantId, date])
   @@map("reconciliations")
 }
@@ -511,8 +522,8 @@ model ReconciliationLine {
   isMatched        Boolean @default(false)
   notes            String?
 
-  reconciliation Reconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
-  account        LedgerAccount  @relation(fields: [accountId], references: [id])
+  reconciliation Reconciliation @relation(fields: [tenantId, reconciliationId], references: [tenantId, id], onDelete: Cascade)
+  account        LedgerAccount  @relation(fields: [tenantId, accountId], references: [tenantId, id])
   tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, reconciliationId])
@@ -526,15 +537,18 @@ model CollectionReminder {
   invoiceId String?
   amount    Decimal  @db.Decimal(18, 2)
   dueDate   DateTime
+  remindAt  DateTime
   status    String   @default("PENDING") // PENDING, SENT, CANCELLED
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  contact Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  contact Contact  @relation(fields: [tenantId, contactId], references: [tenantId, id], onDelete: Cascade)
+  invoice Invoice? @relation(fields: [tenantId, invoiceId], references: [tenantId, id], onDelete: Cascade)
 
+  @@unique([tenantId, id])
+  @@unique([tenantId, invoiceId, remindAt])
   @@index([tenantId])
   @@map("collection_reminders")
 }

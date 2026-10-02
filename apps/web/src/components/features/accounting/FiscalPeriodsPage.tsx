@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { FeatureGate } from "@/components/shared/FeatureGate";
 import { FiscalPeriodStatusBadge } from "@/components/shared/StatusBadge";
@@ -41,9 +42,12 @@ import type { FiscalPeriod } from "@/services/accounting.service";
 import { ClosingChecklistPanel } from "./ClosingChecklistPanel";
 
 const schema = z.object({
-  name: z.string().min(1, "Ad zorunludur"),
+  name: z.string().trim().min(1, "Ad zorunludur").max(200, "Ad en fazla 200 karakter olabilir"),
   startDate: z.string().min(1, "Başlangıç tarihi zorunludur"),
   endDate: z.string().min(1, "Bitiş tarihi zorunludur"),
+}).refine((value) => !value.startDate || !value.endDate || value.startDate < value.endDate, {
+  message: "Başlangıç tarihi bitiş tarihinden önce olmalıdır",
+  path: ["endDate"],
 });
 type FormData = z.infer<typeof schema>;
 
@@ -221,7 +225,8 @@ function PeriodSummary({
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function FiscalPeriodsPage() {
-  const { data: periods = [], isLoading } = useFiscalPeriods();
+  const periodsQuery = useFiscalPeriods();
+  const { data: periods = [], isLoading } = periodsQuery;
   const createPeriod = useCreateFiscalPeriod();
   const [createOpen, setCreateOpen] = useState(false);
   const [closeTarget, setCloseTarget] = useState<FiscalPeriod | null>(null);
@@ -388,7 +393,9 @@ export function FiscalPeriodsPage() {
         </div>
       )}
 
-      <section className="rounded-xl border border-slate-800/80 bg-slate-950/40">
+      {periodsQuery.isError ? (
+        <ApiErrorState error={periodsQuery.error} onRetry={() => void periodsQuery.refetch()} />
+      ) : <section className="rounded-xl border border-slate-800/80 bg-slate-950/40">
         <div className="border-b border-slate-800/70 bg-slate-900/45 px-4 py-3">
           <div className="flex items-center gap-2">
             <CalendarRange className="h-4 w-4 text-sky-300" />
@@ -408,7 +415,7 @@ export function FiscalPeriodsPage() {
             emptyDescription="Yeni bir mali dönem oluşturarak başlayın."
           />
         </div>
-      </section>
+      </section>}
 
       {/* Create modal */}
       <Modal

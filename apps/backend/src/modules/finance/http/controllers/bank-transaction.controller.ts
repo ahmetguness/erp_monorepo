@@ -2,6 +2,9 @@ import { BankTransactionRefType,BankTransactionType } from '@prisma/client';
 import { Context } from 'hono';
 import { NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
+import { getValidatedBody } from '../../../../middleware/validateBody.js';
+import { autoProcessBankTransactionMatchesBodySchema,bankTransactionMatchBodySchema,bulkApproveBankTransactionMatchesBodySchema,createBankTransactionBodySchema } from '../../../../schemas/request-body.schemas.js';
+import type { AutoProcessBankTransactionMatchesBody,BankTransactionMatchBody,BulkApproveBankTransactionMatchesBody,CreateBankTransactionBody } from '../../../../schemas/request-body.schemas.js';
 import {
 BankTransactionMatchingService,
 } from '../../../../services/bank-transaction-matching.service.js';
@@ -18,31 +21,6 @@ interface BankTransactionListQuery {
   type?: BankTransactionType;
   dateFrom?: string;
   dateTo?: string;
-}
-
-interface CreateBankTransactionDTO {
-  bankAccountId: string;
-  type: BankTransactionType;
-  amount: number;
-  balanceAfter: number;
-  date: string;
-  description?: string;
-  reference?: string;
-}
-
-interface MatchPaymentDTO {
-  refType: string;
-  refId: string;
-}
-
-interface BulkApproveMatchesDTO {
-  transactionIds?: string[];
-  minConfidence?: number;
-}
-
-interface AutoProcessMatchesDTO {
-  minConfidence?: number;
-  limit?: number;
 }
 
 function readMatchTargetType(value: string): 'PAYMENT' | 'INVOICE' | 'CONTACT' {
@@ -116,14 +94,7 @@ export const BankTransactionController = {
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<CreateBankTransactionDTO>();
-
-    if (!body.bankAccountId || !body.type || body.amount === undefined || body.balanceAfter === undefined || !body.date) {
-      return c.json(
-        new ValidationError('bankAccountId, type, amount, balanceAfter ve date zorunludur.').toJSON(),
-        400,
-      );
-    }
+    const body = getValidatedBody<CreateBankTransactionBody>(c, createBankTransactionBodySchema);
 
     const bankAccount = await prisma.bankAccount.findFirst({
       where: { id: body.bankAccountId, tenantId, deletedAt: null },
@@ -158,14 +129,14 @@ export const BankTransactionController = {
     });
     if (!existing) return c.json(new NotFoundError('Banka hareketi', id).toJSON(), 404);
 
-    const body = await c.req.json<MatchPaymentDTO>();
-
-    if (!body.refType || !body.refId) {
-      return c.json(new ValidationError('refType ve refId zorunludur.').toJSON(), 400);
-    }
+    const body = getValidatedBody<BankTransactionMatchBody>(c, bankTransactionMatchBodySchema);
 
     const storedRefType = readStoredRefType(body.refType);
     if (storedRefType === BankTransactionRefType.RECONCILIATION || storedRefType === BankTransactionRefType.OTHER) {
+      if (storedRefType === BankTransactionRefType.RECONCILIATION) {
+        const target = await prisma.reconciliation.findFirst({ where: { id: body.refId, tenantId }, select: { id: true } });
+        if (!target) throw new NotFoundError('Mutabakat', body.refId);
+      }
       const updated = await prisma.bankTransaction.update({
         where: { id },
         data: {
@@ -203,13 +174,7 @@ export const BankTransactionController = {
 
   async bulkApproveMatches(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const body = await c.req.json<BulkApproveMatchesDTO>();
-    if (!Array.isArray(body.transactionIds) || !body.transactionIds.every((id) => typeof id === 'string')) {
-      return c.json(new ValidationError('transactionIds metin listesi olmalidir.').toJSON(), 400);
-    }
-    if (body.minConfidence !== undefined && (typeof body.minConfidence !== 'number' || body.minConfidence < 0 || body.minConfidence > 100)) {
-      return c.json(new ValidationError('minConfidence 0-100 arasinda sayi olmalidir.').toJSON(), 400);
-    }
+    const body = getValidatedBody<BulkApproveBankTransactionMatchesBody>(c, bulkApproveBankTransactionMatchesBodySchema);
 
     const result = await matchingService.bulkApprove(tenantId, {
       transactionIds: body.transactionIds,
@@ -220,13 +185,7 @@ export const BankTransactionController = {
 
   async autoProcessMatches(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const body: AutoProcessMatchesDTO = await c.req.json<AutoProcessMatchesDTO>().catch((): AutoProcessMatchesDTO => ({}));
-    if (body.minConfidence !== undefined && (typeof body.minConfidence !== 'number' || body.minConfidence < 0 || body.minConfidence > 100)) {
-      return c.json(new ValidationError('minConfidence 0-100 arasinda sayi olmalidir.').toJSON(), 400);
-    }
-    if (body.limit !== undefined && (typeof body.limit !== 'number' || body.limit < 1 || body.limit > 100)) {
-      return c.json(new ValidationError('limit 1-100 arasinda sayi olmalidir.').toJSON(), 400);
-    }
+    const body = getValidatedBody<AutoProcessBankTransactionMatchesBody>(c, autoProcessBankTransactionMatchesBodySchema);
 
     const result = await matchingService.autoProcess(tenantId, {
       minConfidence: body.minConfidence,
@@ -238,11 +197,7 @@ export const BankTransactionController = {
   async approveMatch(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const id = requireParam(c, 'id');
-    const body = await c.req.json<MatchPaymentDTO>();
-
-    if (!body.refType || !body.refId) {
-      return c.json(new ValidationError('refType ve refId zorunludur.').toJSON(), 400);
-    }
+    const body = getValidatedBody<BankTransactionMatchBody>(c, bankTransactionMatchBodySchema);
 
     const updated = await matchingService.approve(tenantId, id, {
       refType: readMatchTargetType(body.refType),

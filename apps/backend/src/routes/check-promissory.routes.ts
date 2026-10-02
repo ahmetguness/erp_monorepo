@@ -3,6 +3,8 @@ import { Hono } from "hono";
 import { requireAccess } from "../middleware/requireAccess";
 import { requirePermission } from "../middleware/requirePermission";
 import { CheckPromissoryController } from "../modules/finance/http/controllers/index.js";
+import { validateBody } from "../middleware/validateBody.js";
+import { createCheckPromissoryBodySchema, updateCheckPromissoryBodySchema, updateCheckPromissoryStatusBodySchema } from "../schemas/request-body.schemas.js";
 
 const checkPromissoryRoutes = new Hono();
 
@@ -16,16 +18,19 @@ checkPromissoryRoutes.get(
 checkPromissoryRoutes.post(
   "/",
   requirePermission("accounting", "CREATE"),
+  validateBody(createCheckPromissoryBodySchema),
   CheckPromissoryController.create,
 );
 checkPromissoryRoutes.patch(
   "/:id",
   requirePermission("accounting", "UPDATE"),
+  validateBody(updateCheckPromissoryBodySchema),
   CheckPromissoryController.update,
 );
 checkPromissoryRoutes.patch(
   "/:id/status",
   requirePermission("accounting", "UPDATE"),
+  validateBody(updateCheckPromissoryStatusBodySchema),
   CheckPromissoryController.updateStatus,
 );
 checkPromissoryRoutes.delete(

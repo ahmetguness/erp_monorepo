@@ -24,6 +24,7 @@ model Unit {
   products Product[]
 
   @@unique([tenantId, code])
+  @@unique([tenantId, id])
   @@map("units")
 }
 
@@ -72,10 +73,10 @@ model Contact {
   website   String?
   address   String?
   city      String?
-  country   String  @default("TR")
+  country   String   @default("TR")
   notes     String?
   tags      String[] @default([])
-  isActive  Boolean @default(true)
+  isActive  Boolean  @default(true)
 
   creditLimit     Decimal? @db.Decimal(18, 2)
   paymentTermDays Int?
@@ -97,8 +98,10 @@ model Contact {
   payments            Payment[]
   deliveryNotes       DeliveryNote[]
   collectionReminders CollectionReminder[]
+  checkPromissoryNotes CheckPromissoryNote[]
 
   @@unique([tenantId, code])
+  @@unique([tenantId, id])
   @@index([tenantId, type])
   @@index([tenantId, isActive])
   @@index([tenantId, name])
@@ -121,7 +124,7 @@ model AccountEntry {
   createdAt   DateTime @default(now())
   createdById String?
 
-  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [tenantId, contactId], references: [tenantId, id], onDelete: Cascade)
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, contactId])

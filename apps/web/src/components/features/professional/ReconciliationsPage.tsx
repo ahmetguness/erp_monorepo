@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { CheckCircle, ClipboardCheck, Lock, Plus, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -11,6 +12,7 @@ import { DatePicker } from "@/components/ui/DatePicker";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { useCreateReconciliation, useFinalizeReconciliation, useReconciliations } from "@/hooks/useReconciliation";
+import { useLedgerAccounts } from "@/hooks/useAccounting";
 import { cn, formatDate } from "@/lib/utils";
 import type { Reconciliation } from "@/services/reconciliation.service";
 
@@ -25,13 +27,15 @@ export function ReconciliationsPage() {
   const [filter, setFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const today = new Date().toISOString().split("T")[0];
-  const [form, setForm] = useState({ name: "", description: "", date: today });
+  const [form, setForm] = useState({ name: "", description: "", date: today, accountId: "", amount: "" });
 
-  const { data, isFetching, isLoading, refetch } = useReconciliations({
+  const reconciliationQuery = useReconciliations({
     page,
     limit: 20,
     isFinalized: filter || undefined,
   });
+  const { data, isFetching, isLoading, refetch } = reconciliationQuery;
+  const { data: accounts = [] } = useLedgerAccounts({ isActive: true });
   const createRec = useCreateReconciliation();
   const finalize = useFinalizeReconciliation();
   const rows = useMemo(() => data?.data ?? [], [data?.data]);
@@ -95,7 +99,7 @@ export function ReconciliationsPage() {
       width: "120px",
       align: "right",
       render: (row) =>
-        !row.isFinalized ? (
+        !row.isFinalized && (row._count?.lines ?? row.lines?.length ?? 0) > 0 ? (
           <button
             type="button"
             onClick={(event) => {
@@ -138,7 +142,9 @@ export function ReconciliationsPage() {
         ]}
       />
 
-      <section className="rounded-xl border border-slate-800/80 bg-slate-950/40">
+      {reconciliationQuery.isError ? (
+        <ApiErrorState error={reconciliationQuery.error} onRetry={() => void refetch()} />
+      ) : <section className="rounded-xl border border-slate-800/80 bg-slate-950/40">
         <div className="border-b border-slate-800/70 bg-slate-900/45 px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -177,7 +183,7 @@ export function ReconciliationsPage() {
             pagination={data ? { page, pageSize: 20, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
           />
         </div>
-      </section>
+      </section>}
 
       <Modal
         isOpen={createOpen}
@@ -192,14 +198,15 @@ export function ReconciliationsPage() {
             <Button
               size="sm"
               loading={createRec.isPending}
-              disabled={!form.name.trim()}
+              disabled={!form.name.trim() || !form.date || !form.accountId || !form.amount || Number(form.amount) === 0}
               onClick={() => {
                 createRec.mutate(
-                  { name: form.name, description: form.description || undefined, date: form.date },
+                  { name: form.name.trim(), description: form.description.trim() || undefined, date: form.date,
+                    lines: [{ accountId: form.accountId, amount: Number(form.amount) }] },
                   {
                     onSuccess: () => {
                       setCreateOpen(false);
-                      setForm({ name: "", description: "", date: today });
+                      setForm({ name: "", description: "", date: today, accountId: "", amount: "" });
                     },
                   },
                 );
@@ -214,6 +221,14 @@ export function ReconciliationsPage() {
           <Input label="Mutabakat adı" required value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
           <Input label="Açıklama" value={form.description} onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))} />
           <DatePicker label="Tarih" required value={form.date} onValueChange={(value) => setForm((prev) => ({ ...prev, date: value ?? "" }))} clearable={false} />
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium text-slate-300">
+            Hesap <span className="sr-only">zorunlu</span>
+            <select aria-label="Hesap" required value={form.accountId} onChange={(event) => setForm((prev) => ({ ...prev, accountId: event.target.value }))} className="h-10 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm text-white">
+              <option value="">Hesap seçin</option>
+              {accounts.map((account) => <option key={account.id} value={account.id}>{account.code} - {account.name}</option>)}
+            </select>
+          </label>
+          <Input label="Tutar" required type="number" step="0.01" value={form.amount} onChange={(event) => setForm((prev) => ({ ...prev, amount: event.target.value }))} />
         </div>
       </Modal>
     </div>

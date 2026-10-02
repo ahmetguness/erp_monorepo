@@ -189,18 +189,29 @@ export class CollectionAutomationService {
       return this.item(invoice, stage, 'SKIPPED', existing.id, null, 'Reminder already exists.');
     }
 
-    const reminder = await this.db.collectionReminder.create({
-      data: {
-        tenantId,
-        contactId: invoice.contactId,
-        invoiceId: invoice.id,
-        amount,
-        dueDate: stage === 'PRE_DUE' && invoice.dueDate ? addDays(invoice.dueDate, -PRE_DUE_DAYS) : invoice.dueDate ?? new Date(),
-        status: 'PENDING',
-        notes: `${source} | Automated collection reminder for ${invoice.number}`,
-      },
-      select: { id: true },
-    });
+    let reminder: { id: string };
+    try {
+      reminder = await this.db.collectionReminder.create({
+        data: {
+          tenantId,
+          contactId: invoice.contactId,
+          invoiceId: invoice.id,
+          amount,
+          dueDate: invoice.dueDate ?? new Date(),
+          remindAt: stage === 'PRE_DUE' && invoice.dueDate ? addDays(invoice.dueDate, -PRE_DUE_DAYS) : invoice.dueDate ?? new Date(),
+          status: 'PENDING',
+          notes: `${source} | Automated collection reminder for ${invoice.number}`,
+        },
+        select: { id: true },
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'P2002') throw error;
+      const concurrent = await this.db.collectionReminder.findFirstOrThrow({
+        where: { tenantId, invoiceId: invoice.id, remindAt: stage === 'PRE_DUE' && invoice.dueDate ? addDays(invoice.dueDate, -PRE_DUE_DAYS) : invoice.dueDate ?? new Date() },
+        select: { id: true },
+      });
+      return this.item(invoice, stage, 'SKIPPED', concurrent.id, null, 'Reminder already exists.');
+    }
     return this.item(invoice, stage, 'CREATED', reminder.id, null, 'Reminder created.');
   }
 

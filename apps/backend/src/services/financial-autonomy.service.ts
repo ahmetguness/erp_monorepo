@@ -3,11 +3,13 @@ import {
   EntityType,
   InvoiceStatus,
   InvoiceType,
+  PaymentStatus,
   Prisma,
   PrismaClient,
 } from '@prisma/client';
 import { logger } from '../lib/logger.js';
 import { createAuditLog } from '../utils/audit.js';
+import { NotFoundError, ValidationError } from '../errors/index.js';
 
 export interface CashFlowDailySnapshot {
   date: string; // YYYY-MM-DD
@@ -97,12 +99,14 @@ export class FinancialAutonomyService {
     const now = new Date();
     const futureLimit = new Date(now.getTime() + days * 86_400_000);
 
-    // Compute initial cash & bank balance from completed payments
-    const paymentsSum = await this.db.payment.aggregate({
-      where: { tenantId, deletedAt: null },
-      _sum: { amount: true },
+    const payments = await this.db.payment.findMany({
+      where: { tenantId, deletedAt: null, status: PaymentStatus.COMPLETED },
+      select: { amount: true, direction: true },
     });
-    const initialBalance = Number(paymentsSum._sum.amount ?? 50000);
+    const initialBalance = payments.reduce(
+      (sum, payment) => sum + (payment.direction === 'SEND' ? -Number(payment.amount) : Number(payment.amount)),
+      0,
+    );
 
     // Open sales invoices (Expected Inflows)
     const openSales = await this.db.invoice.findMany({
@@ -113,7 +117,7 @@ export class FinancialAutonomyService {
         status: { in: [InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.OVERDUE] },
         dueDate: { lte: futureLimit },
       },
-      select: { dueDate: true, totalGross: true },
+      select: { dueDate: true, totalGross: true, payments: { select: { amount: true } } },
     });
 
     // Open purchase invoices (Expected Outflows)
@@ -125,20 +129,24 @@ export class FinancialAutonomyService {
         status: { in: [InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.OVERDUE] },
         dueDate: { lte: futureLimit },
       },
-      select: { dueDate: true, totalGross: true },
+      select: { dueDate: true, totalGross: true, payments: { select: { amount: true } } },
     });
 
     // Group by Day
     const inflowsByDay = new Map<string, number>();
     for (const s of openSales) {
-      const dateKey = (s.dueDate ?? now).toISOString().slice(0, 10);
-      inflowsByDay.set(dateKey, (inflowsByDay.get(dateKey) ?? 0) + Number(s.totalGross));
+      const due = s.dueDate && s.dueDate > now ? s.dueDate : now;
+      const dateKey = due.toISOString().slice(0, 10);
+      const outstanding = Math.max(0, Number(s.totalGross) - s.payments.reduce((sum, payment) => sum + Number(payment.amount), 0));
+      inflowsByDay.set(dateKey, (inflowsByDay.get(dateKey) ?? 0) + outstanding);
     }
 
     const outflowsByDay = new Map<string, number>();
     for (const p of openPurchases) {
-      const dateKey = (p.dueDate ?? now).toISOString().slice(0, 10);
-      outflowsByDay.set(dateKey, (outflowsByDay.get(dateKey) ?? 0) + Number(p.totalGross));
+      const due = p.dueDate && p.dueDate > now ? p.dueDate : now;
+      const dateKey = due.toISOString().slice(0, 10);
+      const outstanding = Math.max(0, Number(p.totalGross) - p.payments.reduce((sum, payment) => sum + Number(payment.amount), 0));
+      outflowsByDay.set(dateKey, (outflowsByDay.get(dateKey) ?? 0) + outstanding);
     }
 
     // ── Fixed costs from tenant settings ──────────────────────────────────
@@ -159,7 +167,11 @@ export class FinancialAutonomyService {
               typeof entry === 'object' &&
               typeof (entry as Record<string, unknown>).label === 'string' &&
               typeof (entry as Record<string, unknown>).amount === 'number' &&
-              typeof (entry as Record<string, unknown>).dayOfMonth === 'number',
+              Number.isFinite((entry as Record<string, unknown>).amount) &&
+              (entry as Record<string, number>).amount > 0 &&
+              Number.isInteger((entry as Record<string, unknown>).dayOfMonth) &&
+              (entry as Record<string, number>).dayOfMonth >= 1 &&
+              (entry as Record<string, number>).dayOfMonth <= 31,
           );
         }
       } catch {
@@ -251,7 +263,7 @@ export class FinancialAutonomyService {
       select: { id: true, name: true },
     });
 
-    if (!contact) throw new Error(`Cari bulunamadı: ${contactId}`);
+    if (!contact) throw new NotFoundError('Cari', contactId);
 
     const invoices = await this.db.invoice.findMany({
       where: { tenantId, contactId, type: InvoiceType.SALES, status: InvoiceStatus.PAID },
@@ -316,15 +328,18 @@ export class FinancialAutonomyService {
   ): Promise<CollectionSettlementDraft> {
     const inv = await this.db.invoice.findFirst({
       where: { id: invoiceId, tenantId, deletedAt: null },
-      include: { contact: true },
+      include: { contact: true, payments: { select: { amount: true } } },
     });
 
-    if (!inv) throw new Error(`Fatura bulunamadı: ${invoiceId}`);
+    if (!inv) throw new NotFoundError('Fatura', invoiceId);
+    if (inv.type !== InvoiceType.SALES) throw new ValidationError('Yalnız satış faturaları için tahsilat teklifi üretilebilir.');
 
     const now = new Date();
     const dueDate = inv.dueDate ?? inv.date;
     const daysOverdue = Math.max(0, Math.round((now.getTime() - dueDate.getTime()) / 86_400_000));
-    const gross = Number(inv.totalGross);
+    const paid = inv.payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const gross = Math.max(0, Number(inv.totalGross) - paid);
+    if (gross <= 0 || inv.status === InvoiceStatus.PAID) throw new ValidationError('Faturanın tahsil edilecek bakiyesi bulunmamaktadır.');
 
     // AI Discount Policy
     let suggestedDiscountPercent = 3;
@@ -350,8 +365,8 @@ export class FinancialAutonomyService {
       validUntil,
       paymentLinkUrl,
       installmentOptions: [
-        { installments: 2, monthlyAmount: Math.round((gross / 2) * 100) / 100, totalAmount: gross },
-        { installments: 3, monthlyAmount: Math.round((gross / 3) * 100) / 100, totalAmount: gross },
+        { installments: 2, monthlyAmount: Math.round((netPayableAmount / 2) * 100) / 100, totalAmount: netPayableAmount },
+        { installments: 3, monthlyAmount: Math.round((netPayableAmount / 3) * 100) / 100, totalAmount: netPayableAmount },
       ],
     };
   }
@@ -387,6 +402,9 @@ export class FinancialAutonomyService {
     actionType: string,
     payload: Prisma.JsonObject = {},
   ): Promise<{ success: boolean; message: string }> {
+    if (actionType !== 'TRIGGER_COLLECTION_SETTLEMENT') {
+      throw new ValidationError('Desteklenmeyen finansal otonomi aksiyonu.');
+    }
     logger.info(`[FinancialAutonomy] User ${userId} executing financial action ${actionType}`);
 
     const invoiceId = typeof payload.invoiceId === 'string' ? payload.invoiceId : tenantId;
@@ -403,7 +421,7 @@ export class FinancialAutonomyService {
 
     return {
       success: true,
-      message: `Finansal Otonomi Aksiyonu (${actionType}) başarıyla icra edildi ve audit kaydı düşüldü.`,
+      message: `Finansal Otonomi önerisi (${actionType}) onay kaydına alındı ve audit izi oluşturuldu.`,
     };
   }
 }

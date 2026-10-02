@@ -2,7 +2,9 @@ import { ACCESS_POLICIES } from "@repo/types/plans";
 import { Hono } from "hono";
 import { requireAccess } from "../middleware/requireAccess";
 import { requirePermission } from "../middleware/requirePermission";
+import { validateBody } from "../middleware/validateBody";
 import { BankTransactionController } from "../modules/finance/http/controllers/index.js";
+import { autoProcessBankTransactionMatchesBodySchema, bankTransactionMatchBodySchema, bulkApproveBankTransactionMatchesBodySchema, createBankTransactionBodySchema } from "../schemas/request-body.schemas";
 
 const bankTransactionRoutes = new Hono();
 
@@ -16,6 +18,7 @@ bankTransactionRoutes.get(
 bankTransactionRoutes.post(
   "/",
   requirePermission("accounting", "CREATE"),
+  validateBody(createBankTransactionBodySchema),
   BankTransactionController.create,
 );
 bankTransactionRoutes.get(
@@ -26,11 +29,13 @@ bankTransactionRoutes.get(
 bankTransactionRoutes.post(
   "/bulk-approve-matches",
   requirePermission("accounting", "UPDATE"),
+  validateBody(bulkApproveBankTransactionMatchesBodySchema),
   BankTransactionController.bulkApproveMatches,
 );
 bankTransactionRoutes.post(
   "/auto-process-matches",
   requirePermission("accounting", "UPDATE"),
+  validateBody(autoProcessBankTransactionMatchesBodySchema),
   BankTransactionController.autoProcessMatches,
 );
 bankTransactionRoutes.get(
@@ -41,11 +46,13 @@ bankTransactionRoutes.get(
 bankTransactionRoutes.post(
   "/:id/approve-match",
   requirePermission("accounting", "UPDATE"),
+  validateBody(bankTransactionMatchBodySchema),
   BankTransactionController.approveMatch,
 );
 bankTransactionRoutes.post(
   "/:id/match",
   requirePermission("accounting", "UPDATE"),
+  validateBody(bankTransactionMatchBodySchema),
   BankTransactionController.matchPayment,
 );
 

@@ -1917,6 +1917,7 @@ async function seedCollectionReminders(
         invoiceId: invoices[2].id, // INV-000003
         amount: 5988.0,
         dueDate: d("2026-03-01"),
+        remindAt: d("2026-02-26"),
         status: "SENT",
         notes:
           "1. Seviye Vade Hatırlatma E-postası ve SMS müşteriye otomatik iletildi.",
@@ -1928,6 +1929,7 @@ async function seedCollectionReminders(
         invoiceId: invoices[2].id,
         amount: 5988.0,
         dueDate: d("2026-03-01"),
+        remindAt: d("2026-03-01"),
         status: "PENDING",
         notes:
           "2. Seviye telefon araması planlandı - Muhasebe sorumlusu doğrudan arayacak.",
@@ -1939,6 +1941,7 @@ async function seedCollectionReminders(
         invoiceId: invoices[1].id,
         amount: 10398.8,
         dueDate: d("2026-04-12"),
+        remindAt: d("2026-04-09"),
         status: "CANCELLED",
         notes: "Kısmi ödeme alındığı için hatırlatma iptal edildi.",
         createdAt: d("2026-04-10"),
@@ -2186,31 +2189,18 @@ async function seedAccounting(
     accSatis,
   ] = accounts;
 
-  const fp1 = await prisma.fiscalPeriod.create({
-    data: {
-      tenantId,
-      name: "2026 Q1 (Ocak-Mart)",
-      startDate: d("2026-01-01"),
-      endDate: d("2026-03-31"),
-      status: "CLOSED",
-      closedAt: d("2026-04-05"),
-    },
-  });
-  const fp2 = await prisma.fiscalPeriod.create({
-    data: {
-      tenantId,
-      name: "2026 Q2 (Nisan-Haziran)",
-      startDate: d("2026-04-01"),
-      endDate: d("2026-06-30"),
-      status: "OPEN",
-    },
+  // Reuse the non-overlapping annual period created by seedMasterData.
+  // Fiscal periods are exclusive date ranges per tenant; creating quarterly
+  // periods here used to violate that invariant.
+  const fiscalPeriod = await prisma.fiscalPeriod.findFirstOrThrow({
+    where: { tenantId, startDate: d("2026-01-01"), endDate: d("2026-12-31") },
   });
 
   // Yevmiye Fişleri
   await prisma.journalEntry.create({
     data: {
       tenantId,
-      fiscalPeriodId: fp1.id,
+      fiscalPeriodId: fiscalPeriod.id,
       type: "AUTO_INVOICE",
       number: "JE-000001",
       date: d("2026-03-22"),
@@ -2251,7 +2241,7 @@ async function seedAccounting(
   await prisma.journalEntry.create({
     data: {
       tenantId,
-      fiscalPeriodId: fp1.id,
+      fiscalPeriodId: fiscalPeriod.id,
       type: "AUTO_PAYMENT",
       number: "JE-000002",
       date: d("2026-03-25"),
@@ -2284,7 +2274,7 @@ async function seedAccounting(
   await prisma.journalEntry.create({
     data: {
       tenantId,
-      fiscalPeriodId: fp2.id,
+      fiscalPeriodId: fiscalPeriod.id,
       type: "AUTO_INVOICE",
       number: "JE-000003",
       date: d("2026-04-05"),
@@ -2325,7 +2315,7 @@ async function seedAccounting(
   await prisma.journalEntry.create({
     data: {
       tenantId,
-      fiscalPeriodId: fp2.id,
+      fiscalPeriodId: fiscalPeriod.id,
       type: "MANUAL",
       number: "JE-000004",
       date: d("2026-04-30"),

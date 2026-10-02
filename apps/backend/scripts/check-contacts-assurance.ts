@@ -347,7 +347,7 @@ async function main() {
         quantity: 10,
       },
     });
-    const date = new Date().toISOString();
+    const date = new Date().toISOString().slice(0, 10);
     const item = {
       productId: product.id,
       description: `${prefix}_FLOW_ITEM`,

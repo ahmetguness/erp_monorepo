@@ -15,7 +15,7 @@ export function mapPrismaError(error: unknown): ApplicationError | null {
     const message = target.length === 1
       ? `${UNIQUE_FIELD_LABELS[target[0]] ?? target[0]} zaten kullanımda.`
       : 'Benzersiz olması gereken bir alan zaten kullanımda.';
-    return new ApplicationError(message, 'validation', 'VALIDATION_ERROR', undefined, fields);
+    return new ApplicationError(message, 'conflict', 'CONFLICT', undefined, fields);
   }
   if (error.code === 'P2003') return new ConflictError('Kayıt ilişkili veriler nedeniyle değiştirilemiyor.');
   if (error.code === 'P2025') return new ApplicationError('Kayıt bulunamadı.', 'not-found', 'NOT_FOUND');

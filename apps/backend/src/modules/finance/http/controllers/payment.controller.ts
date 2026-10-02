@@ -2,7 +2,8 @@ import { Context } from 'hono';
 import { NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { getValidatedBody } from '../../../../middleware/validateBody.js';
-import { cancelReasonBodySchema,createPaymentBodySchema } from '../../../../schemas/request-body.schemas.js';
+import { cancelReasonBodySchema,createBankAccountBodySchema,createCashAccountBodySchema,createPaymentBodySchema,updateBankAccountBodySchema,updateCashAccountBodySchema } from '../../../../schemas/request-body.schemas.js';
+import type { CreateBankAccountBody,CreateCashAccountBody,UpdateBankAccountBody,UpdateCashAccountBody } from '../../../../schemas/request-body.schemas.js';
 import { readRequiredReason,reversePayment } from '../../../../services/financial/index.js';
 import {
 type CreatePaymentInput,
@@ -15,19 +16,6 @@ import type { ListPaymentsQuery } from '../../application/queries/payment.querie
 // ─────────────────────────────────────────────
 // DTOs
 // ─────────────────────────────────────────────
-
-interface CreateBankAccountDTO {
-  name: string;
-  accountNumber?: string;
-  iban?: string;
-  bankName?: string;
-  currencyCode?: string;
-}
-
-interface CreateCashAccountDTO {
-  name: string;
-  currencyCode?: string;
-}
 
 type CreatePaymentDTO = CreatePaymentInput;
 type PaymentListQuery = ListPaymentsQuery;
@@ -53,11 +41,7 @@ export const PaymentController = {
   async createBankAccount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<CreateBankAccountDTO>();
-
-    if (!body.name) {
-      return c.json(new ValidationError('name alanı zorunludur.').toJSON(), 400);
-    }
+    const body = getValidatedBody<CreateBankAccountBody>(c, createBankAccountBodySchema);
 
     const account = await prisma.bankAccount.create({
       data: {
@@ -67,6 +51,7 @@ export const PaymentController = {
         iban: body.iban ?? null,
         bankName: body.bankName ?? null,
         currencyCode: body.currencyCode ?? 'TRY',
+        type: body.type,
       },
     });
 
@@ -80,7 +65,7 @@ export const PaymentController = {
     const existing = await prisma.bankAccount.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) return c.json(new NotFoundError('Banka hesabı', id).toJSON(), 404);
 
-    const body = await c.req.json<Partial<CreateBankAccountDTO> & { isActive?: boolean }>();
+    const body = getValidatedBody<UpdateBankAccountBody>(c, updateBankAccountBodySchema);
 
     const updated = await prisma.bankAccount.update({
       where: { id },
@@ -89,6 +74,8 @@ export const PaymentController = {
         ...(body.accountNumber !== undefined && { accountNumber: body.accountNumber }),
         ...(body.iban !== undefined && { iban: body.iban }),
         ...(body.bankName !== undefined && { bankName: body.bankName }),
+        ...(body.currencyCode !== undefined && { currencyCode: body.currencyCode }),
+        ...(body.type !== undefined && { type: body.type }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
       },
     });
@@ -123,11 +110,7 @@ export const PaymentController = {
   async createCashAccount(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<CreateCashAccountDTO>();
-
-    if (!body.name) {
-      return c.json(new ValidationError('name alanı zorunludur.').toJSON(), 400);
-    }
+    const body = getValidatedBody<CreateCashAccountBody>(c, createCashAccountBodySchema);
 
     const account = await prisma.cashAccount.create({
       data: {
@@ -147,12 +130,13 @@ export const PaymentController = {
     const existing = await prisma.cashAccount.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!existing) return c.json(new NotFoundError('Kasa hesabı', id).toJSON(), 404);
 
-    const body = await c.req.json<{ name?: string; isActive?: boolean }>();
+    const body = getValidatedBody<UpdateCashAccountBody>(c, updateCashAccountBodySchema);
 
     const updated = await prisma.cashAccount.update({
       where: { id },
       data: {
         ...(body.name !== undefined && { name: body.name }),
+        ...(body.currencyCode !== undefined && { currencyCode: body.currencyCode }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
       },
     });

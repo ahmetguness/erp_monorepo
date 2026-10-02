@@ -1,6 +1,6 @@
 import { AccountType,FiscalPeriodStatus,JournalEntryType } from '@prisma/client';
 import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
+import { ConflictError,NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { getAccountingClosingChecklist } from '../../../../services/accounting-closing-checklist.service.js';
 import { AccountingPostingEngineService,parsePostingEngineOptions } from '../../../../services/accounting-posting-engine.service.js';
@@ -36,6 +36,69 @@ interface CreateJournalEntryDTO {
   date: string;
   description?: string;
   lines: JournalEntryLineDTO[];
+}
+
+const MAX_JOURNAL_LINES = 1000;
+const MAX_JOURNAL_AMOUNT = 9_999_999_999_999_999;
+
+function parseJournalEntryBody(body: Record<string, unknown>): CreateJournalEntryDTO {
+  if (typeof body.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+    throw new ValidationError('date YYYY-MM-DD formatında zorunludur.');
+  }
+  const date = new Date(body.date);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== body.date) {
+    throw new ValidationError('date geçerli bir tarih olmalıdır.');
+  }
+  if (body.description !== undefined && (typeof body.description !== 'string' || body.description.length > 500)) {
+    throw new ValidationError('description en fazla 500 karakter olabilir.');
+  }
+  if (!Array.isArray(body.lines) || body.lines.length < 2 || body.lines.length > MAX_JOURNAL_LINES) {
+    throw new ValidationError(`lines 2-${MAX_JOURNAL_LINES} satır içermelidir.`);
+  }
+  const lines = body.lines.map((value, index) => {
+    if (!isRecord(value) || typeof value.accountId !== 'string' || !value.accountId.trim()) {
+      throw new ValidationError(`lines.${index}.accountId zorunludur.`);
+    }
+    const debit = value.debit;
+    const credit = value.credit;
+    if (typeof debit !== 'number' || !Number.isFinite(debit) || debit < 0 || debit > MAX_JOURNAL_AMOUNT) {
+      throw new ValidationError(`lines.${index}.debit geçersizdir.`);
+    }
+    if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < 0 || credit > MAX_JOURNAL_AMOUNT) {
+      throw new ValidationError(`lines.${index}.credit geçersizdir.`);
+    }
+    if (Math.abs(debit * 100 - Math.round(debit * 100)) > 1e-7 || Math.abs(credit * 100 - Math.round(credit * 100)) > 1e-7) {
+      throw new ValidationError(`lines.${index} tutarları en fazla iki ondalık basamak içerebilir.`);
+    }
+    if ((debit > 0) === (credit > 0)) {
+      throw new ValidationError(`lines.${index} yalnızca borç veya alacak içermelidir.`);
+    }
+    if (value.description !== undefined && typeof value.description !== 'string') {
+      throw new ValidationError(`lines.${index}.description metin olmalıdır.`);
+    }
+    return {
+      accountId: value.accountId.trim(),
+      debit,
+      credit,
+      ...(typeof value.description === 'string' && { description: value.description.trim() }),
+    };
+  });
+  assertJournalBalanced(lines);
+  return {
+    date: body.date,
+    ...(typeof body.description === 'string' && { description: body.description.trim() }),
+    lines,
+  };
+}
+
+async function assertJournalAccountsOwned(tenantId: string, lines: readonly JournalEntryLineDTO[]): Promise<void> {
+  const accountIds = [...new Set(lines.map((line) => line.accountId))];
+  const ownedCount = await prisma.ledgerAccount.count({
+    where: { tenantId, id: { in: accountIds }, deletedAt: null, isActive: true },
+  });
+  if (ownedCount !== accountIds.length) {
+    throw new ValidationError('Fiş satırlarındaki hesaplardan biri bu tenant içinde aktif değil.');
+  }
 }
 
 interface LedgerAccountListQuery {
@@ -196,8 +259,22 @@ export const AccountingController = {
     const tenantId = requireTenantId(c);
 
     const query = c.req.query() as JournalEntryListQuery;
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
+    const page = Number(query.page ?? '1');
+    const pageSize = Number(query.limit ?? '20');
+    if (!Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      return c.json(new ValidationError('page ve limit geçerli aralıkta tam sayı olmalıdır.').toJSON(), 400);
+    }
+    if (query.isPosted !== undefined && query.isPosted !== 'true' && query.isPosted !== 'false') {
+      return c.json(new ValidationError('isPosted true veya false olmalıdır.').toJSON(), 400);
+    }
+    const dateFrom = query.dateFrom ? new Date(query.dateFrom) : undefined;
+    const dateTo = query.dateTo ? new Date(query.dateTo) : undefined;
+    if ((dateFrom && Number.isNaN(dateFrom.getTime())) || (dateTo && Number.isNaN(dateTo.getTime()))) {
+      return c.json(new ValidationError('Tarih filtresi geçersizdir.').toJSON(), 400);
+    }
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      return c.json(new ValidationError('dateFrom, dateTo sonrasinda olamaz.').toJSON(), 400);
+    }
     const skip = (page - 1) * pageSize;
 
     const where = {
@@ -206,8 +283,8 @@ export const AccountingController = {
       ...(query.dateFrom || query.dateTo
         ? {
             date: {
-              ...(query.dateFrom && { gte: new Date(query.dateFrom) }),
-              ...(query.dateTo && { lte: new Date(query.dateTo) }),
+              ...(dateFrom && { gte: dateFrom }),
+              ...(dateTo && { lte: dateTo }),
             },
           }
         : {}),
@@ -240,17 +317,8 @@ export const AccountingController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
 
-    const body = await c.req.json<CreateJournalEntryDTO>();
-
-    if (!body.date || !body.lines?.length) {
-      return c.json(
-        new ValidationError('date ve en az bir satır zorunludur.').toJSON(),
-        400,
-      );
-    }
-
-    // Borç = Alacak dengesi kontrolü
-    assertJournalBalanced(body.lines);
+    const body = parseJournalEntryBody(await readOptionalJsonObject(c));
+    await assertJournalAccountsOwned(tenantId, body.lines);
     const entryDate = new Date(body.date);
     const fiscalPeriodId = await resolveOpenFiscalPeriodId(prisma, tenantId, entryDate, 'Yevmiye fisi');
     const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', 'journalEntry');
@@ -305,10 +373,12 @@ export const AccountingController = {
 
     const fiscalPeriodId = await resolveOpenFiscalPeriodId(prisma, tenantId, entry.date, 'Yevmiye fisi onayi');
 
-    const updated = await prisma.journalEntry.update({
-      where: { id: entryId },
+    const result = await prisma.journalEntry.updateMany({
+      where: { id: entryId, tenantId, isPosted: false },
       data: { isPosted: true, fiscalPeriodId, postedAt: new Date(), postedById: userId },
     });
+    if (result.count !== 1) throw new ConflictError('Fiş başka bir işlem tarafından zaten onaylandı.');
+    const updated = await prisma.journalEntry.findUniqueOrThrow({ where: { id: entryId } });
 
     return c.json({ data: updated });
   },
@@ -325,12 +395,8 @@ export const AccountingController = {
       return c.json(new ValidationError('Onaylı fişler düzenlenemez.').toJSON(), 400);
     }
 
-    const body = await c.req.json<CreateJournalEntryDTO>();
-    if (!body.date || !body.lines?.length) {
-      return c.json(new ValidationError('date ve en az bir satir zorunludur.').toJSON(), 400);
-    }
-
-    assertJournalBalanced(body.lines);
+    const body = parseJournalEntryBody(await readOptionalJsonObject(c));
+    await assertJournalAccountsOwned(tenantId, body.lines);
     const entryDate = new Date(body.date);
     const fiscalPeriodId = await resolveOpenFiscalPeriodId(prisma, tenantId, entryDate, 'Yevmiye fisi duzeltmesi');
 
@@ -376,6 +442,11 @@ export const AccountingController = {
     if (!entry.isPosted) {
       return c.json(new ValidationError('Sadece onaylı fişler ters kayıt yapılabilir.').toJSON(), 400);
     }
+    const existingReversal = await prisma.journalEntry.findFirst({
+      where: { tenantId, refType: 'JOURNAL_REVERSAL', refId: entry.id },
+      select: { id: true },
+    });
+    if (existingReversal) throw new ConflictError('Bu fiş için ters kayıt zaten oluşturuldu.');
     const reversalDate = new Date();
     const fiscalPeriodId = await resolveOpenFiscalPeriodId(prisma, tenantId, reversalDate, 'Yevmiye ters kaydi');
     const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', 'journalEntry');
@@ -426,6 +497,28 @@ interface CreateFiscalPeriodDTO {
   name: string;
   startDate: string;
   endDate: string;
+}
+
+const FISCAL_PERIOD_NAME_MAX_LENGTH = 200;
+
+function parseFiscalPeriodBody(body: Record<string, unknown>): CreateFiscalPeriodDTO {
+  const name = requiredTrimmedString(body.name, 'name', FISCAL_PERIOD_NAME_MAX_LENGTH);
+  const parseDate = (value: unknown, field: string): string => {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      throw new ValidationError(`${field} YYYY-MM-DD formatında zorunludur.`);
+    }
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+      throw new ValidationError(`${field} geçerli bir tarih olmalıdır.`);
+    }
+    return value;
+  };
+  const startDate = parseDate(body.startDate, 'startDate');
+  const endDate = parseDate(body.endDate, 'endDate');
+  if (startDate >= endDate) {
+    throw new ValidationError('Başlangıç tarihi bitiş tarihinden önce olmalıdır.');
+  }
+  return { name, startDate, endDate };
 }
 
 export const AccountingExtController = {
@@ -518,38 +611,21 @@ export const AccountingExtController = {
 
   async createFiscalPeriod(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    const body = parseFiscalPeriodBody(await readOptionalJsonObject(c));
+    const startDate = new Date(`${body.startDate}T00:00:00.000Z`);
+    const endDate = new Date(`${body.endDate}T00:00:00.000Z`);
 
-    const body = await c.req.json<CreateFiscalPeriodDTO>();
-
-    if (!body.name || !body.startDate || !body.endDate) {
-      return c.json(new ValidationError('name, startDate ve endDate zorunludur.').toJSON(), 400);
-    }
-
-    const startDate = new Date(body.startDate);
-    const endDate = new Date(body.endDate);
-
-    if (startDate >= endDate) {
-      return c.json(new ValidationError('Başlangıç tarihi bitiş tarihinden önce olmalıdır.').toJSON(), 400);
-    }
-
-    // Çakışma kontrolü — aynı tarih aralığında başka dönem olmamalı
-    const overlap = await prisma.fiscalPeriod.findFirst({
-      where: {
-        tenantId,
-        OR: [
-          { startDate: { lte: endDate }, endDate: { gte: startDate } },
-        ],
-      },
-    });
-    if (overlap) {
-      return c.json(
-        new ValidationError(`Bu tarih aralığı "${overlap.name}" dönemi ile çakışıyor.`).toJSON(),
-        400,
-      );
-    }
-
-    const period = await prisma.fiscalPeriod.create({
-      data: { tenantId, name: body.name, startDate, endDate },
+    const period = await prisma.$transaction(async (tx) => {
+      // Serialize creates per tenant for a deterministic conflict response.
+      // The DB exclusion constraint remains the final concurrency invariant.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}))`;
+      const overlap = await tx.fiscalPeriod.findFirst({
+        where: { tenantId, startDate: { lte: endDate }, endDate: { gte: startDate } },
+      });
+      if (overlap) {
+        throw new ConflictError(`Bu tarih aralığı "${overlap.name}" dönemi ile çakışıyor.`);
+      }
+      return tx.fiscalPeriod.create({ data: { tenantId, name: body.name, startDate, endDate } });
     });
 
     return c.json({ data: period }, 201);
@@ -558,7 +634,7 @@ export const AccountingExtController = {
   async closeFiscalPeriod(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const periodId = c.req.param('id');
+    const periodId = requireParam(c, 'id');
 
     const period = await prisma.fiscalPeriod.findFirst({ where: { id: periodId, tenantId } });
     if (!period) return c.json(new NotFoundError('Dönem', periodId).toJSON(), 404);
@@ -567,21 +643,17 @@ export const AccountingExtController = {
       return c.json(new ValidationError('Sadece açık dönemler kapatılabilir.').toJSON(), 400);
     }
 
-    // Onaylanmamış (draft) fişleri olan dönem kapatılamaz
-    const draftCount = await prisma.journalEntry.count({
-      where: { tenantId, fiscalPeriodId: periodId, isPosted: false },
-    });
-    if (draftCount > 0) {
-      return c.json(
-        new ValidationError(`Bu döneme ait ${draftCount} onaylanmamış yevmiye fişi var. Önce fişleri onaylayın veya silin.`).toJSON(),
-        400,
-      );
+    const checklist = await getAccountingClosingChecklist(prisma, tenantId, periodId);
+    if (!checklist?.summary.canClose) {
+      throw new ValidationError(`Dönem kapanış kontrol listesinde ${checklist?.summary.blockers ?? 0} engel var.`);
     }
 
-    const updated = await prisma.fiscalPeriod.update({
-      where: { id: periodId },
+    const result = await prisma.fiscalPeriod.updateMany({
+      where: { id: periodId, tenantId, status: FiscalPeriodStatus.OPEN },
       data: { status: FiscalPeriodStatus.CLOSED, closedAt: new Date(), closedById: userId },
     });
+    if (result.count !== 1) throw new ConflictError('Dönem başka bir işlem tarafından zaten kapatıldı.');
+    const updated = await prisma.fiscalPeriod.findUniqueOrThrow({ where: { id: periodId } });
 
     return c.json({ data: updated });
   },
@@ -607,10 +679,12 @@ export const AccountingExtController = {
       return c.json(new ValidationError('Sadece kapalı dönemler kilitlenebilir.').toJSON(), 400);
     }
 
-    const updated = await prisma.fiscalPeriod.update({
-      where: { id: periodId },
+    const result = await prisma.fiscalPeriod.updateMany({
+      where: { id: periodId, tenantId, status: FiscalPeriodStatus.CLOSED },
       data: { status: FiscalPeriodStatus.LOCKED },
     });
+    if (result.count !== 1) throw new ConflictError('Dönem durumu başka bir işlem tarafından değiştirildi.');
+    const updated = await prisma.fiscalPeriod.findUniqueOrThrow({ where: { id: periodId } });
 
     return c.json({ data: updated });
   },
@@ -636,10 +710,12 @@ export const AccountingExtController = {
       );
     }
 
-    const updated = await prisma.fiscalPeriod.update({
-      where: { id: periodId },
+    const result = await prisma.fiscalPeriod.updateMany({
+      where: { id: periodId, tenantId, status: FiscalPeriodStatus.CLOSED },
       data: { status: FiscalPeriodStatus.OPEN, closedAt: null, closedById: null },
     });
+    if (result.count !== 1) throw new ConflictError('Dönem durumu başka bir işlem tarafından değiştirildi.');
+    const updated = await prisma.fiscalPeriod.findUniqueOrThrow({ where: { id: periodId } });
 
     void reason; // audit log için ileride kullanılabilir
     return c.json({ data: updated });

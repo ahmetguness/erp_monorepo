@@ -23,6 +23,7 @@ import type { CollectionSettlementDraft } from '@/services/financial.autonomy.se
 import { cn, formatCurrency } from '@/lib/utils';
 import { useUIStore } from '@/store/ui.store';
 import { FinanceOperationsWorkspace } from '@/features/finance';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 export function FinancialAutonomyCenter() {
   const [selectedDays, setSelectedDays] = useState<30 | 60 | 90>(30);
   const [sampleInvoiceId, setSampleInvoiceId] = useState('');
@@ -92,6 +93,13 @@ export function FinancialAutonomyCenter() {
       </div>
 
       <FinanceOperationsWorkspace />
+
+      {forecastQuery.isError && (
+        <ApiErrorState error={forecastQuery.error} onRetry={() => void forecastQuery.refetch()} />
+      )}
+      {recommendationsQuery.isError && (
+        <ApiErrorState error={recommendationsQuery.error} onRetry={() => void recommendationsQuery.refetch()} />
+      )}
 
       {/* Metrics Row */}
       {forecastQuery.isLoading ? (
@@ -164,7 +172,7 @@ export function FinancialAutonomyCenter() {
                   className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs transition-all shadow-md shrink-0 flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {executeMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                  <span>Otonom İskonto Tekliflerini İcra Et</span>
+                  <span>Öneriyi Onay Kaydına Al</span>
                 </button>
               </div>
             ))}

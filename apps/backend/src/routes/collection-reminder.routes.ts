@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { requirePermission } from "../middleware/requirePermission";
 import { validateBody } from "../middleware/validateBody";
 import { CollectionReminderController } from "../modules/sales/http/controllers/index.js";
-import { createCollectionReminderBodySchema } from "../schemas/request-body.schemas";
+import { createCollectionReminderBodySchema, updateCollectionReminderStatusBodySchema } from "../schemas/request-body.schemas";
 
 const collectionReminderRoutes = new Hono();
 
@@ -25,6 +25,7 @@ collectionReminderRoutes.post(
 collectionReminderRoutes.patch(
   "/:id/status",
   requirePermission("accounting", "UPDATE"),
+  validateBody(updateCollectionReminderStatusBodySchema),
   CollectionReminderController.updateStatus,
 );
 collectionReminderRoutes.delete(

@@ -25,6 +25,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { BankAccountSelect, CashAccountSelect, ContactSelect } from "@/components/shared/EntitySelect";
 import { PaymentStatusBadge } from "@/components/shared/StatusBadge";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
@@ -133,7 +134,8 @@ export function PaymentsListPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(() => createClientIdempotencyKey("web-payment-quick"));
-  const { data, isLoading } = usePayments({ page, limit: 20, paymentId: focusedPaymentId });
+  const paymentsQuery = usePayments({ page, limit: 20, paymentId: focusedPaymentId });
+  const { data, isLoading } = paymentsQuery;
   const createPayment = useCreatePayment();
 
   const { data: contactsData } = useContacts({ page: 1, limit: 200 });
@@ -470,7 +472,7 @@ export function PaymentsListPage() {
         </select>
       </div>
 
-      <DataTable
+      {paymentsQuery.isError ? <ApiErrorState error={paymentsQuery.error} onRetry={() => void paymentsQuery.refetch()} /> : <DataTable
         columns={columns}
         data={filteredPayments}
         keyExtractor={(r) => r.id}
@@ -488,7 +490,7 @@ export function PaymentsListPage() {
               }
             : undefined
         }
-      />
+      />}
 
       {/* ── New payment modal ───────────────────── */}
       <Modal

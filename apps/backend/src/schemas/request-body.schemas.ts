@@ -1,4 +1,6 @@
 import {
+  BankAccountType,
+  BankTransactionType,
   InvoiceStatus,
   InvoiceType,
   DeliveryNoteStatus,
@@ -8,6 +10,8 @@ import {
   MovementType,
   OrderStatus,
   PaymentMethod,
+  CheckNoteType,
+  CheckStatus,
 } from "@prisma/client";
 import { z } from "zod";
 
@@ -16,6 +20,36 @@ const optionalString = z.string().trim().optional();
 const positiveNumber = z.number().finite().positive("0dan buyuk olmalidir.");
 const nonNegativeNumber = z.number().finite().nonnegative("Negatif olamaz.");
 const jsonValue = z.json();
+
+const optionalTrimmedString = (max: number) =>
+  z.preprocess(
+    (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().trim().max(max).optional(),
+  );
+
+function isValidIban(value: string): boolean {
+  const normalized = value.replace(/\s/g, "").toUpperCase();
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(normalized)) return false;
+  const rearranged = normalized.slice(4) + normalized.slice(0, 4);
+  let remainder = 0;
+  for (const character of rearranged) {
+    const digits = /[A-Z]/.test(character) ? String(character.charCodeAt(0) - 55) : character;
+    for (const digit of digits) remainder = (remainder * 10 + Number(digit)) % 97;
+  }
+  return remainder === 1;
+}
+
+const optionalIban = z.preprocess(
+  (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
+  z.string().transform((value) => value.replace(/\s/g, "").toUpperCase())
+    .refine(isValidIban, "Gecerli bir IBAN girin.")
+    .optional(),
+);
+
+const optionalCurrencyCode = z.preprocess(
+  (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
+  z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, "Para birimi 3 harfli ISO kodu olmalidir.").optional(),
+);
 
 const optionalNonNegativeNumber = z
   .number()
@@ -307,6 +341,50 @@ export const createPaymentBodySchema = z
   })
   .strict();
 
+export const createBankAccountBodySchema = z
+  .object({
+    name: nonEmptyString.max(200),
+    accountNumber: optionalTrimmedString(100),
+    iban: optionalIban,
+    bankName: optionalTrimmedString(200),
+    currencyCode: optionalCurrencyCode,
+    type: z.nativeEnum(BankAccountType).optional(),
+  })
+  .strict();
+
+export const updateBankAccountBodySchema = z
+  .object({
+    name: nonEmptyString.max(200).optional(),
+    accountNumber: optionalTrimmedString(100),
+    iban: optionalIban,
+    bankName: optionalTrimmedString(200),
+    currencyCode: optionalCurrencyCode,
+    type: z.nativeEnum(BankAccountType).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "En az bir alan gonderilmelidir.",
+  });
+
+export const createCashAccountBodySchema = z
+  .object({
+    name: nonEmptyString.max(200),
+    currencyCode: optionalCurrencyCode,
+  })
+  .strict();
+
+export const updateCashAccountBodySchema = z
+  .object({
+    name: nonEmptyString.max(200).optional(),
+    currencyCode: optionalCurrencyCode,
+    isActive: z.boolean().optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "En az bir alan gonderilmelidir.",
+  });
+
 export const cancelReasonBodySchema = z
   .object({
     reason: nonEmptyString,
@@ -482,6 +560,10 @@ export type CreateEDocumentBody = z.infer<typeof createEDocumentBodySchema>;
 export type CreateSalesQuoteBody = z.infer<typeof createSalesQuoteBodySchema>;
 export type UpdateSalesQuoteBody = z.infer<typeof updateSalesQuoteBodySchema>;
 export type CreatePaymentBody = z.infer<typeof createPaymentBodySchema>;
+export type CreateBankAccountBody = z.infer<typeof createBankAccountBodySchema>;
+export type UpdateBankAccountBody = z.infer<typeof updateBankAccountBodySchema>;
+export type CreateCashAccountBody = z.infer<typeof createCashAccountBodySchema>;
+export type UpdateCashAccountBody = z.infer<typeof updateCashAccountBodySchema>;
 export type CreateStockMovementBody = z.infer<
   typeof createStockMovementBodySchema
 >;
@@ -498,17 +580,105 @@ export type ProductQuickImportBody = z.infer<
 export type CreateProductBody = z.infer<typeof createProductBodySchema>;
 export type UpdateProductBody = z.infer<typeof updateProductBodySchema>;
 
+const collectionReminderDateString = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Tarih YYYY-MM-DD formatinda olmalidir.").refine((value) => {
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}, "Gecersiz tarih.");
+
 export const createCollectionReminderBodySchema = z
   .object({
     contactId: nonEmptyString,
-    invoiceId: optionalString,
-    amount: positiveNumber,
-    dueDate: nonEmptyString,
-    remindAt: optionalString,
-    notes: optionalString,
+    invoiceId: nonEmptyString,
+    amount: positiveNumber.max(9999999999999999.99).multipleOf(0.01, "En fazla iki ondalik basamak kullanilabilir."),
+    dueDate: collectionReminderDateString,
+    remindAt: collectionReminderDateString,
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .strict();
+
+export const updateCollectionReminderStatusBodySchema = z
+  .object({
+    status: z.enum(["PENDING", "SENT", "FAILED", "CANCELLED"]),
+    notes: z.string().trim().max(2000).optional(),
   })
   .strict();
 
 export type CreateCollectionReminderBody = z.infer<
   typeof createCollectionReminderBodySchema
 >;
+export type UpdateCollectionReminderStatusBody = z.infer<typeof updateCollectionReminderStatusBodySchema>;
+
+export const createBankTransactionBodySchema = z.object({
+  bankAccountId: nonEmptyString,
+  type: z.nativeEnum(BankTransactionType),
+  amount: positiveNumber.max(9999999999999999.99).multipleOf(0.01),
+  balanceAfter: z.number().finite().min(-9999999999999999.99).max(9999999999999999.99).multipleOf(0.01),
+  date: collectionReminderDateString,
+  description: z.string().trim().max(500).optional(),
+  reference: z.string().trim().max(200).optional(),
+}).strict();
+
+export const bankTransactionMatchBodySchema = z.object({
+  refType: z.enum(["PAYMENT", "INVOICE", "CONTACT", "RECONCILIATION", "OTHER"]),
+  refId: nonEmptyString,
+}).strict();
+
+export const bulkApproveBankTransactionMatchesBodySchema = z.object({
+  transactionIds: z.array(nonEmptyString).min(1).max(100),
+  minConfidence: z.number().finite().min(0).max(100).optional(),
+}).strict();
+
+export const autoProcessBankTransactionMatchesBodySchema = z.object({
+  minConfidence: z.number().finite().min(0).max(100).optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+}).strict().default({});
+
+export type CreateBankTransactionBody = z.infer<typeof createBankTransactionBodySchema>;
+export type BankTransactionMatchBody = z.infer<typeof bankTransactionMatchBodySchema>;
+export type BulkApproveBankTransactionMatchesBody = z.infer<typeof bulkApproveBankTransactionMatchesBodySchema>;
+export type AutoProcessBankTransactionMatchesBody = z.infer<typeof autoProcessBankTransactionMatchesBodySchema>;
+
+export const executeFinancialAutonomyActionBodySchema = z.object({
+  actionType: z.literal("TRIGGER_COLLECTION_SETTLEMENT"),
+  payload: z.record(z.string(), z.json()).optional(),
+}).strict();
+export type ExecuteFinancialAutonomyActionBody = z.infer<typeof executeFinancialAutonomyActionBodySchema>;
+
+const checkPromissoryDate = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Tarih YYYY-AA-GG formatinda olmalidir.")
+  .refine((value) => {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  }, "Gecersiz tarih.");
+
+export const createCheckPromissoryBodySchema = z.object({
+  contactId: optionalTrimmedString(100),
+  type: z.nativeEnum(CheckNoteType),
+  number: nonEmptyString.max(100),
+  amount: positiveNumber.max(9999999999999999.99).multipleOf(0.01),
+  currencyCode: optionalCurrencyCode,
+  issueDate: checkPromissoryDate,
+  dueDate: checkPromissoryDate,
+  bankName: optionalTrimmedString(200),
+  notes: optionalTrimmedString(2000),
+}).strict().refine((value) => value.dueDate >= value.issueDate, {
+  path: ["dueDate"],
+  message: "Vade tarihi duzenleme tarihinden once olamaz.",
+});
+
+export const updateCheckPromissoryBodySchema = z.object({
+  contactId: optionalTrimmedString(100).nullable(),
+  amount: positiveNumber.max(9999999999999999.99).multipleOf(0.01).optional(),
+  dueDate: checkPromissoryDate.optional(),
+  bankName: optionalTrimmedString(200).nullable(),
+  notes: optionalTrimmedString(2000).nullable(),
+}).strict().refine((value) => Object.keys(value).length > 0, {
+  message: "En az bir alan gonderilmelidir.",
+});
+
+export const updateCheckPromissoryStatusBodySchema = z.object({
+  status: z.nativeEnum(CheckStatus),
+}).strict();
+
+export type CreateCheckPromissoryBody = z.infer<typeof createCheckPromissoryBodySchema>;
+export type UpdateCheckPromissoryBody = z.infer<typeof updateCheckPromissoryBodySchema>;
+export type UpdateCheckPromissoryStatusBody = z.infer<typeof updateCheckPromissoryStatusBodySchema>;

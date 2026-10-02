@@ -21,6 +21,7 @@ import {
   useCreateBankTransaction,
 } from "@/hooks/useBankTransactions";
 import { cn, formatDate, formatCurrency } from "@/lib/utils";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import type {
   BankTransaction,
   BankTransactionMatchSuggestion,
@@ -75,11 +76,12 @@ export function BankTransactionsPage() {
     reference: "",
   });
 
-  const { data, isLoading } = useBankTransactions({
+  const transactionsQuery = useBankTransactions({
     page,
     limit: 20,
     type: typeFilter || undefined,
   });
+  const { data, isLoading } = transactionsQuery;
   const createTx = useCreateBankTransaction();
   const workbenchQuery = useBankTransactionMatchingWorkbench();
   const bulkApprove = useBulkApproveBankTransactionMatches();
@@ -394,7 +396,7 @@ export function BankTransactionsPage() {
           </div>
         </section>
       )}
-      <DataTable
+      {transactionsQuery.isError ? <ApiErrorState error={transactionsQuery.error} onRetry={() => void transactionsQuery.refetch()} /> : <DataTable
         columns={columns}
         data={data?.data ?? []}
         keyExtractor={(r) => r.id}
@@ -412,7 +414,7 @@ export function BankTransactionsPage() {
               }
             : undefined
         }
-      />
+      />}
 
       <Modal
         isOpen={Boolean(selectedTransaction)}

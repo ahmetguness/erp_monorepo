@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { FinancialAutonomyController } from "../modules/finance/http/controllers/index.js";
 import { FinanceOperationsController } from "../modules/finance/http/controllers/index.js";
 import { requirePermission } from "../middleware/requirePermission.js";
+import { validateBody } from "../middleware/validateBody.js";
+import { executeFinancialAutonomyActionBodySchema } from "../schemas/request-body.schemas.js";
 
 const financialAutonomyRoutes = new Hono();
 
@@ -28,6 +30,7 @@ financialAutonomyRoutes.get(
 financialAutonomyRoutes.post(
   "/execute-action",
   requirePermission("accounting", "UPDATE"),
+  validateBody(executeFinancialAutonomyActionBodySchema),
   FinancialAutonomyController.executeAction,
 );
 financialAutonomyRoutes.get(

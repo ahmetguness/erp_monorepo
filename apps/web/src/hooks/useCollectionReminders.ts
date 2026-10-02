@@ -51,6 +51,8 @@ export function useCollectionReminders() {
     reminders: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
+    isError: query.isError,
+    refetch: query.refetch,
     createReminder: createMutation,
     updateReminderStatus: updateStatusMutation,
     deleteReminder: deleteMutation,
