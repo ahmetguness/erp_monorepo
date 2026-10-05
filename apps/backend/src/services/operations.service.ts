@@ -6,7 +6,8 @@ import {
   PrismaClient,
   ReservationRefType,
   SyncJobStatus,
-} from '@prisma/client';
+} from "@prisma/client";
+import { NotFoundError } from "../errors/index.js";
 
 export interface OperationsHealthSnapshot {
   generatedAt: string;
@@ -20,11 +21,21 @@ export interface OperationsHealthSnapshot {
     totalEvents: number;
     failedCount: number;
     deadLetterCount: number;
-    recentFailures: Array<{ id: string; name: string; lastError: string | null; updatedAt: string }>;
+    recentFailures: Array<{
+      id: string;
+      name: string;
+      lastError: string | null;
+      updatedAt: string;
+    }>;
   };
   failedJobs: {
     totalFailed: number;
-    recentJobs: Array<{ id: string; jobType: string; errorMessage: string | null; updatedAt: string }>;
+    recentJobs: Array<{
+      id: string;
+      jobType: string;
+      errorMessage: string | null;
+      updatedAt: string;
+    }>;
   };
   deadLetters: {
     count: number;
@@ -34,15 +45,31 @@ export interface OperationsHealthSnapshot {
   };
   marketplaceSyncErrors: {
     failedCount: number;
-    recentErrors: Array<{ id: string; integrationId: string; errorMessage: string | null; updatedAt: string }>;
+    recentErrors: Array<{
+      id: string;
+      integrationId: string;
+      errorMessage: string | null;
+      updatedAt: string;
+    }>;
   };
   eDocumentErrors: {
     errorCount: number;
-    recentErrors: Array<{ id: string; invoiceId: string | null; documentType: string; errorMessage: string | null; updatedAt: string }>;
+    recentErrors: Array<{
+      id: string;
+      invoiceId: string | null;
+      documentType: string;
+      errorMessage: string | null;
+      updatedAt: string;
+    }>;
   };
   accountingPostingErrors: {
     unpostedInvoiceCount: number;
-    recentUnposted: Array<{ id: string; number: string; totalGross: number; createdAt: string }>;
+    recentUnposted: Array<{
+      id: string;
+      number: string;
+      totalGross: number;
+      createdAt: string;
+    }>;
   };
 }
 
@@ -52,7 +79,7 @@ export interface EntityTimelineEvent {
   title: string;
   description: string;
   actor: string;
-  type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+  type: "INFO" | "SUCCESS" | "WARNING" | "ERROR";
   metadata?: Record<string, unknown>;
 }
 
@@ -71,8 +98,11 @@ export class OperationsService {
   /**
    * 1. Fetches Operations Health Dashboard metrics
    */
-  async getOperationsHealth(tenantId: string): Promise<OperationsHealthSnapshot> {
+  async getOperationsHealth(
+    tenantId: string,
+  ): Promise<OperationsHealthSnapshot> {
     const now = new Date();
+    const recentSince = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     const [
       _autoRunning,
@@ -89,39 +119,83 @@ export class OperationsService {
       recentEdocErrors,
       unpostedInvoicesCount,
       recentUnpostedInvoices,
+      recentFailedEventsCount,
+      recentAutoFailedCount,
     ] = await this.db.$transaction([
-      this.db.automationExecution.count({ where: { tenantId, status: AutomationExecutionStatus.RUNNING } }),
-      this.db.automationExecution.count({ where: { tenantId, status: AutomationExecutionStatus.SUCCEEDED } }),
-      this.db.automationExecution.count({ where: { tenantId, status: AutomationExecutionStatus.FAILED } }),
+      this.db.automationExecution.count({
+        where: { tenantId, status: AutomationExecutionStatus.RUNNING },
+      }),
+      this.db.automationExecution.count({
+        where: { tenantId, status: AutomationExecutionStatus.SUCCEEDED },
+      }),
+      this.db.automationExecution.count({
+        where: { tenantId, status: AutomationExecutionStatus.FAILED },
+      }),
       this.db.domainEventOutbox.count({ where: { tenantId } }),
-      this.db.domainEventOutbox.count({ where: { tenantId, status: DomainEventOutboxStatus.FAILED } }),
-      this.db.domainEventOutbox.count({ where: { tenantId, status: DomainEventOutboxStatus.DEAD_LETTER } }),
+      this.db.domainEventOutbox.count({
+        where: { tenantId, status: DomainEventOutboxStatus.FAILED },
+      }),
+      this.db.domainEventOutbox.count({
+        where: { tenantId, status: DomainEventOutboxStatus.DEAD_LETTER },
+      }),
       this.db.domainEventOutbox.findMany({
-        where: { tenantId, status: { in: [DomainEventOutboxStatus.FAILED, DomainEventOutboxStatus.DEAD_LETTER] } },
+        where: {
+          tenantId,
+          status: {
+            in: [
+              DomainEventOutboxStatus.FAILED,
+              DomainEventOutboxStatus.DEAD_LETTER,
+            ],
+          },
+        },
         select: { id: true, name: true, lastError: true, updatedAt: true },
-        orderBy: { updatedAt: 'desc' },
+        orderBy: { updatedAt: "desc" },
         take: 5,
       }),
-      this.db.marketplaceSyncJob.count({ where: { tenantId, status: SyncJobStatus.FAILED } }),
-      this.db.marketplaceSyncJob.findMany({
+      this.db.marketplaceSyncJob.count({
         where: { tenantId, status: SyncJobStatus.FAILED },
-        select: { id: true, jobType: true, errorMessage: true, updatedAt: true },
-        orderBy: { updatedAt: 'desc' },
-        take: 5,
       }),
       this.db.marketplaceSyncJob.findMany({
         where: { tenantId, status: SyncJobStatus.FAILED },
-        select: { id: true, integrationId: true, errorMessage: true, updatedAt: true },
-        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          jobType: true,
+          errorMessage: true,
+          updatedAt: true,
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+      }),
+      this.db.marketplaceSyncJob.findMany({
+        where: { tenantId, status: SyncJobStatus.FAILED },
+        select: {
+          id: true,
+          integrationId: true,
+          errorMessage: true,
+          updatedAt: true,
+        },
+        orderBy: { updatedAt: "desc" },
         take: 5,
       }),
       this.db.eDocument.count({
-        where: { tenantId, status: { in: [EDocumentStatus.ERROR, EDocumentStatus.REJECTED] } },
+        where: {
+          tenantId,
+          status: { in: [EDocumentStatus.ERROR, EDocumentStatus.REJECTED] },
+        },
       }),
       this.db.eDocument.findMany({
-        where: { tenantId, status: { in: [EDocumentStatus.ERROR, EDocumentStatus.REJECTED] } },
-        select: { id: true, invoiceId: true, type: true, providerMessage: true, updatedAt: true },
-        orderBy: { updatedAt: 'desc' },
+        where: {
+          tenantId,
+          status: { in: [EDocumentStatus.ERROR, EDocumentStatus.REJECTED] },
+        },
+        select: {
+          id: true,
+          invoiceId: true,
+          type: true,
+          providerMessage: true,
+          updatedAt: true,
+        },
+        orderBy: { updatedAt: "desc" },
         take: 5,
       }),
       this.db.invoice.count({
@@ -130,13 +204,31 @@ export class OperationsService {
       this.db.invoice.findMany({
         where: { tenantId, deletedAt: null, status: InvoiceStatus.DRAFT },
         select: { id: true, number: true, totalGross: true, createdAt: true },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         take: 5,
+      }),
+      this.db.domainEventOutbox.count({
+        where: {
+          tenantId,
+          status: DomainEventOutboxStatus.FAILED,
+          updatedAt: { gte: recentSince },
+        },
+      }),
+      this.db.automationExecution.count({
+        where: {
+          tenantId,
+          status: AutomationExecutionStatus.FAILED,
+          createdAt: { gte: recentSince },
+        },
       }),
     ]);
 
-    const totalAuto = autoSucceeded + autoFailed;
-    const successRatePct = totalAuto > 0 ? Math.round((autoSucceeded / totalAuto) * 100) : 100;
+    const completedAuto = autoSucceeded + autoFailed;
+    const totalAuto = _autoRunning + completedAuto;
+    const successRatePct =
+      completedAuto > 0
+        ? Math.round((autoSucceeded / completedAuto) * 100)
+        : 100;
 
     return {
       generatedAt: now.toISOString(),
@@ -170,7 +262,7 @@ export class OperationsService {
         count: deadLetterEventsCount,
       },
       apiFailures: {
-        recentErrorCount: failedEventsCount + autoFailed,
+        recentErrorCount: recentFailedEventsCount + recentAutoFailedCount,
       },
       marketplaceSyncErrors: {
         failedCount: failedJobsCount,
@@ -216,11 +308,12 @@ export class OperationsService {
     const typeUpper = entityType.toUpperCase();
 
     let entityCode = entityIdOrCode;
-    let status = 'ACTIVE';
+    let status = "ACTIVE";
     let createdAt = new Date().toISOString();
+    let found = false;
 
     // ── 1. SalesOrder Timeline ──
-    if (typeUpper === 'SALES_ORDER' || typeUpper === 'SO') {
+    if (typeUpper === "SALES_ORDER" || typeUpper === "SO") {
       const order = await this.db.salesOrder.findFirst({
         where: {
           tenantId,
@@ -235,6 +328,7 @@ export class OperationsService {
       });
 
       if (order) {
+        found = true;
         entityCode = order.number;
         status = order.status;
         createdAt = order.createdAt.toISOString();
@@ -242,10 +336,10 @@ export class OperationsService {
         events.push({
           id: `so-create-${order.id}`,
           timestamp: order.createdAt.toISOString(),
-          title: 'Sipariş Oluşturuldu',
+          title: "Sipariş Oluşturuldu",
           description: `Satış Siparişi ${order.number} taslak olarak sisteme girildi.`,
-          actor: 'Satış Ekibi',
-          type: 'INFO',
+          actor: "Satış Ekibi",
+          type: "INFO",
         });
 
         for (const h of order.history) {
@@ -253,24 +347,29 @@ export class OperationsService {
             id: `so-hist-${h.id}`,
             timestamp: h.createdAt.toISOString(),
             title: `Durum Güncellendi: ${h.fromStatus} -> ${h.toStatus}`,
-            description: h.notes || `Sipariş durumu ${h.toStatus} olarak değiştirildi.`,
-            actor: 'Otomasyon / Kullanıcı',
-            type: h.toStatus === 'CONFIRMED' ? 'SUCCESS' : 'INFO',
+            description:
+              h.notes || `Sipariş durumu ${h.toStatus} olarak değiştirildi.`,
+            actor: "Otomasyon / Kullanıcı",
+            type: h.toStatus === "CONFIRMED" ? "SUCCESS" : "INFO",
           });
         }
 
         const reservations = await this.db.inventoryReservation.findMany({
-          where: { tenantId, refType: ReservationRefType.SALES_ORDER, refId: order.id },
+          where: {
+            tenantId,
+            refType: ReservationRefType.SALES_ORDER,
+            refId: order.id,
+          },
         });
 
         for (const r of reservations) {
           events.push({
             id: `so-res-${r.id}`,
             timestamp: r.reservedAt.toISOString(),
-            title: 'Stok Rezerve Edildi',
+            title: "Stok Rezerve Edildi",
             description: `${r.quantity} adet stok depodan kilitlendi (Rezervasyon ID: ${r.id}).`,
-            actor: 'Stok Otomasyonu',
-            type: 'SUCCESS',
+            actor: "Stok Otomasyonu",
+            type: "SUCCESS",
           });
         }
 
@@ -278,10 +377,10 @@ export class OperationsService {
           events.push({
             id: `so-del-${d.id}`,
             timestamp: d.createdAt.toISOString(),
-            title: 'İrsaliye Oluşturuldu',
+            title: "İrsaliye Oluşturuldu",
             description: `Teslimat irsaliyesi ${d.number} (${d.status}) hazırlandı.`,
-            actor: 'Depo Sorumlusu',
-            type: 'SUCCESS',
+            actor: "Depo Sorumlusu",
+            type: "SUCCESS",
           });
         }
 
@@ -289,17 +388,17 @@ export class OperationsService {
           events.push({
             id: `so-inv-${inv.id}`,
             timestamp: inv.createdAt.toISOString(),
-            title: 'Fatura Taslağı Üretildi',
+            title: "Fatura Taslağı Üretildi",
             description: `Satış faturası ${inv.number} (${inv.totalGross} TRY) taslak olarak bağlandı.`,
-            actor: 'Faturatör Otomasyonu',
-            type: 'SUCCESS',
+            actor: "Faturatör Otomasyonu",
+            type: "SUCCESS",
           });
         }
       }
     }
 
     // ── 2. Invoice Timeline ──
-    else if (typeUpper === 'INVOICE' || typeUpper === 'INV') {
+    else if (typeUpper === "INVOICE" || typeUpper === "INV") {
       const inv = await this.db.invoice.findFirst({
         where: {
           tenantId,
@@ -314,6 +413,7 @@ export class OperationsService {
       });
 
       if (inv) {
+        found = true;
         entityCode = inv.number;
         status = inv.status;
         createdAt = inv.createdAt.toISOString();
@@ -321,10 +421,10 @@ export class OperationsService {
         events.push({
           id: `inv-create-${inv.id}`,
           timestamp: inv.createdAt.toISOString(),
-          title: 'Fatura Oluşturuldu',
+          title: "Fatura Oluşturuldu",
           description: `Fatura ${inv.number} (${inv.totalGross} TRY) sisteme kaydedildi.`,
-          actor: 'Finans Ekibi / Otomasyon',
-          type: 'INFO',
+          actor: "Finans Ekibi / Otomasyon",
+          type: "INFO",
         });
 
         for (const h of inv.history) {
@@ -333,8 +433,8 @@ export class OperationsService {
             timestamp: h.createdAt.toISOString(),
             title: `Fatura Durum Değişimi: ${h.fromStatus} -> ${h.toStatus}`,
             description: h.notes || `Fatura durumu ${h.toStatus} oldu.`,
-            actor: 'Finans Otomasyonu',
-            type: h.toStatus === 'PAID' ? 'SUCCESS' : 'INFO',
+            actor: "Finans Otomasyonu",
+            type: h.toStatus === "PAID" ? "SUCCESS" : "INFO",
           });
         }
 
@@ -343,9 +443,12 @@ export class OperationsService {
             id: `inv-edoc-${edoc.id}`,
             timestamp: edoc.createdAt.toISOString(),
             title: `E-Belge Üretildi (${edoc.type})`,
-            description: `ETTN: ${edoc.uuid ?? 'Taslak'} — Durum: ${edoc.status}`,
-            actor: 'Phase 13 E-Belge Motoru',
-            type: edoc.status === 'SENT' || edoc.status === 'ACCEPTED' ? 'SUCCESS' : 'WARNING',
+            description: `ETTN: ${edoc.uuid ?? "Taslak"} — Durum: ${edoc.status}`,
+            actor: "Phase 13 E-Belge Motoru",
+            type:
+              edoc.status === "SENT" || edoc.status === "ACCEPTED"
+                ? "SUCCESS"
+                : "WARNING",
           });
         }
 
@@ -353,17 +456,22 @@ export class OperationsService {
           events.push({
             id: `inv-alloc-${alloc.id}`,
             timestamp: alloc.createdAt.toISOString(),
-            title: 'Tahsilat / Ödeme Eşleştirildi',
+            title: "Tahsilat / Ödeme Eşleştirildi",
             description: `${alloc.amount} TRY tutarında ödeme faturaya aktarıldı.`,
-            actor: 'Banka Otomasyonu',
-            type: 'SUCCESS',
+            actor: "Banka Otomasyonu",
+            type: "SUCCESS",
           });
         }
       }
     }
 
+    if (!found) throw new NotFoundError("Operasyon varligi", entityIdOrCode);
+
     // Sort all timeline events chronologically
-    events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    events.sort(
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    );
 
     return {
       entityType: typeUpper,

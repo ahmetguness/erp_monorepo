@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Shield, Key, Globe, Clock, Copy, Check, RefreshCw, Save, UsersRound, RadioTower, Send, Archive, FileCheck, ServerCog, DatabaseBackup } from 'lucide-react';
+import { Shield, Key, Globe, Clock, Copy, Check, RefreshCw, Save, UsersRound, RadioTower, Send, Archive, FileCheck } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -19,13 +19,9 @@ import {
   useUpdateDataRetentionSettings,
   useDataRetentionPreview,
   useRunDataRetentionDryRun,
-  useDeploymentOperationsSnapshot,
-  useDeploymentOperationsSettings,
-  useUpdateDeploymentOperationsSettings,
-  useSimulateDeploymentBackup,
 } from '@/hooks/useSettings';
 import { useRoles } from '@/hooks/useRoles';
-import type { CorporateSecuritySettings, DataRetentionSettings, DeploymentOperationsSettings, RetentionPolicyRule, SiemSettings } from '@/services/settings.service';
+import type { CorporateSecuritySettings, DataRetentionSettings, RetentionPolicyRule, SiemSettings } from '@/services/settings.service';
 
 interface ScimRoleMappingFormRow {
   group: string;
@@ -121,25 +117,12 @@ const DEFAULT_RETENTION_FORM: DataRetentionSettings = {
   ],
 };
 
-const DEFAULT_DEPLOYMENT_OPERATIONS_FORM: DeploymentOperationsSettings = {
-  environmentName: 'production',
-  releaseChannel: 'stable',
-  backupEnabled: true,
-  backupFrequency: 'daily',
-  backupRetentionDays: 30,
-  backupLastRunAt: null,
-  backupLastStatus: null,
-  maintenanceWindow: 'Sunday 02:00-04:00',
-};
-
 export default function CorporateSecurityPage() {
   const { data: settings, isLoading } = useCorporateSecuritySettings();
   const { data: siemSettings } = useSiemSettings();
   const { data: auditLogFullStatus } = useAuditLogFullStatus();
   const { data: retentionSettings } = useDataRetentionSettings();
   const { data: retentionPreview } = useDataRetentionPreview();
-  const { data: deploymentSnapshot } = useDeploymentOperationsSnapshot();
-  const { data: deploymentSettings } = useDeploymentOperationsSettings();
   const updateSettings = useUpdateCorporateSecuritySettings();
   const generateScim = useGenerateScimToken();
   const updateSiemSettings = useUpdateSiemSettings();
@@ -147,22 +130,18 @@ export default function CorporateSecurityPage() {
   const updateAuditLogFullSettings = useUpdateAuditLogFullSettings();
   const updateRetentionSettings = useUpdateDataRetentionSettings();
   const runRetentionDryRun = useRunDataRetentionDryRun();
-  const updateDeploymentSettings = useUpdateDeploymentOperationsSettings();
-  const simulateDeploymentBackup = useSimulateDeploymentBackup();
   const { data: rolesData } = useRoles({ page: 1, limit: 100 });
   const { toast } = useUIStore();
 
   const [draftForm, setDraftForm] = useState<CorporateSecuritySettings | null>(null);
   const [draftSiemForm, setDraftSiemForm] = useState<SiemSettings | null>(null);
   const [draftRetentionForm, setDraftRetentionForm] = useState<DataRetentionSettings | null>(null);
-  const [draftDeploymentForm, setDraftDeploymentForm] = useState<DeploymentOperationsSettings | null>(null);
   const [copied, setCopied] = useState(false);
   const [draftScimMappings, setDraftScimMappings] = useState<ScimRoleMappingFormRow[] | null>(null);
   const roles = rolesData?.data ?? [];
   const form = draftForm ?? settings ?? DEFAULT_SECURITY_FORM;
   const siemForm = draftSiemForm ?? siemSettings ?? DEFAULT_SIEM_FORM;
   const retentionForm = draftRetentionForm ?? retentionSettings ?? DEFAULT_RETENTION_FORM;
-  const deploymentForm = draftDeploymentForm ?? deploymentSettings ?? DEFAULT_DEPLOYMENT_OPERATIONS_FORM;
   const scimMappings = draftScimMappings ?? parseScimRoleMappings(form.scimRoleMappings);
 
   const setForm = (updater: (current: CorporateSecuritySettings) => CorporateSecuritySettings) => {
@@ -188,9 +167,6 @@ export default function CorporateSecurityPage() {
     }));
   };
 
-  const setDeploymentForm = (updater: (current: DeploymentOperationsSettings) => DeploymentOperationsSettings) => {
-    setDraftDeploymentForm((current) => updater(current ?? deploymentSettings ?? DEFAULT_DEPLOYMENT_OPERATIONS_FORM));
-  };
 
   const handleCopyToken = () => {
     if (form.scimToken) {
@@ -224,9 +200,6 @@ export default function CorporateSecurityPage() {
     updateRetentionSettings.mutate(retentionForm);
   };
 
-  const handleSaveDeploymentSettings = () => {
-    updateDeploymentSettings.mutate(deploymentForm);
-  };
 
   if (isLoading) {
     return (
@@ -832,150 +805,6 @@ export default function CorporateSecurityPage() {
               </div>
             ) : null}
           </div>
-        </div>
-
-        {/* Deployment Operations Panel */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
-            <div className="w-10 h-10 rounded-xl bg-teal-500/10 flex items-center justify-center shrink-0">
-              <ServerCog className="w-5 h-5 text-teal-400" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white">On-premise / Private Cloud Operasyon Paneli</h3>
-              <p className="text-xs text-slate-500">Ortam, versiyon, yedek, health ve migration gorunurlugunu Enterprise için takip edin.</p>
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <p className="text-[10px] uppercase tracking-wide text-slate-500">Deployment</p>
-              <p className="mt-1 text-sm font-semibold text-slate-100">{deploymentSnapshot?.tenant.deploymentType ?? 'CLOUD'}</p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <p className="text-[10px] uppercase tracking-wide text-slate-500">Versiyon</p>
-              <p className="mt-1 text-sm font-semibold text-slate-100">{deploymentSnapshot?.environment.version ?? 'dev'}</p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <p className="text-[10px] uppercase tracking-wide text-slate-500">Health</p>
-              <p className={`mt-1 text-sm font-semibold ${
-                deploymentSnapshot?.health.status === 'fail'
-                  ? 'text-red-300'
-                  : deploymentSnapshot?.health.status === 'warn'
-                    ? 'text-amber-300'
-                    : 'text-emerald-300'
-              }`}>
-                {deploymentSnapshot?.health.status ?? 'ok'}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <p className="text-[10px] uppercase tracking-wide text-slate-500">Migration</p>
-              <p className="mt-1 text-sm font-semibold text-slate-100">
-                {deploymentSnapshot ? `${deploymentSnapshot.migrations.pendingMigrations.length} pending` : 'kontrol yok'}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Input
-              label="Ortam adı"
-              value={deploymentForm.environmentName}
-              onChange={(e) => setDeploymentForm((prev) => ({ ...prev, environmentName: e.target.value }))}
-            />
-            <Input
-              label="Release kanali"
-              value={deploymentForm.releaseChannel}
-              onChange={(e) => setDeploymentForm((prev) => ({ ...prev, releaseChannel: e.target.value }))}
-            />
-            <label className="space-y-2">
-              <span className="text-xs text-slate-400 font-medium">Yedek frekansi</span>
-              <select
-                value={deploymentForm.backupFrequency}
-                onChange={(e) => setDeploymentForm((prev) => ({ ...prev, backupFrequency: e.target.value as DeploymentOperationsSettings['backupFrequency'] }))}
-                className="w-full h-10 px-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-200 text-sm focus:border-teal-500/50 focus:outline-none"
-              >
-                <option value="hourly">Saatlik</option>
-                <option value="daily">Günlük</option>
-                <option value="weekly">Haftalik</option>
-              </select>
-            </label>
-            <Input
-              label="Yedek saklama (gün)"
-              type="number"
-              min={1}
-              value={deploymentForm.backupRetentionDays}
-              onChange={(e) => setDeploymentForm((prev) => ({ ...prev, backupRetentionDays: Number(e.target.value) }))}
-            />
-            <Input
-              label="Bakim penceresi"
-              value={deploymentForm.maintenanceWindow}
-              onChange={(e) => setDeploymentForm((prev) => ({ ...prev, maintenanceWindow: e.target.value }))}
-            />
-            <label className="flex items-end gap-3 pb-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={deploymentForm.backupEnabled}
-                onChange={(e) => setDeploymentForm((prev) => ({ ...prev, backupEnabled: e.target.checked }))}
-                className="w-4.5 h-4.5 rounded border-slate-800 bg-slate-950 text-teal-500 focus:ring-teal-500/20"
-              />
-              <span className="text-sm text-slate-200 font-medium">Yedek politikasi aktif</span>
-            </label>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <p className="text-xs font-semibold text-slate-300">Son yedek</p>
-              <p className="mt-1 text-[11px] text-slate-500">
-                {deploymentSnapshot?.backup.lastRunAt ?? deploymentForm.backupLastRunAt ?? 'Henüz yedek koşumu yok.'}
-              </p>
-              <p className="mt-1 text-[11px] text-slate-600">
-                {deploymentSnapshot?.backup.lastStatus ?? deploymentForm.backupLastStatus ?? 'status bekleniyor'}
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              loading={simulateDeploymentBackup.isPending}
-              leftIcon={<DatabaseBackup className="h-4 w-4" />}
-              onClick={() => simulateDeploymentBackup.mutate()}
-            >
-              Yedek Testi
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              loading={updateDeploymentSettings.isPending}
-              leftIcon={<Save className="h-4 w-4" />}
-              onClick={handleSaveDeploymentSettings}
-            >
-              Operasyon Kaydet
-            </Button>
-          </div>
-
-          <div className="grid gap-2 md:grid-cols-2">
-            {(deploymentSnapshot?.health.checks ?? []).map((check) => (
-              <div key={check.key} className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-semibold text-slate-200">{check.label}</p>
-                  <span className={`text-[10px] font-semibold uppercase ${
-                    check.status === 'fail' ? 'text-red-300' : check.status === 'warn' ? 'text-amber-300' : 'text-emerald-300'
-                  }`}>
-                    {check.status}
-                  </span>
-                </div>
-                <p className="mt-1 text-[11px] text-slate-500">{check.message}</p>
-              </div>
-            ))}
-          </div>
-
-          {deploymentSnapshot?.migrations.pendingMigrations.length ? (
-            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
-              <p className="text-xs font-semibold text-amber-200">Bekleyen migration</p>
-              <p className="mt-1 text-[11px] text-amber-100/80">
-                {deploymentSnapshot.migrations.pendingMigrations.slice(0, 3).join(', ')}
-              </p>
-            </div>
-          ) : null}
         </div>
 
         {/* IP Restriction Panel */}

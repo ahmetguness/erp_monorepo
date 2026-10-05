@@ -21,6 +21,7 @@ import {
   Filter,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { useUIStore } from "@/store/ui.store";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/Badge";
@@ -192,11 +193,11 @@ export function ApprovalsPage() {
   });
 
   // Queries
-  const { data: flowsData, isLoading: flowsLoading } = useApprovalFlows({
+  const { data: flowsData, isLoading: flowsLoading, isError: flowsError, error: flowsErrorValue, refetch: refetchFlows } = useApprovalFlows({
     page: flowPage,
     limit: 20,
   });
-  const { data: reqsData, isLoading: reqsLoading } = useApprovalRequests({
+  const { data: reqsData, isLoading: reqsLoading, isError: requestsError, error: requestsErrorValue, refetch: refetchRequests } = useApprovalRequests({
     page: reqPage,
     limit: 20,
     requestId: focusedRequestId,
@@ -593,7 +594,7 @@ export function ApprovalsPage() {
             </div>
           </div>
 
-          <DataTable
+          {flowsError ? <ApiErrorState error={flowsErrorValue} onRetry={() => void refetchFlows()} /> : <DataTable
             columns={flowColumns}
             data={flowsData?.data ?? []}
             keyExtractor={(r) => r.id}
@@ -611,11 +612,11 @@ export function ApprovalsPage() {
                   }
                 : undefined
             }
-          />
+          />}
         </div>
       )}
       {tab === "requests" && (
-        <DataTable
+        requestsError ? <ApiErrorState error={requestsErrorValue} onRetry={() => void refetchRequests()} /> : <DataTable
           columns={reqColumns}
           data={reqsData?.data ?? []}
           keyExtractor={(r) => r.id}

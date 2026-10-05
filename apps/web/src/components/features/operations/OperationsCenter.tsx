@@ -23,11 +23,11 @@ import { AutomationScorecardPanel } from '@/features/automation-scorecard';
 
 export function OperationsCenter() {
   const [searchEntityType, setSearchEntityType] = useState('SALES_ORDER');
-  const [searchEntityCode, setSearchEntityCode] = useState('SO-000154');
-  const [activeSearch, setActiveSearch] = useState({ type: 'SALES_ORDER', code: 'SO-000154' });
+  const [searchEntityCode, setSearchEntityCode] = useState('');
+  const [activeSearch, setActiveSearch] = useState({ type: 'SALES_ORDER', code: '' });
 
-  const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useOperationsHealth();
-  const { data: timeline, isLoading: isTimelineLoading } = useEntityTimeline(
+  const { data: health, isLoading: isHealthLoading, isError: isHealthError, refetch: refetchHealth } = useOperationsHealth();
+  const { data: timeline, isLoading: isTimelineLoading, isError: isTimelineError, refetch: refetchTimeline } = useEntityTimeline(
     activeSearch.type,
     activeSearch.code,
     Boolean(activeSearch.code),
@@ -65,6 +65,18 @@ export function OperationsCenter() {
           </button>
         </div>
       </div>
+
+      {isHealthError && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4 text-xs text-rose-300">
+          Operasyon sağlık verileri alınamadı.
+          <button type="button" onClick={() => refetchHealth()} className="ml-3 font-bold underline">Tekrar dene</button>
+        </div>
+      )}
+      {isHealthLoading && !health && (
+        <div role="status" className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 text-xs text-slate-400">
+          Operasyon sağlık verileri yükleniyor...
+        </div>
+      )}
 
       {/* 8 Metric Health Dashboard Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -210,6 +222,11 @@ export function OperationsCenter() {
           <div className="flex items-center justify-center py-12 text-slate-400 text-xs gap-2">
             <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
             <span>Zaman çizelgesi yükleniyor...</span>
+          </div>
+        ) : isTimelineError ? (
+          <div className="p-8 text-center rounded-xl bg-rose-950/20 border border-rose-800 text-rose-300 text-xs">
+            Varlık zaman çizelgesi alınamadı.
+            <button type="button" onClick={() => refetchTimeline()} className="ml-3 font-bold underline">Tekrar dene</button>
           </div>
         ) : timeline && timeline.events.length > 0 ? (
           <div className="space-y-4">

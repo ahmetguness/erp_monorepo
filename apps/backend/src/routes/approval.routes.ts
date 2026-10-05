@@ -53,12 +53,12 @@ approvalRoutes.post(
 );
 approvalRoutes.post(
   "/requests/batch-action",
-  requirePermission("approvals", "UPDATE"),
+  requirePermission("approvals", "APPROVE"),
   ApprovalController.batchAction,
 );
 approvalRoutes.post(
   "/requests/:id/action",
-  requirePermission("approvals", "UPDATE"),
+  requirePermission("approvals", "APPROVE"),
   ApprovalController.addAction,
 );
 approvalRoutes.delete(

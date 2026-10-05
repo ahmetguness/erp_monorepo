@@ -88,8 +88,3 @@ export async function replayDomainEvent(id: string): Promise<DomainEventReplayRe
   const res = await apiClient.post(`/api/domain-events/${id}/replay`);
   return safeParse(SingleResponseSchema(DomainEventReplayResultSchema), res.data, 'replayDomainEvent').data;
 }
-
-export async function getDomainEventCoverage(): Promise<DomainEventCoverage> {
-  const res = await apiClient.get('/api/domain-events/coverage');
-  return safeParse(SingleResponseSchema(DomainEventCoverageSchema), res.data, 'getDomainEventCoverage').data;
-}

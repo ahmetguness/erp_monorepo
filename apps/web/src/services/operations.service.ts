@@ -55,7 +55,7 @@ export const OperationsHealthSnapshotSchema = z.object({
     recentErrors: z.array(
       z.object({
         id: z.string(),
-        invoiceId: z.string(),
+        invoiceId: z.string().nullable(),
         documentType: z.string(),
         errorMessage: z.string().nullable(),
         updatedAt: z.string(),
@@ -101,10 +101,10 @@ export type EntityTimelineEvent = z.infer<typeof EntityTimelineEventSchema>;
 
 export async function getOperationsHealth(): Promise<OperationsHealthSnapshot> {
   const res = await apiClient.get('/api/operations/health');
-  return res.data.data;
+  return OperationsHealthSnapshotSchema.parse(res.data.data);
 }
 
 export async function getEntityTimeline(entityType: string, entityId: string): Promise<EntityTimeline> {
   const res = await apiClient.get(`/api/operations/timeline/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`);
-  return res.data.data;
+  return EntityTimelineSchema.parse(res.data.data);
 }

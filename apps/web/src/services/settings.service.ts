@@ -607,25 +607,6 @@ export type DeploymentOperationsSettings = z.infer<typeof DeploymentOperationsSe
 export type DeploymentOperationsSnapshot = z.infer<typeof DeploymentOperationsSnapshotSchema>;
 export type DeploymentBackupSimulation = z.infer<typeof DeploymentBackupSimulationSchema>;
 
-export async function getDeploymentOperationsSnapshot(): Promise<DeploymentOperationsSnapshot> {
-  const res = await apiClient.get('/api/settings/security/deployment-operations');
-  return safeParse(SingleResponseSchema(DeploymentOperationsSnapshotSchema), res.data, 'getDeploymentOperationsSnapshot').data;
-}
-
-export async function getDeploymentOperationsSettings(): Promise<DeploymentOperationsSettings> {
-  const res = await apiClient.get('/api/settings/security/deployment-operations/settings');
-  return safeParse(SingleResponseSchema(DeploymentOperationsSettingsSchema), res.data, 'getDeploymentOperationsSettings').data;
-}
-
-export async function updateDeploymentOperationsSettings(data: DeploymentOperationsSettings): Promise<void> {
-  await apiClient.post('/api/settings/security/deployment-operations/settings', data);
-}
-
-export async function simulateDeploymentBackup(): Promise<DeploymentBackupSimulation> {
-  const res = await apiClient.post('/api/settings/security/deployment-operations/backup-simulation');
-  return safeParse(SingleResponseSchema(DeploymentBackupSimulationSchema), res.data, 'simulateDeploymentBackup').data;
-}
-
 // ── BI & Data Warehouse Settings ────────────────
 
 export const BiSettingsSchema = z.object({

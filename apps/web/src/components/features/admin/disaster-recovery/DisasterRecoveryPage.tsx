@@ -20,6 +20,7 @@ import { completeRestoreDrill, createRestoreDrill, getDisasterRecoveryOverview, 
 import { useAdminAuthStore } from "@/store/admin-auth.store";
 import { toast } from "@/store/ui.store";
 import { AdminPageHeader, AdminKpiGrid, AdminKpiCard } from "../ui";
+import { TenantDeploymentOperationsPanel } from "./TenantDeploymentOperationsPanel";
 
 const panel = "rounded-xl border border-slate-800/80 bg-slate-900/60 p-5 backdrop-blur-sm shadow-inner";
 const field = "rounded-lg border border-slate-700/80 bg-slate-950/80 px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 transition-colors";
@@ -106,6 +107,8 @@ export function DisasterRecoveryPage() {
           </button>
         }
       />
+
+      <TenantDeploymentOperationsPanel />
 
       {query.isError && (
         <div role="alert" className="flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs font-medium text-rose-200">

@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { OperationInterventionPanel } from '@/components/features/admin/operations/OperationInterventionPanel';
 import { PersistentObservabilityPanel } from '@/components/features/admin/observability/PersistentObservabilityPanel';
+import { DomainEventCoveragePanel } from '@/components/features/admin/observability/DomainEventCoveragePanel';
 
 const numberFormatter = new Intl.NumberFormat('tr-TR');
 const dateTimeFormatter = new Intl.DateTimeFormat('tr-TR', {
@@ -732,6 +733,7 @@ export default function AdminObservabilityPage() {
       {/* Tab 3: Historical Analytics & SLO */}
       {activeTab === 'historical' && (
         <div className="space-y-6">
+          <DomainEventCoveragePanel />
           <PersistentObservabilityPanel />
         </div>
       )}

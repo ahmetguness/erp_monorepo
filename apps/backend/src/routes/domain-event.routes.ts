@@ -14,11 +14,6 @@ domainEventRoutes.get(
   requirePermission("audit_logs", "READ"),
   DomainEventController.failures,
 );
-domainEventRoutes.get(
-  "/coverage",
-  requirePermission("audit_logs", "READ"),
-  DomainEventController.coverage,
-);
 domainEventRoutes.post(
   "/:id/replay",
   requirePermission("audit_logs", "UPDATE"),

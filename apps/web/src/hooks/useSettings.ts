@@ -26,10 +26,6 @@ import {
   updateDataRetentionSettings,
   previewDataRetention,
   runDataRetentionDryRun,
-  getDeploymentOperationsSnapshot,
-  getDeploymentOperationsSettings,
-  updateDeploymentOperationsSettings,
-  simulateDeploymentBackup,
   getBiSettings,
   updateBiSettings,
   generateBiToken,
@@ -45,7 +41,6 @@ import {
   type SiemSettings,
   type AuditLogFullStatus,
   type DataRetentionSettings,
-  type DeploymentOperationsSettings,
 } from '@/services/settings.service';
 
 function invalidateSetupData(qc: ReturnType<typeof useQueryClient>) {
@@ -336,42 +331,6 @@ export function useRunDataRetentionDryRun() {
       qc.invalidateQueries({ queryKey: ['settings', 'data-retention'] });
       qc.invalidateQueries({ queryKey: ['settings', 'data-retention-preview'] });
       toast.success(`Retention dry-run tamamlandı: ${data.totalCandidates} aday kayıt bulundu.`);
-    },
-    onError: (e: unknown) => toast.error(getErrorMessage(e)),
-  });
-}
-
-export function useDeploymentOperationsSnapshot() {
-  return useQuery({ queryKey: ['settings', 'deployment-operations'], queryFn: getDeploymentOperationsSnapshot, staleTime: 60 * 1000 });
-}
-
-export function useDeploymentOperationsSettings() {
-  return useQuery({ queryKey: ['settings', 'deployment-operations-settings'], queryFn: getDeploymentOperationsSettings, staleTime: 5 * 60 * 1000 });
-}
-
-export function useUpdateDeploymentOperationsSettings() {
-  const qc = useQueryClient();
-  const { toast } = useUIStore();
-  return useMutation({
-    mutationFn: (data: DeploymentOperationsSettings) => updateDeploymentOperationsSettings(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['settings', 'deployment-operations'] });
-      qc.invalidateQueries({ queryKey: ['settings', 'deployment-operations-settings'] });
-      toast.success('Deployment operasyon ayarlari kaydedildi.');
-    },
-    onError: (e: unknown) => toast.error(getErrorMessage(e)),
-  });
-}
-
-export function useSimulateDeploymentBackup() {
-  const qc = useQueryClient();
-  const { toast } = useUIStore();
-  return useMutation({
-    mutationFn: simulateDeploymentBackup,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['settings', 'deployment-operations'] });
-      qc.invalidateQueries({ queryKey: ['settings', 'deployment-operations-settings'] });
-      toast.success('Yedek simülasyonu tamamlandı.');
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),
   });

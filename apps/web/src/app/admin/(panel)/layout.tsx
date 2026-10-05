@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import {
   Shield,
   LayoutDashboard,
@@ -22,24 +22,24 @@ import {
   DatabaseBackup,
   MonitorCheck,
   Inbox,
-} from 'lucide-react';
-import { useAdminAuthStore } from '@/store/admin-auth.store';
-import { cn } from '@/lib/utils';
-import { AdminSecurityNotice } from '@/components/features/admin/AdminSecurityNotice';
-import type { AdminPermission } from '@repo/types';
-import { canAdmin } from '@/lib/admin/permissions';
-import { getAdminChangeRequests } from '@/services/admin.service';
-import { listAdminTickets } from '@/services/support-ticket.service';
-import { AdminCommandPalette } from '@/components/features/admin/global-search/AdminCommandPalette';
-import { AdminAccessibilityPreferences } from '@/components/features/admin/accessibility/AdminAccessibilityPreferences';
-import { adminCopy } from '@/lib/admin/admin-copy';
+} from "lucide-react";
+import { useAdminAuthStore } from "@/store/admin-auth.store";
+import { cn } from "@/lib/utils";
+import { AdminSecurityNotice } from "@/components/features/admin/AdminSecurityNotice";
+import type { AdminPermission } from "@repo/types";
+import { canAdmin } from "@/lib/admin/permissions";
+import { getAdminChangeRequests } from "@/services/admin.service";
+import { listAdminTickets } from "@/services/support-ticket.service";
+import { AdminCommandPalette } from "@/components/features/admin/global-search/AdminCommandPalette";
+import { AdminAccessibilityPreferences } from "@/components/features/admin/accessibility/AdminAccessibilityPreferences";
+import { adminCopy } from "@/lib/admin/admin-copy";
 
 interface NavItemConfig {
   href: string;
   icon: typeof LayoutDashboard;
   label: string;
   permission: AdminPermission;
-  badgeKey?: 'changeRequests' | 'supportTickets';
+  badgeKey?: "changeRequests" | "supportTickets";
 }
 
 const NAV_GROUPS: Array<{
@@ -49,43 +49,114 @@ const NAV_GROUPS: Array<{
   {
     groupLabel: adminCopy.navigation.general,
     items: [
-      { href: '/admin', icon: LayoutDashboard, label: adminCopy.product.dashboard, permission: 'dashboard.read' },
-      { href: '/admin/tenants', icon: Building2, label: adminCopy.product.tenants, permission: 'tenant.read' },
-      { href: '/admin/demo-requests', icon: MonitorCheck, label: 'Demo Talepleri', permission: 'demo.read' },
-      { href: '/admin/inbox', icon: Inbox, label: adminCopy.navigation.inbox, permission: 'inbox.read' },
       {
-        href: '/admin/tickets',
-        icon: LifeBuoy,
-        label: 'Destek Talepleri',
-        permission: 'support-ticket.read',
-        badgeKey: 'supportTickets',
+        href: "/admin",
+        icon: LayoutDashboard,
+        label: adminCopy.product.dashboard,
+        permission: "dashboard.read",
       },
-      { href: '/admin/support', icon: KeyRound, label: 'Destek Oturumları', permission: 'support-session.manage' },
       {
-        href: '/admin/change-requests',
+        href: "/admin/tenants",
+        icon: Building2,
+        label: adminCopy.product.tenants,
+        permission: "tenant.read",
+      },
+      {
+        href: "/admin/demo-requests",
+        icon: MonitorCheck,
+        label: "Demo Talepleri",
+        permission: "demo.read",
+      },
+      {
+        href: "/admin/inbox",
+        icon: Inbox,
+        label: adminCopy.navigation.inbox,
+        permission: "inbox.read",
+      },
+      {
+        href: "/admin/tickets",
+        icon: LifeBuoy,
+        label: "Destek Talepleri",
+        permission: "support-ticket.read",
+        badgeKey: "supportTickets",
+      },
+      {
+        href: "/admin/support",
+        icon: KeyRound,
+        label: "Destek Oturumları",
+        permission: "support-session.manage",
+      },
+      {
+        href: "/admin/change-requests",
         icon: UserRoundCheck,
-        label: 'Onay Talepleri',
-        permission: 'change-request.read',
-        badgeKey: 'changeRequests',
+        label: "Onay Talepleri",
+        permission: "change-request.read",
+        badgeKey: "changeRequests",
       },
     ],
   },
   {
     groupLabel: adminCopy.navigation.configuration,
     items: [
-      { href: '/admin/features', icon: Sliders, label: 'Özellikler & Plan', permission: 'feature.read' },
-      { href: '/admin/coupons', icon: Ticket, label: 'Kupon Yönetimi', permission: 'tenant.plan.update' },
-      { href: '/admin/observability', icon: Activity, label: 'Operasyon & Telemetri', permission: 'operations.read' },
-      { href: '/admin/disaster-recovery', icon: DatabaseBackup, label: 'Yedekleme & Kurtarma', permission: 'operations.read' },
-      { href: '/admin/audit', icon: FileText, label: 'Denetim Günlüğü', permission: 'audit.read' },
+      {
+        href: "/admin/features",
+        icon: Sliders,
+        label: "Özellikler & Plan",
+        permission: "feature.read",
+      },
+      {
+        href: "/admin/coupons",
+        icon: Ticket,
+        label: "Kupon Yönetimi",
+        permission: "tenant.plan.update",
+      },
+      {
+        href: "/admin/observability",
+        icon: Activity,
+        label: "Operasyon & Telemetri",
+        permission: "operations.read",
+      },
+      {
+        href: "/admin/pilot-readiness",
+        icon: ShieldCheck,
+        label: "Pilot GO / NO-GO",
+        permission: "operations.read",
+      },
+      {
+        href: "/admin/disaster-recovery",
+        icon: DatabaseBackup,
+        label: "Yedekleme & Kurtarma",
+        permission: "operations.read",
+      },
+      {
+        href: "/admin/audit",
+        icon: FileText,
+        label: "Denetim Günlüğü",
+        permission: "audit.read",
+      },
     ],
   },
   {
     groupLabel: adminCopy.navigation.access,
     items: [
-      { href: '/admin/admin-users', icon: UserRoundCheck, label: 'Admin Kullanıcıları', permission: 'admin-user.read' },
-      { href: '/admin/security', icon: ShieldCheck, label: adminCopy.navigation.security, permission: 'security.read' },
-      { href: '/admin/privacy', icon: Shield, label: 'Gizlilik & KVKK', permission: 'privacy.read' },
+      {
+        href: "/admin/admin-users",
+        icon: UserRoundCheck,
+        label: "Admin Kullanıcıları",
+        permission: "admin-user.read",
+      },
+      {
+        href: "/admin/security",
+        icon: ShieldCheck,
+        label: adminCopy.navigation.security,
+        permission: "security.read",
+      },
+      {
+        href: "/admin/privacy",
+        icon: Shield,
+        label: "Gizlilik & KVKK",
+        permission: "privacy.read",
+      },
     ],
   },
 ];
@@ -94,26 +165,29 @@ const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
 
 function permissionForPath(pathname: string): AdminPermission | null {
   return (
-    ALL_NAV_ITEMS.find((item) => (item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)))
-      ?.permission ?? null
+    ALL_NAV_ITEMS.find((item) =>
+      item.href === "/admin"
+        ? pathname === "/admin"
+        : pathname.startsWith(item.href),
+    )?.permission ?? null
   );
 }
 
 function AdminNavLinks({ pathname }: { pathname: string }) {
   const admin = useAdminAuthStore((state) => state.admin);
-  const canReadChangeRequests = canAdmin(admin, 'change-request.read');
+  const canReadChangeRequests = canAdmin(admin, "change-request.read");
 
   const { data: pendingRequests = [] } = useQuery({
-    queryKey: ['admin', 'change-requests', 'pending'],
-    queryFn: () => getAdminChangeRequests('PENDING'),
+    queryKey: ["admin", "change-requests", "pending"],
+    queryFn: () => getAdminChangeRequests("PENDING"),
     enabled: canReadChangeRequests,
     refetchInterval: 30_000,
   });
 
-  const canReadTickets = canAdmin(admin, 'support-ticket.read');
+  const canReadTickets = canAdmin(admin, "support-ticket.read");
   const { data: openTickets = [] } = useQuery({
-    queryKey: ['admin-tickets', 'open-badge'],
-    queryFn: () => listAdminTickets({ status: 'OPEN' }),
+    queryKey: ["admin-tickets", "open-badge"],
+    queryFn: () => listAdminTickets({ status: "OPEN" }),
     enabled: Boolean(admin && canReadTickets),
     refetchInterval: 15_000,
   });
@@ -121,7 +195,9 @@ function AdminNavLinks({ pathname }: { pathname: string }) {
   return (
     <div className="space-y-4">
       {NAV_GROUPS.map((group, gIdx) => {
-        const visibleItems = group.items.filter((item) => canAdmin(admin, item.permission));
+        const visibleItems = group.items.filter((item) =>
+          canAdmin(admin, item.permission),
+        );
         if (visibleItems.length === 0) return null;
 
         return (
@@ -133,35 +209,45 @@ function AdminNavLinks({ pathname }: { pathname: string }) {
             )}
             <div className="space-y-0.5">
               {visibleItems.map((item) => {
-                const isActive = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href);
-                const pendingCount = item.badgeKey === 'changeRequests' ? pendingRequests.length : 0;
-                const openTicketsCount = item.badgeKey === 'supportTickets' ? openTickets.length : 0;
+                const isActive =
+                  item.href === "/admin"
+                    ? pathname === "/admin"
+                    : pathname.startsWith(item.href);
+                const pendingCount =
+                  item.badgeKey === "changeRequests"
+                    ? pendingRequests.length
+                    : 0;
+                const openTicketsCount =
+                  item.badgeKey === "supportTickets" ? openTickets.length : 0;
 
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      'group relative flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition-all duration-150',
+                      "group relative flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition-all duration-150",
                       isActive
-                        ? 'bg-red-500/10 text-white ring-1 ring-red-500/30 font-bold'
-                        : 'text-slate-400 hover:bg-slate-900 hover:text-slate-100',
+                        ? "bg-red-500/10 text-white ring-1 ring-red-500/30 font-bold"
+                        : "text-slate-400 hover:bg-slate-900 hover:text-slate-100",
                     )}
                   >
                     <div className="flex items-center gap-2.5">
                       <div className="relative">
                         <item.icon
                           className={cn(
-                            'h-4 w-4 shrink-0 transition-colors',
-                            isActive ? 'text-red-400' : 'text-slate-400 group-hover:text-slate-200',
+                            "h-4 w-4 shrink-0 transition-colors",
+                            isActive
+                              ? "text-red-400"
+                              : "text-slate-400 group-hover:text-slate-200",
                           )}
                         />
-                        {item.badgeKey === 'supportTickets' && openTicketsCount > 0 && (
-                          <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
-                            <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-500 ring-1 ring-slate-950" />
-                          </span>
-                        )}
+                        {item.badgeKey === "supportTickets" &&
+                          openTicketsCount > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-500 ring-1 ring-slate-950" />
+                            </span>
+                          )}
                       </div>
                       <span>{item.label}</span>
                     </div>
@@ -172,20 +258,21 @@ function AdminNavLinks({ pathname }: { pathname: string }) {
                       </span>
                     )}
 
-                    {item.badgeKey === 'supportTickets' && openTicketsCount > 0 && (
-                      <span
-                        className="flex items-center gap-1.5"
-                        title={`${openTicketsCount} yeni/açık destek talebi`}
-                      >
-                        <span className="relative flex h-2 w-2">
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
-                          <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-500 shadow-sm shadow-sky-500/50" />
+                    {item.badgeKey === "supportTickets" &&
+                      openTicketsCount > 0 && (
+                        <span
+                          className="flex items-center gap-1.5"
+                          title={`${openTicketsCount} yeni/açık destek talebi`}
+                        >
+                          <span className="relative flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-500 shadow-sm shadow-sky-500/50" />
+                          </span>
+                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-500/20 px-1.5 text-[10px] font-bold text-sky-300 ring-1 ring-sky-500/30">
+                            {openTicketsCount}
+                          </span>
                         </span>
-                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-500/20 px-1.5 text-[10px] font-bold text-sky-300 ring-1 ring-sky-500/30">
-                          {openTicketsCount}
-                        </span>
-                      </span>
-                    )}
+                      )}
                   </Link>
                 );
               })}
@@ -199,10 +286,10 @@ function AdminNavLinks({ pathname }: { pathname: string }) {
         <Link
           href="/admin/sessions"
           className={cn(
-            'flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition-colors',
-            pathname.startsWith('/admin/sessions')
-              ? 'bg-slate-800 text-white ring-1 ring-slate-700'
-              : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200',
+            "flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition-colors",
+            pathname.startsWith("/admin/sessions")
+              ? "bg-slate-800 text-white ring-1 ring-slate-700"
+              : "text-slate-400 hover:bg-slate-900 hover:text-slate-200",
           )}
         >
           <div className="flex items-center gap-2.5">
@@ -215,21 +302,25 @@ function AdminNavLinks({ pathname }: { pathname: string }) {
   );
 }
 
-export default function AdminPanelLayout({ children }: { children: React.ReactNode }) {
+export default function AdminPanelLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const { admin, fetchMe, logout } = useAdminAuthStore();
 
   useEffect(() => {
     if (!admin) {
-      fetchMe().catch(() => router.push('/admin/login'));
+      fetchMe().catch(() => router.push("/admin/login"));
     }
   }, [admin, fetchMe, router]);
 
   useEffect(() => {
     const requiredPermission = permissionForPath(pathname);
     if (admin && requiredPermission && !canAdmin(admin, requiredPermission)) {
-      router.replace('/admin');
+      router.replace("/admin");
     }
   }, [admin, pathname, router]);
 
@@ -238,7 +329,9 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
       <div className="flex min-h-screen items-center justify-center bg-slate-950">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-red-500 border-t-transparent" />
-          <p className="text-xs font-medium text-slate-400">Yönetim Oturumu Doğrulanıyor…</p>
+          <p className="text-xs font-medium text-slate-400">
+            Yönetim Oturumu Doğrulanıyor…
+          </p>
         </div>
       </div>
     );
@@ -255,7 +348,7 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
 
   // Get current page title for breadcrumb
   const currentNav = ALL_NAV_ITEMS.find((n) =>
-    n.href === '/admin' ? pathname === '/admin' : pathname.startsWith(n.href),
+    n.href === "/admin" ? pathname === "/admin" : pathname.startsWith(n.href),
   );
 
   return (
@@ -269,12 +362,16 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold text-white tracking-tight">Axon Admin</span>
+              <span className="text-sm font-bold text-white tracking-tight">
+                Axon Admin
+              </span>
               <span className="rounded bg-red-500/20 px-1 py-0.2 text-[9px] font-bold uppercase tracking-wider text-red-400">
                 PRO
               </span>
             </div>
-            <p className="text-[10px] text-slate-400">Merkezi Platform Yönetimi</p>
+            <p className="text-[10px] text-slate-400">
+              Merkezi Platform Yönetimi
+            </p>
           </div>
         </div>
 
@@ -287,11 +384,15 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
         <div className="border-t border-slate-800/80 p-3.5 bg-slate-950/60">
           <div className="mb-2.5 flex items-center gap-2.5 rounded-xl border border-slate-800/80 bg-slate-900/80 p-2.5 shadow-inner">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-xs font-bold text-red-300 ring-1 ring-red-500/20">
-              {admin.name ? admin.name.charAt(0).toUpperCase() : 'A'}
+              {admin.name ? admin.name.charAt(0).toUpperCase() : "A"}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-white">{admin.name}</p>
-              <p className="truncate text-[10px] text-slate-400">{admin.email}</p>
+              <p className="truncate text-xs font-semibold text-white">
+                {admin.name}
+              </p>
+              <p className="truncate text-[10px] text-slate-400">
+                {admin.email}
+              </p>
             </div>
           </div>
 
@@ -307,7 +408,9 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
 
             <button
               type="button"
-              onClick={() => { void logout(); }}
+              onClick={() => {
+                void logout();
+              }}
               className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-xs font-medium text-slate-400 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -333,7 +436,9 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
             </div>
             <button
               type="button"
-              onClick={() => { void logout(); }}
+              onClick={() => {
+                void logout();
+              }}
               aria-label="Çıkış yap"
               className="rounded-lg border border-slate-800 p-2 text-slate-400 hover:border-red-500/30 hover:text-red-300"
             >
@@ -348,11 +453,16 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
         {/* Desktop Topbar Header for Breadcrumbs and System Indicator */}
         <header className="hidden lg:flex h-14 items-center justify-between border-b border-slate-800/80 bg-slate-950/40 px-8 backdrop-blur-md sticky top-0 z-20">
           <div className="flex items-center gap-2 text-xs text-slate-400">
-            <Link href="/admin" className="text-slate-400 hover:text-slate-200 transition-colors">
+            <Link
+              href="/admin"
+              className="text-slate-400 hover:text-slate-200 transition-colors"
+            >
               Axon Admin
             </Link>
             <ChevronRight className="h-3 w-3 text-slate-600" />
-            <span className="font-semibold text-slate-200">{currentNav?.label ?? 'Panel'}</span>
+            <span className="font-semibold text-slate-200">
+              {currentNav?.label ?? "Panel"}
+            </span>
           </div>
 
           <div className="flex items-center gap-4 text-xs">
@@ -364,7 +474,10 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
         </header>
 
         {/* Content Container */}
-        <section aria-label="Yönetim paneli içeriği" className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8 flex-1">
+        <section
+          aria-label="Yönetim paneli içeriği"
+          className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8 flex-1"
+        >
           <AdminSecurityNotice />
           {children}
         </section>

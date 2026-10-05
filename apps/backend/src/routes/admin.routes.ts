@@ -35,6 +35,9 @@ import {
   AdminUiPreferencesController,
   AdminListOperationsController,
   AdminSensitiveDataController,
+  AdminPilotReadinessController,
+  AdminDeploymentOperationsController,
+  DomainEventController,
 } from "../modules/platform/http/controllers/index.js";
 
 const adminRoutes = new Hono();
@@ -423,6 +426,30 @@ adminRoutes.post(
   AdminTenantProvisioningController.create,
 );
 adminRoutes.get(
+  "/tenants/:id/pilot-readiness",
+  requireAdmin,
+  requireAdminPermission("operations.read"),
+  AdminPilotReadinessController.get,
+);
+adminRoutes.get(
+  "/tenants/:id/deployment-operations",
+  requireAdmin,
+  requireAdminPermission("operations.read"),
+  AdminDeploymentOperationsController.get,
+);
+adminRoutes.put(
+  "/tenants/:id/deployment-operations",
+  requireAdmin,
+  requireAdminPermission("operations.manage"),
+  AdminDeploymentOperationsController.update,
+);
+adminRoutes.post(
+  "/tenants/:id/deployment-operations/backup-simulation",
+  requireAdmin,
+  requireAdminPermission("operations.manage"),
+  AdminDeploymentOperationsController.simulateBackup,
+);
+adminRoutes.get(
   "/tenants/:id",
   requireAdmin,
   requireAdminPermission("tenant.read"),
@@ -557,6 +584,12 @@ adminRoutes.get(
   requireAdmin,
   requireAdminPermission("operations.read"),
   AdminMetricsController.observabilitySearch,
+);
+adminRoutes.get(
+  "/domain-events/coverage",
+  requireAdmin,
+  requireAdminPermission("operations.read"),
+  DomainEventController.coverage,
 );
 adminRoutes.get(
   "/observability",

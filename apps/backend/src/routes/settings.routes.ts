@@ -147,26 +147,6 @@ settingsRoutes.post(
   SettingsController.runDataRetentionDryRun,
 );
 settingsRoutes.get(
-  "/security/deployment-operations",
-  requirePermission("settings", "READ"),
-  SettingsController.getDeploymentOperationsSnapshot,
-);
-settingsRoutes.get(
-  "/security/deployment-operations/settings",
-  requirePermission("settings", "READ"),
-  SettingsController.getDeploymentOperationsSettings,
-);
-settingsRoutes.post(
-  "/security/deployment-operations/settings",
-  requirePermission("settings", "UPDATE"),
-  SettingsController.updateDeploymentOperationsSettings,
-);
-settingsRoutes.post(
-  "/security/deployment-operations/backup-simulation",
-  requirePermission("settings", "UPDATE"),
-  SettingsController.simulateDeploymentBackup,
-);
-settingsRoutes.get(
   "/security/portal-tokens/:contactId",
   requirePermission("settings", "READ"),
   SettingsController.getPortalToken,

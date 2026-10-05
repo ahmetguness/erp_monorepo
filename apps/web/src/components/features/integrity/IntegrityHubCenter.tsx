@@ -20,17 +20,26 @@ export function IntegrityHubCenter() {
   const resolveMutation = useResolveExceptionItem();
 
   const handleStartScan = async () => {
-    const res = await scanMutation.mutateAsync(true);
-    setScanResult(res);
+    try {
+      const res = await scanMutation.mutateAsync(true);
+      setScanResult(res);
+    } catch {
+      // Mutation hook shows the user-facing error toast.
+    }
   };
 
   const handleResolveItem = async (id: string) => {
-    await resolveMutation.mutateAsync({ id, notes: 'Kullanıcı tarafından manuel incelendi ve çözümlendi.' });
-    if (scanResult) {
-      setScanResult({
-        ...scanResult,
-        anomalies: scanResult.anomalies.filter((a) => a.id !== id),
-      });
+    try {
+      await resolveMutation.mutateAsync({ id, notes: 'Kullanıcı tarafından manuel incelendi ve çözümlendi.' });
+      if (scanResult) {
+        setScanResult({
+          ...scanResult,
+          exceptionCenterCount: Math.max(0, scanResult.exceptionCenterCount - 1),
+          anomalies: scanResult.anomalies.filter((a) => a.id !== id),
+        });
+      }
+    } catch {
+      // Mutation hook shows the user-facing error toast.
     }
   };
 

@@ -7,29 +7,30 @@ import {
   OrderStatus,
   PrismaClient,
   ReservationRefType,
-} from '@prisma/client';
-import { logger } from '../lib/logger.js';
-import { createAuditLog } from '../utils/audit.js';
+} from "@prisma/client";
+import { logger } from "../lib/logger.js";
+import { createAuditLog } from "../utils/audit.js";
+import { NotFoundError } from "../errors/index.js";
 
 export type IntegrityRuleCode =
-  | 'PAID_WITHOUT_ALLOCATION'
-  | 'ALLOCATION_EXCEEDS_PAYMENT'
-  | 'STOCK_LEVEL_MISMATCH'
-  | 'RESERVATION_EXCEEDS_ORDER'
-  | 'OPEN_RESERVATION_DELIVERED'
-  | 'INVOICE_WITHOUT_JOURNAL_ENTRY'
-  | 'UNBALANCED_JOURNAL_ENTRY'
-  | 'UNLINKED_MARKETPLACE_ORDER';
+  | "PAID_WITHOUT_ALLOCATION"
+  | "ALLOCATION_EXCEEDS_PAYMENT"
+  | "STOCK_LEVEL_MISMATCH"
+  | "RESERVATION_EXCEEDS_ORDER"
+  | "OPEN_RESERVATION_DELIVERED"
+  | "INVOICE_WITHOUT_JOURNAL_ENTRY"
+  | "UNBALANCED_JOURNAL_ENTRY"
+  | "UNLINKED_MARKETPLACE_ORDER";
 
 export interface IntegrityAnomalyItem {
   id: string;
   ruleCode: IntegrityRuleCode;
   title: string;
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   entityType: string;
   entityId: string;
   description: string;
-  actionTaken: 'AUTO_FIXED' | 'SENT_TO_EXCEPTION_CENTER' | 'SKIPPED';
+  actionTaken: "AUTO_FIXED" | "SENT_TO_EXCEPTION_CENTER" | "SKIPPED";
   fixedAt?: string;
 }
 
@@ -66,13 +67,13 @@ export class IntegrityAutomationService {
       if (inv.payments.length === 0) {
         anomalies.push({
           id: `anomaly-rule1-${inv.id}`,
-          ruleCode: 'PAID_WITHOUT_ALLOCATION',
-          title: 'Ödenmiş Fatura Tahsilat Eşleşme Eksikliği',
-          severity: 'HIGH',
-          entityType: 'INVOICE',
+          ruleCode: "PAID_WITHOUT_ALLOCATION",
+          title: "Ödenmiş Fatura Tahsilat Eşleşme Eksikliği",
+          severity: "HIGH",
+          entityType: "INVOICE",
           entityId: inv.id,
           description: `Fatura ${inv.number} statüsü ÖDENDİ (PAID) ancak bağlı tahsilat/ödeme kaydı (PaymentAllocation) bulunamadı.`,
-          actionTaken: 'SENT_TO_EXCEPTION_CENTER',
+          actionTaken: "SENT_TO_EXCEPTION_CENTER",
         });
       }
     }
@@ -85,18 +86,21 @@ export class IntegrityAutomationService {
     });
 
     for (const pay of payments) {
-      const allocatedSum = pay.allocations.reduce((s, a) => s + Number(a.amount), 0);
+      const allocatedSum = pay.allocations.reduce(
+        (s, a) => s + Number(a.amount),
+        0,
+      );
       const payAmount = Number(pay.amount);
       if (allocatedSum > payAmount + 0.01) {
         anomalies.push({
           id: `anomaly-rule2-${pay.id}`,
-          ruleCode: 'ALLOCATION_EXCEEDS_PAYMENT',
-          title: 'Ödeme Tahsis Tutarı Aşımı',
-          severity: 'CRITICAL',
-          entityType: 'PAYMENT',
+          ruleCode: "ALLOCATION_EXCEEDS_PAYMENT",
+          title: "Ödeme Tahsis Tutarı Aşımı",
+          severity: "CRITICAL",
+          entityType: "PAYMENT",
           entityId: pay.id,
           description: `Ödeme tutarı (${payAmount} TRY) allocated toplamından (${allocatedSum} TRY) küçük.`,
-          actionTaken: 'SENT_TO_EXCEPTION_CENTER',
+          actionTaken: "SENT_TO_EXCEPTION_CENTER",
         });
       }
     }
@@ -109,7 +113,11 @@ export class IntegrityAutomationService {
 
     for (const sl of stockLevels) {
       const movements = await this.db.stockMovement.findMany({
-        where: { tenantId, productId: sl.productId, fromWarehouseId: sl.warehouseId },
+        where: {
+          tenantId,
+          productId: sl.productId,
+          fromWarehouseId: sl.warehouseId,
+        },
         select: { type: true, quantity: true },
       });
 
@@ -124,13 +132,13 @@ export class IntegrityAutomationService {
       if (Math.abs(slQty - netMovements) > 0.001) {
         anomalies.push({
           id: `anomaly-rule3-${sl.id}`,
-          ruleCode: 'STOCK_LEVEL_MISMATCH',
-          title: 'Stok Seviyesi & Hareket Uyuşmazlığı',
-          severity: 'HIGH',
-          entityType: 'PRODUCT',
+          ruleCode: "STOCK_LEVEL_MISMATCH",
+          title: "Stok Seviyesi & Hareket Uyuşmazlığı",
+          severity: "HIGH",
+          entityType: "PRODUCT",
           entityId: sl.productId,
           description: `Stok bakiyesi (${slQty}) ile stok hareket net toplamı (${netMovements}) uyuşmuyor.`,
-          actionTaken: 'SENT_TO_EXCEPTION_CENTER',
+          actionTaken: "SENT_TO_EXCEPTION_CENTER",
         });
       }
     }
@@ -143,29 +151,40 @@ export class IntegrityAutomationService {
 
     for (const order of deliveredOrders) {
       const activeRes = await this.db.inventoryReservation.findMany({
-        where: { tenantId, refType: ReservationRefType.SALES_ORDER, refId: order.id, releasedAt: null },
+        where: {
+          tenantId,
+          refType: ReservationRefType.SALES_ORDER,
+          refId: order.id,
+          releasedAt: null,
+        },
       });
 
       if (activeRes.length > 0) {
-        let actionTaken: IntegrityAnomalyItem['actionTaken'] = 'SENT_TO_EXCEPTION_CENTER';
+        let actionTaken: IntegrityAnomalyItem["actionTaken"] =
+          "SENT_TO_EXCEPTION_CENTER";
         let fixedAt: string | undefined;
 
         if (options.autoFix) {
           await this.db.inventoryReservation.updateMany({
-            where: { tenantId, refType: ReservationRefType.SALES_ORDER, refId: order.id, releasedAt: null },
+            where: {
+              tenantId,
+              refType: ReservationRefType.SALES_ORDER,
+              refId: order.id,
+              releasedAt: null,
+            },
             data: { releasedAt: new Date() },
           });
           autoFixedCount++;
-          actionTaken = 'AUTO_FIXED';
+          actionTaken = "AUTO_FIXED";
           fixedAt = new Date().toISOString();
         }
 
         anomalies.push({
           id: `anomaly-rule5-${order.id}`,
-          ruleCode: 'OPEN_RESERVATION_DELIVERED',
-          title: 'Teslim Edilmiş Siparişte Açık Stok Rezervasyonu',
-          severity: 'MEDIUM',
-          entityType: 'SALES_ORDER',
+          ruleCode: "OPEN_RESERVATION_DELIVERED",
+          title: "Teslim Edilmiş Siparişte Açık Stok Rezervasyonu",
+          severity: "MEDIUM",
+          entityType: "SALES_ORDER",
           entityId: order.id,
           description: `Sipariş ${order.number} teslim edildi ancak ${activeRes.length} stok rezervasyon kilidi açık kalmıştı.`,
           actionTaken,
@@ -188,13 +207,13 @@ export class IntegrityAutomationService {
       if (Math.abs(totalDebit - totalCredit) > 0.01) {
         anomalies.push({
           id: `anomaly-rule7-${je.id}`,
-          ruleCode: 'UNBALANCED_JOURNAL_ENTRY',
-          title: 'Dengesiz Yevmiye Fişi (Borç != Alacak)',
-          severity: 'CRITICAL',
-          entityType: 'OTHER',
+          ruleCode: "UNBALANCED_JOURNAL_ENTRY",
+          title: "Dengesiz Yevmiye Fişi (Borç != Alacak)",
+          severity: "CRITICAL",
+          entityType: "OTHER",
           entityId: je.id,
           description: `Yevmiye fişi ${je.number} Borç (${totalDebit} TRY) ve Alacak (${totalCredit} TRY) dengeli değil!`,
-          actionTaken: 'SENT_TO_EXCEPTION_CENTER',
+          actionTaken: "SENT_TO_EXCEPTION_CENTER",
         });
       }
     }
@@ -208,27 +227,50 @@ export class IntegrityAutomationService {
     for (const mktOrder of unlinkedMktOrders) {
       anomalies.push({
         id: `anomaly-rule8-${mktOrder.id}`,
-        ruleCode: 'UNLINKED_MARKETPLACE_ORDER',
-        title: 'Satış Siparişine Dönüştürülmemiş Pazaryeri Siparişi',
-        severity: 'MEDIUM',
-        entityType: 'OTHER',
+        ruleCode: "UNLINKED_MARKETPLACE_ORDER",
+        title: "Satış Siparişine Dönüştürülmemiş Pazaryeri Siparişi",
+        severity: "MEDIUM",
+        entityType: "OTHER",
         entityId: mktOrder.id,
         description: `Pazaryeri Siparişi #${mktOrder.externalId} çekildi ancak satış siparişine çevrilmedi.`,
-        actionTaken: 'SENT_TO_EXCEPTION_CENTER',
+        actionTaken: "SENT_TO_EXCEPTION_CENTER",
       });
     }
 
-    const exceptionCenterCount = anomalies.filter((a) => a.actionTaken === 'SENT_TO_EXCEPTION_CENTER').length;
+    const resolvableIds = anomalies
+      .filter((item) => item.actionTaken === "SENT_TO_EXCEPTION_CENTER")
+      .map((item) => item.id);
+    const resolved =
+      resolvableIds.length > 0
+        ? await this.db.auditLog.findMany({
+            where: {
+              tenantId,
+              module: "integrity",
+              entityId: { in: resolvableIds },
+              action: AuditAction.UPDATE,
+            },
+            select: { entityId: true },
+          })
+        : [];
+    const resolvedIds = new Set(resolved.map((item) => item.entityId));
+    const visibleAnomalies = anomalies.filter(
+      (item) => item.actionTaken === "AUTO_FIXED" || !resolvedIds.has(item.id),
+    );
+    const exceptionCenterCount = visibleAnomalies.filter(
+      (a) => a.actionTaken === "SENT_TO_EXCEPTION_CENTER",
+    ).length;
 
-    logger.info(`[IntegrityAutomation] Scanned ${anomalies.length} anomalies. Auto-fixed: ${autoFixedCount}, Exception Center: ${exceptionCenterCount}`);
+    logger.info(
+      `[IntegrityAutomation] Scanned ${anomalies.length} anomalies. Auto-fixed: ${autoFixedCount}, Exception Center: ${exceptionCenterCount}`,
+    );
 
     return {
       scanTimestamp: new Date().toISOString(),
-      totalRulesChecked: 8,
-      totalAnomaliesFound: anomalies.length,
+      totalRulesChecked: 6,
+      totalAnomaliesFound: visibleAnomalies.length,
       autoFixedCount,
       exceptionCenterCount,
-      anomalies,
+      anomalies: visibleAnomalies,
     };
   }
 
@@ -241,17 +283,45 @@ export class IntegrityAutomationService {
     anomalyId: string,
     resolutionNotes: string,
   ): Promise<{ success: boolean; message: string }> {
-    logger.info(`[IntegrityAutomation] User ${userId} resolving exception ${anomalyId}`);
+    const current = await this.runIntegrityCheck(tenantId, { autoFix: false });
+    if (
+      !current.anomalies.some(
+        (item) =>
+          item.id === anomalyId &&
+          item.actionTaken === "SENT_TO_EXCEPTION_CENTER",
+      )
+    ) {
+      throw new NotFoundError("Acik butunluk istisnasi", anomalyId);
+    }
+    logger.info(
+      `[IntegrityAutomation] User ${userId} resolving exception ${anomalyId}`,
+    );
 
     await createAuditLog(this.db, {
       tenantId,
       userId,
-      module: 'accounting',
+      module: "integrity",
       entityType: EntityType.OTHER,
       entityId: anomalyId,
       action: AuditAction.UPDATE,
-      newValues: { anomalyId, resolutionNotes, resolvedAt: new Date().toISOString() },
+      newValues: {
+        anomalyId,
+        resolutionNotes,
+        resolvedAt: new Date().toISOString(),
+      },
     });
+
+    const persisted = await this.db.auditLog.findFirst({
+      where: {
+        tenantId,
+        module: "integrity",
+        entityId: anomalyId,
+        action: AuditAction.UPDATE,
+      },
+      select: { id: true },
+    });
+    if (!persisted)
+      throw new Error("Butunluk istisnasi cozumu kalici olarak kaydedilemedi.");
 
     return {
       success: true,
