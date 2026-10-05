@@ -1,5 +1,5 @@
 import { AccountType, FiscalPeriodStatus, JournalEntryType } from '@prisma/client';
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { ValidationError } from '../../errors/index.js';
 import { resolveOpenFiscalPeriodId } from './period-guard.js';
 import { generateDocumentNumber } from '../../utils/generate-number.js';
@@ -89,6 +89,15 @@ export async function createPayrollAccountingVoucher(
   period: string,
   userId: string | null | undefined,
 ): Promise<{ id: string; number: string; totalGross: number; totalNet: number; totalDeductions: number }> {
+  return db.$transaction((tx) => createPayrollAccountingVoucherInTransaction(tx, tenantId, period, userId));
+}
+
+async function createPayrollAccountingVoucherInTransaction(
+  db: Prisma.TransactionClient,
+  tenantId: string,
+  period: string,
+  userId: string | null | undefined,
+): Promise<{ id: string; number: string; totalGross: number; totalNet: number; totalDeductions: number }> {
   if (!/^\d{4}-\d{2}$/.test(period)) {
     throw new ValidationError('Dönem formatı YYYY-MM olmalıdır.');
   }
@@ -99,6 +108,7 @@ export async function createPayrollAccountingVoucher(
       grossSalary: true,
       deductions: true,
       netSalary: true,
+      items: { select: { amount: true, isDeduction: true } },
     },
   });
 
@@ -125,10 +135,25 @@ export async function createPayrollAccountingVoucher(
   const totalGross = payrolls.reduce((sum, p) => sum + Number(p.grossSalary), 0);
   const totalNet = payrolls.reduce((sum, p) => sum + Number(p.netSalary), 0);
   const totalDeductions = payrolls.reduce((sum, p) => sum + Number(p.deductions), 0);
+  const totalAdditions = payrolls.reduce(
+    (sum, payroll) => sum + payroll.items.filter((item) => !item.isDeduction).reduce((itemSum, item) => itemSum + Number(item.amount), 0),
+    0,
+  );
+  const totalExpense = totalGross + totalAdditions;
 
-  // Validate values
-  if (Math.abs(totalGross - (totalNet + totalDeductions)) > 0.01) {
+  const inconsistentPayroll = payrolls.some((payroll) => {
+    const additions = payroll.items.filter((item) => !item.isDeduction).reduce((sum, item) => sum + Number(item.amount), 0);
+    return Math.abs(Number(payroll.grossSalary) + additions - Number(payroll.deductions) - Number(payroll.netSalary)) > 0.01;
+  });
+  if (inconsistentPayroll || Math.abs(totalExpense - (totalNet + totalDeductions)) > 0.01) {
     throw new ValidationError('Bordro toplamları tutarsız: Brüt, Net ve Kesintiler toplamına eşit olmalıdır.');
+  }
+
+  const [year, month] = period.split('-').map((n) => Number.parseInt(n, 10));
+  const entryDate = new Date(Date.UTC(year, month, 0));
+  const fiscalPeriodId = await resolveOpenFiscalPeriodId(db, tenantId, entryDate, 'Bordro muhasebe fişi');
+  if (!fiscalPeriodId) {
+    throw new ValidationError('Bordro dönemi için açık bir mali dönem bulunamadı.');
   }
 
   // Ensure accounts exist (provision if missing)
@@ -172,21 +197,13 @@ export async function createPayrollAccountingVoucher(
   }
 
   // Create Journal Entry
-  const [year, month] = period.split('-').map((n) => Number.parseInt(n, 10));
-  const entryDate = new Date(Date.UTC(year, month, 0)); // last day of that month
-
-  const fiscalPeriodId = await resolveOpenFiscalPeriodId(db, tenantId, entryDate, 'Bordro muhasebe fişi');
-  if (!fiscalPeriodId) {
-    throw new ValidationError('Bordro dönemi için açık bir mali dönem bulunamadı.');
-  }
-
-  const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', 'journalEntry');
+  const number = await generateDocumentNumber(tenantId, 'journal', 'JE-', 'journalEntry', db);
 
   const linesData = [
     {
       tenantId,
       accountId: accountMap.get('770')!,
-      debit: totalGross,
+      debit: totalExpense,
       credit: 0,
       description: `${period} Dönemi Personel Brüt Maaş Gideri`,
       sortOrder: 0,
@@ -225,11 +242,11 @@ export async function createPayrollAccountingVoucher(
       isPosted: true,
       postedAt: entryDate,
       createdById: userId,
-      lines: {
-        create: linesData,
-      },
     },
     select: { id: true, number: true },
+  });
+  await db.journalEntryLine.createMany({
+    data: linesData.map((line) => ({ ...line, journalEntryId: journalEntry.id })),
   });
 
   return {

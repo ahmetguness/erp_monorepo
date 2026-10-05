@@ -7,7 +7,7 @@ import * as svc from '@/features/workforce/api';
 
 // ─── Employees ────────────────────────────────
 
-export function useEmployees(params?: { page?: number; limit?: number; department?: string; isActive?: string }) {
+export function useEmployees(params?: { page?: number; limit?: number; department?: string; isActive?: string; search?: string }) {
   return useQuery({ queryKey: ['employees', params], queryFn: () => svc.getEmployees(params) });
 }
 

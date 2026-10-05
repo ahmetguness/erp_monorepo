@@ -465,6 +465,7 @@ model JournalEntry {
   @@unique([tenantId, number])
   @@unique([tenantId, idempotencyKey])
   @@unique([tenantId, refType, refId])
+  @@unique([tenantId, id])
   @@index([tenantId, date])
   @@index([tenantId, isPosted])
   @@index([refType, refId])
@@ -481,7 +482,7 @@ model JournalEntryLine {
   description    String?
   sortOrder      Int     @default(0)
 
-  journalEntry JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  journalEntry JournalEntry  @relation(fields: [tenantId, journalEntryId], references: [tenantId, id], onDelete: Cascade)
   account      LedgerAccount @relation(fields: [tenantId, accountId], references: [tenantId, id])
   tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

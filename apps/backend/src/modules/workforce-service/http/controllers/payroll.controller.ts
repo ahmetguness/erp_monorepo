@@ -13,6 +13,8 @@ import { createAuditLog, getRequestMeta } from "../../../../utils/audit.js";
 import { requireParam, requireTenantId } from "../../../../utils/context.js";
 import { getPaginationParams } from "../../../../utils/pagination.js";
 import { workforceApplication } from "../../composition.js";
+import { getValidatedBody } from "../../../../middleware/validateBody.js";
+import { bulkPayrollBodySchema, createPayrollBodySchema, payrollItemBodySchema, type CreatePayrollBody, type PayrollItemBody } from "../../../../schemas/request-body.schemas.js";
 
 // ─────────────────────────────────────────────
 // Payroll Controller — Bordro CRUD + toplu oluşturma
@@ -25,6 +27,9 @@ export const PayrollController = {
     const { page, limit } = getPaginationParams(c, 20);
     const period = c.req.query("period");
     const employeeId = c.req.query("employeeId");
+    if (period && !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) throw new ValidationError("Gecersiz bordro donemi.");
+    if (c.req.query("page") && (!/^\d+$/.test(c.req.query("page")!) || Number(c.req.query("page")) < 1)) throw new ValidationError("page pozitif tam sayi olmalidir.");
+    if (c.req.query("limit") && (!/^\d+$/.test(c.req.query("limit")!) || Number(c.req.query("limit")) < 1 || Number(c.req.query("limit")) > 100)) throw new ValidationError("limit 1-100 arasinda olmalidir.");
 
     return c.json(
       await workforceApplication.payrollQueries.list(
@@ -49,28 +54,15 @@ export const PayrollController = {
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<{
-      employeeId: string;
-      period: string;
-      grossSalary: number;
-      items?: Array<{ label: string; amount: number; isDeduction: boolean }>;
-      notes?: string;
-    }>();
-    if (!body.employeeId || !body.period || body.grossSalary == null) {
-      return c.json(
-        new ValidationError(
-          "employeeId, period ve grossSalary zorunludur.",
-        ).toJSON(),
-        400,
-      );
-    }
+    const body = getValidatedBody<CreatePayrollBody>(c, createPayrollBodySchema);
 
-    // Dönem formatı kontrolü (YYYY-MM)
-    if (!/^\d{4}-\d{2}$/.test(body.period)) {
+    const employee = await prisma.employee.findFirst({
+      where: { id: body.employeeId, tenantId, deletedAt: null, isActive: true },
+      select: { id: true },
+    });
+    if (!employee) {
       return c.json(
-        new ValidationError(
-          "period formatı YYYY-MM olmalıdır (ör. 2026-03).",
-        ).toJSON(),
+        new ValidationError("Personel bulunamadi veya aktif degil.").toJSON(),
         400,
       );
     }
@@ -102,31 +94,39 @@ export const PayrollController = {
       .filter((i) => !i.isDeduction)
       .reduce((sum, i) => sum + i.amount, 0);
     const netSalary = body.grossSalary + additions - deductions;
+    if (netSalary < 0) throw new ValidationError("Net maas negatif olamaz.");
 
-    const payroll = await prisma.payroll.create({
-      data: {
-        tenantId,
-        employeeId: body.employeeId,
-        period: body.period,
-        grossSalary: body.grossSalary,
-        deductions,
-        netSalary,
-        notes: body.notes ?? null,
-        ...(body.items?.length && {
-          items: {
-            create: body.items.map((item) => ({
-              tenantId,
-              label: item.label,
-              amount: item.amount,
-              isDeduction: item.isDeduction,
-            })),
-          },
-        }),
-      },
-      include: {
-        employee: { select: { id: true, firstName: true, lastName: true } },
-        items: true,
-      },
+    const payroll = await prisma.$transaction(async (tx) => {
+      const created = exists ? await tx.payroll.update({
+        where: { id: exists.id }, data: { deletedAt: null, paidAt: null, grossSalary: body.grossSalary, deductions, netSalary, notes: body.notes ?? null },
+      }) : await tx.payroll.create({ data: {
+          tenantId,
+          employeeId: body.employeeId,
+          period: body.period,
+          grossSalary: body.grossSalary,
+          deductions,
+          netSalary,
+          notes: body.notes ?? null,
+        } });
+      if (exists) await tx.payrollItem.deleteMany({ where: { tenantId, payrollId: created.id } });
+      if (body.items?.length) {
+        await tx.payrollItem.createMany({
+          data: body.items.map((item) => ({
+            tenantId,
+            payrollId: created.id,
+            label: item.label,
+            amount: item.amount,
+            isDeduction: item.isDeduction,
+          })),
+        });
+      }
+      return tx.payroll.findUniqueOrThrow({
+        where: { id: created.id },
+        include: {
+          employee: { select: { id: true, firstName: true, lastName: true } },
+          items: true,
+        },
+      });
     });
     return c.json({ data: payroll }, 201);
   },
@@ -134,13 +134,7 @@ export const PayrollController = {
   async generateBulk(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<{ period: string }>();
-    if (!body.period || !/^\d{4}-\d{2}$/.test(body.period)) {
-      return c.json(
-        new ValidationError("period formatı YYYY-MM olmalıdır.").toJSON(),
-        400,
-      );
-    }
+    const body = getValidatedBody<{ period: string }>(c, bulkPayrollBodySchema);
 
     // Aktif personelleri al
     const employees = await prisma.employee.findMany({
@@ -206,43 +200,21 @@ export const PayrollController = {
         400,
       );
 
-    const body = await c.req.json<{
-      label: string;
-      amount: number;
-      isDeduction: boolean;
-    }>();
-    if (!body.label || body.amount == null)
-      return c.json(
-        new ValidationError("label ve amount zorunludur.").toJSON(),
-        400,
-      );
+    const body = getValidatedBody<PayrollItemBody>(c, payrollItemBodySchema);
 
-    const item = await prisma.payrollItem.create({
-      data: {
-        tenantId,
-        payrollId,
-        label: body.label,
-        amount: body.amount,
-        isDeduction: body.isDeduction ?? false,
-      },
-    });
-
-    // Net maaşı yeniden hesapla
-    const allItems = await prisma.payrollItem.findMany({
-      where: { tenantId, payrollId },
-    });
-    const deductions = allItems
-      .filter((i) => i.isDeduction)
-      .reduce((sum, i) => sum + Number(i.amount), 0);
-    const additions = allItems
-      .filter((i) => !i.isDeduction)
-      .reduce((sum, i) => sum + Number(i.amount), 0);
-    await prisma.payroll.update({
-      where: { id: payrollId },
-      data: {
-        deductions,
-        netSalary: Number(payroll.grossSalary) + additions - deductions,
-      },
+    const item = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${`payroll:${payrollId}`}))`;
+      const current = await tx.payroll.findFirst({ where: { id: payrollId, tenantId, deletedAt: null } });
+      if (!current) throw new NotFoundError("Bordro", payrollId);
+      if (current.paidAt) throw new ValidationError("Ödenmiş bordroya kalem eklenemez.");
+      const created = await tx.payrollItem.create({ data: { tenantId, payrollId, label: body.label, amount: body.amount, isDeduction: body.isDeduction } });
+      const allItems = await tx.payrollItem.findMany({ where: { tenantId, payrollId } });
+      const deductions = allItems.filter((i) => i.isDeduction).reduce((sum, i) => sum + Number(i.amount), 0);
+      const additions = allItems.filter((i) => !i.isDeduction).reduce((sum, i) => sum + Number(i.amount), 0);
+      const netSalary = Number(current.grossSalary) + additions - deductions;
+      if (netSalary < 0) throw new ValidationError("Net maaş negatif olamaz.");
+      await tx.payroll.update({ where: { id: payrollId }, data: { deductions, netSalary } });
+      return created;
     });
 
     return c.json({ data: item }, 201);
@@ -267,27 +239,27 @@ export const PayrollController = {
         400,
       );
 
-    await prisma.payrollItem.delete({ where: { id: itemId } });
-
-    // Net maaşı yeniden hesapla
-    if (payroll) {
-      const allItems = await prisma.payrollItem.findMany({
-        where: { tenantId, payrollId: payroll.id },
-      });
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${`payroll:${item.payrollId}`}))`;
+      const current = await tx.payroll.findFirst({ where: { id: item.payrollId, tenantId, deletedAt: null } });
+      if (!current) throw new NotFoundError("Bordro", item.payrollId);
+      if (current.paidAt) throw new ValidationError("Ödenmiş bordrodan kalem silinemez.");
+      await tx.payrollItem.delete({ where: { id: itemId } });
+      const allItems = await tx.payrollItem.findMany({ where: { tenantId, payrollId: current.id } });
       const deductions = allItems
         .filter((i) => i.isDeduction)
         .reduce((sum, i) => sum + Number(i.amount), 0);
       const additions = allItems
         .filter((i) => !i.isDeduction)
         .reduce((sum, i) => sum + Number(i.amount), 0);
-      await prisma.payroll.update({
-        where: { id: payroll.id },
+      await tx.payroll.update({
+        where: { id: current.id },
         data: {
           deductions,
-          netSalary: Number(payroll.grossSalary) + additions - deductions,
+          netSalary: Number(current.grossSalary) + additions - deductions,
         },
       });
-    }
+    });
 
     return c.json({ data: { success: true } });
   },
@@ -303,10 +275,9 @@ export const PayrollController = {
     if (payroll.paidAt)
       return c.json(new ValidationError("Bordro zaten ödenmiş.").toJSON(), 400);
 
-    const updated = await prisma.payroll.update({
-      where: { id },
-      data: { paidAt: new Date() },
-    });
+    const result = await prisma.payroll.updateMany({ where: { id, tenantId, deletedAt: null, paidAt: null }, data: { paidAt: new Date() } });
+    if (result.count === 0) return c.json(new ValidationError("Bordro zaten ödenmiş.").toJSON(), 400);
+    const updated = await prisma.payroll.findUniqueOrThrow({ where: { id } });
     return c.json({ data: updated });
   },
 

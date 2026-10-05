@@ -1,11 +1,20 @@
 "use client";
 
-import { Award, BookOpenCheck, Boxes, GitBranch, Receipt, RefreshCw, Users } from "lucide-react";
+import {
+  Award,
+  BookOpenCheck,
+  Boxes,
+  GitBranch,
+  Receipt,
+  RefreshCw,
+  Users,
+} from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useAdvancedHr } from "@/hooks/useHR";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import type {
   HrAssetAssignmentRow,
   HrAssetStatus,
@@ -21,7 +30,11 @@ import type {
 
 function formatDate(value: string | null): string {
   if (!value) return "-";
-  return new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 function reviewVariant(status: HrReviewStatus): BadgeVariant {
@@ -78,12 +91,18 @@ function nodeVariant(type: OrganizationNode["type"]): BadgeVariant {
   return "neutral";
 }
 
-function employeeSubtitle(employee: { department: string | null; position: string | null }): string {
-  return [employee.department, employee.position].filter(Boolean).join(" / ") || "-";
+function employeeSubtitle(employee: {
+  department: string | null;
+  position: string | null;
+}): string {
+  return (
+    [employee.department, employee.position].filter(Boolean).join(" / ") || "-"
+  );
 }
 
 export function AdvancedHrPage() {
-  const { data, isLoading, isFetching, refetch } = useAdvancedHr();
+  const { data, isLoading, isFetching, isError, error, refetch } =
+    useAdvancedHr();
 
   const reviewColumns: ColumnDef<PerformanceReviewRow>[] = [
     {
@@ -91,8 +110,12 @@ export function AdvancedHrPage() {
       header: "Personel",
       render: (row) => (
         <div>
-          <span className="text-sm font-semibold text-white">{row.employee.fullName}</span>
-          <span className="block text-[11px] text-slate-500">{employeeSubtitle(row.employee)}</span>
+          <span className="text-sm font-semibold text-white">
+            {row.employee.fullName}
+          </span>
+          <span className="block text-[11px] text-slate-500">
+            {employeeSubtitle(row.employee)}
+          </span>
         </div>
       ),
     },
@@ -100,26 +123,36 @@ export function AdvancedHrPage() {
       key: "last",
       header: "Son Degerlendirme",
       width: "150px",
-      render: (row) => <span className="text-slate-400">{formatDate(row.lastReviewAt)}</span>,
+      render: (row) => (
+        <span className="text-slate-400">{formatDate(row.lastReviewAt)}</span>
+      ),
     },
     {
       key: "next",
       header: "Sonraki",
       width: "120px",
-      render: (row) => <span className="text-slate-300">{formatDate(row.nextReviewAt)}</span>,
+      render: (row) => (
+        <span className="text-slate-300">{formatDate(row.nextReviewAt)}</span>
+      ),
     },
     {
       key: "actions",
       header: "Aksiyon",
       width: "90px",
       align: "right",
-      render: (row) => <span className="font-mono text-sky-300">{row.openActionCount}</span>,
+      render: (row) => (
+        <span className="font-mono text-sky-300">{row.openActionCount}</span>
+      ),
     },
     {
       key: "status",
       header: "Durum",
       width: "105px",
-      render: (row) => <Badge variant={reviewVariant(row.status)}>{reviewLabel(row.status)}</Badge>,
+      render: (row) => (
+        <Badge variant={reviewVariant(row.status)}>
+          {reviewLabel(row.status)}
+        </Badge>
+      ),
     },
   ];
 
@@ -129,8 +162,12 @@ export function AdvancedHrPage() {
       header: "Personel",
       render: (row) => (
         <div>
-          <span className="text-sm font-semibold text-white">{row.employee.fullName}</span>
-          <span className="block text-[11px] text-slate-500">{employeeSubtitle(row.employee)}</span>
+          <span className="text-sm font-semibold text-white">
+            {row.employee.fullName}
+          </span>
+          <span className="block text-[11px] text-slate-500">
+            {employeeSubtitle(row.employee)}
+          </span>
         </div>
       ),
     },
@@ -139,25 +176,37 @@ export function AdvancedHrPage() {
       header: "Tamamlanan",
       width: "110px",
       align: "right",
-      render: (row) => <span className="font-mono text-emerald-300">{row.completedCount}</span>,
+      render: (row) => (
+        <span className="font-mono text-emerald-300">{row.completedCount}</span>
+      ),
     },
     {
       key: "planned",
       header: "Planlı",
       width: "90px",
       align: "right",
-      render: (row) => <span className="font-mono text-amber-300">{row.plannedCount}</span>,
+      render: (row) => (
+        <span className="font-mono text-amber-300">{row.plannedCount}</span>
+      ),
     },
     {
       key: "missing",
       header: "Eksikler",
-      render: (row) => <span className="text-xs text-slate-400">{row.missingTopics.join(", ") || "-"}</span>,
+      render: (row) => (
+        <span className="text-xs text-slate-400">
+          {row.missingTopics.join(", ") || "-"}
+        </span>
+      ),
     },
     {
       key: "status",
       header: "Durum",
       width: "105px",
-      render: (row) => <Badge variant={trainingVariant(row.status)}>{trainingLabel(row.status)}</Badge>,
+      render: (row) => (
+        <Badge variant={trainingVariant(row.status)}>
+          {trainingLabel(row.status)}
+        </Badge>
+      ),
     },
   ];
 
@@ -167,8 +216,12 @@ export function AdvancedHrPage() {
       header: "Personel",
       render: (row) => (
         <div>
-          <span className="text-sm font-semibold text-white">{row.employee.fullName}</span>
-          <span className="block text-[11px] text-slate-500">{employeeSubtitle(row.employee)}</span>
+          <span className="text-sm font-semibold text-white">
+            {row.employee.fullName}
+          </span>
+          <span className="block text-[11px] text-slate-500">
+            {employeeSubtitle(row.employee)}
+          </span>
         </div>
       ),
     },
@@ -177,26 +230,36 @@ export function AdvancedHrPage() {
       header: "Zimmet",
       width: "90px",
       align: "right",
-      render: (row) => <span className="font-mono text-sky-300">{row.assetCount}</span>,
+      render: (row) => (
+        <span className="font-mono text-sky-300">{row.assetCount}</span>
+      ),
     },
     {
       key: "documents",
       header: "Dokuman",
       width: "100px",
       align: "right",
-      render: (row) => <span className="text-slate-300">{row.documentCount}</span>,
+      render: (row) => (
+        <span className="text-slate-300">{row.documentCount}</span>
+      ),
     },
     {
       key: "last",
       header: "Son Zimmet",
       width: "120px",
-      render: (row) => <span className="text-slate-400">{formatDate(row.lastAssignedAt)}</span>,
+      render: (row) => (
+        <span className="text-slate-400">{formatDate(row.lastAssignedAt)}</span>
+      ),
     },
     {
       key: "status",
       header: "Durum",
       width: "105px",
-      render: (row) => <Badge variant={assetVariant(row.status)}>{assetLabel(row.status)}</Badge>,
+      render: (row) => (
+        <Badge variant={assetVariant(row.status)}>
+          {assetLabel(row.status)}
+        </Badge>
+      ),
     },
   ];
 
@@ -205,9 +268,19 @@ export function AdvancedHrPage() {
       key: "label",
       header: "Organizasyon",
       render: (row) => (
-        <div className={row.type === "employee" ? "pl-8" : row.type === "position" ? "pl-4" : ""}>
+        <div
+          className={
+            row.type === "employee"
+              ? "pl-8"
+              : row.type === "position"
+                ? "pl-4"
+                : ""
+          }
+        >
           <span className="text-sm font-semibold text-white">{row.label}</span>
-          <span className="block text-[11px] text-slate-500">{row.parentId ?? "Kok"}</span>
+          <span className="block text-[11px] text-slate-500">
+            {row.parentId ?? "Kok"}
+          </span>
         </div>
       ),
     },
@@ -215,14 +288,18 @@ export function AdvancedHrPage() {
       key: "type",
       header: "Tip",
       width: "120px",
-      render: (row) => <Badge variant={nodeVariant(row.type)}>{row.type}</Badge>,
+      render: (row) => (
+        <Badge variant={nodeVariant(row.type)}>{row.type}</Badge>
+      ),
     },
     {
       key: "count",
       header: "Kisi",
       width: "80px",
       align: "right",
-      render: (row) => <span className="font-mono text-sky-300">{row.employeeCount}</span>,
+      render: (row) => (
+        <span className="font-mono text-sky-300">{row.employeeCount}</span>
+      ),
     },
   ];
 
@@ -232,8 +309,12 @@ export function AdvancedHrPage() {
       header: "Personel",
       render: (row) => (
         <div>
-          <span className="text-sm font-semibold text-white">{row.employee.fullName}</span>
-          <span className="block text-[11px] text-slate-500">{employeeSubtitle(row.employee)}</span>
+          <span className="text-sm font-semibold text-white">
+            {row.employee.fullName}
+          </span>
+          <span className="block text-[11px] text-slate-500">
+            {employeeSubtitle(row.employee)}
+          </span>
         </div>
       ),
     },
@@ -241,33 +322,45 @@ export function AdvancedHrPage() {
       key: "type",
       header: "Tur",
       width: "90px",
-      render: (row) => <Badge variant="info">{expenseAdvanceTypeLabel(row.type)}</Badge>,
+      render: (row) => (
+        <Badge variant="info">{expenseAdvanceTypeLabel(row.type)}</Badge>
+      ),
     },
     {
       key: "actions",
       header: "Aksiyon",
       width: "90px",
       align: "right",
-      render: (row) => <span className="font-mono text-amber-300">{row.openActionCount}</span>,
+      render: (row) => (
+        <span className="font-mono text-amber-300">{row.openActionCount}</span>
+      ),
     },
     {
       key: "documents",
       header: "Dokuman",
       width: "100px",
       align: "right",
-      render: (row) => <span className="text-slate-300">{row.documentCount}</span>,
+      render: (row) => (
+        <span className="text-slate-300">{row.documentCount}</span>
+      ),
     },
     {
       key: "due",
       header: "Son Tarih",
       width: "120px",
-      render: (row) => <span className="text-slate-400">{formatDate(row.nextDueAt)}</span>,
+      render: (row) => (
+        <span className="text-slate-400">{formatDate(row.nextDueAt)}</span>
+      ),
     },
     {
       key: "status",
       header: "Durum",
       width: "140px",
-      render: (row) => <Badge variant={expenseAdvanceVariant(row.status)}>{expenseAdvanceStatusLabel(row.status)}</Badge>,
+      render: (row) => (
+        <Badge variant={expenseAdvanceVariant(row.status)}>
+          {expenseAdvanceStatusLabel(row.status)}
+        </Badge>
+      ),
     },
   ];
 
@@ -279,77 +372,152 @@ export function AdvancedHrPage() {
         title="Gelismis IK"
         subtitle="Performans değerlendirme, eğitim matrisi, zimmet ve organizasyon semasi."
         action={
-          <Button variant="secondary" size="sm" onClick={() => void refetch()} loading={isFetching}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void refetch()}
+            loading={isFetching}
+          >
             <RefreshCw className="h-3.5 w-3.5" />
             Yenile
           </Button>
         }
       />
 
-      <div className="mb-5 grid gap-3 md:grid-cols-6">
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <Users className="mb-2 h-4 w-4 text-sky-400" />
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Personel</span>
-          <span className="mt-1 block text-2xl font-bold text-white">{summary?.employeeCount ?? 0}</span>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <Award className="mb-2 h-4 w-4 text-amber-400" />
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Performans Eksik</span>
-          <span className="mt-1 block text-2xl font-bold text-white">{summary?.reviewMissingCount ?? 0}</span>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <BookOpenCheck className="mb-2 h-4 w-4 text-emerald-400" />
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Egitim Eksik</span>
-          <span className="mt-1 block text-2xl font-bold text-white">{summary?.trainingMissingCount ?? 0}</span>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <Boxes className="mb-2 h-4 w-4 text-violet-400" />
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Zimmet Eksik</span>
-          <span className="mt-1 block text-2xl font-bold text-white">{summary?.assetMissingCount ?? 0}</span>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <Receipt className="mb-2 h-4 w-4 text-rose-400" />
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Masraf/Avans</span>
-          <span className="mt-1 block text-2xl font-bold text-white">{summary?.expenseAdvancePendingCount ?? 0}</span>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <GitBranch className="mb-2 h-4 w-4 text-cyan-400" />
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Org Dugumu</span>
-          <span className="mt-1 block text-2xl font-bold text-white">{summary?.organizationNodeCount ?? 0}</span>
-        </div>
-      </div>
+      {isError ? (
+        <ApiErrorState error={error} onRetry={() => void refetch()} />
+      ) : (
+        <>
+          <div className="mb-5 grid gap-3 md:grid-cols-6">
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+              <Users className="mb-2 h-4 w-4 text-sky-400" />
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Personel
+              </span>
+              <span className="mt-1 block text-2xl font-bold text-white">
+                {summary?.employeeCount ?? 0}
+              </span>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+              <Award className="mb-2 h-4 w-4 text-amber-400" />
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Performans Eksik
+              </span>
+              <span className="mt-1 block text-2xl font-bold text-white">
+                {summary?.reviewMissingCount ?? 0}
+              </span>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+              <BookOpenCheck className="mb-2 h-4 w-4 text-emerald-400" />
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Egitim Eksik
+              </span>
+              <span className="mt-1 block text-2xl font-bold text-white">
+                {summary?.trainingMissingCount ?? 0}
+              </span>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+              <Boxes className="mb-2 h-4 w-4 text-violet-400" />
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Zimmet Eksik
+              </span>
+              <span className="mt-1 block text-2xl font-bold text-white">
+                {summary?.assetMissingCount ?? 0}
+              </span>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+              <Receipt className="mb-2 h-4 w-4 text-rose-400" />
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Masraf/Avans
+              </span>
+              <span className="mt-1 block text-2xl font-bold text-white">
+                {summary?.expenseAdvancePendingCount ?? 0}
+              </span>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+              <GitBranch className="mb-2 h-4 w-4 text-cyan-400" />
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Org Dugumu
+              </span>
+              <span className="mt-1 block text-2xl font-bold text-white">
+                {summary?.organizationNodeCount ?? 0}
+              </span>
+            </div>
+          </div>
 
-      <div className="space-y-6">
-        <section>
-          <h2 className="mb-3 text-sm font-semibold text-white">Performans Degerlendirme</h2>
-          <DataTable columns={reviewColumns} data={data?.performanceReviews ?? []} keyExtractor={(row) => row.employee.id} isLoading={isLoading}
-            emptyTitle="Personel bulunamadi" emptyDescription="Performans değerlendirme için aktif personel kaydı gerekir." />
-        </section>
+          <div className="space-y-6">
+            <section>
+              <h2 className="mb-3 text-sm font-semibold text-white">
+                Performans Degerlendirme
+              </h2>
+              <DataTable
+                columns={reviewColumns}
+                data={data?.performanceReviews ?? []}
+                keyExtractor={(row) => row.employee.id}
+                isLoading={isLoading}
+                emptyTitle="Personel bulunamadi"
+                emptyDescription="Performans değerlendirme için aktif personel kaydı gerekir."
+              />
+            </section>
 
-        <section>
-          <h2 className="mb-3 text-sm font-semibold text-white">Egitim Matrisi</h2>
-          <DataTable columns={trainingColumns} data={data?.trainingMatrix ?? []} keyExtractor={(row) => row.employee.id} isLoading={isLoading}
-            emptyTitle="Egitim matrisi boş" emptyDescription="Aktif personel veya eğitim dokumani bulunmuyor." />
-        </section>
+            <section>
+              <h2 className="mb-3 text-sm font-semibold text-white">
+                Egitim Matrisi
+              </h2>
+              <DataTable
+                columns={trainingColumns}
+                data={data?.trainingMatrix ?? []}
+                keyExtractor={(row) => row.employee.id}
+                isLoading={isLoading}
+                emptyTitle="Egitim matrisi boş"
+                emptyDescription="Aktif personel veya eğitim dokumani bulunmuyor."
+              />
+            </section>
 
-        <section>
-          <h2 className="mb-3 text-sm font-semibold text-white">Zimmet Takibi</h2>
-          <DataTable columns={assetColumns} data={data?.assetAssignments ?? []} keyExtractor={(row) => row.employee.id} isLoading={isLoading}
-            emptyTitle="Zimmet kaydı yok" emptyDescription="Personel dokumanlarina asset-assignment tagli zimmet ekleyin." />
-        </section>
+            <section>
+              <h2 className="mb-3 text-sm font-semibold text-white">
+                Zimmet Takibi
+              </h2>
+              <DataTable
+                columns={assetColumns}
+                data={data?.assetAssignments ?? []}
+                keyExtractor={(row) => row.employee.id}
+                isLoading={isLoading}
+                emptyTitle="Zimmet kaydı yok"
+                emptyDescription="Personel dokumanlarina asset-assignment tagli zimmet ekleyin."
+              />
+            </section>
 
-        <section>
-          <h2 className="mb-3 text-sm font-semibold text-white">Masraf ve Avans Takibi</h2>
-          <DataTable columns={expenseAdvanceColumns} data={data?.expenseAdvances ?? []} keyExtractor={(row) => `${row.employee.id}:${row.type}`} isLoading={isLoading}
-            emptyTitle="Masraf/avans aksiyonu yok" emptyDescription="hr:expense veya hr:advance kaynakli gorevler ve ilgili dokümanlar burada izlenir." />
-        </section>
+            <section>
+              <h2 className="mb-3 text-sm font-semibold text-white">
+                Masraf ve Avans Takibi
+              </h2>
+              <DataTable
+                columns={expenseAdvanceColumns}
+                data={data?.expenseAdvances ?? []}
+                keyExtractor={(row) => `${row.employee.id}:${row.type}`}
+                isLoading={isLoading}
+                emptyTitle="Masraf/avans aksiyonu yok"
+                emptyDescription="hr:expense veya hr:advance kaynakli gorevler ve ilgili dokümanlar burada izlenir."
+              />
+            </section>
 
-        <section>
-          <h2 className="mb-3 text-sm font-semibold text-white">Organizasyon Semasi</h2>
-          <DataTable columns={organizationColumns} data={data?.organization ?? []} keyExtractor={(row) => row.id} isLoading={isLoading}
-            emptyTitle="Organizasyon semasi yok" emptyDescription="Departman ve pozisyon bilgisi olan personel ekleyin." />
-        </section>
-      </div>
+            <section>
+              <h2 className="mb-3 text-sm font-semibold text-white">
+                Organizasyon Semasi
+              </h2>
+              <DataTable
+                columns={organizationColumns}
+                data={data?.organization ?? []}
+                keyExtractor={(row) => row.id}
+                isLoading={isLoading}
+                emptyTitle="Organizasyon semasi yok"
+                emptyDescription="Departman ve pozisyon bilgisi olan personel ekleyin."
+              />
+            </section>
+          </div>
+        </>
+      )}
     </div>
   );
 }

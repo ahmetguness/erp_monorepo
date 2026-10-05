@@ -2,6 +2,8 @@ import { ACCESS_POLICIES } from "@repo/types/plans";
 import { Hono } from "hono";
 import { requireAccess } from "../middleware/requireAccess";
 import { requirePermission } from "../middleware/requirePermission";
+import { validateBody } from "../middleware/validateBody.js";
+import { bulkPayrollBodySchema, createPayrollBodySchema, emptyBodySchema, payrollItemBodySchema } from "../schemas/request-body.schemas.js";
 import {
   AdvancedPayrollController,
   PayrollController,
@@ -19,11 +21,13 @@ payrollRoutes.get(
 payrollRoutes.post(
   "/",
   requirePermission("payroll", "CREATE"),
+  validateBody(createPayrollBodySchema),
   PayrollController.create,
 );
 payrollRoutes.post(
   "/generate-bulk",
   requirePermission("payroll", "CREATE"),
+  validateBody(bulkPayrollBodySchema),
   PayrollController.generateBulk,
 );
 payrollRoutes.get(
@@ -54,6 +58,7 @@ payrollRoutes.get(
 payrollRoutes.post(
   "/:id/items",
   requirePermission("payroll", "UPDATE"),
+  validateBody(payrollItemBodySchema),
   PayrollController.addItem,
 );
 payrollRoutes.delete(
@@ -64,6 +69,7 @@ payrollRoutes.delete(
 payrollRoutes.post(
   "/:id/pay",
   requirePermission("payroll", "UPDATE"),
+  validateBody(emptyBodySchema),
   PayrollController.markPaid,
 );
 payrollRoutes.post(

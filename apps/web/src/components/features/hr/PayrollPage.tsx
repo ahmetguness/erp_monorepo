@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { FormRow } from "@/components/shared/FormField";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   usePayrolls,
   usePayroll,
@@ -76,6 +78,7 @@ export function PayrollPage() {
     notes: "",
   });
   const [bulkPeriod, setBulkPeriod] = useState("");
+  const [pendingAction, setPendingAction] = useState<{ payroll: Payroll; action: "pay" | "delete" } | null>(null);
 
   // Integration States
   const [checksOpen, setChecksOpen] = useState(false);
@@ -83,11 +86,12 @@ export function PayrollPage() {
   const [isChecking, setIsChecking] = useState(false);
   const [isDownloadingBankFile, setIsDownloadingBankFile] = useState(false);
 
-  const { data, isLoading } = usePayrolls({
+  const payrollQuery = usePayrolls({
     page,
     limit: 20,
     ...(periodFilter && { period: periodFilter }),
   });
+  const { data, isLoading } = payrollQuery;
   const advancedPeriod = /^\d{4}-\d{2}$/.test(periodFilter) ? periodFilter : currentPeriod();
   const { data: advancedPayroll, isLoading: advancedLoading } = useAdvancedPayroll(advancedPeriod);
   const { data: detail } = usePayroll(detailId ?? "");
@@ -224,7 +228,7 @@ export function PayrollPage() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  markPaid.mutate(r.id);
+                  setPendingAction({ payroll: r, action: "pay" });
                 }}
                 className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
               >
@@ -233,7 +237,7 @@ export function PayrollPage() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  remove.mutate(r.id);
+                  setPendingAction({ payroll: r, action: "delete" });
                 }}
                 className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
               >
@@ -459,7 +463,7 @@ export function PayrollPage() {
         )}
       </section>
 
-      <DataTable
+      {payrollQuery.isError ? <ApiErrorState error={payrollQuery.error} onRetry={() => void payrollQuery.refetch()} /> : <DataTable
         columns={columns}
         data={data?.data ?? []}
         keyExtractor={(r) => r.id}
@@ -478,7 +482,7 @@ export function PayrollPage() {
               }
             : undefined
         }
-      />
+      />}
 
       {/* Create Modal */}
       <Modal
@@ -737,6 +741,19 @@ export function PayrollPage() {
           </div>
         </div>
       </Modal>
+      <ConfirmDialog
+        isOpen={Boolean(pendingAction)}
+        onClose={() => setPendingAction(null)}
+        title={pendingAction?.action === "pay" ? "Bordroyu ödendi işaretle" : "Bordroyu sil"}
+        message={pendingAction ? `${pendingAction.payroll.period} dönemi bordrosuna işlem uygulanacak.` : ""}
+        confirmLabel={pendingAction?.action === "pay" ? "Ödendi işaretle" : "Sil"}
+        isLoading={markPaid.isPending || remove.isPending}
+        onConfirm={() => {
+          if (!pendingAction) return;
+          const mutation = pendingAction.action === "pay" ? markPaid : remove;
+          mutation.mutate(pendingAction.payroll.id, { onSuccess: () => setPendingAction(null) });
+        }}
+      />
     </div>
   );
 }

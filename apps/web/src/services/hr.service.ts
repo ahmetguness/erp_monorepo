@@ -116,7 +116,7 @@ type Paginated<T> = { data: T[]; meta: { total: number; page: number; pageSize: 
 
 // ─── Employees ────────────────────────────────
 
-export const getEmployees = (params?: { page?: number; limit?: number; department?: string; isActive?: string }) =>
+export const getEmployees = (params?: { page?: number; limit?: number; department?: string; isActive?: string; search?: string }) =>
   apiClient.get<Paginated<Employee>>('/api/hr/employees', { params }).then((r) => r.data);
 
 export const getEmployee = (id: string) =>

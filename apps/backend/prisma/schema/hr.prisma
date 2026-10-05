@@ -43,6 +43,7 @@ model Employee {
 
   @@index([tenantId, isActive])
   @@index([tenantId, department])
+  @@unique([tenantId, id])
   @@index([deletedAt])
   @@map("employees")
 }
@@ -63,7 +64,7 @@ model LeaveRequest {
   updatedAt  DateTime    @updatedAt
   deletedAt  DateTime?
 
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Cascade)
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, employeeId])
@@ -82,7 +83,7 @@ model Attendance {
   notes         String?
   updatedAt     DateTime  @updatedAt
 
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Cascade)
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, date])
@@ -105,11 +106,12 @@ model Payroll {
   deletedAt   DateTime?
   createdById String?
 
-  employee Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee Employee      @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Cascade)
   tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   items    PayrollItem[]
 
   @@unique([tenantId, employeeId, period])
+  @@unique([tenantId, id])
   @@index([tenantId, period])
   @@index([deletedAt])
   @@map("payrolls")
@@ -123,7 +125,7 @@ model PayrollItem {
   amount      Decimal @db.Decimal(18, 2)
   isDeduction Boolean @default(false)
 
-  payroll Payroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  payroll Payroll @relation(fields: [tenantId, payrollId], references: [tenantId, id], onDelete: Cascade)
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, payrollId])

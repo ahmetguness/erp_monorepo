@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { FormRow } from "@/components/shared/FormField";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { useAttendance, useCheckIn, useCheckOut } from "@/hooks/useHR";
 import { formatDate } from "@/lib/utils";
 import type { Attendance } from "@/services/hr.service";
@@ -31,12 +32,13 @@ export function AttendancePage() {
   const [form, setForm] = useState({ employeeId: "", notes: "" });
   const [outForm, setOutForm] = useState({ employeeId: "", overtimeHours: "" });
 
-  const { data, isLoading } = useAttendance({
+  const attendanceQuery = useAttendance({
     page,
     limit: 50,
     ...(dateFrom && { dateFrom }),
     ...(dateTo && { dateTo }),
   });
+  const { data, isLoading } = attendanceQuery;
   const doCheckIn = useCheckIn();
   const doCheckOut = useCheckOut();
 
@@ -161,7 +163,7 @@ export function AttendancePage() {
         </FormRow>
       </div>
 
-      <DataTable
+      {attendanceQuery.isError ? <ApiErrorState error={attendanceQuery.error} onRetry={() => void attendanceQuery.refetch()} /> : <DataTable
         columns={columns}
         data={data?.data ?? []}
         keyExtractor={(r) => r.id}
@@ -179,7 +181,7 @@ export function AttendancePage() {
               }
             : undefined
         }
-      />
+      />}
 
       {/* Check-in Modal */}
       <Modal

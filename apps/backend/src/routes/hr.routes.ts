@@ -2,6 +2,16 @@ import { ACCESS_POLICIES } from "@repo/types/plans";
 import { Hono } from "hono";
 import { requireAccess } from "../middleware/requireAccess";
 import { requirePermission } from "../middleware/requirePermission";
+import { validateBody } from "../middleware/validateBody.js";
+import {
+  createEmployeeBodySchema,
+  updateEmployeeBodySchema,
+  createLeaveRequestBodySchema,
+  leaveTransitionBodySchema,
+  attendanceCheckInBodySchema,
+  attendanceCheckOutBodySchema,
+  updateAttendanceBodySchema,
+} from "../schemas/request-body.schemas.js";
 import {
   AdvancedHrController,
   AttendanceController,
@@ -37,11 +47,13 @@ hrRoutes.get(
 hrRoutes.post(
   "/employees",
   requirePermission("hr", "CREATE"),
+  validateBody(createEmployeeBodySchema),
   EmployeeController.create,
 );
 hrRoutes.patch(
   "/employees/:id",
   requirePermission("hr", "UPDATE"),
+  validateBody(updateEmployeeBodySchema),
   EmployeeController.update,
 );
 hrRoutes.delete(
@@ -64,21 +76,25 @@ hrRoutes.get(
 hrRoutes.post(
   "/leave-requests",
   requirePermission("hr", "CREATE"),
+  validateBody(createLeaveRequestBodySchema),
   LeaveRequestController.create,
 );
 hrRoutes.post(
   "/leave-requests/:id/approve",
   requirePermission("hr", "UPDATE"),
+  validateBody(leaveTransitionBodySchema),
   LeaveRequestController.approve,
 );
 hrRoutes.post(
   "/leave-requests/:id/reject",
   requirePermission("hr", "UPDATE"),
+  validateBody(leaveTransitionBodySchema),
   LeaveRequestController.reject,
 );
 hrRoutes.post(
   "/leave-requests/:id/cancel",
   requirePermission("hr", "UPDATE"),
+  validateBody(leaveTransitionBodySchema),
   LeaveRequestController.cancel,
 );
 
@@ -91,16 +107,19 @@ hrRoutes.get(
 hrRoutes.post(
   "/attendance/check-in",
   requirePermission("hr", "CREATE"),
+  validateBody(attendanceCheckInBodySchema),
   AttendanceController.checkIn,
 );
 hrRoutes.post(
   "/attendance/check-out",
   requirePermission("hr", "UPDATE"),
+  validateBody(attendanceCheckOutBodySchema),
   AttendanceController.checkOut,
 );
 hrRoutes.patch(
   "/attendance/:id",
   requirePermission("hr", "UPDATE"),
+  validateBody(updateAttendanceBodySchema),
   AttendanceController.update,
 );
 hrRoutes.delete(

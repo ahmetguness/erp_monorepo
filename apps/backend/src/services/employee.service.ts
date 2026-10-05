@@ -1,5 +1,5 @@
-import { prisma } from '../lib/prisma';
-import { NotFoundError, ValidationError } from '../errors';
+import { prisma } from "../lib/prisma";
+import { NotFoundError, ValidationError } from "../errors";
 
 export interface EmployeeListInput {
   tenantId: string;
@@ -34,7 +34,7 @@ export interface UpdateEmployeeInput {
   department?: string;
   salary?: number;
   isActive?: boolean;
-  leaveDate?: string;
+  leaveDate?: string | null;
 }
 
 export async function listEmployees(input: EmployeeListInput) {
@@ -43,14 +43,16 @@ export async function listEmployees(input: EmployeeListInput) {
     tenantId: input.tenantId,
     deletedAt: null,
     ...(input.department && { department: input.department }),
-    ...(input.isActive !== undefined && { isActive: input.isActive === 'true' }),
+    ...(input.isActive !== undefined && {
+      isActive: input.isActive === "true",
+    }),
     ...(search && {
       OR: [
-        { firstName: { contains: search, mode: 'insensitive' as const } },
-        { lastName: { contains: search, mode: 'insensitive' as const } },
-        { email: { contains: search, mode: 'insensitive' as const } },
-        { position: { contains: search, mode: 'insensitive' as const } },
-        { department: { contains: search, mode: 'insensitive' as const } },
+        { firstName: { contains: search, mode: "insensitive" as const } },
+        { lastName: { contains: search, mode: "insensitive" as const } },
+        { email: { contains: search, mode: "insensitive" as const } },
+        { position: { contains: search, mode: "insensitive" as const } },
+        { department: { contains: search, mode: "insensitive" as const } },
       ],
     }),
   };
@@ -62,7 +64,7 @@ export async function listEmployees(input: EmployeeListInput) {
       include: {
         _count: { select: { leaveRequests: true, payrolls: true } },
       },
-      orderBy: { lastName: 'asc' },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }],
       skip: input.skip,
       take: input.limit,
     }),
@@ -83,18 +85,27 @@ export async function getEmployeeById(tenantId: string, id: string) {
   const employee = await prisma.employee.findFirst({
     where: { id, tenantId, deletedAt: null },
     include: {
-      leaveRequests: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 10 },
-      payrolls: { where: { deletedAt: null }, orderBy: { period: 'desc' }, take: 12, include: { items: true } },
-      attendances: { orderBy: { date: 'desc' }, take: 30 },
+      leaveRequests: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      },
+      payrolls: {
+        where: { deletedAt: null },
+        orderBy: { period: "desc" },
+        take: 12,
+        include: { items: true },
+      },
+      attendances: { orderBy: { date: "desc" }, take: 30 },
     },
   });
-  if (!employee) throw new NotFoundError('Personel', id);
+  if (!employee) throw new NotFoundError("Personel", id);
   return employee;
 }
 
 export async function createEmployee(input: CreateEmployeeInput) {
   if (!input.firstName || !input.lastName || !input.hireDate) {
-    throw new ValidationError('firstName, lastName ve hireDate zorunludur.');
+    throw new ValidationError("firstName, lastName ve hireDate zorunludur.");
   }
 
   return prisma.employee.create({
@@ -116,7 +127,7 @@ export async function updateEmployee(input: UpdateEmployeeInput) {
   const existing = await prisma.employee.findFirst({
     where: { id: input.id, tenantId: input.tenantId, deletedAt: null },
   });
-  if (!existing) throw new NotFoundError('Personel', input.id);
+  if (!existing) throw new NotFoundError("Personel", input.id);
 
   return prisma.employee.update({
     where: { id: input.id },
@@ -129,7 +140,9 @@ export async function updateEmployee(input: UpdateEmployeeInput) {
       ...(input.department !== undefined && { department: input.department }),
       ...(input.salary !== undefined && { salary: input.salary }),
       ...(input.isActive !== undefined && { isActive: input.isActive }),
-      ...(input.leaveDate !== undefined && { leaveDate: input.leaveDate ? new Date(input.leaveDate) : null }),
+      ...(input.leaveDate !== undefined && {
+        leaveDate: input.leaveDate ? new Date(input.leaveDate) : null,
+      }),
     },
   });
 }
@@ -138,7 +151,7 @@ export async function removeEmployee(tenantId: string, id: string) {
   const existing = await prisma.employee.findFirst({
     where: { id, tenantId, deletedAt: null },
   });
-  if (!existing) throw new NotFoundError('Personel', id);
+  if (!existing) throw new NotFoundError("Personel", id);
 
   await prisma.employee.update({
     where: { id },
@@ -150,7 +163,7 @@ export async function removeEmployee(tenantId: string, id: string) {
 
 export async function listEmployeeDepartments(tenantId: string) {
   const result = await prisma.employee.groupBy({
-    by: ['department'],
+    by: ["department"],
     where: { tenantId, deletedAt: null, department: { not: null } },
     _count: { id: true },
   });

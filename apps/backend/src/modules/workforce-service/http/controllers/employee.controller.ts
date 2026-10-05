@@ -9,6 +9,32 @@ import {
 } from "../../../../services/employee.service.js";
 import { requireParam, requireTenantId } from "../../../../utils/context.js";
 import { getPaginationParams } from "../../../../utils/pagination.js";
+import { getValidatedBody } from "../../../../middleware/validateBody.js";
+import {
+  createEmployeeBodySchema,
+  updateEmployeeBodySchema,
+  type CreateEmployeeBody,
+  type UpdateEmployeeBody,
+} from "../../../../schemas/request-body.schemas.js";
+import { ValidationError } from "../../../../errors/index.js";
+
+function validateListQuery(c: Context): void {
+  const page = c.req.query("page");
+  const limit = c.req.query("limit");
+  const isActive = c.req.query("isActive");
+  if (page !== undefined && (!/^\d+$/.test(page) || Number(page) < 1)) {
+    throw new ValidationError("page pozitif bir tam sayi olmalidir.");
+  }
+  if (
+    limit !== undefined &&
+    (!/^\d+$/.test(limit) || Number(limit) < 1 || Number(limit) > 100)
+  ) {
+    throw new ValidationError("limit 1 ile 100 arasinda olmalidir.");
+  }
+  if (isActive !== undefined && !["true", "false"].includes(isActive)) {
+    throw new ValidationError("isActive true veya false olmalidir.");
+  }
+}
 
 // ─────────────────────────────────────────────
 // Employee Controller — Personel CRUD
@@ -17,6 +43,7 @@ import { getPaginationParams } from "../../../../utils/pagination.js";
 export const EmployeeController = {
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
+    validateListQuery(c);
 
     const { page, limit, skip } = getPaginationParams(c, 20);
     const department = c.req.query("department");
@@ -48,16 +75,10 @@ export const EmployeeController = {
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<{
-      firstName: string;
-      lastName: string;
-      email?: string;
-      phone?: string;
-      position?: string;
-      department?: string;
-      hireDate: string;
-      salary?: number;
-    }>();
+    const body = getValidatedBody<CreateEmployeeBody>(
+      c,
+      createEmployeeBodySchema,
+    );
     const employee = await createEmployee({ tenantId, ...body });
 
     return c.json({ data: employee }, 201);
@@ -67,17 +88,10 @@ export const EmployeeController = {
     const tenantId = requireTenantId(c);
     const id = requireParam(c, "id");
 
-    const body = await c.req.json<{
-      firstName?: string;
-      lastName?: string;
-      email?: string;
-      phone?: string;
-      position?: string;
-      department?: string;
-      salary?: number;
-      isActive?: boolean;
-      leaveDate?: string;
-    }>();
+    const body = getValidatedBody<UpdateEmployeeBody>(
+      c,
+      updateEmployeeBodySchema,
+    );
     const updated = await updateEmployee({ tenantId, id, ...body });
 
     return c.json({ data: updated });

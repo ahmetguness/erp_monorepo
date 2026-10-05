@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/Input";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { Select } from "@/components/ui/Select";
 import { FormRow } from "@/components/shared/FormField";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   useLeaveRequests,
   useCreateLeaveRequest,
@@ -48,6 +50,7 @@ export function LeaveRequestsPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [transition, setTransition] = useState<{ request: LeaveRequest; action: "approve" | "reject" | "cancel" } | null>(null);
   const [form, setForm] = useState({
     employeeId: "",
     type: "ANNUAL",
@@ -57,11 +60,12 @@ export function LeaveRequestsPage() {
     notes: "",
   });
 
-  const { data, isLoading } = useLeaveRequests({
+  const leaveQuery = useLeaveRequests({
     page,
     limit: 20,
     ...(statusFilter && { status: statusFilter }),
   });
+  const { data, isLoading } = leaveQuery;
   const create = useCreateLeaveRequest();
   const approve = useApproveLeaveRequest();
   const reject = useRejectLeaveRequest();
@@ -135,7 +139,7 @@ export function LeaveRequestsPage() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                approve.mutate(r.id);
+                setTransition({ request: r, action: "approve" });
               }}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-emerald-400 hover:bg-emerald-500/10 transition-colors"
             >
@@ -145,7 +149,7 @@ export function LeaveRequestsPage() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                reject.mutate(r.id);
+                setTransition({ request: r, action: "reject" });
               }}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors"
             >
@@ -157,7 +161,7 @@ export function LeaveRequestsPage() {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              cancel.mutate(r.id);
+              setTransition({ request: r, action: "cancel" });
             }}
             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-slate-400 hover:bg-slate-800 transition-colors"
           >
@@ -198,7 +202,7 @@ export function LeaveRequestsPage() {
         ))}
       </div>
 
-      <DataTable
+      {leaveQuery.isError ? <ApiErrorState error={leaveQuery.error} onRetry={() => void leaveQuery.refetch()} /> : <DataTable
         columns={columns}
         data={data?.data ?? []}
         keyExtractor={(r) => r.id}
@@ -216,7 +220,7 @@ export function LeaveRequestsPage() {
               }
             : undefined
         }
-      />
+      />}
 
       <Modal
         isOpen={createOpen}
@@ -324,6 +328,20 @@ export function LeaveRequestsPage() {
           />
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(transition)}
+        onClose={() => setTransition(null)}
+        title={transition?.action === "approve" ? "İzin talebini onayla" : transition?.action === "reject" ? "İzin talebini reddet" : "İzin talebini iptal et"}
+        message="Bu durum değişikliği izin talebine hemen uygulanacaktır."
+        confirmLabel={transition?.action === "approve" ? "Onayla" : transition?.action === "reject" ? "Reddet" : "İptal et"}
+        isLoading={approve.isPending || reject.isPending || cancel.isPending}
+        onConfirm={() => {
+          if (!transition) return;
+          const mutation = transition.action === "approve" ? approve : transition.action === "reject" ? reject : cancel;
+          mutation.mutate(transition.request.id, { onSuccess: () => setTransition(null) });
+        }}
+      />
     </div>
   );
 }

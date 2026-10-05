@@ -19,6 +19,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { EntityActionPanel, type EntityAction } from "@/components/shared/EntityActionPanel";
 import { EntityActivityTimeline } from "@/components/shared/EntityActivityTimeline";
 import { EntityImageManager } from "@/components/shared/EntityImageManager";
@@ -323,9 +324,10 @@ function formatTenure(hireDate: string): string {
 
 export function EmployeeDetailPage({ id }: { id: string }) {
   const router = useRouter();
-  const { data: emp, isLoading } = useEmployee(id);
+  const { data: emp, isLoading, isError, error, refetch } = useEmployee(id);
 
   if (isLoading) return <LoadingState />;
+  if (isError) return <ApiErrorState error={error} onRetry={() => void refetch()} />;
 
   if (!emp) {
     return (
