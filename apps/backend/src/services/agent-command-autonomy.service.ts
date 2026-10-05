@@ -8,6 +8,8 @@ import {
 } from '@prisma/client';
 import { logger } from '../lib/logger.js';
 import { createAuditLog } from '../utils/audit.js';
+import { randomUUID } from 'node:crypto';
+import { NotFoundError, ValidationError } from '../errors/index.js';
 
 export interface ParsedCommandStep {
   stepIndex: number;
@@ -47,8 +49,11 @@ export class AgentCommandAutonomyService {
     userId: string,
     prompt: string,
   ): Promise<ParsedCommandPlan> {
-    const planId = `PLAN-${Date.now()}`;
+    const planId = `PLAN-${randomUUID()}`;
     const cleanPrompt = prompt.trim();
+    if (!cleanPrompt || cleanPrompt.length > 2000) {
+      throw new ValidationError('Komut 1-2000 karakter arasinda olmalidir.');
+    }
 
     let intentCategory = 'GENERAL_QUERY';
     let riskLevel: ParsedCommandPlan['riskLevel'] = 'LOW';
@@ -88,6 +93,19 @@ export class AgentCommandAutonomyService {
       createdAt: new Date().toISOString(),
     };
 
+    await this.db.agentCommandPlan.create({
+      data: {
+        id: planId,
+        tenantId,
+        userId,
+        prompt: cleanPrompt,
+        intentCategory,
+        riskLevel,
+        steps: steps as unknown as Prisma.InputJsonValue,
+        requiresApproval: plan.requiresApproval,
+      },
+    });
+
     logger.info(`[AgentCommandAutonomy] Generated plan ${planId} for prompt: "${cleanPrompt}"`);
 
     await createAuditLog(this.db, {
@@ -111,6 +129,35 @@ export class AgentCommandAutonomyService {
     userId: string,
     planId: string,
   ): Promise<{ success: boolean; message: string; executedStepsCount: number }> {
+    const plan = await this.db.agentCommandPlan.findFirst({
+      where: { id: planId, tenantId, userId },
+      select: { id: true, status: true, steps: true },
+    });
+    if (!plan) throw new NotFoundError('Komut plani', planId);
+
+    const steps = Array.isArray(plan.steps) ? plan.steps : [];
+    const executedStepsCount = steps.length;
+    if (plan.status === 'EXECUTED') {
+      return {
+        success: true,
+        message: `Komut plani (${planId}) daha once icra edildi.`,
+        executedStepsCount,
+      };
+    }
+
+    const now = new Date();
+    const claimed = await this.db.agentCommandPlan.updateMany({
+      where: { id: planId, tenantId, userId, status: 'PENDING' },
+      data: { status: 'EXECUTED', approvedAt: now, executedAt: now },
+    });
+    if (claimed.count === 0) {
+      return {
+        success: true,
+        message: `Komut plani (${planId}) daha once icra edildi.`,
+        executedStepsCount,
+      };
+    }
+
     logger.info(`[AgentCommandAutonomy] Executed command plan ${planId}`);
 
     await createAuditLog(this.db, {
@@ -126,7 +173,7 @@ export class AgentCommandAutonomyService {
     return {
       success: true,
       message: `Komut planı (${planId}) tüm deterministik adımlarıyla otonom olarak icra edildi.`,
-      executedStepsCount: 3,
+      executedStepsCount,
     };
   }
 
@@ -177,6 +224,9 @@ export class AgentCommandAutonomyService {
     userId: string,
     suggestionId: string,
   ): Promise<{ success: boolean; message: string; ruleId: string }> {
+    if (!['SUGG-001', 'SUGG-002'].includes(suggestionId)) {
+      throw new ValidationError('Desteklenmeyen is akisi onerisi.');
+    }
     const ruleName = `Self-Healing Rule: ${suggestionId}`;
     const existingRule = await this.db.automationRule.findUnique({
       where: { tenantId_name: { tenantId, name: ruleName } },

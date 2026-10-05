@@ -34,26 +34,37 @@ export function AgentCommandCenter() {
   const handleParsePrompt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!promptInput.trim()) return;
-
-    const res = await parseMutation.mutateAsync(promptInput);
-    setCurrentPlan(res);
+    try {
+      const res = await parseMutation.mutateAsync(promptInput);
+      setCurrentPlan(res);
+    } catch {
+      // Mutation hook shows the user-facing error toast.
+    }
   };
 
   const handleExecutePlan = async () => {
     if (!currentPlan) return;
-    await executeMutation.mutateAsync(currentPlan.planId);
-    setCurrentPlan((prev) =>
-      prev
-        ? {
-            ...prev,
-            steps: prev.steps.map((s) => ({ ...s, status: 'EXECUTED' })),
-          }
-        : null,
-    );
+    try {
+      await executeMutation.mutateAsync(currentPlan.planId);
+      setCurrentPlan((prev) =>
+        prev
+          ? {
+              ...prev,
+              steps: prev.steps.map((s) => ({ ...s, status: 'EXECUTED' })),
+            }
+          : null,
+      );
+    } catch {
+      // Mutation hook shows the user-facing error toast.
+    }
   };
 
   const handleAdoptSuggestion = async (suggestionId: string) => {
-    await adoptMutation.mutateAsync(suggestionId);
+    try {
+      await adoptMutation.mutateAsync(suggestionId);
+    } catch {
+      // Mutation hook shows the user-facing error toast.
+    }
   };
 
   const suggestions = suggestionsQuery.data ?? [];
@@ -147,7 +158,7 @@ export function AgentCommandCenter() {
               </span>
               <button
                 onClick={handleExecutePlan}
-                disabled={executeMutation.isPending}
+                disabled={executeMutation.isPending || currentPlan.steps.every((step) => step.status === 'EXECUTED')}
                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs transition-all flex items-center gap-2 shadow-lg disabled:opacity-50"
               >
                 {executeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
@@ -206,6 +217,17 @@ export function AgentCommandCenter() {
           <div className="p-8 text-center text-slate-400 flex items-center justify-center gap-2 text-xs">
             <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
             <span>Manuel Süreç Logları Analiz Ediliyor...</span>
+          </div>
+        ) : suggestionsQuery.isError ? (
+          <div className="p-8 text-center space-y-3 text-xs">
+            <p className="text-rose-300">Otomasyon önerileri alınamadı.</p>
+            <button
+              type="button"
+              onClick={() => suggestionsQuery.refetch()}
+              className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold"
+            >
+              Tekrar dene
+            </button>
           </div>
         ) : suggestions.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

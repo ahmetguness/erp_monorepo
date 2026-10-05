@@ -222,6 +222,32 @@ model AutomationRule {
   @@map("automation_rules")
 }
 
+enum AgentCommandPlanStatus {
+  PENDING
+  EXECUTED
+}
+
+model AgentCommandPlan {
+  id               String                 @id
+  tenantId         String
+  userId           String
+  prompt           String
+  intentCategory   String
+  riskLevel        String
+  steps            Json
+  requiresApproval Boolean
+  status           AgentCommandPlanStatus @default(PENDING)
+  approvedAt       DateTime?
+  executedAt       DateTime?
+  createdAt        DateTime               @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, createdAt])
+  @@index([tenantId, status])
+  @@map("agent_command_plans")
+}
+
 model AutomationExecution {
   id          String                    @id @default(cuid())
   tenantId    String

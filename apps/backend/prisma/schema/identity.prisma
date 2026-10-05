@@ -203,6 +203,7 @@ model Tenant {
   tasks                       Task[]
   automationRules             AutomationRule[]
   automationExecutions        AutomationExecution[]
+  agentCommandPlans           AgentCommandPlan[]
   domainEventOutbox           DomainEventOutbox[]
   tenantSettings              TenantSetting[]
   moduleSettings              ModuleSetting[]
