@@ -219,6 +219,9 @@ function resolveDateRange(config: KpiReportConfig): { dateFrom: Date | null; dat
   const dateFrom = parseDate(config.dateFrom);
   const dateTo = parseDate(config.dateTo);
   if (!dateFrom || !dateTo) throw new ValidationError('Özel tarih aralığı için başlangıç ve bitiş zorunludur.');
+  dateFrom.setUTCHours(0, 0, 0, 0);
+  dateTo.setUTCHours(23, 59, 59, 999);
+  if (dateFrom > dateTo) throw new ValidationError('Başlangıç tarihi bitiş tarihinden sonra olamaz.');
   return { dateFrom, dateTo, from: config.dateFrom, to: config.dateTo };
 }
 
@@ -234,10 +237,13 @@ function normalizeSchedule(value: Record<string, unknown>): KpiScheduleEmailConf
   const rawSchedule = value.scheduleEmail;
   const schedule = isRecord(rawSchedule) ? rawSchedule : {};
   const frequency = readString(schedule, 'frequency');
+  const recipients = readStringArray(schedule, 'recipients').slice(0, 10);
+  const invalidRecipient = recipients.find((recipient) => !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(recipient));
+  if (invalidRecipient) throw new ValidationError(`Geçersiz zamanlanmış rapor alıcısı: ${invalidRecipient}`);
   return {
     enabled: readBoolean(schedule, 'enabled'),
     frequency: isScheduleFrequency(frequency) ? frequency : 'WEEKLY',
-    recipients: readStringArray(schedule, 'recipients').slice(0, 10),
+    recipients,
   };
 }
 
@@ -357,14 +363,14 @@ export class ReportingBuilderService {
   private async invoiceMetric(tenantId: string, metric: string, dateFrom: Date | null, dateTo: Date | null): Promise<number> {
     const dateFilter = dateFrom && dateTo ? { date: { gte: dateFrom, lte: dateTo } } : {};
     if (metric === 'invoiceCount') {
-      return this.db.invoice.count({ where: { tenantId, status: { not: InvoiceStatus.CANCELLED }, ...dateFilter } });
+      return this.db.invoice.count({ where: { tenantId, deletedAt: null, status: { not: InvoiceStatus.CANCELLED }, ...dateFilter } });
     }
     if (metric === 'overdueInvoiceCount') {
-      return this.db.invoice.count({ where: { tenantId, status: InvoiceStatus.OVERDUE, ...dateFilter } });
+      return this.db.invoice.count({ where: { tenantId, deletedAt: null, status: InvoiceStatus.OVERDUE, ...dateFilter } });
     }
     const type = metric === 'purchaseExpense' ? InvoiceType.PURCHASE : InvoiceType.SALES;
     const result = await this.db.invoice.aggregate({
-      where: { tenantId, type, status: { not: InvoiceStatus.CANCELLED }, ...dateFilter },
+      where: { tenantId, type, deletedAt: null, status: { not: InvoiceStatus.CANCELLED }, ...dateFilter },
       _sum: { totalGross: true },
     });
     return Number(result._sum.totalGross ?? 0);
@@ -389,7 +395,7 @@ export class ReportingBuilderService {
 
   private async stockMetric(tenantId: string, metric: string): Promise<number> {
     const rows = await this.db.stockLevel.findMany({
-      where: { tenantId },
+      where: { tenantId, product: { deletedAt: null, isActive: true } },
       select: { quantity: true, product: { select: { averageCost: true, minStockLevel: true } } },
     });
     if (metric === 'lowStockCount') {

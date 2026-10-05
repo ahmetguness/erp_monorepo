@@ -8,6 +8,7 @@ import {
   Copy, Check, Repeat2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import { useTcmbRates } from '@/hooks/useCurrencyRates';
 
 interface TcmbCurrency {
@@ -93,11 +94,12 @@ function CurrencyConverter({ currencies }: { currencies: TcmbCurrency[] }) {
   const [reversed, setReversed] = useState(false);
 
   const selected = currencies.find((c) => c.code === fromCode);
-  const buyRate = selected?.forexBuying ?? 0;
-  const sellRate = selected?.forexSelling ?? 0;
+  const unit = selected?.unit && selected.unit > 0 ? selected.unit : 1;
+  const buyRate = (selected?.forexBuying ?? 0) / unit;
+  const sellRate = (selected?.forexSelling ?? 0) / unit;
 
-  const resultBuy = reversed ? Number(amount || 0) / buyRate : Number(amount || 0) * buyRate;
-  const resultSell = reversed ? Number(amount || 0) / sellRate : Number(amount || 0) * sellRate;
+  const resultBuy = buyRate > 0 ? (reversed ? Number(amount || 0) / buyRate : Number(amount || 0) * buyRate) : 0;
+  const resultSell = sellRate > 0 ? (reversed ? Number(amount || 0) / sellRate : Number(amount || 0) * sellRate) : 0;
 
   const fromLabel = reversed ? 'TRY' : fromCode;
   const toLabel = reversed ? fromCode : 'TRY';
@@ -152,7 +154,7 @@ export function CurrencyRatesPage() {
   const [tab, setTab] = useState<'popular' | 'all'>('popular');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  const { data, isLoading, refetch, isFetching, dataUpdatedAt } = useTcmbRates();
+  const { data, isLoading, refetch, isFetching, dataUpdatedAt, isError, error } = useTcmbRates();
 
   const currencies = useMemo(() => data?.currencies ?? [], [data?.currencies]);
   const filtered = useMemo(() => {
@@ -164,6 +166,8 @@ export function CurrencyRatesPage() {
   const usd = currencies.find((c) => c.code === 'USD');
   const eur = currencies.find((c) => c.code === 'EUR');
   const gbp = currencies.find((c) => c.code === 'GBP');
+
+  if (isError) return <ApiErrorState error={error} onRetry={() => void refetch()} />;
 
   const copyRate = (code: string, rate: number) => {
     navigator.clipboard.writeText(rate.toFixed(4));

@@ -26,15 +26,21 @@ function reportScheduleHtml(input: {
   formattedValue: string;
   period: { from: string | null; to: string | null };
 }): string {
+  const escapeHtml = (value: string) => value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
   const periodText = input.period.from && input.period.to ? `${input.period.from} - ${input.period.to}` : 'Dinamik donem';
   return `
     <div style="font-family:Arial,sans-serif;color:#0f172a;">
-      <h2 style="margin:0 0 12px;">${input.reportName}</h2>
+      <h2 style="margin:0 0 12px;">${escapeHtml(input.reportName)}</h2>
       <p style="margin:0 0 16px;color:#475569;">Zamanlanmis rapor ozeti hazirlandi.</p>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;">
-        <p style="margin:0 0 6px;color:#64748b;font-size:12px;text-transform:uppercase;">${input.datasetLabel} / ${input.metricLabel}</p>
-        <p style="margin:0;font-size:28px;font-weight:700;color:#0284c7;">${input.formattedValue}</p>
-        <p style="margin:8px 0 0;color:#64748b;font-size:12px;">Donem: ${periodText}</p>
+        <p style="margin:0 0 6px;color:#64748b;font-size:12px;text-transform:uppercase;">${escapeHtml(input.datasetLabel)} / ${escapeHtml(input.metricLabel)}</p>
+        <p style="margin:0;font-size:28px;font-weight:700;color:#0284c7;">${escapeHtml(input.formattedValue)}</p>
+        <p style="margin:8px 0 0;color:#64748b;font-size:12px;">Donem: ${escapeHtml(periodText)}</p>
       </div>
     </div>
   `;

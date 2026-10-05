@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { FeaturePageShell } from "@/components/shared/FeaturePageShell";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -173,6 +174,9 @@ export function MailCenterPage() {
     templateLifecycle,
     data,
     isLoading,
+    isError,
+    error,
+    refetch,
     detail,
     availableMailTemplates,
     selectedTemplate,
@@ -275,7 +279,9 @@ export function MailCenterPage() {
         <MailStatCard label="Taslak şablon" value={String(templateLifecycle?.draftTenantCount ?? 0)} hint={`Son v${templateLifecycle?.latestTenantVersion ?? 0}`} />
       </div>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900">
+      {isError ? (
+        <ApiErrorState error={error} onRetry={() => void refetch()} />
+      ) : <section className="rounded-xl border border-slate-800 bg-slate-900">
         <MailCenterFilters
           search={search}
           direction={direction}
@@ -356,7 +362,7 @@ export function MailCenterPage() {
             </Button>
           </div>
         </div>
-      </section>
+      </section>}
 
       <Modal
         isOpen={composeOpen}

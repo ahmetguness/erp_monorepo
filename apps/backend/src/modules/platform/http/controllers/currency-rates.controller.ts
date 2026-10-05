@@ -54,6 +54,22 @@ function parseXml(xml: string): { date: string; currencies: TcmbCurrency[] } {
 let cache: { data: ReturnType<typeof parseXml>; fetchedAt: number } | null = null;
 const CACHE_TTL = 30 * 60 * 1000; // 30 min
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseCurrencyDate(value: unknown): Date | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value ? date : null;
+}
+
+function parseCurrencyCode(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const code = value.trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(code) ? code : null;
+}
+
 export const CurrencyRatesController = {
   async getTcmbRates(c: Context): Promise<Response> {
     const now = Date.now();
@@ -82,39 +98,39 @@ export const CurrencyRatesController = {
   async createRate(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = await c.req.json<{
-      currencyCode: string;
-      rate: number;
-      date: string;
-      source?: CurrencyRateSource;
-    }>();
-
-    if (!body.currencyCode || !body.rate || !body.date) {
-      return c.json(new ValidationError('currencyCode, rate ve date zorunludur.').toJSON(), 400);
+    const body: unknown = await c.req.json();
+    if (!isRecord(body)) return c.json(new ValidationError('Geçersiz istek gövdesi.').toJSON(), 400);
+    const currencyCode = parseCurrencyCode(body.currencyCode);
+    const date = parseCurrencyDate(body.date);
+    const numericRate = body.rate;
+    if (!currencyCode || !date || typeof numericRate !== 'number' || !Number.isFinite(numericRate)) {
+      return c.json(new ValidationError('Geçerli currencyCode, rate ve date zorunludur.').toJSON(), 400);
     }
-
-    if (body.rate <= 0) {
-      return c.json(new ValidationError('Kur değeri 0\'dan büyük olmalıdır.').toJSON(), 400);
+    if (numericRate <= 0 || numericRate >= 1_000_000_000_000) {
+      return c.json(new ValidationError('Kur değeri geçerli aralıkta olmalıdır.').toJSON(), 400);
+    }
+    if (body.source !== undefined && body.source !== CurrencyRateSource.MANUAL) {
+      return c.json(new ValidationError('Manuel kur endpointinde source MANUAL olmalıdır.').toJSON(), 400);
     }
 
     const rate = await prisma.currencyRate.upsert({
       where: {
         tenantId_currencyCode_date: {
           tenantId,
-          currencyCode: body.currencyCode.toUpperCase(),
-          date: new Date(body.date),
+          currencyCode,
+          date,
         },
       },
       create: {
         tenantId,
-        currencyCode: body.currencyCode.toUpperCase(),
-        rate: body.rate,
-        date: new Date(body.date),
-        source: body.source ?? CurrencyRateSource.MANUAL,
+        currencyCode,
+        rate: numericRate,
+        date,
+        source: CurrencyRateSource.MANUAL,
       },
       update: {
-        rate: body.rate,
-        source: body.source ?? CurrencyRateSource.MANUAL,
+        rate: numericRate,
+        source: CurrencyRateSource.MANUAL,
       },
     });
 
@@ -128,19 +144,27 @@ export const CurrencyRatesController = {
   async listRates(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const currencyCode = c.req.query('currencyCode');
+    const rawCurrencyCode = c.req.query('currencyCode');
     const dateFrom = c.req.query('dateFrom');
     const dateTo = c.req.query('dateTo');
+
+    const currencyCode = rawCurrencyCode ? parseCurrencyCode(rawCurrencyCode) : null;
+    if (rawCurrencyCode && !currencyCode) return c.json(new ValidationError('Geçersiz currencyCode.').toJSON(), 400);
+    const from = dateFrom ? parseCurrencyDate(dateFrom) : null;
+    const to = dateTo ? parseCurrencyDate(dateTo) : null;
+    if ((dateFrom && !from) || (dateTo && !to) || (from && to && from > to)) {
+      return c.json(new ValidationError('Geçersiz tarih aralığı.').toJSON(), 400);
+    }
 
     const rates = await prisma.currencyRate.findMany({
       where: {
         tenantId,
-        ...(currencyCode && { currencyCode: currencyCode.toUpperCase() }),
+        ...(currencyCode && { currencyCode }),
         ...(dateFrom || dateTo
           ? {
               date: {
-                ...(dateFrom && { gte: new Date(dateFrom) }),
-                ...(dateTo && { lte: new Date(dateTo) }),
+                ...(from && { gte: from }),
+                ...(to && { lte: to }),
               },
             }
           : {}),

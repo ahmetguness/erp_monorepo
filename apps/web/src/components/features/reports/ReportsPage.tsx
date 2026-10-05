@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { Download, Pin, Save, Trash2, TrendingDown, TrendingUp, Package, Users, Coins, BarChart3, Lock, Share2, Mail, Shield, Trophy, type LucideIcon } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import { CashflowForecastPanel } from './CashflowForecastPanel';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { Button } from '@/components/ui/Button';
@@ -104,9 +105,19 @@ export function ReportsPage() {
     collectionList, loadingCollections,
     topProducts, loadingTopProducts,
     savedReports, loadingSaved,
+    reportError, retryReports,
     deleteReport, previewKpiMutation, createKpiReport, updateReport, recordExportAudit, runReportSchedule,
     customReporting, isStarter,
   } = useReportsData();
+
+  if (reportError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Raporlar" subtitle="İşletmenizin finansal ve operasyonel özetleri." />
+        <ApiErrorState error={reportError} onRetry={retryReports} />
+      </div>
+    );
+  }
 
   const savedColumns: ColumnDef<SavedReport>[] = [
     {

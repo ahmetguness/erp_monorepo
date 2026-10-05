@@ -152,6 +152,8 @@ export interface UseReportsDataReturn {
   loadingTopProducts: boolean;
   savedReports: SavedReport[];
   loadingSaved: boolean;
+  reportError: unknown;
+  retryReports: () => void;
 
   // Mutations
   deleteReport: ReturnType<typeof useMutation<void, unknown, string>>;
@@ -267,73 +269,63 @@ export function useReportsData(): UseReportsDataReturn {
   });
 
   // ── Queries ──────────────────────────────────────────────────────────────
-  const { data: revenue, isLoading: loadingRevenue } = useQuery({
+  const revenueQuery = useQuery({
     queryKey: ['reports', 'revenue', dateFrom, dateTo],
     queryFn: () => getRevenueSummary(dateFrom, dateTo),
     enabled: !!dateFrom && !!dateTo,
   });
 
-  const { data: expense, isLoading: loadingExpense } = useQuery({
+  const expenseQuery = useQuery({
     queryKey: ['reports', 'expense', dateFrom, dateTo],
     queryFn: () => getExpenseSummary(dateFrom, dateTo),
     enabled: !!dateFrom && !!dateTo,
   });
 
-  const { data: stock, isLoading: loadingStock } = useQuery({
+  const stockQuery = useQuery({
     queryKey: ['reports', 'stock'],
     queryFn: getStockSummary,
   });
 
-  const { data: contactBalance, isLoading: loadingContactBalance } = useQuery({
+  const contactBalanceQuery = useQuery({
     queryKey: ['reports', 'contact-balance'],
     queryFn: getContactBalance,
   });
 
-  const { data: collectionList, isLoading: loadingCollections } = useQuery({
+  const collectionQuery = useQuery({
     queryKey: ['reports', 'collections', dateFrom, dateTo],
     queryFn: () => getCollectionList(dateFrom, dateTo),
     enabled: !!dateFrom && !!dateTo,
   });
 
-  const { data: topProducts, isLoading: loadingTopProducts } = useQuery({
+  const topProductsQuery = useQuery({
     queryKey: ['reports', 'top-products', dateFrom, dateTo],
     queryFn: () => getTopProducts(dateFrom, dateTo, 10),
     enabled: !!dateFrom && !!dateTo,
   });
 
-  const { data: savedReports = [], isLoading: loadingSaved } = useQuery({
+  const savedReportsQuery = useQuery({
     queryKey: ['reports', 'saved'],
-    queryFn: async () => {
-      try {
-        return await getSavedReports();
-      } catch {
-        return [];
-      }
-    },
+    queryFn: () => getSavedReports(),
     enabled: customReporting,
   });
 
-  const { data: registry } = useQuery({
+  const registryQuery = useQuery({
     queryKey: ['reports', 'registry'],
-    queryFn: async () => {
-      try {
-        return await getReportingRegistry();
-      } catch {
-        return {
-          datasets: [],
-          chartTypes: [],
-          capabilities: {
-            savedKpi: false,
-            dashboardPinning: false,
-            scheduledReportEmail: false,
-            exportAudit: false,
-            permissionAwareDatasetFields: false,
-          },
-        };
-      }
-    },
+    queryFn: getReportingRegistry,
     enabled: customReporting,
   });
+
+  const revenue = revenueQuery.data;
+  const expense = expenseQuery.data;
+  const stock = stockQuery.data;
+  const contactBalance = contactBalanceQuery.data;
+  const collectionList = collectionQuery.data;
+  const topProducts = topProductsQuery.data;
+  const savedReports = savedReportsQuery.data ?? [];
+  const registry = registryQuery.data;
+  const reportQueries = [revenueQuery, expenseQuery, stockQuery, contactBalanceQuery, collectionQuery, topProductsQuery, savedReportsQuery, registryQuery];
+  const reportError = reportQueries.find((query) => query.isError)?.error;
+  const retryReports = () => { reportQueries.forEach((query) => { if (query.isError) void query.refetch(); }); };
 
   const selectedDataset = registry?.datasets.find(
     (dataset) => dataset.key === kpiConfig.dataset,
@@ -381,19 +373,21 @@ export function useReportsData(): UseReportsDataReturn {
     selectedDataset,
     registry,
     revenue,
-    loadingRevenue,
+    loadingRevenue: revenueQuery.isLoading,
     expense,
-    loadingExpense,
+    loadingExpense: expenseQuery.isLoading,
     stock,
-    loadingStock,
+    loadingStock: stockQuery.isLoading,
     contactBalance,
-    loadingContactBalance,
+    loadingContactBalance: contactBalanceQuery.isLoading,
     collectionList,
-    loadingCollections,
+    loadingCollections: collectionQuery.isLoading,
     topProducts,
-    loadingTopProducts,
+    loadingTopProducts: topProductsQuery.isLoading,
     savedReports,
-    loadingSaved,
+    loadingSaved: savedReportsQuery.isLoading,
+    reportError,
+    retryReports,
     deleteReport,
     previewKpiMutation,
     createKpiReport,

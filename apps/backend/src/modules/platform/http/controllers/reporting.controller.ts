@@ -24,6 +24,21 @@ function parseReportLimit(value: string | undefined, fallback: number, max: numb
   return Math.min(parsed, max);
 }
 
+function parseReportDateRange(dateFromValue: string | undefined, dateToValue: string | undefined):
+  | { dateFrom: Date; dateTo: Date }
+  | { error: string } {
+  if (!dateFromValue || !dateToValue) return { error: 'dateFrom ve dateTo parametreleri zorunludur.' };
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!datePattern.test(dateFromValue) || !datePattern.test(dateToValue)) return { error: 'Tarih formati YYYY-MM-DD olmalidir.' };
+  const dateFrom = new Date(`${dateFromValue}T00:00:00.000Z`);
+  const dateTo = new Date(`${dateToValue}T23:59:59.999Z`);
+  if (Number.isNaN(dateFrom.getTime()) || Number.isNaN(dateTo.getTime()) || dateFrom.toISOString().slice(0, 10) !== dateFromValue || dateTo.toISOString().slice(0, 10) !== dateToValue) {
+    return { error: 'Gecerli bir tarih araligi girilmelidir.' };
+  }
+  if (dateFrom > dateTo) return { error: 'dateFrom, dateTo tarihinden sonra olamaz.' };
+  return { dateFrom, dateTo };
+}
+
 // ─────────────────────────────────────────────
 // DTOs
 // ─────────────────────────────────────────────
@@ -43,22 +58,16 @@ export const ReportingController = {
 
     const query = { dateFrom: c.req.query('dateFrom'), dateTo: c.req.query('dateTo') };
 
-    if (!query.dateFrom || !query.dateTo) {
-      return c.json(
-        new ValidationError('dateFrom ve dateTo parametreleri zorunludur.').toJSON(),
-        400,
-      );
-    }
-
-    const dateFrom = new Date(query.dateFrom);
-    const dateTo = new Date(query.dateTo);
+    const range = parseReportDateRange(query.dateFrom, query.dateTo);
+    if ('error' in range) return c.json(new ValidationError(range.error).toJSON(), 400);
 
     const invoices = await prisma.invoice.findMany({
       where: {
         tenantId,
         type: InvoiceType.SALES,
         status: { not: InvoiceStatus.CANCELLED },
-        date: { gte: dateFrom, lte: dateTo },
+        deletedAt: null,
+        date: { gte: range.dateFrom, lte: range.dateTo },
       },
       select: {
         id: true,
@@ -94,7 +103,7 @@ export const ReportingController = {
     const tenantId = requireTenantId(c);
 
     const stockLevels = await prisma.stockLevel.findMany({
-      where: { tenantId, quantity: { gt: 0 } },
+      where: { tenantId, quantity: { gt: 0 }, product: { deletedAt: null, isActive: true } },
       include: {
         product: {
           select: {
@@ -200,19 +209,16 @@ export const ReportingController = {
 
     const query = { dateFrom: c.req.query('dateFrom'), dateTo: c.req.query('dateTo') };
 
-    if (!query.dateFrom || !query.dateTo) {
-      return c.json(
-        new ValidationError('dateFrom ve dateTo parametreleri zorunludur.').toJSON(),
-        400,
-      );
-    }
+    const range = parseReportDateRange(query.dateFrom, query.dateTo);
+    if ('error' in range) return c.json(new ValidationError(range.error).toJSON(), 400);
 
     const invoices = await prisma.invoice.findMany({
       where: {
         tenantId,
         type: InvoiceType.PURCHASE,
         status: { not: InvoiceStatus.CANCELLED },
-        date: { gte: new Date(query.dateFrom), lte: new Date(query.dateTo) },
+        deletedAt: null,
+        date: { gte: range.dateFrom, lte: range.dateTo },
       },
       select: {
         totalNet: true,
@@ -241,19 +247,19 @@ export const ReportingController = {
     const dateFrom = c.req.query('dateFrom');
     const dateTo = c.req.query('dateTo');
 
+    let range: { dateFrom: Date; dateTo: Date } | null = null;
+    if (dateFrom || dateTo) {
+      const parsed = parseReportDateRange(dateFrom, dateTo);
+      if ('error' in parsed) return c.json(new ValidationError(parsed.error).toJSON(), 400);
+      range = parsed;
+    }
+
     const payments = await prisma.payment.findMany({
       where: {
         tenantId,
         direction: 'RECEIVE',
         deletedAt: null,
-        ...(dateFrom || dateTo
-          ? {
-              date: {
-                ...(dateFrom && { gte: new Date(dateFrom) }),
-                ...(dateTo && { lte: new Date(dateTo) }),
-              },
-            }
-          : {}),
+        ...(range ? { date: { gte: range.dateFrom, lte: range.dateTo } } : {}),
       },
       include: {
         contact: { select: { id: true, name: true, code: true } },
@@ -284,12 +290,8 @@ export const ReportingController = {
       limit: c.req.query('limit'),
     };
 
-    if (!query.dateFrom || !query.dateTo) {
-      return c.json(
-        new ValidationError('dateFrom ve dateTo parametreleri zorunludur.').toJSON(),
-        400,
-      );
-    }
+    const range = parseReportDateRange(query.dateFrom, query.dateTo);
+    if ('error' in range) return c.json(new ValidationError(range.error).toJSON(), 400);
 
     const limit = parseReportLimit(query.limit, 10, 50);
     const lines = await prisma.invoiceLine.findMany({
@@ -301,7 +303,7 @@ export const ReportingController = {
           type: InvoiceType.SALES,
           status: { not: InvoiceStatus.CANCELLED },
           deletedAt: null,
-          date: { gte: new Date(query.dateFrom), lte: new Date(query.dateTo) },
+          date: { gte: range.dateFrom, lte: range.dateTo },
         },
       },
       select: {
@@ -479,6 +481,36 @@ async function canAccessSavedReport(
   return isReportAllowedByDataset(report, allowedDatasetKeys);
 }
 
+function canMutateSavedReport(userId: string, report: { createdBy: string | null }): boolean {
+  return report.createdBy === null || report.createdBy === userId;
+}
+
+function validateSavedReportName(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const name = value.trim();
+  return name.length <= 120 && !/[\r\n\0]/.test(name) ? name : null;
+}
+
+function validateSavedReportShape(body: Record<string, unknown>): string | null {
+  if (body.filters !== undefined && !isRecord(body.filters)) return 'filters nesne olmalıdır.';
+  for (const key of ['columns', 'sharedRoleIds', 'sharedUserIds'] as const) {
+    const value = body[key];
+    if (value !== undefined && (!Array.isArray(value) || value.some((item) => typeof item !== 'string'))) return `${key} metin dizisi olmalıdır.`;
+  }
+  for (const key of ['isShared', 'pinnedToDashboard'] as const) {
+    if (body[key] !== undefined && typeof body[key] !== 'boolean') return `${key} boolean olmalıdır.`;
+  }
+  return null;
+}
+
+async function validateShareTargets(tenantId: string, roleIds: string[], userIds: string[]): Promise<boolean> {
+  const [roleCount, userCount] = await Promise.all([
+    prisma.role.count({ where: { tenantId, id: { in: roleIds } } }),
+    prisma.tenantUser.count({ where: { tenantId, userId: { in: userIds }, isActive: true } }),
+  ]);
+  return roleCount === roleIds.length && userCount === userIds.length;
+}
+
 export const ReportingBuilderController = {
   async registry(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
@@ -539,9 +571,15 @@ export const SavedReportController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
 
-    const body = await c.req.json<CreateSavedReportDTO>();
+    const rawBody: unknown = await c.req.json();
+    if (!isRecord(rawBody)) return c.json(new ValidationError('Geçersiz istek gövdesi.').toJSON(), 400);
+    const shapeError = validateSavedReportShape(rawBody);
+    if (shapeError) return c.json(new ValidationError(shapeError).toJSON(), 400);
+    const body = rawBody as unknown as CreateSavedReportDTO;
 
-    if (!body.name || !body.module) {
+    const name = validateSavedReportName(body.name);
+    const moduleName = typeof body.module === 'string' ? body.module.trim() : '';
+    if (!name || !moduleName || moduleName.length > 80) {
       return c.json(new ValidationError('name ve module alanları zorunludur.').toJSON(), 400);
     }
     const filters = toSavedReportFilters(body.filters ?? {});
@@ -549,17 +587,22 @@ export const SavedReportController = {
     if (kpiConfig) {
       await new ReportingBuilderService(prisma).assertCanUseConfig(tenantId, userId, kpiConfig);
     }
+    const sharedRoleIds = sanitizeStringArray(body.sharedRoleIds);
+    const sharedUserIds = sanitizeStringArray(body.sharedUserIds);
+    if (!(await validateShareTargets(tenantId, sharedRoleIds, sharedUserIds))) {
+      return c.json(new ValidationError('Paylaşım hedefleri bu tenant içinde bulunamadı.').toJSON(), 400);
+    }
 
     const report = await prisma.savedReport.create({
       data: {
         tenantId,
-        name: body.name,
-        module: body.module,
+        name,
+        module: moduleName,
         filters,
         columns: body.columns ?? [],
         isShared: body.isShared ?? false,
-        sharedRoleIds: sanitizeStringArray(body.sharedRoleIds),
-        sharedUserIds: sanitizeStringArray(body.sharedUserIds),
+        sharedRoleIds,
+        sharedUserIds,
         columnTemplateName: readOptionalString(body.columnTemplateName),
         pinnedToDashboard: body.pinnedToDashboard ?? kpiConfig?.pinnedToDashboard ?? false,
         createdBy: userId,
@@ -575,24 +618,36 @@ export const SavedReportController = {
 
     const report = await prisma.savedReport.findFirst({ where: { id: reportId, tenantId } });
     if (!report) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
-    if (!(await canAccessSavedReport(tenantId, requireUserId(c), report))) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
+    const userId = requireUserId(c);
+    if (!(await canAccessSavedReport(tenantId, userId, report)) || !canMutateSavedReport(userId, report)) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
 
-    const body = await c.req.json<Partial<CreateSavedReportDTO>>();
+    const rawBody: unknown = await c.req.json();
+    if (!isRecord(rawBody)) return c.json(new ValidationError('Geçersiz istek gövdesi.').toJSON(), 400);
+    const shapeError = validateSavedReportShape(rawBody);
+    if (shapeError) return c.json(new ValidationError(shapeError).toJSON(), 400);
+    const body = rawBody as Partial<CreateSavedReportDTO>;
+    const name = body.name !== undefined ? validateSavedReportName(body.name) : undefined;
+    if (body.name !== undefined && !name) return c.json(new ValidationError('Geçerli bir rapor adı girilmelidir.').toJSON(), 400);
     const filters = body.filters !== undefined ? toSavedReportFilters(body.filters) : undefined;
     const kpiConfig = filters && isKpiConfig(filters) ? normalizeKpiConfig(filters) : null;
     if (kpiConfig) {
       await new ReportingBuilderService(prisma).assertCanUseConfig(tenantId, requireUserId(c), kpiConfig);
     }
+    const sharedRoleIds = body.sharedRoleIds !== undefined ? sanitizeStringArray(body.sharedRoleIds) : undefined;
+    const sharedUserIds = body.sharedUserIds !== undefined ? sanitizeStringArray(body.sharedUserIds) : undefined;
+    if (!(await validateShareTargets(tenantId, sharedRoleIds ?? report.sharedRoleIds, sharedUserIds ?? report.sharedUserIds))) {
+      return c.json(new ValidationError('Paylaşım hedefleri bu tenant içinde bulunamadı.').toJSON(), 400);
+    }
 
     const updated = await prisma.savedReport.update({
       where: { id: reportId },
       data: {
-        ...(body.name !== undefined && { name: body.name }),
+        ...(typeof name === 'string' && { name }),
         ...(filters !== undefined && { filters }),
         ...(body.columns !== undefined && { columns: body.columns }),
         ...(body.isShared !== undefined && { isShared: body.isShared }),
-        ...(body.sharedRoleIds !== undefined && { sharedRoleIds: sanitizeStringArray(body.sharedRoleIds) }),
-        ...(body.sharedUserIds !== undefined && { sharedUserIds: sanitizeStringArray(body.sharedUserIds) }),
+        ...(sharedRoleIds !== undefined && { sharedRoleIds }),
+        ...(sharedUserIds !== undefined && { sharedUserIds }),
         ...(body.columnTemplateName !== undefined && { columnTemplateName: readOptionalString(body.columnTemplateName) }),
         ...(body.pinnedToDashboard !== undefined && { pinnedToDashboard: body.pinnedToDashboard }),
       },
@@ -607,7 +662,8 @@ export const SavedReportController = {
 
     const report = await prisma.savedReport.findFirst({ where: { id: reportId, tenantId } });
     if (!report) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
-    if (!(await canAccessSavedReport(tenantId, requireUserId(c), report))) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
+    const userId = requireUserId(c);
+    if (!(await canAccessSavedReport(tenantId, userId, report)) || !canMutateSavedReport(userId, report)) return c.json(new NotFoundError('Rapor', reportId).toJSON(), 404);
 
     await prisma.savedReport.delete({ where: { id: reportId } });
     return c.json({ data: { success: true } });

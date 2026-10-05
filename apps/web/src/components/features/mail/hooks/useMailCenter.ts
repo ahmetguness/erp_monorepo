@@ -199,6 +199,9 @@ export interface UseMailCenterReturn {
   templateLifecycle: ReturnType<typeof useMailTemplateLifecycle>["data"];
   data: ReturnType<typeof useMailHistory>["data"];
   isLoading: boolean;
+  isError: boolean;
+  error: unknown;
+  refetch: ReturnType<typeof useMailHistory>["refetch"];
   detail: ReturnType<typeof useMailMessage>["data"];
   availableMailTemplates: MailTemplate[];
   selectedTemplate: MailTemplate | undefined;
@@ -337,7 +340,7 @@ export function useMailCenter(): UseMailCenterReturn {
     [direction, page, search, status],
   );
 
-  const { data, isLoading } = useMailHistory(params);
+  const { data, isLoading, isError, error, refetch } = useMailHistory(params);
   const { data: detail } = useMailMessage(detailId);
 
   const availableMailTemplates = useMemo(
@@ -535,6 +538,9 @@ export function useMailCenter(): UseMailCenterReturn {
     templateLifecycle,
     data,
     isLoading,
+    isError,
+    error,
+    refetch,
     detail,
     availableMailTemplates,
     selectedTemplate,
