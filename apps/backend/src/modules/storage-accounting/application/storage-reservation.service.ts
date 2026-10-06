@@ -31,7 +31,10 @@ async function serializableTransaction<T>(
     try {
       return await db.$transaction(operation, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
-      const retryable = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+      const retryable = error instanceof Prisma.PrismaClientKnownRequestError && (
+        error.code === 'P2034' ||
+        (error.code === 'P2010' && typeof error.meta?.code === 'string' && error.meta.code === '40001')
+      );
       if (!retryable || attempt === 2) throw error;
     }
   }

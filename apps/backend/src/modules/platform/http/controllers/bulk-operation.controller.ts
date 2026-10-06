@@ -8,11 +8,29 @@ import { z } from 'zod';
 import { BulkImportAssistanceService } from '../../application/bulk-import-assistance/index.js';
 import { PrismaMappingProfileRepository } from '../../infrastructure/persistence/prisma-mapping-profile.repository.js';
 
-const importCellSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+const importCellSchema = z.union([z.string().max(10_000), z.number().finite(), z.boolean(), z.null()]);
 const importTargetSchema = z.enum(['contacts', 'products', 'invoices']);
-const mappingSchema = z.object({ source: z.string().min(1), target: z.string(), confidence: z.number().min(0).max(1), learned: z.boolean() });
-const analyzeImportSchema = z.object({ target: importTargetSchema, headers: z.array(z.string().min(1)).min(1).max(100), rows: z.array(z.record(z.string(), importCellSchema)).max(1000) });
-const saveProfileSchema = z.object({ name: z.string().trim().min(1).max(80), target: importTargetSchema, headers: z.array(z.string().min(1)).min(1).max(100), mappings: z.array(mappingSchema).min(1).max(100) });
+const importTargetFields = {
+  contacts: new Set(['name', 'taxNumber', 'email', 'phone', 'city', 'country']),
+  products: new Set(['code', 'name', 'barcode', 'salesPrice', 'purchasePrice', 'unit']),
+  invoices: new Set(['number', 'date', 'dueDate', 'contactName', 'total', 'currency']),
+} as const;
+const headerSchema = z.string().trim().min(1).max(120);
+const mappingSchema = z.object({ source: headerSchema, target: z.string().max(80), confidence: z.number().finite().min(0).max(1), learned: z.boolean() }).strict();
+const analyzeImportSchema = z.object({ target: importTargetSchema, headers: z.array(headerSchema).min(1).max(100), rows: z.array(z.record(z.string().max(120), importCellSchema)).max(1000) }).strict().superRefine((value, ctx) => {
+  if (new Set(value.headers).size !== value.headers.length) ctx.addIssue({ code: 'custom', message: 'Başlıklar benzersiz olmalıdır.', path: ['headers'] });
+});
+const saveProfileSchema = z.object({ name: z.string().trim().min(1).max(80), target: importTargetSchema, headers: z.array(headerSchema).min(1).max(100), mappings: z.array(mappingSchema).min(1).max(100) }).strict().superRefine((value, ctx) => {
+  const headers = new Set(value.headers);
+  if (headers.size !== value.headers.length) ctx.addIssue({ code: 'custom', message: 'Başlıklar benzersiz olmalıdır.', path: ['headers'] });
+  const sources = new Set<string>();
+  for (const [index, mapping] of value.mappings.entries()) {
+    if (!headers.has(mapping.source)) ctx.addIssue({ code: 'custom', message: 'Eşleme kaynağı başlıklarda bulunmalıdır.', path: ['mappings', index, 'source'] });
+    if (mapping.target && !importTargetFields[value.target].has(mapping.target)) ctx.addIssue({ code: 'custom', message: 'Eşleme hedef için desteklenmiyor.', path: ['mappings', index, 'target'] });
+    if (sources.has(mapping.source)) ctx.addIssue({ code: 'custom', message: 'Eşleme kaynakları benzersiz olmalıdır.', path: ['mappings', index, 'source'] });
+    sources.add(mapping.source);
+  }
+});
 const importAssistance = new BulkImportAssistanceService(new PrismaMappingProfileRepository(prisma));
 
 interface BulkOperationBody {

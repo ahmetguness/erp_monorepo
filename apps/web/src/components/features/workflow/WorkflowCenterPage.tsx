@@ -7,6 +7,7 @@ import {
 import Link from 'next/link';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import { useExceptionCenter, useWorkflowTasks } from '@/hooks/useWorkflow';
 import type { ExceptionCenterItem, WorkflowTask } from '@/services/task.service';
 import type { AutomationExecution, AutomationRule, SchedulerJobDefinition } from '@/services/intelligence.service';
@@ -115,6 +116,7 @@ export function WorkflowCenterPage() {
   const accessContext = createUserAccessContext(user, tenant);
   const canCreateAutomation = hasUserPermission(accessContext, 'settings', 'CREATE');
   const canUpdateAutomation = hasUserPermission(accessContext, 'settings', 'UPDATE');
+  const canDeleteAutomation = hasUserPermission(accessContext, 'settings', 'DELETE');
   const [activeTab, setActiveTab] = useState<'exceptions' | 'tasks' | 'rules' | 'scheduler'>('exceptions');
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
   const { data, isLoading, isError } = useWorkflowTasks();
@@ -124,16 +126,16 @@ export function WorkflowCenterPage() {
   const { data: exceptions, isLoading: loadingExceptions, isError: exceptionError } = useExceptionCenter();
   const exceptionItems = exceptions?.items ?? [];
 
-  const { data: rules, isLoading: loadingRules } = useAutomationRules();
+  const { data: rules, isLoading: loadingRules, isError: rulesError, error: rulesErrorValue, refetch: refetchRules } = useAutomationRules();
   const { data: templates } = useAutomationRuleTemplates();
   const createRule = useCreateAutomationRule();
   const updateRule = useUpdateAutomationRule();
   const deleteRule = useDeleteAutomationRule();
   const runRule = useRunAutomationRule();
   const runAllActive = useRunActiveAutomationRules();
-  const { data: executions = [], isLoading: loadingExecutions } = useAutomationExecutions();
-  const { data: schedulerJobs = [], isLoading: loadingSchedulerJobs } = useSchedulerJobs();
-  const { data: schedulerRuns = [], isLoading: loadingSchedulerRuns } = useSchedulerRuns();
+  const { data: executions = [], isLoading: loadingExecutions, isError: executionsError, error: executionsErrorValue, refetch: refetchExecutions } = useAutomationExecutions();
+  const { data: schedulerJobs = [], isLoading: loadingSchedulerJobs, isError: schedulerJobsError, error: schedulerJobsErrorValue, refetch: refetchSchedulerJobs } = useSchedulerJobs();
+  const { data: schedulerRuns = [], isLoading: loadingSchedulerRuns, isError: schedulerRunsError, error: schedulerRunsErrorValue, refetch: refetchSchedulerRuns } = useSchedulerRuns();
   const runScheduler = useRunSchedulerJob();
   const activeSchedulerCount = schedulerJobs.filter((job) => job.status === 'ACTIVE').length;
   const plannedSchedulerCount = schedulerJobs.filter((job) => job.status === 'PLANNED').length;
@@ -144,7 +146,7 @@ export function WorkflowCenterPage() {
         title="İş Akışı & Otomasyon Merkezi"
         subtitle="İş akışlarını, otomatik kuralları ve bekleyen görevleri tek bir merkezden yönetin."
         action={
-          activeTab === 'rules' ? (
+          activeTab === 'rules' && canUpdateAutomation ? (
             <button
               onClick={() => runAllActive.mutate()}
               disabled={runAllActive.isPending}
@@ -153,7 +155,7 @@ export function WorkflowCenterPage() {
               <Play className="w-4 h-4" />
               Tüm Aktif Kuralları Tetikle
             </button>
-          ) : activeTab === 'scheduler' ? (
+          ) : activeTab === 'scheduler' && canUpdateAutomation ? (
             <button
               onClick={() => runScheduler.mutate('all')}
               disabled={runScheduler.isPending || activeSchedulerCount === 0}
@@ -352,7 +354,7 @@ export function WorkflowCenterPage() {
               onCreateSuggestion={(draft) => createRule.mutate({ ...draft, isActive: false })}
             />
           )}
-          <AutomationRuleBuilder
+          {(canCreateAutomation || (editingRule && canUpdateAutomation)) && <AutomationRuleBuilder
             key={editingRule?.id ?? 'new-rule'}
             templates={templates ?? []}
             editingRule={editingRule}
@@ -360,7 +362,7 @@ export function WorkflowCenterPage() {
             onCreate={(payload) => createRule.mutate(payload)}
             onUpdate={(id, payload) => updateRule.mutate({ id, data: payload }, { onSuccess: () => setEditingRule(null) })}
             onCancelEdit={() => setEditingRule(null)}
-          />
+          />}
 
           {/* Rules Templates Section */}
           <div className="space-y-4 bg-slate-950/20 border border-slate-800/80 rounded-2xl p-5">
@@ -416,7 +418,7 @@ export function WorkflowCenterPage() {
                     </div>
                     <p className="text-[10px] leading-relaxed text-emerald-300/80">{tmpl.outcomeLabel}</p>
                   </div>
-                  <button
+                  {canCreateAutomation && <button
                     onClick={() => {
                       createRule.mutate({
                         name: tmpl.title,
@@ -433,7 +435,7 @@ export function WorkflowCenterPage() {
                     className="mt-4 w-full text-center py-2 rounded-lg text-xs font-bold text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 disabled:opacity-50 transition-all duration-200"
                   >
                     Şablonu Ekle
-                  </button>
+                  </button>}
                 </div>
               ))}
             </div>
@@ -445,6 +447,8 @@ export function WorkflowCenterPage() {
             <div className="rounded-lg border border-slate-800 bg-slate-900/40 overflow-hidden">
               {loadingRules ? (
                 <div className="p-6 text-sm text-slate-500">Kurallar yükleniyor...</div>
+              ) : rulesError ? (
+                <ApiErrorState error={rulesErrorValue} onRetry={() => void refetchRules()} />
               ) : !rules || rules.length === 0 ? (
                 <div className="p-6 text-sm text-slate-500">Kayıtlı otomasyon kuralı bulunmamaktadır. Yukarıdan bir şablon ekleyerek başlayabilirsiniz.</div>
               ) : (
@@ -474,13 +478,13 @@ export function WorkflowCenterPage() {
                       </div>
 
                       <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
-                        <button
+                        {canUpdateAutomation && <button
                           onClick={() => setEditingRule(rule)}
                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-colors"
                         >
                           Düzenle
-                        </button>
-                        <button
+                        </button>}
+                        {canUpdateAutomation && <button
                           onClick={() => {
                             updateRule.mutate({
                               id: rule.id,
@@ -496,23 +500,23 @@ export function WorkflowCenterPage() {
                           ) : (
                             <ToggleLeft className="w-5 h-5 text-slate-500" />
                           )}
-                        </button>
-                        <button
+                        </button>}
+                        {canUpdateAutomation && <button
                           onClick={() => runRule.mutate(rule.id)}
                           disabled={runRule.isPending || !rule.isActive}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 disabled:opacity-50 transition-colors"
                         >
                           <Play className="w-3.5 h-3.5" />
                           Çalıştır
-                        </button>
-                        <button
+                        </button>}
+                        {canDeleteAutomation && <button
                           onClick={() => deleteRule.mutate(rule.id)}
                           disabled={deleteRule.isPending}
                           className="p-1.5 rounded-lg border border-slate-850 bg-slate-900/50 hover:bg-red-500/10 hover:border-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
                           title="Sil"
                         >
                           <Trash2 className="w-4 h-4" />
-                        </button>
+                        </button>}
                       </div>
                     </div>
                   ))}
@@ -526,6 +530,8 @@ export function WorkflowCenterPage() {
             <div className="rounded-lg border border-slate-800 bg-slate-900/40 overflow-hidden">
               {loadingExecutions ? (
                 <div className="p-6 text-sm text-slate-500">Çalışma geçmişi yükleniyor...</div>
+              ) : executionsError ? (
+                <ApiErrorState error={executionsErrorValue} onRetry={() => void refetchExecutions()} />
               ) : executions.length === 0 ? (
                 <div className="p-6 text-sm text-slate-500">Henüz otomasyon çalışması bulunmuyor.</div>
               ) : (
@@ -582,6 +588,8 @@ export function WorkflowCenterPage() {
           <section className="rounded-lg border border-slate-800 bg-slate-900/40">
             {loadingSchedulerJobs ? (
               <div className="p-6 text-sm text-slate-500">Scheduler joblari yükleniyor...</div>
+            ) : schedulerJobsError ? (
+              <ApiErrorState error={schedulerJobsErrorValue} onRetry={() => void refetchSchedulerJobs()} />
             ) : schedulerJobs.length === 0 ? (
               <div className="p-6 text-sm text-slate-500">Tanimli scheduler job bulunmuyor.</div>
             ) : (
@@ -615,6 +623,8 @@ export function WorkflowCenterPage() {
           <section className="rounded-lg border border-slate-800 bg-slate-900/40">
             {loadingSchedulerRuns ? (
               <div className="p-6 text-sm text-slate-500">Scheduler gecmisi yükleniyor...</div>
+            ) : schedulerRunsError ? (
+              <ApiErrorState error={schedulerRunsErrorValue} onRetry={() => void refetchSchedulerRuns()} />
             ) : schedulerRuns.length === 0 ? (
               <div className="p-6 text-sm text-slate-500">Henüz scheduler calismasi bulunmuyor.</div>
             ) : (

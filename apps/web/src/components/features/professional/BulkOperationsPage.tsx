@@ -149,7 +149,8 @@ function OperationDecisionPanel({ result }: { result: BulkOperationResult }) {
 
 export function BulkOperationsPage() {
   const { user, tenant } = useCurrentUser();
-  const canManageImports = hasUserPermission(createUserAccessContext(user, tenant), "settings", "CREATE");
+  const access = createUserAccessContext(user, tenant);
+  const canManageImports = hasUserPermission(access, "settings", "CREATE");
   const [target, setTarget] = useState<BulkOperationTarget>("contacts");
   const [field, setField] = useState(FIELD_OPTIONS.contacts[0].value);
   const [rawValue, setRawValue] = useState("true");
@@ -160,6 +161,8 @@ export function BulkOperationsPage() {
   const execute = useExecuteBulkOperation();
   const fields = FIELD_OPTIONS[target];
   const selectedField = fields.find((item) => item.value === field) ?? fields[0];
+  const targetModule = target === "contacts" ? "contacts" : target === "products" ? "inventory" : "invoicing";
+  const canUpdate = hasUserPermission(access, targetModule, "UPDATE");
   const ids = useMemo(() => parseIds(idsText), [idsText]);
 
   const payload: BulkOperationPayload = {
@@ -268,7 +271,7 @@ export function BulkOperationsPage() {
             type="button"
             variant="secondary"
             leftIcon={preview.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
-            disabled={ids.length === 0 || ids.length > 100 || preview.isPending}
+            disabled={!canUpdate || ids.length === 0 || ids.length > 100 || preview.isPending}
             onClick={runPreview}
           >
             Onizle
@@ -276,7 +279,7 @@ export function BulkOperationsPage() {
           <Button
             type="button"
             leftIcon={execute.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-            disabled={!result || result.mode !== "preview" || result.changed === 0 || execute.isPending}
+            disabled={!canUpdate || !result || result.mode !== "preview" || result.changed === 0 || execute.isPending}
             onClick={runExecute}
           >
             Güvenli güncelle
@@ -293,6 +296,7 @@ export function BulkOperationsPage() {
             Temizle
           </Button>
         </div>
+        {!canUpdate && <p className="mt-3 text-xs text-amber-400">Bu hedefte toplu güncelleme için güncelleme yetkisi gerekir.</p>}
       </section>
 
       {result && (

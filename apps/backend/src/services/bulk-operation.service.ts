@@ -1,14 +1,27 @@
-import { AuditAction, EntityType, Prisma, PrismaClient } from '@prisma/client';
-import { ValidationError } from '../errors/index.js';
-import { createAuditLog } from '../utils/audit.js';
+import { AuditAction, EntityType, Prisma, PrismaClient } from "@prisma/client";
+import { ValidationError } from "../errors/index.js";
+import { createAuditLog } from "../utils/audit.js";
 
-export type BulkOperationTarget = 'contacts' | 'products' | 'invoices';
-export type BulkOperationMode = 'preview' | 'execute';
+export type BulkOperationTarget = "contacts" | "products" | "invoices";
+export type BulkOperationMode = "preview" | "execute";
 
-type ContactBulkField = 'isActive' | 'city' | 'country' | 'paymentTermDays' | 'notes';
-type ProductBulkField = 'isActive' | 'salesPrice' | 'purchasePrice' | 'minStockLevel' | 'description';
-type InvoiceBulkField = 'dueDate' | 'notes';
-export type BulkOperationField = ContactBulkField | ProductBulkField | InvoiceBulkField;
+type ContactBulkField =
+  | "isActive"
+  | "city"
+  | "country"
+  | "paymentTermDays"
+  | "notes";
+type ProductBulkField =
+  | "isActive"
+  | "salesPrice"
+  | "purchasePrice"
+  | "minStockLevel"
+  | "description";
+type InvoiceBulkField = "dueDate" | "notes";
+export type BulkOperationField =
+  | ContactBulkField
+  | ProductBulkField
+  | InvoiceBulkField;
 
 export type BulkValue = string | number | boolean | null;
 
@@ -34,7 +47,7 @@ export interface BulkOperationChange {
   changed: boolean;
 }
 
-export type BulkRollbackStrategyType = 'audit_snapshot' | 'not_required';
+export type BulkRollbackStrategyType = "audit_snapshot" | "not_required";
 
 export interface BulkRollbackStrategy {
   type: BulkRollbackStrategyType;
@@ -91,105 +104,144 @@ type InvoiceRecord = {
 };
 
 const MAX_BULK_OPERATION_RECORDS = 100;
-const CONTACT_FIELDS = ['isActive', 'city', 'country', 'paymentTermDays', 'notes'] as const;
-const PRODUCT_FIELDS = ['isActive', 'salesPrice', 'purchasePrice', 'minStockLevel', 'description'] as const;
-const INVOICE_FIELDS = ['dueDate', 'notes'] as const;
+const CONTACT_FIELDS = [
+  "isActive",
+  "city",
+  "country",
+  "paymentTermDays",
+  "notes",
+] as const;
+const PRODUCT_FIELDS = [
+  "isActive",
+  "salesPrice",
+  "purchasePrice",
+  "minStockLevel",
+  "description",
+] as const;
+const INVOICE_FIELDS = ["dueDate", "notes"] as const;
 
 function normalizeIds(ids: readonly string[]): string[] {
   const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
-  if (uniqueIds.length === 0) throw new ValidationError('En az bir kayıt seçilmelidir.');
+  if (uniqueIds.length === 0)
+    throw new ValidationError("En az bir kayıt seçilmelidir.");
   if (uniqueIds.length > MAX_BULK_OPERATION_RECORDS) {
-    throw new ValidationError(`Tek seferde en fazla ${MAX_BULK_OPERATION_RECORDS} kayıt güncellenebilir.`);
+    throw new ValidationError(
+      `Tek seferde en fazla ${MAX_BULK_OPERATION_RECORDS} kayıt güncellenebilir.`,
+    );
   }
   return uniqueIds;
 }
 
-function assertField<T extends string>(field: string, fields: readonly T[], target: BulkOperationTarget): T {
+function assertField<T extends string>(
+  field: string,
+  fields: readonly T[],
+  target: BulkOperationTarget,
+): T {
   const matched = fields.find((item) => item === field);
-  if (!matched) throw new ValidationError(`${target} için desteklenmeyen toplu işlem alanı: ${field}`);
+  if (!matched)
+    throw new ValidationError(
+      `${target} için desteklenmeyen toplu işlem alanı: ${field}`,
+    );
   return matched;
 }
 
 function parseBoolean(value: BulkValue, field: string): boolean {
-  if (typeof value === 'boolean') return value;
-  if (value === 'true') return true;
-  if (value === 'false') return false;
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
   throw new ValidationError(`${field} boolean olmalıdır.`);
 }
 
 function parseNullableString(value: BulkValue, field: string): string | null {
   if (value === null) return null;
-  if (typeof value !== 'string') throw new ValidationError(`${field} metin olmalıdır.`);
+  if (typeof value !== "string")
+    throw new ValidationError(`${field} metin olmalıdır.`);
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
 
 function parseRequiredString(value: BulkValue, field: string): string {
-  if (typeof value !== 'string' || value.trim().length === 0) {
+  if (typeof value !== "string" || value.trim().length === 0) {
     throw new ValidationError(`${field} boş bırakılamaz.`);
   }
   return value.trim();
 }
 
 function parseNullableInt(value: BulkValue, field: string): number | null {
-  if (value === null || value === '') return null;
-  const parsed = typeof value === 'number' ? value : Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) throw new ValidationError(`${field} sıfır veya pozitif tam sayı olmalıdır.`);
+  if (value === null || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0)
+    throw new ValidationError(
+      `${field} sıfır veya pozitif tam sayı olmalıdır.`,
+    );
   return parsed;
 }
 
-function parseDecimalString(value: BulkValue, field: string): string {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) throw new ValidationError(`${field} sıfır veya pozitif sayı olmalıdır.`);
-  return parsed.toFixed(4);
+function parseDecimalString(value: BulkValue, field: ProductBulkField): string {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0)
+    throw new ValidationError(`${field} sıfır veya pozitif sayı olmalıdır.`);
+  const scale = field === "minStockLevel" ? 3 : 2;
+  const max =
+    field === "minStockLevel"
+      ? 999_999_999_999_999.999
+      : 9_999_999_999_999_999.99;
+  if (parsed > max)
+    throw new ValidationError(`${field} veritabanı sayı sınırını aşamaz.`);
+  return parsed.toFixed(scale);
 }
 
 function parseNullableDateIso(value: BulkValue, field: string): string | null {
-  if (value === null || value === '') return null;
-  if (typeof value !== 'string') throw new ValidationError(`${field} tarih metni olmalıdır.`);
+  if (value === null || value === "") return null;
+  if (typeof value !== "string")
+    throw new ValidationError(`${field} tarih metni olmalıdır.`);
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) throw new ValidationError(`${field} geçerli bir tarih olmalıdır.`);
+  if (Number.isNaN(date.getTime()))
+    throw new ValidationError(`${field} geçerli bir tarih olmalıdır.`);
   return date.toISOString();
 }
 
 function contactValue(field: ContactBulkField, value: BulkValue): BulkValue {
   switch (field) {
-    case 'isActive':
+    case "isActive":
       return parseBoolean(value, field);
-    case 'city':
-    case 'notes':
+    case "city":
+    case "notes":
       return parseNullableString(value, field);
-    case 'country':
+    case "country":
       return parseRequiredString(value, field);
-    case 'paymentTermDays':
+    case "paymentTermDays":
       return parseNullableInt(value, field);
   }
 }
 
 function productValue(field: ProductBulkField, value: BulkValue): BulkValue {
   switch (field) {
-    case 'isActive':
+    case "isActive":
       return parseBoolean(value, field);
-    case 'description':
+    case "description":
       return parseNullableString(value, field);
-    case 'salesPrice':
-    case 'purchasePrice':
-    case 'minStockLevel':
+    case "salesPrice":
+    case "purchasePrice":
+    case "minStockLevel":
       return parseDecimalString(value, field);
   }
 }
 
 function invoiceValue(field: InvoiceBulkField, value: BulkValue): BulkValue {
   switch (field) {
-    case 'dueDate':
+    case "dueDate":
       return parseNullableDateIso(value, field);
-    case 'notes':
+    case "notes":
       return parseNullableString(value, field);
   }
 }
 
-function decimalToString(value: Prisma.Decimal): string {
-  return value.toFixed(4);
+function decimalToString(
+  value: Prisma.Decimal,
+  field: ProductBulkField,
+): string {
+  return value.toFixed(field === "minStockLevel" ? 3 : 2);
 }
 
 function dateToIso(value: Date | null): string | null {
@@ -200,7 +252,10 @@ function createBatchId(): string {
   return `bulk_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function missingIds(requestedIds: readonly string[], matchedIds: readonly string[]): string[] {
+function missingIds(
+  requestedIds: readonly string[],
+  matchedIds: readonly string[],
+): string[] {
   const matched = new Set(matchedIds);
   return requestedIds.filter((id) => !matched.has(id));
 }
@@ -210,35 +265,44 @@ function countChanged(changes: readonly BulkOperationChange[]): number {
 }
 
 function createAuditHref(auditLogId: string | null): string | null {
-  return auditLogId ? `/dashboard/settings/audit-log?selected=${auditLogId}` : null;
+  return auditLogId
+    ? `/dashboard/settings/audit-log?selected=${auditLogId}`
+    : null;
 }
 
-function createRollbackStrategy(mode: BulkOperationMode, changed: number, auditLogId: string | null): BulkRollbackStrategy {
+function createRollbackStrategy(
+  mode: BulkOperationMode,
+  changed: number,
+  auditLogId: string | null,
+): BulkRollbackStrategy {
   if (changed === 0) {
     return {
-      type: 'not_required',
+      type: "not_required",
       available: false,
-      label: 'Geri alma gerekmiyor',
-      description: 'Degisecek kayit olmadigi icin rollback stratejisi olusturulmadi.',
+      label: "Geri alma gerekmiyor",
+      description:
+        "Degisecek kayit olmadigi icin rollback stratejisi olusturulmadi.",
       auditLogId: null,
     };
   }
 
-  if (mode === 'preview') {
+  if (mode === "preview") {
     return {
-      type: 'audit_snapshot',
+      type: "audit_snapshot",
       available: true,
-      label: 'Dry-run snapshot hazir',
-      description: 'Onizleme eski ve yeni degerleri gosterir. Uygulama sonrasi ayni snapshot audit kaydina yazilir.',
+      label: "Dry-run snapshot hazir",
+      description:
+        "Onizleme eski ve yeni degerleri gosterir. Uygulama sonrasi ayni snapshot audit kaydina yazilir.",
       auditLogId: null,
     };
   }
 
   return {
-    type: 'audit_snapshot',
+    type: "audit_snapshot",
     available: auditLogId !== null,
-    label: 'Audit snapshot ile manuel geri alma',
-    description: 'Her degisen kaydin eski degeri audit kaydinda tutulur; gerekirse ayni alan eski degerle tekrar toplu guncellenebilir.',
+    label: "Audit snapshot ile manuel geri alma",
+    description:
+      "Her degisen kaydin eski degeri audit kaydinda tutulur; gerekirse ayni alan eski degerle tekrar toplu guncellenebilir.",
     auditLogId,
   };
 }
@@ -258,13 +322,16 @@ function buildResult(params: {
     batchId: params.batchId,
     target: params.target,
     mode: params.mode,
-    dryRun: params.mode === 'preview',
+    dryRun: params.mode === "preview",
     field: params.field,
     totalRequested: params.requestedIds.length,
     matched: params.changes.length,
     changed,
     skipped: params.changes.length - changed,
-    missingIds: missingIds(params.requestedIds, params.changes.map((change) => change.id)),
+    missingIds: missingIds(
+      params.requestedIds,
+      params.changes.map((change) => change.id),
+    ),
     changes: [...params.changes],
     rollbackLogId: params.rollbackLogId,
     auditLogId,
@@ -273,7 +340,11 @@ function buildResult(params: {
   };
 }
 
-function createContactChanges(records: readonly ContactRecord[], field: ContactBulkField, newValue: BulkValue): BulkOperationChange[] {
+function createContactChanges(
+  records: readonly ContactRecord[],
+  field: ContactBulkField,
+  newValue: BulkValue,
+): BulkOperationChange[] {
   return records.map((record) => {
     const oldValue = record[field];
     return {
@@ -287,11 +358,18 @@ function createContactChanges(records: readonly ContactRecord[], field: ContactB
   });
 }
 
-function createProductChanges(records: readonly ProductRecord[], field: ProductBulkField, newValue: BulkValue): BulkOperationChange[] {
+function createProductChanges(
+  records: readonly ProductRecord[],
+  field: ProductBulkField,
+  newValue: BulkValue,
+): BulkOperationChange[] {
   return records.map((record) => {
-    const oldValue = field === 'salesPrice' || field === 'purchasePrice' || field === 'minStockLevel'
-      ? decimalToString(record[field])
-      : record[field];
+    const oldValue =
+      field === "salesPrice" ||
+      field === "purchasePrice" ||
+      field === "minStockLevel"
+        ? decimalToString(record[field], field)
+        : record[field];
     return {
       id: record.id,
       label: `${record.code} - ${record.name}`,
@@ -303,9 +381,14 @@ function createProductChanges(records: readonly ProductRecord[], field: ProductB
   });
 }
 
-function createInvoiceChanges(records: readonly InvoiceRecord[], field: InvoiceBulkField, newValue: BulkValue): BulkOperationChange[] {
+function createInvoiceChanges(
+  records: readonly InvoiceRecord[],
+  field: InvoiceBulkField,
+  newValue: BulkValue,
+): BulkOperationChange[] {
   return records.map((record) => {
-    const oldValue = field === 'dueDate' ? dateToIso(record.dueDate) : record[field];
+    const oldValue =
+      field === "dueDate" ? dateToIso(record.dueDate) : record[field];
     return {
       id: record.id,
       label: record.number,
@@ -347,12 +430,18 @@ async function createRollbackAudit(
     data: {
       tenantId: context.tenantId,
       userId: context.userId,
-      module: 'bulk-operations',
+      module: "bulk-operations",
       entityType: EntityType.OTHER,
       entityId: result.batchId,
       action: AuditAction.UPDATE,
       oldValues: auditJson(result),
-      newValues: { summary: { changed: result.changed, target: result.target, field: result.field } },
+      newValues: {
+        summary: {
+          changed: result.changed,
+          target: result.target,
+          field: result.field,
+        },
+      },
       ipAddress: context.ipAddress,
       userAgent: context.userAgent,
     },
@@ -367,18 +456,30 @@ async function auditEntityChanges(
   result: BulkOperationResult,
 ): Promise<void> {
   const entityType =
-    result.target === 'contacts' ? EntityType.CONTACT : result.target === 'products' ? EntityType.PRODUCT : EntityType.INVOICE;
+    result.target === "contacts"
+      ? EntityType.CONTACT
+      : result.target === "products"
+        ? EntityType.PRODUCT
+        : EntityType.INVOICE;
 
   for (const change of result.changes.filter((item) => item.changed)) {
     await createAuditLog(tx, {
       tenantId: context.tenantId,
       userId: context.userId,
-      module: 'bulk-operations',
+      module: "bulk-operations",
       entityType,
       entityId: change.id,
       action: AuditAction.UPDATE,
-      oldValues: { batchId: result.batchId, field: change.field, value: change.oldValue },
-      newValues: { batchId: result.batchId, field: change.field, value: change.newValue },
+      oldValues: {
+        batchId: result.batchId,
+        field: change.field,
+        value: change.oldValue,
+      },
+      newValues: {
+        batchId: result.batchId,
+        field: change.field,
+        value: change.newValue,
+      },
       ipAddress: context.ipAddress,
       userAgent: context.userAgent,
     });
@@ -386,44 +487,97 @@ async function auditEntityChanges(
 }
 
 export async function previewBulkOperation(
-  db: PrismaClient,
-  context: Pick<BulkOperationContext, 'tenantId'>,
+  db: PrismaClient | Prisma.TransactionClient,
+  context: Pick<BulkOperationContext, "tenantId">,
   target: BulkOperationTarget,
   input: BulkOperationInput,
 ): Promise<BulkOperationResult> {
   const requestedIds = normalizeIds(input.ids);
   const batchId = createBatchId();
 
-  if (target === 'contacts') {
+  if (target === "contacts") {
     const field = assertField(input.field, CONTACT_FIELDS, target);
     const newValue = contactValue(field, input.value);
     const records = await db.contact.findMany({
-      where: { tenantId: context.tenantId, id: { in: requestedIds }, deletedAt: null },
-      select: { id: true, name: true, isActive: true, city: true, country: true, paymentTermDays: true, notes: true },
-      orderBy: { name: 'asc' },
+      where: {
+        tenantId: context.tenantId,
+        id: { in: requestedIds },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        isActive: true,
+        city: true,
+        country: true,
+        paymentTermDays: true,
+        notes: true,
+      },
+      orderBy: { name: "asc" },
     });
-    return buildResult({ batchId, target, mode: 'preview', field, requestedIds, changes: createContactChanges(records, field, newValue), rollbackLogId: null });
+    return buildResult({
+      batchId,
+      target,
+      mode: "preview",
+      field,
+      requestedIds,
+      changes: createContactChanges(records, field, newValue),
+      rollbackLogId: null,
+    });
   }
 
-  if (target === 'products') {
+  if (target === "products") {
     const field = assertField(input.field, PRODUCT_FIELDS, target);
     const newValue = productValue(field, input.value);
     const records = await db.product.findMany({
-      where: { tenantId: context.tenantId, id: { in: requestedIds }, deletedAt: null },
-      select: { id: true, code: true, name: true, isActive: true, salesPrice: true, purchasePrice: true, minStockLevel: true, description: true },
-      orderBy: { code: 'asc' },
+      where: {
+        tenantId: context.tenantId,
+        id: { in: requestedIds },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        isActive: true,
+        salesPrice: true,
+        purchasePrice: true,
+        minStockLevel: true,
+        description: true,
+      },
+      orderBy: { code: "asc" },
     });
-    return buildResult({ batchId, target, mode: 'preview', field, requestedIds, changes: createProductChanges(records, field, newValue), rollbackLogId: null });
+    return buildResult({
+      batchId,
+      target,
+      mode: "preview",
+      field,
+      requestedIds,
+      changes: createProductChanges(records, field, newValue),
+      rollbackLogId: null,
+    });
   }
 
   const field = assertField(input.field, INVOICE_FIELDS, target);
   const newValue = invoiceValue(field, input.value);
   const records = await db.invoice.findMany({
-    where: { tenantId: context.tenantId, id: { in: requestedIds }, deletedAt: null },
+    where: {
+      tenantId: context.tenantId,
+      id: { in: requestedIds },
+      deletedAt: null,
+    },
     select: { id: true, number: true, dueDate: true, notes: true },
-    orderBy: { date: 'desc' },
+    orderBy: { date: "desc" },
   });
-  return buildResult({ batchId, target, mode: 'preview', field, requestedIds, changes: createInvoiceChanges(records, field, newValue), rollbackLogId: null });
+  return buildResult({
+    batchId,
+    target,
+    mode: "preview",
+    field,
+    requestedIds,
+    changes: createInvoiceChanges(records, field, newValue),
+    rollbackLogId: null,
+  });
 }
 
 export async function executeBulkOperation(
@@ -432,57 +586,106 @@ export async function executeBulkOperation(
   target: BulkOperationTarget,
   input: BulkOperationInput,
 ): Promise<BulkOperationResult> {
-  const preview = await previewBulkOperation(db, context, target, input);
-  const changedIds = preview.changes.filter((change) => change.changed).map((change) => change.id);
+  const run = () =>
+    db.$transaction(
+      async (tx) => {
+        // Read the snapshot in the same serializable transaction as the write. This
+        // keeps audit oldValues truthful when another bulk operation races us.
+        const preview = await previewBulkOperation(tx, context, target, input);
+        const changedIds = preview.changes
+          .filter((change) => change.changed)
+          .map((change) => change.id);
+        if (changedIds.length === 0) {
+          return {
+            ...preview,
+            mode: "execute" as const,
+            dryRun: false,
+            rollbackLogId: null,
+            auditLogId: null,
+            auditHref: null,
+            rollbackStrategy: createRollbackStrategy("execute", 0, null),
+          };
+        }
 
-  if (changedIds.length === 0) {
-    return {
-      ...preview,
-      mode: 'execute',
-      dryRun: false,
-      rollbackLogId: null,
-      auditLogId: null,
-      auditHref: null,
-      rollbackStrategy: createRollbackStrategy('execute', 0, null),
-    };
-  }
+        if (target === "contacts") {
+          await tx.contact.updateMany({
+            where: {
+              tenantId: context.tenantId,
+              id: { in: changedIds },
+              deletedAt: null,
+            },
+            data: {
+              [preview.field]: preview.changes[0]?.newValue,
+              updatedById: context.userId,
+            },
+          });
+        } else if (target === "products") {
+          await tx.product.updateMany({
+            where: {
+              tenantId: context.tenantId,
+              id: { in: changedIds },
+              deletedAt: null,
+            },
+            data: {
+              [preview.field]: preview.changes[0]?.newValue,
+              updatedById: context.userId,
+            },
+          });
+        } else {
+          await tx.invoice.updateMany({
+            where: {
+              tenantId: context.tenantId,
+              id: { in: changedIds },
+              deletedAt: null,
+            },
+            data: {
+              [preview.field]: preview.changes[0]?.newValue,
+              updatedById: context.userId,
+            },
+          });
+        }
 
-  return db.$transaction(async (tx) => {
-    if (target === 'contacts') {
-      await tx.contact.updateMany({
-        where: { tenantId: context.tenantId, id: { in: changedIds }, deletedAt: null },
-        data: { [preview.field]: preview.changes[0]?.newValue, updatedById: context.userId },
-      });
-    } else if (target === 'products') {
-      await tx.product.updateMany({
-        where: { tenantId: context.tenantId, id: { in: changedIds }, deletedAt: null },
-        data: { [preview.field]: preview.changes[0]?.newValue, updatedById: context.userId },
-      });
-    } else {
-      await tx.invoice.updateMany({
-        where: { tenantId: context.tenantId, id: { in: changedIds }, deletedAt: null },
-        data: { [preview.field]: preview.changes[0]?.newValue, updatedById: context.userId },
-      });
+        const result: BulkOperationResult = {
+          ...preview,
+          mode: "execute",
+          dryRun: false,
+          rollbackLogId: null,
+          auditLogId: null,
+          auditHref: null,
+          rollbackStrategy: createRollbackStrategy(
+            "execute",
+            preview.changed,
+            null,
+          ),
+        };
+        const rollbackLogId = await createRollbackAudit(tx, context, result);
+        const resultWithRollback: BulkOperationResult = {
+          ...result,
+          rollbackLogId,
+          auditLogId: rollbackLogId,
+          auditHref: createAuditHref(rollbackLogId),
+          rollbackStrategy: createRollbackStrategy(
+            "execute",
+            result.changed,
+            rollbackLogId,
+          ),
+        };
+        await auditEntityChanges(tx, context, resultWithRollback);
+        return resultWithRollback;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== "P2034" ||
+        attempt >= 2
+      )
+        throw error;
     }
-
-    const result: BulkOperationResult = {
-      ...preview,
-      mode: 'execute',
-      dryRun: false,
-      rollbackLogId: null,
-      auditLogId: null,
-      auditHref: null,
-      rollbackStrategy: createRollbackStrategy('execute', preview.changed, null),
-    };
-    const rollbackLogId = await createRollbackAudit(tx, context, result);
-    const resultWithRollback: BulkOperationResult = {
-      ...result,
-      rollbackLogId,
-      auditLogId: rollbackLogId,
-      auditHref: createAuditHref(rollbackLogId),
-      rollbackStrategy: createRollbackStrategy('execute', result.changed, rollbackLogId),
-    };
-    await auditEntityChanges(tx, context, resultWithRollback);
-    return resultWithRollback;
-  });
+  }
 }

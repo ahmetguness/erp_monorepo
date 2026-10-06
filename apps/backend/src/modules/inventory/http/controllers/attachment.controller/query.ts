@@ -1,17 +1,32 @@
-import { AuditAction } from '@prisma/client';
-import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
-import { prisma } from '../../../../../lib/prisma.js';
+import { AuditAction } from "@prisma/client";
+import { Context } from "hono";
+import { NotFoundError, ValidationError } from "../../../../../errors/index.js";
+import { prisma } from "../../../../../lib/prisma.js";
 import {
-DocumentCenterService,
-parseDocumentCenterCategory,
-parseDocumentCenterSource
-} from '../../../../../services/document-center.service.js';
-import { bufferToArrayBuffer,storageService } from '../../../../../services/storage.service.js';
-import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
-import { requireParam,requireTenantId,requireUserId } from '../../../../../utils/context.js';
-import { canAccessConfidentialDocuments,ensureAttachmentConfidentialityAccess,ensureEntityBelongsToTenant,findEntityOptions,getAttachmentIdFromAuditValues,isEntityType,sanitizeFileName } from './shared.js';
-import { StorageReservationService } from '../../../../storage-accounting/index.js';
+  DocumentCenterService,
+  parseDocumentCenterCategory,
+  parseDocumentCenterSource,
+} from "../../../../../services/document-center.service.js";
+import {
+  bufferToArrayBuffer,
+  storageService,
+} from "../../../../../services/storage.service.js";
+import { createAuditLog, getRequestMeta } from "../../../../../utils/audit.js";
+import {
+  requireParam,
+  requireTenantId,
+  requireUserId,
+} from "../../../../../utils/context.js";
+import {
+  canAccessConfidentialDocuments,
+  ensureAttachmentConfidentialityAccess,
+  ensureEntityBelongsToTenant,
+  findEntityOptions,
+  getAttachmentIdFromAuditValues,
+  isEntityType,
+  sanitizeFileName,
+} from "./shared.js";
+import { StorageReservationService } from "../../../../storage-accounting/index.js";
 
 const storageAccounting = new StorageReservationService(prisma);
 
@@ -19,22 +34,50 @@ export const queryAttachmentController = {
   async library(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '30', 10)));
-    const rawEntityType = c.req.query('entityType');
-    const entityType = rawEntityType && isEntityType(rawEntityType) ? rawEntityType : undefined;
-    const category = parseDocumentCenterCategory(c.req.query('category'));
-    const source = parseDocumentCenterSource(c.req.query('source'));
+    const rawPage = c.req.query("page") ?? "1";
+    const rawLimit = c.req.query("limit") ?? "30";
+    if (
+      !/^\d+$/.test(rawPage) ||
+      !/^\d+$/.test(rawLimit) ||
+      Number(rawPage) < 1 ||
+      Number(rawLimit) < 1 ||
+      Number(rawLimit) > 100
+    ) {
+      return c.json(
+        new ValidationError(
+          "page pozitif, limit 1-100 arasinda tam sayi olmalidir.",
+        ).toJSON(),
+        400,
+      );
+    }
+    const page = Number(rawPage);
+    const limit = Number(rawLimit);
+    const rawEntityType = c.req.query("entityType");
+    if (rawEntityType && !isEntityType(rawEntityType))
+      return c.json(new ValidationError("Gecersiz entityType.").toJSON(), 400);
+    const entityType =
+      rawEntityType && isEntityType(rawEntityType) ? rawEntityType : undefined;
+    const rawCategory = c.req.query("category");
+    const rawSource = c.req.query("source");
+    const category = parseDocumentCenterCategory(rawCategory);
+    const source = parseDocumentCenterSource(rawSource);
+    if (rawCategory && !category)
+      return c.json(new ValidationError("Gecersiz kategori.").toJSON(), 400);
+    if (rawSource && !source)
+      return c.json(new ValidationError("Gecersiz kaynak.").toJSON(), 400);
 
     const service = new DocumentCenterService(prisma);
-    const includeConfidential = await canAccessConfidentialDocuments(tenantId, userId);
+    const includeConfidential = await canAccessConfidentialDocuments(
+      tenantId,
+      userId,
+    );
     const result = await service.list({
       tenantId,
       userId,
       includeConfidential,
       page,
       limit,
-      search: c.req.query('search'),
+      search: c.req.query("search"),
       category,
       source,
       entityType,
@@ -44,11 +87,14 @@ export const queryAttachmentController = {
   },
   async entityOptions(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const rawEntityType = c.req.query('entityType');
-    const search = c.req.query('search')?.trim() || undefined;
+    const rawEntityType = c.req.query("entityType");
+    const search = c.req.query("search")?.trim() || undefined;
 
     if (!rawEntityType || !isEntityType(rawEntityType)) {
-      return c.json(new ValidationError('Gecerli entityType zorunludur.').toJSON(), 400);
+      return c.json(
+        new ValidationError("Gecerli entityType zorunludur.").toJSON(),
+        400,
+      );
     }
 
     const data = await findEntityOptions(tenantId, rawEntityType, search);
@@ -57,15 +103,23 @@ export const queryAttachmentController = {
   async listByEntity(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const rawEntityType = c.req.query('entityType');
-    const entityId = c.req.query('entityId');
+    const rawEntityType = c.req.query("entityType");
+    const entityId = c.req.query("entityId");
 
     if (!rawEntityType || !isEntityType(rawEntityType) || !entityId) {
-      return c.json(new ValidationError('Gecerli entityType ve entityId zorunludur.').toJSON(), 400);
+      return c.json(
+        new ValidationError(
+          "Gecerli entityType ve entityId zorunludur.",
+        ).toJSON(),
+        400,
+      );
     }
 
     await ensureEntityBelongsToTenant(tenantId, rawEntityType, entityId);
-    const includeConfidential = await canAccessConfidentialDocuments(tenantId, userId);
+    const includeConfidential = await canAccessConfidentialDocuments(
+      tenantId,
+      userId,
+    );
 
     const attachments = await prisma.attachment.findMany({
       where: {
@@ -73,10 +127,13 @@ export const queryAttachmentController = {
         entityType: rawEntityType,
         entityId,
         ...(!includeConfidential && {
-          OR: [{ confidentiality: null }, { confidentiality: { not: 'CONFIDENTIAL' } }],
+          OR: [
+            { confidentiality: null },
+            { confidentiality: { not: "CONFIDENTIAL" } },
+          ],
         }),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
 
     return c.json({ data: attachments });
@@ -84,66 +141,116 @@ export const queryAttachmentController = {
   async download(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
-    const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
-    if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
+    const attachment = await prisma.attachment.findFirst({
+      where: { id, tenantId },
+    });
+    if (!attachment)
+      return c.json(new NotFoundError("Dosya", id).toJSON(), 404);
 
-    await ensureEntityBelongsToTenant(tenantId, attachment.entityType, attachment.entityId);
-    await ensureAttachmentConfidentialityAccess(tenantId, userId, attachment.confidentiality);
+    await ensureEntityBelongsToTenant(
+      tenantId,
+      attachment.entityType,
+      attachment.entityId,
+    );
+    await ensureAttachmentConfidentialityAccess(
+      tenantId,
+      userId,
+      attachment.confidentiality,
+    );
 
     const storedObject = await storageService.get(attachment.storagePath);
-    if (!storedObject) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
+    if (!storedObject)
+      return c.json(new NotFoundError("Dosya", id).toJSON(), 404);
 
     const body = new Blob([bufferToArrayBuffer(storedObject.body)]);
-    await storageAccounting.recordTraffic(tenantId, 'download', storedObject.contentLength);
+    await storageAccounting.recordTraffic(
+      tenantId,
+      "download",
+      storedObject.contentLength,
+    );
 
     await createAuditLog(prisma, {
       tenantId,
       userId,
-      module: 'attachments',
+      module: "attachments",
       entityType: attachment.entityType,
       entityId: attachment.entityId,
       action: AuditAction.OTHER,
-      newValues: { attachmentId: attachment.id, fileName: attachment.fileName, fileSize: attachment.fileSize },
+      newValues: {
+        attachmentId: attachment.id,
+        fileName: attachment.fileName,
+        fileSize: attachment.fileSize,
+      },
       ...getRequestMeta(c),
     });
 
     return new Response(body, {
       headers: {
-        'Content-Type': attachment.mimeType ?? storedObject.contentType,
-        'Content-Disposition': `attachment; filename="${sanitizeFileName(attachment.fileName)}"`,
-        'Content-Length': String(storedObject.contentLength),
+        "Content-Type": attachment.mimeType ?? storedObject.contentType,
+        "Content-Disposition": `attachment; filename="${sanitizeFileName(attachment.fileName)}"`,
+        "Content-Length": String(storedObject.contentLength),
       },
     });
   },
   async signedDownloadUrl(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = requireParam(c, 'id');
-    const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
-    if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
-    await ensureEntityBelongsToTenant(tenantId, attachment.entityType, attachment.entityId);
-    await ensureAttachmentConfidentialityAccess(tenantId, userId, attachment.confidentiality);
+    const id = requireParam(c, "id");
+    const attachment = await prisma.attachment.findFirst({
+      where: { id, tenantId },
+    });
+    if (!attachment)
+      return c.json(new NotFoundError("Dosya", id).toJSON(), 404);
+    await ensureEntityBelongsToTenant(
+      tenantId,
+      attachment.entityType,
+      attachment.entityId,
+    );
+    await ensureAttachmentConfidentialityAccess(
+      tenantId,
+      userId,
+      attachment.confidentiality,
+    );
 
-    const configuredTtl = Number.parseInt(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? '300', 10);
-    const expiresInSeconds = Number.isFinite(configuredTtl) ? Math.min(3_600, Math.max(30, configuredTtl)) : 300;
-    const signed = await storageService.createSignedGetUrl(attachment.storagePath, expiresInSeconds);
-    if (signed) await storageAccounting.recordTraffic(tenantId, 'download', attachment.fileSize ?? 0);
-    const expiresAt = signed?.expiresAt ?? new Date(Date.now() + expiresInSeconds * 1_000);
+    const configuredTtl = Number.parseInt(
+      process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? "300",
+      10,
+    );
+    const expiresInSeconds = Number.isFinite(configuredTtl)
+      ? Math.min(3_600, Math.max(30, configuredTtl))
+      : 300;
+    const signed = await storageService.createSignedGetUrl(
+      attachment.storagePath,
+      expiresInSeconds,
+    );
+    if (signed)
+      await storageAccounting.recordTraffic(
+        tenantId,
+        "download",
+        attachment.fileSize ?? 0,
+      );
+    const expiresAt =
+      signed?.expiresAt ?? new Date(Date.now() + expiresInSeconds * 1_000);
     await createAuditLog(prisma, {
       tenantId,
       userId,
-      module: 'attachments',
+      module: "attachments",
       entityType: attachment.entityType,
       entityId: attachment.entityId,
       action: AuditAction.OTHER,
-      newValues: { attachmentId: attachment.id, signedDownloadIssued: Boolean(signed), expiresAt },
+      newValues: {
+        attachmentId: attachment.id,
+        signedDownloadIssued: Boolean(signed),
+        expiresAt,
+      },
       ...getRequestMeta(c),
     });
     return c.json({
       data: {
-        url: signed?.url ?? `/api/attachments/${encodeURIComponent(id)}/download`,
+        url:
+          signed?.url ?? `/api/attachments/${encodeURIComponent(id)}/download`,
         direct: Boolean(signed),
         expiresAt: expiresAt.toISOString(),
       },
@@ -152,21 +259,32 @@ export const queryAttachmentController = {
   async accessLog(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const id = requireParam(c, 'id');
+    const id = requireParam(c, "id");
 
-    const attachment = await prisma.attachment.findFirst({ where: { id, tenantId } });
-    if (!attachment) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
-    await ensureEntityBelongsToTenant(tenantId, attachment.entityType, attachment.entityId);
-    await ensureAttachmentConfidentialityAccess(tenantId, userId, attachment.confidentiality);
+    const attachment = await prisma.attachment.findFirst({
+      where: { id, tenantId },
+    });
+    if (!attachment)
+      return c.json(new NotFoundError("Dosya", id).toJSON(), 404);
+    await ensureEntityBelongsToTenant(
+      tenantId,
+      attachment.entityType,
+      attachment.entityId,
+    );
+    await ensureAttachmentConfidentialityAccess(
+      tenantId,
+      userId,
+      attachment.confidentiality,
+    );
 
     const logs = await prisma.auditLog.findMany({
       where: {
         tenantId,
-        module: 'attachments',
+        module: "attachments",
         entityType: attachment.entityType,
         entityId: attachment.entityId,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: 100,
       select: {
         id: true,
@@ -181,7 +299,11 @@ export const queryAttachmentController = {
     });
 
     const data = logs
-      .filter((log) => getAttachmentIdFromAuditValues(log.oldValues) === id || getAttachmentIdFromAuditValues(log.newValues) === id)
+      .filter(
+        (log) =>
+          getAttachmentIdFromAuditValues(log.oldValues) === id ||
+          getAttachmentIdFromAuditValues(log.newValues) === id,
+      )
       .map((log) => ({
         id: log.id,
         userId: log.userId,

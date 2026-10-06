@@ -423,6 +423,7 @@ const SchedulerJobKeySchema = z.enum([
   'batch_expiration',
   'lot_expiration',
   'bank_auto_match',
+  'executive_insights_digest',
   'accounting_integrity_check',
   'marketplace_sync',
   'automation_runner',

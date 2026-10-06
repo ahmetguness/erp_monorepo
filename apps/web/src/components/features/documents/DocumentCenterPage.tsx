@@ -2,16 +2,19 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { Download, Edit3, ExternalLink, FileText, FileUp, History, Layers3, Mail, ScanText, Search, Shield, Tags, Upload } from 'lucide-react';
+import { Download, Edit3, ExternalLink, FileText, FileUp, History, Layers3, Mail, ScanText, Search, Shield, Tags, Trash2, Upload } from 'lucide-react';
 import { FeaturePageShell } from '@/components/shared/FeaturePageShell';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
-import { useAttachmentAccessLog, useAttachmentEntityOptions, useBulkUpdateAttachmentMetadata, useDocumentCenter, useUpdateAttachmentMetadata, useUploadAttachment, useUploadAttachmentVersion } from '@/hooks/useAttachments';
+import { useAttachmentAccessLog, useAttachmentEntityOptions, useBulkUpdateAttachmentMetadata, useDeleteAttachment, useDocumentCenter, useUpdateAttachmentMetadata, useUploadAttachment, useUploadAttachmentVersion } from '@/hooks/useAttachments';
 import { useBulkSelection } from '@/hooks/useBulkSelection';
+import { useCurrentUser } from '@/hooks/useAuth';
+import { createUserAccessContext, hasUserPermission } from '@/domain/access/user-access-context';
 import { DocumentIntakeModal } from './DocumentIntakeModal';
 import { cn, formatDateTime } from '@/lib/utils';
 import {
@@ -224,6 +227,11 @@ function dateInputValue(value: string | null): string {
 }
 
 export function DocumentCenterPage() {
+  const { user, tenant } = useCurrentUser();
+  const access = createUserAccessContext(user, tenant);
+  const canCreate = hasUserPermission(access, 'attachments', 'CREATE');
+  const canUpdate = hasUserPermission(access, 'attachments', 'UPDATE');
+  const canDelete = hasUserPermission(access, 'attachments', 'DELETE');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<DocumentCenterCategory | ''>('');
@@ -248,17 +256,19 @@ export function DocumentCenterPage() {
     [category, page, search, source],
   );
 
-  const { data, isLoading } = useDocumentCenter(params);
+  const documentsQuery = useDocumentCenter(params);
+  const { data, isLoading } = documentsQuery;
   const upload = useUploadAttachment();
   const uploadVersion = useUploadAttachmentVersion();
   const updateMetadata = useUpdateAttachmentMetadata();
   const bulkUpdateMetadata = useBulkUpdateAttachmentMetadata();
+  const deleteAttachment = useDeleteAttachment();
   const { data: accessLogs = [], isLoading: accessLogsLoading } = useAttachmentAccessLog(accessLogId);
   const { data: entityOptions = [] } = useAttachmentEntityOptions(uploadForm.entityType, uploadForm.entitySearch.trim() || undefined);
   const documentItems = useMemo(() => data?.data ?? [], [data?.data]);
   const selectableAttachmentIds = useMemo(
-    () => documentItems.filter((item) => item.source === 'ATTACHMENT').map((item) => item.id),
-    [documentItems],
+    () => canUpdate ? documentItems.filter((item) => item.source === 'ATTACHMENT').map((item) => item.id) : [],
+    [canUpdate, documentItems],
   );
   const bulkSelection = useBulkSelection(selectableAttachmentIds);
   const selectableAttachmentIdSet = useMemo(() => new Set(selectableAttachmentIds), [selectableAttachmentIds]);
@@ -465,7 +475,7 @@ export function DocumentCenterPage() {
       align: 'right',
       render: (row) => (
         <div className="flex justify-end gap-1.5">
-          {row.source === 'ATTACHMENT' && (
+          {row.source === 'ATTACHMENT' && canUpdate && (
             <button
               type="button"
               onClick={(event) => {
@@ -492,7 +502,7 @@ export function DocumentCenterPage() {
               >
                 <ScanText className="h-3.5 w-3.5" />
               </button>
-              <button
+              {canCreate && <button
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
@@ -502,7 +512,7 @@ export function DocumentCenterPage() {
                 aria-label="Yeni versiyon yükle"
               >
                 <FileUp className="h-3.5 w-3.5" />
-              </button>
+              </button>}
               <button
                 type="button"
                 onClick={(event) => {
@@ -538,6 +548,20 @@ export function DocumentCenterPage() {
           >
             <Download className="h-3.5 w-3.5" />
           </button>
+          {row.source === 'ATTACHMENT' && canDelete && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (window.confirm(`${row.fileName} silinsin mi?`)) deleteAttachment.mutate(row.id);
+              }}
+              disabled={deleteAttachment.isPending}
+              className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+              aria-label="Dosyayı sil"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -549,7 +573,7 @@ export function DocumentCenterPage() {
     <FeaturePageShell
       title="Doküman Merkezi"
       subtitle="Müşteri, personel, satış, servis ve mail eklerini tek merkezden takip edin."
-      action={<Button leftIcon={<Upload className="h-4 w-4" />} onClick={() => setIsUploadOpen(true)}>Yeni dosya yükle</Button>}
+      action={canCreate ? <Button leftIcon={<Upload className="h-4 w-4" />} onClick={() => setIsUploadOpen(true)}>Yeni dosya yükle</Button> : undefined}
     >
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
@@ -632,22 +656,22 @@ export function DocumentCenterPage() {
         </div>
       )}
 
-      <DataTable
+      {documentsQuery.isError ? <ApiErrorState error={documentsQuery.error} onRetry={() => void documentsQuery.refetch()} /> : <DataTable
         columns={columns}
         data={documentItems}
         keyExtractor={(row) => row.id}
-        selection={{
+        selection={canUpdate ? {
           selectedIds: bulkSelection.selectedIds,
           isPageSelected: bulkSelection.isPageSelected,
           isPagePartiallySelected: bulkSelection.isPagePartiallySelected,
           onToggleRow: toggleSelectableRow,
           onTogglePage: bulkSelection.togglePage,
-        }}
+        } : undefined}
         isLoading={isLoading}
         emptyTitle="Doküman bulunamadı"
         emptyDescription="Filtreleri değiştirerek tekrar deneyin."
         pagination={data ? { page, pageSize: PAGE_SIZE, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
-      />
+      />}
 
       <div className="flex items-start gap-2 rounded-xl border border-slate-800 bg-slate-950/35 px-4 py-3 text-xs text-slate-500">
         <Tags className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-600" />

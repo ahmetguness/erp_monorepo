@@ -534,6 +534,7 @@ model Attachment {
   validFrom       DateTime?
   validUntil      DateTime?
   version         Int        @default(1)
+  /// Logical version uniqueness is enforced by the attachment expression index migration.
   uploadedById    String?
   createdAt       DateTime   @default(now())
 
@@ -554,6 +555,7 @@ model Notification {
   module     String?
   entityType EntityType?
   entityId   String?
+  source     String?
   status     NotificationStatus @default(UNREAD)
   createdAt  DateTime           @default(now())
   readAt     DateTime?
@@ -562,6 +564,7 @@ model Notification {
 
   @@index([tenantId, userId, status])
   @@index([tenantId, createdAt])
+  @@unique([tenantId, userId, source])
   @@map("notifications")
 }
 

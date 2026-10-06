@@ -8,11 +8,11 @@ import {
   NotificationStatus,
   Priority,
   TaskType,
-} from '@prisma/client';
-import { prisma } from '../lib/prisma';
-import { createTask } from './task.service.js';
-import { getStringField } from '../utils/json.js';
-import { AutomationExecutionService } from './automation-execution.service.js';
+} from "@prisma/client";
+import { prisma } from "../lib/prisma";
+import { createTask } from "./task.service.js";
+import { getStringField } from "../utils/json.js";
+import { AutomationExecutionService } from "./automation-execution.service.js";
 
 interface AutomationRunResult {
   matched: number;
@@ -38,12 +38,30 @@ function numberValue(value: unknown): number {
   return Number(value ?? 0);
 }
 
-function getAssignedToId(rule: AutomationRule): string | null {
-  return getStringField(rule.actionConfig, 'assignedToId') ?? null;
+function configNumber(value: unknown, key: string, fallback: number): number {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return fallback;
+  const candidate = (value as Record<string, unknown>)[key];
+  return typeof candidate === "number" && Number.isFinite(candidate)
+    ? candidate
+    : fallback;
 }
 
-async function getNotificationUserIds(tenantId: string, assignedToId: string | null): Promise<string[]> {
-  if (assignedToId) return [assignedToId];
+function getAssignedToId(rule: AutomationRule): string | null {
+  return getStringField(rule.actionConfig, "assignedToId") ?? null;
+}
+
+async function getNotificationUserIds(
+  tenantId: string,
+  assignedToId: string | null,
+): Promise<string[]> {
+  if (assignedToId) {
+    const member = await prisma.tenantUser.findFirst({
+      where: { tenantId, userId: assignedToId, isActive: true },
+      select: { userId: true },
+    });
+    return member ? [member.userId] : [];
+  }
 
   const owners = await prisma.tenantUser.findMany({
     where: { tenantId, isActive: true, isOwner: true },
@@ -60,16 +78,24 @@ async function getNotificationUserIds(tenantId: string, assignedToId: string | n
   return users.map((user) => user.userId);
 }
 
-async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): Promise<AutomationMatch[]> {
+async function findMatches(
+  rule: Pick<AutomationRule, "tenantId" | "trigger" | "conditions">,
+): Promise<AutomationMatch[]> {
   const now = new Date();
-  const soon = new Date(now.getTime() + 7 * 86_400_000);
+  const dueInDays = configNumber(rule.conditions, "dueInDays", 7);
+  const soon = new Date(now.getTime() + dueInDays * 86_400_000);
 
   switch (rule.trigger) {
     case AutomationTrigger.LOW_STOCK: {
       const stockLevels = await prisma.stockLevel.findMany({
         where: {
           tenantId: rule.tenantId,
-          product: { tenantId: rule.tenantId, deletedAt: null, isActive: true, minStockLevel: { gt: 0 } },
+          product: {
+            tenantId: rule.tenantId,
+            deletedAt: null,
+            isActive: true,
+            minStockLevel: { gt: 0 },
+          },
         },
         select: {
           productId: true,
@@ -79,7 +105,10 @@ async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): 
         take: 500,
       });
 
-      const totals = new Map<string, { code: string; name: string; quantity: number; minStock: number }>();
+      const totals = new Map<
+        string,
+        { code: string; name: string; quantity: number; minStock: number }
+      >();
       for (const level of stockLevels) {
         const current = totals.get(level.productId);
         if (current) {
@@ -94,26 +123,36 @@ async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): 
         }
       }
 
+      const minDeficit = configNumber(rule.conditions, "minDeficit", 0);
       return [...totals.entries()]
-        .map(([productId, item]) => ({ productId, ...item, deficit: Math.ceil(item.minStock - item.quantity) }))
-        .filter((item) => item.deficit > 0)
+        .map(([productId, item]) => ({
+          productId,
+          ...item,
+          deficit: Math.ceil(item.minStock - item.quantity),
+        }))
+        .filter((item) => item.deficit > 0 && item.deficit >= minDeficit)
         .slice(0, 25)
         .map((item) => ({
           sourceKey: `low-stock:${item.productId}`,
           title: `${item.code} kritik stok`,
           detail: `${item.name} icin ${item.deficit} adet tamamlanma oneriliyor.`,
           priority: item.deficit > 10 ? Priority.CRITICAL : Priority.HIGH,
-          module: 'inventory',
+          module: "inventory",
           entityType: EntityType.PRODUCT,
           entityId: item.productId,
-          href: '/dashboard/stock/levels',
+          href: "/dashboard/stock/levels",
           dueAt: now,
           monetaryImpact: null,
         }));
     }
     case AutomationTrigger.OVERDUE_INVOICE:
     case AutomationTrigger.HIGH_VALUE_INVOICE: {
-      const minAmount = rule.trigger === AutomationTrigger.HIGH_VALUE_INVOICE ? 100_000 : 0;
+      const minAmount =
+        rule.trigger === AutomationTrigger.HIGH_VALUE_INVOICE
+          ? configNumber(rule.conditions, "minAmount", 100_000)
+          : 0;
+      const overdueDays = configNumber(rule.conditions, "overdueDays", 0);
+      const overdueBefore = new Date(now.getTime() - overdueDays * 86_400_000);
       const invoices = await prisma.invoice.findMany({
         where: {
           tenantId: rule.tenantId,
@@ -123,22 +162,45 @@ async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): 
             ? {
                 OR: [
                   { status: InvoiceStatus.OVERDUE },
-                  { status: { in: [InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID] }, dueDate: { lt: now } },
+                  {
+                    status: {
+                      in: [InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID],
+                    },
+                    dueDate: { lt: overdueBefore },
+                  },
                 ],
               }
-            : { status: { not: InvoiceStatus.CANCELLED }, totalGross: { gte: minAmount } }),
+            : {
+                status: { not: InvoiceStatus.CANCELLED },
+                totalGross: { gte: minAmount },
+              }),
         },
-        select: { id: true, number: true, dueDate: true, totalGross: true, contact: { select: { name: true } } },
-        orderBy: rule.trigger === AutomationTrigger.OVERDUE_INVOICE ? { dueDate: 'asc' } : { totalGross: 'desc' },
+        select: {
+          id: true,
+          number: true,
+          dueDate: true,
+          totalGross: true,
+          contact: { select: { name: true } },
+        },
+        orderBy:
+          rule.trigger === AutomationTrigger.OVERDUE_INVOICE
+            ? { dueDate: "asc" }
+            : { totalGross: "desc" },
         take: 25,
       });
 
       return invoices.map((invoice) => ({
         sourceKey: `${rule.trigger.toLowerCase()}:${invoice.id}`,
-        title: rule.trigger === AutomationTrigger.OVERDUE_INVOICE ? `${invoice.number} tahsilat takibi` : `${invoice.number} onay kontrolu`,
-        detail: `${invoice.contact?.name ?? 'Cari'} - ${numberValue(invoice.totalGross).toFixed(2)} TRY`,
-        priority: rule.trigger === AutomationTrigger.HIGH_VALUE_INVOICE ? Priority.HIGH : Priority.CRITICAL,
-        module: 'invoicing',
+        title:
+          rule.trigger === AutomationTrigger.OVERDUE_INVOICE
+            ? `${invoice.number} tahsilat takibi`
+            : `${invoice.number} onay kontrolu`,
+        detail: `${invoice.contact?.name ?? "Cari"} - ${numberValue(invoice.totalGross).toFixed(2)} TRY`,
+        priority:
+          rule.trigger === AutomationTrigger.HIGH_VALUE_INVOICE
+            ? Priority.HIGH
+            : Priority.CRITICAL,
+        module: "invoicing",
         entityType: EntityType.INVOICE,
         entityId: invoice.id,
         href: `/dashboard/invoices/${invoice.id}`,
@@ -148,26 +210,47 @@ async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): 
     }
     case AutomationTrigger.LOW_MARGIN: {
       const products = await prisma.product.findMany({
-        where: { tenantId: rule.tenantId, deletedAt: null, isActive: true, salesPrice: { gt: 0 } },
-        select: { id: true, code: true, name: true, purchasePrice: true, salesPrice: true, averageCost: true },
+        where: {
+          tenantId: rule.tenantId,
+          deletedAt: null,
+          isActive: true,
+          salesPrice: { gt: 0 },
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          purchasePrice: true,
+          salesPrice: true,
+          averageCost: true,
+        },
         take: 500,
       });
 
+      const maxMarginRate = configNumber(
+        rule.conditions,
+        "maxMarginRate",
+        0.12,
+      );
       return products
         .map((product) => {
-          const cost = numberValue(product.averageCost) > 0 ? numberValue(product.averageCost) : numberValue(product.purchasePrice);
+          const cost =
+            numberValue(product.averageCost) > 0
+              ? numberValue(product.averageCost)
+              : numberValue(product.purchasePrice);
           const salesPrice = numberValue(product.salesPrice);
-          const marginRate = salesPrice > 0 ? (salesPrice - cost) / salesPrice : 0;
+          const marginRate =
+            salesPrice > 0 ? (salesPrice - cost) / salesPrice : 0;
           return { product, marginRate };
         })
-        .filter((item) => item.marginRate < 0.12)
+        .filter((item) => item.marginRate < maxMarginRate)
         .slice(0, 25)
         .map(({ product, marginRate }) => ({
           sourceKey: `low-margin:${product.id}`,
           title: `${product.code} kar marji kontrolu`,
           detail: `${product.name} marji ${(marginRate * 100).toFixed(1)}%. Fiyat gozden gecirilmeli.`,
           priority: marginRate < 0 ? Priority.CRITICAL : Priority.MEDIUM,
-          module: 'inventory',
+          module: "inventory",
           entityType: EntityType.PRODUCT,
           entityId: product.id,
           href: `/dashboard/products/${product.id}`,
@@ -180,11 +263,17 @@ async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): 
         where: {
           tenantId: rule.tenantId,
           deletedAt: null,
-          status: { in: ['PENDING', 'DEPOSITED'] },
+          status: { in: ["PENDING", "DEPOSITED"] },
           dueDate: { lte: soon },
         },
-        select: { id: true, number: true, type: true, amount: true, dueDate: true },
-        orderBy: { dueDate: 'asc' },
+        select: {
+          id: true,
+          number: true,
+          type: true,
+          amount: true,
+          dueDate: true,
+        },
+        orderBy: { dueDate: "asc" },
         take: 25,
       });
       return checks.map((check) => ({
@@ -192,10 +281,10 @@ async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): 
         title: `${check.number} cek/senet takibi`,
         detail: `${check.type} - ${numberValue(check.amount).toFixed(2)} TRY`,
         priority: check.dueDate < now ? Priority.HIGH : Priority.MEDIUM,
-        module: 'accounting',
+        module: "accounting",
         entityType: EntityType.OTHER,
         entityId: check.id,
-        href: '/dashboard/check-promissory',
+        href: "/dashboard/check-promissory",
         dueAt: check.dueDate,
         monetaryImpact: numberValue(check.amount),
       }));
@@ -206,9 +295,15 @@ async function findMatches(rule: Pick<AutomationRule, 'tenantId' | 'trigger'>): 
 export async function previewAutomationTrigger(
   tenantId: string,
   trigger: AutomationTrigger,
-): Promise<Array<{ title: string; detail: string; monetaryImpact: number | null }>> {
-  const matches = await findMatches({ tenantId, trigger });
-  return matches.map(({ title, detail, monetaryImpact }) => ({ title, detail, monetaryImpact }));
+): Promise<
+  Array<{ title: string; detail: string; monetaryImpact: number | null }>
+> {
+  const matches = await findMatches({ tenantId, trigger, conditions: null });
+  return matches.map(({ title, detail, monetaryImpact }) => ({
+    title,
+    detail,
+    monetaryImpact,
+  }));
 }
 
 export const AutomationRuleService = {
@@ -229,9 +324,10 @@ export const AutomationRuleService = {
     try {
       const matches = await findMatches(rule);
       const assignedToId = getAssignedToId(rule);
-      const notificationUserIds = rule.action === AutomationAction.CREATE_NOTIFICATION
-        ? await getNotificationUserIds(rule.tenantId, assignedToId)
-        : [];
+      const notificationUserIds =
+        rule.action === AutomationAction.CREATE_NOTIFICATION
+          ? await getNotificationUserIds(rule.tenantId, assignedToId)
+          : [];
       let tasksCreated = 0;
       let notificationsCreated = 0;
       let handledMatches = 0;
@@ -263,30 +359,16 @@ export const AutomationRuleService = {
           });
           if (!existingTask) tasksCreated += 1;
           handledMatches += 1;
-        } else if (rule.action === AutomationAction.CREATE_NOTIFICATION && notificationUserIds.length > 0) {
-          const existingNotifications = await prisma.notification.findMany({
-            where: {
-              tenantId: rule.tenantId,
-              userId: { in: notificationUserIds },
-              title: match.title,
-              entityType: match.entityType,
-              entityId: match.entityId,
-              status: NotificationStatus.UNREAD,
-            },
-            select: { userId: true },
-          });
-          const existingUserIds = new Set(existingNotifications.map((notification) => notification.userId));
-          const newNotificationUserIds = notificationUserIds.filter((userId) => !existingUserIds.has(userId));
-
-          if (newNotificationUserIds.length === 0) {
-            handledMatches += 1;
-            continue;
-          }
-
-          await prisma.notification.createMany({
-            data: newNotificationUserIds.map((userId) => ({
+        } else if (
+          rule.action === AutomationAction.CREATE_NOTIFICATION &&
+          notificationUserIds.length > 0
+        ) {
+          const notificationSource = `automation:${rule.id}:${match.sourceKey}`;
+          const created = await prisma.notification.createMany({
+            data: notificationUserIds.map((userId) => ({
               tenantId: rule.tenantId,
               userId,
+              source: notificationSource,
               title: match.title,
               message: match.detail,
               module: match.module,
@@ -294,8 +376,9 @@ export const AutomationRuleService = {
               entityId: match.entityId,
               status: NotificationStatus.UNREAD,
             })),
+            skipDuplicates: true,
           });
-          notificationsCreated += newNotificationUserIds.length;
+          notificationsCreated += created.count;
           handledMatches += 1;
         }
       }
@@ -333,7 +416,8 @@ export const AutomationRuleService = {
 
       return result;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Bilinmeyen otomasyon hatasi';
+      const message =
+        error instanceof Error ? error.message : "Bilinmeyen otomasyon hatasi";
       await executionService.fail({
         tenantId: rule.tenantId,
         executionId: execution.id,
@@ -344,8 +428,15 @@ export const AutomationRuleService = {
   },
 
   async runActiveRules(tenantId: string): Promise<AutomationRunResult> {
-    const rules = await prisma.automationRule.findMany({ where: { tenantId, deletedAt: null, isActive: true } });
-    const total: AutomationRunResult = { matched: 0, tasksCreated: 0, notificationsCreated: 0, skipped: 0 };
+    const rules = await prisma.automationRule.findMany({
+      where: { tenantId, deletedAt: null, isActive: true },
+    });
+    const total: AutomationRunResult = {
+      matched: 0,
+      tasksCreated: 0,
+      notificationsCreated: 0,
+      skipped: 0,
+    };
     for (const rule of rules) {
       const result = await this.runRule(rule);
       total.matched += result.matched;

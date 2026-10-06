@@ -211,7 +211,8 @@ export const IntelligenceController = {
     }
 
     const id = requireParam(c, 'id');
-    const data = await new DocumentDraftService(prisma, storageService, new HttpDocumentTextExtractorAdapter(), aiAutomation).get(context.tenantId, id);
+    const includeConfidential = hasPermission(context.permissions, 'attachments', PermissionAction.UPDATE);
+    const data = await new DocumentDraftService(prisma, storageService, new HttpDocumentTextExtractorAdapter(), aiAutomation).get(context.tenantId, id, includeConfidential);
     if (!data) return c.json(new NotFoundError('Dosya', id).toJSON(), 404);
     return c.json({ data });
   },
@@ -466,6 +467,16 @@ export const IntelligenceController = {
 
     if (body.useCase === 'INVOICE_OCR' && ((requiresAttachmentAccess && !canRead(context.permissions, 'attachments')) || !canCreate(context.permissions, 'invoicing'))) {
       return c.json(new ForbiddenError('attachments:READ ve invoicing:CREATE yetkileri gerekli.').toJSON(), 403);
+    }
+    if (requiresAttachmentAccess) {
+      const sourceAttachment = await prisma.attachment.findFirst({
+        where: { id: String(body.draftData.sourceAttachmentId), tenantId: context.tenantId },
+        select: { confidentiality: true },
+      });
+      if (!sourceAttachment) return c.json(new ValidationError('Kaynak belge bu tenant icinde bulunamadi.').toJSON(), 400);
+      if (sourceAttachment.confidentiality === 'CONFIDENTIAL' && !hasPermission(context.permissions, 'attachments', PermissionAction.UPDATE)) {
+        return c.json(new ForbiddenError('Gizli dokuman icin attachments:UPDATE yetkisi gerekli.').toJSON(), 403);
+      }
     }
 
     const result = await aiAutomation.executeAiSuggestion(context.tenantId, userId, body.useCase, body.draftData ?? {});
