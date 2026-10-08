@@ -2210,7 +2210,6 @@ async function seedAccounting(
       lines: {
         create: [
           {
-            tenantId,
             accountId: accAlici.id,
             debit: 31556.4,
             credit: 0,
@@ -2218,7 +2217,6 @@ async function seedAccounting(
             sortOrder: 0,
           },
           {
-            tenantId,
             accountId: accSatis.id,
             debit: 0,
             credit: 26297,
@@ -2226,7 +2224,6 @@ async function seedAccounting(
             sortOrder: 1,
           },
           {
-            tenantId,
             accountId: accHesKdv.id,
             debit: 0,
             credit: 5259.4,
@@ -2251,7 +2248,6 @@ async function seedAccounting(
       lines: {
         create: [
           {
-            tenantId,
             accountId: accBanka.id,
             debit: 31556.4,
             credit: 0,
@@ -2259,7 +2255,6 @@ async function seedAccounting(
             sortOrder: 0,
           },
           {
-            tenantId,
             accountId: accAlici.id,
             debit: 0,
             credit: 31556.4,
@@ -2284,7 +2279,6 @@ async function seedAccounting(
       lines: {
         create: [
           {
-            tenantId,
             accountId: accMal.id,
             debit: 54000,
             credit: 0,
@@ -2292,7 +2286,6 @@ async function seedAccounting(
             sortOrder: 0,
           },
           {
-            tenantId,
             accountId: accIndKdv.id,
             debit: 10800,
             credit: 0,
@@ -2300,7 +2293,6 @@ async function seedAccounting(
             sortOrder: 1,
           },
           {
-            tenantId,
             accountId: accSatici.id,
             debit: 0,
             credit: 64800,
@@ -2324,7 +2316,6 @@ async function seedAccounting(
       lines: {
         create: [
           {
-            tenantId,
             accountId: accounts[12].id,
             debit: 15000,
             credit: 0,
@@ -2332,7 +2323,6 @@ async function seedAccounting(
             sortOrder: 0,
           },
           {
-            tenantId,
             accountId: accBanka.id,
             debit: 0,
             credit: 15000,

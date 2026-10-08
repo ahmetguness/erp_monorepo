@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { AlertCircle, CheckCircle2, Circle, ListChecks } from 'lucide-react';
 import { useSetupChecklist } from '@/hooks/useSettings';
 import { cn } from '@/lib/utils';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import type { SetupChecklistItem } from '@/services/settings.service';
 
 interface SetupChecklistCardProps {
@@ -23,7 +24,7 @@ function statusIcon(item: SetupChecklistItem) {
 }
 
 export function SetupChecklistCard({ enabled = true, compact = false }: SetupChecklistCardProps) {
-  const { data, isLoading } = useSetupChecklist({ enabled });
+  const { data, isLoading, isError, error, refetch } = useSetupChecklist({ enabled });
 
   if (!enabled) return null;
 
@@ -60,7 +61,11 @@ export function SetupChecklistCard({ enabled = true, compact = false }: SetupChe
         </div>
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <div className="p-4">
+          <ApiErrorState error={error} onRetry={() => void refetch()} />
+        </div>
+      ) : isLoading ? (
         <div className="px-5 py-6 text-sm text-slate-500">Kurulum durumu yükleniyor...</div>
       ) : (
         <div className={cn('grid gap-2 p-4', compact ? 'lg:grid-cols-7' : 'md:grid-cols-2 xl:grid-cols-4')}>

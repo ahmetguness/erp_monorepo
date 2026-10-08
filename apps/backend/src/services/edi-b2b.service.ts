@@ -381,8 +381,7 @@ function buildErrorQueue(queue: EdiB2BExchangeItem[]): EdiB2BErrorQueueItem[] {
       retryEligible: item.retryEligible,
       retryAction: item.retryAction,
       href: item.href,
-    }))
-    .slice(0, 20);
+    }));
 }
 
 function buildSlaSummary(queue: EdiB2BExchangeItem[], now: Date): EdiB2BSlaSummary {
@@ -458,7 +457,6 @@ export class EdiB2BService {
           contact: { select: { id: true, code: true, name: true, type: true, taxNumber: true, email: true } },
         },
         orderBy: { date: 'desc' },
-        take: 60,
       }),
       this.db.purchaseOrder.findMany({
         where: { tenantId, deletedAt: null, status: { not: PurchaseOrderStatus.CANCELLED } },
@@ -471,7 +469,6 @@ export class EdiB2BService {
           contact: { select: { id: true, code: true, name: true, type: true, taxNumber: true, email: true } },
         },
         orderBy: { date: 'desc' },
-        take: 60,
       }),
       this.db.deliveryNote.findMany({
         where: { tenantId, deletedAt: null, status: { not: DeliveryNoteStatus.CANCELLED } },
@@ -484,7 +481,6 @@ export class EdiB2BService {
           contact: { select: { id: true, code: true, name: true, type: true, taxNumber: true, email: true } },
         },
         orderBy: { date: 'desc' },
-        take: 60,
       }),
       this.db.invoice.findMany({
         where: { tenantId, deletedAt: null, status: { not: InvoiceStatus.CANCELLED } },
@@ -498,7 +494,6 @@ export class EdiB2BService {
           contact: { select: { id: true, code: true, name: true, type: true, taxNumber: true, email: true } },
         },
         orderBy: { date: 'desc' },
-        take: 60,
       }),
       this.db.salesOrder.count({ where: { tenantId, deletedAt: null, status: { in: [...SALES_READY_STATUSES] } } }),
       this.db.purchaseOrder.count({ where: { tenantId, deletedAt: null, status: { in: [...PURCHASE_READY_STATUSES] } } }),
@@ -595,11 +590,10 @@ export class EdiB2BService {
 
     const partnerRows = allPartnerRows.slice(0, 12);
 
-    const sortedQueue = queue
-      .sort((a, b) => b.documentDate.localeCompare(a.documentDate))
-      .slice(0, 18);
-    const errorQueue = buildErrorQueue(sortedQueue);
-    const sla = buildSlaSummary(sortedQueue, now);
+    const orderedQueue = queue.sort((a, b) => b.documentDate.localeCompare(a.documentDate));
+    const sortedQueue = orderedQueue.slice(0, 18);
+    const errorQueue = buildErrorQueue(orderedQueue);
+    const sla = buildSlaSummary(orderedQueue, now);
 
     const blockedDocumentCount = blockedSalesOrderCount + blockedPurchaseOrderCount + blockedDeliveryNoteCount;
     const readyDocumentCount = readySalesOrderCount + readyPurchaseOrderCount + readyDeliveryNoteCount + readyInvoiceCount;
@@ -610,7 +604,7 @@ export class EdiB2BService {
       summary: {
         partnerCount: allPartnerRows.length,
         readyDocumentCount,
-        blockedDocumentCount: errorQueue.length,
+        blockedDocumentCount,
         inboundOrderCount: readySalesOrderCount,
         outboundDeliveryCount: readyDeliveryNoteCount,
         outboundInvoiceCount: readyInvoiceCount,

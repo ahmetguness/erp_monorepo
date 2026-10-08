@@ -1,6 +1,8 @@
-import { AuditAction,EntityType,PermissionAction } from '@prisma/client';
+import { AuditAction,EntityType,Prisma } from '@prisma/client';
 import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
+import { ConflictError,NotFoundError,ValidationError } from '../../../../errors/index.js';
+import { getValidatedBody } from '../../../../middleware/validateBody.js';
+import { addRolePermissionBodySchema,createRoleBodySchema,updateRoleBodySchema } from '../../../../schemas/request-body.schemas.js';
 import { prisma } from '../../../../lib/prisma.js';
 import {
 listPermissionMatrix,
@@ -11,34 +13,7 @@ simulatePermission as simulatePermissionAccess,
 } from '../../../../services/permission-simulator.service.js';
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
-
-// ─────────────────────────────────────────────
-// DTOs
-// ─────────────────────────────────────────────
-
-interface RoleListQuery {
-  page?: string;
-  limit?: string;
-}
-
-interface CreateRoleDTO {
-  name: string;
-  description?: string;
-  permissions?: Array<{
-    module: string;
-    action: PermissionAction;
-  }>;
-}
-
-interface UpdateRoleDTO {
-  name?: string;
-  description?: string;
-}
-
-interface AddPermissionDTO {
-  module: string;
-  action: PermissionAction;
-}
+import { getPaginationParams } from '../../../../utils/pagination.js';
 
 // ─────────────────────────────────────────────
 // Role Controller
@@ -69,10 +44,7 @@ export const RoleController = {
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const query = c.req.query() as RoleListQuery;
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
-    const skip = (page - 1) * pageSize;
+    const { page, limit: pageSize, skip } = getPaginationParams(c, 20);
 
     const where = { tenantId };
 
@@ -122,28 +94,27 @@ export const RoleController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
 
-    const body = await c.req.json<CreateRoleDTO>();
+    const body = getValidatedBody(c, createRoleBodySchema);
 
-    if (!body.name) {
-      return c.json(new ValidationError('name alanı zorunludur.').toJSON(), 400);
+    let role;
+    try {
+      role = await prisma.role.create({
+        data: {
+          tenantId,
+          name: body.name,
+          description: body.description ?? null,
+          ...(body.permissions?.length && {
+            permissions: { create: body.permissions },
+          }),
+        },
+        include: { permissions: true },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError('Ayni ada sahip rol zaten mevcut.');
+      }
+      throw error;
     }
-
-    const role = await prisma.role.create({
-      data: {
-        tenantId,
-        name: body.name,
-        description: body.description ?? null,
-        ...(body.permissions?.length && {
-          permissions: {
-            create: body.permissions.map((p) => ({
-              module: p.module,
-              action: p.action,
-            })),
-          },
-        }),
-      },
-      include: { permissions: true },
-    });
 
     await createAuditLog(prisma, {
       tenantId,
@@ -171,16 +142,24 @@ export const RoleController = {
       return c.json(new ValidationError('Sistem rolleri düzenlenemez.').toJSON(), 400);
     }
 
-    const body = await c.req.json<UpdateRoleDTO>();
+    const body = getValidatedBody(c, updateRoleBodySchema);
 
-    const updated = await prisma.role.update({
-      where: { id },
-      data: {
-        ...(body.name !== undefined && { name: body.name }),
-        ...(body.description !== undefined && { description: body.description }),
-      },
-      include: { permissions: true },
-    });
+    let updated;
+    try {
+      updated = await prisma.role.update({
+        where: { id },
+        data: {
+          ...(body.name !== undefined && { name: body.name }),
+          ...(body.description !== undefined && { description: body.description }),
+        },
+        include: { permissions: true },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError('Bu ada sahip rol zaten mevcut.');
+      }
+      throw error;
+    }
 
     await createAuditLog(prisma, {
       tenantId,
@@ -209,6 +188,11 @@ export const RoleController = {
       return c.json(new ValidationError('Sistem rolleri silinemez.').toJSON(), 400);
     }
 
+    const assignedUserCount = await prisma.tenantUser.count({ where: { tenantId, roleId: id } });
+    if (assignedUserCount > 0) {
+      throw new ConflictError('Kullanicilara atanmis rol silinemez. Once rol atamalarini kaldirin.');
+    }
+
     await prisma.role.delete({ where: { id } });
     await createAuditLog(prisma, {
       tenantId,
@@ -233,19 +217,21 @@ export const RoleController = {
     const role = await prisma.role.findFirst({ where: { id: roleId, tenantId } });
     if (!role) return c.json(new NotFoundError('Rol', roleId).toJSON(), 404);
 
-    const body = await c.req.json<AddPermissionDTO>();
-
-    if (!body.module || !body.action) {
-      return c.json(new ValidationError('module ve action zorunludur.').toJSON(), 400);
+    if (role.isSystem) {
+      return c.json(new ValidationError('Sistem rollerinin izinleri degistirilemez.').toJSON(), 400);
     }
 
-    const permission = await prisma.rolePermission.create({
-      data: {
-        roleId,
-        module: body.module,
-        action: body.action,
-      },
-    });
+    const body = getValidatedBody(c, addRolePermissionBodySchema);
+
+    let permission;
+    try {
+      permission = await prisma.rolePermission.create({ data: { roleId, ...body } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError('Bu izin role zaten eklenmis.');
+      }
+      throw error;
+    }
 
     await createAuditLog(prisma, {
       tenantId,
@@ -269,6 +255,10 @@ export const RoleController = {
 
     const role = await prisma.role.findFirst({ where: { id: roleId, tenantId } });
     if (!role) return c.json(new NotFoundError('Rol', roleId).toJSON(), 404);
+
+    if (role.isSystem) {
+      return c.json(new ValidationError('Sistem rollerinin izinleri degistirilemez.').toJSON(), 400);
+    }
 
     const permission = await prisma.rolePermission.findFirst({
       where: { id: permissionId, roleId },

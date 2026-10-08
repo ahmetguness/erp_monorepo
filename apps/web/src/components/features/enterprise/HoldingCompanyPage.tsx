@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 import { useHoldingCompany } from "@/hooks/useEnterprise";
 import type { ConsolidatedReportRow, HoldingCompanyNode, IntercompanyTransferRow } from "@/services/enterprise.service";
 
@@ -27,7 +28,7 @@ function nodeVariant(type: HoldingCompanyNode["type"]): BadgeVariant {
 }
 
 export function HoldingCompanyPage() {
-  const { data, isLoading, isFetching, refetch } = useHoldingCompany();
+  const { data, isLoading, isFetching, isError, error, refetch } = useHoldingCompany();
 
   const organizationColumns: ColumnDef<HoldingCompanyNode>[] = [
     {
@@ -83,6 +84,11 @@ export function HoldingCompanyPage() {
         }
       />
 
+      {isError ? (
+        <ApiErrorState error={error} onRetry={() => void refetch()} />
+      ) : (
+        <>
+
       <div className="mb-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Metric icon={<Building2 className="h-4 w-4" />} label="Şirket" value={summary?.companyCount ?? 0} />
         <Metric icon={<GitBranch className="h-4 w-4" />} label="Şube" value={summary?.branchCount ?? 0} />
@@ -109,6 +115,8 @@ export function HoldingCompanyPage() {
             emptyTitle="Rapor verisi yok" emptyDescription="Fatura, tahsilat ve stok kayıtları konsolide ozetleri besler." />
         </section>
       </div>
+        </>
+      )}
     </div>
   );
 }

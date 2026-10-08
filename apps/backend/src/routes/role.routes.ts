@@ -2,7 +2,9 @@ import { ACCESS_POLICIES } from "@repo/types/plans";
 import { Hono } from "hono";
 import { requireAccess } from "../middleware/requireAccess";
 import { requirePermission } from "../middleware/requirePermission";
+import { validateBody } from "../middleware/validateBody";
 import { RoleController } from "../modules/identity/http/controllers/index.js";
+import { addRolePermissionBodySchema, createRoleBodySchema, updateRoleBodySchema } from "../schemas/request-body.schemas";
 
 const roleRoutes = new Hono();
 
@@ -32,11 +34,13 @@ roleRoutes.get(
 roleRoutes.post(
   "/",
   requirePermission("roles", "CREATE"),
+  validateBody(createRoleBodySchema),
   RoleController.create,
 );
 roleRoutes.patch(
   "/:id",
   requirePermission("roles", "UPDATE"),
+  validateBody(updateRoleBodySchema),
   RoleController.update,
 );
 roleRoutes.delete(
@@ -49,6 +53,7 @@ roleRoutes.delete(
 roleRoutes.post(
   "/:id/permissions",
   requirePermission("roles", "UPDATE"),
+  validateBody(addRolePermissionBodySchema),
   RoleController.addPermission,
 );
 roleRoutes.delete(

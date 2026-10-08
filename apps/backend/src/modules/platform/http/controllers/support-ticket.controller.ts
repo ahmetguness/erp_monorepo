@@ -12,14 +12,17 @@ import {
   createSupportTicketSchema,
   addTicketMessageSchema,
   listTenantTicketsQuerySchema,
+  reopenTicketSchema,
 } from '../../support-tickets/support-ticket.schemas.js';
 
 export const SupportTicketController = {
   async list(c: Context): Promise<Response> {
     const tenantId: string = c.get('tenantId');
     const query = listTenantTicketsQuerySchema.safeParse(c.req.query());
-    const filter = query.success ? query.data : undefined;
-    const tickets = await listTenantTickets(tenantId, filter);
+    if (!query.success) {
+      return c.json({ error: query.error.issues[0]?.message || 'Gecersiz destek bileti filtresi.' }, 400);
+    }
+    const tickets = await listTenantTickets(tenantId, query.data);
     return c.json({ data: tickets });
   },
 
@@ -67,8 +70,12 @@ export const SupportTicketController = {
     const tenantId: string = c.get('tenantId');
     const userId: string = c.get('userId');
     const id = requireParam(c, 'id');
-    const body = await c.req.json<{ reason?: string }>().catch(() => ({} as { reason?: string }));
-    const ticket = await reopenTenantTicket(tenantId, id, userId, body.reason);
+    const body = await c.req.json<unknown>().catch(() => ({}));
+    const parsed = reopenTicketSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.issues[0]?.message || 'Gecersiz yeniden acma istegi.' }, 400);
+    }
+    const ticket = await reopenTenantTicket(tenantId, id, userId, parsed.data.reason);
     return c.json({ data: ticket });
   },
 };

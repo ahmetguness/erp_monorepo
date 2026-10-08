@@ -318,6 +318,10 @@ export async function closeTenantTicket(
     throw new NotFoundError('Destek bileti');
   }
 
+  if (ticket.status === 'CLOSED') {
+    return;
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.platformSupportTicket.update({
       where: { id: ticketId, tenantId },
@@ -355,6 +359,10 @@ export async function reopenTenantTicket(
 
   if (ticket.status === 'CLOSED') {
     throw new ValidationError('Kapatılmış bir destek bileti yeniden açılamaz. Lütfen yeni bir destek bileti oluşturun.');
+  }
+
+  if (ticket.status !== 'RESOLVED') {
+    throw new ValidationError('Yalnizca cozumlenmis bir destek bileti yeniden acilabilir.');
   }
 
   await prisma.$transaction(async (tx) => {

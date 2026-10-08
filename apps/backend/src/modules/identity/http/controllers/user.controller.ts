@@ -106,6 +106,11 @@ export const UserController = {
 
     const body = getValidatedBody(c, createUserBodySchema);
 
+    if (body.roleId) {
+      const roleExists = await prisma.role.count({ where: { id: body.roleId, tenantId } });
+      if (roleExists !== 1) throw new ValidationError('Secilen rol bu tenant icin gecerli degildir.');
+    }
+
     if (!body.email || !body.name || !body.password) {
       return c.json(
         new ValidationError('email, name ve password alanları zorunludur.', {
@@ -208,6 +213,11 @@ export const UserController = {
     }
 
     const body = getValidatedBody(c, updateUserBodySchema);
+
+    if (body.roleId) {
+      const roleExists = await prisma.role.count({ where: { id: body.roleId, tenantId } });
+      if (roleExists !== 1) throw new ValidationError('Secilen rol bu tenant icin gecerli degildir.');
+    }
 
     const [updatedUser] = await prisma.$transaction([
       prisma.user.update({

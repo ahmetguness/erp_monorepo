@@ -1,17 +1,34 @@
-import { AuditAction,EntityType,PermissionAction } from '@prisma/client';
-import { randomUUID } from 'crypto';
-import { Context } from 'hono';
-import { ForbiddenError,ValidationError } from '../../../../errors/index.js';
-import { prisma } from '../../../../lib/prisma.js';
-import { getTenantPermissionContext,type TenantPermissionContext } from '../../../../lib/tenant-permissions.js';
-import { DataExchangeWorkflowService,duplicateSuggestionsFromWarnings,toJsonObject } from '../../../../services/data-exchange-workflow.service.js';
-import { getDataQualitySummary } from '../../../../services/data-quality.service.js';
-import { StarterAccessService } from '../../../../services/starter-access.service.js';
-import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
-import { requireTenantId,requireUserId } from '../../../../utils/context.js';
-import { buildCsv,parseCsv,type CsvParseResult } from '../../../../utils/csv.js';
+import { AuditAction, EntityType, PermissionAction } from "@prisma/client";
+import { randomUUID } from "crypto";
+import { Context } from "hono";
+import { ForbiddenError, ValidationError } from "../../../../errors/index.js";
+import { prisma } from "../../../../lib/prisma.js";
+import {
+  getTenantPermissionContext,
+  type TenantPermissionContext,
+} from "../../../../lib/tenant-permissions.js";
+import {
+  DataExchangeWorkflowService,
+  duplicateSuggestionsFromWarnings,
+  toJsonObject,
+} from "../../../../services/data-exchange-workflow.service.js";
+import {
+  getDataQualitySummary,
+  type DataQualityCategory,
+  type DataQualityIssue,
+} from "../../../../services/data-quality.service.js";
+import { StarterAccessService } from "../../../../services/starter-access.service.js";
+import { createAuditLog, getRequestMeta } from "../../../../utils/audit.js";
+import { requireTenantId, requireUserId } from "../../../../utils/context.js";
+import {
+  buildCsv,
+  parseCsv,
+  type CsvParseResult,
+} from "../../../../utils/csv.js";
 
-type DataExchangeEntity = 'products' | 'contacts' | 'stock' | 'invoices';
+type DataExchangeEntity = "products" | "contacts" | "stock" | "invoices";
+const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
+const MAX_IMPORT_ROWS = 5_000;
 
 interface ImportWizardBody {
   csv: string;
@@ -36,40 +53,82 @@ interface EntityConfig {
 
 const ENTITY_CONFIGS: Record<DataExchangeEntity, EntityConfig> = {
   products: {
-    entity: 'products',
-    module: 'inventory',
-    headers: ['code', 'name', 'barcode', 'salesPrice', 'purchasePrice', 'minStockLevel', 'isActive'],
-    requiredHeaders: ['code', 'name'],
+    entity: "products",
+    module: "inventory",
+    headers: [
+      "code",
+      "name",
+      "barcode",
+      "salesPrice",
+      "purchasePrice",
+      "minStockLevel",
+      "isActive",
+    ],
+    requiredHeaders: ["code", "name"],
   },
   contacts: {
-    entity: 'contacts',
-    module: 'contacts',
-    headers: ['type', 'code', 'name', 'taxNumber', 'email', 'phone', 'city', 'country', 'isActive'],
-    requiredHeaders: ['type', 'name'],
+    entity: "contacts",
+    module: "contacts",
+    headers: [
+      "type",
+      "code",
+      "name",
+      "taxNumber",
+      "email",
+      "phone",
+      "city",
+      "country",
+      "isActive",
+    ],
+    requiredHeaders: ["type", "name"],
   },
   stock: {
-    entity: 'stock',
-    module: 'inventory',
-    headers: ['productCode', 'productName', 'warehouseCode', 'warehouseName', 'quantity'],
-    requiredHeaders: ['productCode', 'warehouseCode', 'quantity'],
+    entity: "stock",
+    module: "inventory",
+    headers: [
+      "productCode",
+      "productName",
+      "warehouseCode",
+      "warehouseName",
+      "quantity",
+    ],
+    requiredHeaders: ["productCode", "warehouseCode", "quantity"],
   },
   invoices: {
-    entity: 'invoices',
-    module: 'invoicing',
-    headers: ['number', 'type', 'status', 'contactName', 'date', 'dueDate', 'currencyCode', 'totalGross'],
-    requiredHeaders: ['number', 'type', 'contactName', 'date'],
+    entity: "invoices",
+    module: "invoicing",
+    headers: [
+      "number",
+      "type",
+      "status",
+      "contactName",
+      "date",
+      "dueDate",
+      "currencyCode",
+      "totalGross",
+    ],
+    requiredHeaders: ["number", "type", "contactName", "date"],
   },
 };
 
 function parseEntity(value: string | undefined): DataExchangeEntity | null {
-  if (value === 'products' || value === 'contacts' || value === 'stock' || value === 'invoices') return value;
+  if (
+    value === "products" ||
+    value === "contacts" ||
+    value === "stock" ||
+    value === "invoices"
+  )
+    return value;
   return null;
 }
 
 function requireEntity(c: Context): EntityConfig | Response {
-  const entity = parseEntity(c.req.param('entity'));
+  const entity = parseEntity(c.req.param("entity"));
   if (!entity) {
-    return c.json(new ValidationError('Gecersiz import/export varligi.').toJSON(), 400);
+    return c.json(
+      new ValidationError("Gecersiz import/export varligi.").toJSON(),
+      400,
+    );
   }
   return ENTITY_CONFIGS[entity];
 }
@@ -82,9 +141,18 @@ async function requireAccess(
   action: PermissionAction,
 ): Promise<TenantPermissionContext | Response> {
   const permissions = await getTenantPermissionContext(tenantId, userId);
-  if (!permissions) return c.json(new ForbiddenError("Bu tenant'a erisiminiz yok.").toJSON(), 403);
+  if (!permissions)
+    return c.json(
+      new ForbiddenError("Bu tenant'a erisiminiz yok.").toJSON(),
+      403,
+    );
   if (!permissions.can(action, module)) {
-    return c.json(new ForbiddenError(`Bu islem icin yetkiniz yok (${module}:${action}).`).toJSON(), 403);
+    return c.json(
+      new ForbiddenError(
+        `Bu islem icin yetkiniz yok (${module}:${action}).`,
+      ).toJSON(),
+      403,
+    );
   }
   return permissions;
 }
@@ -96,58 +164,167 @@ async function requireAnyReadAccess(
   modules: readonly string[],
 ): Promise<TenantPermissionContext | Response> {
   const permissions = await getTenantPermissionContext(tenantId, userId);
-  if (!permissions) return c.json(new ForbiddenError("Bu tenant'a erisiminiz yok.").toJSON(), 403);
-  if (!modules.some((module) => permissions.can(PermissionAction.READ, module))) {
-    return c.json(new ForbiddenError(`Bu islem icin yetkiniz yok (${modules.join('|')}:READ).`).toJSON(), 403);
+  if (!permissions)
+    return c.json(
+      new ForbiddenError("Bu tenant'a erisiminiz yok.").toJSON(),
+      403,
+    );
+  if (
+    !modules.some((module) => permissions.can(PermissionAction.READ, module))
+  ) {
+    return c.json(
+      new ForbiddenError(
+        `Bu islem icin yetkiniz yok (${modules.join("|")}:READ).`,
+      ).toJSON(),
+      403,
+    );
   }
   return permissions;
 }
 
+function canReadQualityCategory(
+  permissions: TenantPermissionContext,
+  category: DataQualityCategory,
+): boolean {
+  if (permissions.can(PermissionAction.READ, "reporting")) return true;
+  const modules =
+    category === "contacts"
+      ? ["contacts"]
+      : category === "inventory"
+        ? ["inventory"]
+        : category === "hr"
+          ? ["hr"]
+          : ["sales", "invoicing"];
+  return modules.some((module) =>
+    permissions.can(PermissionAction.READ, module),
+  );
+}
+
+function filterQualityIssues(
+  permissions: TenantPermissionContext,
+  issues: readonly DataQualityIssue[],
+): DataQualityIssue[] {
+  return issues.filter((issue) =>
+    canReadQualityCategory(permissions, issue.category),
+  );
+}
+
+function scoreQualityIssues(issues: readonly DataQualityIssue[]): number {
+  const penalty = issues.reduce(
+    (sum, issue) =>
+      sum + Math.min(issue.scoreImpact, issue.count * issue.scoreImpact),
+    0,
+  );
+  return Math.max(0, Math.min(100, 100 - penalty));
+}
+
 function parseMapping(value: unknown): Partial<Record<string, string>> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return {};
   const mapping: Partial<Record<string, string>> = {};
   for (const [key, item] of Object.entries(value)) {
-    if (typeof item === 'string') mapping[key] = item;
+    if (typeof item === "string") mapping[key] = item;
   }
   return mapping;
 }
 
+function semanticErrors(
+  entity: DataExchangeEntity,
+  values: Record<string, string>,
+): string[] {
+  const errors: string[] = [];
+  const nonNegative = (field: string) => {
+    const raw = values[field]?.trim();
+    if (raw && (!Number.isFinite(Number(raw)) || Number(raw) < 0))
+      errors.push(`${field} sifir veya pozitif sayi olmalidir.`);
+  };
+  if (entity === "products") {
+    ["salesPrice", "purchasePrice", "minStockLevel"].forEach(nonNegative);
+    if (
+      values.isActive?.trim() &&
+      !/^(true|false|1|0|evet|hayir)$/i.test(values.isActive.trim())
+    )
+      errors.push("isActive boolean olmalidir.");
+  } else if (entity === "contacts") {
+    if (
+      values.type?.trim() &&
+      !/^(CUSTOMER|SUPPLIER|BOTH)$/i.test(values.type.trim())
+    )
+      errors.push("type CUSTOMER, SUPPLIER veya BOTH olmalidir.");
+    if (
+      values.email?.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())
+    )
+      errors.push("email formati gecersizdir.");
+  } else if (entity === "stock") {
+    nonNegative("quantity");
+  } else {
+    if (values.type?.trim() && !/^(SALES|PURCHASE)$/i.test(values.type.trim()))
+      errors.push("type SALES veya PURCHASE olmalidir.");
+    if (values.date?.trim() && Number.isNaN(Date.parse(values.date.trim())))
+      errors.push("date gecerli bir tarih olmalidir.");
+    if (
+      values.dueDate?.trim() &&
+      Number.isNaN(Date.parse(values.dueDate.trim()))
+    )
+      errors.push("dueDate gecerli bir tarih olmalidir.");
+    nonNegative("totalGross");
+  }
+  return errors;
+}
+
 async function readImportBody(c: Context): Promise<ImportWizardBody> {
   const body = await c.req.json<unknown>().catch(() => null);
-  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-    return { csv: '', mapping: {}, partialImport: false };
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { csv: "", mapping: {}, partialImport: false };
   }
 
   const entries = Object.entries(body);
-  const csvValue = entries.find(([key]) => key === 'csv')?.[1];
-  const mappingValue = entries.find(([key]) => key === 'mapping')?.[1];
-  const partialImportValue = entries.find(([key]) => key === 'partialImport')?.[1];
+  const csvValue = entries.find(([key]) => key === "csv")?.[1];
+  const mappingValue = entries.find(([key]) => key === "mapping")?.[1];
+  const partialImportValue = entries.find(
+    ([key]) => key === "partialImport",
+  )?.[1];
 
   return {
-    csv: typeof csvValue === 'string' ? csvValue : '',
+    csv: typeof csvValue === "string" ? csvValue : "",
     mapping: parseMapping(mappingValue),
     partialImport: partialImportValue === true,
   };
 }
 
-function remapRows(config: EntityConfig, parsed: CsvParseResult, mapping: Partial<Record<string, string>>): CsvParseResult {
+function remapRows(
+  config: EntityConfig,
+  parsed: CsvParseResult,
+  mapping: Partial<Record<string, string>>,
+): CsvParseResult {
   const headers = config.headers;
   const rows = parsed.rows.map((row) => {
     const output: Record<string, string> = {};
     for (const target of headers) {
       const source = mapping[target]?.trim() || target;
-      output[target] = row[source] ?? '';
+      output[target] = row[source] ?? "";
     }
     return output;
   });
   return { headers, rows };
 }
 
-async function dbDuplicateWarnings(config: EntityConfig, tenantId: string, rows: Record<string, string>[]): Promise<Map<number, string[]>> {
+async function dbDuplicateWarnings(
+  config: EntityConfig,
+  tenantId: string,
+  rows: Record<string, string>[],
+): Promise<Map<number, string[]>> {
   const warnings = new Map<number, string[]>();
 
-  if (config.entity === 'products') {
-    const codes = Array.from(new Set(rows.map((row) => row.code?.trim()).filter((code): code is string => Boolean(code))));
+  if (config.entity === "products") {
+    const codes = Array.from(
+      new Set(
+        rows
+          .map((row) => row.code?.trim())
+          .filter((code): code is string => Boolean(code)),
+      ),
+    );
     if (codes.length === 0) return warnings;
     const existing = await prisma.product.findMany({
       where: { tenantId, deletedAt: null, code: { in: codes } },
@@ -155,15 +332,35 @@ async function dbDuplicateWarnings(config: EntityConfig, tenantId: string, rows:
     });
     const existingCodes = new Set(existing.map((product) => product.code));
     rows.forEach((row, index) => {
-      if (existingCodes.has(row.code?.trim())) warnings.set(index, ['Aynı ürün kodu sistemde mevcut.']);
+      if (existingCodes.has(row.code?.trim()))
+        warnings.set(index, ["Aynı ürün kodu sistemde mevcut."]);
     });
   }
 
-  if (config.entity === 'contacts') {
-    const codes = Array.from(new Set(rows.map((row) => row.code?.trim()).filter((code): code is string => Boolean(code))));
-    const taxNumbers = Array.from(new Set(rows.map((row) => row.taxNumber?.trim()).filter((taxNumber): taxNumber is string => Boolean(taxNumber))));
-    const emails = Array.from(new Set(rows.map((row) => row.email?.trim()).filter((email): email is string => Boolean(email))));
-    if (codes.length === 0 && taxNumbers.length === 0 && emails.length === 0) return warnings;
+  if (config.entity === "contacts") {
+    const codes = Array.from(
+      new Set(
+        rows
+          .map((row) => row.code?.trim())
+          .filter((code): code is string => Boolean(code)),
+      ),
+    );
+    const taxNumbers = Array.from(
+      new Set(
+        rows
+          .map((row) => row.taxNumber?.trim())
+          .filter((taxNumber): taxNumber is string => Boolean(taxNumber)),
+      ),
+    );
+    const emails = Array.from(
+      new Set(
+        rows
+          .map((row) => row.email?.trim())
+          .filter((email): email is string => Boolean(email)),
+      ),
+    );
+    if (codes.length === 0 && taxNumbers.length === 0 && emails.length === 0)
+      return warnings;
     const existing = await prisma.contact.findMany({
       where: {
         tenantId,
@@ -176,14 +373,32 @@ async function dbDuplicateWarnings(config: EntityConfig, tenantId: string, rows:
       },
       select: { code: true, taxNumber: true, email: true },
     });
-    const existingCodes = new Set(existing.map((contact) => contact.code).filter((code): code is string => Boolean(code)));
-    const existingTaxNumbers = new Set(existing.map((contact) => contact.taxNumber).filter((taxNumber): taxNumber is string => Boolean(taxNumber)));
-    const existingEmails = new Set(existing.map((contact) => contact.email).filter((email): email is string => Boolean(email)));
+    const existingCodes = new Set(
+      existing
+        .map((contact) => contact.code)
+        .filter((code): code is string => Boolean(code)),
+    );
+    const existingTaxNumbers = new Set(
+      existing
+        .map((contact) => contact.taxNumber)
+        .filter((taxNumber): taxNumber is string => Boolean(taxNumber)),
+    );
+    const existingEmails = new Set(
+      existing
+        .map((contact) => contact.email)
+        .filter((email): email is string => Boolean(email)),
+    );
     rows.forEach((row, index) => {
       const rowWarnings = [
-        existingCodes.has(row.code?.trim()) ? 'Aynı cari kodu sistemde mevcut.' : null,
-        existingTaxNumbers.has(row.taxNumber?.trim()) ? 'Aynı vergi numarası sistemde mevcut.' : null,
-        existingEmails.has(row.email?.trim()) ? 'Aynı e-posta sistemde mevcut.' : null,
+        existingCodes.has(row.code?.trim())
+          ? "Aynı cari kodu sistemde mevcut."
+          : null,
+        existingTaxNumbers.has(row.taxNumber?.trim())
+          ? "Aynı vergi numarası sistemde mevcut."
+          : null,
+        existingEmails.has(row.email?.trim())
+          ? "Aynı e-posta sistemde mevcut."
+          : null,
       ].filter((warning): warning is string => warning !== null);
       if (rowWarnings.length > 0) warnings.set(index, rowWarnings);
     });
@@ -192,38 +407,82 @@ async function dbDuplicateWarnings(config: EntityConfig, tenantId: string, rows:
   return warnings;
 }
 
-function fileDuplicateWarnings(config: EntityConfig, rows: Record<string, string>[]): Map<number, string[]> {
+function fileDuplicateWarnings(
+  config: EntityConfig,
+  rows: Record<string, string>[],
+): Map<number, string[]> {
   const warnings = new Map<number, string[]>();
-  const uniqueField = config.entity === 'products' ? 'code' : config.entity === 'contacts' ? 'code' : null;
+  const uniqueField =
+    config.entity === "products"
+      ? "code"
+      : config.entity === "contacts"
+        ? "code"
+        : null;
   if (!uniqueField) return warnings;
 
   const seen = new Map<string, number>();
   rows.forEach((row, index) => {
-    const key = row[uniqueField]?.trim().toLocaleLowerCase('tr-TR');
+    const key = row[uniqueField]?.trim().toLocaleLowerCase("tr-TR");
     if (!key) return;
     const firstIndex = seen.get(key);
     if (firstIndex === undefined) {
       seen.set(key, index);
       return;
     }
-    warnings.set(index, [`Dosyada ${uniqueField} daha önce ${firstIndex + 2}. satırda kullanılmış.`]);
+    warnings.set(index, [
+      `Dosyada ${uniqueField} daha önce ${firstIndex + 2}. satırda kullanılmış.`,
+    ]);
   });
   return warnings;
 }
 
-async function previewImport(config: EntityConfig, tenantId: string, body: ImportWizardBody): Promise<{ rows: ImportPreviewRow[]; errors: string[] }> {
+async function previewImport(
+  config: EntityConfig,
+  tenantId: string,
+  body: ImportWizardBody,
+): Promise<{ rows: ImportPreviewRow[]; errors: string[] }> {
   const rawParsed = parseCsv(body.csv);
-  const mappingErrors = Object.entries(body.mapping).flatMap(([target, source]) => {
-    const column = source?.trim();
-    if (!column || rawParsed.headers.includes(column)) return [];
-    return [`${target} eşleştirmesi için ${column} kolonu dosyada yok.`];
-  });
+  if (new TextEncoder().encode(body.csv).byteLength > MAX_IMPORT_BYTES)
+    return {
+      rows: [],
+      errors: [`CSV en fazla ${MAX_IMPORT_BYTES} byte olabilir.`],
+    };
+  if (rawParsed.rows.length > MAX_IMPORT_ROWS)
+    return {
+      rows: [],
+      errors: [`CSV en fazla ${MAX_IMPORT_ROWS} veri satiri icerebilir.`],
+    };
+  const duplicateHeaders = rawParsed.headers.filter(
+    (header, index) => rawParsed.headers.indexOf(header) !== index,
+  );
+  if (duplicateHeaders.length > 0)
+    return {
+      rows: [],
+      errors: [
+        `Tekrarlanan kolonlar: ${Array.from(new Set(duplicateHeaders)).join(", ")}`,
+      ],
+    };
+  const mappingErrors = Object.entries(body.mapping).flatMap(
+    ([target, source]) => {
+      const column = source?.trim();
+      if (!column || rawParsed.headers.includes(column)) return [];
+      return [`${target} eşleştirmesi için ${column} kolonu dosyada yok.`];
+    },
+  );
   if (mappingErrors.length > 0) return { rows: [], errors: mappingErrors };
 
-  const parsed = Object.keys(body.mapping).length > 0 ? remapRows(config, rawParsed, body.mapping) : rawParsed;
-  const missingHeaders = config.requiredHeaders.filter((header) => !parsed.headers.includes(header));
+  const parsed =
+    Object.keys(body.mapping).length > 0
+      ? remapRows(config, rawParsed, body.mapping)
+      : rawParsed;
+  const missingHeaders = config.requiredHeaders.filter(
+    (header) => !parsed.headers.includes(header),
+  );
   if (missingHeaders.length > 0) {
-    return { rows: [], errors: missingHeaders.map((header) => `${header} kolonu zorunludur.`) };
+    return {
+      rows: [],
+      errors: missingHeaders.map((header) => `${header} kolonu zorunludur.`),
+    };
   }
 
   const dbWarnings = await dbDuplicateWarnings(config, tenantId, parsed.rows);
@@ -232,6 +491,7 @@ async function previewImport(config: EntityConfig, tenantId: string, body: Impor
     const errors = config.requiredHeaders
       .filter((header) => !values[header]?.trim())
       .map((header) => `${header} zorunludur.`);
+    errors.push(...semanticErrors(config.entity, values));
     const warnings = [
       ...(fileWarnings.get(index) ?? []),
       ...(dbWarnings.get(index) ?? []),
@@ -246,16 +506,22 @@ async function previewImport(config: EntityConfig, tenantId: string, body: Impor
     };
   });
 
-  if (config.entity === 'products') {
+  if (config.entity === "products") {
     await applyProductLimitToPreview(tenantId, rows);
   }
 
   return { rows, errors: [] };
 }
 
-async function applyProductLimitToPreview(tenantId: string, rows: ImportPreviewRow[]): Promise<void> {
+async function applyProductLimitToPreview(
+  tenantId: string,
+  rows: ImportPreviewRow[],
+): Promise<void> {
   const validRows = rows.filter((row) => row.valid).length;
-  const capacity = await new StarterAccessService(prisma).getProductCapacity(tenantId, validRows);
+  const capacity = await new StarterAccessService(prisma).getProductCapacity(
+    tenantId,
+    validRows,
+  );
   if (capacity.allowed || capacity.remainingSlots === null) return;
 
   let acceptedRows = 0;
@@ -264,7 +530,9 @@ async function applyProductLimitToPreview(tenantId: string, rows: ImportPreviewR
     acceptedRows += 1;
     if (acceptedRows > capacity.remainingSlots) {
       row.valid = false;
-      row.errors.push(`Plan urun limiti asiliyor. Kalan hak: ${capacity.remainingSlots}.`);
+      row.errors.push(
+        `Plan urun limiti asiliyor. Kalan hak: ${capacity.remainingSlots}.`,
+      );
     }
   }
 }
@@ -272,39 +540,61 @@ async function applyProductLimitToPreview(tenantId: string, rows: ImportPreviewR
 function csvResponse(csv: string, filename: string): Response {
   return new Response(csv, {
     headers: {
-      'content-type': 'text/csv; charset=utf-8',
-      'content-disposition': `attachment; filename="${filename}"`,
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="${filename}"`,
     },
   });
 }
 
-async function exportEntity(entity: DataExchangeEntity, tenantId: string): Promise<string> {
-  if (entity === 'products') {
+async function exportEntity(
+  entity: DataExchangeEntity,
+  tenantId: string,
+): Promise<string> {
+  if (entity === "products") {
     const rows = await prisma.product.findMany({
       where: { tenantId, deletedAt: null },
-      select: { code: true, name: true, barcode: true, salesPrice: true, purchasePrice: true, minStockLevel: true, isActive: true },
-      orderBy: { code: 'asc' },
-      take: 5_000,
+      select: {
+        code: true,
+        name: true,
+        barcode: true,
+        salesPrice: true,
+        purchasePrice: true,
+        minStockLevel: true,
+        isActive: true,
+      },
+      orderBy: { code: "asc" },
     });
-    return buildCsv(ENTITY_CONFIGS.products.headers, rows.map((row) => ({
-      ...row,
-      salesPrice: Number(row.salesPrice).toFixed(2),
-      purchasePrice: Number(row.purchasePrice).toFixed(2),
-      minStockLevel: Number(row.minStockLevel).toFixed(3),
-    })));
+    return buildCsv(
+      ENTITY_CONFIGS.products.headers,
+      rows.map((row) => ({
+        ...row,
+        salesPrice: Number(row.salesPrice).toFixed(2),
+        purchasePrice: Number(row.purchasePrice).toFixed(2),
+        minStockLevel: Number(row.minStockLevel).toFixed(3),
+      })),
+    );
   }
 
-  if (entity === 'contacts') {
+  if (entity === "contacts") {
     const rows = await prisma.contact.findMany({
       where: { tenantId, deletedAt: null },
-      select: { type: true, code: true, name: true, taxNumber: true, email: true, phone: true, city: true, country: true, isActive: true },
-      orderBy: { name: 'asc' },
-      take: 5_000,
+      select: {
+        type: true,
+        code: true,
+        name: true,
+        taxNumber: true,
+        email: true,
+        phone: true,
+        city: true,
+        country: true,
+        isActive: true,
+      },
+      orderBy: { name: "asc" },
     });
     return buildCsv(ENTITY_CONFIGS.contacts.headers, rows);
   }
 
-  if (entity === 'stock') {
+  if (entity === "stock") {
     const rows = await prisma.stockLevel.findMany({
       where: { tenantId },
       select: {
@@ -312,16 +602,18 @@ async function exportEntity(entity: DataExchangeEntity, tenantId: string): Promi
         product: { select: { code: true, name: true } },
         warehouse: { select: { code: true, name: true } },
       },
-      orderBy: [{ product: { code: 'asc' } }, { warehouse: { code: 'asc' } }],
-      take: 5_000,
+      orderBy: [{ product: { code: "asc" } }, { warehouse: { code: "asc" } }],
     });
-    return buildCsv(ENTITY_CONFIGS.stock.headers, rows.map((row) => ({
-      productCode: row.product.code,
-      productName: row.product.name,
-      warehouseCode: row.warehouse.code,
-      warehouseName: row.warehouse.name,
-      quantity: Number(row.quantity).toFixed(3),
-    })));
+    return buildCsv(
+      ENTITY_CONFIGS.stock.headers,
+      rows.map((row) => ({
+        productCode: row.product.code,
+        productName: row.product.name,
+        warehouseCode: row.warehouse.code,
+        warehouseName: row.warehouse.name,
+        quantity: Number(row.quantity).toFixed(3),
+      })),
+    );
   }
 
   const rows = await prisma.invoice.findMany({
@@ -336,48 +628,85 @@ async function exportEntity(entity: DataExchangeEntity, tenantId: string): Promi
       totalGross: true,
       contact: { select: { name: true } },
     },
-    orderBy: { date: 'desc' },
-    take: 5_000,
+    orderBy: { date: "desc" },
   });
-  return buildCsv(ENTITY_CONFIGS.invoices.headers, rows.map((row) => ({
-    number: row.number,
-    type: row.type,
-    status: row.status,
-    contactName: row.contact.name,
-    date: row.date.toISOString().slice(0, 10),
-    dueDate: row.dueDate?.toISOString().slice(0, 10) ?? '',
-    currencyCode: row.currencyCode,
-    totalGross: Number(row.totalGross).toFixed(2),
-  })));
+  return buildCsv(
+    ENTITY_CONFIGS.invoices.headers,
+    rows.map((row) => ({
+      number: row.number,
+      type: row.type,
+      status: row.status,
+      contactName: row.contact.name,
+      date: row.date.toISOString().slice(0, 10),
+      dueDate: row.dueDate?.toISOString().slice(0, 10) ?? "",
+      currencyCode: row.currencyCode,
+      totalGross: Number(row.totalGross).toFixed(2),
+    })),
+  );
 }
 
 export const DataExchangeController = {
   async batches(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const access = await requireAnyReadAccess(c, tenantId, userId, ['reporting', 'contacts', 'inventory', 'invoicing']);
+    const access = await requireAnyReadAccess(c, tenantId, userId, [
+      "reporting",
+      "contacts",
+      "inventory",
+      "invoicing",
+    ]);
     if (access instanceof Response) return access;
 
-    const batches = await new DataExchangeWorkflowService(prisma).listBatches(tenantId);
-    return c.json({ data: batches });
+    const batches = await new DataExchangeWorkflowService(prisma).listBatches(
+      tenantId,
+    );
+    return c.json({
+      data: batches.filter((batch) =>
+        access.can(
+          PermissionAction.READ,
+          ENTITY_CONFIGS[batch.entity].module,
+        ),
+      ),
+    });
   },
 
   async rollbackBatch(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const batchId = c.req.param('batchId');
-    if (!batchId) return c.json(new ValidationError('batchId zorunludur.').toJSON(), 400);
-    const access = await requireAnyReadAccess(c, tenantId, userId, ['reporting', 'contacts', 'inventory', 'invoicing']);
+    const batchId = c.req.param("batchId");
+    if (!batchId)
+      return c.json(new ValidationError("batchId zorunludur.").toJSON(), 400);
+    const workflow = new DataExchangeWorkflowService(prisma);
+    const existing = (await workflow.listBatches(tenantId)).find(
+      (item) => item.batchId === batchId,
+    );
+    if (!existing)
+      return c.json(
+        new ValidationError("Import batch bulunamadÄ±.").toJSON(),
+        404,
+      );
+    const config = ENTITY_CONFIGS[existing.entity];
+    const access = await requireAccess(
+      c,
+      tenantId,
+      userId,
+      config.module,
+      PermissionAction.CREATE,
+    );
     if (access instanceof Response) return access;
 
-    const batch = await new DataExchangeWorkflowService(prisma).rollbackBatch(tenantId, batchId);
-    if (!batch) return c.json(new ValidationError('Import batch bulunamadı.').toJSON(), 404);
+    const batch = await workflow.rollbackBatch(tenantId, batchId);
+    if (!batch)
+      return c.json(
+        new ValidationError("Import batch bulunamadı.").toJSON(),
+        404,
+      );
 
     const { ipAddress, userAgent } = getRequestMeta(c);
     await createAuditLog(prisma, {
       tenantId,
       userId,
-      module: 'data_exchange',
+      module: "data_exchange",
       entityType: EntityType.OTHER,
       entityId: batch.batchId,
       action: AuditAction.UPDATE,
@@ -392,25 +721,63 @@ export const DataExchangeController = {
   async quality(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const access = await requireAnyReadAccess(c, tenantId, userId, ['reporting', 'contacts', 'inventory', 'hr', 'sales', 'invoicing']);
+    const access = await requireAnyReadAccess(c, tenantId, userId, [
+      "reporting",
+      "contacts",
+      "inventory",
+      "hr",
+      "sales",
+      "invoicing",
+    ]);
     if (access instanceof Response) return access;
 
     const summary = await getDataQualitySummary(prisma, tenantId);
-    return c.json({ data: summary });
+    const issues = filterQualityIssues(access, summary.issues);
+    return c.json({
+      data: {
+        ...summary,
+        score: scoreQualityIssues(issues),
+        issueCount: issues.reduce((sum, issue) => sum + issue.count, 0),
+        criticalCount: issues
+          .filter((issue) => issue.severity === "critical")
+          .reduce((sum, issue) => sum + issue.count, 0),
+        issues,
+      },
+    });
   },
 
   async createQualityTask(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
-    const access = await requireAnyReadAccess(c, tenantId, userId, ['reporting', 'contacts', 'inventory', 'hr', 'sales', 'invoicing']);
+    const access = await requireAnyReadAccess(c, tenantId, userId, [
+      "reporting",
+      "contacts",
+      "inventory",
+      "hr",
+      "sales",
+      "invoicing",
+    ]);
     if (access instanceof Response) return access;
 
-    const issueKey = c.req.param('issueKey');
+    const issueKey = c.req.param("issueKey");
     const summary = await getDataQualitySummary(prisma, tenantId);
     const issue = summary.issues.find((item) => item.key === issueKey);
-    if (!issue) return c.json(new ValidationError('Data quality sorunu bulunamadı.').toJSON(), 404);
+    if (!issue)
+      return c.json(
+        new ValidationError("Data quality sorunu bulunamadı.").toJSON(),
+        404,
+      );
+    if (!canReadQualityCategory(access, issue.category))
+      return c.json(
+        new ForbiddenError(
+          "Bu data quality sorunu icin okuma yetkiniz yok.",
+        ).toJSON(),
+        403,
+      );
 
-    const result = await new DataExchangeWorkflowService(prisma).createQualityTask(tenantId, userId, issue);
+    const result = await new DataExchangeWorkflowService(
+      prisma,
+    ).createQualityTask(tenantId, userId, issue);
     return c.json({ data: result }, 201);
   },
 
@@ -420,10 +787,19 @@ export const DataExchangeController = {
     const config = requireEntity(c);
     if (config instanceof Response) return config;
 
-    const access = await requireAccess(c, tenantId, userId, config.module, PermissionAction.READ);
+    const access = await requireAccess(
+      c,
+      tenantId,
+      userId,
+      config.module,
+      PermissionAction.READ,
+    );
     if (access instanceof Response) return access;
 
-    return csvResponse(buildCsv(config.headers, []), `${config.entity}-template.csv`);
+    return csvResponse(
+      buildCsv(config.headers, []),
+      `${config.entity}-template.csv`,
+    );
   },
 
   async export(c: Context): Promise<Response> {
@@ -432,7 +808,13 @@ export const DataExchangeController = {
     const config = requireEntity(c);
     if (config instanceof Response) return config;
 
-    const access = await requireAccess(c, tenantId, userId, config.module, PermissionAction.READ);
+    const access = await requireAccess(
+      c,
+      tenantId,
+      userId,
+      config.module,
+      PermissionAction.READ,
+    );
     if (access instanceof Response) return access;
 
     const csv = await exportEntity(config.entity, tenantId);
@@ -445,16 +827,33 @@ export const DataExchangeController = {
     const config = requireEntity(c);
     if (config instanceof Response) return config;
 
-    const access = await requireAccess(c, tenantId, userId, config.module, PermissionAction.CREATE);
+    const access = await requireAccess(
+      c,
+      tenantId,
+      userId,
+      config.module,
+      PermissionAction.CREATE,
+    );
     if (access instanceof Response) return access;
 
     const body = await readImportBody(c);
-    if (!body.csv.trim()) return c.json(new ValidationError('csv alani zorunludur.').toJSON(), 400);
+    if (!body.csv.trim())
+      return c.json(new ValidationError("csv alani zorunludur.").toJSON(), 400);
+    if (new TextEncoder().encode(body.csv).byteLength > MAX_IMPORT_BYTES) {
+      return c.json(
+        new ValidationError(
+          `CSV en fazla ${MAX_IMPORT_BYTES} byte olabilir.`,
+        ).toJSON(),
+        400,
+      );
+    }
 
     const preview = await previewImport(config, tenantId, body);
     const validRows = preview.rows.filter((row) => row.valid).length;
     const invalidRows = preview.rows.filter((row) => !row.valid).length;
-    const canImportValidRows = body.partialImport ? validRows > 0 : invalidRows === 0 && validRows > 0;
+    const canImportValidRows = body.partialImport
+      ? validRows > 0
+      : invalidRows === 0 && validRows > 0;
     const batchId = randomUUID();
     const duplicateSuggestions = duplicateSuggestionsFromWarnings(preview.rows);
     const batch = await new DataExchangeWorkflowService(prisma).registerBatch({
@@ -469,7 +868,11 @@ export const DataExchangeController = {
       mapping: body.mapping,
       rowIssues: preview.rows
         .filter((row) => row.errors.length > 0 || row.warnings.length > 0)
-        .map((row) => ({ rowNumber: row.rowNumber, errors: row.errors, warnings: row.warnings })),
+        .map((row) => ({
+          rowNumber: row.rowNumber,
+          errors: row.errors,
+          warnings: row.warnings,
+        })),
       duplicateSuggestions,
       canImportValidRows,
     });

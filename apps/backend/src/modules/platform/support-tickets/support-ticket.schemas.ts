@@ -37,3 +37,7 @@ export const updateTicketAdminSchema = z.object({
   priority: z.enum(PLATFORM_TICKET_PRIORITIES).optional(),
   assignedAdminId: z.string().nullable().optional(),
 }).strict();
+
+export const reopenTicketSchema = z.object({
+  reason: z.string().trim().max(2000, 'Yeniden acma gerekcesi en fazla 2000 karakter olabilir').optional(),
+}).strict();

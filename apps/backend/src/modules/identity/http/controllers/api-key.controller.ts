@@ -1,7 +1,7 @@
-import { AuditAction,EntityType } from '@prisma/client';
+import { AuditAction,EntityType,Prisma } from '@prisma/client';
 import { API_KEY_SCOPE_VALUES } from '@repo/types/contracts';
 import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
+import { ConflictError,NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { generateApiKeyMaterial,validateIpAllowlist } from '../../../../services/api-key-access.service.js';
 import { ApiKeyUsageService } from '../../../../services/api-key-usage.service.js';
@@ -13,6 +13,7 @@ getIntegrationSandboxPostmanCollection,
 } from '../../../../services/integration-sandbox.service.js';
 import { createAuditLog,getRequestMeta } from '../../../../utils/audit.js';
 import { requireParam,requireTenantId,requireUserId } from '../../../../utils/context.js';
+import { getPaginationParams } from '../../../../utils/pagination.js';
 
 // ─────────────────────────────────────────────
 // DTOs
@@ -52,6 +53,15 @@ function parseCreateApiKeyBody(value: unknown): CreateApiKeyDTO | ValidationErro
     : undefined;
 
   if (!name) return new ValidationError('name alanı zorunludur.');
+  if (name.length > 100) return new ValidationError('name en fazla 100 karakter olabilir.');
+  if (scopes && scopes.length > 50) return new ValidationError('En fazla 50 scope secilebilir.');
+  if (scopes && new Set(scopes).size !== scopes.length) return new ValidationError('Ayni scope birden fazla secilemez.');
+  if (ipAllowlist && ipAllowlist.length > 100) return new ValidationError('IP allowlist en fazla 100 kayit icerebilir.');
+  if (expiresAt) {
+    const expiry = new Date(expiresAt);
+    if (Number.isNaN(expiry.getTime())) return new ValidationError('expiresAt gecerli bir tarih olmalidir.');
+    if (expiry <= new Date()) return new ValidationError('expiresAt gelecekte bir tarih olmalidir.');
+  }
   return { name, scopes, expiresAt, ipAllowlist };
 }
 
@@ -84,9 +94,10 @@ export const ApiKeyController = {
     const tenantId = requireTenantId(c);
 
     const query = c.req.query() as ApiKeyListQuery;
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(query.limit ?? '20', 10)));
-    const skip = (page - 1) * pageSize;
+    if (query.isActive !== undefined && query.isActive !== 'true' && query.isActive !== 'false') {
+      return c.json(new ValidationError('isActive true veya false olmalidir.').toJSON(), 400);
+    }
+    const { page, limit: pageSize, skip } = getPaginationParams(c, 20);
 
     const where = {
       tenantId,
@@ -227,8 +238,15 @@ export const ApiKeyController = {
     const keyMaterial = generateApiKeyMaterial();
     const now = new Date();
 
-    const [rotated] = await prisma.$transaction([
-      prisma.apiKey.create({
+    let rotated;
+    try {
+      rotated = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.apiKey.updateMany({
+          where: { id: existing.id, tenantId, deletedAt: null, isActive: true, revokedAt: null },
+          data: { isActive: false, revokedAt: now, revokedById: userId, rotatedAt: now },
+        });
+        if (claimed.count !== 1) throw new ConflictError('API anahtari baska bir islem tarafindan rotate veya revoke edildi.');
+        return tx.apiKey.create({
         data: {
           tenantId,
           name: existing.name,
@@ -252,12 +270,14 @@ export const ApiKeyController = {
           createdAt: true,
           rotatedFromId: true,
         },
-      }),
-      prisma.apiKey.update({
-        where: { id: existing.id },
-        data: { isActive: false, revokedAt: now, revokedById: userId, rotatedAt: now },
-      }),
-    ]);
+        });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError('Bu API anahtari daha once rotate edildi.');
+      }
+      throw error;
+    }
 
     await createAuditLog(prisma, {
       tenantId,

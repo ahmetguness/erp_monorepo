@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import { listTenantTickets } from '@/services/support-ticket.service';
 import { TicketCard } from './TicketCard';
 import { CreateTicketModal } from './CreateTicketModal';
@@ -27,7 +28,7 @@ export function TicketListPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  const { data: tickets = [], isLoading, refetch } = useQuery({
+  const { data: tickets = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['tenant-tickets', selectedStatus, selectedCategory, search],
     queryFn: () =>
       listTenantTickets({
@@ -186,6 +187,7 @@ export function TicketListPage() {
 
       {/* Tickets List */}
       <div className="space-y-3">
+        {isError && <ApiErrorState error={error} onRetry={() => void refetch()} />}
         {isLoading && (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/40 p-16 text-center">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-sky-500 border-t-transparent mb-3" />
@@ -193,7 +195,7 @@ export function TicketListPage() {
           </div>
         )}
 
-        {!isLoading && tickets.length === 0 && (
+        {!isLoading && !isError && tickets.length === 0 && (
           <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/30 p-16 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-800/80 text-sky-400 shadow-inner">
               <LifeBuoy className="h-7 w-7" />
@@ -233,7 +235,7 @@ export function TicketListPage() {
           </div>
         )}
 
-        {!isLoading &&
+        {!isLoading && !isError &&
           tickets.map((ticket) => (
             <TicketCard key={ticket.id} ticket={ticket} />
           ))}

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { DataTable, type ColumnDef } from '@/components/shared/DataTable';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import {
   useAiGovernanceInsights,
   useAiGovernanceLogs,
@@ -91,14 +92,14 @@ export function AiGovernancePage() {
   const [status, setStatus] = useState<AiRequestStatus | ''>('');
   const [requestType, setRequestType] = useState<AiRequestType | ''>('');
   const [detail, setDetail] = useState<AiRequestLog | null>(null);
-  const { data, isLoading } = useAiGovernanceLogs({
+  const { data, isLoading, isError: logsError, error: logsErrorValue, refetch: refetchLogs } = useAiGovernanceLogs({
     page,
     limit: 30,
     status: status || undefined,
     requestType: requestType || undefined,
   });
-  const { data: policyData } = useAiGovernancePolicy();
-  const { data: insights } = useAiGovernanceInsights();
+  const { data: policyData, isError: policyError, error: policyErrorValue, refetch: refetchPolicy } = useAiGovernancePolicy();
+  const { data: insights, isError: insightsError, error: insightsErrorValue, refetch: refetchInsights } = useAiGovernanceInsights();
   const updatePolicy = useUpdateAiGovernancePolicy();
   const updateInsights = useUpdateAiGovernanceInsightsSettings();
   const [costSettingsDraft, setCostSettingsDraft] = useState<{
@@ -195,6 +196,19 @@ export function AiGovernancePage() {
       { onSuccess: () => setCostSettingsDraft(null) },
     );
   };
+
+  const queryError = logsErrorValue ?? policyErrorValue ?? insightsErrorValue;
+  if (logsError || policyError || insightsError) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title="AI Governance & Karar Destek Stüdyosu" subtitle="Kurumsal kontrol merkezi, AI istekleri, izin sonucu, maskeleme ve deterministik yapay zeka boru hattı." />
+        <ApiErrorState
+          error={queryError}
+          onRetry={() => void Promise.all([refetchLogs(), refetchPolicy(), refetchInsights()])}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

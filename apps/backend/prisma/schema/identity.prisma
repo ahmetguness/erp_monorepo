@@ -601,13 +601,12 @@ model ApiKey {
   revokedAt     DateTime?
   revokedById   String?
   rotatedAt     DateTime?
-  rotatedFromId String?
+  rotatedFromId String?   @unique
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, isActive])
   @@index([tenantId, deletedAt])
-  @@index([tenantId, rotatedFromId])
   @@map("api_keys")
 }
 

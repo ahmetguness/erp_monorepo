@@ -19,6 +19,8 @@ import { useUIStore } from '@/store/ui.store';
 import { getErrorMessage } from '@/types/api.types';
 import { cn } from '@/lib/utils';
 import { DataDeduplicationCenter } from './DataDeduplicationCenter';
+import { useCurrentUser } from '@/hooks/useAuth';
+import { createUserAccessContext, hasUserPermission } from '@/domain/access/user-access-context';
 
 const ENTITIES: { value: DataExchangeEntity; label: string; description: string }[] = [
   { value: 'products', label: 'Urunler', description: 'Kod, ad, fiyat ve stok esigi' },
@@ -26,6 +28,10 @@ const ENTITIES: { value: DataExchangeEntity; label: string; description: string 
   { value: 'stock', label: 'Stok', description: 'Depo bazlı miktar görünümü' },
   { value: 'invoices', label: 'Faturalar', description: 'Fatura baslik bilgileri' },
 ];
+
+const ENTITY_MODULE: Record<DataExchangeEntity, string> = {
+  products: 'inventory', contacts: 'contacts', stock: 'inventory', invoices: 'invoicing',
+};
 
 const ENTITY_HELP: Record<DataExchangeEntity, { required: string[]; exported: string; note: string }> = {
   products: {
@@ -67,6 +73,8 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export function DataExchangePage() {
+  const { user, tenant } = useCurrentUser();
+  const access = createUserAccessContext(user, tenant);
   const [entity, setEntity] = useState<DataExchangeEntity>('products');
   const [csv, setCsv] = useState('');
   const [mapping, setMapping] = useState<Partial<Record<string, string>>>({});
@@ -134,6 +142,8 @@ export function DataExchangePage() {
   const previewData = preview.data;
   const help = ENTITY_HELP[entity];
   const qualityData = quality.data;
+  const canReadEntity = hasUserPermission(access, ENTITY_MODULE[entity], 'READ');
+  const canCreateEntity = hasUserPermission(access, ENTITY_MODULE[entity], 'CREATE');
 
   return (
     <div>
@@ -142,10 +152,10 @@ export function DataExchangePage() {
         subtitle="CSV şablonu al, mevcut veriyi dışa aktar veya import dosyasini kaydetmeden önce doğrula."
         action={
           <>
-            <Button variant="outline" leftIcon={<FileSpreadsheet className="h-4 w-4" />} loading={template.isPending} onClick={handleTemplate}>
+            <Button variant="outline" leftIcon={<FileSpreadsheet className="h-4 w-4" />} loading={template.isPending} disabled={!canReadEntity} onClick={handleTemplate}>
               Şablon
             </Button>
-            <Button variant="secondary" leftIcon={<Download className="h-4 w-4" />} loading={dataExport.isPending} onClick={handleExport}>
+            <Button variant="secondary" leftIcon={<Download className="h-4 w-4" />} loading={dataExport.isPending} disabled={!canReadEntity} onClick={handleExport}>
               Export
             </Button>
           </>
@@ -168,6 +178,11 @@ export function DataExchangePage() {
         {quality.isLoading ? (
           <div className="grid gap-3 md:grid-cols-3">
             {[1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-lg bg-slate-800/60" />)}
+          </div>
+        ) : quality.isError ? (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200">
+            <span>{getErrorMessage(quality.error)}</span>
+            <Button size="sm" variant="outline" onClick={() => { void quality.refetch(); }}>Tekrar dene</Button>
           </div>
         ) : qualityData ? (
           <div className="space-y-3">
@@ -303,7 +318,7 @@ export function DataExchangePage() {
                 <Button variant="outline" leftIcon={<UploadCloud className="h-4 w-4" />} onClick={() => fileInputRef.current?.click()}>
                   Dosya Seç
                 </Button>
-                <Button loading={preview.isPending} onClick={handlePreview} disabled={!csv.trim()}>
+                <Button loading={preview.isPending} onClick={handlePreview} disabled={!csv.trim() || !canCreateEntity}>
                   Kontrol Et
                 </Button>
               </div>
@@ -402,6 +417,11 @@ export function DataExchangePage() {
             </div>
             {batches.isLoading ? (
               <div className="h-24 animate-pulse rounded-lg bg-slate-800/60" />
+            ) : batches.isError ? (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200">
+                <span>{getErrorMessage(batches.error)}</span>
+                <Button size="sm" variant="outline" onClick={() => { void batches.refetch(); }}>Tekrar dene</Button>
+              </div>
             ) : !batches.data || batches.data.length === 0 ? (
               <p className="rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-500">Henüz batch geçmişi yok.</p>
             ) : (
@@ -423,7 +443,7 @@ export function DataExchangePage() {
                         variant="outline"
                         leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
                         loading={rollbackBatch.isPending}
-                        disabled={batch.status === 'ROLLED_BACK'}
+                        disabled={batch.status === 'ROLLED_BACK' || !hasUserPermission(access, ENTITY_MODULE[batch.entity], 'CREATE')}
                         onClick={() => { void handleRollback(batch.batchId); }}
                       >
                         Rollback

@@ -1,6 +1,6 @@
 import { InvoiceType, MovementType, Plan } from '@prisma/client';
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { ValidationError } from '../errors';
+import { ForbiddenError, ValidationError } from '../errors';
 
 type HoldingCompanyDbClient = PrismaClient;
 
@@ -95,10 +95,10 @@ export async function getHoldingCompany(
 
   if (!tenant) throw new ValidationError('Tenant bulunamadi.');
   if (tenant.plan !== Plan.ENTERPRISE) {
-    throw new ValidationError('Coklu sirket/sube paneli sadece Enterprise plan icindir.');
+    throw new ForbiddenError('Coklu sirket/sube paneli sadece Enterprise plan icindir.');
   }
 
-  const [warehouses, invoices, payments, transfers] = await Promise.all([
+  const [warehouses, invoiceGroups, paymentTotals, transfers, transferCount] = await Promise.all([
     db.warehouse.findMany({
       where: { tenantId: input.tenantId, isActive: true },
       select: {
@@ -115,15 +115,16 @@ export async function getHoldingCompany(
       },
       orderBy: { code: 'asc' },
     }),
-    db.invoice.findMany({
+    db.invoice.groupBy({
       where: { tenantId: input.tenantId, deletedAt: null },
-      select: { type: true, totalGross: true },
-      take: 1000,
+      by: ['type'],
+      _sum: { totalGross: true },
+      _count: { _all: true },
     }),
-    db.payment.findMany({
+    db.payment.aggregate({
       where: { tenantId: input.tenantId, deletedAt: null, direction: 'RECEIVE' },
-      select: { amount: true },
-      take: 1000,
+      _sum: { amount: true },
+      _count: { _all: true },
     }),
     db.stockMovement.findMany({
       where: { tenantId: input.tenantId, type: MovementType.TRANSFER },
@@ -138,6 +139,7 @@ export async function getHoldingCompany(
       orderBy: { createdAt: 'desc' },
       take: 20,
     }),
+    db.stockMovement.count({ where: { tenantId: input.tenantId, type: MovementType.TRANSFER } }),
   ]);
 
   const stockValueByWarehouse = new Map<string, number>();
@@ -148,13 +150,11 @@ export async function getHoldingCompany(
     stockValueByWarehouse.set(warehouse.id, value);
   }
 
-  const consolidatedSales = invoices
-    .filter((invoice) => invoice.type === InvoiceType.SALES)
-    .reduce((sum, invoice) => sum + decimalToNumber(invoice.totalGross), 0);
-  const consolidatedPurchases = invoices
-    .filter((invoice) => invoice.type === InvoiceType.PURCHASE)
-    .reduce((sum, invoice) => sum + decimalToNumber(invoice.totalGross), 0);
-  const consolidatedCollections = payments.reduce((sum, payment) => sum + decimalToNumber(payment.amount), 0);
+  const salesGroup = invoiceGroups.find((group) => group.type === InvoiceType.SALES);
+  const purchaseGroup = invoiceGroups.find((group) => group.type === InvoiceType.PURCHASE);
+  const consolidatedSales = decimalToNumber(salesGroup?._sum.totalGross);
+  const consolidatedPurchases = decimalToNumber(purchaseGroup?._sum.totalGross);
+  const consolidatedCollections = decimalToNumber(paymentTotals._sum.amount);
   const consolidatedStockValue = [...stockValueByWarehouse.values()].reduce((sum, value) => sum + value, 0);
 
   const holding = rootNode(tenant, warehouses.length, consolidatedStockValue);
@@ -189,7 +189,7 @@ export async function getHoldingCompany(
       consolidatedPurchases,
       consolidatedCollections,
       consolidatedStockValue,
-      intercompanyTransferCount: transfers.length,
+      intercompanyTransferCount: transferCount,
     },
     organization: [holding, companyNode, ...branchNodes],
     intercompanyTransfers: transfers.map((transfer): IntercompanyTransferRow => ({
@@ -203,9 +203,9 @@ export async function getHoldingCompany(
       status: 'completed',
     })),
     consolidatedReports: [
-      { key: 'sales', label: 'Konsolide satis', amount: consolidatedSales, recordCount: invoices.filter((invoice) => invoice.type === InvoiceType.SALES).length },
-      { key: 'purchases', label: 'Konsolide satin alma', amount: consolidatedPurchases, recordCount: invoices.filter((invoice) => invoice.type === InvoiceType.PURCHASE).length },
-      { key: 'collections', label: 'Konsolide tahsilat', amount: consolidatedCollections, recordCount: payments.length },
+      { key: 'sales', label: 'Konsolide satis', amount: consolidatedSales, recordCount: salesGroup?._count._all ?? 0 },
+      { key: 'purchases', label: 'Konsolide satin alma', amount: consolidatedPurchases, recordCount: purchaseGroup?._count._all ?? 0 },
+      { key: 'collections', label: 'Konsolide tahsilat', amount: consolidatedCollections, recordCount: paymentTotals._count._all },
       { key: 'stock', label: 'Konsolide stok degeri', amount: consolidatedStockValue, recordCount: warehouses.length },
     ],
   };

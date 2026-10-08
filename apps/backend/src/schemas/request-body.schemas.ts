@@ -13,6 +13,7 @@ import {
   CheckNoteType,
   CheckStatus,
   LeaveType,
+  PermissionAction,
 } from "@prisma/client";
 import { z } from "zod";
 
@@ -482,9 +483,42 @@ export const updateUserBodySchema = z
     name: optionalString,
     phone: optionalString,
     isActive: z.boolean().optional(),
-    roleId: optionalString,
+    roleId: optionalString.nullable(),
   })
   .strict();
+
+const rolePermissionBodySchema = z
+  .object({
+    module: z.string().trim().min(1, "Zorunlu alan").max(100, "En fazla 100 karakter olabilir."),
+    action: z.nativeEnum(PermissionAction),
+  })
+  .strict();
+
+export const createRoleBodySchema = z
+  .object({
+    name: z.string().trim().min(1, "Zorunlu alan").max(100, "En fazla 100 karakter olabilir."),
+    description: z.string().trim().max(500, "En fazla 500 karakter olabilir.").optional(),
+    permissions: z.array(rolePermissionBodySchema).max(500, "En fazla 500 izin eklenebilir.").optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const seen = new Set<string>();
+    value.permissions?.forEach((permission, index) => {
+      const key = `${permission.module}:${permission.action}`;
+      if (seen.has(key)) context.addIssue({ code: "custom", path: ["permissions", index], message: "Ayni izin birden fazla eklenemez." });
+      seen.add(key);
+    });
+  });
+
+export const updateRoleBodySchema = z
+  .object({
+    name: z.string().trim().min(1, "Zorunlu alan").max(100, "En fazla 100 karakter olabilir.").optional(),
+    description: z.string().trim().max(500, "En fazla 500 karakter olabilir.").nullable().optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, { message: "En az bir alan gonderilmelidir." });
+
+export const addRolePermissionBodySchema = rolePermissionBodySchema;
 
 export const tenantSettingBodySchema = z
   .object({

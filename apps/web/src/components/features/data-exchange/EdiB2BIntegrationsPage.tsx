@@ -8,6 +8,8 @@ import { FeatureGate } from '@/components/shared/FeatureGate';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { useCreateEdiB2BRetryTask, useEdiB2BHub } from '@/hooks/useDataExchange';
 import type { EdiB2BExchangeStatus, EdiB2BSlaStatus } from '@/services/data-exchange.service';
+import { useCurrentUser } from '@/hooks/useAuth';
+import { createUserAccessContext, hasUserPermission } from '@/domain/access/user-access-context';
 
 const STATUS_VARIANT: Record<EdiB2BExchangeStatus, 'success' | 'warning' | 'danger' | 'info' | 'neutral'> = {
   ready: 'success',
@@ -64,6 +66,9 @@ function formatSlaMinutes(value: number): string {
 }
 
 export function EdiB2BIntegrationsPage() {
+  const { user, tenant } = useCurrentUser();
+  const access = createUserAccessContext(user, tenant);
+  const canRetry = hasUserPermission(access, 'marketplace', 'UPDATE');
   const hub = useEdiB2BHub();
   const retryTask = useCreateEdiB2BRetryTask();
   const data = hub.data;
@@ -89,9 +94,12 @@ export function EdiB2BIntegrationsPage() {
           <div className="grid gap-4 md:grid-cols-4">
             {[1, 2, 3, 4].map((item) => <div key={item} className="h-28 animate-pulse rounded-lg bg-slate-800/60" />)}
           </div>
-        ) : !data ? (
+        ) : hub.isError || !data ? (
           <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-500">
-            EDI / B2B özeti alinamadi.
+            <p>EDI / B2B özeti alinamadi.</p>
+            <Button className="mt-3" size="sm" variant="outline" onClick={() => void hub.refetch()}>
+              Tekrar dene
+            </Button>
           </div>
         ) : (
           <div className="space-y-5">
@@ -278,7 +286,7 @@ export function EdiB2BIntegrationsPage() {
                             size="sm"
                             variant="outline"
                             leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
-                            disabled={!item.retryEligible}
+                            disabled={!item.retryEligible || !canRetry}
                             loading={retryTask.isPending && retryTask.variables === item.itemKey}
                             onClick={() => retryTask.mutate(item.itemKey)}
                           >
