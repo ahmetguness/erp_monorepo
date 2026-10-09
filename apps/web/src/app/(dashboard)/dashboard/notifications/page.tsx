@@ -42,6 +42,7 @@ import {
 } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 import { NotificationAttentionPanel } from '@/features/notification-attention';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 
 const CATEGORY_MAP: Record<string, { label: string; icon: ReactNode; color: string }> = {
   collection_due: { label: 'Tahsilat & Finans', icon: <DollarSign className="w-3.5 h-3.5" />, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
@@ -59,8 +60,8 @@ type SeverityFilter = 'ALL' | 'critical' | 'high' | 'medium' | 'low';
 
 export default function NotificationsPage() {
   // Query hooks
-  const { data: notificationsData, isLoading: isNotifLoading, refetch: refetchNotifs } = useNotifications({ limit: 100 });
-  const { data: smartSummary, isLoading: isSmartLoading, refetch: refetchSmart } = useSmartNotifications();
+  const { data: notificationsData, isLoading: isNotifLoading, isError: isNotifError, error: notifError, refetch: refetchNotifs } = useNotifications({ limit: 100 });
+  const { data: smartSummary, isLoading: isSmartLoading, isError: isSmartError, error: smartError, refetch: refetchSmart } = useSmartNotifications();
   const { data: attention } = useNotificationAttention();
   const markRead = useMarkAsRead();
   const markAllRead = useMarkAllAsRead();
@@ -171,6 +172,10 @@ export default function NotificationsPage() {
   };
 
   const isLoading = isNotifLoading || isSmartLoading;
+
+  if (isNotifError || isSmartError) {
+    return <ApiErrorState error={notifError ?? smartError} onRetry={() => { void refetchNotifs(); void refetchSmart(); }} />;
+  }
 
   return (
     <div className="space-y-6 pb-12">

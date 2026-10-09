@@ -20,6 +20,8 @@ import {
 import { useAdminAuthStore } from "@/store/admin-auth.store";
 import { toast } from "@/store/ui.store";
 import { AdminPageHeader, AdminFilterToolbar } from "@/components/features/admin/ui";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
+import { toastAdminError } from "@/lib/admin/errors";
 
 const statuses: Array<DemoRequestStatus | "ALL"> = [
   "ALL",
@@ -85,9 +87,7 @@ export function DemoRequestOperationsPage() {
       {requests.isLoading && (
         <p className="text-slate-400">Talepler yükleniyor…</p>
       )}
-      {requests.isError && (
-        <p className="text-red-400">Demo talepleri yüklenemedi.</p>
-      )}
+      {requests.isError && <ApiErrorState error={requests.error} onRetry={() => void requests.refetch()} />}
       <div className="space-y-3">
         {requests.data?.data.map((request) => (
           <DemoRequestCard
@@ -142,6 +142,7 @@ function DemoRequestCard({
         toast.success("Demo talebi güncellendi.");
       }
     },
+    onError: (error: unknown) => toastAdminError(error, "Demo talebi güncellenemedi."),
   });
   const noteValid = note.trim().length >= 10;
   return (

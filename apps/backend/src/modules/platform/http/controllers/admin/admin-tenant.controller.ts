@@ -8,7 +8,6 @@ import { tenantReadyEmail } from '../../../../../services/mail-templates.service
 import { sendMail } from '../../../../../services/mail.service.js';
 import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
 import { requireParam } from '../../../../../utils/context.js';
-import { getPaginationParams } from '../../../../../utils/pagination.js';
 import { modulesForPrismaPlan } from '../../../../../utils/tenant-modules.js';
 import { submitAdminChange } from '../../../admin-change-request/admin-change-request.service.js';
 import { isCriticalTenantPlanChange,isCriticalTenantStatusChange } from '../../../admin-change-request/admin-change-request.policy.js';
@@ -24,12 +23,10 @@ import { buildChangeLine,createSlug,formatNotificationValue,normalizeEmail,notif
 export const AdminTenantController = {
 
   async list(c: Context): Promise<Response> {
-    const { page, limit, skip } = getPaginationParams(c, 20);
-    const status = c.req.query('status') as TenantStatus | undefined;
-    const plan = c.req.query('plan') as Plan | undefined;
-    const search = c.req.query('search');
-    const listOptions = tenantListQuerySchema.safeParse({ from: c.req.query('from'), to: c.req.query('to'), sortBy: c.req.query('sortBy'), sortDirection: c.req.query('sortDirection') });
+    const listOptions = tenantListQuerySchema.safeParse({ page: c.req.query('page'), limit: c.req.query('limit'), search: c.req.query('search'), status: c.req.query('status'), plan: c.req.query('plan'), from: c.req.query('from'), to: c.req.query('to'), sortBy: c.req.query('sortBy'), sortDirection: c.req.query('sortDirection') });
     if (!listOptions.success) return c.json(new ValidationError('Geçersiz tarih veya sıralama filtresi.').toJSON(), 400);
+    const { page, limit, search, status, plan } = listOptions.data;
+    const skip = (page - 1) * limit;
     const from = listOptions.data.from ? new Date(`${listOptions.data.from}T00:00:00.000Z`) : undefined;
     const to = listOptions.data.to ? new Date(`${listOptions.data.to}T23:59:59.999Z`) : undefined;
 

@@ -5,8 +5,6 @@ import {
   requireRecentAdminMfa,
 } from "../middleware/requireAdmin";
 import { DemoController } from "../modules/platform/http/controllers/index.js";
-import { platformAdminAuditMiddleware } from "../middleware/platform-admin-audit.js";
-import { adminIdempotency } from "../middleware/admin-idempotency.js";
 
 /** Public route – JWT gerektirmez */
 export const demoPublicRoutes = new Hono();
@@ -15,8 +13,6 @@ demoPublicRoutes.post("/demo-requests", DemoController.create);
 /** Admin route – admin panelinden yönetim */
 export const demoAdminRoutes = new Hono();
 demoAdminRoutes.use("*", requireAdmin);
-demoAdminRoutes.use("*", adminIdempotency);
-demoAdminRoutes.use("*", platformAdminAuditMiddleware);
 demoAdminRoutes.get(
   "/demo-requests",
   requireAdmin,

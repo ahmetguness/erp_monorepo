@@ -52,6 +52,7 @@ import { canAdmin } from '@/lib/admin/permissions';
 import { toast } from '@/store/ui.store';
 import { extractAdminError, toastAdminError } from '@/lib/admin/errors';
 import { AdminPageHeader, AdminKpiCard, AdminKpiGrid } from '@/components/features/admin/ui';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 
 const STATUS_MAP: Record<string, { label: string; variant: BadgeVariant }> = {
   TRIAL: { label: 'Deneme', variant: 'warning' },
@@ -218,7 +219,7 @@ function AdminTenantsContent() {
   } | null>(null);
   const [job, setJob] = useState<TenantProvisioningJob | null>(null);
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['admin', 'tenants', page, search, statusFilter, planFilter, from, to, sortBy, sortDirection],
     queryFn: () =>
       getTenants({
@@ -336,6 +337,8 @@ function AdminTenantsContent() {
 
   const tenantList = data?.data ?? [];
   const meta = data?.meta ?? { total: 0, totalPages: 1, page: 1, pageSize: 20 };
+
+  if (isError) return <ApiErrorState error={error} onRetry={() => void refetch()} />;
 
   return (
     <div className="space-y-4 pb-10">

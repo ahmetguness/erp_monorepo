@@ -44,6 +44,7 @@ notificationRoutes.get(
 );
 notificationRoutes.post(
   "/push-token",
+  requirePermission("notifications", "UPDATE"),
   NotificationController.registerPushToken,
 );
 notificationRoutes.post(

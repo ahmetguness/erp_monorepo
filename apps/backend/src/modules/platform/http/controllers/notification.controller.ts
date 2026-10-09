@@ -51,17 +51,19 @@ export const NotificationController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
 
-    const status = parseNotificationStatus(c.req.query('status'));
-    const limit = parseLimit(c.req.query('limit'));
+    const statusResult = parseNotificationStatus(c.req.query('status'));
+    if (statusResult.invalid) return c.json(new ValidationError('status geÃ§ersiz.').toJSON(), 400);
+    const limitResult = parseLimit(c.req.query('limit'));
+    if (limitResult.invalid) return c.json(new ValidationError('limit 1 ile 100 arasÄ±nda bir tam sayÄ± olmalÄ±dÄ±r.').toJSON(), 400);
 
     const notifications = await prisma.notification.findMany({
       where: {
         tenantId,
         ...(userId && { userId }),
-        ...(status && { status }),
+        ...(statusResult.value && { status: statusResult.value }),
       },
       orderBy: { createdAt: 'desc' },
-      take: limit,
+      take: limitResult.value,
     });
 
     const unreadCount = await prisma.notification.count({
@@ -139,47 +141,50 @@ export const NotificationController = {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
     const body = await c.req.json<{ ids: string[] }>().catch(() => ({ ids: [] }));
-    const ids = Array.isArray(body.ids) ? body.ids : [];
-
+    const ids = parseIds(body.ids);
+    if (!ids) return c.json(new ValidationError('ids, en fazla 100 benzersiz ID iÃ§eren bir dizi olmalÄ±dÄ±r.').toJSON(), 400);
+    let count = 0;
     if (ids.length > 0) {
-      await prisma.notification.updateMany({
+      const result = await prisma.notification.updateMany({
         where: { tenantId, userId, id: { in: ids } },
         data: { status: NotificationStatus.READ, readAt: new Date() },
       });
+      count = result.count;
     }
-
-    return c.json({ data: { success: true, count: ids.length } });
+    return c.json({ data: { success: true, count } });
   },
 
   async bulkArchive(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
     const body = await c.req.json<{ ids: string[] }>().catch(() => ({ ids: [] }));
-    const ids = Array.isArray(body.ids) ? body.ids : [];
-
+    const ids = parseIds(body.ids);
+    if (!ids) return c.json(new ValidationError('ids, en fazla 100 benzersiz ID iÃ§eren bir dizi olmalÄ±dÄ±r.').toJSON(), 400);
+    let count = 0;
     if (ids.length > 0) {
-      await prisma.notification.updateMany({
+      const result = await prisma.notification.updateMany({
         where: { tenantId, userId, id: { in: ids } },
         data: { status: NotificationStatus.ARCHIVED },
       });
+      count = result.count;
     }
-
-    return c.json({ data: { success: true, count: ids.length } });
+    return c.json({ data: { success: true, count } });
   },
 
   async bulkDelete(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = requireUserId(c);
     const body = await c.req.json<{ ids: string[] }>().catch(() => ({ ids: [] }));
-    const ids = Array.isArray(body.ids) ? body.ids : [];
-
+    const ids = parseIds(body.ids);
+    if (!ids) return c.json(new ValidationError('ids, en fazla 100 benzersiz ID iÃ§eren bir dizi olmalÄ±dÄ±r.').toJSON(), 400);
+    let count = 0;
     if (ids.length > 0) {
-      await prisma.notification.deleteMany({
+      const result = await prisma.notification.deleteMany({
         where: { tenantId, userId, id: { in: ids } },
       });
+      count = result.count;
     }
-
-    return c.json({ data: { success: true, count: ids.length } });
+    return c.json({ data: { success: true, count } });
   },
 
   async registerPushToken(c: Context): Promise<Response> {
@@ -187,7 +192,8 @@ export const NotificationController = {
     const userId = requireUserId(c);
     const body = await c.req.json<{ pushToken: string }>().catch(() => ({ pushToken: '' }));
 
-    if (!body.pushToken || typeof body.pushToken !== 'string') {
+    const pushToken = typeof body.pushToken === 'string' ? body.pushToken.trim() : '';
+    if (!pushToken || pushToken.length > 4096) {
       return c.json(new ValidationError('pushToken alani zorunludur.').toJSON(), 400);
     }
 
@@ -205,7 +211,7 @@ export const NotificationController = {
       data: {
         preferences: {
           ...currentPrefs,
-          pushToken: body.pushToken,
+          pushToken,
           pushTokenUpdatedAt: new Date().toISOString(),
         },
       },
@@ -219,15 +225,21 @@ function isSmartNotificationAction(value: string): value is SmartNotificationAct
   return value === 'acknowledge' || value === 'complete' || value === 'snooze' || value === 'hide' || value === 'reopen';
 }
 
-function parseNotificationStatus(value: string | undefined): NotificationStatus | undefined {
-  if (value === NotificationStatus.UNREAD) return value;
-  if (value === NotificationStatus.READ) return value;
-  if (value === NotificationStatus.ARCHIVED) return value;
-  return undefined;
+function parseNotificationStatus(value: string | undefined): { value?: NotificationStatus; invalid: boolean } {
+  if (value === undefined) return { invalid: false };
+  if (value === NotificationStatus.UNREAD || value === NotificationStatus.READ || value === NotificationStatus.ARCHIVED) return { value, invalid: false };
+  return { invalid: true };
 }
 
-function parseLimit(value: string | undefined): number {
-  const parsed = Number.parseInt(value ?? '', 10);
-  if (!Number.isFinite(parsed)) return 50;
-  return Math.min(100, Math.max(1, parsed));
+function parseLimit(value: string | undefined): { value: number; invalid: boolean } {
+  if (value === undefined) return { value: 50, invalid: false };
+  if (!/^\d+$/.test(value)) return { value: 50, invalid: true };
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 100) return { value: 50, invalid: true };
+  return { value: parsed, invalid: false };
+}
+
+function parseIds(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length > 100 || !value.every((id) => typeof id === 'string' && id.trim().length > 0 && id.length <= 191)) return null;
+  return [...new Set(value)];
 }

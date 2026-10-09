@@ -38,11 +38,13 @@ interface ConflictResult {
 
 // ── Spam / Duplicate / Mevcut hesap kontrol ──
 
-async function checkConflicts(email: string, phone?: string, companyName?: string): Promise<ConflictResult | null> {
+type DemoConflictDb = Pick<Prisma.TransactionClient, 'user' | 'tenant' | 'demoRequest'>;
+
+async function checkConflicts(db: DemoConflictDb, email: string, phone?: string, companyName?: string): Promise<ConflictResult | null> {
   const normalizedEmail = email.toLowerCase().trim();
 
   // 1. Mevcut kayıtlı kullanıcı var mı? (tüm tenant'lar)
-  const existingUser = await prisma.user.findUnique({
+  const existingUser = await db.user.findUnique({
     where: { email: normalizedEmail },
     include: {
       tenants: {
@@ -71,7 +73,7 @@ async function checkConflicts(email: string, phone?: string, companyName?: strin
   // 2. Aynı telefon numarası ile aktif hesap var mı?
   if (phone && phone.trim()) {
     const normalizedPhone = phone.replace(/\s+/g, '').trim();
-    const phoneUser = await prisma.user.findFirst({
+    const phoneUser = await db.user.findFirst({
       where: { phone: normalizedPhone },
       include: {
         tenants: {
@@ -92,7 +94,7 @@ async function checkConflicts(email: string, phone?: string, companyName?: strin
 
   // 3. Birebir aynı şirket adı ile aktif tenant var mı?
   if (companyName && companyName.trim()) {
-    const existingTenant = await prisma.tenant.findFirst({
+    const existingTenant = await db.tenant.findFirst({
       where: {
         companyName: { equals: companyName.trim(), mode: 'insensitive' },
         status: { in: ['ACTIVE', 'TRIAL'] },
@@ -110,7 +112,7 @@ async function checkConflicts(email: string, phone?: string, companyName?: strin
   }
 
   // 4. Aktif (PROVISIONED) demo var mı?
-  const activeDemo = await prisma.demoRequest.findFirst({
+  const activeDemo = await db.demoRequest.findFirst({
     where: {
       email: normalizedEmail,
       status: 'PROVISIONED',
@@ -127,7 +129,7 @@ async function checkConflicts(email: string, phone?: string, companyName?: strin
   }
 
   // 5. Bekleyen (PENDING / APPROVED / PROVISIONING) talep var mı?
-  const pendingRequest = await prisma.demoRequest.findFirst({
+  const pendingRequest = await db.demoRequest.findFirst({
     where: {
       email: normalizedEmail,
       status: { in: ['PENDING', 'APPROVED', 'PROVISIONING'] },
@@ -144,7 +146,7 @@ async function checkConflicts(email: string, phone?: string, companyName?: strin
   }
 
   // 6. Son 24 saatte oluşturulmuş talep var mı? (spam koruması)
-  const recentRequest = await prisma.demoRequest.findFirst({
+  const recentRequest = await db.demoRequest.findFirst({
     where: {
       email: normalizedEmail,
       createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
@@ -166,18 +168,18 @@ async function checkConflicts(email: string, phone?: string, companyName?: strin
 
 // ── Demo talebi oluştur ──────────────────────
 
-export async function createDemoRequest(dto: CreateDemoRequestDTO) {
+async function createDemoRequestUnlocked(db: DemoConflictDb, dto: CreateDemoRequestDTO) {
   const email = dto.email.toLowerCase().trim();
 
   // Conflict kontrol (email + telefon + şirket adı)
-  const conflict = await checkConflicts(email, dto.phone, dto.companyName);
+  const conflict = await checkConflicts(db, email, dto.phone, dto.companyName);
   if (conflict) {
     return conflict;
   }
 
   const plan = dto.plan || 'STARTER';
 
-  const demoRequest = await prisma.demoRequest.create({
+  const demoRequest = await db.demoRequest.create({
     data: {
       fullName: dto.fullName,
       companyName: dto.companyName,
@@ -202,6 +204,22 @@ export async function createDemoRequest(dto: CreateDemoRequestDTO) {
     demoRequestId: demoRequest.id,
     status: demoRequest.status,
   };
+}
+
+export async function createDemoRequest(dto: CreateDemoRequestDTO) {
+  const email = dto.email.toLowerCase().trim();
+  return prisma.$transaction(async (tx) => {
+    // Keep every duplicate dimension serialized through conflict check + insert.
+    const lockKeys = [
+      `email:${email}`,
+      dto.phone?.trim() ? `phone:${dto.phone.replace(/\s+/g, '').trim()}` : null,
+      dto.companyName?.trim() ? `company:${dto.companyName.trim().toLocaleLowerCase('tr-TR')}` : null,
+    ].filter((key): key is string => Boolean(key)).sort();
+    for (const key of lockKeys) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+    }
+    return createDemoRequestUnlocked(tx, dto);
+  });
 }
 
 // ── Demo tenant provisioning ─────────────────
@@ -306,27 +324,16 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
 
       // 4. Demo seed verileri
       await seedDemoData(tx, tenant.id);
+      await tx.demoRequest.update({
+        where: { id: demoRequestId },
+        data: {
+          status: 'PROVISIONED', tenantId: tenant.id, setPasswordToken, setPasswordExpiry,
+          processedAt: new Date(),
+          history: { create: { action: 'PROVISIONED', actorId: demoRequest.processedBy, note: `Tenant: ${tenant.id}` } },
+        },
+      });
 
       return { tenant, user };
-    });
-
-    // DemoRequest güncelle → PROVISIONED
-    await prisma.demoRequest.update({
-      where: { id: demoRequestId },
-      data: {
-        status: 'PROVISIONED',
-        tenantId: result.tenant.id,
-        setPasswordToken,
-        setPasswordExpiry,
-        processedAt: new Date(),
-        history: {
-          create: {
-            action: 'PROVISIONED',
-            actorId: demoRequest.processedBy,
-            note: `Tenant: ${result.tenant.id}`,
-          },
-        },
-      },
     });
 
     // Mail gönder (raw token kullan — DB'de hash saklanıyor)

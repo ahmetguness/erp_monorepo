@@ -60,6 +60,11 @@ export const bulkExecuteSchema = bulkPreviewSchema
   .strict();
 export const tenantListQuerySchema = z
   .object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    search: z.string().trim().max(100).optional(),
+    status: tenantStatusSchema.optional(),
+    plan: tenantPlanSchema.optional(),
     from: z.string().date().optional(),
     to: z.string().date().optional(),
     sortBy: z
