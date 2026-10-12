@@ -9,6 +9,7 @@ import {
   createDeployment,
   getPersistentDashboard,
   silenceAlert,
+  searchPersistentLogs,
   updateAlertOwnership,
   upsertSlo,
 } from "../src/modules/platform/persistent-observability/persistent-observability.service.js";
@@ -73,6 +74,9 @@ async function main(): Promise<void> {
     where: { service: serviceId, requestId: `request-${suffix}` },
   });
   assert.equal(storedLog.message.includes("admin@example.com"), false);
+  const persistedSearch = await searchPersistentLogs(`request-${suffix}`);
+  assert.equal(persistedSearch.length, 1);
+  assert.equal(persistedSearch[0]?.correlationId, `correlation-${suffix}`);
   assert.equal(
     await prisma.observabilityMetricPoint.count({
       where: {
@@ -96,6 +100,12 @@ async function main(): Promise<void> {
     notificationChannel: "ops-test",
     isEnabled: true,
   });
+  await assert.rejects(upsertSlo({
+    name: "Orphan tenant SLO", scope: "TENANT", scopeId: `missing-${suffix}`,
+    metricKey: "operation_health_pct", targetPercentage: 99, windowDays: 7,
+    owner: "platform-operations", runbookUrl: "https://runbooks.local/orphan",
+    notificationChannel: "ops-test", isEnabled: true,
+  }), /geçerli ve aktif bir tenant/);
   const dashboard = await getPersistentDashboard("24h");
   const status = dashboard.slos.find((item) => item.id === slo.id);
   assert.ok(status && status.sampleCount === 1 && status.sliPercentage >= 0);
@@ -122,6 +132,10 @@ async function main(): Promise<void> {
   `;
   assert.equal(alertMutation?.lastModifiedById, adminId);
   assert.equal(alertMutation?.silenceReason, "Integration test maintenance silence");
+  await assert.rejects(updateAlertOwnership(`missing-${suffix}`, adminId, {
+    owner: "sre-team", runbookUrl: "https://runbooks.local/missing", notificationChannel: "pager-sre",
+  }), /bulunamadı/);
+  await assert.rejects(silenceAlert(`missing-${suffix}`, adminId, new Date(Date.now() + 3600000), "Missing alert assurance"), /bulunamadı/);
   const marker = await createDeployment(
     {
       service: serviceId,

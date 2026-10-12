@@ -8,10 +8,14 @@ import type {
   PlatformTicketStatus,
   PlatformTicketPriority,
   PlatformTicketCategory,
-} from '@repo/types';
-import { prisma } from '../../../lib/prisma.js';
-import { runWithTenantIsolationBypass } from '../../../lib/tenant-isolation-context.js';
-import { NotFoundError, ForbiddenError, ValidationError } from '../../../errors/index.js';
+} from "@repo/types";
+import { prisma } from "../../../lib/prisma.js";
+import { runWithTenantIsolationBypass } from "../../../lib/tenant-isolation-context.js";
+import {
+  NotFoundError,
+  ForbiddenError,
+  ValidationError,
+} from "../../../errors/index.js";
 
 function generateTicketNumber(): string {
   const year = new Date().getFullYear();
@@ -30,15 +34,24 @@ export async function createTenantTicket(
     select: { id: true, companyName: true, slug: true, deletedAt: true },
   });
   if (!tenant || tenant.deletedAt) {
-    throw new NotFoundError('Tenant');
+    throw new NotFoundError("Tenant");
   }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      tenants: {
+        where: { tenantId, isActive: true },
+        select: { id: true },
+        take: 1,
+      },
+    },
   });
-  if (!user) {
-    throw new NotFoundError('Kullanıcı');
+  if (!user || user.tenants.length === 0) {
+    throw new NotFoundError("Kullanıcı");
   }
 
   const ticketNumber = await generateTicketNumber();
@@ -51,9 +64,9 @@ export async function createTenantTicket(
         createdById: userId,
         title: input.title.trim(),
         description: input.description.trim(),
-        category: input.category ?? 'TECHNICAL',
-        priority: input.priority ?? 'MEDIUM',
-        status: 'OPEN',
+        category: input.category ?? "TECHNICAL",
+        priority: input.priority ?? "MEDIUM",
+        status: "OPEN",
       },
       include: {
         tenant: { select: { companyName: true, slug: true } },
@@ -65,7 +78,7 @@ export async function createTenantTicket(
     const firstMessage = await tx.platformTicketMessage.create({
       data: {
         ticketId: created.id,
-        senderType: 'TENANT_USER',
+        senderType: "TENANT_USER",
         authorUserId: userId,
         message: input.description.trim(),
         isInternal: false,
@@ -132,23 +145,30 @@ export async function listTenantTickets(
     ...(filter?.category ? { category: filter.category } : {}),
     ...(filter?.search
       ? {
-        OR: [
-          { ticketNumber: { contains: filter.search, mode: 'insensitive' as const } },
-          { title: { contains: filter.search, mode: 'insensitive' as const } },
-        ],
-      }
+          OR: [
+            {
+              ticketNumber: {
+                contains: filter.search,
+                mode: "insensitive" as const,
+              },
+            },
+            {
+              title: { contains: filter.search, mode: "insensitive" as const },
+            },
+          ],
+        }
       : {}),
   };
 
   const tickets = await prisma.platformSupportTicket.findMany({
     where,
-    orderBy: { updatedAt: 'desc' },
+    orderBy: { updatedAt: "desc" },
     include: {
       createdBy: { select: { id: true, name: true, email: true } },
       assignedAdmin: { select: { id: true, name: true, email: true } },
       messages: {
         where: { isInternal: false },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         take: 1,
         select: { createdAt: true },
       },
@@ -178,7 +198,9 @@ export async function listTenantTickets(
     createdAt: ticket.createdAt.toISOString(),
     updatedAt: ticket.updatedAt.toISOString(),
     messageCount: ticket._count.messages,
-    lastMessageAt: ticket.messages[0]?.createdAt.toISOString() ?? ticket.createdAt.toISOString(),
+    lastMessageAt:
+      ticket.messages[0]?.createdAt.toISOString() ??
+      ticket.createdAt.toISOString(),
   }));
 }
 
@@ -194,7 +216,7 @@ export async function getTenantTicket(
       assignedAdmin: { select: { id: true, name: true, email: true } },
       messages: {
         where: { isInternal: false },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
         include: {
           authorUser: { select: { id: true, name: true, email: true } },
           authorAdmin: { select: { id: true, name: true, email: true } },
@@ -204,7 +226,7 @@ export async function getTenantTicket(
   });
 
   if (!ticket) {
-    throw new NotFoundError('Destek bileti bulunamadı.');
+    throw new NotFoundError("Destek bileti bulunamadı.");
   }
 
   return {
@@ -227,7 +249,9 @@ export async function getTenantTicket(
     createdAt: ticket.createdAt.toISOString(),
     updatedAt: ticket.updatedAt.toISOString(),
     messageCount: ticket.messages.length,
-    lastMessageAt: ticket.messages[ticket.messages.length - 1]?.createdAt.toISOString() ?? ticket.createdAt.toISOString(),
+    lastMessageAt:
+      ticket.messages[ticket.messages.length - 1]?.createdAt.toISOString() ??
+      ticket.createdAt.toISOString(),
     messages: ticket.messages.map((msg) => ({
       id: msg.id,
       ticketId: msg.ticketId,
@@ -253,22 +277,26 @@ export async function addTenantTicketMessage(
     where: { id: ticketId, tenantId },
   });
   if (!ticket) {
-    throw new NotFoundError('Destek bileti');
+    throw new NotFoundError("Destek bileti");
   }
 
-  if (ticket.status === 'CLOSED') {
-    throw new ValidationError('Kapatılmış bir destek biletine yeni mesaj eklenemez. Lütfen yeni bir bilet oluşturun.');
+  if (ticket.status === "CLOSED") {
+    throw new ValidationError(
+      "Kapatılmış bir destek biletine yeni mesaj eklenemez. Lütfen yeni bir bilet oluşturun.",
+    );
   }
 
-  if (ticket.status === 'RESOLVED') {
-    throw new ValidationError('Bu bilet çözümlendi olarak işaretlenmiştir. Lütfen önce "Çözüme Ulaşmadı" seçeneğiyle talebi yeniden açın.');
+  if (ticket.status === "RESOLVED") {
+    throw new ValidationError(
+      'Bu bilet çözümlendi olarak işaretlenmiştir. Lütfen önce "Çözüme Ulaşmadı" seçeneğiyle talebi yeniden açın.',
+    );
   }
 
   return await prisma.$transaction(async (tx) => {
     const createdMessage = await tx.platformTicketMessage.create({
       data: {
         ticketId,
-        senderType: 'TENANT_USER',
+        senderType: "TENANT_USER",
         authorUserId: userId,
         message: input.message.trim(),
         isInternal: false,
@@ -279,9 +307,7 @@ export async function addTenantTicketMessage(
     });
 
     const nextStatus =
-      ticket.status === 'WAITING_TENANT'
-        ? 'IN_PROGRESS'
-        : ticket.status;
+      ticket.status === "WAITING_TENANT" ? "IN_PROGRESS" : ticket.status;
 
     await tx.platformSupportTicket.update({
       where: { id: ticketId, tenantId },
@@ -315,10 +341,10 @@ export async function closeTenantTicket(
     where: { id: ticketId, tenantId },
   });
   if (!ticket) {
-    throw new NotFoundError('Destek bileti');
+    throw new NotFoundError("Destek bileti");
   }
 
-  if (ticket.status === 'CLOSED') {
+  if (ticket.status === "CLOSED") {
     return;
   }
 
@@ -326,7 +352,7 @@ export async function closeTenantTicket(
     await tx.platformSupportTicket.update({
       where: { id: ticketId, tenantId },
       data: {
-        status: 'CLOSED',
+        status: "CLOSED",
         closedAt: new Date(),
         updatedAt: new Date(),
       },
@@ -335,9 +361,10 @@ export async function closeTenantTicket(
     await tx.platformTicketMessage.create({
       data: {
         ticketId,
-        senderType: 'TENANT_USER',
+        senderType: "TENANT_USER",
         authorUserId: userId,
-        message: 'Kullanıcı sorunun çözüme ulaştığını onaylayarak talebi kapattı.',
+        message:
+          "Kullanıcı sorunun çözüme ulaştığını onaylayarak talebi kapattı.",
         isInternal: false,
       },
     });
@@ -354,22 +381,26 @@ export async function reopenTenantTicket(
     where: { id: ticketId, tenantId },
   });
   if (!ticket) {
-    throw new NotFoundError('Destek bileti');
+    throw new NotFoundError("Destek bileti");
   }
 
-  if (ticket.status === 'CLOSED') {
-    throw new ValidationError('Kapatılmış bir destek bileti yeniden açılamaz. Lütfen yeni bir destek bileti oluşturun.');
+  if (ticket.status === "CLOSED") {
+    throw new ValidationError(
+      "Kapatılmış bir destek bileti yeniden açılamaz. Lütfen yeni bir destek bileti oluşturun.",
+    );
   }
 
-  if (ticket.status !== 'RESOLVED') {
-    throw new ValidationError('Yalnizca cozumlenmis bir destek bileti yeniden acilabilir.');
+  if (ticket.status !== "RESOLVED") {
+    throw new ValidationError(
+      "Yalnizca cozumlenmis bir destek bileti yeniden acilabilir.",
+    );
   }
 
   await prisma.$transaction(async (tx) => {
     await tx.platformSupportTicket.update({
       where: { id: ticketId, tenantId },
       data: {
-        status: 'IN_PROGRESS',
+        status: "IN_PROGRESS",
         resolvedAt: null,
         updatedAt: new Date(),
       },
@@ -377,12 +408,12 @@ export async function reopenTenantTicket(
 
     const msgContent = reason?.trim()
       ? `Kullanıcı sorunun henüz çözülmediğini bildirdi: ${reason.trim()}`
-      : 'Kullanıcı sorunun çözüme ulaşmadığını belirterek talebi tekrar incelemeye aldı.';
+      : "Kullanıcı sorunun çözüme ulaşmadığını belirterek talebi tekrar incelemeye aldı.";
 
     await tx.platformTicketMessage.create({
       data: {
         ticketId,
-        senderType: 'TENANT_USER',
+        senderType: "TENANT_USER",
         authorUserId: userId,
         message: msgContent,
         isInternal: false,
@@ -405,37 +436,54 @@ export async function listAdminTickets(filter?: {
   assignedAdminId?: string;
   search?: string;
 }): Promise<PlatformSupportTicketSummaryDto[]> {
-  return runWithTenantIsolationBypass('admin-console', async () => {
+  return runWithTenantIsolationBypass("admin-console", async () => {
     const where = {
       ...(filter?.status ? { status: filter.status } : {}),
       ...(filter?.priority ? { priority: filter.priority } : {}),
       ...(filter?.category ? { category: filter.category } : {}),
       ...(filter?.tenantId ? { tenantId: filter.tenantId } : {}),
       ...(filter?.assignedAdminId !== undefined
-        ? filter.assignedAdminId === 'UNASSIGNED'
+        ? filter.assignedAdminId === "UNASSIGNED"
           ? { assignedAdminId: null }
           : { assignedAdminId: filter.assignedAdminId }
         : {}),
       ...(filter?.search
         ? {
-          OR: [
-            { ticketNumber: { contains: filter.search, mode: 'insensitive' as const } },
-            { title: { contains: filter.search, mode: 'insensitive' as const } },
-            { tenant: { companyName: { contains: filter.search, mode: 'insensitive' as const } } },
-          ],
-        }
+            OR: [
+              {
+                ticketNumber: {
+                  contains: filter.search,
+                  mode: "insensitive" as const,
+                },
+              },
+              {
+                title: {
+                  contains: filter.search,
+                  mode: "insensitive" as const,
+                },
+              },
+              {
+                tenant: {
+                  companyName: {
+                    contains: filter.search,
+                    mode: "insensitive" as const,
+                  },
+                },
+              },
+            ],
+          }
         : {}),
     };
 
     const tickets = await prisma.platformSupportTicket.findMany({
       where,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { updatedAt: "desc" },
       include: {
         tenant: { select: { companyName: true, slug: true } },
         createdBy: { select: { id: true, name: true, email: true } },
         assignedAdmin: { select: { id: true, name: true, email: true } },
         messages: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
           take: 1,
           select: { createdAt: true },
         },
@@ -465,13 +513,17 @@ export async function listAdminTickets(filter?: {
       createdAt: ticket.createdAt.toISOString(),
       updatedAt: ticket.updatedAt.toISOString(),
       messageCount: ticket._count.messages,
-      lastMessageAt: ticket.messages[0]?.createdAt.toISOString() ?? ticket.createdAt.toISOString(),
+      lastMessageAt:
+        ticket.messages[0]?.createdAt.toISOString() ??
+        ticket.createdAt.toISOString(),
     }));
   });
 }
 
-export async function getAdminTicket(ticketId: string): Promise<PlatformSupportTicketDetailDto> {
-  return runWithTenantIsolationBypass('admin-console', async () => {
+export async function getAdminTicket(
+  ticketId: string,
+): Promise<PlatformSupportTicketDetailDto> {
+  return runWithTenantIsolationBypass("admin-console", async () => {
     const ticket = await prisma.platformSupportTicket.findUnique({
       where: { id: ticketId },
       include: {
@@ -479,7 +531,7 @@ export async function getAdminTicket(ticketId: string): Promise<PlatformSupportT
         createdBy: { select: { id: true, name: true, email: true } },
         assignedAdmin: { select: { id: true, name: true, email: true } },
         messages: {
-          orderBy: { createdAt: 'asc' },
+          orderBy: { createdAt: "asc" },
           include: {
             authorUser: { select: { id: true, name: true, email: true } },
             authorAdmin: { select: { id: true, name: true, email: true } },
@@ -489,9 +541,8 @@ export async function getAdminTicket(ticketId: string): Promise<PlatformSupportT
     });
 
     if (!ticket) {
-      throw new NotFoundError('Destek bileti');
+      throw new NotFoundError("Destek bileti");
     }
-
     return {
       id: ticket.id,
       ticketNumber: ticket.ticketNumber,
@@ -512,7 +563,9 @@ export async function getAdminTicket(ticketId: string): Promise<PlatformSupportT
       createdAt: ticket.createdAt.toISOString(),
       updatedAt: ticket.updatedAt.toISOString(),
       messageCount: ticket.messages.length,
-      lastMessageAt: ticket.messages[ticket.messages.length - 1]?.createdAt.toISOString() ?? ticket.createdAt.toISOString(),
+      lastMessageAt:
+        ticket.messages[ticket.messages.length - 1]?.createdAt.toISOString() ??
+        ticket.createdAt.toISOString(),
       messages: ticket.messages.map((msg) => ({
         id: msg.id,
         ticketId: msg.ticketId,
@@ -534,19 +587,27 @@ export async function addAdminTicketMessage(
   ticketId: string,
   input: AddTicketMessageInput,
 ): Promise<PlatformTicketMessageDto> {
-  return runWithTenantIsolationBypass('admin-console', async () => {
+  return runWithTenantIsolationBypass("admin-console", async () => {
     const ticket = await prisma.platformSupportTicket.findUnique({
       where: { id: ticketId },
     });
     if (!ticket) {
-      throw new NotFoundError('Destek bileti');
+      throw new NotFoundError("Destek bileti");
+    }
+    if (
+      !input.isInternal &&
+      (ticket.status === "RESOLVED" || ticket.status === "CLOSED")
+    ) {
+      throw new ValidationError(
+        "Çözülmüş veya kapatılmış bilete müşteri yanıtı gönderilemez. Bileti önce yeniden açın.",
+      );
     }
 
     return await prisma.$transaction(async (tx) => {
       const createdMessage = await tx.platformTicketMessage.create({
         data: {
           ticketId,
-          senderType: 'ADMIN_USER',
+          senderType: "ADMIN_USER",
           authorAdminId: adminId,
           message: input.message.trim(),
           isInternal: input.isInternal ?? false,
@@ -557,8 +618,9 @@ export async function addAdminTicketMessage(
       });
 
       const nextStatus =
-        !input.isInternal && (ticket.status === 'OPEN' || ticket.status === 'IN_PROGRESS')
-          ? 'WAITING_TENANT'
+        !input.isInternal &&
+        (ticket.status === "OPEN" || ticket.status === "IN_PROGRESS")
+          ? "WAITING_TENANT"
           : ticket.status;
 
       await tx.platformSupportTicket.update({
@@ -566,7 +628,9 @@ export async function addAdminTicketMessage(
         data: {
           status: nextStatus,
           updatedAt: new Date(),
-          ...(ticket.assignedAdminId === null ? { assignedAdminId: adminId } : {}),
+          ...(ticket.assignedAdminId === null
+            ? { assignedAdminId: adminId }
+            : {}),
         },
       });
 
@@ -591,25 +655,52 @@ export async function updateAdminTicket(
   ticketId: string,
   input: UpdateTicketAdminInput,
 ): Promise<PlatformSupportTicketDetailDto> {
-  return runWithTenantIsolationBypass('admin-console', async () => {
+  return runWithTenantIsolationBypass("admin-console", async () => {
     const ticket = await prisma.platformSupportTicket.findUnique({
       where: { id: ticketId },
     });
     if (!ticket) {
-      throw new NotFoundError('Destek bileti');
+      throw new NotFoundError("Destek bileti");
     }
 
     const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 
+    if (input.assignedAdminId) {
+      const assignee = await prisma.adminUser.findFirst({
+        where: {
+          id: input.assignedAdminId,
+          isActive: true,
+          roleAssignments: {
+            some: {
+              adminRole: {
+                permissions: {
+                  some: { adminPermission: { key: "support-ticket.manage" } },
+                },
+              },
+            },
+          },
+        },
+        select: { id: true },
+      });
+      if (!assignee) {
+        throw new ValidationError(
+          "Aktif ve destek bileti yönetme yetkisi olan uzman bulunamadı.",
+        );
+      }
+    }
+
     if (input.status) {
       updateData.status = input.status;
-      if (input.status === 'RESOLVED' && !ticket.resolvedAt) {
-        updateData.resolvedAt = new Date();
-      }
-      if (input.status === 'CLOSED' && !ticket.closedAt) {
-        updateData.closedAt = new Date();
+      if (input.status === "RESOLVED") {
+        updateData.resolvedAt = ticket.resolvedAt ?? new Date();
+        updateData.closedAt = null;
+      } else if (input.status === "CLOSED") {
+        updateData.closedAt = ticket.closedAt ?? new Date();
+      } else {
+        updateData.resolvedAt = null;
+        updateData.closedAt = null;
       }
     }
 

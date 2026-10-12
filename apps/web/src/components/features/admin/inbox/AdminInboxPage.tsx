@@ -16,6 +16,7 @@ import {
 import { useAdminAuthStore } from "@/store/admin-auth.store";
 import { toast } from "@/store/ui.store";
 import { AdminPageHeader, AdminKpiCard, AdminKpiGrid } from "@/components/features/admin/ui";
+import { ApiErrorState } from "@/components/shared/ApiErrorState";
 
 const buttonClass = "rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-white disabled:opacity-50";
 const priorityClass: Record<AdminInboxItem["priority"], string> = {
@@ -115,7 +116,9 @@ export function AdminInboxPage() {
         />
       )}
       {inbox.isLoading && <p className="text-sm text-slate-400">Gelen kutusu yükleniyor…</p>}
-      {inbox.isError && <p className="text-sm text-red-400">Gelen kutusu yüklenemedi.</p>}
+      {inbox.isError && (
+        <ApiErrorState error={inbox.error} onRetry={() => void inbox.refetch()} />
+      )}
       <div className="space-y-3">
         {inbox.data?.items.map((item) => (
           <InboxCard

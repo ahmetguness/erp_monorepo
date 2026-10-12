@@ -367,6 +367,10 @@ model AdminUser {
   auditLogs               AuditLog[]
   sessions                AdminSession[]
   securityEvents          AdminSecurityEvent[]
+  inboxReadStates         AdminInboxItemState[]  @relation("AdminInboxReadStates")
+  legacyInboxOwnedStates  AdminInboxItemState[]  @relation("LegacyAdminInboxOwners")
+  inboxPreference         AdminInboxPreference?
+  inboxOwnedTasks         AdminInboxTaskState[]  @relation("AdminInboxTaskOwners")
 
   @@map("admin_users")
 }

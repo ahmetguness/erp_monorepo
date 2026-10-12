@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/store/ui.store';
 import { extractAdminError, isReauthRequired, toastAdminError } from '@/lib/admin/errors';
 import { AdminPageHeader, AdminKpiCard, AdminKpiGrid } from '@/components/features/admin/ui';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -662,7 +663,7 @@ export default function CouponsPage() {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('ALL');
   const [search, setSearch] = useState('');
 
-  const { data: coupons = [], isLoading } = useQuery({
+  const { data: coupons = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['admin', 'coupons'],
     queryFn: () => getCoupons(),
     refetchInterval: 60_000,
@@ -712,6 +713,8 @@ export default function CouponsPage() {
         ? 'bg-slate-700/80 text-white shadow-inner'
         : 'text-slate-500 hover:bg-slate-800/60 hover:text-slate-300',
     );
+
+  if (isError) return <ApiErrorState error={error} onRetry={() => void refetch()} />;
 
   return (
     <div className="space-y-4 pb-10">

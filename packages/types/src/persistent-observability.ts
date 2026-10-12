@@ -63,6 +63,15 @@ export interface CentralLogEntry {
 export interface PersistentObservabilityDashboard {
   range: ObservabilityRange;
   points: ObservabilityPoint[];
+  pointsMeta: {
+    totalEligible: number;
+    returned: number;
+    limit: number;
+    truncated: boolean;
+    hasMore: boolean;
+    coverage: "LATEST";
+    ordering: "bucketAt_asc";
+  };
   slos: SloStatus[];
   alerts: AlertHistoryItem[];
   deployments: DeploymentMarker[];

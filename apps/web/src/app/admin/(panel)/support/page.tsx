@@ -96,8 +96,8 @@ function SupportSessionsContent() {
 
   // If no tenantId, fetch tenant list for selection
   const tenantsListQuery = useQuery({
-    queryKey: ['admin', 'tenants-list', 'support-picker'],
-    queryFn: () => getTenants({ limit: 100 }),
+    queryKey: ['admin', 'tenants-list', 'support-picker', searchFilter.trim()],
+    queryFn: () => getTenants({ limit: 100, search: searchFilter.trim() || undefined }),
     enabled: Boolean(!tenantId && hasManagePermission),
     staleTime: 60_000,
   });

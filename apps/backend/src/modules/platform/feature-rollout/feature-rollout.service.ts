@@ -135,28 +135,26 @@ export async function createFeatureRollout(
         400,
       );
   }
-  const version =
-    (
-      await prisma.featureRollout.aggregate({
-        where: {
-          plan: input.plan,
-          featureKey: input.featureKey,
-          environment: input.environment,
-        },
-        _max: { version: true },
-      })
-    )._max.version ?? 0;
-  return mapRollout(
-    await prisma.featureRollout.create({
-      data: {
-        ...input,
-        targetTenantIds,
-        endsAt: input.endsAt ?? null,
-        version: version + 1,
-        createdById: adminId,
-      },
-    }),
-  );
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const created = await prisma.$transaction(async (tx) => {
+        const version = (
+          await tx.featureRollout.aggregate({
+            where: { plan: input.plan, featureKey: input.featureKey, environment: input.environment },
+            _max: { version: true },
+          })
+        )._max.version ?? 0;
+        return tx.featureRollout.create({
+          data: { ...input, targetTenantIds, endsAt: input.endsAt ?? null, version: version + 1, createdById: adminId },
+        });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      return mapRollout(created);
+    } catch (error) {
+      const retryable = error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code);
+      if (!retryable || attempt === 3) throw error;
+    }
+  }
+  throw new FeatureRolloutError("Rollout sürümü oluşturulamadı.");
 }
 
 export async function markRolloutPending(id: string): Promise<void> {

@@ -70,27 +70,24 @@ export async function getAdminInbox(
           ? prisma.adminChangeRequest.findMany({
               where: { status: "PENDING" },
               orderBy: { createdAt: "asc" },
-              take: 100,
             })
           : [],
         canSecurity
           ? prisma.platformSecurityFinding.findMany({
               where: { status: { not: "RESOLVED" } },
               orderBy: { lastSeenAt: "desc" },
-              take: 100,
             })
           : [],
         canIncidents
           ? prisma.platformIncident.findMany({
               where: { status: { not: "RESOLVED" } },
               orderBy: { createdAt: "asc" },
-              take: 100,
             })
           : [],
         canFeatureExpirations
           ? prisma.tenantFeatureOverride.findMany({
               where: { expiresAt: { gt: now, lte: horizon }, isEnabled: true },
-              take: 100,
+              orderBy: { expiresAt: "asc" },
             })
           : [],
         canTenantExpirations
@@ -106,7 +103,7 @@ export async function getAdminInbox(
                 trialEndsAt: true,
                 createdAt: true,
               },
-              take: 100,
+              orderBy: { trialEndsAt: "asc" },
             })
           : [],
       ]),
@@ -251,11 +248,38 @@ export async function updateInboxItem(
   input: InboxActionInput,
 ): Promise<void> {
   if (input.action === "ASSIGN") {
+    const sourcePermission =
+      input.category === "APPROVAL"
+        ? "change-request.read"
+        : input.category === "SECURITY"
+          ? "security.read"
+          : input.category === "INCIDENT"
+            ? "operations.read"
+            : input.sourceId.startsWith("trial-")
+              ? "tenant.read"
+              : "feature.read";
     const owner = await prisma.adminUser.findFirst({
-      where: { id: input.ownerId, isActive: true },
+      where: {
+        id: input.ownerId,
+        isActive: true,
+        AND: ["inbox.read", sourcePermission].map((permission) => ({
+          roleAssignments: {
+            some: {
+              adminRole: {
+                permissions: {
+                  some: { adminPermission: { key: permission } },
+                },
+              },
+            },
+          },
+        })),
+      },
       select: { id: true },
     });
-    if (!owner) throw new ValidationError("Aktif görev sahibi bulunamadı.");
+    if (!owner)
+      throw new ValidationError(
+        "Aktif ve bu görev kaynağına yetkili görev sahibi bulunamadı.",
+      );
   }
   const now = new Date();
   if (input.action === "READ" || input.action === "UNREAD") {

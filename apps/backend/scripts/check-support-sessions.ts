@@ -210,6 +210,12 @@ async function main(): Promise<void> {
   const session = await prisma.supportSession.findFirstOrThrow({
     where: { tenantId, adminId: admin.id },
   });
+  assert.equal(session.durationMinutes, 30);
+  // Pending time must not consume the approved access window.
+  await prisma.supportSession.updateMany({
+    where: { id: session.id, tenantId },
+    data: { expiresAt: new Date(0) },
+  });
   const headers = {
     ...adminHeaders,
     "X-Support-Session": session.id,
@@ -244,6 +250,14 @@ async function main(): Promise<void> {
   const approved = await prisma.supportSession.findFirstOrThrow({
     where: { id: session.id, tenantId },
   });
+  assert.ok(approved.approvedAt);
+  const approvedWindowMs =
+    approved.expiresAt.getTime() - approved.approvedAt.getTime();
+  assert.ok(
+    approvedWindowMs >= 30 * 60_000 - 2_000 &&
+      approvedWindowMs <= 30 * 60_000 + 2_000,
+    "Requested duration starts at owner approval",
+  );
   assert.equal(
     (await decision("approve")).status,
     403,

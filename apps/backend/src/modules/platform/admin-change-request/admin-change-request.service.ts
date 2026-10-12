@@ -104,42 +104,66 @@ function toContract(request: RequestWithActors): AdminChangeRequest {
 export async function submitAdminChange(
   input: SubmitChangeInput,
 ): Promise<AdminChangeRequest> {
-  return prisma.$transaction(async (tx) => {
-    const existing = await tx.adminChangeRequest.findFirst({
-      where: {
-        type: input.type,
-        targetId: input.targetId,
-        status: AdminChangeRequestStatus.PENDING,
-      },
-      include: requestInclude,
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const existing = await tx.adminChangeRequest.findFirst({
+        where: {
+          type: input.type,
+          targetId: input.targetId,
+          status: AdminChangeRequestStatus.PENDING,
+        },
+        include: requestInclude,
+      });
+      if (existing) {
+        if (existing.requestedById === input.requestedById)
+          return toContract(existing);
+        throw new AdminChangeRequestError(
+          "Bu hedef için başka bir admin tarafından oluşturulmuş bekleyen talep var.",
+          409,
+        );
+      }
+      const created = await tx.adminChangeRequest.create({
+        data: {
+          type: input.type,
+          targetId: input.targetId,
+          targetLabel: input.targetLabel,
+          requiredPermission: input.requiredPermission,
+          payload: input.payload,
+          previousValues: input.previousValues ?? Prisma.JsonNull,
+          affectedTenantCount: input.affectedTenantCount,
+          affectedUserCount: input.affectedUserCount,
+          requestedById: input.requestedById,
+          reason: input.reason,
+          ticketId: input.ticketId,
+          rollbackOfId: input.rollbackOfId,
+        },
+        include: requestInclude,
+      });
+      return toContract(created);
     });
-    if (existing) {
-      if (existing.requestedById === input.requestedById)
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const existing = await prisma.adminChangeRequest.findFirst({
+        where: {
+          type: input.type,
+          targetId: input.targetId,
+          status: AdminChangeRequestStatus.PENDING,
+        },
+        include: requestInclude,
+      });
+      if (existing?.requestedById === input.requestedById)
         return toContract(existing);
-      throw new AdminChangeRequestError(
-        "Bu hedef için başka bir admin tarafından oluşturulmuş bekleyen talep var.",
-        409,
-      );
+      if (existing)
+        throw new AdminChangeRequestError(
+          "Bu hedef için başka bir admin tarafından oluşturulmuş bekleyen talep var.",
+          409,
+        );
     }
-    const created = await tx.adminChangeRequest.create({
-      data: {
-        type: input.type,
-        targetId: input.targetId,
-        targetLabel: input.targetLabel,
-        requiredPermission: input.requiredPermission,
-        payload: input.payload,
-        previousValues: input.previousValues ?? Prisma.JsonNull,
-        affectedTenantCount: input.affectedTenantCount,
-        affectedUserCount: input.affectedUserCount,
-        requestedById: input.requestedById,
-        reason: input.reason,
-        ticketId: input.ticketId,
-        rollbackOfId: input.rollbackOfId,
-      },
-      include: requestInclude,
-    });
-    return toContract(created);
-  });
+    throw error;
+  }
 }
 
 export async function listAdminChanges(

@@ -302,6 +302,7 @@ model SupportSession {
   reason            String
   ticketId          String
   scopes            String[]
+  durationMinutes   Int
   expiresAt         DateTime
   approvedAt        DateTime?
   approvedById      String?

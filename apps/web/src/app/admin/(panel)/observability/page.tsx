@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/Button';
 import { OperationInterventionPanel } from '@/components/features/admin/operations/OperationInterventionPanel';
 import { PersistentObservabilityPanel } from '@/components/features/admin/observability/PersistentObservabilityPanel';
 import { DomainEventCoveragePanel } from '@/components/features/admin/observability/DomainEventCoveragePanel';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 
 const numberFormatter = new Intl.NumberFormat('tr-TR');
 const dateTimeFormatter = new Intl.DateTimeFormat('tr-TR', {
@@ -241,6 +242,10 @@ export default function AdminObservabilityPage() {
   const data = observability.data;
   const workerTotal = data ? data.workerJobs.byStatus.reduce((sum, item) => sum + item.count, 0) : 0;
 
+  if (observability.isError) {
+    return <ApiErrorState error={observability.error} onRetry={() => void observability.refetch()} />;
+  }
+
   return (
     <div className="space-y-6 pb-12">
       {/* Page Header */}
@@ -322,6 +327,12 @@ export default function AdminObservabilityPage() {
           <span>SLO & Tarihsel Analiz</span>
         </button>
       </div>
+
+      {observability.isLoading && (
+        <div role="status" className="rounded-2xl border border-slate-800 bg-slate-900/60 p-10 text-center text-sm text-slate-400">
+          Gözlemlenebilirlik verileri yükleniyor…
+        </div>
+      )}
 
       {/* Tab 1: Live Metrics */}
       {activeTab === 'live' && (
@@ -461,12 +472,16 @@ export default function AdminObservabilityPage() {
             </form>
 
             {query && search.data && (
-              <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4 border-t border-slate-800/80 pt-3">
+              <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-5 border-t border-slate-800/80 pt-3">
                 <MetricPill label="Yavaş Endpoint" value={formatNumber(search.data.slowEndpoints.length)} highlight={search.data.slowEndpoints.length > 0} />
                 <MetricPill label="Hata Kaydı" value={formatNumber(search.data.errors.length)} highlight={search.data.errors.length > 0} />
                 <MetricPill label="Yavaş DB Sorgusu" value={formatNumber(search.data.slowQueries.length)} highlight={search.data.slowQueries.length > 0} />
+                <MetricPill label="Kalıcı Log" value={formatNumber(search.data.persistentLogs.length)} highlight={search.data.persistentLogs.length > 0} />
                 <MetricPill label="Eşleşen Audit Log" value={formatNumber(search.data.auditLogs.length)} />
               </div>
+            )}
+            {query && search.isError && (
+              <p role="alert" className="mt-3 text-xs text-rose-400">İz araması tamamlanamadı. Sorguyu kontrol edip tekrar deneyin.</p>
             )}
           </div>
 

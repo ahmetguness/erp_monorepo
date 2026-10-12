@@ -33,6 +33,7 @@ import {
   updateAdminTicket,
 } from '@/services/support-ticket.service';
 import { useAdminAuthStore } from '@/store/admin-auth.store';
+import { canAdmin } from '@/lib/admin/permissions';
 import type {
   PlatformTicketPriority,
   PlatformTicketStatus,
@@ -198,6 +199,8 @@ export function AdminTicketDetailPage({ ticketId: propTicketId }: AdminTicketDet
   };
 
   const isAssignedToMe = currentAdmin && ticket.assignedAdminId === currentAdmin.id;
+  const canManage = canAdmin(currentAdmin, 'support-ticket.manage');
+  const canStartSupportSession = canAdmin(currentAdmin, 'support-session.manage');
 
   return (
     <div className="space-y-6">
@@ -215,7 +218,7 @@ export function AdminTicketDetailPage({ ticketId: propTicketId }: AdminTicketDet
 
         {/* Quick Lifecycle Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          {!isAssignedToMe && currentAdmin && (
+          {canManage && !isAssignedToMe && currentAdmin && (
             <Button
               variant="outline"
               size="sm"
@@ -227,7 +230,7 @@ export function AdminTicketDetailPage({ ticketId: propTicketId }: AdminTicketDet
             </Button>
           )}
 
-          {ticket.status !== 'RESOLVED' && ticket.status !== 'CLOSED' && (
+          {canManage && ticket.status !== 'RESOLVED' && ticket.status !== 'CLOSED' && (
             <Button
               variant="outline"
               size="sm"
@@ -241,7 +244,7 @@ export function AdminTicketDetailPage({ ticketId: propTicketId }: AdminTicketDet
           )}
 
           {/* Quick link to Tenant Support Session */}
-          <Link href={`/admin/support?tenantId=${encodeURIComponent(ticket.tenantId)}&ticketId=${encodeURIComponent(ticket.ticketNumber)}`}>
+          {canStartSupportSession && <Link href={`/admin/support?tenantId=${encodeURIComponent(ticket.tenantId)}&ticketId=${encodeURIComponent(ticket.ticketNumber)}`}>
             <Button
               variant="primary"
               size="sm"
@@ -250,7 +253,7 @@ export function AdminTicketDetailPage({ ticketId: propTicketId }: AdminTicketDet
             >
               Destek Oturumu Başlat
             </Button>
-          </Link>
+          </Link>}
         </div>
       </div>
 
@@ -439,7 +442,7 @@ export function AdminTicketDetailPage({ ticketId: propTicketId }: AdminTicketDet
           </div>
 
           {/* Reply Form */}
-          <form
+          {canManage && <form
             onSubmit={handleSendMessage}
             className={`rounded-2xl border p-5 space-y-4 shadow-lg transition-all ${
               isInternalNote
@@ -563,7 +566,7 @@ export function AdminTicketDetailPage({ ticketId: propTicketId }: AdminTicketDet
                 {isInternalNote ? 'Dahili Notu Kaydet' : 'Yanıtı Gönder'}
               </Button>
             </div>
-          </form>
+          </form>}
         </div>
 
         {/* Right Sidebar: Ticket Controls & Tenant Context */}
@@ -622,7 +625,7 @@ export function AdminTicketDetailPage({ ticketId: propTicketId }: AdminTicketDet
                 onChange={(e) =>
                   updateMutation.mutate({ status: e.target.value as PlatformTicketStatus })
                 }
-                disabled={updateMutation.isPending}
+                disabled={!canManage || updateMutation.isPending}
                 className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-200 outline-none focus:border-sky-500"
               >
                 <option value="OPEN">Açık (Kuyrukta)</option>
@@ -641,7 +644,7 @@ export function AdminTicketDetailPage({ ticketId: propTicketId }: AdminTicketDet
                 onChange={(e) =>
                   updateMutation.mutate({ priority: e.target.value as PlatformTicketPriority })
                 }
-                disabled={updateMutation.isPending}
+                disabled={!canManage || updateMutation.isPending}
                 className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-200 outline-none focus:border-sky-500"
               >
                 <option value="LOW">Düşük</option>
@@ -663,7 +666,7 @@ export function AdminTicketDetailPage({ ticketId: propTicketId }: AdminTicketDet
                     <p className="text-[10px] text-slate-400">{ticket.assignedAdmin.email}</p>
                   )}
                 </div>
-                {ticket.assignedAdminId && (
+                {canManage && ticket.assignedAdminId && (
                   <button
                     type="button"
                     onClick={() => updateMutation.mutate({ assignedAdminId: null })}

@@ -13,8 +13,13 @@ async function main(): Promise<void> {
   const owner = await prisma.user.create({ data: { name: 'Tenant Owner', email: `owner-${suffix}@test.local`, password: 'unused', tenants: { create: { tenantId: tenant.id, isOwner: true } } } });
   let requestId: string | null = null;
   try {
-    const request = await submitAdminChange({ type: AdminChangeRequestType.TENANT_STATUS_UPDATE, targetId: tenant.id, targetLabel: tenant.companyName, requiredPermission: 'tenant.status.approve', payload: { tenantId: tenant.id, status: 'SUSPENDED' }, previousValues: { status: 'ACTIVE' }, affectedTenantCount: 1, affectedUserCount: 0, requestedById: requester.id, reason: 'Operasyon güvence iki kişi onayı testi.' });
+    const input = { type: AdminChangeRequestType.TENANT_STATUS_UPDATE, targetId: tenant.id, targetLabel: tenant.companyName, requiredPermission: 'tenant.status.approve' as const, payload: { tenantId: tenant.id, status: 'SUSPENDED' }, previousValues: { status: 'ACTIVE' }, affectedTenantCount: 1, affectedUserCount: 0, requestedById: requester.id, reason: 'Operasyon güvence iki kişi onayı testi.' };
+    const concurrent = await Promise.all([submitAdminChange(input), submitAdminChange(input)]);
+    assert.equal(concurrent[0].id, concurrent[1].id, 'Concurrent same-maker submit is idempotent');
+    const request = concurrent[0];
     requestId = request.id;
+    assert.equal(await prisma.adminChangeRequest.count({ where: { type: input.type, targetId: tenant.id, status: 'PENDING' } }), 1);
+    await assert.rejects(submitAdminChange({ ...input, requestedById: approver.id }), /başka bir admin/);
     await assert.rejects(approveAdminChange(request.id, requester.id, ['tenant.status.approve']));
     await assert.rejects(approveAdminChange(request.id, approver.id, ['tenant.read']));
     const applied = await approveAdminChange(request.id, approver.id, ['tenant.status.approve'], 'Bağımsız onay verildi.', `assurance-${suffix}`);

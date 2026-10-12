@@ -112,9 +112,9 @@ export const AdminFeatureController = {
       tenantId: string; featureKey: string; value: string;
       isEnabled?: boolean; reason?: string; expiresAt?: string;
       ticketId?: string;
-    }>();
+    }>().catch(() => null);
 
-    if (!body.tenantId || !body.featureKey || body.value === undefined) {
+    if (!body || !body.tenantId || !body.featureKey || body.value === undefined) {
       return c.json(new ValidationError('tenantId, featureKey ve value zorunludur.').toJSON(), 400);
     }
 
@@ -157,6 +157,11 @@ export const AdminFeatureController = {
       return c.json({ data: { requiresApproval: true, changeRequest } }, 202);
     }
 
+    const expiresAt = new Date(body.expiresAt);
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt <= new Date()) {
+      return c.json(new ValidationError('Geçici override bitiş tarihi geçerli ve gelecekte olmalıdır.').toJSON(), 400);
+    }
+
     const override = await prisma.tenantFeatureOverride.upsert({
       where: { tenantId_featureKey: { tenantId: body.tenantId, featureKey } },
       create: {
@@ -165,13 +170,13 @@ export const AdminFeatureController = {
         value: body.value,
         isEnabled: body.isEnabled ?? true,
         reason: body.reason ?? null,
-        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+        expiresAt,
       },
       update: {
         value: body.value,
         isEnabled: body.isEnabled ?? true,
         reason: body.reason ?? null,
-        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+        expiresAt,
       },
     });
 

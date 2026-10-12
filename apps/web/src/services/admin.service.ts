@@ -300,6 +300,15 @@ export interface ObservabilityAuditSearchResult {
   slowEndpoints: SlowEndpointSnapshot[];
   errors: RecentErrorSnapshot[];
   slowQueries: SlowQuerySnapshot[];
+  persistentLogs: Array<{
+    id: string;
+    level: "INFO" | "WARN" | "ERROR";
+    service: string;
+    message: string;
+    requestId: string | null;
+    correlationId: string | null;
+    occurredAt: string;
+  }>;
   auditLogs: Array<{
     id: string;
     tenantId: string;

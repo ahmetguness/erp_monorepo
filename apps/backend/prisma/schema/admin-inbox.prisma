@@ -9,6 +9,9 @@ model AdminInboxItemState {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
+  admin AdminUser @relation("AdminInboxReadStates", fields: [adminId], references: [id], onDelete: Cascade)
+  owner AdminUser? @relation("LegacyAdminInboxOwners", fields: [ownerId], references: [id], onDelete: SetNull)
+
   @@unique([adminId, sourceType, sourceId])
   @@index([adminId, resolvedAt, updatedAt])
   @@index([ownerId, resolvedAt])
@@ -23,6 +26,8 @@ model AdminInboxPreference {
   expirations Boolean  @default(true)
   updatedAt   DateTime @updatedAt
 
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
   @@map("admin_inbox_preferences")
 }
 
@@ -34,6 +39,8 @@ model AdminInboxTaskState {
   resolvedAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+
+  owner AdminUser? @relation("AdminInboxTaskOwners", fields: [ownerId], references: [id], onDelete: SetNull)
 
   @@unique([sourceType, sourceId])
   @@index([ownerId, resolvedAt])

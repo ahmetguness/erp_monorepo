@@ -439,7 +439,7 @@ export default function AdminChangeRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<AdminChangeRequestStatus | 'ALL'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const { data = [], isLoading, isFetching } = useQuery({
+  const { data = [], isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['admin', 'change-requests'],
     queryFn: () => getAdminChangeRequests(),
     refetchInterval: 30_000,
@@ -453,7 +453,7 @@ export default function AdminChangeRequestsPage() {
   const metrics = useMemo(() => {
     const total = data.length;
     const pending = data.filter((r) => r.status === 'PENDING').length;
-    const approved = data.filter((r) => r.status === 'APPROVED').length;
+    const approved = data.filter((r) => r.status === 'APPROVED' || r.status === 'APPLIED').length;
     const rejected = data.filter((r) => r.status === 'REJECTED').length;
 
     return { total, pending, approved, rejected };
@@ -654,7 +654,16 @@ export default function AdminChangeRequestsPage() {
       )}
 
       {/* Empty State */}
-      {!isLoading && filteredRequests.length === 0 && (
+      {!isLoading && isError && (
+        <div className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-8 text-center">
+          <h3 className="text-sm font-semibold text-rose-200">Onay talepleri alınamadı</h3>
+          <p className="mt-1 text-xs text-slate-400">Bağlantınızı ve admin yetkinizi kontrol edip tekrar deneyin.</p>
+          <Button variant="outline" size="sm" className="mt-4" onClick={() => void refetch()}>
+            Tekrar Dene
+          </Button>
+        </div>
+      )}
+      {!isLoading && !isError && filteredRequests.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-800/70 text-slate-400">
             <UserCheck className="h-6 w-6" />
@@ -671,7 +680,7 @@ export default function AdminChangeRequestsPage() {
       )}
 
       {/* Change Requests List */}
-      {!isLoading && filteredRequests.length > 0 && (
+      {!isLoading && !isError && filteredRequests.length > 0 && (
         <div className="space-y-4">
           {filteredRequests.map((request) => (
             <ChangeRequestCard

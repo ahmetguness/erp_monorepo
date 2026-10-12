@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { AdminPageHeader, AdminKpiCard, AdminKpiGrid } from '@/components/features/admin/ui';
 import { listAdminTickets } from '@/services/support-ticket.service';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import type { PlatformSupportTicketSummaryDto } from '@repo/types';
 import { formatDateTime } from '@/lib/utils';
 import {
@@ -38,7 +39,7 @@ export function AdminTicketListPage() {
   const [selectedPriority, setSelectedPriority] = useState<string>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
-  const { data: tickets = [], isLoading, isFetching, refetch } = useQuery({
+  const { data: tickets = [], isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['admin-tickets', selectedStatus, selectedPriority, selectedCategory, search],
     queryFn: () =>
       listAdminTickets({
@@ -214,6 +215,7 @@ export function AdminTicketListPage() {
       </div>
 
       {/* Tickets Table / List */}
+      {isError && <ApiErrorState error={error} onRetry={() => void refetch()} />}
       <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 shadow-sm backdrop-blur-sm">
         <table className="w-full text-left text-xs">
           <thead className="border-b border-slate-800 bg-slate-950/80 text-slate-400 font-semibold">

@@ -39,10 +39,17 @@ export const couponSchema = z
     percent: z.number().int().min(1).max(100),
     expiresAt: z.string().datetime(),
     maxRedemptions: z.number().int().positive().optional(),
-    plan: z.enum(['STARTER', 'PROFESSIONAL', 'ENTERPRISE']).nullable().optional(),
+    plan: z
+      .enum(["STARTER", "PROFESSIONAL", "ENTERPRISE"])
+      .nullable()
+      .optional(),
     description: z.string().trim().max(500).optional(),
   })
-  .strict();
+  .strict()
+  .refine(({ expiresAt }) => new Date(expiresAt).getTime() > Date.now(), {
+    path: ["expiresAt"],
+    message: "Kupon bitiş tarihi gelecekte olmalıdır.",
+  });
 export const applyCouponSchema = z
   .object({ code: z.string().trim().toUpperCase().min(3).max(40) })
   .strict();

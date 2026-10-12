@@ -1,26 +1,35 @@
-import { Prisma } from '@prisma/client';
-import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
-import { prisma } from '../../../../../lib/prisma.js';
-import { getObservabilitySnapshot } from '../../../../../services/observability.service.js';
-import { requireParam } from '../../../../../utils/context.js';
-import { capturePersistentSnapshot } from '../../../persistent-observability/persistent-observability.service.js';
+import { Prisma } from "@prisma/client";
+import { Context } from "hono";
+import { NotFoundError, ValidationError } from "../../../../../errors/index.js";
+import { prisma } from "../../../../../lib/prisma.js";
+import { getObservabilitySnapshot } from "../../../../../services/observability.service.js";
+import { requireParam } from "../../../../../utils/context.js";
+import { capturePersistentSnapshot } from "../../../persistent-observability/persistent-observability.service.js";
+import { searchPersistentLogs } from "../../../persistent-observability/persistent-observability.service.js";
+import { observabilitySearchSchema } from "../../../persistent-observability/persistent-observability.schemas.js";
 
 export const AdminMetricsController = {
-
   async dashboard(c: Context): Promise<Response> {
     const [
-      totalTenants, activeTenants, trialTenants, suspendedTenants,
-      starterCount, professionalCount, enterpriseCount,
-      totalUsers, totalProducts, totalInvoices, totalPayments,
+      totalTenants,
+      activeTenants,
+      trialTenants,
+      suspendedTenants,
+      starterCount,
+      professionalCount,
+      enterpriseCount,
+      totalUsers,
+      totalProducts,
+      totalInvoices,
+      totalPayments,
     ] = await prisma.$transaction([
       prisma.tenant.count({ where: { deletedAt: null } }),
-      prisma.tenant.count({ where: { deletedAt: null, status: 'ACTIVE' } }),
-      prisma.tenant.count({ where: { deletedAt: null, status: 'TRIAL' } }),
-      prisma.tenant.count({ where: { deletedAt: null, status: 'SUSPENDED' } }),
-      prisma.tenant.count({ where: { deletedAt: null, plan: 'STARTER' } }),
-      prisma.tenant.count({ where: { deletedAt: null, plan: 'PROFESSIONAL' } }),
-      prisma.tenant.count({ where: { deletedAt: null, plan: 'ENTERPRISE' } }),
+      prisma.tenant.count({ where: { deletedAt: null, status: "ACTIVE" } }),
+      prisma.tenant.count({ where: { deletedAt: null, status: "TRIAL" } }),
+      prisma.tenant.count({ where: { deletedAt: null, status: "SUSPENDED" } }),
+      prisma.tenant.count({ where: { deletedAt: null, plan: "STARTER" } }),
+      prisma.tenant.count({ where: { deletedAt: null, plan: "PROFESSIONAL" } }),
+      prisma.tenant.count({ where: { deletedAt: null, plan: "ENTERPRISE" } }),
       prisma.user.count(),
       prisma.product.count(),
       prisma.invoice.count(),
@@ -29,19 +38,46 @@ export const AdminMetricsController = {
 
     return c.json({
       data: {
-        tenants: { total: totalTenants, active: activeTenants, trial: trialTenants, suspended: suspendedTenants },
-        plans: { starter: starterCount, professional: professionalCount, enterprise: enterpriseCount },
-        totals: { users: totalUsers, products: totalProducts, invoices: totalInvoices, payments: totalPayments },
+        tenants: {
+          total: totalTenants,
+          active: activeTenants,
+          trial: trialTenants,
+          suspended: suspendedTenants,
+        },
+        plans: {
+          starter: starterCount,
+          professional: professionalCount,
+          enterprise: enterpriseCount,
+        },
+        totals: {
+          users: totalUsers,
+          products: totalProducts,
+          invoices: totalInvoices,
+          payments: totalPayments,
+        },
       },
     });
   },
 
   async tenantMetrics(c: Context): Promise<Response> {
-    const id = requireParam(c, 'id');
-    const tenant = await prisma.tenant.findFirst({ where: { id, deletedAt: null } });
-    if (!tenant) return c.json(new NotFoundError('Tenant', id).toJSON(), 404);
+    const id = requireParam(c, "id");
+    const tenant = await prisma.tenant.findFirst({
+      where: { id, deletedAt: null },
+    });
+    if (!tenant) return c.json(new NotFoundError("Tenant", id).toJSON(), 404);
 
-    const [users, products, contacts, invoices, salesOrders, purchaseOrders, payments, warehouses, stockLevels, journalEntries] = await prisma.$transaction([
+    const [
+      users,
+      products,
+      contacts,
+      invoices,
+      salesOrders,
+      purchaseOrders,
+      payments,
+      warehouses,
+      stockLevels,
+      journalEntries,
+    ] = await prisma.$transaction([
       prisma.tenantUser.count({ where: { tenantId: id } }),
       prisma.product.count({ where: { tenantId: id, deletedAt: null } }),
       prisma.contact.count({ where: { tenantId: id, deletedAt: null } }),
@@ -57,7 +93,18 @@ export const AdminMetricsController = {
     return c.json({
       data: {
         tenantId: id,
-        counts: { users, products, contacts, invoices, salesOrders, purchaseOrders, payments, warehouses, stockLevels, journalEntries },
+        counts: {
+          users,
+          products,
+          contacts,
+          invoices,
+          salesOrders,
+          purchaseOrders,
+          payments,
+          warehouses,
+          stockLevels,
+          journalEntries,
+        },
       },
     });
   },
@@ -69,10 +116,16 @@ export const AdminMetricsController = {
   },
 
   async observabilitySearch(c: Context): Promise<Response> {
-    const query = c.req.query('q')?.trim();
-    if (!query || query.length < 6) {
-      return c.json(new ValidationError('Arama için en az 6 karakterli requestId veya correlationId girin.').toJSON(), 400);
+    const parsedQuery = observabilitySearchSchema.safeParse(c.req.query("q"));
+    if (!parsedQuery.success) {
+      return c.json(
+        new ValidationError(
+          "Arama için en az 6 karakterli requestId veya correlationId girin.",
+        ).toJSON(),
+        400,
+      );
     }
+    const query = parsedQuery.data;
 
     const snapshot = await getObservabilitySnapshot(prisma);
     const matchingSlowEndpoints = snapshot.http.recentSlowEndpoints.filter(
@@ -87,27 +140,30 @@ export const AdminMetricsController = {
 
     const where: Prisma.AuditLogWhereInput = {
       OR: [
-        { newValues: { path: ['requestId'], equals: query } },
-        { newValues: { path: ['correlationId'], equals: query } },
-        { oldValues: { path: ['requestId'], equals: query } },
-        { oldValues: { path: ['correlationId'], equals: query } },
+        { newValues: { path: ["requestId"], equals: query } },
+        { newValues: { path: ["correlationId"], equals: query } },
+        { oldValues: { path: ["requestId"], equals: query } },
+        { oldValues: { path: ["correlationId"], equals: query } },
       ],
     };
-    const auditLogs = await prisma.auditLog.findMany({
-      where,
-      select: {
-        id: true,
-        tenantId: true,
-        userId: true,
-        module: true,
-        entityType: true,
-        entityId: true,
-        action: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    });
+    const [auditLogs, persistentLogs] = await Promise.all([
+      prisma.auditLog.findMany({
+        where,
+        select: {
+          id: true,
+          tenantId: true,
+          userId: true,
+          module: true,
+          entityType: true,
+          entityId: true,
+          action: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      searchPersistentLogs(query),
+    ]);
 
     return c.json({
       data: {
@@ -115,7 +171,11 @@ export const AdminMetricsController = {
         slowEndpoints: matchingSlowEndpoints,
         errors: matchingErrors,
         slowQueries: matchingSlowQueries,
-        auditLogs: auditLogs.map((log) => ({ ...log, createdAt: log.createdAt.toISOString() })),
+        persistentLogs,
+        auditLogs: auditLogs.map((log) => ({
+          ...log,
+          createdAt: log.createdAt.toISOString(),
+        })),
       },
     });
   },

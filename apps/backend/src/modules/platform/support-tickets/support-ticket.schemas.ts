@@ -1,9 +1,9 @@
-import { z } from 'zod';
+import { z } from "zod";
 import {
   PLATFORM_TICKET_CATEGORIES,
   PLATFORM_TICKET_PRIORITIES,
   PLATFORM_TICKET_STATUSES,
-} from '@repo/types';
+} from "@repo/types";
 
 export const listTenantTicketsQuerySchema = z.object({
   status: z.enum(PLATFORM_TICKET_STATUSES).optional(),
@@ -20,24 +20,55 @@ export const listAdminTicketsQuerySchema = z.object({
   search: z.string().trim().min(1).optional(),
 });
 
-export const createSupportTicketSchema = z.object({
-  title: z.string().trim().min(5, 'Başlık en az 5 karakter olmalıdır').max(200, 'Başlık en fazla 200 karakter olabilir'),
-  description: z.string().trim().min(10, 'Açıklama en az 10 karakter olmalıdır').max(10000, 'Açıklama çok uzun'),
-  category: z.enum(PLATFORM_TICKET_CATEGORIES).default('TECHNICAL'),
-  priority: z.enum(PLATFORM_TICKET_PRIORITIES).default('MEDIUM'),
-}).strict();
+export const createSupportTicketSchema = z
+  .object({
+    title: z
+      .string()
+      .trim()
+      .min(5, "Başlık en az 5 karakter olmalıdır")
+      .max(200, "Başlık en fazla 200 karakter olabilir"),
+    description: z
+      .string()
+      .trim()
+      .min(10, "Açıklama en az 10 karakter olmalıdır")
+      .max(10000, "Açıklama çok uzun"),
+    category: z.enum(PLATFORM_TICKET_CATEGORIES).default("TECHNICAL"),
+    priority: z.enum(PLATFORM_TICKET_PRIORITIES).default("MEDIUM"),
+  })
+  .strict();
 
-export const addTicketMessageSchema = z.object({
-  message: z.string().trim().min(2, 'Mesaj en az 2 karakter olmalıdır').max(10000, 'Mesaj çok uzun'),
-  isInternal: z.boolean().optional().default(false),
-}).strict();
+export const addTicketMessageSchema = z
+  .object({
+    message: z
+      .string()
+      .trim()
+      .min(2, "Mesaj en az 2 karakter olmalıdır")
+      .max(10000, "Mesaj çok uzun"),
+    isInternal: z.boolean().optional().default(false),
+  })
+  .strict();
 
-export const updateTicketAdminSchema = z.object({
-  status: z.enum(PLATFORM_TICKET_STATUSES).optional(),
-  priority: z.enum(PLATFORM_TICKET_PRIORITIES).optional(),
-  assignedAdminId: z.string().nullable().optional(),
-}).strict();
+export const updateTicketAdminSchema = z
+  .object({
+    status: z.enum(PLATFORM_TICKET_STATUSES).optional(),
+    priority: z.enum(PLATFORM_TICKET_PRIORITIES).optional(),
+    assignedAdminId: z.string().trim().min(1).nullable().optional(),
+  })
+  .strict()
+  .refine(
+    (input) =>
+      input.status !== undefined ||
+      input.priority !== undefined ||
+      input.assignedAdminId !== undefined,
+    { message: "En az bir güncelleme alanı zorunludur." },
+  );
 
-export const reopenTicketSchema = z.object({
-  reason: z.string().trim().max(2000, 'Yeniden acma gerekcesi en fazla 2000 karakter olabilir').optional(),
-}).strict();
+export const reopenTicketSchema = z
+  .object({
+    reason: z
+      .string()
+      .trim()
+      .max(2000, "Yeniden acma gerekcesi en fazla 2000 karakter olabilir")
+      .optional(),
+  })
+  .strict();

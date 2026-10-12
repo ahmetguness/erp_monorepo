@@ -163,10 +163,10 @@ export async function getSubscriptionSnapshot(
       subscription.customPricingExpiresAt?.toISOString() ?? null,
     discount: discount
       ? {
-        code: discount.coupon.code,
-        percent: discount.coupon.percent,
-        expiresAt: discount.expiresAt.toISOString(),
-      }
+          code: discount.coupon.code,
+          percent: discount.coupon.percent,
+          expiresAt: discount.expiresAt.toISOString(),
+        }
       : null,
     invoices: invoices.map((row) => ({
       id: row.id,
@@ -392,10 +392,10 @@ export async function ingestProviderEvent(
         data:
           status === "FAILED"
             ? {
-              state: "PAST_DUE",
-              dunningAttempt: { increment: 1 },
-              nextRetryAt: new Date(Date.now() + 3 * 86400000),
-            }
+                state: "PAST_DUE",
+                dunningAttempt: { increment: 1 },
+                nextRetryAt: new Date(Date.now() + 3 * 86400000),
+              }
             : status === "PAID"
               ? { state: "ACTIVE", dunningAttempt: 0, nextRetryAt: null }
               : {},
@@ -421,13 +421,18 @@ export async function createCoupon(input: {
   plan?: string | null;
   description?: string;
 }) {
-  return prisma.billingCoupon.create({ data: input });
+  return prisma.billingCoupon.create({
+    data: { ...input, code: input.code.trim().toUpperCase() },
+  });
 }
 
-export async function validateCheckoutCoupon(code: string, plan: string): Promise<{
+export async function validateCheckoutCoupon(
+  code: string,
+  plan: string,
+): Promise<{
   code: string;
   percent: number;
-  applicablePlans: string[] | 'ALL';
+  applicablePlans: string[] | "ALL";
   description: string;
 } | null> {
   const coupon = await prisma.billingCoupon.findFirst({
@@ -437,13 +442,25 @@ export async function validateCheckoutCoupon(code: string, plan: string): Promis
       expiresAt: { gt: new Date() },
       OR: [{ plan: null }, { plan }],
     },
-    select: { code: true, percent: true, plan: true, description: true, maxRedemptions: true, redemptionCount: true },
+    select: {
+      code: true,
+      percent: true,
+      plan: true,
+      description: true,
+      maxRedemptions: true,
+      redemptionCount: true,
+    },
   });
-  if (!coupon || (coupon.maxRedemptions !== null && coupon.redemptionCount >= coupon.maxRedemptions)) return null;
+  if (
+    !coupon ||
+    (coupon.maxRedemptions !== null &&
+      coupon.redemptionCount >= coupon.maxRedemptions)
+  )
+    return null;
   return {
     code: coupon.code,
     percent: coupon.percent,
-    applicablePlans: coupon.plan ? [coupon.plan] : 'ALL',
+    applicablePlans: coupon.plan ? [coupon.plan] : "ALL",
     description: coupon.description || `%${coupon.percent} indirim kuponu`,
   };
 }
@@ -471,79 +488,139 @@ export async function listCoupons(opts?: {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: { createdAt: "desc" },
     take: 200,
   });
 }
 
 export async function deactivateCoupon(id: string): Promise<void> {
   const coupon = await prisma.billingCoupon.findUnique({ where: { id } });
-  if (!coupon) throw new SubscriptionOperationsError('Kupon bulunamadı.', 404);
-  await prisma.billingCoupon.update({ where: { id }, data: { isActive: false } });
+  if (!coupon) throw new SubscriptionOperationsError("Kupon bulunamadı.", 404);
+  await prisma.billingCoupon.update({
+    where: { id },
+    data: { isActive: false },
+  });
 }
-export async function setCouponActive(id: string, isActive: boolean): Promise<void> {
-  const updated = await prisma.billingCoupon.updateMany({ where: { id }, data: { isActive } });
-  if (updated.count === 0) throw new SubscriptionOperationsError('Kupon bulunamadı.', 404);
+export async function setCouponActive(
+  id: string,
+  isActive: boolean,
+): Promise<void> {
+  const updated = await prisma.billingCoupon.updateMany({
+    where: { id },
+    data: { isActive },
+  });
+  if (updated.count === 0)
+    throw new SubscriptionOperationsError("Kupon bulunamadı.", 404);
 }
 export async function applyCoupon(
   tenantId: string,
   code: string,
   adminId: string,
 ): Promise<SubscriptionSnapshot> {
-  const coupon = await prisma.billingCoupon.findFirst({
-    where: { code, isActive: true, expiresAt: { gt: new Date() } },
-  });
-  const alreadyApplied = coupon
-    ? await prisma.subscriptionDiscount.findFirst({
-      where: { tenantId, couponId: coupon.id },
-    })
-    : null;
-  if (alreadyApplied) return getSubscriptionSnapshot(tenantId);
-  if (
-    !coupon ||
-    (coupon.maxRedemptions !== null &&
-      coupon.redemptionCount >= coupon.maxRedemptions)
-  )
-    throw new SubscriptionOperationsError(
-      "Kupon geçersiz veya kullanım limiti dolmuş.",
-      400,
-    );
-  // Plan kısıtlama kontrolü
-  if (coupon.plan !== null) {
-    const tenant = await prisma.tenant.findFirst({ where: { id: tenantId, deletedAt: null }, select: { plan: true } });
-    if (!tenant) throw new SubscriptionOperationsError('Tenant bulunamadı.', 404);
-    if (coupon.plan !== tenant.plan)
-      throw new SubscriptionOperationsError(
-        `Bu kupon yalnızca ${coupon.plan} planındaki tenantlara uygulanabilir.`,
-        400,
+  const normalizedCode = code.trim().toUpperCase();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await prisma.$transaction(
+        async (tx) => {
+          const tenant = await tx.tenant.findFirst({
+            where: { id: tenantId, deletedAt: null },
+            select: { plan: true },
+          });
+          if (!tenant)
+            throw new SubscriptionOperationsError("Tenant bulunamadı.", 404);
+
+          const now = new Date();
+          const coupon = await tx.billingCoupon.findFirst({
+            where: {
+              code: normalizedCode,
+              isActive: true,
+              expiresAt: { gt: now },
+            },
+          });
+          if (!coupon)
+            throw new SubscriptionOperationsError(
+              "Kupon geçersiz veya kullanım limiti dolmuş.",
+              400,
+            );
+
+          const existing = await tx.subscriptionDiscount.findFirst({
+            where: { tenantId, couponId: coupon.id },
+            select: { id: true },
+          });
+          if (existing) return;
+
+          if (coupon.plan !== null && coupon.plan !== tenant.plan)
+            throw new SubscriptionOperationsError(
+              `Bu kupon yalnızca ${coupon.plan} planındaki tenantlara uygulanabilir.`,
+              400,
+            );
+
+          // The conditional update is the redemption claim. It prevents two
+          // transactions from both consuming the final available redemption.
+          const claimed = await tx.billingCoupon.updateMany({
+            where: {
+              id: coupon.id,
+              isActive: true,
+              expiresAt: { gt: now },
+              ...(coupon.maxRedemptions === null
+                ? {}
+                : { redemptionCount: { lt: coupon.maxRedemptions } }),
+            },
+            data: { redemptionCount: { increment: 1 } },
+          });
+          if (claimed.count !== 1)
+            throw new SubscriptionOperationsError(
+              "Kupon geçersiz veya kullanım limiti dolmuş.",
+              400,
+            );
+
+          await tx.subscriptionDiscount.create({
+            data: {
+              tenantId,
+              couponId: coupon.id,
+              expiresAt: coupon.expiresAt,
+            },
+          });
+          await createAuditLog(tx, {
+            tenantId,
+            adminId,
+            module: "SUBSCRIPTION",
+            entityType: EntityType.OTHER,
+            entityId: coupon.id,
+            action: AuditAction.UPDATE,
+            newValues: { coupon: normalizedCode, percent: coupon.percent },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
+      return getSubscriptionSnapshot(tenantId);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2034" &&
+        attempt < 2
+      )
+        continue;
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        const existing = await prisma.subscriptionDiscount.findFirst({
+          where: { tenantId, coupon: { code: normalizedCode } },
+          select: { id: true },
+        });
+        if (existing) return getSubscriptionSnapshot(tenantId);
+      }
+      throw error;
+    }
   }
-  await prisma.$transaction(async (tx) => {
-    const existing = await tx.subscriptionDiscount.findFirst({
-      where: { tenantId, couponId: coupon.id },
-    });
-    if (existing) return;
-    await tx.subscriptionDiscount.create({
-      data: { tenantId, couponId: coupon.id, expiresAt: coupon.expiresAt },
-    });
-    await tx.billingCoupon.update({
-      where: { id: coupon.id },
-      data: { redemptionCount: { increment: 1 } },
-    });
-    await createAuditLog(tx, {
-      tenantId,
-      adminId,
-      module: "SUBSCRIPTION",
-      entityType: EntityType.OTHER,
-      entityId: coupon.id,
-      action: AuditAction.UPDATE,
-      newValues: { coupon: code, percent: coupon.percent },
-    });
-  });
-  return getSubscriptionSnapshot(tenantId);
+  throw new SubscriptionOperationsError(
+    "Kupon işlemi eşzamanlı güncelleme nedeniyle tamamlanamadı.",
+    409,
+  );
 }
 
 const custom = (row: {

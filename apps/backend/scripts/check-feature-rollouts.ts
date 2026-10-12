@@ -28,10 +28,10 @@ async function activate(rollout: Awaited<ReturnType<typeof createFeatureRollout>
   await approveAdminChange(request.id, approverId, ["feature.approve"]);
 }
 
-async function createVersion(adminId: string, value: string) {
+async function createVersion(adminId: string, value: string, featureKey: FeatureKey = FeatureKey.CUSTOM_REPORTING) {
   const rollout = await createFeatureRollout(adminId, {
     plan: "STARTER",
-    featureKey: FeatureKey.CUSTOM_REPORTING,
+    featureKey,
     environment: "PRODUCTION",
     stage: "GENERAL",
     value,
@@ -86,6 +86,13 @@ async function main(): Promise<void> {
     errorThresholdPct: 5,
     reason: "Invalid self dependency scenario",
   }));
+
+  const concurrent = await Promise.all([
+    createVersion(requester, "true", FeatureKey.API_ACCESS),
+    createVersion(requester, "false", FeatureKey.API_ACCESS),
+  ]);
+  assert.equal(new Set(concurrent.map((item) => item.version)).size, 2);
+  assert.deepEqual(concurrent.map((item) => item.version).sort((a, b) => a - b), [1, 2]);
 
   const first = await createVersion(requester, "true");
   assert.ok(first.version >= 1);

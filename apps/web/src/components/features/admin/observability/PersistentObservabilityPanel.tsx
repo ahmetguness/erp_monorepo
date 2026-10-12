@@ -122,8 +122,16 @@ export function PersistentObservabilityPanel() {
         </div>
       </div>
       {query.isError && (
-        <p role="alert" className="text-red-400">
-          Kalıcı gözlemlenebilirlik geçmişi alınamadı.
+        <div role="alert" className="flex items-center gap-3 text-red-400">
+          <span>Kalıcı gözlemlenebilirlik geçmişi alınamadı.</span>
+          <button className={button} onClick={() => void query.refetch()} disabled={query.isFetching}>
+            Tekrar dene
+          </button>
+        </div>
+      )}
+      {query.data?.pointsMeta.truncated && (
+        <p role="status" className="rounded-lg border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+          Grafik sınırlandırıldı: {query.data.pointsMeta.totalEligible.toLocaleString("tr-TR")} uygun kaydın son {query.data.pointsMeta.returned.toLocaleString("tr-TR")} noktası gösteriliyor. SLO ve hata bütçesi hesapları tüm uygun örnekleri kullanır.
         </p>
       )}
       <div className="grid gap-3 md:grid-cols-3">
