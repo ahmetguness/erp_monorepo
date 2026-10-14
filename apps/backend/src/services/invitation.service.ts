@@ -5,6 +5,7 @@ import { logger } from '../lib/logger';
 import { validatePasswordStrength } from '../utils/password-policy.js';
 import { sendMail } from './mail.service';
 import { invitationEmail } from './mail-templates.service';
+import { StarterAccessService } from './starter-access.service.js';
 
 const INVITE_EXPIRY_HOURS = 48;
 
@@ -18,45 +19,53 @@ export async function createInvitation(
 ) {
   const normalizedEmail = email.toLowerCase().trim();
 
-  // Zaten tenant üyesi mi?
-  const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-  if (existingUser) {
-    const existingMember = await prisma.tenantUser.findFirst({
-      where: { tenantId, userId: existingUser.id, isActive: true },
-    });
-    if (existingMember) {
-      return { success: false, code: 'ALREADY_MEMBER', message: 'Bu kullanıcı zaten ekip üyesi.' };
-    }
-  }
-
-  // Bekleyen davet var mı?
-  const pendingInvite = await prisma.invitation.findFirst({
-    where: { tenantId, email: normalizedEmail, status: 'PENDING', expiresAt: { gt: new Date() } },
-  });
-  if (pendingInvite) {
-    return { success: false, code: 'INVITE_PENDING', message: 'Bu e-posta adresine zaten bekleyen bir davet var.' };
-  }
-
-  // Token oluştur
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
   const expiresAt = new Date(Date.now() + INVITE_EXPIRY_HOURS * 60 * 60 * 1000);
 
-  // Süresi dolmuş eski daveti sil (aynı tenant+email unique constraint)
-  await prisma.invitation.deleteMany({
-    where: { tenantId, email: normalizedEmail, status: { in: ['EXPIRED', 'CANCELLED'] } },
+  const creation = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}))`;
+
+    if (roleId && await tx.role.count({ where: { id: roleId, tenantId } }) !== 1) {
+      return { kind: 'error' as const, code: 'INVALID_ROLE', message: 'Seçilen rol bu tenant için geçerli değildir.' };
+    }
+
+    const existingUser = await tx.user.findUnique({ where: { email: normalizedEmail } });
+    if (existingUser) {
+      const existingMember = await tx.tenantUser.findUnique({
+        where: { tenantId_userId: { tenantId, userId: existingUser.id } },
+      });
+      if (existingMember?.isActive) {
+        return { kind: 'error' as const, code: 'ALREADY_MEMBER', message: 'Bu kullanıcı zaten ekip üyesi.' };
+      }
+    }
+
+    const pendingInvite = await tx.invitation.findFirst({
+      where: { tenantId, email: normalizedEmail, status: 'PENDING', expiresAt: { gt: new Date() } },
+    });
+    if (pendingInvite) {
+      return { kind: 'error' as const, code: 'INVITE_PENDING', message: 'Bu e-posta adresine zaten bekleyen bir davet var.' };
+    }
+
+    const [activeUsers, pendingInvites] = await Promise.all([
+      tx.tenantUser.count({ where: { tenantId, isActive: true } }),
+      tx.invitation.count({ where: { tenantId, status: 'PENDING', expiresAt: { gt: new Date() } } }),
+    ]);
+    await new StarterAccessService(tx).enforceUserCapacity(tenantId, 1, activeUsers + pendingInvites);
+
+    await tx.invitation.deleteMany({
+      where: { tenantId, email: normalizedEmail, status: { in: ['EXPIRED', 'CANCELLED'] } },
+    });
+    const invitation = await tx.invitation.create({
+      data: { tenantId, email: normalizedEmail, roleId: roleId || null, tokenHash, expiresAt, invitedBy },
+    });
+    return { kind: 'created' as const, invitation };
   });
 
-  const invitation = await prisma.invitation.create({
-    data: {
-      tenantId,
-      email: normalizedEmail,
-      roleId: roleId || null,
-      tokenHash,
-      expiresAt,
-      invitedBy,
-    },
-  });
+  if (creation.kind === 'error') {
+    return { success: false, code: creation.code, message: creation.message };
+  }
+  const invitation = creation.invitation;
 
   // Tenant bilgisi al
   const tenant = await prisma.tenant.findUnique({
@@ -76,7 +85,12 @@ export async function createInvitation(
   const inviteUrl = `${appUrl}/invite?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}`;
 
   const template = invitationEmail(tenant?.companyName || 'Axon ERP', inviteUrl, roleName);
-  await sendMail({ to: normalizedEmail, ...template });
+  try {
+    await sendMail({ to: normalizedEmail, ...template });
+  } catch (error) {
+    await prisma.invitation.deleteMany({ where: { id: invitation.id, tenantId, status: 'PENDING' } });
+    throw error;
+  }
 
   logger.info(`Davet gönderildi: ${normalizedEmail} → tenant ${tenantId}`);
 
@@ -144,18 +158,18 @@ export async function acceptInvitation(
   const hashedPassword = await bcrypt.hash(password, 12);
 
   const result = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.invitation.updateMany({
+      where: { id: invitation.id, tokenHash, email: normalizedEmail, status: 'PENDING', expiresAt: { gte: new Date() } },
+      data: { status: 'ACCEPTED', acceptedAt: new Date() },
+    });
+    if (claimed.count !== 1) return null;
+
     // User oluştur veya mevcut user'ı bul
     let user = await tx.user.findUnique({ where: { email: normalizedEmail } });
 
     if (!user) {
       user = await tx.user.create({
         data: { email: normalizedEmail, name, password: hashedPassword },
-      });
-    } else {
-      // Mevcut user — şifreyi güncelle (yeni şifre belirledi)
-      await tx.user.update({
-        where: { id: user.id },
-        data: { password: hashedPassword, name },
       });
     }
 
@@ -172,14 +186,12 @@ export async function acceptInvitation(
       update: { isActive: true, roleId: invitation.roleId },
     });
 
-    // Daveti kabul edildi olarak işaretle
-    await tx.invitation.update({
-      where: { id: invitation.id },
-      data: { status: 'ACCEPTED', acceptedAt: new Date() },
-    });
-
     return user;
   });
+
+  if (!result) {
+    return { success: false, error: 'Geçersiz veya kullanılmış davet linki.' };
+  }
 
   logger.info(`Davet kabul edildi: ${normalizedEmail} → tenant ${invitation.tenantId}`);
 

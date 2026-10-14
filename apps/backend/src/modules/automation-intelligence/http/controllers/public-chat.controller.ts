@@ -181,14 +181,18 @@ export const PublicChatController = {
           checkEmailFn,
           {
             async onToken(token) {
-              const sanitized = sanitizeOutput(token, true);
-              await s.writeSSE({ event: 'token', data: JSON.stringify({ token: sanitized.text }) });
+              // Do not emit partially matched secrets. Redaction patterns such as
+              // API keys, IBANs and card numbers can span provider token boundaries.
+              void token;
             },
             async onToolStart() {
               // Public chat does not expose tool internals.
             },
             async onDone(fullText) {
               const sanitized = sanitizeOutput(fullText, true);
+              if (sanitized.text) {
+                await s.writeSSE({ event: 'token', data: JSON.stringify({ token: sanitized.text }) });
+              }
               await recordAiRequestLog({
                 requestType: AiRequestType.PUBLIC_CHAT,
                 promptVersion: AI_PROMPT_VERSIONS.PUBLIC_CHAT_STREAM,

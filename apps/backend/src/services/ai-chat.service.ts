@@ -85,6 +85,18 @@ function addUsage(total: AiTokenUsage, response: ChatCompletion): AiTokenUsage {
   };
 }
 
+export function hasExplicitDemoApproval(
+  message: string,
+  history: ChatCompletionMessageParam[],
+): boolean {
+  const previous = [...history].reverse().find((entry) => entry.role === 'assistant');
+  const previousText = previous && typeof previous.content === 'string' ? previous.content : '';
+  const askedForApproval = /bilgileriniz\s+do[ğg]ru\s+mu|olu[sş]tural[ıi]m\s+m[ıi]|onayl[ıi]yor\s+musunuz|onay[ıi]n[ıi]z/iu.test(previousText);
+  const answer = message.trim().toLocaleLowerCase('tr-TR');
+  const explicitApproval = /^(evet|onayl[ıi]yorum|onayla(?:\s+ve\s+(?:demo(?:yu|\s+hesab[ıi]n[ıi])?\s*)?olu[sş]tur)?|olu[sş]tur(?:abilirsiniz)?|tamam)[.!]?$/iu.test(answer);
+  return askedForApproval && explicitApproval;
+}
+
 function buildGovernanceEntityContext(
   context: ChatPageContext | undefined,
   entityContext: LoadedChatEntityContext | null,
@@ -305,7 +317,9 @@ export async function handlePublicChat(
       const email = String(args.email ?? '').trim().toLowerCase();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-      if (!args.fullName || !args.companyName || !email || !emailRegex.test(email)) {
+      if (!hasExplicitDemoApproval(message, history)) {
+        toolResult = JSON.stringify({ success: false, confirmationRequired: true, message: 'Demo talebi icin once bilgileri ozetleyip kullanicidan acik onay almalisiniz.' });
+      } else if (!args.fullName || !args.companyName || !email || !emailRegex.test(email)) {
         toolResult = JSON.stringify({ success: false, message: 'Geçersiz veya eksik bilgi. Lütfen tekrar deneyin.' });
       } else {
         try {
@@ -434,7 +448,9 @@ export async function handlePublicChatStream(
       } else if (toolCall.function.name === 'create_demo_request') {
         const email = String(args.email ?? '').trim().toLowerCase();
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!args.fullName || !args.companyName || !email || !emailRegex.test(email)) {
+        if (!hasExplicitDemoApproval(message, history)) {
+          toolResult = JSON.stringify({ success: false, confirmationRequired: true, message: 'Demo talebi icin once bilgileri ozetleyip kullanicidan acik onay almalisiniz.' });
+        } else if (!args.fullName || !args.companyName || !email || !emailRegex.test(email)) {
           toolResult = JSON.stringify({ success: false, message: 'Geçersiz veya eksik bilgi. Lütfen tekrar deneyin.' });
         } else {
           try {

@@ -154,6 +154,13 @@ export const UserController = {
         },
       });
 
+      await createAuditLog(prisma, {
+        tenantId, userId, module: 'users', entityType: EntityType.OTHER, entityId: existingUser.id,
+        action: AuditAction.CREATE,
+        newValues: { email: existingUser.email, membershipCreated: true, roleId: body.roleId ?? null },
+        ipAddress, userAgent,
+      });
+
       return c.json({ data: tenantUser }, 201);
     }
 
@@ -203,6 +210,8 @@ export const UserController = {
   async update(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const userId = c.req.param('id');
+    const actorId = c.get('userId') as string | undefined;
+    const { ipAddress, userAgent } = getRequestMeta(c);
 
     const tenantUser = await prisma.tenantUser.findFirst({
       where: { tenantId, userId },
@@ -214,29 +223,61 @@ export const UserController = {
 
     const body = getValidatedBody(c, updateUserBodySchema);
 
+    if (tenantUser.isOwner && (body.roleId !== undefined || body.isActive === false)) {
+      throw new ForbiddenError('Tenant sahibinin rolü veya aktiflik durumu değiştirilemez.');
+    }
+
     if (body.roleId) {
       const roleExists = await prisma.role.count({ where: { id: body.roleId, tenantId } });
       if (roleExists !== 1) throw new ValidationError('Secilen rol bu tenant icin gecerli degildir.');
     }
 
-    const [updatedUser] = await prisma.$transaction([
-      prisma.user.update({
+    const changesGlobalIdentity = body.name !== undefined || body.phone !== undefined;
+    if (changesGlobalIdentity) {
+      const identity = await prisma.user.findUniqueOrThrow({
         where: { id: userId },
-        data: {
-          ...(body.name !== undefined && { name: body.name }),
-          ...(body.phone !== undefined && { phone: body.phone }),
-          ...(body.isActive !== undefined && { isActive: body.isActive }),
-        },
-        select: { id: true, email: true, name: true, phone: true, isActive: true },
-      }),
-      prisma.tenantUser.update({
+        select: { tenants: { where: { isActive: true }, select: { tenantId: true } } },
+      });
+      if (identity.tenants.some((membership) => membership.tenantId !== tenantId)) {
+        throw new ValidationError('Birden fazla tenant üyesi olan kullanıcının global profil bilgileri tenant yönetiminden değiştirilemez.');
+      }
+    }
+
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      const user = changesGlobalIdentity
+        ? await tx.user.update({
+            where: { id: userId },
+            data: {
+              ...(body.name !== undefined && { name: body.name }),
+              ...(body.phone !== undefined && { phone: body.phone }),
+            },
+            select: { id: true, email: true, name: true, phone: true, isActive: true },
+          })
+        : await tx.user.findUniqueOrThrow({
+            where: { id: userId },
+            select: { id: true, email: true, name: true, phone: true, isActive: true },
+          });
+      await tx.tenantUser.update({
         where: { id: tenantUser.id },
         data: {
           ...(body.roleId !== undefined && { roleId: body.roleId }),
           ...(body.isActive !== undefined && { isActive: body.isActive }),
         },
-      }),
-    ]);
+      });
+      await createAuditLog(tx, {
+        tenantId, userId: actorId, module: 'users', entityType: EntityType.OTHER, entityId: userId!,
+        action: AuditAction.UPDATE,
+        oldValues: { roleId: tenantUser.roleId, isActive: tenantUser.isActive },
+        newValues: {
+          ...(body.name !== undefined && { name: body.name }),
+          ...(body.phone !== undefined && { phoneChanged: true }),
+          ...(body.roleId !== undefined && { roleId: body.roleId }),
+          ...(body.isActive !== undefined && { isActive: body.isActive }),
+        },
+        ipAddress, userAgent,
+      });
+      return user;
+    });
 
     return c.json({ data: updatedUser });
   },

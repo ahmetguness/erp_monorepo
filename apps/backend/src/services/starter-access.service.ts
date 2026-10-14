@@ -25,9 +25,15 @@ export class StarterAccessService {
   async getUserCapacity(tenantId: string, requestedCount = 1, currentCount?: number): Promise<PlanLimitCapacity> {
     const feature = await this.tenantFeatureService.resolveFeature(tenantId, FeatureKey.MAX_USERS);
     const limitResult = parseLimitValue(feature.value);
-    const resolvedCurrentCount = currentCount ?? await this.prisma.tenantUser.count({
-      where: { tenantId, isActive: true },
-    });
+    const resolvedCurrentCount = currentCount ?? await (async () => {
+      const [activeUsers, pendingInvites] = await Promise.all([
+        this.prisma.tenantUser.count({ where: { tenantId, isActive: true } }),
+        this.prisma.invitation.count({
+          where: { tenantId, status: 'PENDING', expiresAt: { gt: new Date() } },
+        }),
+      ]);
+      return activeUsers + pendingInvites;
+    })();
 
     return buildCapacity(resolvedCurrentCount, requestedCount, limitResult.isUnlimited ? null : limitResult.limit);
   }

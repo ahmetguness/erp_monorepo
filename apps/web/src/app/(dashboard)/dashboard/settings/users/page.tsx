@@ -33,11 +33,11 @@ export default function UsersAndInvitesPage() {
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [now] = useState(() => Date.now());
 
-  const { data: users = [], isLoading: usersLoading } = useTenantUsers();
+  const { data: users = [], isLoading: usersLoading, isError: usersError, refetch: refetchUsers } = useTenantUsers();
   const { data: rolesData } = useRoles({ page: 1, limit: 50 });
   const roles = rolesData?.data ?? [];
   const updateUserRole = useUpdateUserRole();
-  const { data: invitations = [] } = useQuery({
+  const { data: invitations = [], isError: invitationsError, refetch: refetchInvitations } = useQuery({
     queryKey: ['invitations'],
     queryFn: getInvitations,
   });
@@ -103,6 +103,15 @@ export default function UsersAndInvitesPage() {
         }
       />
 
+      {(usersError || invitationsError) && (
+        <div role="alert" className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <span>Kullanıcı veya davet verileri yüklenemedi.</span>
+          <Button size="sm" variant="ghost" onClick={() => { void refetchUsers(); void refetchInvitations(); }}>
+            Tekrar Dene
+          </Button>
+        </div>
+      )}
+
       {userLimit.isLimited && (
         <div className={cn(
           'mb-6 rounded-xl border px-4 py-3',
@@ -162,7 +171,13 @@ export default function UsersAndInvitesPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((tu) => {
+                {users.length === 0 && !usersError ? (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-500">
+                      Henüz ekip üyesi bulunmuyor.
+                    </td>
+                  </tr>
+                ) : users.map((tu) => {
                   const u = tu.user || tu;
                   return (
                     <tr key={tu.id || u.id} className="border-b border-slate-800/50 last:border-0">
@@ -200,8 +215,8 @@ export default function UsersAndInvitesPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <Badge variant={u.isActive !== false ? 'success' : 'danger'}>
-                          {u.isActive !== false ? 'Aktif' : 'Pasif'}
+                        <Badge variant={tu.isActive && u.isActive !== false ? 'success' : 'danger'}>
+                          {tu.isActive && u.isActive !== false ? 'Aktif' : 'Pasif'}
                         </Badge>
                       </td>
                     </tr>
@@ -306,7 +321,8 @@ export default function UsersAndInvitesPage() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    if (!userLimit.isInviteBlocked) sendInvite.mutate();
+                    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+                    if (!userLimit.isInviteBlocked && validEmail && !sendInvite.isPending) sendInvite.mutate();
                   }
                 }}
                 className="w-full h-12 pl-11 pr-4 bg-slate-900/80 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/40 transition-all" />

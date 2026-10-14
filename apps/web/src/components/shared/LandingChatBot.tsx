@@ -145,7 +145,7 @@ export function LandingChatBot() {
   ]);
   const [loading, setLoading] = useState(false);
   const { displayed: streamingContent, append: appendStream, reset: resetStream } = useSmoothStream();
-  const [sessionId] = useState(() => `pub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const [sessionId, setSessionId] = useState(() => `pub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -158,6 +158,10 @@ export function LandingChatBot() {
   }, [open]);
 
   const clearChat = () => {
+    // Public conversation history lives server-side under the session id. Rotating
+    // the id makes "clear" a real conversation reset instead of only hiding the
+    // previous messages in the browser.
+    setSessionId(`pub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     setMessages([{
       id: 'welcome', role: 'assistant', timestamp: new Date(),
       content: 'Sohbet temizlendi. Size nasıl yardımcı olabilirim?',

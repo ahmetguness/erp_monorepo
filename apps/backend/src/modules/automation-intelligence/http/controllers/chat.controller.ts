@@ -161,9 +161,6 @@ async function validateChatRequest(c: Context): Promise<
     return { error: c.json({ error: 'Tenant hesabı aktif değil.' }, 403) };
   }
 
-  const rateCheck = await checkChatRateLimit(userId, tenant.plan);
-  if (!rateCheck.allowed) return { error: c.json({ error: rateCheck.reason }, 429) };
-
   const body = await c.req.json().catch(() => null);
   const messageValue = isRecord(body) ? body.message : undefined;
   const message = typeof messageValue === 'string' ? messageValue.trim() : '';
@@ -174,6 +171,10 @@ async function validateChatRequest(c: Context): Promise<
   if (message.length > MAX_MESSAGE_LENGTH) {
     return { error: c.json(new ValidationError(`Mesaj en fazla ${MAX_MESSAGE_LENGTH} karakter olabilir.`).toJSON(), 400) };
   }
+
+  // Invalid requests must not consume the user's paid AI quota.
+  const rateCheck = await checkChatRateLimit(userId, tenant.plan);
+  if (!rateCheck.allowed) return { error: c.json({ error: rateCheck.reason }, 429) };
 
   const context = parseChatPageContext(isRecord(body) ? body.context : undefined);
 
@@ -301,9 +302,6 @@ export const ChatController = {
     const requestMeta = getRequestMeta(c);
 
     return streamSSE(c, async (s) => {
-      let accumulatedRaw = '';
-      let lastSanitizedLength = 0;
-
       try {
         await handlePrivateChatStream(
           {
@@ -319,13 +317,9 @@ export const ChatController = {
           },
           {
             async onToken(token) {
-              accumulatedRaw += token;
-              const sanitized = sanitizeOutput(accumulatedRaw).text;
-              const newPart = sanitized.slice(lastSanitizedLength);
-              lastSanitizedLength = sanitized.length;
-              if (newPart) {
-                await s.writeSSE({ event: 'token', data: JSON.stringify({ token: newPart }) });
-              }
+              // The service accumulates fullText while this controller withholds
+              // raw chunks; only the fully redacted final text is emitted.
+              void token;
             },
             async onToolStart() {
               await s.writeSSE({ event: 'tool_start', data: '{}' });
@@ -338,6 +332,9 @@ export const ChatController = {
               const finalOutput = sanitized.text.length > MAX_RESPONSE_LENGTH
                 ? sanitized.text.slice(0, MAX_RESPONSE_LENGTH) + '\n\n_(Yanıt kısaltıldı)_'
                 : sanitized.text;
+              if (finalOutput) {
+                await s.writeSSE({ event: 'token', data: JSON.stringify({ token: finalOutput }) });
+              }
               await recordAiRequestLog({
                 tenantId: v.tenantId,
                 userId: v.userId,

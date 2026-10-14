@@ -12,6 +12,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { FormRow } from '@/components/shared/FormField';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import { useUnits, useCreateUnit, useDeleteUnit } from '@/hooks/useMasterData';
 import type { Unit } from '@/services/master-data.service';
 
@@ -20,8 +21,8 @@ import type { Unit } from '@/services/master-data.service';
 // ─────────────────────────────────────────────
 
 const createUnitSchema = z.object({
-  name: z.string().min(1, 'Ad zorunludur'),
-  code: z.string().min(1, 'Kod zorunludur').max(10, 'Kod en fazla 10 karakter'),
+  name: z.string().trim().min(1, 'Ad zorunludur').max(100, 'Ad en fazla 100 karakter'),
+  code: z.string().trim().min(1, 'Kod zorunludur').max(10, 'Kod en fazla 10 karakter'),
 });
 
 type CreateUnitForm = z.infer<typeof createUnitSchema>;
@@ -54,7 +55,8 @@ function useColumns(onDelete: (unit: Unit) => void): ColumnDef<Unit>[] {
 // ─────────────────────────────────────────────
 
 export function UnitsManager() {
-  const { data: units = [], isLoading } = useUnits();
+  const unitsQuery = useUnits();
+  const units = unitsQuery.data ?? [];
   const createUnit = useCreateUnit();
   const deleteUnit = useDeleteUnit();
 
@@ -85,14 +87,14 @@ export function UnitsManager() {
         }
       />
 
-      <DataTable
+      {unitsQuery.isError ? <ApiErrorState error={unitsQuery.error} onRetry={() => void unitsQuery.refetch()} /> : <DataTable
         columns={columns}
         data={units}
         keyExtractor={(r) => r.id}
-        isLoading={isLoading}
+        isLoading={unitsQuery.isLoading}
         emptyTitle="Henüz birim eklenmemiş"
         emptyDescription="Ürünlerinizde kullanmak için birim ekleyin."
-      />
+      />}
 
       {/* Create Modal */}
       <Modal

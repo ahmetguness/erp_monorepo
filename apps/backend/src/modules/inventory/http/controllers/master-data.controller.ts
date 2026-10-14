@@ -1,5 +1,6 @@
 import { Context } from 'hono';
-import { NotFoundError,ValidationError } from '../../../../errors/index.js';
+import { Prisma } from '@prisma/client';
+import { ConflictError, NotFoundError, ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { requireTenantId } from '../../../../utils/context.js';
 
@@ -28,6 +29,22 @@ function normalizeCurrencySymbol(code: string, symbol: string): string {
   return KNOWN_CURRENCY_SYMBOLS[code.toUpperCase()] ?? symbol;
 }
 
+function parseCreateUnit(value: unknown): CreateUnitDTO {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new ValidationError('Geçerli bir istek gövdesi zorunludur.');
+  }
+  const body = value as Record<string, unknown>;
+  if (typeof body.name !== 'string' || typeof body.code !== 'string') {
+    throw new ValidationError('name ve code metin olmalıdır.');
+  }
+  const name = body.name.trim();
+  const code = body.code.trim().toUpperCase();
+  if (!name || !code) throw new ValidationError('name ve code zorunludur.');
+  if (name.length > 100) throw new ValidationError('name en fazla 100 karakter olabilir.');
+  if (code.length > 10) throw new ValidationError('code en fazla 10 karakter olabilir.');
+  return { name, code };
+}
+
 // ─────────────────────────────────────────────
 // Master Data Controller — Unit, Category, TaxRate, Currency
 // ─────────────────────────────────────────────
@@ -43,12 +60,18 @@ export const MasterDataController = {
 
   async createUnit(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
-    const body = await c.req.json<CreateUnitDTO>();
-    if (!body.name || !body.code) return c.json(new ValidationError('name ve code zorunludur.').toJSON(), 400);
+    const body = parseCreateUnit(await c.req.json<unknown>());
     const existing = await prisma.unit.findUnique({ where: { tenantId_code: { tenantId, code: body.code } } });
-    if (existing) return c.json(new ValidationError(`"${body.code}" kodu zaten kullanımda.`).toJSON(), 400);
-    const unit = await prisma.unit.create({ data: { tenantId, name: body.name, code: body.code } });
-    return c.json({ data: unit }, 201);
+    if (existing) return c.json(new ConflictError(`"${body.code}" kodu zaten kullanımda.`).toJSON(), 409);
+    try {
+      const unit = await prisma.unit.create({ data: { tenantId, name: body.name, code: body.code } });
+      return c.json({ data: unit }, 201);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return c.json(new ConflictError(`"${body.code}" kodu zaten kullanımda.`).toJSON(), 409);
+      }
+      throw error;
+    }
   },
 
   async deleteUnit(c: Context): Promise<Response> {
@@ -56,9 +79,16 @@ export const MasterDataController = {
     const unitId = c.req.param('id');
     const unit = await prisma.unit.findFirst({ where: { id: unitId, tenantId } });
     if (!unit) return c.json(new NotFoundError('Birim', unitId).toJSON(), 404);
-    const usedCount = await prisma.product.count({ where: { tenantId, unitId, deletedAt: null } });
+    const usedCount = await prisma.product.count({ where: { tenantId, unitId } });
     if (usedCount > 0) return c.json(new ValidationError(`Bu birim ${usedCount} üründe kullanılıyor.`).toJSON(), 400);
-    await prisma.unit.delete({ where: { id: unitId } });
+    try {
+      await prisma.unit.delete({ where: { id: unitId } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+        return c.json(new ConflictError('Birim kullanımda olduğu için silinemiyor.').toJSON(), 409);
+      }
+      throw error;
+    }
     return c.json({ data: { success: true } });
   },
 
