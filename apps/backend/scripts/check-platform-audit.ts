@@ -4,6 +4,10 @@ import { Hono } from "hono";
 import { prisma } from "../src/lib/prisma.js";
 import { platformAdminAuditMiddleware } from "../src/middleware/platform-admin-audit.js";
 import {
+  auditExportSchema,
+  platformAuditFiltersSchema,
+} from "../src/modules/platform/platform-audit/platform-audit.schemas.js";
+import {
   createPlatformAudit,
   exportPlatformAudit,
   getPlatformAudit,
@@ -22,7 +26,7 @@ async function main(): Promise<void> {
     targetType: "tenant",
     targetId: marker,
     outcome: "SUCCESS",
-    reason: "Platform audit integrity integration",
+    reason: '=HYPERLINK("https://invalid.test","Platform audit integrity")',
     approvalId: `approval-${marker}`,
     ipAddress: "127.0.0.1",
     device: "integration-agent",
@@ -50,6 +54,30 @@ async function main(): Promise<void> {
   assert.equal(
     page.data.some((entry) => entry.outcome === "DENIED"),
     true,
+  );
+  const csv = (
+    await exportPlatformAudit(
+      { module: "INTEGRATION_TEST", target: marker },
+      "csv",
+    )
+  ).body;
+  assert.equal(csv.startsWith("\uFEFF"), true);
+  assert.equal(csv.includes('"\'=HYPERLINK(""https://invalid.test""'), true);
+  assert.equal(csv.includes("\r\n"), true);
+  assert.equal(
+    platformAuditFiltersSchema.safeParse({
+      from: "2026-02-02",
+      to: "2026-02-01",
+    }).success,
+    false,
+  );
+  assert.equal(
+    auditExportSchema.safeParse({
+      from: "2026-02-02",
+      to: "2026-02-01",
+      format: "csv",
+    }).success,
+    false,
   );
   const changed = page.data.find((entry) => entry.action === "UPDATE");
   assert.ok(changed);
@@ -109,6 +137,29 @@ async function main(): Promise<void> {
   assert.equal(
     JSON.stringify(middlewareEntry.afterValues).includes("***MASKED***"),
     true,
+  );
+  await Promise.all(
+    Array.from({ length: 8 }, (_, index) =>
+      createPlatformAudit({
+        actorId: admin.id,
+        action: "CONCURRENT_CREATE",
+        module: "INTEGRATION_TEST",
+        targetType: "concurrency",
+        targetId: `${marker}-${index}`,
+        outcome: "SUCCESS",
+        afterValues: { index, optional: undefined },
+      }),
+    ),
+  );
+  assert.equal(
+    await prisma.platformAdminAuditLog.count({
+      where: {
+        module: "INTEGRATION_TEST",
+        action: "CONCURRENT_CREATE",
+        targetId: { startsWith: marker },
+      },
+    }),
+    8,
   );
   assert.deepEqual(await verifyPlatformAuditIntegrity(), {
     valid: true,

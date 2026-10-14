@@ -27,6 +27,9 @@ function differences(before: Prisma.InputJsonObject | undefined, after: Prisma.I
 function hashPayload(row: unknown): string {
   return createHash("sha256").update(stable(row)).digest("hex");
 }
+function normalizedJson(value: Prisma.InputJsonObject | undefined): Prisma.InputJsonObject | undefined {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value)) as Prisma.InputJsonObject;
+}
 function whereFor(filters: Omit<PlatformAuditFiltersInput, "page" | "limit">): Prisma.PlatformAdminAuditLogWhereInput {
   return {
     ...(filters.from || filters.to ? { createdAt: { gte: filters.from, lte: filters.to } } : {}),
@@ -57,37 +60,71 @@ export async function createPlatformAudit(input: CreatePlatformAuditInput): Prom
         update: {},
       }),
     ]);
-    const createdAt = new Date(); const id = randomUUID(); const changedFields = differences(input.beforeValues, input.afterValues);
-    const base = { id, actorId: input.actorId, action: input.action, module: input.module, targetType: input.targetType, targetId: input.targetId, outcome: input.outcome, reason: input.reason ?? null, approvalId: input.approvalId ?? null, ipAddress: input.ipAddress ?? null, device: input.device ?? null, requestId: input.requestId ?? null, correlationId: input.correlationId ?? null, beforeValues: input.beforeValues ?? null, afterValues: input.afterValues ?? null, changedFields, previousHash: head?.hash ?? null, retentionUntil: new Date(createdAt.getTime() + policy.retentionDays * 86400000), createdAt };
-    await tx.platformAdminAuditLog.create({ data: { ...base, beforeValues: input.beforeValues ?? Prisma.JsonNull, afterValues: input.afterValues ?? Prisma.JsonNull, changedFields, hash: hashPayload(base) } });
+    const beforeValues = normalizedJson(input.beforeValues); const afterValues = normalizedJson(input.afterValues);
+    const createdAt = new Date(Math.max(Date.now(), (head?.createdAt.getTime() ?? 0) + 1)); const id = randomUUID(); const changedFields = differences(beforeValues, afterValues);
+    const base = { id, actorId: input.actorId, action: input.action, module: input.module, targetType: input.targetType, targetId: input.targetId, outcome: input.outcome, reason: input.reason ?? null, approvalId: input.approvalId ?? null, ipAddress: input.ipAddress ?? null, device: input.device ?? null, requestId: input.requestId ?? null, correlationId: input.correlationId ?? null, beforeValues: beforeValues ?? null, afterValues: afterValues ?? null, changedFields, previousHash: head?.hash ?? null, retentionUntil: new Date(createdAt.getTime() + policy.retentionDays * 86400000), createdAt };
+    await tx.platformAdminAuditLog.create({ data: { ...base, beforeValues: beforeValues ?? Prisma.JsonNull, afterValues: afterValues ?? Prisma.JsonNull, changedFields, hash: hashPayload(base) } });
   });
 }
 
 export async function verifyPlatformAuditIntegrity(): Promise<PlatformAuditPage["integrity"]> {
-  let previousHash: string | null = null; let checked = 0; let cursor: string | undefined;
+  let checked = 0; let cursor: string | undefined;
+  const rowsByHash = new Map<string, AuditRow>();
+  const nextByPreviousHash = new Map<string, AuditRow>();
+  let genesis: AuditRow | null = null;
   while (true) {
-    const rows = await prisma.platformAdminAuditLog.findMany({ orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 1000, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) });
+    const rows = await prisma.platformAdminAuditLog.findMany({ orderBy: { id: "asc" }, take: 1000, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) });
     for (const row of rows) {
       const { hash: storedHash, ...hashable } = row; const expected = hashPayload(hashable); checked += 1;
-      if (row.previousHash !== previousHash || storedHash !== expected) return { valid: false, checked, brokenAtId: row.id };
-      previousHash = row.hash;
+      if (storedHash !== expected || rowsByHash.has(storedHash)) return { valid: false, checked, brokenAtId: row.id };
+      rowsByHash.set(storedHash, row);
+      if (row.previousHash === null) {
+        if (genesis) return { valid: false, checked, brokenAtId: row.id };
+        genesis = row;
+      } else {
+        if (nextByPreviousHash.has(row.previousHash)) return { valid: false, checked, brokenAtId: row.id };
+        nextByPreviousHash.set(row.previousHash, row);
+      }
     }
     if (rows.length < 1000) break;
     cursor = rows.at(-1)?.id;
+  }
+  if (checked === 0) return { valid: true, checked: 0, brokenAtId: null };
+  if (!genesis) return { valid: false, checked, brokenAtId: rowsByHash.values().next().value?.id ?? null };
+  let visited = 1; let current = genesis;
+  while (true) {
+    const next = nextByPreviousHash.get(current.hash);
+    if (!next) break;
+    visited += 1; current = next;
+  }
+  if (visited !== checked) {
+    const broken = [...rowsByHash.values()].find((row) => row !== genesis && (!row.previousHash || !rowsByHash.has(row.previousHash)));
+    return { valid: false, checked, brokenAtId: broken?.id ?? current.id };
   }
   return { valid: true, checked, brokenAtId: null };
 }
 
 export async function listPlatformAudit(filters: PlatformAuditFiltersInput): Promise<PlatformAuditPage> {
   const where = whereFor(filters); const skip = (filters.page - 1) * filters.limit;
-  const [total, rows, integrity, policy] = await Promise.all([prisma.platformAdminAuditLog.count({ where }), prisma.platformAdminAuditLog.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: filters.limit }), verifyPlatformAuditIntegrity(), prisma.platformAuditPolicy.upsert({ where: { id: "default" }, create: { id: "default", retentionDays: DEFAULT_AUDIT_RETENTION_DAYS }, update: {} })]);
+  const [total, rows, integrity, policy] = await Promise.all([prisma.platformAdminAuditLog.count({ where }), prisma.platformAdminAuditLog.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take: filters.limit }), verifyPlatformAuditIntegrity(), prisma.platformAuditPolicy.upsert({ where: { id: "default" }, create: { id: "default", retentionDays: DEFAULT_AUDIT_RETENTION_DAYS }, update: {} })]);
   return { data: await mapRows(rows), meta: { total, page: filters.page, pageSize: filters.limit, totalPages: Math.ceil(total / filters.limit) }, integrity, retentionDays: policy.retentionDays };
 }
 export async function getPlatformAudit(id: string): Promise<PlatformAuditEntry | null> { const row = await prisma.platformAdminAuditLog.findUnique({ where: { id } }); return row ? (await mapRows([row]))[0] ?? null : null; }
 export async function exportPlatformAudit(filters: Omit<PlatformAuditFiltersInput, "page" | "limit">, format: "csv" | "json"): Promise<{ contentType: string; filename: string; body: string }> {
-  const entries = await mapRows(await prisma.platformAdminAuditLog.findMany({ where: whereFor(filters), orderBy: { createdAt: "desc" }, take: 10000 }));
+  const rows: AuditRow[] = []; let cursor: string | undefined;
+  while (true) {
+    const batch = await prisma.platformAdminAuditLog.findMany({ where: whereFor(filters), orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1000, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) });
+    rows.push(...batch);
+    if (batch.length < 1000) break;
+    cursor = batch.at(-1)?.id;
+  }
+  const entries = await mapRows(rows);
   if (format === "json") return { contentType: "application/json", filename: "platform-audit.json", body: JSON.stringify(entries, null, 2) };
-  const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-  return { contentType: "text/csv; charset=utf-8", filename: "platform-audit.csv", body: ["id,createdAt,actor,module,action,target,outcome,reason,requestId,correlationId,hash", ...entries.map((entry) => [entry.id, entry.createdAt, entry.actor?.email, entry.module, entry.action, `${entry.targetType}:${entry.targetId ?? ""}`, entry.outcome, entry.reason, entry.requestId, entry.correlationId, entry.hash].map(escape).join(","))].join("\n") };
+  const escape = (value: unknown) => {
+    const text = String(value ?? "");
+    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+    return `"${safe.replaceAll('"', '""')}"`;
+  };
+  return { contentType: "text/csv; charset=utf-8", filename: "platform-audit.csv", body: `\uFEFF${["id,createdAt,actor,module,action,target,outcome,reason,requestId,correlationId,hash", ...entries.map((entry) => [entry.id, entry.createdAt, entry.actor?.email, entry.module, entry.action, `${entry.targetType}:${entry.targetId ?? ""}`, entry.outcome, entry.reason, entry.requestId, entry.correlationId, entry.hash].map(escape).join(","))].join("\r\n")}` };
 }
 export async function updateRetentionPolicy(retentionDays: number, adminId: string): Promise<number> { const policy = await prisma.platformAuditPolicy.upsert({ where: { id: "default" }, create: { id: "default", retentionDays, updatedById: adminId }, update: { retentionDays, updatedById: adminId } }); return policy.retentionDays; }

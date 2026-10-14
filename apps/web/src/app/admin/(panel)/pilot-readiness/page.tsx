@@ -142,6 +142,21 @@ export default function AdminPilotReadinessPage() {
         </div>
       </section>
 
+      {tenantsQuery.isError && (
+        <div role="alert" className="rounded-xl border border-rose-800 bg-rose-950/30 p-5 text-rose-200">
+          <div className="flex items-center gap-2 font-bold">
+            <AlertTriangle className="h-5 w-5" /> Tenant listesi alınamadı
+          </div>
+          <p className="mt-2 text-sm text-rose-300/80">
+            Pilot değerlendirmesi için tenant seçimi yapılamıyor.
+          </p>
+          <Button type="button" variant="secondary" className="mt-3" onClick={() => void tenantsQuery.refetch()} disabled={tenantsQuery.isFetching}>
+            <RefreshCw className={cn("h-4 w-4", tenantsQuery.isFetching && "animate-spin")} />
+            Tekrar dene
+          </Button>
+        </div>
+      )}
+
       {readinessQuery.isLoading && (
         <div className="flex min-h-64 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/50">
           <Loader2 className="h-7 w-7 animate-spin text-red-400" />
@@ -160,7 +175,7 @@ export default function AdminPilotReadinessPage() {
         </div>
       )}
 
-      {!readinessQuery.isLoading && !readinessQuery.isError && !result && (
+      {!tenantsQuery.isError && !readinessQuery.isLoading && !readinessQuery.isError && !result && (
         <div className="flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-900/30 text-center">
           <CircleSlash2 className="h-8 w-8 text-slate-600" />
           <p className="mt-3 text-sm font-semibold text-slate-300">

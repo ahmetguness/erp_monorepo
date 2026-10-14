@@ -74,6 +74,7 @@ export function DisasterRecoveryPage() {
 
   const data = query.data;
   const isHealthy = data?.health === "HEALTHY";
+  const mutationFailed = backupMutation.isError || drillMutation.isError || resultMutation.isError;
 
   return (
     <div className="space-y-6 pb-12">
@@ -114,6 +115,12 @@ export function DisasterRecoveryPage() {
         <div role="alert" className="flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs font-medium text-rose-200">
           <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
           <span>Felaket kurtarma görünümü yüklenemedi. Lütfen bağlantınızı kontrol edip tekrar deneyin.</span>
+        </div>
+      )}
+      {mutationFailed && (
+        <div role="alert" className="flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs font-medium text-rose-200">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+          <span>İşlem tamamlanamadı. Form alanlarını ve sunucu doğrulama mesajlarını kontrol edip tekrar deneyin.</span>
         </div>
       )}
 

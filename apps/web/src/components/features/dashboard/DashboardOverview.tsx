@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Package, Mail, ShieldAlert, ScrollText, Wallet,
+  AlertTriangle, Package, Mail, ShieldAlert, ScrollText, Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/useAuth";
@@ -171,18 +171,19 @@ export function DashboardOverview() {
   const dT = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
   const reportRange = { dateFrom: dF, dateTo: dT };
 
-  const { data: rev } = useRevenueSummary(reportRange, { enabled: canReadReporting || canReadInvoicing });
-  const { data: exp } = useExpenseSummary(reportRange, { enabled: canReadReporting || canReadAccounting });
-  const { data: stk } = useStockSummary({ enabled: canReadReporting || canReadInventory });
-  const { data: bal } = useContactBalance({ enabled: canReadReporting || canReadContacts || canReadAccounting });
-  const { data: invs } = useDashboardInvoices(6, { enabled: canReadInvoicing });
-  const { data: tcmb } = useDashboardRates();
-  const { data: notifs } = useDashboardNotifications(5, { enabled: canReadNotifications });
-  const { data: appr } = useDashboardApprovals(5, { enabled: canReadApprovals });
-  const { data: tasks } = useDashboardTasks({ enabled: canReadTasks });
-  const { data: recommendations = [] } = useDashboardRecommendations();
-  const { data: pinnedKpis = [] } = usePinnedKpiPreviews({ enabled: canReadReporting });
-  const { data: smartNotifications } = useSmartNotifications();
+  const { data: rev, isError: revenueError } = useRevenueSummary(reportRange, { enabled: canReadReporting || canReadInvoicing });
+  const { data: exp, isError: expenseError } = useExpenseSummary(reportRange, { enabled: canReadReporting || canReadAccounting });
+  const { data: stk, isError: stockError } = useStockSummary({ enabled: canReadReporting || canReadInventory });
+  const { data: bal, isError: balanceError } = useContactBalance({ enabled: canReadReporting || canReadContacts || canReadAccounting });
+  const { data: invs, isError: invoiceError } = useDashboardInvoices(6, { enabled: canReadInvoicing });
+  const { data: tcmb, isError: ratesError } = useDashboardRates();
+  const { data: notifs, isError: notificationsError } = useDashboardNotifications(5, { enabled: canReadNotifications });
+  const { data: appr, isError: approvalsError } = useDashboardApprovals(5, { enabled: canReadApprovals });
+  const { data: tasks, isError: tasksError } = useDashboardTasks({ enabled: canReadTasks });
+  const { data: recommendations = [], isError: recommendationsError } = useDashboardRecommendations();
+  const { data: pinnedKpis = [], isError: pinnedKpisError } = usePinnedKpiPreviews({ enabled: canReadReporting });
+  const { data: smartNotifications, isError: smartNotificationsError } = useSmartNotifications();
+  const hasPartialDataError = revenueError || expenseError || stockError || balanceError || invoiceError || ratesError || notificationsError || approvalsError || tasksError || recommendationsError || pinnedKpisError || smartNotificationsError;
 
   // ── Derived ──
   const profit = (rev?.totalGross ?? 0) - (exp?.totalGross ?? 0);
@@ -265,6 +266,12 @@ export function DashboardOverview() {
         production={canReadProduction}
         procurement={canReadPurchasing}
       />
+      {hasPartialDataError && (
+        <div role="alert" className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-300">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          Dashboard verilerinin bir bölümü alınamadı. Gösterilen toplamlar eksik olabilir; yeniden denemek için sayfayı yenileyin.
+        </div>
+      )}
       {/* Tab Bar */}
       <TabBar active={activeTab} onChange={setActiveTab} />
 

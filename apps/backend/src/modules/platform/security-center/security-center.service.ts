@@ -15,6 +15,7 @@ import { collectSecurityChecks } from "./security-checks.js";
 type FindingRow = Prisma.PlatformSecurityFindingGetPayload<Record<string, never>>;
 const findingStatuses: SecurityFindingStatus[] = ["OPEN", "ACKNOWLEDGED", "RESOLVED"];
 const severities: SecurityFindingSeverity[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+const severityPriority: Record<SecurityFindingSeverity, number> = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 };
 const verificationStatuses: SecurityVerificationStatus[] = ["PASS", "WARN", "FAIL"];
 
 function enumValue<T extends string>(value: string, values: T[], fallback: T): T {
@@ -71,8 +72,12 @@ export async function scanSecurityCenter(): Promise<PlatformSecurityCenter> {
 }
 
 export async function getSecurityCenter(): Promise<PlatformSecurityCenter> {
-  const rows = await prisma.platformSecurityFinding.findMany({ orderBy: [{ severity: "desc" }, { lastSeenAt: "desc" }] });
-  const findings = rows.map(mapFinding);
+  const rows = await prisma.platformSecurityFinding.findMany({ orderBy: [{ lastSeenAt: "desc" }, { id: "asc" }] });
+  const findings = rows.map(mapFinding).sort((left, right) =>
+    severityPriority[right.severity] - severityPriority[left.severity]
+      || Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt)
+      || left.id.localeCompare(right.id),
+  );
   const passing = findings.filter((item) => item.verificationStatus === "PASS").length;
   const warning = findings.filter((item) => item.verificationStatus === "WARN").length;
   const failing = findings.filter((item) => item.verificationStatus === "FAIL").length;
@@ -104,9 +109,14 @@ export async function updateSecurityFinding(id: string, input: UpdateSecurityFin
 }
 
 export async function createSecurityTicket(id: string, requestedTicketId?: string): Promise<PlatformSecurityFinding> {
-  const row = await prisma.platformSecurityFinding.findUnique({ where: { id } });
-  if (!row) throw new ValidationError("Güvenlik bulgusu bulunamadı.");
-  if (row.ticketId) throw new ValidationError("Bu bulgu zaten bir ticket ile ilişkilendirilmiş.");
   const ticketId = requestedTicketId ?? `SEC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
-  return mapFinding(await prisma.platformSecurityFinding.update({ where: { id }, data: { ticketId, status: "ACKNOWLEDGED" } }));
+  const updated = await prisma.platformSecurityFinding.updateMany({
+    where: { id, ticketId: null },
+    data: { ticketId, status: "ACKNOWLEDGED" },
+  });
+  if (updated.count === 0) {
+    const exists = await prisma.platformSecurityFinding.count({ where: { id } });
+    throw new ValidationError(exists ? "Bu bulgu zaten bir ticket ile ilişkilendirilmiş." : "Güvenlik bulgusu bulunamadı.");
+  }
+  return mapFinding(await prisma.platformSecurityFinding.findUniqueOrThrow({ where: { id } }));
 }

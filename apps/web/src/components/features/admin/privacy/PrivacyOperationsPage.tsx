@@ -177,6 +177,7 @@ export function PrivacyOperationsPage() {
         <div role="alert" className="flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs font-medium text-rose-200">
           <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
           <span>Gizlilik talepleri listesi yüklenemedi. Lütfen bağlantınızı kontrol edin.</span>
+          <button type="button" className={`${buttonClass} ml-auto`} onClick={() => requests.refetch()} disabled={requests.isFetching}>Tekrar Dene</button>
         </div>
       )}
 

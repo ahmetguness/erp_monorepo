@@ -8,6 +8,7 @@ export const recordBackupSchema = z.object({
   startedAt: z.coerce.date(), completedAt: z.coerce.date(),
 }).strict()
   .refine((value) => value.completedAt >= value.startedAt, { message: "Tamamlanma zamanı başlangıçtan önce olamaz." })
+  .refine((value) => value.completedAt.getTime() <= Date.now() + 5 * 60_000, { message: "Yedek tamamlanma zamanı gelecekte olamaz.", path: ["completedAt"] })
   .refine((value) => !value.encrypted || Boolean(value.encryptionKeyRef), { message: "Şifreli yedek için KMS anahtar referansı zorunludur.", path: ["encryptionKeyRef"] })
   .refine((value) => value.replicationLagSeconds === undefined || Boolean(value.replicaRegion), { message: "Replikasyon gecikmesi için replika bölgesi zorunludur.", path: ["replicaRegion"] });
 export const createRestoreDrillSchema = z.object({

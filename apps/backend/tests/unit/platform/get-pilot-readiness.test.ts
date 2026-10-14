@@ -63,4 +63,20 @@ describe('GetPilotReadiness', () => {
     expect(report.decision).toBe('NO_GO');
     expect(report.blockers).toContain('tenant_isolation');
   });
+
+  it('fails closed for future, malformed-calendar and non-UTC attestations', async () => {
+    const report = await new GetPilotReadiness(
+      new StubEvidenceRepository(cleanEvidence),
+      {
+        retrySafetyVerifiedAt: '2026-09-14T11:00:00.000Z',
+        tenantIsolationVerifiedAt: '2026-02-30T11:00:00.000Z',
+        deterministicFlowVerifiedAt: '2026-09-13T14:00:00+03:00',
+        deterministicFlowRuns: 3,
+      },
+      () => new Date('2026-09-13T12:00:00.000Z'),
+    ).execute('tenant-1');
+
+    expect(report.decision).toBe('NO_GO');
+    expect(report.blockers).toEqual(['retry_safety', 'tenant_isolation', 'deterministic_flow']);
+  });
 });

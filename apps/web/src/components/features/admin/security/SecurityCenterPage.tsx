@@ -165,8 +165,11 @@ export function SecurityCenterPage() {
       </section>
 
       {query.isError && (
-        <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-200">
-          Güvenlik bulguları yüklenemedi.
+        <div role="alert" className="flex items-center justify-between rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-200">
+          <span>Güvenlik bulguları yüklenemedi.</span>
+          <button type="button" className={button} onClick={() => query.refetch()} disabled={query.isFetching}>
+            Tekrar Dene
+          </button>
         </div>
       )}
 

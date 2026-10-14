@@ -4,8 +4,9 @@ import { z } from 'zod';
 import { prisma } from '../../../../../lib/prisma.js';
 import { rateLimiter } from '../../../../../lib/rateLimiter.js';
 import { consumeAdminMfa } from '../../../admin-auth/admin-mfa.service.js';
-import { ADMIN_RECENT_MFA_SECONDS, revokeAdminSession } from '../../../admin-auth/admin-session.service.js';
+import { ADMIN_RECENT_MFA_SECONDS } from '../../../admin-auth/admin-session.service.js';
 import { RESOLVED_ADMIN_SECRET } from './shared.js';
+import { getTrustedClientIpOrNull } from '../../../../../utils/request-ip.js';
 
 const reauthSchema = z.object({ password: z.string().min(1).max(256), otp: z.string().regex(/^\d{6}$/) }).strict();
 
@@ -40,7 +41,10 @@ export const AdminSessionController = {
       return c.json({ error: { code: 'INVALID_CREDENTIALS', message: 'Şifre veya doğrulama kodu geçersiz. Kullanılmış kodlar tekrar kullanılamaz.' } }, 401);
     }
     const verifiedAt = new Date();
-    await prisma.adminSession.updateMany({ where: { id: c.get('adminSessionId'), adminUserId: adminId, revokedAt: null }, data: { mfaVerifiedAt: verifiedAt } });
+    await prisma.$transaction([
+      prisma.adminSession.updateMany({ where: { id: c.get('adminSessionId'), adminUserId: adminId, revokedAt: null }, data: { mfaVerifiedAt: verifiedAt } }),
+      prisma.adminSecurityEvent.create({ data: { adminUserId: adminId, type: 'ADMIN_REAUTHENTICATED', message: 'Kritik işlemler için MFA ile yeniden doğrulama başarılı.', ipAddress: getTrustedClientIpOrNull(c), userAgent: c.req.header('user-agent') ?? null } }),
+    ]);
     await rateLimiter.reset(rateLimitKey);
     return c.json({ data: {
       success: true,
@@ -50,13 +54,19 @@ export const AdminSessionController = {
   async revoke(c: Context): Promise<Response> {
     const id = c.req.param('id');
     if (!id) return c.json({ error: 'Oturum gerekli.' }, 400);
-    const revoked = await revokeAdminSession(id, c.get('adminId'));
+    const adminId = c.get('adminId');
+    const revoked = await prisma.$transaction(async (tx) => {
+      const result = await tx.adminSession.updateMany({ where: { id, adminUserId: adminId, revokedAt: null }, data: { revokedAt: new Date() } });
+      if (result.count === 1) await tx.adminSecurityEvent.create({ data: { adminUserId: adminId, type: 'ADMIN_SESSION_REVOKED', message: `Oturum sonlandırıldı: ${id}`, ipAddress: getTrustedClientIpOrNull(c), userAgent: c.req.header('user-agent') ?? null } });
+      return result.count === 1;
+    });
     return c.json({ data: { success: revoked } });
   },
   async revokeAll(c: Context): Promise<Response> {
     await prisma.$transaction([
       prisma.adminUser.update({ where: { id: c.get('adminId') }, data: { tokenVersion: { increment: 1 } } }),
       prisma.adminSession.updateMany({ where: { adminUserId: c.get('adminId'), revokedAt: null }, data: { revokedAt: new Date() } }),
+      prisma.adminSecurityEvent.create({ data: { adminUserId: c.get('adminId'), type: 'ADMIN_ALL_SESSIONS_REVOKED', message: 'Tüm yönetici oturumları sonlandırıldı.', ipAddress: getTrustedClientIpOrNull(c), userAgent: c.req.header('user-agent') ?? null } }),
     ]);
     return c.json({ data: { success: true } });
   },

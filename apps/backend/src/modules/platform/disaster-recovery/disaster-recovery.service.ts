@@ -20,14 +20,15 @@ function mapDrill(row: DrillRow): RestoreDrill {
   return { id: row.id, backupId: row.backupId, status, environment: row.environment, runbookUrl: row.runbookUrl, approvalId: row.approvalId, requestedById: row.requestedById, startedAt: row.startedAt?.toISOString() ?? null, completedAt: row.completedAt?.toISOString() ?? null, recoveryPointAt: row.recoveryPointAt?.toISOString() ?? null, actualRpoMinutes: row.actualRpoMinutes, actualRtoMinutes: row.actualRtoMinutes, notes: row.notes, createdAt: row.createdAt.toISOString() };
 }
 export async function getDisasterRecoveryOverview(): Promise<DisasterRecoveryOverview> {
-  const [policy, backups, drills] = await Promise.all([
+  const [policy, backups, drills, lastCompletedDrill] = await Promise.all([
     prisma.platformDisasterRecoveryPolicy.findUniqueOrThrow({ where: { id: "default" } }),
     prisma.platformBackupEvidence.findMany({ orderBy: { completedAt: "desc" }, take: 50 }),
     prisma.platformRestoreDrill.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
+    prisma.platformRestoreDrill.findFirst({ where: { status: { in: ["PASSED", "FAILED"] } }, orderBy: { completedAt: "desc" } }),
   ]);
   const latest = backups[0] ?? null;
   const successful = backups.find((item) => item.status === "SUCCESS") ?? null;
-  const lastDrill = drills.find((item) => item.status === "PASSED" || item.status === "FAILED") ?? null;
+  const lastDrill = lastCompletedDrill;
   const backupStale = !successful || Date.now() - successful.completedAt.getTime() > policy.targetRpoMinutes * 60_000;
   const lagBad = latest?.replicationLagSeconds === null || latest?.replicationLagSeconds === undefined || latest.replicationLagSeconds > policy.maxReplicationLagSeconds;
   const restoreBad = !lastDrill || lastDrill.status !== "PASSED" || !lastDrill.completedAt || Date.now() - lastDrill.completedAt.getTime() > 90 * 86_400_000 || (lastDrill.actualRpoMinutes ?? Number.POSITIVE_INFINITY) > policy.targetRpoMinutes || (lastDrill.actualRtoMinutes ?? Number.POSITIVE_INFINITY) > policy.targetRtoMinutes;

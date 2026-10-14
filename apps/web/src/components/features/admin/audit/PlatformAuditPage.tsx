@@ -156,6 +156,10 @@ export function PlatformAuditPage() {
       </section>
 
       {query.isError && <p role="alert" className="text-red-300">Platform denetim kayıtları alınamadı.</p>}
+      {retentionMutation.isError && <p role="alert" className="text-red-300">Saklama politikası güncellenemedi.</p>}
+      {exportMutation.isError && <p role="alert" className="text-red-300">Denetim kayıtları dışa aktarılamadı.</p>}
+      {query.isPending && <p role="status" className="text-slate-400">Platform denetim kayıtları yükleniyor…</p>}
+      {!query.isPending && !query.isError && query.data?.data.length === 0 && <p className="text-slate-400">Filtrelerle eşleşen denetim kaydı bulunamadı.</p>}
       <AuditTable entries={query.data?.data ?? []} onSelect={setSelected} />
       <div className="flex justify-between">
         <button className={buttonClass} disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Önceki</button>

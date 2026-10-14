@@ -9,10 +9,16 @@ export interface PilotReadinessAttestations {
   deterministicFlowRuns: number;
 }
 
-function validDate(value: string | undefined): string | null {
+function validDate(value: string | undefined, now: Date): string | null {
   if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/.exec(value);
+  if (!match) return null;
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  if (Number.isNaN(parsed.getTime()) || parsed > now) return null;
+  const [, year, month, day, hour, minute, second] = match;
+  if (parsed.getUTCFullYear() !== Number(year) || parsed.getUTCMonth() + 1 !== Number(month) || parsed.getUTCDate() !== Number(day)
+    || parsed.getUTCHours() !== Number(hour) || parsed.getUTCMinutes() !== Number(minute) || parsed.getUTCSeconds() !== Number(second)) return null;
+  return parsed.toISOString();
 }
 
 export class GetPilotReadiness {
@@ -23,10 +29,11 @@ export class GetPilotReadiness {
   ) {}
 
   async execute(tenantId: string): Promise<PilotReadinessReport> {
+    const generatedAt = this.now();
     const evidence = await this.repository.getDatabaseIntegrityEvidence(tenantId);
-    const retryVerifiedAt = validDate(this.attestations.retrySafetyVerifiedAt);
-    const tenantVerifiedAt = validDate(this.attestations.tenantIsolationVerifiedAt);
-    const deterministicVerifiedAt = validDate(this.attestations.deterministicFlowVerifiedAt);
+    const retryVerifiedAt = validDate(this.attestations.retrySafetyVerifiedAt, generatedAt);
+    const tenantVerifiedAt = validDate(this.attestations.tenantIsolationVerifiedAt, generatedAt);
+    const deterministicVerifiedAt = validDate(this.attestations.deterministicFlowVerifiedAt, generatedAt);
     const stockPassed = evidence.negativeStockLevelCount === 0 && evidence.crossTenantStockLevelCount === 0;
     const tenantPassed = Boolean(tenantVerifiedAt) && evidence.crossTenantInvoiceCount === 0 && evidence.crossTenantStockLevelCount === 0;
     const deterministicPassed = Boolean(deterministicVerifiedAt) && this.attestations.deterministicFlowRuns >= 3;
@@ -52,6 +59,6 @@ export class GetPilotReadiness {
         evidence: [`Başarılı koşu: ${this.attestations.deterministicFlowRuns}/3`, deterministicVerifiedAt ? `Doğrulama: ${deterministicVerifiedAt}` : 'PILOT_DETERMINISM_VERIFIED_AT eksik veya geçersiz.'],
       },
     ];
-    return buildPilotReadinessReport(checks, this.now());
+    return buildPilotReadinessReport(checks, generatedAt);
   }
 }

@@ -81,6 +81,9 @@ export function TenantDeploymentOperationsPanel() {
         </div>
       </div>
 
+      {tenantsQuery.isError && <div role="alert" className="flex gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-200"><AlertTriangle className="h-4 w-4" /> Tenant listesi alınamadı.</div>}
+      {!tenantsQuery.isLoading && !tenantsQuery.isError && tenants.length === 0 && <div className="rounded-lg border border-dashed border-slate-700 p-3 text-xs text-slate-400">Deployment operasyonları için tenant bulunamadı.</div>}
+
       {query.isError && <div className="flex gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-200"><AlertTriangle className="h-4 w-4" /> Deployment bilgisi alınamadı.</div>}
 
       {snapshot && (

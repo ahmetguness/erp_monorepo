@@ -6,6 +6,10 @@ import { prisma } from "../../../lib/prisma.js";
 import { runWithTenantIsolationBypass } from "../../../lib/tenant-isolation-context.js";
 
 type RequestRow = Prisma.DataSubjectRequestGetPayload<Record<string, never>>;
+async function lockRequest(tx: Prisma.TransactionClient, id: string): Promise<RequestRow | null> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
+  return tx.dataSubjectRequest.findUnique({ where: { id } });
+}
 const bypass = <T>(work: () => Promise<T>) =>
   runWithTenantIsolationBypass("admin-console", work);
 function strings(value: Prisma.JsonValue): string[] {
@@ -102,92 +106,62 @@ export async function verifyIdentity(
   id: string,
   adminId: string,
 ): Promise<DataSubjectRequestDto> {
-  const current = await bypass(async () =>
-    prisma.dataSubjectRequest.findUnique({ where: { id } }),
-  );
-  if (!current || current.status !== "PENDING_VERIFICATION")
-    throw new ValidationError("Talep kimlik doğrulama aşamasında değil.");
-  return map(
-    await bypass(async () =>
-      prisma.dataSubjectRequest.update({
+  const updated = await bypass(async () => prisma.$transaction(async (tx) => {
+    const current = await lockRequest(tx, id);
+    if (!current || current.status !== "PENDING_VERIFICATION")
+      throw new ValidationError("Talep kimlik doğrulama aşamasında değil.");
+    return tx.dataSubjectRequest.update({
         where: { id },
         data: {
           status: "PENDING_APPROVAL",
           verifiedById: adminId,
           identityVerifiedAt: new Date(),
         },
-      }),
-    ),
-  );
+      });
+  }));
+  return map(updated);
 }
 export async function decideRequest(
   id: string,
   adminId: string,
   approve: boolean,
 ): Promise<DataSubjectRequestDto> {
-  const current = await bypass(async () =>
-    prisma.dataSubjectRequest.findUnique({ where: { id } }),
-  );
-  if (!current || current.status !== "PENDING_APPROVAL")
-    throw new ValidationError("Talep onay aşamasında değil.");
-  if (current.requestedById === adminId || current.verifiedById === adminId)
-    throw new ValidationError(
-      "Talebi oluşturan veya kimliği doğrulayan admin onay veremez.",
-    );
-  return map(
-    await bypass(async () =>
-      prisma.dataSubjectRequest.update({
+  const updated = await bypass(async () => prisma.$transaction(async (tx) => {
+    const current = await lockRequest(tx, id);
+    if (!current || current.status !== "PENDING_APPROVAL")
+      throw new ValidationError("Talep onay aşamasında değil.");
+    if (current.requestedById === adminId || current.verifiedById === adminId)
+      throw new ValidationError("Talebi oluşturan veya kimliği doğrulayan admin onay veremez.");
+    return tx.dataSubjectRequest.update({
         where: { id },
         data: {
           status: approve ? "APPROVED" : "REJECTED",
           approvedById: adminId,
           approvedAt: new Date(),
         },
-      }),
-    ),
-  );
-}
-async function activeHold(row: RequestRow): Promise<boolean> {
-  return bypass(async () =>
-    Boolean(
-      await prisma.privacyLegalHold.findFirst({
-        where: {
-          tenantId: row.tenantId,
-          active: true,
-          OR: [{ subjectEmail: null }, { subjectEmail: row.subjectEmail }],
-        },
-      }),
-    ),
-  );
+      });
+  }));
+  return map(updated);
 }
 export async function executeRequest(
   id: string,
 ): Promise<DataSubjectRequestDto> {
-  const row = await bypass(async () =>
-    prisma.dataSubjectRequest.findUnique({ where: { id } }),
-  );
-  if (!row || row.status !== "APPROVED")
-    throw new ValidationError("Yalnızca onaylı talepler uygulanabilir.");
-  if (row.type !== "EXPORT" && (await activeHold(row)))
-    return map(
-      await bypass(async () =>
-        prisma.dataSubjectRequest.update({
-          where: { id },
-          data: { status: "BLOCKED_LEGAL_HOLD" },
-        }),
-      ),
-    );
-  if (row.type !== "EXPORT")
-    await bypass(async () => {
-      const memberships = await prisma.tenantUser.findMany({
+  const updated = await bypass(async () => prisma.$transaction(async (tx) => {
+    const row = await lockRequest(tx, id);
+    if (!row || row.status !== "APPROVED")
+      throw new ValidationError("Yalnızca onaylı talepler uygulanabilir.");
+    if (row.type !== "EXPORT") {
+      const hold = await tx.privacyLegalHold.findFirst({ where: { tenantId: row.tenantId, active: true, OR: [{ subjectEmail: null }, { subjectEmail: row.subjectEmail }] } });
+      if (hold) return tx.dataSubjectRequest.update({ where: { id }, data: { status: "BLOCKED_LEGAL_HOLD" } });
+      const memberships = await tx.tenantUser.findMany({
         where: { tenantId: row.tenantId, user: { email: row.subjectEmail } },
         select: { userId: true },
       });
       for (const membership of memberships) {
-        const otherTenantCount = await prisma.tenantUser.count({
+        const otherTenantCount = await tx.tenantUser.count({
           where: { userId: membership.userId, tenantId: { not: row.tenantId } },
         });
-        await prisma.tenantUser.update({
+        await tx.tenantUser.update({
           where: {
             tenantId_userId: {
               tenantId: row.tenantId,
@@ -197,7 +171,7 @@ export async function executeRequest(
           data: { isActive: false, preferences: Prisma.DbNull },
         });
         if (otherTenantCount === 0)
-          await prisma.user.update({
+          await tx.user.update({
             where: { id: membership.userId },
             data: {
               name: "Anonim Kullanıcı",
@@ -207,15 +181,10 @@ export async function executeRequest(
             },
           });
       }
-    });
-  return map(
-    await bypass(async () =>
-      prisma.dataSubjectRequest.update({
-        where: { id },
-        data: { status: "COMPLETED", completedAt: new Date() },
-      }),
-    ),
-  );
+    }
+    return tx.dataSubjectRequest.update({ where: { id }, data: { status: "COMPLETED", completedAt: new Date() } });
+  }));
+  return map(updated);
 }
 export async function createDownloadGrant(
   id: string,

@@ -44,13 +44,7 @@ export function useDashboardInvoices(limit: number, options?: QueryOptions) {
 export function useDashboardNotifications(limit: number, options?: QueryOptions) {
   return useQuery({
     queryKey: [...DASHBOARD_QUERY_KEYS.notifications, limit] as const,
-    queryFn: async () => {
-      try {
-        return await getDashboardNotifications(limit);
-      } catch {
-        return [];
-      }
-    },
+    queryFn: () => getDashboardNotifications(limit),
     enabled: options?.enabled ?? true,
   });
 }
@@ -58,13 +52,7 @@ export function useDashboardNotifications(limit: number, options?: QueryOptions)
 export function useDashboardApprovals(limit: number, options?: QueryOptions) {
   return useQuery({
     queryKey: [...DASHBOARD_QUERY_KEYS.approvals, limit] as const,
-    queryFn: async () => {
-      try {
-        return await getDashboardApprovalRequests(limit);
-      } catch {
-        return [];
-      }
-    },
+    queryFn: () => getDashboardApprovalRequests(limit),
     enabled: options?.enabled ?? true,
   });
 }
@@ -72,13 +60,7 @@ export function useDashboardApprovals(limit: number, options?: QueryOptions) {
 export function useDashboardTasks(options?: QueryOptions) {
   return useQuery({
     queryKey: DASHBOARD_QUERY_KEYS.tasks,
-    queryFn: async () => {
-      try {
-        return await getDashboardTasks();
-      } catch {
-        return [];
-      }
-    },
+    queryFn: getDashboardTasks,
     enabled: options?.enabled ?? true,
   });
 }
@@ -86,13 +68,7 @@ export function useDashboardTasks(options?: QueryOptions) {
 export function useDashboardRecommendations() {
   return useQuery({
     queryKey: DASHBOARD_QUERY_KEYS.recommendations,
-    queryFn: async () => {
-      try {
-        return await getRecommendations();
-      } catch {
-        return [];
-      }
-    },
+    queryFn: getRecommendations,
   });
 }
 

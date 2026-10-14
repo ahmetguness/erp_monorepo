@@ -19,7 +19,8 @@ export const AdminAuditController = {
   },
   async integrity(c: Context): Promise<Response> { return c.json({ data: await verifyPlatformAuditIntegrity() }); },
   async export(c: Context): Promise<Response> {
-    const parsed = auditExportSchema.safeParse({ ...queryInput(c), format: c.req.query("format") });
+    const { page: _page, limit: _limit, ...filtersInput } = queryInput(c);
+    const parsed = auditExportSchema.safeParse({ ...filtersInput, format: c.req.query("format") });
     if (!parsed.success) return invalid(c, parsed.error.issues[0]?.message ?? "Geçersiz export filtresi.");
     const { format, ...filters } = parsed.data; const result = await exportPlatformAudit(filters, format);
     await createPlatformAudit({ actorId: c.get("adminId"), action: "EXPORT", module: "AUDIT", targetType: "platform-audit", targetId: format, outcome: "SUCCESS", ipAddress: getTrustedClientIpOrNull(c), device: c.req.header("user-agent") ?? null, requestId: c.get("requestId") as string | undefined ?? null, correlationId: c.req.header("x-correlation-id") ?? null, afterValues: { format, from: filters.from?.toISOString(), to: filters.to?.toISOString(), module: filters.module, actorId: filters.actorId, target: filters.target, outcome: filters.outcome } });
