@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { FormRow } from '@/components/shared/FormField';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import { useTaxRates, useCreateTaxRate, useUpdateTaxRate } from '@/hooks/useMasterData';
 import type { TaxRate } from '@/services/master-data.service';
 
@@ -20,9 +21,9 @@ import type { TaxRate } from '@/services/master-data.service';
 // ─────────────────────────────────────────────
 
 const taxRateSchema = z.object({
-  name: z.string().min(1, 'Ad zorunludur'),
+  name: z.string().trim().min(1, 'Ad zorunludur').max(100, 'Ad en fazla 100 karakter'),
   rate: z.string().min(1, 'Oran zorunludur').refine(
-    (v) => !isNaN(Number(v)) && Number(v) >= 0 && Number(v) <= 100,
+    (v) => Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 100 && Math.abs(Number(v) * 100 - Math.round(Number(v) * 100)) <= 1e-9,
     'Geçerli bir oran girin (0-100)',
   ),
   isWithholding: z.boolean().optional(),
@@ -35,7 +36,8 @@ type TaxRateForm = z.infer<typeof taxRateSchema>;
 // ─────────────────────────────────────────────
 
 export function TaxRatesManager() {
-  const { data: taxRates = [], isLoading } = useTaxRates();
+  const taxRatesQuery = useTaxRates();
+  const taxRates = taxRatesQuery.data ?? [];
   const createTaxRate = useCreateTaxRate();
   const updateTaxRate = useUpdateTaxRate();
 
@@ -102,13 +104,13 @@ export function TaxRatesManager() {
         }
       />
 
-      <DataTable
+      {taxRatesQuery.isError ? <ApiErrorState error={taxRatesQuery.error} onRetry={() => void taxRatesQuery.refetch()} /> : <DataTable
         columns={columns}
         data={taxRates}
         keyExtractor={(r) => r.id}
-        isLoading={isLoading}
+        isLoading={taxRatesQuery.isLoading}
         emptyTitle="Henüz vergi veya stopaj oranı eklenmemiş"
-      />
+      />}
 
       <Modal
         isOpen={modalState.open}

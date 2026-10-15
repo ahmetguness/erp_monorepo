@@ -158,6 +158,32 @@ async function main() {
       ).status,
       400,
     );
+    for (const [key, value] of [
+      ["timezone", "Invalid/Timezone"],
+      ["date_format", "YYYY/DD/MM"],
+      ["default_currency", "INVALID"],
+      ["email_notifications", "yes"],
+    ]) {
+      assert.equal(
+        (await request(a, "/api/settings", "PUT", { key, value })).status,
+        400,
+      );
+    }
+
+    const concurrentKey = "TEST_E2E_concurrent_setting";
+    const concurrentResults = await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        request(a, "/api/settings", "PUT", {
+          key: concurrentKey,
+          value: `value-${index}`,
+        }),
+      ),
+    );
+    assert.equal(concurrentResults.every((result) => result.status === 200), true);
+    assert.equal(
+      await prisma.tenantSetting.count({ where: { tenantId: tenantA.id, key: concurrentKey } }),
+      1,
+    );
     assert.equal(
       (
         await request(a, "/api/settings", "PUT", {
@@ -215,6 +241,16 @@ async function main() {
           module: "",
           key: "x",
           value: "x",
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await request(a, "/api/settings/modules", "PUT", {
+          module: "inventory",
+          key: "negative_stock_policy",
+          value: "UNSAFE",
         })
       ).status,
       400,
@@ -308,6 +344,8 @@ async function main() {
           tenantIsolation: "PASS",
           authAndPermission: "PASS",
           internalKeyGuard: "PASS",
+          knownValueValidation: "PASS",
+          concurrentUpsertUniqueness: "PASS",
         },
         null,
         2,

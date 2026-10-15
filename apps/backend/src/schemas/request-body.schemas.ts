@@ -489,43 +489,172 @@ export const updateUserBodySchema = z
 
 const rolePermissionBodySchema = z
   .object({
-    module: z.string().trim().min(1, "Zorunlu alan").max(100, "En fazla 100 karakter olabilir."),
+    module: z
+      .string()
+      .trim()
+      .min(1, "Zorunlu alan")
+      .max(100, "En fazla 100 karakter olabilir."),
     action: z.nativeEnum(PermissionAction),
   })
   .strict();
 
 export const createRoleBodySchema = z
   .object({
-    name: z.string().trim().min(1, "Zorunlu alan").max(100, "En fazla 100 karakter olabilir."),
-    description: z.string().trim().max(500, "En fazla 500 karakter olabilir.").optional(),
-    permissions: z.array(rolePermissionBodySchema).max(500, "En fazla 500 izin eklenebilir.").optional(),
+    name: z
+      .string()
+      .trim()
+      .min(1, "Zorunlu alan")
+      .max(100, "En fazla 100 karakter olabilir."),
+    description: z
+      .string()
+      .trim()
+      .max(500, "En fazla 500 karakter olabilir.")
+      .optional(),
+    permissions: z
+      .array(rolePermissionBodySchema)
+      .max(500, "En fazla 500 izin eklenebilir.")
+      .optional(),
   })
   .strict()
   .superRefine((value, context) => {
     const seen = new Set<string>();
     value.permissions?.forEach((permission, index) => {
       const key = `${permission.module}:${permission.action}`;
-      if (seen.has(key)) context.addIssue({ code: "custom", path: ["permissions", index], message: "Ayni izin birden fazla eklenemez." });
+      if (seen.has(key))
+        context.addIssue({
+          code: "custom",
+          path: ["permissions", index],
+          message: "Ayni izin birden fazla eklenemez.",
+        });
       seen.add(key);
     });
   });
 
 export const updateRoleBodySchema = z
   .object({
-    name: z.string().trim().min(1, "Zorunlu alan").max(100, "En fazla 100 karakter olabilir.").optional(),
-    description: z.string().trim().max(500, "En fazla 500 karakter olabilir.").nullable().optional(),
+    name: z
+      .string()
+      .trim()
+      .min(1, "Zorunlu alan")
+      .max(100, "En fazla 100 karakter olabilir.")
+      .optional(),
+    description: z
+      .string()
+      .trim()
+      .max(500, "En fazla 500 karakter olabilir.")
+      .nullable()
+      .optional(),
   })
   .strict()
-  .refine((value) => Object.keys(value).length > 0, { message: "En az bir alan gonderilmelidir." });
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "En az bir alan gonderilmelidir.",
+  });
 
 export const addRolePermissionBodySchema = rolePermissionBodySchema;
 
+const ENUM_TENANT_SETTING_VALUES: Readonly<Record<string, readonly string[]>> =
+  {
+    date_format: ["DD.MM.YYYY", "DD/MM/YYYY", "YYYY-MM-DD", "MM/DD/YYYY"],
+    email_notifications: ["true", "false"],
+    fiscal_year_start: ["01-01", "04-01", "07-01", "10-01"],
+    language: ["tr", "en"],
+    low_stock_alert: ["true", "false"],
+  };
+
+const ENUM_MODULE_SETTING_VALUES: Readonly<Record<string, readonly string[]>> =
+  {
+    auto_journal: ["true", "false"],
+    auto_number: ["true", "false"],
+    auto_invoice_number: ["true", "false"],
+    low_stock_alert: ["true", "false"],
+    negative_stock: ["true", "false"],
+    negative_stock_policy: ["BLOCK", "WARN", "ALLOW"],
+    reservation_policy: ["RESPECT", "IGNORE"],
+    lot_serial_policy: ["OPTIONAL", "REQUIRED", "REQUIRED_FOR_OUT"],
+    stock_count_approval_policy: ["OPTIONAL", "REQUIRED_FOR_DIFFERENCE"],
+    costing_method: ["MOVING_AVERAGE", "FIFO", "LIFO", "STANDARD"],
+    fiscal_year_start: ["01-01", "04-01", "07-01", "10-01"],
+  };
+
+function validateKnownSettingValue(
+  key: string,
+  value: string,
+  allowedValues: Readonly<Record<string, readonly string[]>>,
+  ctx: z.RefinementCtx,
+): void {
+  const allowed = allowedValues[key];
+  if (allowed && !allowed.includes(value)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["value"],
+      message: `${key} icin gecersiz deger.`,
+    });
+  }
+}
+
+function validateTenantSettingValue(
+  key: string,
+  value: string,
+  ctx: z.RefinementCtx,
+): void {
+  validateKnownSettingValue(key, value, ENUM_TENANT_SETTING_VALUES, ctx);
+  if (key === "default_currency" && !/^[A-Z]{3}$/.test(value)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["value"],
+      message: "Para birimi 3 harfli ISO kodu olmalidir.",
+    });
+  }
+  if (key === "timezone") {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["value"],
+        message: "Gecersiz IANA saat dilimi.",
+      });
+    }
+  }
+}
+
+function validateModuleSettingValue(
+  key: string,
+  value: string,
+  ctx: z.RefinementCtx,
+): void {
+  validateKnownSettingValue(key, value, ENUM_MODULE_SETTING_VALUES, ctx);
+  const numericBounds: Readonly<Record<string, readonly [number, number]>> = {
+    default_vat_rate: [0, 100],
+    default_tax_rate: [0, 100],
+    payment_terms: [0, 3650],
+    payment_terms_days: [0, 3650],
+    auto_sync_interval: [1, 1440],
+    sgk_rate: [0, 100],
+    work_hours_per_day: [0, 24],
+  };
+  const bounds = numericBounds[key];
+  if (bounds) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < bounds[0] || parsed > bounds[1]) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["value"],
+        message: `${key} icin gecersiz sayisal deger.`,
+      });
+    }
+  }
+}
+
 export const tenantSettingBodySchema = z
   .object({
-    key: nonEmptyString,
-    value: z.string(),
+    key: nonEmptyString.max(160, "En fazla 160 karakter olabilir."),
+    value: z.string().max(10_000, "En fazla 10000 karakter olabilir."),
   })
-  .strict();
+  .strict()
+  .superRefine((body, ctx) =>
+    validateTenantSettingValue(body.key, body.value, ctx),
+  );
 
 export const businessRuleBodySchema = z
   .object({
@@ -536,11 +665,14 @@ export const businessRuleBodySchema = z
 
 export const moduleSettingBodySchema = z
   .object({
-    module: nonEmptyString,
-    key: nonEmptyString,
-    value: z.string(),
+    module: nonEmptyString.max(160, "En fazla 160 karakter olabilir."),
+    key: nonEmptyString.max(160, "En fazla 160 karakter olabilir."),
+    value: z.string().max(10_000, "En fazla 10000 karakter olabilir."),
   })
-  .strict();
+  .strict()
+  .superRefine((body, ctx) =>
+    validateModuleSettingValue(body.key, body.value, ctx),
+  );
 
 export const salesTargetBodySchema = z
   .object({
@@ -854,7 +986,11 @@ const leaveDateSchema = z
   .refine((value) => {
     const [year, month, day] = value.split("-").map(Number);
     const date = new Date(Date.UTC(year, month - 1, day));
-    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+    return (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    );
   }, "Gecersiz tarih.");
 
 export const createLeaveRequestBodySchema = z
@@ -873,22 +1009,76 @@ export const createLeaveRequestBodySchema = z
   });
 
 export const leaveTransitionBodySchema = z.object({}).strict();
-export type CreateLeaveRequestBody = z.infer<typeof createLeaveRequestBodySchema>;
+export type CreateLeaveRequestBody = z.infer<
+  typeof createLeaveRequestBodySchema
+>;
 
 const isoDateTime = z.string().datetime({ offset: true });
 const attendanceDate = leaveDateSchema.optional();
-export const attendanceCheckInBodySchema = z.object({ employeeId: nonEmptyString.max(100), date: attendanceDate, checkIn: isoDateTime.optional(), notes: optionalTrimmedString(1000) }).strict();
-export const attendanceCheckOutBodySchema = z.object({ employeeId: nonEmptyString.max(100), date: attendanceDate, checkOut: isoDateTime.optional(), overtimeHours: z.number().finite().min(0).max(24).optional() }).strict();
-export const updateAttendanceBodySchema = z.object({ checkIn: isoDateTime.nullable().optional(), checkOut: isoDateTime.nullable().optional(), overtimeHours: z.number().finite().min(0).max(24).optional(), notes: z.string().trim().max(1000).nullable().optional() }).strict().refine((v) => Object.keys(v).length > 0, "En az bir alan gonderilmelidir.");
+export const attendanceCheckInBodySchema = z
+  .object({
+    employeeId: nonEmptyString.max(100),
+    date: attendanceDate,
+    checkIn: isoDateTime.optional(),
+    notes: optionalTrimmedString(1000),
+  })
+  .strict();
+export const attendanceCheckOutBodySchema = z
+  .object({
+    employeeId: nonEmptyString.max(100),
+    date: attendanceDate,
+    checkOut: isoDateTime.optional(),
+    overtimeHours: z.number().finite().min(0).max(24).optional(),
+  })
+  .strict();
+export const updateAttendanceBodySchema = z
+  .object({
+    checkIn: isoDateTime.nullable().optional(),
+    checkOut: isoDateTime.nullable().optional(),
+    overtimeHours: z.number().finite().min(0).max(24).optional(),
+    notes: z.string().trim().max(1000).nullable().optional(),
+  })
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, "En az bir alan gonderilmelidir.");
 export type AttendanceCheckInBody = z.infer<typeof attendanceCheckInBodySchema>;
-export type AttendanceCheckOutBody = z.infer<typeof attendanceCheckOutBodySchema>;
+export type AttendanceCheckOutBody = z.infer<
+  typeof attendanceCheckOutBodySchema
+>;
 export type UpdateAttendanceBody = z.infer<typeof updateAttendanceBodySchema>;
 
-const payrollPeriodSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Donem YYYY-MM formatinda olmalidir.");
-const payrollMoneySchema = z.number().finite().nonnegative().max(9999999999999999.99).multipleOf(0.01);
-const payrollItemSchema = z.object({ label: nonEmptyString.max(200), amount: z.number().finite().positive().max(9999999999999999.99).multipleOf(0.01), isDeduction: z.boolean() }).strict();
-export const createPayrollBodySchema = z.object({ employeeId: nonEmptyString.max(100), period: payrollPeriodSchema, grossSalary: payrollMoneySchema, items: z.array(payrollItemSchema).max(100).optional(), notes: optionalTrimmedString(1000) }).strict();
-export const bulkPayrollBodySchema = z.object({ period: payrollPeriodSchema }).strict();
+const payrollPeriodSchema = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Donem YYYY-MM formatinda olmalidir.");
+const payrollMoneySchema = z
+  .number()
+  .finite()
+  .nonnegative()
+  .max(9999999999999999.99)
+  .multipleOf(0.01);
+const payrollItemSchema = z
+  .object({
+    label: nonEmptyString.max(200),
+    amount: z
+      .number()
+      .finite()
+      .positive()
+      .max(9999999999999999.99)
+      .multipleOf(0.01),
+    isDeduction: z.boolean(),
+  })
+  .strict();
+export const createPayrollBodySchema = z
+  .object({
+    employeeId: nonEmptyString.max(100),
+    period: payrollPeriodSchema,
+    grossSalary: payrollMoneySchema,
+    items: z.array(payrollItemSchema).max(100).optional(),
+    notes: optionalTrimmedString(1000),
+  })
+  .strict();
+export const bulkPayrollBodySchema = z
+  .object({ period: payrollPeriodSchema })
+  .strict();
 export const payrollItemBodySchema = payrollItemSchema;
 export const emptyBodySchema = z.object({}).strict();
 export type CreatePayrollBody = z.infer<typeof createPayrollBodySchema>;

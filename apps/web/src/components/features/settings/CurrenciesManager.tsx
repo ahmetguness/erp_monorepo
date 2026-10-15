@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { FormRow } from '@/components/shared/FormField';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import { useCurrencies, useCreateCurrency } from '@/hooks/useMasterData';
 import type { Currency } from '@/services/master-data.service';
 
@@ -20,11 +21,11 @@ import type { Currency } from '@/services/master-data.service';
 // ─────────────────────────────────────────────
 
 const currencySchema = z.object({
-  code: z.string().min(1, 'Kod zorunludur').max(5).toUpperCase(),
-  name: z.string().min(1, 'Ad zorunludur'),
-  symbol: z.string().min(1, 'Sembol zorunludur').max(5),
+  code: z.string().trim().regex(/^[A-Za-z]{3}$/, 'Kod üç harf olmalıdır').transform((value) => value.toUpperCase()),
+  name: z.string().trim().min(1, 'Ad zorunludur').max(100, 'Ad en fazla 100 karakter'),
+  symbol: z.string().trim().min(1, 'Sembol zorunludur').max(5, 'Sembol en fazla 5 karakter'),
   defaultRate: z.string().min(1, 'Kur zorunludur').refine(
-    (v) => !isNaN(Number(v)) && Number(v) >= 0,
+    (v) => Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) < 1_000_000_000_000 && Math.abs(Number(v) * 1_000_000 - Math.round(Number(v) * 1_000_000)) <= 1e-6,
     'Geçerli bir kur girin',
   ),
 });
@@ -47,7 +48,8 @@ function currencySymbol(currency: Currency): string {
 // ─────────────────────────────────────────────
 
 export function CurrenciesManager() {
-  const { data: currencies = [], isLoading } = useCurrencies();
+  const currenciesQuery = useCurrencies();
+  const currencies = currenciesQuery.data ?? [];
   const createCurrency = useCreateCurrency();
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -87,13 +89,13 @@ export function CurrenciesManager() {
         }
       />
 
-      <DataTable
+      {currenciesQuery.isError ? <ApiErrorState error={currenciesQuery.error} onRetry={() => void currenciesQuery.refetch()} /> : <DataTable
         columns={columns}
         data={currencies}
         keyExtractor={(r) => r.id}
-        isLoading={isLoading}
+        isLoading={currenciesQuery.isLoading}
         emptyTitle="Henüz para birimi eklenmemiş"
-      />
+      />}
 
       <Modal
         isOpen={createOpen}

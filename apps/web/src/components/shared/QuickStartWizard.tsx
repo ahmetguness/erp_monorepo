@@ -28,7 +28,7 @@ const wizardSchema = z.object({
 type WizardForm = z.infer<typeof wizardSchema>;
 
 export function QuickStartWizard() {
-  const { data: settings = [], isLoading } = useTenantSettings();
+  const { data: settings = [], isLoading, isError } = useTenantSettings();
   const runQuickStart = useRunQuickStart();
   const tenant = useAuthStore((state) => state.tenant);
   const [step, setStep] = useState<1 | 2>(1);
@@ -49,7 +49,7 @@ export function QuickStartWizard() {
   });
 
   const completed = settings.some((setting) => setting.key === 'wizard_completed' && setting.value === 'true');
-  if (isLoading || !tenant || completed) return null;
+  if (isLoading || isError || !tenant || completed) return null;
 
   async function continueToGoal(): Promise<void> {
     if (await trigger(['companyName', 'country', 'industry', 'companyScale'], { shouldFocus: true })) setStep(2);

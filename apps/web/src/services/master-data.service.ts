@@ -65,8 +65,8 @@ export type Currency = z.infer<typeof CurrencySchema>;
 // ─────────────────────────────────────────────
 
 export interface CreateUnitDTO { name: string; code: string; }
-export interface CreateCategoryDTO { name: string; parentId?: string; }
-export interface UpdateCategoryDTO { name?: string; parentId?: string; }
+export interface CreateCategoryDTO { name: string; parentId?: string | null; }
+export interface UpdateCategoryDTO { name?: string; parentId?: string | null; }
 export interface CreateTaxRateDTO { name: string; rate: number; isWithholding?: boolean; }
 export interface UpdateTaxRateDTO { name?: string; rate?: number; isActive?: boolean; isWithholding?: boolean; }
 export interface CreateCurrencyDTO {

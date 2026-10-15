@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { ApiErrorState } from '@/components/shared/ApiErrorState';
 import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory } from '@/hooks/useMasterData';
 import type { CategoryItem } from '@/services/master-data.service';
 
@@ -23,7 +24,7 @@ import type { CategoryItem } from '@/services/master-data.service';
 // ─────────────────────────────────────────────
 
 const categorySchema = z.object({
-  name: z.string().min(1, 'Ad zorunludur'),
+  name: z.string().trim().min(1, 'Ad zorunludur').max(100, 'Ad en fazla 100 karakter'),
   parentId: z.string().optional(),
 });
 
@@ -79,7 +80,8 @@ function CategoryRow({ category, depth, onEdit, onDelete }: CategoryRowProps) {
 // ─────────────────────────────────────────────
 
 export function CategoriesManager() {
-  const { data: categories = [], isLoading } = useCategories();
+  const categoriesQuery = useCategories();
+  const categories = categoriesQuery.data ?? [];
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
   const deleteCategory = useDeleteCategory();
@@ -101,7 +103,7 @@ export function CategoriesManager() {
   const closeModal = () => { setModalState({ open: false, editing: null }); reset(); };
 
   const onSubmit = (data: CategoryForm) => {
-    const payload = { name: data.name, parentId: data.parentId || undefined };
+    const payload = { name: data.name, parentId: data.parentId || null };
     if (modalState.editing) {
       updateCategory.mutate({ id: modalState.editing.id, data: payload }, { onSuccess: closeModal });
     } else {
@@ -113,8 +115,9 @@ export function CategoriesManager() {
   const flatCategories = (cats: CategoryItem[], depth = 0): { id: string; name: string; depth: number }[] =>
     cats.flatMap((c) => [{ id: c.id, name: c.name, depth }, ...flatCategories(c.children ?? [], depth + 1)]);
 
+  const descendantIds = new Set(flatCategories(modalState.editing?.children ?? []).map((c) => c.id));
   const parentOptions = flatCategories(categories)
-    .filter((c) => c.id !== modalState.editing?.id)
+    .filter((c) => c.id !== modalState.editing?.id && !descendantIds.has(c.id))
     .map((c) => ({ value: c.id, label: `${'— '.repeat(c.depth)}${c.name}` }));
 
   const isPending = createCategory.isPending || updateCategory.isPending;
@@ -132,7 +135,9 @@ export function CategoriesManager() {
       />
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-        {isLoading ? (
+        {categoriesQuery.isError ? (
+          <ApiErrorState error={categoriesQuery.error} onRetry={() => void categoriesQuery.refetch()} />
+        ) : categoriesQuery.isLoading ? (
           <FullPageSpinner />
         ) : categories.length === 0 ? (
           <EmptyState title="Henüz kategori eklenmemiş" description="Ürünlerinizi organize etmek için kategori ekleyin." />

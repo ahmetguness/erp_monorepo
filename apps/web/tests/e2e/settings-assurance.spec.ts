@@ -1,13 +1,29 @@
 import { expect, test, type Page } from '@playwright/test';
 
+let cachedSessionCookie: { name: string; value: string } | null = null;
+
 async function login(page: Page) {
-  await page.goto('/login');
-  await page.getByLabel(/E-posta/).fill('admin@axondemo.com');
-  await page.getByRole('textbox', { name: /ifre/, exact: true }).fill('demo1234');
-  await page.getByRole('button', { name: /Giri.*Yap/ }).click();
+  if (cachedSessionCookie) {
+    await page.context().addCookies([{ ...cachedSessionCookie, domain: 'localhost', path: '/' }]);
+  } else {
+    const response = await page.request.post('http://localhost:3001/api/auth/login', {
+      headers: { origin: 'http://localhost:3000' },
+      data: { email: 'admin@axondemo.com', password: 'demo1234', tenantSlug: 'axon-demo' },
+    });
+    expect(response.status()).toBe(200);
+    const pair = response.headers()['set-cookie']?.split(';')[0]?.split('=');
+    expect(pair?.length).toBeGreaterThanOrEqual(2);
+    cachedSessionCookie = { name: pair![0], value: pair!.slice(1).join('=') };
+  }
+  await page.goto('/dashboard');
   await expect(page).toHaveURL(/dashboard/);
   const close = page.getByRole('button', { name: /Onboarding.*kapat/ });
-  await close.waitFor({ state: 'visible', timeout: 1200 }).then(() => close.click()).catch(() => undefined);
+  await close.waitFor({ state: 'visible', timeout: 5000 }).then(() => close.click()).catch(() => undefined);
+}
+
+async function dismissOnboarding(page: Page) {
+  const close = page.getByRole('button', { name: /Onboarding.*kapat/ });
+  await close.waitFor({ state: 'visible', timeout: 5000 }).then(() => close.click()).catch(() => undefined);
 }
 
 const settingsLinks = [
@@ -73,5 +89,69 @@ test('every settings destination resolves as an authenticated page', async ({ pa
     expect(response?.status(), href).toBeLessThan(400);
     await expect(page).toHaveURL(new RegExp(href.replaceAll('/', '\\/')));
     await expect(page.locator('body')).not.toContainText('404');
+  }
+});
+
+test('general settings exposes API failure and retries successfully', async ({ page }) => {
+  test.setTimeout(120_000);
+  // The preceding navigation matrix intentionally visits every settings page and can
+  // consume most of the production 60-second global API allowance. Preserve the real
+  // limiter and wait for its fixed window instead of weakening it for E2E.
+  await page.waitForTimeout(61_000);
+  let failTenantSettings = true;
+  let interceptedRequests = 0;
+  await page.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.replace(/\/$/, '') === '/api/settings' && route.request().method() === 'GET' && failTenantSettings) {
+      interceptedRequests += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: 'controlled general settings error' } }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await login(page);
+
+  await page.goto('/dashboard/settings/general');
+  await dismissOnboarding(page);
+  const errorAlert = page.locator('[role="alert"]').filter({ hasText: 'controlled general settings error' });
+  await expect.poll(() => interceptedRequests, { timeout: 15_000 }).toBeGreaterThan(0);
+  await expect(errorAlert).toBeVisible({ timeout: 20_000 });
+  failTenantSettings = false;
+  await page.getByRole('button', { name: /Tekrar dene/ }).click();
+  await expect(errorAlert).not.toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(/Genel Ayarlar/);
+});
+
+test('general settings creates and persists an isolated browser fixture', async ({ page }) => {
+  const key = `TEST_E2E_GENERAL_BROWSER_${Date.now()}`;
+  const value = 'TÃ¼rkÃ§e, quoted "value"';
+  await login(page);
+
+  try {
+    await page.goto('/dashboard/settings/general');
+    await dismissOnboarding(page);
+    await page.getByRole('button', { name: /Yeni Ayar/ }).click();
+    await page.getByRole('textbox', { name: 'Anahtar', exact: true }).fill(key);
+    await page.getByRole('textbox', { name: /De.er/, exact: true }).fill(value);
+    await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
+    await expect(page.getByText(value, { exact: true })).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText(value, { exact: true })).toBeVisible();
+    const response = await page.request.get('http://localhost:3001/api/settings', { headers: { origin: 'http://localhost:3000' } });
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.data).toEqual(expect.arrayContaining([expect.objectContaining({ key, value })]));
+  } finally {
+    const cleanup = await page.request.delete(`http://localhost:3001/api/settings/${encodeURIComponent(key)}`, { headers: { origin: 'http://localhost:3000' } });
+    expect(cleanup.status()).toBe(200);
+    const afterCleanup = await page.request.get('http://localhost:3001/api/settings', { headers: { origin: 'http://localhost:3000' } });
+    expect(afterCleanup.status()).toBe(200);
+    const cleanupBody = await afterCleanup.json();
+    expect(cleanupBody.data.some((item: { key: string }) => item.key === key)).toBe(false);
   }
 });

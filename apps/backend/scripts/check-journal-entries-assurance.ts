@@ -229,7 +229,6 @@ async function main() {
           lines: {
             create: [
               {
-                tenantId: a.tenant.id,
                 accountId: b.debit.id,
                 debit: 1,
                 credit: 0,

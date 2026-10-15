@@ -203,8 +203,14 @@ export class AccountingPostingEngineService {
     });
     if (!invoice) throw new Error("Fatura bulunamadi.");
     if (existing) {
-      if (idempotencyKey && existing.idempotencyKey && existing.idempotencyKey !== idempotencyKey) {
-        throw new Error("Muhasebe fisi daha once farkli bir idempotencyKey ile olusturulmus.");
+      if (
+        idempotencyKey &&
+        existing.idempotencyKey &&
+        existing.idempotencyKey !== idempotencyKey
+      ) {
+        throw new Error(
+          "Muhasebe fisi daha once farkli bir idempotencyKey ile olusturulmus.",
+        );
       }
       if (idempotencyKey && !existing.idempotencyKey) {
         await this.db.journalEntry.update({
@@ -494,13 +500,14 @@ export class AccountingPostingEngineService {
       (line) => !params.mappings.has(line.role),
     )?.role;
     if (missingRole) {
-      if (params.options.emitDomainEvent !== false) await this.publishPostingFailed(
-        tenantId,
-        params.refType,
-        params.refId,
-        `${missingRole} için hesap planı mapping'i bulunamadı.`,
-        params.options.userId,
-      );
+      if (params.options.emitDomainEvent !== false)
+        await this.publishPostingFailed(
+          tenantId,
+          params.refType,
+          params.refId,
+          `${missingRole} için hesap planı mapping'i bulunamadı.`,
+          params.options.userId,
+        );
       return {
         source: params.source,
         refType: params.refType,
@@ -519,13 +526,14 @@ export class AccountingPostingEngineService {
       params.lines.reduce((sum, line) => sum + line.credit, 0),
     );
     if (Math.abs(debit - credit) > 0.01) {
-      if (params.options.emitDomainEvent !== false) await this.publishPostingFailed(
-        tenantId,
-        params.refType,
-        params.refId,
-        `Fiş dengeli değil. Borç ${debit}, alacak ${credit}.`,
-        params.options.userId,
-      );
+      if (params.options.emitDomainEvent !== false)
+        await this.publishPostingFailed(
+          tenantId,
+          params.refType,
+          params.refId,
+          `Fiş dengeli değil. Borç ${debit}, alacak ${credit}.`,
+          params.options.userId,
+        );
       return {
         source: params.source,
         refType: params.refType,
@@ -574,7 +582,6 @@ export class AccountingPostingEngineService {
               if (!account)
                 throw new Error(`${line.role} mapping'i bulunamadı.`);
               return {
-                tenantId,
                 accountId: account.id,
                 debit: line.debit,
                 credit: line.credit,
@@ -619,13 +626,14 @@ export class AccountingPostingEngineService {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Bilinmeyen posting hatası.";
-      if (params.options.emitDomainEvent !== false) await this.publishPostingFailed(
-        tenantId,
-        params.refType,
-        params.refId,
-        message,
-        params.options.userId,
-      );
+      if (params.options.emitDomainEvent !== false)
+        await this.publishPostingFailed(
+          tenantId,
+          params.refType,
+          params.refId,
+          message,
+          params.options.userId,
+        );
       return {
         source: params.source,
         refType: params.refType,

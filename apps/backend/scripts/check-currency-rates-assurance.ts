@@ -11,6 +11,11 @@ async function main() {
   const make = async (suffix: string) => { const tenant = await prisma.tenant.create({ data: { slug: `${marker.toLowerCase()}-${suffix}`, companyName: `${marker}_${suffix}`, email: `${suffix}-${marker}@example.test`, plan: 'ENTERPRISE', status: 'ACTIVE', modules: [] } }); await prisma.tenantUser.create({ data: { tenantId: tenant.id, userId: user.id, isOwner: true } }); return tenant; };
   const a = await make('a'), b = await make('b');
   try {
+    await prisma.currency.createMany({ data: [
+      { tenantId: a.id, code: 'USD', name: 'US Dollar', symbol: '$', defaultRate: 30 },
+      { tenantId: a.id, code: 'EUR', name: 'Euro', symbol: '€', defaultRate: 40 },
+      { tenantId: b.id, code: 'USD', name: 'US Dollar', symbol: '$', defaultRate: 99 },
+    ] });
     const role = await prisma.role.create({ data: { tenantId: a.id, name: `${marker}_READ`, permissions: { create: { module: 'settings', action: 'READ' } } } });
     await prisma.tenantUser.create({ data: { tenantId: a.id, userId: reader.id, roleId: role.id } });
     const sa = await login(a.slug), sb = await login(b.slug);

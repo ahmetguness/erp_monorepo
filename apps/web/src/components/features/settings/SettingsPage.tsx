@@ -40,6 +40,7 @@ import {
   useUpdateDefaultPolicies,
 } from '@/hooks/useSettings';
 import { cn } from '@/lib/utils';
+import { getErrorMessage } from '@/types/api.types';
 import type { ModuleSetting, BusinessRule, DefaultPolicyScope, DefaultPolicyValue } from '@/services/settings.service';
 
 // ─────────────────────────────────────────────
@@ -363,13 +364,20 @@ function hasOptions(key: string): boolean {
 // ─────────────────────────────────────────────
 
 export function SettingsPage() {
-  const { data: tenantSettings = [], isLoading: loadingTenant } = useTenantSettings();
-  const { data: moduleSettings = [], isLoading: loadingModule } = useModuleSettings();
-  const { data: businessRules = [], isLoading: loadingBusinessRules } = useBusinessRules();
-  const { data: defaultPolicySnapshot, isLoading: loadingDefaultPolicies } = useDefaultPolicySnapshot();
-  const { data: securityScore, isLoading: loadingSecurityScore } = useTenantSecurityScore();
-  const { data: securityHardening, isLoading: loadingSecurityHardening } = useSecurityHardeningSnapshot();
-  const { data: logoBlob } = useTenantLogo();
+  const tenantQuery = useTenantSettings();
+  const moduleQuery = useModuleSettings();
+  const businessRulesQuery = useBusinessRules();
+  const defaultPoliciesQuery = useDefaultPolicySnapshot();
+  const securityScoreQuery = useTenantSecurityScore();
+  const securityHardeningQuery = useSecurityHardeningSnapshot();
+  const logoQuery = useTenantLogo();
+  const { data: tenantSettings = [], isLoading: loadingTenant } = tenantQuery;
+  const { data: moduleSettings = [], isLoading: loadingModule } = moduleQuery;
+  const { data: businessRules = [], isLoading: loadingBusinessRules } = businessRulesQuery;
+  const { data: defaultPolicySnapshot, isLoading: loadingDefaultPolicies } = defaultPoliciesQuery;
+  const { data: securityScore, isLoading: loadingSecurityScore } = securityScoreQuery;
+  const { data: securityHardening, isLoading: loadingSecurityHardening } = securityHardeningQuery;
+  const { data: logoBlob } = logoQuery;
   const upsertTenant = useUpsertTenantSetting();
   const upsertModule = useUpsertModuleSetting();
   const uploadLogo = useUploadTenantLogo();
@@ -418,6 +426,7 @@ export function SettingsPage() {
   };
 
   const handleAdd = () => {
+    if (!newKey.trim() || !newValue || (addType === 'module' && !newModule)) return;
     if (addType === 'tenant') {
       upsertTenant.mutate({ key: newKey, value: newValue }, { onSuccess: () => { setAddOpen(false); setNewKey(''); setNewValue(''); } });
     } else {
@@ -482,6 +491,20 @@ export function SettingsPage() {
   const hasDefaultPolicyChanges = (defaultPolicySnapshot?.values ?? []).some(
     (item) => (defaultPolicyDraft[item.storageKey] ?? item.effectiveValue) !== item.effectiveValue,
   );
+  const failedQueries = [
+    tenantQuery,
+    moduleQuery,
+    businessRulesQuery,
+    defaultPoliciesQuery,
+    securityScoreQuery,
+    securityHardeningQuery,
+    logoQuery,
+  ].filter((query) => query.isError);
+  const queryError = failedQueries[0]?.error;
+
+  const retryFailedQueries = () => {
+    for (const query of failedQueries) void query.refetch();
+  };
 
   return (
     <FeaturePageShell title="Genel Ayarlar" subtitle="Sistem ve modül yapılandırmasını yönetin."
@@ -493,6 +516,18 @@ export function SettingsPage() {
           </button>
         }
     >
+
+      {queryError && (
+        <div role="alert" className="flex flex-col gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200 md:flex-row md:items-center">
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Ayar verileri alinamadi.</p>
+            <p className="mt-1 text-xs text-red-200/80">{getErrorMessage(queryError)}</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={retryFailedQueries} disabled={failedQueries.some((query) => query.isFetching)}>
+            Tekrar dene
+          </Button>
+        </div>
+      )}
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
         <ImageUploadBox
@@ -1083,7 +1118,7 @@ export function SettingsPage() {
       <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title="Yeni Ayar Ekle" description="Sistem veya modül ayarı ekleyin." size="sm"
         footer={<>
           <Button variant="ghost" size="sm" onClick={() => setAddOpen(false)}>İptal</Button>
-          <Button size="sm" leftIcon={<Save className="w-3.5 h-3.5" />} onClick={handleAdd} disabled={!newKey || !newValue}
+          <Button size="sm" leftIcon={<Save className="w-3.5 h-3.5" />} onClick={handleAdd} disabled={!newKey.trim() || !newValue || (addType === 'module' && !newModule)}
             className="bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 shadow-lg shadow-sky-500/20">Kaydet</Button>
         </>}>
         <div className="space-y-4">
