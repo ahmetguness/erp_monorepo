@@ -9,20 +9,10 @@ import {
   Receipt,
   ArrowDownLeft,
   ArrowUpRight,
-  AlertTriangle,
   Filter,
   X,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  TrendingUp,
-  TrendingDown,
-  Users,
-  FileText,
-  Info,
   UploadCloud,
 } from "lucide-react";
-import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { BulkActionBar } from "@/components/shared/BulkActionBar";
 import { createBulkActionPresets } from "@/components/shared/bulkActionPresets";
@@ -39,21 +29,28 @@ import {
   CONTACT_RISK_SCORE_LABELS,
   CONTACT_RISK_SCORE_VARIANTS,
   CONTACT_TYPE_LABELS,
-  CONTACT_TYPE_VARIANTS,
   formatMissingInfo,
 } from "@/components/features/contacts/contact-display";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useBulkSelection } from "@/hooks/useBulkSelection";
 import { useContacts } from "@/hooks/useContacts";
 import { useUIStore } from "@/store/ui.store";
-import { createListSavedViewState, getSavedViewPageSize, getVisibleColumns, normalizeColumnKeys } from "@/lib/list-standard";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import {
+  createListSavedViewState,
+  getSavedViewPageSize,
+  getVisibleColumns,
+  normalizeColumnKeys,
+} from "@/lib/list-standard";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type {
   ContactListItem,
   ContactType,
   RiskLevel,
 } from "@/services/contact.service";
-import { getSavedViewFilterString, type SavedViewState } from "@/services/saved-view.service";
+import {
+  getSavedViewFilterString,
+  type SavedViewState,
+} from "@/services/saved-view.service";
 
 // ─────────────────────────────────────────────
 // Config
@@ -80,7 +77,18 @@ const BALANCE_OPTIONS = [
 ];
 
 const DEFAULT_PAGE_SIZE = 25;
-const CONTACT_COLUMN_KEYS = ['name', 'type', 'taxNumber', 'balance', 'openInvoices', 'risk', 'missingInfo', 'lastTx', 'isActive', 'actions'] as const;
+const CONTACT_COLUMN_KEYS = [
+  "name",
+  "type",
+  "taxNumber",
+  "balance",
+  "openInvoices",
+  "risk",
+  "missingInfo",
+  "lastTx",
+  "isActive",
+  "actions",
+] as const;
 
 function parseContactType(value: string): ContactType | "" {
   return value === "CUSTOMER" || value === "SUPPLIER" || value === "BOTH" ? value : "";
@@ -96,31 +104,40 @@ function parseBalanceFilter(value: string): "" | "receivable" | "payable" | "ris
 
 const RISK_CONFIG: Record<
   RiskLevel,
-  { icon: typeof Shield; color: string; label: string; bg: string }
+  { dotColor: string; label: string; textTone: string; borderTone: string; bgTone: string }
 > = {
   safe: {
-    icon: ShieldCheck,
-    color: "text-emerald-400",
+    dotColor: "bg-emerald-400",
     label: "Güvenli",
-    bg: "bg-emerald-500/10",
+    textTone: "text-slate-300",
+    borderTone: "border-slate-800",
+    bgTone: "bg-slate-900/60",
   },
   warning: {
-    icon: ShieldAlert,
-    color: "text-amber-400",
+    dotColor: "bg-amber-400",
     label: "Uyarı",
-    bg: "bg-amber-500/10",
+    textTone: "text-amber-300",
+    borderTone: "border-amber-500/20",
+    bgTone: "bg-amber-500/10",
   },
   exceeded: {
-    icon: AlertTriangle,
-    color: "text-red-400",
+    dotColor: "bg-rose-400",
     label: "Aşıldı",
-    bg: "bg-red-500/10",
+    textTone: "text-rose-300",
+    borderTone: "border-rose-500/20",
+    bgTone: "bg-rose-500/10",
   },
-  none: { icon: Shield, color: "text-slate-600", label: "—", bg: "" },
+  none: {
+    dotColor: "bg-slate-500",
+    label: "—",
+    textTone: "text-slate-400",
+    borderTone: "border-slate-800",
+    bgTone: "bg-slate-900/60",
+  },
 };
 
 // ─────────────────────────────────────────────
-// Summary Bar
+// Financial Summary Strip
 // ─────────────────────────────────────────────
 
 function SummaryBar({
@@ -149,93 +166,120 @@ function SummaryBar({
   const total = Number(summary.totalAccounts) || 0;
 
   return (
-    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
-          <Users className="w-4 h-4 text-sky-400" />
-        </div>
-        <div>
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+    <div className="mb-3 overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/60 shadow-sm">
+      <div className="grid grid-cols-2 divide-y divide-slate-800/60 sm:grid-cols-4 sm:divide-y-0 sm:divide-x lg:grid-cols-7">
+        {/* Toplam Hesap */}
+        <div className="flex flex-col justify-between p-3 min-w-0">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 truncate">
             Toplam Hesap
-          </p>
-          <p className="text-base font-semibold text-white">{total}</p>
+          </span>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-base font-semibold text-slate-100 tabular-nums">
+              {total}
+            </span>
+            <span className="text-[11px] text-slate-500">cari</span>
+          </div>
         </div>
-      </div>
-      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
-          <Users className="w-4 h-4 text-violet-400" />
-        </div>
-        <div>
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+
+        {/* Müşteri / Satıcı */}
+        <div className="flex flex-col justify-between p-3 min-w-0">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 truncate">
             Müşteri / Satıcı
-          </p>
-          <p className="text-base font-semibold text-white">
-            {customers} / {suppliers}
-            {both > 0 ? <span className="text-xs text-violet-300"> +{both}</span> : null}
-          </p>
+          </span>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-base font-semibold text-slate-100 tabular-nums">
+              {customers} <span className="text-slate-500 font-normal">/</span> {suppliers}
+            </span>
+            {both > 0 && (
+              <span className="text-[11px] text-indigo-300 font-medium">+{both} ikisi</span>
+            )}
+          </div>
         </div>
-      </div>
-      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-          <TrendingUp className="w-4 h-4 text-emerald-400" />
-        </div>
-        <div>
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+
+        {/* Toplam Alacak */}
+        <div className="flex flex-col justify-between p-3 min-w-0">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 truncate">
             Toplam Alacak
-          </p>
-          <p className="text-base font-semibold text-emerald-400">
-            {formatCurrency(recv)}
-          </p>
+          </span>
+          <div className="mt-1">
+            <span className="text-base font-semibold text-emerald-400 tabular-nums">
+              {formatCurrency(recv)}
+            </span>
+            <span className="block text-[11px] text-slate-500">Müşteri borcu</span>
+          </div>
         </div>
-      </div>
-      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
-          <TrendingDown className="w-4 h-4 text-red-400" />
-        </div>
-        <div>
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+
+        {/* Toplam Borç */}
+        <div className="flex flex-col justify-between p-3 min-w-0">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 truncate">
             Toplam Borç
-          </p>
-          <p className="text-base font-semibold text-red-400">
-            {formatCurrency(pay)}
-          </p>
+          </span>
+          <div className="mt-1">
+            <span className="text-base font-semibold text-rose-400 tabular-nums">
+              {formatCurrency(pay)}
+            </span>
+            <span className="block text-[11px] text-slate-500">Tedarikçi alacağı</span>
+          </div>
         </div>
-      </div>
-      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
-          <FileText className="w-4 h-4 text-sky-400" />
-        </div>
-        <div>
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+
+        {/* Net Bakiye */}
+        <div className="flex flex-col justify-between p-3 min-w-0">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 truncate">
             Net Bakiye
-          </p>
-          <p
-            className={`text-base font-semibold ${net >= 0 ? "text-emerald-400" : "text-red-400"}`}
-          >
-            {formatCurrency(Math.abs(net))}
-          </p>
+          </span>
+          <div className="mt-1">
+            <span
+              className={cn(
+                "text-base font-semibold tabular-nums",
+                net >= 0 ? "text-emerald-400" : "text-rose-400"
+              )}
+            >
+              {formatCurrency(Math.abs(net))}
+            </span>
+            <span className="block text-[11px] text-slate-400 font-medium">
+              {net >= 0 ? "Net Alacaklı" : "Net Borçlu"}
+            </span>
+          </div>
         </div>
-      </div>
-      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
-          <AlertTriangle className="w-4 h-4 text-red-400" />
-        </div>
-        <div>
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+
+        {/* Riskli Hesap */}
+        <div className="flex flex-col justify-between p-3 min-w-0">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 truncate">
             Riskli Hesap
-          </p>
-          <p className="text-base font-semibold text-red-400">{risky}</p>
+          </span>
+          <div className="mt-1">
+            <span
+              className={cn(
+                "text-base font-semibold tabular-nums",
+                risky > 0 ? "text-amber-400" : "text-slate-300"
+              )}
+            >
+              {risky}
+            </span>
+            <span className="block text-[11px] text-slate-500">
+              {risky > 0 ? "Limit aşımı" : "Risk yok"}
+            </span>
+          </div>
         </div>
-      </div>
-      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
-          <Info className="w-4 h-4 text-amber-400" />
-        </div>
-        <div>
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+
+        {/* Eksik Bilgi */}
+        <div className="flex flex-col justify-between p-3 min-w-0">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 truncate">
             Eksik Bilgi
-          </p>
-          <p className="text-base font-semibold text-amber-400">{missing}</p>
+          </span>
+          <div className="mt-1">
+            <span
+              className={cn(
+                "text-base font-semibold tabular-nums",
+                missing > 0 ? "text-amber-400" : "text-slate-300"
+              )}
+            >
+              {missing}
+            </span>
+            <span className="block text-[11px] text-slate-500">
+              {missing > 0 ? "Eksik kart" : "Kayıtlar tam"}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -243,7 +287,7 @@ function SummaryBar({
 }
 
 // ─────────────────────────────────────────────
-// Component
+// Main Component
 // ─────────────────────────────────────────────
 
 export function ContactsListPage() {
@@ -253,14 +297,13 @@ export function ContactsListPage() {
   const [search, setSearch] = useState("");
   const [type, setType] = useState<ContactType | "">("");
   const [status, setStatus] = useState("");
-  const [balanceFilter, setBalanceFilter] = useState<
-    "" | "receivable" | "payable" | "risky"
-  >("");
+  const [balanceFilter, setBalanceFilter] = useState<"" | "receivable" | "payable" | "risky">("");
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>([...CONTACT_COLUMN_KEYS]);
   const [tableDensity, setTableDensity] = useState<"comfortable" | "compact">("compact");
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const importRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useContacts({
@@ -277,22 +320,46 @@ export function ContactsListPage() {
   const summary = data?.summary;
   const hasActiveFilters = !!type || !!status || !!balanceFilter;
   const isEmptyFirstUse = !isLoading && !search && !hasActiveFilters && (data?.meta.total ?? 0) === 0;
+
   const activeFilterChips = [
-    type ? { key: "type", label: TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type, clear: () => setType("") } : null,
-    status ? { key: "status", label: STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status, clear: () => setStatus("") } : null,
-    balanceFilter ? { key: "balance", label: BALANCE_OPTIONS.find((option) => option.value === balanceFilter)?.label ?? balanceFilter, clear: () => setBalanceFilter("") } : null,
+    type
+      ? {
+          key: "type",
+          label: TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type,
+          clear: () => setType(""),
+        }
+      : null,
+    status
+      ? {
+          key: "status",
+          label: STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status,
+          clear: () => setStatus(""),
+        }
+      : null,
+    balanceFilter
+      ? {
+          key: "balance",
+          label: BALANCE_OPTIONS.find((option) => option.value === balanceFilter)?.label ?? balanceFilter,
+          clear: () => setBalanceFilter(""),
+        }
+      : null,
   ].filter((chip): chip is { key: string; label: string; clear: () => void } => Boolean(chip));
-  const viewState = useMemo<SavedViewState>(() => createListSavedViewState({
-    filters: { search, type, status, balanceFilter },
-    columns: visibleColumnKeys,
-    pageSize,
-  }), [balanceFilter, pageSize, search, status, type, visibleColumnKeys]);
+
+  const viewState = useMemo<SavedViewState>(
+    () =>
+      createListSavedViewState({
+        filters: { search, type, status, balanceFilter },
+        columns: visibleColumnKeys,
+        pageSize,
+      }),
+    [balanceFilter, pageSize, search, status, type, visibleColumnKeys]
+  );
 
   const applyView = (state: SavedViewState) => {
-    setSearch(getSavedViewFilterString(state, 'search'));
-    setType(parseContactType(getSavedViewFilterString(state, 'type')));
-    setStatus(parseActiveStatus(getSavedViewFilterString(state, 'status')));
-    setBalanceFilter(parseBalanceFilter(getSavedViewFilterString(state, 'balanceFilter')));
+    setSearch(getSavedViewFilterString(state, "search"));
+    setType(parseContactType(getSavedViewFilterString(state, "type")));
+    setStatus(parseActiveStatus(getSavedViewFilterString(state, "status")));
+    setBalanceFilter(parseBalanceFilter(getSavedViewFilterString(state, "balanceFilter")));
     setPageSize(getSavedViewPageSize(state, DEFAULT_PAGE_SIZE));
     setVisibleColumnKeys(normalizeColumnKeys(columns, state.columns));
     setPage(1);
@@ -303,6 +370,18 @@ export function ContactsListPage() {
     setStatus("");
     setBalanceFilter("");
     setPage(1);
+  };
+
+  const toggleImport = () => {
+    setIsImportOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        setTimeout(() => {
+          importRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }, 50);
+      }
+      return next;
+    });
   };
 
   const bulkActions = createBulkActionPresets({
@@ -326,25 +405,18 @@ export function ContactsListPage() {
     {
       label: "Fatura Oluştur",
       icon: <Receipt className="w-4 h-4" />,
-      onClick: () =>
-        router.push(`/dashboard/invoices/new?contactId=${contact.id}`),
+      onClick: () => router.push(`/dashboard/invoices/new?contactId=${contact.id}`),
       separator: true,
     },
     {
       label: "Tahsilat Al",
       icon: <ArrowDownLeft className="w-4 h-4" />,
-      onClick: () =>
-        router.push(
-          `/dashboard/payments/new?type=receive&contactId=${contact.id}`,
-        ),
+      onClick: () => router.push(`/dashboard/payments/new?type=receive&contactId=${contact.id}`),
     },
     {
       label: "Ödeme Yap",
       icon: <ArrowUpRight className="w-4 h-4" />,
-      onClick: () =>
-        router.push(
-          `/dashboard/payments/new?type=send&contactId=${contact.id}`,
-        ),
+      onClick: () => router.push(`/dashboard/payments/new?type=send&contactId=${contact.id}`),
     },
   ];
 
@@ -354,22 +426,40 @@ export function ContactsListPage() {
       header: "Cari Hesap",
       exportValue: (r) => r.name,
       render: (r) => (
-        <div>
-          <p className="font-medium text-slate-200 text-sm leading-tight">
+        <div className="min-w-0">
+          <p
+            className="font-medium text-slate-200 text-xs sm:text-sm leading-tight truncate group-hover:text-sky-300 transition-colors"
+            title={r.name}
+          >
             {r.name}
           </p>
-          <p className="text-[11px] text-slate-500">{r.code ?? "—"}</p>
+          <p className="text-[11px] text-slate-500 font-mono mt-0.5">{r.code ?? "—"}</p>
         </div>
       ),
     },
     {
       key: "type",
       header: "Tip",
-      width: "125px",
+      width: "120px",
       exportValue: (r) => CONTACT_TYPE_LABELS[r.type],
-      render: (r) => (
-        <Badge variant={CONTACT_TYPE_VARIANTS[r.type]}>{CONTACT_TYPE_LABELS[r.type]}</Badge>
-      ),
+      render: (r) => {
+        const typeStyle =
+          r.type === "CUSTOMER"
+            ? "border-sky-500/20 bg-sky-500/10 text-sky-300"
+            : r.type === "SUPPLIER"
+            ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
+            : "border-indigo-500/20 bg-indigo-500/10 text-indigo-300";
+        return (
+          <span
+            className={cn(
+              "inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-medium",
+              typeStyle
+            )}
+          >
+            {CONTACT_TYPE_LABELS[r.type]}
+          </span>
+        );
+      },
     },
     {
       key: "taxNumber",
@@ -377,34 +467,38 @@ export function ContactsListPage() {
       width: "115px",
       exportValue: (r) => r.taxNumber ?? "",
       render: (r) => (
-        <span className="text-xs text-slate-400 font-mono">
-          {r.taxNumber ?? "—"}
-        </span>
+        <span className="text-xs text-slate-400 font-mono">{r.taxNumber ?? "—"}</span>
       ),
     },
     {
       key: "balance",
       header: "Bakiye",
-      width: "150px",
+      width: "145px",
       align: "right",
       exportValue: (r) => Number(r.currentBalance) || 0,
       render: (r) => {
         const bal = Number(r.currentBalance) || 0;
         if (bal === 0)
-          return <span className="text-xs text-slate-600">₺0,00</span>;
+          return <span className="text-xs text-slate-500 tabular-nums font-mono">₺0,00</span>;
         const isReceivable = bal > 0;
         return (
           <div className="text-right">
             <span
-              className={`text-sm font-semibold tabular-nums ${isReceivable ? "text-emerald-400" : "text-red-400"}`}
+              className={cn(
+                "text-xs sm:text-sm font-semibold tabular-nums font-mono",
+                isReceivable ? "text-emerald-400" : "text-rose-400"
+              )}
             >
               {formatCurrency(Math.abs(bal))}
             </span>
-            <p
-              className={`text-[10px] ${isReceivable ? "text-emerald-500/70" : "text-red-500/70"}`}
+            <span
+              className={cn(
+                "block text-[10px]",
+                isReceivable ? "text-emerald-500/75" : "text-rose-500/75"
+              )}
             >
               {isReceivable ? "Alacaklıyız" : "Borçluyuz"}
-            </p>
+            </span>
           </div>
         );
       },
@@ -419,13 +513,13 @@ export function ContactsListPage() {
           return <span className="text-xs text-slate-600">—</span>;
         return (
           <div className="text-center">
-            <span className="text-sm font-medium text-slate-200">
+            <span className="text-xs sm:text-sm font-medium text-slate-200 tabular-nums">
               {r.openInvoiceCount}
             </span>
             {r.overdueInvoiceCount > 0 && (
-              <p className="text-[10px] text-red-400">
+              <span className="block text-[10px] text-rose-400 font-medium">
                 {r.overdueInvoiceCount} gecikmiş
-              </p>
+              </span>
             )}
           </div>
         );
@@ -439,45 +533,54 @@ export function ContactsListPage() {
       exportValue: (r) => r.riskScore,
       render: (r) => {
         const cfg = RISK_CONFIG[r.riskLevel as RiskLevel];
-        if (!cfg || r.riskLevel === "none")
+        if (!cfg || r.riskLevel === "none") {
           return (
             <Badge variant={CONTACT_RISK_SCORE_VARIANTS[r.riskScoreLevel]}>
               {CONTACT_RISK_SCORE_LABELS[r.riskScoreLevel]} %{r.riskScore}
             </Badge>
           );
-        const Icon = cfg.icon;
+        }
         return (
           <span
-            className={`inline-flex h-7 items-center justify-center gap-1.5 rounded-lg px-2 ${cfg.bg}`}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium",
+              cfg.borderTone,
+              cfg.bgTone,
+              cfg.textTone
+            )}
             title={`${cfg.label} (%${r.riskRatio}) - risk skoru %${r.riskScore}`}
           >
-            <Icon className={`w-3.5 h-3.5 ${cfg.color}`} />
-            <span className="text-[11px] font-semibold text-slate-300">%{r.riskScore}</span>
+            <span className={cn("h-1.5 w-1.5 rounded-full", cfg.dotColor)} />
+            <span className="tabular-nums">%{r.riskScore}</span>
           </span>
         );
       },
     },
     {
       key: "missingInfo",
-      header: "Bilgi Uyarisi",
-      width: "140px",
+      header: "Bilgi Uyarısı",
+      width: "135px",
       exportValue: (r) => formatMissingInfo(r.missingInfoKeys, 6),
-      render: (r) => (
+      render: (r) =>
         r.hasMissingInfo ? (
-          <Badge variant="warning" className="max-w-[132px] truncate">
+          <span
+            className="inline-flex max-w-[130px] items-center truncate rounded border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300"
+            title={formatMissingInfo(r.missingInfoKeys, 6)}
+          >
             {formatMissingInfo(r.missingInfoKeys)}
-          </Badge>
+          </span>
         ) : (
-          <Badge variant="success">Tam</Badge>
-        )
-      ),
+          <span className="inline-flex items-center rounded border border-slate-800 bg-slate-900/50 px-2 py-0.5 text-[11px] font-medium text-slate-400">
+            Tam
+          </span>
+        ),
     },
     {
       key: "lastTx",
       header: "Son İşlem",
       width: "95px",
       render: (r) => (
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-slate-400 font-mono">
           {r.lastTransactionDate ? formatDate(r.lastTransactionDate) : "—"}
         </span>
       ),
@@ -487,7 +590,7 @@ export function ContactsListPage() {
       header: "Durum",
       width: "70px",
       align: "center",
-      exportValue: (r) => r.isActive ? "Aktif" : "Pasif",
+      exportValue: (r) => (r.isActive ? "Aktif" : "Pasif"),
       render: (r) => <ActiveBadge isActive={r.isActive} />,
     },
     {
@@ -499,113 +602,176 @@ export function ContactsListPage() {
       render: (r) => <RowActions actions={getRowActions(r)} />,
     },
   ];
+
   const visibleColumns = getVisibleColumns(columns, visibleColumnKeys);
 
   return (
     <div>
-      <PageHeader
-        title="Cari Hesaplar"
-        subtitle="Müşteri ve tedarikçi hesaplarını yönetin"
-        action={
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              leftIcon={<UploadCloud className="w-4 h-4" />}
-              onClick={() => importRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-            >
-              İçe Aktar
-            </Button>
-            <Button
-              leftIcon={<Plus className="w-4 h-4" />}
-              onClick={() => router.push("/dashboard/contacts/new")}
-            >
-              Yeni Cari
-            </Button>
-          </div>
-        }
-      />
-
-      {isEmptyFirstUse && (
-        <div ref={importRef}>
-          <StarterCsvImportWizard entity="contacts" />
+      {/* 1. Page Header */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold text-slate-100 tracking-tight">Cari Hesaplar</h1>
+          <p className="mt-0.5 text-xs text-slate-400">Müşteri ve tedarikçi hesapları</p>
         </div>
-      )}
-
-      <CustomerTrackingPanel />
-
-      {/* Summary Bar */}
-      {summary && <SummaryBar summary={summary} />}
-
-      {/* Search + Filter Bar */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <SearchInput
-          value={search}
-          onChange={(v) => {
-            setSearch(v);
-            setPage(1);
-          }}
-          placeholder="Ad, kod, vergi no, telefon, e-posta ara…"
-          className="w-72"
-        />
-        <Button
-          variant={showFilters ? "secondary" : "ghost"}
-          size="sm"
-          leftIcon={<Filter className="w-3.5 h-3.5" />}
-          onClick={() => setShowFilters((o) => !o)}
-        >
-          Filtreler
-          {hasActiveFilters && (
-            <span className="ml-1 w-4 h-4 rounded-full bg-sky-500 text-white text-[10px] flex items-center justify-center">
-              {[type, status, balanceFilter].filter(Boolean).length}
-            </span>
-          )}
-        </Button>
-        {hasActiveFilters && (
+        <div className="flex shrink-0 items-center gap-2">
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            leftIcon={<X className="w-3.5 h-3.5" />}
-            onClick={clearFilters}
+            leftIcon={<UploadCloud className="w-3.5 h-3.5" />}
+            onClick={toggleImport}
+            className={cn(
+              "h-8 text-xs transition-colors",
+              isImportOpen && "border-sky-500/50 bg-slate-800 text-white"
+            )}
           >
-            Temizle
+            İçe Aktar
           </Button>
-        )}
-        <ListStandardControls
-          module="contacts"
-          listKey="contacts.list"
-          currentState={viewState}
-          onApplyView={applyView}
-          columns={columns}
-          visibleColumnKeys={visibleColumnKeys}
-          onVisibleColumnKeysChange={setVisibleColumnKeys}
-          pageSize={pageSize}
-          onPageSizeChange={(nextPageSize) => {
-            setPageSize(nextPageSize);
-            setPage(1);
-          }}
-          exportRows={contacts}
-          exportFilename="cari-hesaplar.csv"
-        />
-        <div className="flex rounded-lg border border-slate-800 bg-slate-900/60 p-0.5">
-          <button
-            type="button"
-            onClick={() => setTableDensity("compact")}
-            className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${tableDensity === "compact" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-slate-200"}`}
+          <Button
+            size="sm"
+            leftIcon={<Plus className="w-3.5 h-3.5" />}
+            onClick={() => router.push("/dashboard/contacts/new")}
+            className="h-8 text-xs"
           >
-            Kompakt
-          </button>
-          <button
-            type="button"
-            onClick={() => setTableDensity("comfortable")}
-            className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${tableDensity === "comfortable" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-slate-200"}`}
-          >
-            Rahat
-          </button>
+            Yeni Cari
+          </Button>
         </div>
       </div>
 
+      {/* CSV Import Panel (Collapsible, state preserved via hidden) */}
+      <div
+        ref={importRef}
+        className={cn(
+          "transition-all duration-200 mb-3",
+          !isImportOpen && !isEmptyFirstUse && "hidden"
+        )}
+      >
+        <div className="rounded-xl border border-slate-800/80 bg-slate-900/90 p-4 shadow-sm">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800/80">
+            <div className="flex items-center gap-2">
+              <UploadCloud className="w-4 h-4 text-sky-400" />
+              <h2 className="text-sm font-semibold text-slate-200">
+                Cari Hesaplar — CSV İçe Aktarma
+              </h2>
+            </div>
+            {!isEmptyFirstUse && (
+              <button
+                type="button"
+                onClick={() => setIsImportOpen(false)}
+                className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                aria-label="Kapat"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <StarterCsvImportWizard entity="contacts" />
+        </div>
+      </div>
+
+      {/* 2. Financial Summary Strip */}
+      {summary && <SummaryBar summary={summary} />}
+
+      {/* 3. Customer Tracking Overview */}
+      <CustomerTrackingPanel defaultExpanded={false} />
+
+      {/* 4. Table Toolbar */}
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+        {/* Left Toolbar Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchInput
+            value={search}
+            onChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            placeholder="Ad, kod, vergi no, telefon, e-posta ara…"
+            className="w-64 sm:w-72"
+            inputClassName="h-9 !py-1 text-xs rounded-lg border-slate-800 bg-slate-900/60"
+          />
+          <Button
+            variant={showFilters ? "secondary" : "ghost"}
+            size="sm"
+            leftIcon={<Filter className="w-3.5 h-3.5" />}
+            onClick={() => setShowFilters((o) => !o)}
+            className={cn(
+              "h-9 px-2.5 text-xs rounded-lg border border-slate-800 transition-colors",
+              showFilters
+                ? "bg-slate-800 text-white border-slate-700"
+                : "bg-slate-900/60 text-slate-300"
+            )}
+          >
+            Filtreler
+            {hasActiveFilters && (
+              <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-[10px] font-semibold text-white">
+                {[type, status, balanceFilter].filter(Boolean).length}
+              </span>
+            )}
+          </Button>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<X className="w-3.5 h-3.5" />}
+              onClick={clearFilters}
+              className="h-9 px-2.5 text-xs text-slate-400 hover:text-white"
+            >
+              Temizle
+            </Button>
+          )}
+        </div>
+
+        {/* Right Toolbar Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          <ListStandardControls
+            module="contacts"
+            listKey="contacts.list"
+            currentState={viewState}
+            onApplyView={applyView}
+            columns={columns}
+            visibleColumnKeys={visibleColumnKeys}
+            onVisibleColumnKeysChange={setVisibleColumnKeys}
+            pageSize={pageSize}
+            onPageSizeChange={(nextPageSize) => {
+              setPageSize(nextPageSize);
+              setPage(1);
+            }}
+            exportRows={contacts}
+            exportFilename="cari-hesaplar.csv"
+            controlSize="sm"
+          />
+          <div className="flex h-9 items-center rounded-lg border border-slate-800 bg-slate-900/60 p-0.5">
+            <button
+              type="button"
+              onClick={() => setTableDensity("compact")}
+              className={cn(
+                "h-7 rounded-md px-2.5 text-xs font-medium transition-colors",
+                tableDensity === "compact"
+                  ? "bg-slate-700 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
+              )}
+            >
+              Kompakt
+            </button>
+            <button
+              type="button"
+              onClick={() => setTableDensity("comfortable")}
+              className={cn(
+                "h-7 rounded-md px-2.5 text-xs font-medium transition-colors",
+                tableDensity === "comfortable"
+                  ? "bg-slate-700 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
+              )}
+            >
+              Rahat
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Active Filter Chips */}
       {activeFilterChips.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-slate-500">Aktif filtreler:</span>
           {activeFilterChips.map((chip) => (
             <button
               key={chip.key}
@@ -614,18 +780,22 @@ export function ContactsListPage() {
                 chip.clear();
                 setPage(1);
               }}
-              className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-sky-500/25 bg-sky-500/10 px-2.5 text-xs font-medium text-sky-200 hover:border-sky-400/40 hover:bg-sky-500/15"
+              className="inline-flex h-6 items-center gap-1 rounded-md border border-sky-500/25 bg-sky-500/10 px-2 text-[11px] font-medium text-sky-200 hover:border-sky-400/40 hover:bg-sky-500/15 transition-colors"
             >
-              {chip.label}
-              <X className="h-3 w-3" />
+              <span>{chip.label}</span>
+              <X className="h-3 w-3 text-sky-400" />
             </button>
           ))}
         </div>
       )}
 
-      {/* Advanced Filters */}
+      {/* Advanced Filter Drawer */}
       {showFilters && (
-        <div className="flex flex-wrap gap-2 mb-4 p-3 bg-slate-900/50 border border-slate-800/60 rounded-xl">
+        <div className="mb-3 flex flex-wrap items-center gap-2.5 rounded-lg border border-slate-800/80 bg-slate-900/60 p-2.5">
+          <div className="flex items-center gap-1.5 text-xs text-slate-400">
+            <Filter className="w-3.5 h-3.5 text-slate-500" />
+            <span>Filtrele:</span>
+          </div>
           <Select
             options={TYPE_OPTIONS}
             value={type}
@@ -633,7 +803,7 @@ export function ContactsListPage() {
               setType(e.target.value as ContactType | "");
               setPage(1);
             }}
-            className="w-36 !py-1.5 text-xs"
+            className="w-36 !h-8 !py-1 text-xs rounded-lg border-slate-800 bg-slate-900/60"
           />
           <Select
             options={STATUS_OPTIONS}
@@ -642,7 +812,7 @@ export function ContactsListPage() {
               setStatus(e.target.value);
               setPage(1);
             }}
-            className="w-36 !py-1.5 text-xs"
+            className="w-36 !h-8 !py-1 text-xs rounded-lg border-slate-800 bg-slate-900/60"
           />
           <Select
             options={BALANCE_OPTIONS}
@@ -651,11 +821,12 @@ export function ContactsListPage() {
               setBalanceFilter(e.target.value as "" | "receivable" | "payable" | "risky");
               setPage(1);
             }}
-            className="w-48 !py-1.5 text-xs"
+            className="w-44 !h-8 !py-1 text-xs rounded-lg border-slate-800 bg-slate-900/60"
           />
         </div>
       )}
 
+      {/* Bulk Selection Actions */}
       <BulkActionBar
         selectedIds={bulkSelection.selectedIdList}
         actions={bulkActions}
@@ -663,6 +834,7 @@ export function ContactsListPage() {
         onClear={bulkSelection.clearSelection}
       />
 
+      {/* 5. Contacts Table */}
       <DataTable
         columns={visibleColumns}
         data={contacts}
@@ -691,12 +863,6 @@ export function ContactsListPage() {
             : undefined
         }
       />
-
-      {!isEmptyFirstUse && (
-        <div ref={importRef} className="mt-4">
-          <StarterCsvImportWizard entity="contacts" />
-        </div>
-      )}
     </div>
   );
 }

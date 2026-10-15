@@ -80,6 +80,8 @@
     "test:api-keys-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-api-keys-assurance.ts",
     "test:enterprise-holding-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-enterprise-holding-assurance.ts",
     "test:settings-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-settings-assurance.ts",
+    "test:bi-settings-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-bi-settings-assurance.ts",
+    "test:tenant-audit-log-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-tenant-audit-log-assurance.ts",
     "test:units-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-units-assurance.ts",
     "test:categories-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-categories-assurance.ts",
     "test:tax-rates-assurance": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-tax-rates-assurance.ts",

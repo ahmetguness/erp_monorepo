@@ -1,5 +1,5 @@
 import { Context, Hono } from "hono";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { Plan, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { hashPassword } from "../security/password-hashing.js";
@@ -304,8 +304,9 @@ scimRoutes.use("*", async (c, next) => {
   const token = authHeader.slice(7).trim();
   if (!token) return scimError(c, "Gecersiz token.", 401);
 
+  const tokenHash = `sha256:${createHash("sha256").update(token).digest("hex")}`;
   const setting = await prisma.tenantSetting.findFirst({
-    where: { key: "security.scim.token", value: token },
+    where: { key: "security.scim.token", value: { in: [tokenHash, token] } },
     select: { tenantId: true },
   });
   if (!setting) return scimError(c, "Yetkisiz SCIM token.", 401);

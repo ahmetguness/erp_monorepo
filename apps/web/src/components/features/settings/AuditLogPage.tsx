@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useAuditLogExport, useAuditLogs } from '@/hooks/useAuditLogs';
 import { useTenantUsers } from '@/hooks/useUsers';
+import { useUIStore } from '@/store/ui.store';
 import { formatDateTime } from '@/lib/utils';
 import type { AuditLog } from '@/services/audit-log.service';
 
@@ -220,9 +221,10 @@ export function AuditLogPage() {
     dateTo: dateTo || undefined,
     criticalOnly: criticalOnly ? 'true' : undefined,
   };
-  const { data, isLoading } = useAuditLogs({ page, limit: 30, ...auditFilters });
+  const { data, isLoading, isError, error, refetch, isFetching } = useAuditLogs({ page, limit: 30, ...auditFilters });
   const exportQuery = useAuditLogExport(auditFilters);
   const { data: tenantUsers = [] } = useTenantUsers();
+  const { toast } = useUIStore();
   const userLabelById = useMemo(() => {
     const labels = new Map<string, string>();
     tenantUsers.forEach((tenantUser) => {
@@ -235,6 +237,10 @@ export function AuditLogPage() {
   const handleExport = async () => {
     const exported = await exportQuery.refetch();
     if (!exported.data) return;
+
+    if (exported.data.meta.truncated) {
+      toast.warning(`Export ${exported.data.meta.maxRows} satirla sinirlandi. ${exported.data.meta.totalEligible} uygun kaydin tamami dosyada degil.`);
+    }
 
     const blob = new Blob([JSON.stringify(exported.data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -466,14 +472,19 @@ export function AuditLogPage() {
         </FeatureGate>
       </div>
 
-      <DataTable
+      {isError ? (
+        <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-200">
+          <p>{error instanceof Error ? error.message : 'Denetim kayitlari alinamadi.'}</p>
+          <Button type="button" variant="secondary" size="sm" className="mt-4" onClick={() => void refetch()} loading={isFetching}>Tekrar dene</Button>
+        </div>
+      ) : <DataTable
         columns={columns}
         data={data?.data ?? []}
         keyExtractor={(row) => row.id}
         isLoading={isLoading}
         emptyTitle="Denetim kaydı bulunamadı"
         pagination={data ? { page, pageSize: 30, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
-      />
+      />}
 
       <Modal isOpen={Boolean(detail)} onClose={() => setDetail(null)} title="İşlem Detayı" size="md">
         {detail && (

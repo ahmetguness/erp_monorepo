@@ -9,12 +9,14 @@ import { Select } from '@/components/ui/Select';
 import { useRoles } from '@/hooks/useRoles';
 import { useCreateSavedView, useDeleteSavedView, useSavedViews } from '@/hooks/useSavedViews';
 import type { SavedView, SavedViewScope, SavedViewState } from '@/services/saved-view.service';
+import { cn } from '@/lib/utils';
 
 interface SavedViewControlsProps {
   module: string;
   listKey: string;
   currentState: SavedViewState;
   onApply: (state: SavedViewState) => void;
+  controlSize?: 'sm' | 'md';
 }
 
 const SCOPE_OPTIONS: Array<{ value: SavedViewScope; label: string }> = [
@@ -35,7 +37,7 @@ function parseScope(value: string): SavedViewScope {
   return 'PERSONAL';
 }
 
-export function SavedViewControls({ module, listKey, currentState, onApply }: SavedViewControlsProps) {
+export function SavedViewControls({ module, listKey, currentState, onApply, controlSize = 'md' }: SavedViewControlsProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [name, setName] = useState('');
@@ -114,20 +116,21 @@ export function SavedViewControls({ module, listKey, currentState, onApply }: Sa
   };
 
   return (
-    <div className="flex flex-wrap items-end gap-2">
+    <div className={cn('flex flex-wrap gap-2', controlSize === 'sm' ? 'items-center' : 'items-end')}>
       <Select
         aria-label="Kayıtlı görünümler"
         options={options}
         value={effectiveSelectedId}
         onChange={(event) => applySelected(event.target.value)}
-        className="w-56"
+        className={cn(controlSize === 'sm' ? 'w-48 h-9 !py-1 text-xs rounded-lg border-slate-800 bg-slate-900/60' : 'w-56')}
       />
       <Button
         type="button"
         variant="secondary"
-        size="md"
-        leftIcon={<Save className="w-4 h-4" />}
+        size={controlSize === 'sm' ? 'sm' : 'md'}
+        leftIcon={<Save className="w-3.5 h-3.5" />}
         onClick={() => setSaveOpen(true)}
+        className={cn(controlSize === 'sm' && 'h-9 px-2.5 text-xs rounded-lg border-slate-800 bg-slate-900/60')}
       >
         Görünümü kaydet
       </Button>
@@ -135,10 +138,11 @@ export function SavedViewControls({ module, listKey, currentState, onApply }: Sa
         <Button
           type="button"
           variant="ghost"
-          size="md"
-          leftIcon={<Trash2 className="w-4 h-4" />}
+          size={controlSize === 'sm' ? 'sm' : 'md'}
+          leftIcon={<Trash2 className="w-3.5 h-3.5" />}
           onClick={removeSelected}
           loading={deleteView.isPending}
+          className={cn(controlSize === 'sm' && 'h-9 px-2 text-xs rounded-lg text-slate-400 hover:text-rose-300')}
         >
           Sil
         </Button>
@@ -171,7 +175,8 @@ export function SavedViewControls({ module, listKey, currentState, onApply }: Sa
             options={SCOPE_OPTIONS}
             value={scope}
             onChange={(event) => {
-              setScope(parseScope(event.target.value));
+              const val = event.target.value;
+              setScope(val === 'TENANT' ? 'TENANT' : val === 'ROLE' ? 'ROLE' : 'PERSONAL');
               setRoleId('');
             }}
           />

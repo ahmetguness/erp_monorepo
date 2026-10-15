@@ -19,6 +19,7 @@ const DEFAULT_BI_SETTINGS: BiSettings = {
   entities: 'products,contacts,invoices',
   lastRun: null,
   token: '',
+  tokenConfigured: false,
   connectorType: 'rest',
   destinationName: '',
   readReplicaHost: '',
@@ -68,7 +69,7 @@ const CONNECTOR_LABELS: Record<BiSettings['connectorType'], string> = {
 
 function getPreviewHealth(form: BiSettings): BiSettings['status']['health'] {
   if (!form.enabled) return 'disabled';
-  if (!form.token) return 'needs_token';
+  if (!form.tokenConfigured) return 'needs_token';
   if ((form.connectorType === 'read_replica' || form.connectorType === 'postgresql') && !form.readReplicaHost.trim()) {
     return 'needs_destination';
   }
@@ -80,7 +81,7 @@ function getPreviewHealth(form: BiSettings): BiSettings['status']['health'] {
 }
 
 export default function BiWarehouseSettingsPage() {
-  const { data: settings, isLoading } = useBiSettings();
+  const { data: settings, isLoading, isError, error, refetch, isFetching } = useBiSettings();
   const generateBiToken = useGenerateBiToken();
   const runSimulation = useRunBiScheduleSimulation();
   const { toast } = useUIStore();
@@ -108,7 +109,7 @@ export default function BiWarehouseSettingsPage() {
     if (confirm('Yeni bir BI veri ambarı erişim tokenı oluşturmak istediğinize emin misiniz? Eski token geçersiz kalacaktır.')) {
       generateBiToken.mutate(undefined, {
         onSuccess: (data) => {
-          setForm((prev) => ({ ...prev, token: data.token }));
+          setForm((prev) => ({ ...prev, token: data.token, tokenConfigured: true }));
         },
       });
     }
@@ -137,6 +138,20 @@ export default function BiWarehouseSettingsPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="max-w-4xl space-y-6">
+        <PageHeader title="Veri AmbarÄ± & BI Entegrasyonu" subtitle="BI ayarlarÄ± yÃ¼klenemedi." />
+        <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-200">
+          <p>{error instanceof Error ? error.message : 'BI ayarlarÄ± alÄ±namadÄ±.'}</p>
+          <Button type="button" variant="secondary" size="sm" className="mt-4" onClick={() => void refetch()} loading={isFetching}>
+            Tekrar dene
+          </Button>
+        </div>
       </div>
     );
   }
@@ -196,7 +211,7 @@ export default function BiWarehouseSettingsPage() {
               </div>
             </div>
 
-            {form.token && (
+            {form.tokenConfigured && (
               <div className="space-y-3 pt-2">
                 <div className="flex flex-col sm:flex-row gap-3">
                   <div className="flex-1 space-y-1">

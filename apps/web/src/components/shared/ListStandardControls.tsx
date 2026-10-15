@@ -40,6 +40,7 @@ export interface ListStandardControlsProps<T> {
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
+  controlSize?: 'sm' | 'md';
 }
 
 const DEFAULT_PAGE_SIZE_OPTIONS: readonly PageSizeOption[] = [
@@ -76,6 +77,7 @@ export function ListStandardControls<T>({
   searchValue,
   onSearchChange,
   searchPlaceholder = 'Listede ara...',
+  controlSize = 'md',
 }: ListStandardControlsProps<T>) {
   const [columnsOpen, setColumnsOpen] = useState(false);
   const columnsPopoverRef = useRef<HTMLDivElement>(null);
@@ -141,6 +143,7 @@ export function ListStandardControls<T>({
             onChange={onSearchChange}
             placeholder={searchPlaceholder}
             className="w-full"
+            inputClassName={controlSize === 'sm' ? 'h-9 !py-1 text-xs rounded-lg border-slate-800 bg-slate-900/60' : undefined}
           />
         </div>
       )}
@@ -151,6 +154,7 @@ export function ListStandardControls<T>({
         listKey={listKey}
         currentState={currentState}
         onApply={onApplyView}
+        controlSize={controlSize}
       />
 
       {/* Page Size Select */}
@@ -159,7 +163,7 @@ export function ListStandardControls<T>({
         options={pageSizeOptions.map((option) => ({ value: String(option.value), label: option.label }))}
         value={String(pageSize)}
         onChange={(event) => onPageSizeChange(parsePageSize(event.target.value, pageSizeOptions, pageSize))}
-        className="w-32 h-10"
+        className={cn(controlSize === 'sm' ? 'w-28 h-9 !py-1 text-xs rounded-lg border-slate-800 bg-slate-900/60' : 'w-32 h-10')}
       />
 
       {/* Columns Popover (controlled, replaces native <details>) */}
@@ -170,12 +174,13 @@ export function ListStandardControls<T>({
           aria-expanded={columnsOpen}
           aria-haspopup="dialog"
           className={cn(
-            'inline-flex h-10 items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 text-sm font-medium text-slate-300 transition-colors',
+            'inline-flex items-center rounded-lg border border-slate-800 bg-slate-900 font-medium text-slate-300 transition-colors',
             'hover:border-slate-700 hover:bg-slate-800',
+            controlSize === 'sm' ? 'h-9 px-2.5 text-xs gap-1.5' : 'h-10 px-3 text-sm gap-2 rounded-xl',
             columnsOpen && 'border-sky-500/50 bg-slate-800 text-white',
           )}
         >
-          <SlidersHorizontal className="h-4 w-4" />
+          <SlidersHorizontal className="h-3.5 w-3.5" />
           <span>Kolonlar</span>
         </button>
 
@@ -213,12 +218,12 @@ export function ListStandardControls<T>({
       <Button
         type="button"
         variant="secondary"
-        size="md"
-        leftIcon={<Download className="h-4 w-4" />}
+        size={controlSize === 'sm' ? 'sm' : 'md'}
+        leftIcon={<Download className="h-3.5 w-3.5" />}
         disabled={!canExport}
         title={!hasExportPermission ? (exportDisabledReason ?? 'Dışa aktarma yetkiniz yok') : undefined}
         onClick={exportCsv}
-        className="h-10"
+        className={cn(controlSize === 'sm' && 'h-9 px-3 text-xs rounded-lg border-slate-800 bg-slate-900/60')}
       >
         Dışa aktar
       </Button>
@@ -228,10 +233,10 @@ export function ListStandardControls<T>({
         <Button
           type="button"
           variant="ghost"
-          size="md"
-          leftIcon={<Link2 className="h-4 w-4" />}
+          size={controlSize === 'sm' ? 'sm' : 'md'}
+          leftIcon={<Link2 className="h-3.5 w-3.5" />}
           onClick={copyShareLink}
-          className="h-10"
+          className={cn(controlSize === 'sm' && 'h-9 px-3 text-xs rounded-lg')}
         >
           Link
         </Button>

@@ -53,6 +53,9 @@ export const AuditLogExportSchema = z.object({
   data: z.array(AuditLogSchema),
   meta: z.object({
     total: z.number(),
+    totalEligible: z.number(),
+    truncated: z.boolean(),
+    maxRows: z.number(),
     exportedAt: z.string(),
     format: z.literal('json'),
   }),

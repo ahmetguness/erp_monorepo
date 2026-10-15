@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { resolveAuditStandardFlags } from './audit/audit-standard.js';
 import { canUseAuditLogSiem, resolveAuditLogPolicy } from './audit-log-policy.service.js';
 import { observedFetch } from '../modules/shared/index.js';
+import { decrypt, encrypt } from '../utils/encryption.js';
 
 export const SIEM_SETTING_KEYS = {
   enabled: 'security.siem.enabled',
@@ -79,6 +80,7 @@ const DEFAULT_SIEM_SETTINGS: SiemSettings = {
   lastExportAt: null,
   lastStatus: null,
 };
+const SECRET_MASK = '********';
 
 const SEVERITY_RANK: Record<SiemSeverity, number> = {
   info: 1,
@@ -98,7 +100,7 @@ function readSetting(map: Map<string, string>, key: string): string {
   return map.get(key) ?? '';
 }
 
-export async function getSiemSettings(tenantId: string): Promise<SiemSettings> {
+export async function getSiemSettings(tenantId: string, revealSecrets = false): Promise<SiemSettings> {
   const settings = await prisma.tenantSetting.findMany({
     where: { tenantId, key: { startsWith: 'security.siem.' } },
     select: { key: true, value: true },
@@ -111,7 +113,9 @@ export async function getSiemSettings(tenantId: string): Promise<SiemSettings> {
     enabled: readSetting(map, SIEM_SETTING_KEYS.enabled) === 'true',
     destinationType: isSiemDestinationType(destinationType) ? destinationType : DEFAULT_SIEM_SETTINGS.destinationType,
     endpointUrl: readSetting(map, SIEM_SETTING_KEYS.endpointUrl),
-    authHeader: readSetting(map, SIEM_SETTING_KEYS.authHeader),
+    authHeader: readSetting(map, SIEM_SETTING_KEYS.authHeader)
+      ? (revealSecrets ? decrypt(readSetting(map, SIEM_SETTING_KEYS.authHeader)) : SECRET_MASK)
+      : '',
     minSeverity: isSiemSeverity(minSeverity) ? minSeverity : DEFAULT_SIEM_SETTINGS.minSeverity,
     includeDiff: readSetting(map, SIEM_SETTING_KEYS.includeDiff) !== 'false',
     lastExportAt: readSetting(map, SIEM_SETTING_KEYS.lastExportAt) || null,
@@ -120,11 +124,20 @@ export async function getSiemSettings(tenantId: string): Promise<SiemSettings> {
 }
 
 export async function saveSiemSettings(tenantId: string, settings: SiemSettings): Promise<void> {
+  const existingAuthHeader = settings.authHeader === SECRET_MASK
+    ? await prisma.tenantSetting.findUnique({
+      where: { tenantId_key: { tenantId, key: SIEM_SETTING_KEYS.authHeader } },
+      select: { value: true },
+    })
+    : null;
+  const storedAuthHeader = settings.authHeader === SECRET_MASK
+    ? existingAuthHeader?.value ?? ''
+    : encrypt(settings.authHeader);
   const updates = [
     { key: SIEM_SETTING_KEYS.enabled, value: settings.enabled ? 'true' : 'false' },
     { key: SIEM_SETTING_KEYS.destinationType, value: settings.destinationType },
     { key: SIEM_SETTING_KEYS.endpointUrl, value: settings.endpointUrl },
-    { key: SIEM_SETTING_KEYS.authHeader, value: settings.authHeader },
+    { key: SIEM_SETTING_KEYS.authHeader, value: storedAuthHeader },
     { key: SIEM_SETTING_KEYS.minSeverity, value: settings.minSeverity },
     { key: SIEM_SETTING_KEYS.includeDiff, value: settings.includeDiff ? 'true' : 'false' },
   ];
@@ -222,7 +235,7 @@ export async function exportRecentAuditLogsToSiem(tenantId: string, limit = 25):
     };
   }
 
-  const settings = await getSiemSettings(tenantId);
+  const settings = await getSiemSettings(tenantId, true);
   const logs = await prisma.auditLog.findMany({
     where: { tenantId },
     orderBy: { createdAt: 'desc' },
@@ -291,7 +304,7 @@ export async function exportRecentAuditLogsToSiem(tenantId: string, limit = 25):
 }
 
 export async function pushSingleAuditLogToSiem(log: AuditLogLike): Promise<void> {
-  const settings = await getSiemSettings(log.tenantId);
+  const settings = await getSiemSettings(log.tenantId, true);
   if (!settings.enabled || !settings.endpointUrl) return;
   const policy = await resolveAuditLogPolicy(prisma, log.tenantId);
   if (!canUseAuditLogSiem(policy)) return;

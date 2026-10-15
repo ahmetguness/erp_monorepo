@@ -1,7 +1,9 @@
-import { randomUUID } from 'crypto';
+import { createHash,randomUUID } from 'crypto';
 import { Context } from 'hono';
 import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
+import { getValidatedBody } from '../../../../../middleware/validateBody.js';
+import { corporateSecuritySettingsBodySchema } from '../../../../../schemas/request-body.schemas.js';
 import {
 getSecurityHardeningSnapshot,
 listSecuritySessions,
@@ -10,7 +12,8 @@ revokeSecuritySession,
 import { getTenantSecurityScore } from '../../../../../services/tenant-security.service.js';
 import { getRequestMeta } from '../../../../../utils/audit.js';
 import { requireTenantId,requireUserId } from '../../../../../utils/context.js';
-import { readBoolean,readJsonObject,readPositiveNumber,readString } from './shared.js';
+import { encrypt } from '../../../../../utils/encryption.js';
+import { readBoolean,readPositiveNumber,readString } from './shared.js';
 
 export const securitySettingsController = {
   async securityScore(c: Context): Promise<Response> {
@@ -64,9 +67,9 @@ export const securitySettingsController = {
         ssoProvider: settingsMap.get('security.sso.provider') || 'saml',
         samlMetadataUrl: settingsMap.get('security.sso.saml_metadata_url') || '',
         oidcClientId: settingsMap.get('security.sso.oidc_client_id') || '',
-        oidcClientSecret: settingsMap.get('security.sso.oidc_client_secret') || '',
+        oidcClientSecret: settingsMap.get('security.sso.oidc_client_secret') ? '********' : '',
         scimEnabled: settingsMap.get('security.scim.enabled') === 'true',
-        scimToken: settingsMap.get('security.scim.token') || '',
+        scimToken: '',
         scimRoleSyncEnabled: settingsMap.get('security.scim.role_sync.enabled') === 'true',
         scimDefaultRoleId: settingsMap.get('security.scim.default_role_id') || '',
         scimRoleMappings: settingsMap.get('security.scim.role_mappings') || '[]',
@@ -90,14 +93,34 @@ export const securitySettingsController = {
       throw new ValidationError('Kurumsal güvenlik ayarları sadece Enterprise plan müşterileri içindir.');
     }
 
-    const body = await readJsonObject(c);
+    const body = getValidatedBody(c, corporateSecuritySettingsBodySchema);
+
+    const mappings = JSON.parse(body.scimRoleMappings) as Array<{ group: string; roleId: string }>;
+    const referencedRoleIds = [...new Set([
+      ...(body.scimDefaultRoleId ? [body.scimDefaultRoleId] : []),
+      ...mappings.map((mapping) => mapping.roleId).filter(Boolean),
+    ])];
+    if (referencedRoleIds.length > 0) {
+      const ownedRoleCount = await prisma.role.count({ where: { tenantId, id: { in: referencedRoleIds } } });
+      if (ownedRoleCount !== referencedRoleIds.length) {
+        throw new ValidationError('SCIM rol eslemeleri bu tenant icindeki rollere ait olmalidir.');
+      }
+    }
+
+    const storedOidcSecret = await prisma.tenantSetting.findUnique({
+      where: { tenantId_key: { tenantId, key: 'security.sso.oidc_client_secret' } },
+      select: { value: true },
+    });
+    const oidcClientSecret = body.oidcClientSecret === '********'
+      ? storedOidcSecret?.value ?? ''
+      : encrypt(body.oidcClientSecret);
 
     const updates = [
       { key: 'security.sso.enabled', value: readBoolean(body.ssoEnabled) ? 'true' : 'false' },
       { key: 'security.sso.provider', value: readString(body.ssoProvider, 'saml') },
       { key: 'security.sso.saml_metadata_url', value: readString(body.samlMetadataUrl) },
       { key: 'security.sso.oidc_client_id', value: readString(body.oidcClientId) },
-      { key: 'security.sso.oidc_client_secret', value: readString(body.oidcClientSecret) },
+      { key: 'security.sso.oidc_client_secret', value: oidcClientSecret },
       { key: 'security.scim.enabled', value: readBoolean(body.scimEnabled) ? 'true' : 'false' },
       { key: 'security.scim.role_sync.enabled', value: readBoolean(body.scimRoleSyncEnabled) ? 'true' : 'false' },
       { key: 'security.scim.default_role_id', value: readString(body.scimDefaultRoleId) },
@@ -109,13 +132,13 @@ export const securitySettingsController = {
       { key: 'security.session.idle_timeout_mins', value: String(readPositiveNumber(body.sessionIdleTimeoutMins, 30)) },
     ];
 
-    for (const update of updates) {
-      await prisma.tenantSetting.upsert({
+    await prisma.$transaction(updates.map((update) =>
+      prisma.tenantSetting.upsert({
         where: { tenantId_key: { tenantId, key: update.key } },
         create: { tenantId, key: update.key, value: update.value },
         update: { value: update.value }
-      });
-    }
+      }),
+    ));
 
     return c.json({ data: { success: true } });
   },
@@ -132,11 +155,12 @@ export const securitySettingsController = {
     }
 
     const token = 'scim_' + randomUUID().replace(/-/g, '');
+    const tokenHash = `sha256:${createHash('sha256').update(token).digest('hex')}`;
 
     await prisma.tenantSetting.upsert({
       where: { tenantId_key: { tenantId, key: 'security.scim.token' } },
-      create: { tenantId, key: 'security.scim.token', value: token },
-      update: { value: token }
+      create: { tenantId, key: 'security.scim.token', value: tokenHash },
+      update: { value: tokenHash }
     });
 
     return c.json({ data: { token } });

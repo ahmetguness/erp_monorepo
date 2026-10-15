@@ -76,7 +76,6 @@ export interface SecurityHardeningSnapshot {
 
 const SESSION_SETTING_KEY = 'security.sessions';
 const MAX_STORED_SESSIONS = 100;
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_TOUCH_INTERVAL_MS = 5 * 60 * 1000;
 const API_KEY_ROTATION_MS = 90 * 24 * 60 * 60 * 1000;
 const API_KEY_EXPIRY_WARNING_MS = 14 * 24 * 60 * 60 * 1000;
@@ -152,19 +151,41 @@ function sessionToJson(session: SecuritySession): Prisma.InputJsonObject {
   };
 }
 
-function withExpiredStatus(session: SecuritySession, now = new Date()): SecuritySession {
+function positiveSetting(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function withExpiredStatus(
+  session: SecuritySession,
+  maxAgeDays: number,
+  idleTimeoutMins: number,
+  now = new Date(),
+): SecuritySession {
   if (session.status !== 'ACTIVE') return session;
+  const createdAt = new Date(session.createdAt).getTime();
   const lastSeenAt = new Date(session.lastSeenAt).getTime();
-  if (!Number.isFinite(lastSeenAt) || now.getTime() - lastSeenAt <= SESSION_TTL_MS) return session;
-  return { ...session, status: 'EXPIRED' };
+  const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+  const idleTimeoutMs = idleTimeoutMins * 60 * 1000;
+  const expiredByAge = Number.isFinite(createdAt) && now.getTime() - createdAt > maxAgeMs;
+  const expiredByIdle = Number.isFinite(lastSeenAt) && now.getTime() - lastSeenAt > idleTimeoutMs;
+  return expiredByAge || expiredByIdle ? { ...session, status: 'EXPIRED' } : session;
 }
 
 async function readSessions(db: PrismaClient, tenantId: string): Promise<SecuritySession[]> {
-  const setting = await db.tenantSetting.findUnique({
-    where: { tenantId_key: { tenantId, key: SESSION_SETTING_KEY } },
-    select: { value: true },
+  const settings = await db.tenantSetting.findMany({
+    where: {
+      tenantId,
+      key: { in: [SESSION_SETTING_KEY, 'security.session.max_age_days', 'security.session.idle_timeout_mins'] },
+    },
+    select: { key: true, value: true },
   });
-  return parseSessions(setting?.value).map((session) => withExpiredStatus(session));
+  const map = new Map(settings.map((setting) => [setting.key, setting.value]));
+  const maxAgeDays = positiveSetting(map.get('security.session.max_age_days'), 7);
+  const idleTimeoutMins = positiveSetting(map.get('security.session.idle_timeout_mins'), 30);
+  return parseSessions(map.get(SESSION_SETTING_KEY)).map((session) =>
+    withExpiredStatus(session, maxAgeDays, idleTimeoutMins),
+  );
 }
 
 async function writeSessions(db: PrismaClient, tenantId: string, sessions: readonly SecuritySession[]): Promise<void> {

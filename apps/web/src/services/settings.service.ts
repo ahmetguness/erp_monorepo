@@ -615,6 +615,7 @@ export const BiSettingsSchema = z.object({
   entities: z.string(),
   lastRun: z.string().nullable(),
   token: z.string(),
+  tokenConfigured: z.boolean(),
   connectorType: z.enum(['rest', 'read_replica', 'bigquery', 'snowflake', 'postgresql']),
   destinationName: z.string(),
   readReplicaHost: z.string(),

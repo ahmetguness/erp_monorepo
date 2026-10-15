@@ -38,6 +38,14 @@ function parseDateQuery(value: string | undefined, label: string): Date | undefi
   return date;
 }
 
+function parsePositiveInteger(value: string | undefined, fallback: number, label: string): number {
+  if (value === undefined) return fallback;
+  if (!/^\d+$/.test(value)) throw new ValidationError(`${label} pozitif bir tam sayi olmalidir.`);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) throw new ValidationError(`${label} pozitif bir tam sayi olmalidir.`);
+  return parsed;
+}
+
 function laterDate(first: Date | null | undefined, second: Date | undefined): Date | undefined {
   if (!first) return second;
   if (!second) return first;
@@ -59,9 +67,14 @@ function buildAuditWhere(params: {
   const dateLimit = getAuditLogCutoffDate(params.policy);
   const dateFrom = parseDateQuery(params.dateFrom, 'dateFrom');
   const dateTo = parseDateQuery(params.dateTo, 'dateTo');
+  if (dateFrom && dateTo && dateFrom > dateTo) throw new ValidationError('dateFrom dateTo degerinden sonra olamaz.');
+  if (dateTo && params.dateTo && /^\d{4}-\d{2}-\d{2}$/.test(params.dateTo)) dateTo.setUTCHours(23, 59, 59, 999);
   const gte = laterDate(dateLimit, dateFrom);
-  const filteredEntityType = params.entityType && isEntityType(params.entityType) ? params.entityType : undefined;
-  const filteredAction = params.action && isAuditAction(params.action) ? params.action : undefined;
+  if (params.entityType && !isEntityType(params.entityType)) throw new ValidationError('Gecersiz entityType.');
+  if (params.action && !isAuditAction(params.action)) throw new ValidationError('Gecersiz audit action.');
+  if (params.criticalOnly && params.criticalOnly !== 'true' && params.criticalOnly !== 'false') throw new ValidationError('criticalOnly boolean olmalidir.');
+  const filteredEntityType = params.entityType as EntityType | undefined;
+  const filteredAction = params.action as AuditAction | undefined;
   const criticalOnly = params.criticalOnly === 'true';
   const { tenantId } = params;
 
@@ -282,8 +295,8 @@ export const AuditLogController = {
   async list(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '50', 10)));
+    const page = parsePositiveInteger(c.req.query('page'), 1, 'page');
+    const pageSize = Math.min(100, parsePositiveInteger(c.req.query('limit'), 50, 'limit'));
     const module = c.req.query('module');
     const entityType = c.req.query('entityType');
     const entityId = c.req.query('entityId');
@@ -308,7 +321,7 @@ export const AuditLogController = {
       prisma.auditLog.count({ where }),
       prisma.auditLog.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -366,11 +379,14 @@ export const AuditLogController = {
       criticalOnly: c.req.query('criticalOnly'),
     });
 
-    const logs = await prisma.auditLog.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: policy.exportMaxRows,
-    });
+    const [totalEligible, logs] = await prisma.$transaction([
+      prisma.auditLog.count({ where }),
+      prisma.auditLog.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: policy.exportMaxRows,
+      }),
+    ]);
 
     const enrichedLogs = await enrichAuditLogs(tenantId, logs);
     const meta = getRequestMeta(c);
@@ -401,7 +417,15 @@ export const AuditLogController = {
 
     return c.json({
       data: enrichedLogs,
-      meta: { total: logs.length, exportedAt: new Date().toISOString(), format: 'json', auditPolicy: policy },
+      meta: {
+        total: logs.length,
+        totalEligible,
+        truncated: totalEligible > logs.length,
+        maxRows: policy.exportMaxRows,
+        exportedAt: new Date().toISOString(),
+        format: 'json',
+        auditPolicy: policy,
+      },
     });
   },
 };

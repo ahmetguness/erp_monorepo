@@ -10,6 +10,7 @@ export interface SearchInputProps {
   placeholder?: string;
   debounceMs?: number;
   className?: string;
+  inputClassName?: string;
 }
 
 export function SearchInput({
@@ -18,6 +19,7 @@ export function SearchInput({
   placeholder = 'Ara…',
   debounceMs = 300,
   className,
+  inputClassName,
 }: SearchInputProps) {
   const [local, setLocal] = useReducer((_current: string, next: string) => next, value);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,7 +43,10 @@ export function SearchInput({
         value={local}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-slate-700/75 bg-slate-950/35 py-2.5 pl-9 pr-8 text-sm text-white placeholder-slate-600 shadow-sm transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-sky-500/35 focus:border-sky-500/60"
+        className={cn(
+          'w-full rounded-xl border border-slate-700/75 bg-slate-950/35 py-2.5 pl-9 pr-8 text-sm text-white placeholder-slate-600 shadow-sm transition-all duration-150 hover:border-slate-600/80 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-sky-500/35 focus:border-sky-500/60',
+          inputClassName,
+        )}
       />
       {local && (
         <button onClick={handleClear} aria-label="Temizle"

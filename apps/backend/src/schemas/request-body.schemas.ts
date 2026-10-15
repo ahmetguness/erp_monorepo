@@ -674,6 +674,55 @@ export const moduleSettingBodySchema = z
     validateModuleSettingValue(body.key, body.value, ctx),
   );
 
+const scimRoleMappingsStringSchema = z.string().max(20_000).superRefine((value, ctx) => {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed) || parsed.some((item) =>
+      typeof item !== "object" || item === null || Array.isArray(item) ||
+      typeof (item as Record<string, unknown>).group !== "string" ||
+      typeof (item as Record<string, unknown>).roleId !== "string")) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "SCIM rol eslemeleri gecersiz." });
+    }
+  } catch {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "SCIM rol eslemeleri gecerli JSON olmalidir." });
+  }
+});
+
+const ipv4Part = "(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)";
+const ipOrCidrPattern = new RegExp(`^${ipv4Part}(?:\\.${ipv4Part}){3}(?:\\/(?:[0-9]|[12]\\d|3[0-2]))?$`);
+
+export const corporateSecuritySettingsBodySchema = z.object({
+  ssoEnabled: z.boolean(),
+  ssoProvider: z.enum(["saml", "oidc"]),
+  samlMetadataUrl: z.string().max(20_000),
+  oidcClientId: z.string().max(500),
+  oidcClientSecret: z.string().max(2_000),
+  scimEnabled: z.boolean(),
+  scimToken: z.string().max(2_000),
+  scimRoleSyncEnabled: z.boolean(),
+  scimDefaultRoleId: z.string().max(200),
+  scimRoleMappings: scimRoleMappingsStringSchema,
+  ipRestrictionEnabled: z.boolean(),
+  ipWhitelist: z.string().max(10_000),
+  sessionMaxAgeDays: z.number().int().min(1).max(90),
+  sessionConcurrentLimit: z.number().int().min(1).max(20),
+  sessionIdleTimeoutMins: z.number().int().min(5).max(1440),
+}).strict().superRefine((body, ctx) => {
+  if (body.ssoEnabled && body.ssoProvider === "saml" && !body.samlMetadataUrl.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["samlMetadataUrl"], message: "SAML metadata zorunludur." });
+  }
+  if (body.ssoEnabled && body.ssoProvider === "oidc" && (!body.oidcClientId.trim() || !body.oidcClientSecret.trim())) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["oidcClientId"], message: "OIDC client bilgileri zorunludur." });
+  }
+  const entries = body.ipWhitelist.split(",").map((item) => item.trim()).filter(Boolean);
+  if (body.ipRestrictionEnabled && entries.length === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ipWhitelist"], message: "En az bir IP adresi zorunludur." });
+  }
+  if (entries.some((entry) => !ipOrCidrPattern.test(entry))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ipWhitelist"], message: "Gecersiz IP veya CIDR." });
+  }
+});
+
 export const salesTargetBodySchema = z
   .object({
     month: z

@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useUIStore } from '@/store/ui.store';
+import { getErrorMessage } from '@/types/api.types';
 import {
   useCorporateSecuritySettings,
   useUpdateCorporateSecuritySettings,
@@ -118,7 +119,8 @@ const DEFAULT_RETENTION_FORM: DataRetentionSettings = {
 };
 
 export default function CorporateSecurityPage() {
-  const { data: settings, isLoading } = useCorporateSecuritySettings();
+  const settingsQuery = useCorporateSecuritySettings();
+  const { data: settings, isLoading, isError, error } = settingsQuery;
   const { data: siemSettings } = useSiemSettings();
   const { data: auditLogFullStatus } = useAuditLogFullStatus();
   const { data: retentionSettings } = useDataRetentionSettings();
@@ -205,6 +207,24 @@ export default function CorporateSecurityPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="max-w-4xl space-y-6">
+        <PageHeader
+          title="Kurumsal Güvenlik Politikaları"
+          subtitle="SSO, SCIM, IP kısıtlamaları ve oturum politikalarını yönetin."
+        />
+        <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-200">
+          <p className="font-semibold">Güvenlik politikaları alınamadı.</p>
+          <p className="mt-1 text-xs text-red-200/80">{getErrorMessage(error)}</p>
+          <Button className="mt-4" variant="secondary" size="sm" onClick={() => void settingsQuery.refetch()}>
+            Tekrar dene
+          </Button>
+        </div>
       </div>
     );
   }

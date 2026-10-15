@@ -37,6 +37,14 @@ async function login(email: string, tenantSlug: string): Promise<Session> {
   return { cookie: response.headers.get("set-cookie")!.split(";")[0]! };
 }
 
+async function scimRequest(token: string | null, path: string) {
+  const response = await fetch(`${base}${path}`, {
+    headers: { origin, ...(token ? { authorization: `Bearer ${token}` } : {}) },
+  });
+  const text = await response.text();
+  return { status: response.status, body: text ? JSON.parse(text) : null };
+}
+
 async function main() {
   const owner = await prisma.user.findUniqueOrThrow({
     where: { email: "admin@axondemo.com" },
@@ -58,7 +66,7 @@ async function main() {
       slug: `${marker.toLowerCase()}-b`,
       companyName: `${marker}_B`,
       email: `${marker}-b@example.test`,
-      plan: "ENTERPRISE",
+      plan: "STARTER",
       status: "ACTIVE",
     },
   });
@@ -158,6 +166,10 @@ async function main() {
       ).status,
       400,
     );
+    assert.equal(
+      (await request(a, "/api/settings", "PUT", { key: "security.sso.enabled", value: "true" })).status,
+      400,
+    );
     for (const [key, value] of [
       ["timezone", "Invalid/Timezone"],
       ["date_format", "YYYY/DD/MM"],
@@ -203,6 +215,89 @@ async function main() {
       ).status,
       400,
     );
+
+    const tenantARole = await prisma.role.create({ data: { tenantId: tenantA.id, name: `${marker}_ROLE_A` } });
+    const tenantBRole = await prisma.role.create({ data: { tenantId: tenantB.id, name: `${marker}_ROLE_B` } });
+    const securityPayload = {
+      ssoEnabled: true, ssoProvider: "oidc", samlMetadataUrl: "", oidcClientId: "TEST_E2E_OIDC", oidcClientSecret: "TEST_E2E_SECRET",
+      scimEnabled: true, scimToken: "", scimRoleSyncEnabled: true, scimDefaultRoleId: tenantARole.id,
+      scimRoleMappings: JSON.stringify([{ group: "TEST_E2E_SECURITY", roleId: tenantARole.id }]),
+      ipRestrictionEnabled: false, ipWhitelist: "127.0.0.1, 10.0.0.0/8",
+      sessionMaxAgeDays: 30, sessionConcurrentLimit: 4, sessionIdleTimeoutMins: 45,
+    };
+    assert.equal((await request(null, "/api/settings/security/corporate")).status, 401);
+    assert.equal((await request(unauthorized, "/api/settings/security/corporate")).status, 403);
+    assert.equal((await request(b, "/api/settings/security/corporate")).status, 400);
+    assert.equal((await request(a, "/api/settings/security/corporate", "POST", securityPayload)).status, 200);
+    const securityRead = await request(a, "/api/settings/security/corporate");
+    assert.equal(securityRead.status, 200);
+    assert.equal(securityRead.body.data.sessionMaxAgeDays, 30);
+    assert.equal(securityRead.body.data.scimDefaultRoleId, tenantARole.id);
+    assert.equal(securityRead.body.data.oidcClientSecret, "********");
+    assert.equal(securityRead.body.data.scimToken, "");
+    assert.match(
+      (await prisma.tenantSetting.findUniqueOrThrow({ where: { tenantId_key: { tenantId: tenantA.id, key: "security.sso.oidc_client_secret" } } })).value,
+      /^enc:v1:/,
+    );
+    assert.equal(await prisma.tenantSetting.count({ where: { tenantId: tenantA.id, key: { startsWith: "security." } } }), 15);
+    for (const invalidPayload of [
+      { ...securityPayload, sessionMaxAgeDays: 0 },
+      { ...securityPayload, sessionConcurrentLimit: 21 },
+      { ...securityPayload, sessionIdleTimeoutMins: Number.NaN },
+      { ...securityPayload, ipRestrictionEnabled: true, ipWhitelist: "999.1.1.1" },
+      { ...securityPayload, ssoEnabled: true, ssoProvider: "oidc", oidcClientId: "", oidcClientSecret: "" },
+      { ...securityPayload, scimRoleMappings: "not-json" },
+      { ...securityPayload, scimDefaultRoleId: tenantBRole.id, scimRoleMappings: "[]" },
+    ]) {
+      assert.equal((await request(a, "/api/settings/security/corporate", "POST", invalidPayload)).status, 400);
+    }
+    assert.equal(
+      (await prisma.tenantSetting.findUniqueOrThrow({ where: { tenantId_key: { tenantId: tenantA.id, key: "security.session.max_age_days" } } })).value,
+      "30",
+    );
+    const [tokenOne, tokenTwo] = await Promise.all([
+      request(a, "/api/settings/security/scim/generate-token", "POST"),
+      request(a, "/api/settings/security/scim/generate-token", "POST"),
+    ]);
+    assert.equal(tokenOne.status, 200);
+    assert.equal(tokenTwo.status, 200);
+    assert.notEqual(tokenOne.body.data.token, tokenTwo.body.data.token);
+    const finalScimToken = (await prisma.tenantSetting.findUniqueOrThrow({ where: { tenantId_key: { tenantId: tenantA.id, key: "security.scim.token" } } })).value;
+    assert.match(finalScimToken, /^sha256:[a-f0-9]{64}$/);
+    assert.equal((await scimRequest(null, "/api/scim/v2/Users")).status, 401);
+    const tokenOneRuntime = await scimRequest(tokenOne.body.data.token, "/api/scim/v2/Users");
+    const tokenTwoRuntime = await scimRequest(tokenTwo.body.data.token, "/api/scim/v2/Users");
+    assert.deepEqual([tokenOneRuntime.status, tokenTwoRuntime.status].sort(), [200, 401]);
+    const scimUsers = tokenOneRuntime.status === 200 ? tokenOneRuntime : tokenTwoRuntime;
+    assert.equal(scimUsers.status, 200);
+    assert.equal(scimUsers.body.totalResults, 2);
+    assert.equal(scimUsers.body.Resources.some((resource: { userName: string }) => resource.userName === member.email), true);
+
+    const retention = await request(a, "/api/settings/security/data-retention");
+    assert.equal(retention.status, 200);
+    assert.equal((await request(a, "/api/settings/security/data-retention", "POST", retention.body.data)).status, 200);
+    assert.equal((await request(a, "/api/settings/security/data-retention/preview")).status, 200);
+    const retentionDryRun = await request(a, "/api/settings/security/data-retention/dry-run", "POST");
+    assert.equal(retentionDryRun.status, 200);
+    assert.equal(typeof retentionDryRun.body.data.totalCandidates, "number");
+
+    const siem = await request(a, "/api/settings/security/siem");
+    assert.equal(siem.status, 200);
+    assert.equal((await request(a, "/api/settings/security/siem", "POST", {
+      ...siem.body.data,
+      enabled: false,
+      endpointUrl: "",
+      authHeader: "Authorization: Bearer TEST_E2E_SIEM_SECRET",
+    })).status, 200);
+    const maskedSiem = await request(a, "/api/settings/security/siem");
+    assert.equal(maskedSiem.body.data.authHeader, "********");
+    assert.match(
+      (await prisma.tenantSetting.findUniqueOrThrow({ where: { tenantId_key: { tenantId: tenantA.id, key: "security.siem.auth_header" } } })).value,
+      /^enc:v1:/,
+    );
+    const siemTest = await request(a, "/api/settings/security/siem/test-export", "POST");
+    assert.equal(siemTest.status, 200);
+    assert.equal(siemTest.body.data.status, "prepared");
 
     const moduleCreated = await request(a, "/api/settings/modules", "PUT", {
       module: "inventory",
@@ -346,6 +441,12 @@ async function main() {
           internalKeyGuard: "PASS",
           knownValueValidation: "PASS",
           concurrentUpsertUniqueness: "PASS",
+          corporateSecurityValidationAndAtomicity: "PASS",
+          scimRoleTenantOwnership: "PASS",
+          scimTokenRotation: "PASS",
+          scimRuntimeTenantScope: "PASS",
+          retentionPreviewAndDryRun: "PASS",
+          siemPreparedExport: "PASS",
         },
         null,
         2,

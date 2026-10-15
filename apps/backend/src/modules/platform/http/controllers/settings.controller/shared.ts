@@ -138,7 +138,11 @@ export async function assertAuditLogFullPolicy(tenantId: string, message: string
 }
 
 export function isInternalTenantSettingKey(key: string | undefined): boolean {
-  return typeof key === 'string' && (key.startsWith('adaptive-defaults.') || INTERNAL_TENANT_SETTING_KEYS.some((internalKey) => internalKey === key));
+  return typeof key === 'string' && (
+    key.startsWith('adaptive-defaults.') ||
+    key.startsWith('security.') ||
+    INTERNAL_TENANT_SETTING_KEYS.some((internalKey) => internalKey === key)
+  );
 }
 
 export function sanitizeFileName(fileName: string): string {

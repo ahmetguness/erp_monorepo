@@ -1,11 +1,13 @@
 import { AuditAction,EntityType } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { Context } from 'hono';
-import { NotFoundError } from '../../../../../errors/index.js';
+import { NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
 import {
 BI_TOKEN_SETTING_KEY,
 getBiConnectorSettings,
+hashBiToken,
+InvalidBiSettingsError,
 recordBiScheduleSimulation,
 saveBiConnectorSettings
 } from '../../../../../services/bi-connector.service.js';
@@ -105,17 +107,22 @@ export const deploymentSettingsController = {
     const tenantId = requireTenantId(c);
     await assertEnterpriseTenant(tenantId, 'BI ayarlari sadece Enterprise plan musterileri icindir.');
     const body = await readJsonObject(c);
-    await saveBiConnectorSettings(prisma, tenantId, {
-      enabled: body.enabled,
-      interval: body.interval,
-      entities: body.entities,
-      connectorType: body.connectorType,
-      destinationName: body.destinationName,
-      readReplicaHost: body.readReplicaHost,
-      warehouseProject: body.warehouseProject,
-      scheduledExportTarget: body.scheduledExportTarget,
-      scheduledExportFormat: body.scheduledExportFormat,
-    });
+    try {
+      await saveBiConnectorSettings(prisma, tenantId, {
+        enabled: body.enabled,
+        interval: body.interval,
+        entities: body.entities,
+        connectorType: body.connectorType,
+        destinationName: body.destinationName,
+        readReplicaHost: body.readReplicaHost,
+        warehouseProject: body.warehouseProject,
+        scheduledExportTarget: body.scheduledExportTarget,
+        scheduledExportFormat: body.scheduledExportFormat,
+      });
+    } catch (error) {
+      if (error instanceof InvalidBiSettingsError) throw new ValidationError(error.message);
+      throw error;
+    }
 
     return c.json({ data: { success: true } });
   },
@@ -127,8 +134,8 @@ export const deploymentSettingsController = {
 
     await prisma.tenantSetting.upsert({
       where: { tenantId_key: { tenantId, key: BI_TOKEN_SETTING_KEY } },
-      create: { tenantId, key: BI_TOKEN_SETTING_KEY, value: token },
-      update: { value: token },
+      create: { tenantId, key: BI_TOKEN_SETTING_KEY, value: hashBiToken(token) },
+      update: { value: hashBiToken(token) },
     });
 
     return c.json({ data: { token } });

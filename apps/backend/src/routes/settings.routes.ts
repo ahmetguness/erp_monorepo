@@ -10,6 +10,7 @@ import {
 } from "../modules/platform/http/controllers/index.js";
 import {
   businessRuleBodySchema,
+  corporateSecuritySettingsBodySchema,
   moduleSettingBodySchema,
   tenantSettingBodySchema,
 } from "../schemas/request-body.schemas";
@@ -94,6 +95,7 @@ settingsRoutes.get(
 settingsRoutes.post(
   "/security/corporate",
   requirePermission("settings", "UPDATE"),
+  validateBody(corporateSecuritySettingsBodySchema),
   SettingsController.updateCorporateSecuritySettings,
 );
 settingsRoutes.post(

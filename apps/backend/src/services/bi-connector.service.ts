@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { createHash } from 'node:crypto';
 
 export const BI_CONNECTOR_SETTING_KEYS = {
   scheduleEnabled: 'bi.schedule.enabled',
@@ -40,6 +41,7 @@ export interface BiConnectorSettings {
   entities: string;
   lastRun: string | null;
   token: string;
+  tokenConfigured: boolean;
   connectorType: BiConnectorType;
   destinationName: string;
   readReplicaHost: string;
@@ -60,6 +62,8 @@ export interface BiConnectorSettingsInput {
   scheduledExportTarget: unknown;
   scheduledExportFormat: unknown;
 }
+
+export class InvalidBiSettingsError extends Error {}
 
 const CONNECTOR_LABELS: Record<BiConnectorType, string> = {
   rest: 'REST/OData endpoint',
@@ -87,6 +91,31 @@ function normalizeEntities(value: unknown): string {
     .filter(Boolean);
 
   return entities.length > 0 ? Array.from(new Set(entities)).join(',') : DEFAULT_ENTITIES;
+}
+
+export function validateBiConnectorSettingsInput(input: BiConnectorSettingsInput): void {
+  if (typeof input.enabled !== 'boolean') throw new InvalidBiSettingsError('enabled boolean olmalidir.');
+  if (typeof input.interval !== 'string' || !BI_SCHEDULE_INTERVALS.includes(input.interval as BiScheduleInterval)) {
+    throw new InvalidBiSettingsError('Gecersiz schedule interval.');
+  }
+  if (typeof input.connectorType !== 'string' || !BI_CONNECTOR_TYPES.includes(input.connectorType as BiConnectorType)) {
+    throw new InvalidBiSettingsError('Gecersiz connector tipi.');
+  }
+  if (typeof input.scheduledExportTarget !== 'string' || !BI_EXPORT_TARGETS.includes(input.scheduledExportTarget as BiExportTarget)) {
+    throw new InvalidBiSettingsError('Gecersiz export hedefi.');
+  }
+  if (typeof input.scheduledExportFormat !== 'string' || !BI_EXPORT_FORMATS.includes(input.scheduledExportFormat as BiExportFormat)) {
+    throw new InvalidBiSettingsError('Gecersiz export formati.');
+  }
+  const allowedEntities = new Set(['products', 'contacts', 'invoices', 'ledger']);
+  if (typeof input.entities !== 'string' || input.entities.length > 200) throw new InvalidBiSettingsError('Gecersiz entity listesi.');
+  const entities = input.entities.split(',').map((value) => value.trim()).filter(Boolean);
+  if (entities.length === 0 || entities.some((value) => !allowedEntities.has(value))) {
+    throw new InvalidBiSettingsError('Desteklenmeyen BI entity degeri.');
+  }
+  for (const value of [input.destinationName, input.readReplicaHost, input.warehouseProject]) {
+    if (typeof value !== 'string' || value.length > 255) throw new InvalidBiSettingsError('Connector alanlari en fazla 255 karakter olmalidir.');
+  }
 }
 
 function calculateNextRun(interval: BiScheduleInterval, lastRun: string | null): string | null {
@@ -119,7 +148,7 @@ function hasDestination(settings: Pick<BiConnectorSettings, 'connectorType' | 'd
 function buildStatus(settings: Omit<BiConnectorSettings, 'status'>): BiConnectorStatus {
   let health: BiConnectorHealth = 'ready';
   if (!settings.enabled) health = 'disabled';
-  else if (!settings.token) health = 'needs_token';
+  else if (!settings.tokenConfigured) health = 'needs_token';
   else if (!hasDestination(settings)) health = 'needs_destination';
 
   return {
@@ -143,13 +172,21 @@ export async function getBiConnectorSettings(prisma: PrismaClient, tenantId: str
   const tokenSetting = await prisma.tenantSetting.findUnique({
     where: { tenantId_key: { tenantId, key: BI_TOKEN_SETTING_KEY } },
   });
+  if (tokenSetting?.value && !tokenSetting.value.startsWith('sha256:')) {
+    await prisma.tenantSetting.updateMany({
+      where: { id: tokenSetting.id, value: tokenSetting.value },
+      data: { value: hashBiToken(tokenSetting.value) },
+    });
+  }
 
   const base: Omit<BiConnectorSettings, 'status'> = {
     enabled: settingsMap.get(BI_CONNECTOR_SETTING_KEYS.scheduleEnabled) === 'true',
     interval: pickFromList(settingsMap.get(BI_CONNECTOR_SETTING_KEYS.scheduleInterval), BI_SCHEDULE_INTERVALS, 'daily'),
     entities: normalizeEntities(settingsMap.get(BI_CONNECTOR_SETTING_KEYS.scheduleEntities)),
     lastRun: settingsMap.get(BI_CONNECTOR_SETTING_KEYS.scheduleLastRun) || null,
-    token: tokenSetting?.value || '',
+    // Connector secrets are reveal-once. Never return a stored token from a settings read.
+    token: '',
+    tokenConfigured: Boolean(tokenSetting?.value),
     connectorType: pickFromList(settingsMap.get(BI_CONNECTOR_SETTING_KEYS.connectorType), BI_CONNECTOR_TYPES, 'rest'),
     destinationName: readString(settingsMap.get(BI_CONNECTOR_SETTING_KEYS.destinationName)),
     readReplicaHost: readString(settingsMap.get(BI_CONNECTOR_SETTING_KEYS.readReplicaHost)),
@@ -164,11 +201,16 @@ export async function getBiConnectorSettings(prisma: PrismaClient, tenantId: str
   };
 }
 
+export function hashBiToken(token: string): string {
+  return `sha256:${createHash('sha256').update(token).digest('hex')}`;
+}
+
 export async function saveBiConnectorSettings(
   prisma: PrismaClient,
   tenantId: string,
   input: BiConnectorSettingsInput
 ): Promise<BiConnectorSettings> {
+  validateBiConnectorSettingsInput(input);
   const updates = [
     { key: BI_CONNECTOR_SETTING_KEYS.scheduleEnabled, value: input.enabled === true ? 'true' : 'false' },
     {
