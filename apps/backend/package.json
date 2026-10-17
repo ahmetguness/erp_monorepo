@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "worker:domain-events": "tsx src/workers/domain-event-outbox.worker.ts",
-    "build": "tsc",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "test": "npm run test:typecheck && npm run test:prisma-architecture && npm run test:module-boundaries && npm run test:contracts && npm run test:unit && npm run test:integration && npm run test:admin-assurance",

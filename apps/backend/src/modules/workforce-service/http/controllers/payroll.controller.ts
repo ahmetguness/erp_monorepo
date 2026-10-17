@@ -14,7 +14,13 @@ import { requireParam, requireTenantId } from "../../../../utils/context.js";
 import { getPaginationParams } from "../../../../utils/pagination.js";
 import { workforceApplication } from "../../composition.js";
 import { getValidatedBody } from "../../../../middleware/validateBody.js";
-import { bulkPayrollBodySchema, createPayrollBodySchema, payrollItemBodySchema, type CreatePayrollBody, type PayrollItemBody } from "../../../../schemas/request-body.schemas.js";
+import {
+  bulkPayrollBodySchema,
+  createPayrollBodySchema,
+  payrollItemBodySchema,
+  type CreatePayrollBody,
+  type PayrollItemBody,
+} from "../../../../schemas/request-body.schemas.js";
 
 // ─────────────────────────────────────────────
 // Payroll Controller — Bordro CRUD + toplu oluşturma
@@ -27,9 +33,20 @@ export const PayrollController = {
     const { page, limit } = getPaginationParams(c, 20);
     const period = c.req.query("period");
     const employeeId = c.req.query("employeeId");
-    if (period && !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) throw new ValidationError("Gecersiz bordro donemi.");
-    if (c.req.query("page") && (!/^\d+$/.test(c.req.query("page")!) || Number(c.req.query("page")) < 1)) throw new ValidationError("page pozitif tam sayi olmalidir.");
-    if (c.req.query("limit") && (!/^\d+$/.test(c.req.query("limit")!) || Number(c.req.query("limit")) < 1 || Number(c.req.query("limit")) > 100)) throw new ValidationError("limit 1-100 arasinda olmalidir.");
+    if (period && !/^\d{4}-(0[1-9]|1[0-2])$/.test(period))
+      throw new ValidationError("Gecersiz bordro donemi.");
+    if (
+      c.req.query("page") &&
+      (!/^\d+$/.test(c.req.query("page")!) || Number(c.req.query("page")) < 1)
+    )
+      throw new ValidationError("page pozitif tam sayi olmalidir.");
+    if (
+      c.req.query("limit") &&
+      (!/^\d+$/.test(c.req.query("limit")!) ||
+        Number(c.req.query("limit")) < 1 ||
+        Number(c.req.query("limit")) > 100)
+    )
+      throw new ValidationError("limit 1-100 arasinda olmalidir.");
 
     return c.json(
       await workforceApplication.payrollQueries.list(
@@ -54,7 +71,10 @@ export const PayrollController = {
   async create(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
 
-    const body = getValidatedBody<CreatePayrollBody>(c, createPayrollBodySchema);
+    const body = getValidatedBody<CreatePayrollBody>(
+      c,
+      createPayrollBodySchema,
+    );
 
     const employee = await prisma.employee.findFirst({
       where: { id: body.employeeId, tenantId, deletedAt: null, isActive: true },
@@ -97,18 +117,33 @@ export const PayrollController = {
     if (netSalary < 0) throw new ValidationError("Net maas negatif olamaz.");
 
     const payroll = await prisma.$transaction(async (tx) => {
-      const created = exists ? await tx.payroll.update({
-        where: { id: exists.id }, data: { deletedAt: null, paidAt: null, grossSalary: body.grossSalary, deductions, netSalary, notes: body.notes ?? null },
-      }) : await tx.payroll.create({ data: {
-          tenantId,
-          employeeId: body.employeeId,
-          period: body.period,
-          grossSalary: body.grossSalary,
-          deductions,
-          netSalary,
-          notes: body.notes ?? null,
-        } });
-      if (exists) await tx.payrollItem.deleteMany({ where: { tenantId, payrollId: created.id } });
+      const created = exists
+        ? await tx.payroll.update({
+            where: { tenantId_id: { tenantId, id: exists.id } },
+            data: {
+              deletedAt: null,
+              paidAt: null,
+              grossSalary: body.grossSalary,
+              deductions,
+              netSalary,
+              notes: body.notes ?? null,
+            },
+          })
+        : await tx.payroll.create({
+            data: {
+              tenantId,
+              employeeId: body.employeeId,
+              period: body.period,
+              grossSalary: body.grossSalary,
+              deductions,
+              netSalary,
+              notes: body.notes ?? null,
+            },
+          });
+      if (exists)
+        await tx.payrollItem.deleteMany({
+          where: { tenantId, payrollId: created.id },
+        });
       if (body.items?.length) {
         await tx.payrollItem.createMany({
           data: body.items.map((item) => ({
@@ -204,16 +239,36 @@ export const PayrollController = {
 
     const item = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${`payroll:${payrollId}`}))`;
-      const current = await tx.payroll.findFirst({ where: { id: payrollId, tenantId, deletedAt: null } });
+      const current = await tx.payroll.findFirst({
+        where: { id: payrollId, tenantId, deletedAt: null },
+      });
       if (!current) throw new NotFoundError("Bordro", payrollId);
-      if (current.paidAt) throw new ValidationError("Ödenmiş bordroya kalem eklenemez.");
-      const created = await tx.payrollItem.create({ data: { tenantId, payrollId, label: body.label, amount: body.amount, isDeduction: body.isDeduction } });
-      const allItems = await tx.payrollItem.findMany({ where: { tenantId, payrollId } });
-      const deductions = allItems.filter((i) => i.isDeduction).reduce((sum, i) => sum + Number(i.amount), 0);
-      const additions = allItems.filter((i) => !i.isDeduction).reduce((sum, i) => sum + Number(i.amount), 0);
+      if (current.paidAt)
+        throw new ValidationError("Ödenmiş bordroya kalem eklenemez.");
+      const created = await tx.payrollItem.create({
+        data: {
+          tenantId,
+          payrollId,
+          label: body.label,
+          amount: body.amount,
+          isDeduction: body.isDeduction,
+        },
+      });
+      const allItems = await tx.payrollItem.findMany({
+        where: { tenantId, payrollId },
+      });
+      const deductions = allItems
+        .filter((i) => i.isDeduction)
+        .reduce((sum, i) => sum + Number(i.amount), 0);
+      const additions = allItems
+        .filter((i) => !i.isDeduction)
+        .reduce((sum, i) => sum + Number(i.amount), 0);
       const netSalary = Number(current.grossSalary) + additions - deductions;
       if (netSalary < 0) throw new ValidationError("Net maaş negatif olamaz.");
-      await tx.payroll.update({ where: { id: payrollId }, data: { deductions, netSalary } });
+      await tx.payroll.update({
+        where: { tenantId_id: { tenantId, id: payrollId } },
+        data: { deductions, netSalary },
+      });
       return created;
     });
 
@@ -241,11 +296,16 @@ export const PayrollController = {
 
     await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${`payroll:${item.payrollId}`}))`;
-      const current = await tx.payroll.findFirst({ where: { id: item.payrollId, tenantId, deletedAt: null } });
+      const current = await tx.payroll.findFirst({
+        where: { id: item.payrollId, tenantId, deletedAt: null },
+      });
       if (!current) throw new NotFoundError("Bordro", item.payrollId);
-      if (current.paidAt) throw new ValidationError("Ödenmiş bordrodan kalem silinemez.");
+      if (current.paidAt)
+        throw new ValidationError("Ödenmiş bordrodan kalem silinemez.");
       await tx.payrollItem.delete({ where: { id: itemId } });
-      const allItems = await tx.payrollItem.findMany({ where: { tenantId, payrollId: current.id } });
+      const allItems = await tx.payrollItem.findMany({
+        where: { tenantId, payrollId: current.id },
+      });
       const deductions = allItems
         .filter((i) => i.isDeduction)
         .reduce((sum, i) => sum + Number(i.amount), 0);
@@ -253,7 +313,7 @@ export const PayrollController = {
         .filter((i) => !i.isDeduction)
         .reduce((sum, i) => sum + Number(i.amount), 0);
       await tx.payroll.update({
-        where: { id: current.id },
+        where: { tenantId_id: { tenantId, id: current.id } },
         data: {
           deductions,
           netSalary: Number(current.grossSalary) + additions - deductions,
@@ -275,8 +335,12 @@ export const PayrollController = {
     if (payroll.paidAt)
       return c.json(new ValidationError("Bordro zaten ödenmiş.").toJSON(), 400);
 
-    const result = await prisma.payroll.updateMany({ where: { id, tenantId, deletedAt: null, paidAt: null }, data: { paidAt: new Date() } });
-    if (result.count === 0) return c.json(new ValidationError("Bordro zaten ödenmiş.").toJSON(), 400);
+    const result = await prisma.payroll.updateMany({
+      where: { id, tenantId, deletedAt: null, paidAt: null },
+      data: { paidAt: new Date() },
+    });
+    if (result.count === 0)
+      return c.json(new ValidationError("Bordro zaten ödenmiş.").toJSON(), 400);
     const updated = await prisma.payroll.findUniqueOrThrow({ where: { id } });
     return c.json({ data: updated });
   },
@@ -296,7 +360,7 @@ export const PayrollController = {
       );
 
     await prisma.payroll.update({
-      where: { id },
+      where: { tenantId_id: { tenantId, id } },
       data: { deletedAt: new Date() },
     });
     return c.json({ data: { success: true } });

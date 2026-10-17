@@ -276,8 +276,8 @@ export class MarketplacePricingAutonomyService {
         "Fiyat minimum %20 net kar marjinin altina inemez.",
       );
 
-    await this.db.marketplaceListing.update({
-      where: { id: listingId },
+    await this.db.marketplaceListing.updateMany({
+      where: { id: listingId, tenantId },
       data: { price: newPrice, lastSyncAt: new Date() },
     });
 
@@ -373,7 +373,7 @@ export class MarketplacePricingAutonomyService {
     productId: string,
   ): Promise<{ success: boolean; message: string }> {
     const allocation = await this.db.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${'marketplace-stock:' + productId}))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${"marketplace-stock:" + productId}))`;
       const product = await tx.product.findFirst({
         where: { id: productId, tenantId },
         include: { stockLevels: true, marketplaceListings: true },
@@ -391,8 +391,8 @@ export class MarketplacePricingAutonomyService {
       const synchronizedAt = new Date();
 
       for (const [idx, listing] of product.marketplaceListings.entries()) {
-        await tx.marketplaceListing.update({
-          where: { id: listing.id },
+        await tx.marketplaceListing.updateMany({
+          where: { id: listing.id, tenantId },
           data: {
             stock: equalQuota + (idx < remainder ? 1 : 0),
             lastSyncAt: synchronizedAt,
@@ -407,7 +407,12 @@ export class MarketplacePricingAutonomyService {
         entityType: EntityType.PRODUCT,
         entityId: productId,
         action: AuditAction.UPDATE,
-        newValues: { productId, reallocatedQuota: equalQuota, remainder, totalStock },
+        newValues: {
+          productId,
+          reallocatedQuota: equalQuota,
+          remainder,
+          totalStock,
+        },
       });
 
       return {

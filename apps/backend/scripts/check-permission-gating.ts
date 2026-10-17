@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import ts from 'typescript';
 import { ACCESS_POLICIES } from '@repo/types/plans';
 import { listPermissionMatrix, type PermissionMatrixEntry } from '../src/services/permission-simulator.service';
 import { CheckIssue, joinRoutePath, normalizePath, readText, reportIssues, toProjectPath, walkFiles } from './lib/static-checks';
@@ -103,12 +104,15 @@ function mergeGates(parent: RouteGates, local: RouteGates): RouteGates {
 }
 
 function extractParentGates(routeText: string, routeVar: string): RouteGates {
-  const useRegex = new RegExp(`${routeVar}\\.use\\('\\*',\\s*([^\\n;]+)`, 'g');
+  const useRegex = new RegExp(
+    `${routeVar}\\.use\\(\\s*(["'])\\*\\1\\s*,([\\s\\S]*?)\\);`,
+    'g',
+  );
   let match: RegExpExecArray | null;
   let gates: RouteGates = {};
 
   while ((match = useRegex.exec(routeText)) !== null) {
-    gates = mergeGates(gates, extractGates(match[1]));
+    gates = mergeGates(gates, extractGates(match[2]));
   }
 
   return gates;
@@ -116,15 +120,18 @@ function extractParentGates(routeText: string, routeVar: string): RouteGates {
 
 function extractRoutesFromFile(routeText: string, routeVar: string, basePath: string, file: string): BackendRouteGate[] {
   const parentGates = extractParentGates(routeText, routeVar);
-  const routeRegex = new RegExp(`${routeVar}\\.(get|post|put|patch|delete)\\('([^']+)'([^\\n;]*)`, 'g');
+  const routeRegex = new RegExp(
+    `${routeVar}\\.(get|post|put|patch|delete)\\(\\s*(["'])([^"']+)\\2([\\s\\S]*?)\\);`,
+    'g',
+  );
   const routes: BackendRouteGate[] = [];
   let match: RegExpExecArray | null;
 
   while ((match = routeRegex.exec(routeText)) !== null) {
     const method = match[1].toUpperCase() as HttpMethod;
-    const path = joinRoutePath(basePath, match[2]);
-    const middlewareText = match[3];
-    const permissionMatch = /requirePermission\('([^']+)',\s*'([A-Z]+)'\)/.exec(middlewareText);
+    const path = joinRoutePath(basePath, match[3]);
+    const middlewareText = match[4];
+    const permissionMatch = /requirePermission\(\s*["']([^"']+)["']\s*,\s*["']([A-Z]+)["']\s*\)/.exec(middlewareText);
     if (!permissionMatch) continue;
 
     const gates = mergeGates(parentGates, extractGates(middlewareText));
@@ -162,7 +169,7 @@ function extractBackendRouteManifest(): BackendRouteGate[] {
     if (moduleFile.includes(`${join('modules', 'http-surfaces')}`)) continue;
     const moduleText = readText(moduleFile);
     const importedFiles = new Map<string, string>();
-    const importRegex = /import\s+\{\s*([A-Za-z0-9_,\s]+)\s*\}\s+from\s+'([^']+)'/g;
+    const importRegex = /import\s+\{\s*([A-Za-z0-9_,\s]+)\s*\}\s+from\s*["']([^"']+)["']/g;
     let importMatch: RegExpExecArray | null;
     while ((importMatch = importRegex.exec(moduleText)) !== null) {
       const sourcePath = importMatch[2];
@@ -173,7 +180,7 @@ function extractBackendRouteManifest(): BackendRouteGate[] {
       }
     }
 
-    const mountRegex = /app\.route\('([^']+)',\s*([A-Za-z0-9_]+)\)/g;
+    const mountRegex = /app\.route\(\s*["']([^"']+)["']\s*,\s*([A-Za-z0-9_]+)\s*\)/g;
     let mountMatch: RegExpExecArray | null;
     while ((mountMatch = mountRegex.exec(moduleText)) !== null) {
       const routeVar = mountMatch[2];
@@ -192,34 +199,69 @@ function extractBackendRouteManifest(): BackendRouteGate[] {
 }
 
 function extractWebNavManifest(): Map<string, WebNavGate> {
-  const file = resolve(process.cwd(), '..', 'web', 'src', 'lib', 'nav-config.ts');
-  const text = readText(file);
-  const itemRegex = /\{[^{}]*href:\s*'([^']+)'[^{}]*\}/g;
+  const absoluteFile = resolve(process.cwd(), '..', 'web', 'src', 'lib', 'nav-config.ts');
+  const file = toProjectPath(absoluteFile);
+  const source = ts.createSourceFile(
+    absoluteFile,
+    readText(absoluteFile),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
   const manifest = new Map<string, WebNavGate>();
-  let match: RegExpExecArray | null;
 
-  while ((match = itemRegex.exec(text)) !== null) {
-    const body = match[0];
-    const href = normalizePath(match[1]);
-    const module = /module:\s*'([^']+)'/.exec(body)?.[1];
-    let planRaw = /plan:\s*([A-Za-z0-9_']+)/.exec(body)?.[1];
-    if (planRaw) planRaw = planRaw.replace(/'/g, '');
-    let plan: PlanName | undefined = undefined;
-    if (planRaw === 'PROFESSIONAL_PLAN' || planRaw === 'PROFESSIONAL') {
-      plan = 'PROFESSIONAL';
-    } else if (planRaw === 'ENTERPRISE_PLAN' || planRaw === 'ENTERPRISE') {
-      plan = 'ENTERPRISE';
-    } else if (planRaw === 'STARTER') {
-      plan = 'STARTER';
+  function property(object: ts.ObjectLiteralExpression, name: string): ts.Expression | undefined {
+    for (const member of object.properties) {
+      if (!ts.isPropertyAssignment(member)) continue;
+      const key = ts.isIdentifier(member.name) || ts.isStringLiteral(member.name)
+        ? member.name.text
+        : undefined;
+      if (key === name) return member.initializer;
     }
+    return undefined;
+  }
+
+  function stringValue(expression: ts.Expression | undefined): string | undefined {
+    return expression && ts.isStringLiteral(expression) ? expression.text : undefined;
+  }
+
+  function planValue(expression: ts.Expression | undefined): PlanName | undefined {
+    const literal = stringValue(expression);
+    if (literal === 'STARTER' || literal === 'PROFESSIONAL' || literal === 'ENTERPRISE') return literal;
+    if (!expression || !ts.isIdentifier(expression)) return undefined;
+    if (expression.text === 'PROFESSIONAL_PLAN') return 'PROFESSIONAL';
+    if (expression.text === 'ENTERPRISE_PLAN') return 'ENTERPRISE';
+    return undefined;
+  }
+
+  function visit(node: ts.Node): void {
+    if (!ts.isObjectLiteralExpression(node)) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+
+    const hrefValue = stringValue(property(node, 'href'));
+    if (!hrefValue) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+
+    const href = normalizePath(hrefValue);
     const existing = manifest.get(href);
     manifest.set(href, {
       href,
-      module: existing?.module ?? module,
-      plan: existing?.plan ?? plan,
-      file: toProjectPath(file),
+      module: existing?.module ?? stringValue(property(node, 'module')),
+      plan: existing?.plan ?? planValue(property(node, 'plan')),
+      file,
     });
+    ts.forEachChild(node, visit);
   }
+
+  const navGroups = source.statements
+    .filter(ts.isVariableStatement)
+    .flatMap((statement) => [...statement.declarationList.declarations])
+    .find((declaration) => ts.isIdentifier(declaration.name) && declaration.name.text === 'NAV_GROUPS');
+  if (navGroups?.initializer) visit(navGroups.initializer);
 
   return manifest;
 }

@@ -7,6 +7,54 @@ const origin = "http://localhost:3000";
 const marker = `TEST_E2E_JOURNAL_${Date.now()}`;
 type Session = { cookie: string; tenantId: string };
 
+interface ApiResult {
+  status: number;
+  body: unknown;
+}
+
+interface JournalLineView extends Record<string, unknown> {
+  debit: number | string;
+  credit: number | string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function requireRecord(value: unknown, label: string): Record<string, unknown> {
+  assert.ok(isRecord(value), `${label} nesne olmalıdır.`);
+  return value;
+}
+
+function requireString(value: unknown, label: string): string {
+  assert.equal(typeof value, "string", `${label} metin olmalıdır.`);
+  return value as string;
+}
+
+function requireDataRecord(result: ApiResult): Record<string, unknown> {
+  return requireRecord(requireRecord(result.body, "response").data, "response.data");
+}
+
+function requireDataArray(result: ApiResult): Record<string, unknown>[] {
+  const data = requireRecord(result.body, "response").data;
+  assert.ok(Array.isArray(data), "response.data dizi olmalıdır.");
+  return data.map((item, index) => requireRecord(item, `response.data[${index}]`));
+}
+
+function requireMetaRecord(result: ApiResult): Record<string, unknown> {
+  return requireRecord(requireRecord(result.body, "response").meta, "response.meta");
+}
+
+function requireJournalLines(value: unknown): JournalLineView[] {
+  assert.ok(Array.isArray(value), "journal lines dizi olmalıdır.");
+  return value.map((line, index) => {
+    const record = requireRecord(line, `journal line ${index}`);
+    assert.ok(typeof record.debit === "number" || typeof record.debit === "string");
+    assert.ok(typeof record.credit === "number" || typeof record.credit === "string");
+    return { ...record, debit: record.debit, credit: record.credit };
+  });
+}
+
 async function login(email: string, tenantSlug: string): Promise<Session> {
   const response = await fetch(`${base}/api/auth/login`, {
     method: "POST",
@@ -14,10 +62,12 @@ async function login(email: string, tenantSlug: string): Promise<Session> {
     body: JSON.stringify({ email, password: "demo1234", tenantSlug }),
   });
   assert.equal(response.status, 200);
-  const body = (await response.json()) as any;
+  const body: unknown = await response.json();
+  const tenant = requireRecord(requireDataRecord({ status: response.status, body }).tenant, "login tenant");
+  const tenantId = requireString(tenant.id, "login tenant.id");
   return {
     cookie: response.headers.get("set-cookie")?.split(";")[0] ?? "",
-    tenantId: body.data.tenant.id,
+    tenantId,
   };
 }
 
@@ -27,7 +77,7 @@ async function api(
   method = "GET",
   body?: unknown,
   rawBody?: string,
-) {
+): Promise<ApiResult> {
   const response = await fetch(`${base}/api/accounting${path}`, {
     method,
     headers: {
@@ -41,7 +91,7 @@ async function api(
   });
   return {
     status: response.status,
-    body: (await response.json().catch(() => null)) as any,
+    body: await response.json().catch(() => null) as unknown,
   };
 }
 
@@ -251,7 +301,7 @@ async function main() {
       concurrentCreate.map((result) => result.status),
       [201, 201],
     );
-    const numbers = concurrentCreate.map((result) => result.body.data.number);
+    const numbers = concurrentCreate.map((result) => requireDataRecord(result).number);
     assert.equal(new Set(numbers).size, 2);
 
     const createdResponse = await api(
@@ -261,34 +311,37 @@ async function main() {
       payload(a.debit.id, a.credit.id, 125.5),
     );
     assert.equal(createdResponse.status, 201);
-    const entry = createdResponse.body.data;
-    assert.equal(entry.lines.length, 2);
+    const entry = requireDataRecord(createdResponse);
+    const entryId = requireString(entry.id, "journal entry.id");
+    const entryLines = requireJournalLines(entry.lines);
+    assert.equal(entryLines.length, 2);
     assert.equal(
-      entry.lines.reduce(
-        (sum: number, line: any) => sum + Number(line.debit),
+      entryLines.reduce(
+        (sum, line) => sum + Number(line.debit),
         0,
       ),
       125.5,
     );
     assert.equal(
-      entry.lines.reduce(
-        (sum: number, line: any) => sum + Number(line.credit),
+      entryLines.reduce(
+        (sum, line) => sum + Number(line.credit),
         0,
       ),
       125.5,
     );
-    const detail = await api(owner, `/journal-entries/${entry.id}`);
+    const detail = await api(owner, `/journal-entries/${entryId}`);
     assert.equal(detail.status, 200);
-    assert.equal(detail.body.data.fiscalPeriod.name, `${marker} 2026`);
+    const detailPeriod = requireRecord(requireDataRecord(detail).fiscalPeriod, "fiscalPeriod");
+    assert.equal(detailPeriod.name, `${marker} 2026`);
     assert.equal(
-      (await api(foreign, `/journal-entries/${entry.id}`)).status,
+      (await api(foreign, `/journal-entries/${entryId}`)).status,
       404,
     );
     assert.equal(
       (
         await api(
           foreign,
-          `/journal-entries/${entry.id}`,
+          `/journal-entries/${entryId}`,
           "PATCH",
           payload(b.debit.id, b.credit.id),
         )
@@ -296,12 +349,12 @@ async function main() {
       404,
     );
     assert.equal(
-      (await api(foreign, `/journal-entries/${entry.id}/post`, "POST")).status,
+      (await api(foreign, `/journal-entries/${entryId}/post`, "POST")).status,
       404,
     );
     assert.equal(
       (
-        await api(foreign, `/journal-entries/${entry.id}/reverse`, "POST", {
+        await api(foreign, `/journal-entries/${entryId}/reverse`, "POST", {
           reason: "hack",
         })
       ).status,
@@ -309,14 +362,14 @@ async function main() {
     );
 
     const beforeLines = await prisma.journalEntryLine.findMany({
-      where: { journalEntryId: entry.id },
+      where: { journalEntryId: entryId },
       orderBy: { id: "asc" },
     });
     assert.equal(
       (
         await api(
           owner,
-          `/journal-entries/${entry.id}`,
+          `/journal-entries/${entryId}`,
           "PATCH",
           payload(b.debit.id, a.credit.id),
         )
@@ -326,7 +379,7 @@ async function main() {
     assert.deepEqual(
       (
         await prisma.journalEntryLine.findMany({
-          where: { journalEntryId: entry.id },
+          where: { journalEntryId: entryId },
           orderBy: { id: "asc" },
         })
       ).map((line) => line.id),
@@ -334,21 +387,19 @@ async function main() {
     );
     const updated = await api(
       owner,
-      `/journal-entries/${entry.id}`,
+      `/journal-entries/${entryId}`,
       "PATCH",
       payload(a.debit.id, a.credit.id, 240),
     );
     assert.equal(updated.status, 200);
+    const updatedLines = requireJournalLines(requireDataRecord(updated).lines);
     assert.equal(
-      updated.body.data.lines.reduce(
-        (sum: number, line: any) => sum + Number(line.debit),
-        0,
-      ),
+      updatedLines.reduce((sum, line) => sum + Number(line.debit), 0),
       240,
     );
     assert.equal(
       await prisma.journalEntryLine.count({
-        where: { journalEntryId: entry.id },
+        where: { journalEntryId: entryId },
       }),
       2,
     );
@@ -371,25 +422,25 @@ async function main() {
       "/journal-entries?page=1&limit=2&isPosted=false&dateFrom=2026-01-01&dateTo=2026-12-31",
     );
     assert.equal(list.status, 200);
-    assert.equal(list.body.data.length, 2);
-    assert.equal(list.body.meta.pageSize, 2);
-    assert.equal(list.body.meta.total, 3);
+    assert.equal(requireDataArray(list).length, 2);
+    assert.equal(requireMetaRecord(list).pageSize, 2);
+    assert.equal(requireMetaRecord(list).total, 3);
 
     assert.equal(
       (
-        await api(owner, `/journal-entries/${entry.id}/reverse`, "POST", {
+        await api(owner, `/journal-entries/${entryId}/reverse`, "POST", {
           reason: "early",
         })
       ).status,
       400,
     );
     const posts = await Promise.all([
-      api(owner, `/journal-entries/${entry.id}/post`, "POST"),
-      api(owner, `/journal-entries/${entry.id}/post`, "POST"),
+      api(owner, `/journal-entries/${entryId}/post`, "POST"),
+      api(owner, `/journal-entries/${entryId}/post`, "POST"),
     ]);
     assert.deepEqual(posts.map((result) => result.status).sort(), [200, 409]);
     const posted = await prisma.journalEntry.findUniqueOrThrow({
-      where: { id: entry.id },
+      where: { id: entryId },
     });
     assert.equal(posted.isPosted, true);
     assert.ok(posted.postedAt);
@@ -398,7 +449,7 @@ async function main() {
       (
         await api(
           owner,
-          `/journal-entries/${entry.id}`,
+          `/journal-entries/${entryId}`,
           "PATCH",
           payload(a.debit.id, a.credit.id),
         )
@@ -406,20 +457,20 @@ async function main() {
       400,
     );
     assert.equal(
-      (await api(owner, `/journal-entries/${entry.id}/post`, "POST")).status,
+      (await api(owner, `/journal-entries/${entryId}/post`, "POST")).status,
       400,
     );
     assert.equal(
-      (await api(owner, `/journal-entries/${entry.id}/reverse`, "POST", {}))
+      (await api(owner, `/journal-entries/${entryId}/reverse`, "POST", {}))
         .status,
       400,
     );
 
     const reversals = await Promise.all([
-      api(owner, `/journal-entries/${entry.id}/reverse`, "POST", {
+      api(owner, `/journal-entries/${entryId}/reverse`, "POST", {
         reason: "TEST düzeltme",
       }),
-      api(owner, `/journal-entries/${entry.id}/reverse`, "POST", {
+      api(owner, `/journal-entries/${entryId}/reverse`, "POST", {
         reason: "TEST duplicate",
       }),
     ]);
@@ -431,7 +482,7 @@ async function main() {
       where: {
         tenantId: a.tenant.id,
         refType: "JOURNAL_REVERSAL",
-        refId: entry.id,
+        refId: entryId,
       },
       include: { lines: true },
     });
@@ -440,7 +491,7 @@ async function main() {
         where: {
           tenantId: a.tenant.id,
           refType: "JOURNAL_REVERSAL",
-          refId: entry.id,
+          refId: entryId,
         },
       }),
       1,
@@ -466,13 +517,13 @@ async function main() {
       "/trial-balance?dateFrom=2026-01-01&dateTo=2026-12-31",
     );
     assert.equal(trial.status, 200);
-    assert.equal(trial.body.meta.isBalanced, true);
-    const relevantRows = trial.body.data.filter((row: any) =>
-      [a.debit.id, a.credit.id].includes(row.accountId),
+    assert.equal(requireMetaRecord(trial).isBalanced, true);
+    const relevantRows = requireDataArray(trial).filter((row) =>
+      typeof row.accountId === "string" && [a.debit.id, a.credit.id].includes(row.accountId),
     );
     assert.equal(
       relevantRows.reduce(
-        (sum: number, row: any) => sum + Number(row.balance),
+        (sum, row) => sum + Number(row.balance),
         0,
       ),
       0,
@@ -485,6 +536,7 @@ async function main() {
       payload(a.debit.id, a.credit.id, 50, "2026-08-01"),
     );
     assert.equal(lockedDraftResponse.status, 201);
+    const lockedDraftId = requireString(requireDataRecord(lockedDraftResponse).id, "locked draft id");
     await prisma.fiscalPeriod.updateMany({
       where: { tenantId: a.tenant.id, startDate: new Date("2026-01-01") },
       data: { status: "LOCKED" },
@@ -493,7 +545,7 @@ async function main() {
       (
         await api(
           owner,
-          `/journal-entries/${lockedDraftResponse.body.data.id}/post`,
+          `/journal-entries/${lockedDraftId}/post`,
           "POST",
         )
       ).status,
@@ -502,7 +554,7 @@ async function main() {
     assert.equal(
       (
         await prisma.journalEntry.findUniqueOrThrow({
-          where: { id: lockedDraftResponse.body.data.id },
+          where: { id: lockedDraftId },
         })
       ).isPosted,
       false,

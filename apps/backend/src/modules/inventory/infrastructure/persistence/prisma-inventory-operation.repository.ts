@@ -76,10 +76,17 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     if (!warehouse) throw new NotFoundError("Depo", command.warehouseId);
     if (command.batchId) {
       const batch = await this.db.productBatch.findFirst({
-        where: { id: command.batchId, tenantId: command.tenantId, productId: command.productId },
+        where: {
+          id: command.batchId,
+          tenantId: command.tenantId,
+          productId: command.productId,
+        },
         select: { id: true },
       });
-      if (!batch) throw new ValidationError("batchId secilen tenant ve urun ile uyumlu degildir.");
+      if (!batch)
+        throw new ValidationError(
+          "batchId secilen tenant ve urun ile uyumlu degildir.",
+        );
     }
     if (command.lotId) {
       const lot = await this.db.lotSerialNumber.findFirst({
@@ -91,39 +98,65 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
         },
         select: { id: true },
       });
-      if (!lot) throw new ValidationError("lotId secilen tenant, urun ve parti ile uyumlu degildir.");
+      if (!lot)
+        throw new ValidationError(
+          "lotId secilen tenant, urun ve parti ile uyumlu degildir.",
+        );
     }
 
     const transactionResult = await this.db.$transaction(async (tx) => {
-      await lockInventoryPosition(tx, command.tenantId, `movement:${command.idempotencyKey}`, 'operation');
+      await lockInventoryPosition(
+        tx,
+        command.tenantId,
+        `movement:${command.idempotencyKey}`,
+        "operation",
+      );
       const existing = await tx.stockMovement.findFirst({
-        where: { tenantId: command.tenantId, idempotencyKey: command.idempotencyKey },
+        where: {
+          tenantId: command.tenantId,
+          idempotencyKey: command.idempotencyKey,
+        },
       });
       if (existing) {
         const sameCommand =
           existing.refType === MovementRefType.MANUAL &&
           existing.productId === command.productId &&
-          (existing.fromWarehouseId === command.warehouseId || existing.toWarehouseId === command.warehouseId) &&
+          (existing.fromWarehouseId === command.warehouseId ||
+            existing.toWarehouseId === command.warehouseId) &&
           existing.type === command.type &&
           Number(existing.quantity) === command.quantity &&
           Number(existing.unitCost ?? 0) === Number(command.unitCost ?? 0) &&
           (existing.lotId ?? undefined) === command.lotId &&
           (existing.batchId ?? undefined) === command.batchId;
-        if (!sameCommand) throw new ConflictError('idempotencyKey baska bir stok islemi icin kullanilmis.');
+        if (!sameCommand)
+          throw new ConflictError(
+            "idempotencyKey baska bir stok islemi icin kullanilmis.",
+          );
         return { movement: existing, replayed: true, consumption: null };
       }
-      await lockInventoryPosition(tx, command.tenantId, command.productId, command.warehouseId);
-      const consumption = command.type === MovementType.OUT
-        ? await assertCanConsumeStock(tx, command.tenantId, {
-            productId: command.productId,
-            warehouseId: command.warehouseId,
-            quantity: command.quantity,
-            lotId: command.lotId ?? null,
-          })
-        : null;
-      return { movement: await this.writeMovement(tx, command), replayed: false, consumption };
+      await lockInventoryPosition(
+        tx,
+        command.tenantId,
+        command.productId,
+        command.warehouseId,
+      );
+      const consumption =
+        command.type === MovementType.OUT
+          ? await assertCanConsumeStock(tx, command.tenantId, {
+              productId: command.productId,
+              warehouseId: command.warehouseId,
+              quantity: command.quantity,
+              lotId: command.lotId ?? null,
+            })
+          : null;
+      return {
+        movement: await this.writeMovement(tx, command),
+        replayed: false,
+        consumption,
+      };
     });
-    if (transactionResult.replayed) return { movement: transactionResult.movement, replayed: true };
+    if (transactionResult.replayed)
+      return { movement: transactionResult.movement, replayed: true };
     const { movement, consumption } = transactionResult;
     const updatedProduct = await this.db.product.findFirst({
       where: {
@@ -187,17 +220,47 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     ]);
     if (!product) throw new NotFoundError("Urun", command.productId);
     if (!warehouse) throw new NotFoundError("Depo", command.warehouseId);
-    const referenceExists = command.refType === 'OTHER'
-      ? true
-      : command.refType === 'SALES_ORDER'
-        ? Boolean(await this.db.salesOrder.findFirst({ where: { id: command.refId, tenantId: command.tenantId, deletedAt: null }, select: { id: true } }))
-        : command.refType === 'WORK_ORDER'
-          ? Boolean(await this.db.workOrder.findFirst({ where: { id: command.refId, tenantId: command.tenantId, deletedAt: null }, select: { id: true } }))
-          : Boolean(await this.db.purchaseRequest.findFirst({ where: { id: command.refId, tenantId: command.tenantId }, select: { id: true } }));
-    if (!referenceExists) throw new NotFoundError("Rezervasyon kaynagi", command.refId);
+    const referenceExists =
+      command.refType === "OTHER"
+        ? true
+        : command.refType === "SALES_ORDER"
+          ? Boolean(
+              await this.db.salesOrder.findFirst({
+                where: {
+                  id: command.refId,
+                  tenantId: command.tenantId,
+                  deletedAt: null,
+                },
+                select: { id: true },
+              }),
+            )
+          : command.refType === "WORK_ORDER"
+            ? Boolean(
+                await this.db.workOrder.findFirst({
+                  where: {
+                    id: command.refId,
+                    tenantId: command.tenantId,
+                    deletedAt: null,
+                  },
+                  select: { id: true },
+                }),
+              )
+            : Boolean(
+                await this.db.purchaseRequest.findFirst({
+                  where: { id: command.refId, tenantId: command.tenantId },
+                  select: { id: true },
+                }),
+              );
+    if (!referenceExists)
+      throw new NotFoundError("Rezervasyon kaynagi", command.refId);
 
     return this.db.$transaction(async (tx) => {
-      await lockInventoryPosition(tx, command.tenantId, command.productId, command.warehouseId);
+      await lockInventoryPosition(
+        tx,
+        command.tenantId,
+        command.productId,
+        command.warehouseId,
+      );
       const existing = await tx.inventoryReservation.findFirst({
         where: {
           tenantId: command.tenantId,
@@ -215,7 +278,9 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
       });
       if (existing) {
         if (Number(existing.quantity) !== command.quantity) {
-          throw new ConflictError("Ayni kaynak icin farkli miktarda aktif rezervasyon zaten var.");
+          throw new ConflictError(
+            "Ayni kaynak icin farkli miktarda aktif rezervasyon zaten var.",
+          );
         }
         return existing;
       }
@@ -419,7 +484,9 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
         data: { status },
       });
       if (updatedOrder.count !== 1) {
-        throw new ConflictError('Satinalma siparisi es zamanli olarak degisti veya tenant erisimi reddedildi.');
+        throw new ConflictError(
+          "Satinalma siparisi es zamanli olarak degisti veya tenant erisimi reddedildi.",
+        );
       }
       await tx.purchaseOrderHistory.create({
         data: {
@@ -445,9 +512,12 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
         productId: command.productId,
         warehouseId: command.warehouseId,
       },
-      orderBy: { id: 'asc' },
+      orderBy: { id: "asc" },
     });
-    const previousQuantity = levels.reduce((sum, level) => sum + Number(level.quantity), 0);
+    const previousQuantity = levels.reduce(
+      (sum, level) => sum + Number(level.quantity),
+      0,
+    );
     const resultingQuantity =
       command.type === MovementType.ADJUSTMENT
         ? command.quantity
@@ -480,24 +550,54 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
         idempotencyKey: command.idempotencyKey,
       },
     });
-    const applyIncrease = async (quantity: number) => tx.stockLevel.upsert({
-      where: { productId_warehouseId_locationId: { productId: command.productId, warehouseId: command.warehouseId, locationId } },
-      create: { tenantId: command.tenantId, productId: command.productId, warehouseId: command.warehouseId, locationId, quantity },
-      update: { quantity: { increment: quantity } },
-    });
+    const applyIncrease = async (quantity: number) =>
+      tx.stockLevel.upsert({
+        where: {
+          productId_warehouseId_locationId: {
+            productId: command.productId,
+            warehouseId: command.warehouseId,
+            locationId,
+          },
+        },
+        create: {
+          tenantId: command.tenantId,
+          productId: command.productId,
+          warehouseId: command.warehouseId,
+          locationId,
+          quantity,
+        },
+        update: { quantity: { increment: quantity } },
+      });
     const applyDecrease = async (quantity: number) => {
       let remaining = quantity;
       for (const level of levels) {
         if (remaining <= 0) break;
         const available = Math.max(0, Number(level.quantity));
         const decrement = Math.min(available, remaining);
-        if (decrement > 0) await tx.stockLevel.update({ where: { id: level.id }, data: { quantity: { decrement } } });
+        if (decrement > 0) {
+          await tx.stockLevel.updateMany({
+            where: { id: level.id, tenantId: command.tenantId },
+            data: { quantity: { decrement } },
+          });
+        }
         remaining -= decrement;
       }
       if (remaining > 0) {
         await tx.stockLevel.upsert({
-          where: { productId_warehouseId_locationId: { productId: command.productId, warehouseId: command.warehouseId, locationId } },
-          create: { tenantId: command.tenantId, productId: command.productId, warehouseId: command.warehouseId, locationId, quantity: -remaining },
+          where: {
+            productId_warehouseId_locationId: {
+              productId: command.productId,
+              warehouseId: command.warehouseId,
+              locationId,
+            },
+          },
+          create: {
+            tenantId: command.tenantId,
+            productId: command.productId,
+            warehouseId: command.warehouseId,
+            locationId,
+            quantity: -remaining,
+          },
           update: { quantity: { decrement: remaining } },
         });
       }

@@ -1,15 +1,15 @@
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { ApiErrorSchema } from '@repo/types/contracts';
 import {
   CheckIssue,
-  joinRoutePath,
   normalizePath,
   readText,
   reportIssues,
   toProjectPath,
   walkFiles,
 } from './lib/static-checks';
+import { createBackendRouteManifest } from './lib/backend-route-manifest';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -368,121 +368,8 @@ function routeMatches(endpoint: WebEndpoint, route: BackendRoute): boolean {
   });
 }
 
-function extractRouteImports(indexText: string): Map<string, string> {
-  const imports = new Map<string, string>();
-  const importRegex = /import\s+\{\s*([A-Za-z0-9_,\s]+)\s*\}\s+from\s+'\.\/routes\/([^']+)'/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = importRegex.exec(indexText)) !== null) {
-    const names = match[1].split(',').map((name) => name.trim()).filter(Boolean);
-    const routeFile = match[2];
-    for (const name of names) {
-      imports.set(name, routeFile);
-    }
-  }
-
-  return imports;
-}
-
-function extractMountedRoutes(indexText: string): Map<string, string> {
-  const mounts = new Map<string, string>();
-  const mountRegex = /(app|tenantApi)\.route\('([^']+)',\s*([A-Za-z0-9_]+)\)/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = mountRegex.exec(indexText)) !== null) {
-    const host = match[1];
-    const base = match[2];
-    const routeVar = match[3];
-    mounts.set(routeVar, host === 'tenantApi' ? joinRoutePath('/api', base) : normalizePath(base));
-  }
-
-  return mounts;
-}
-
-function extractDirectIndexRoutes(indexText: string): BackendRoute[] {
-  const routes: BackendRoute[] = [];
-  const directRegex = /(app|tenantApi)\.(get|post|put|patch|delete)\('([^']+)'/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = directRegex.exec(indexText)) !== null) {
-    const host = match[1];
-    const method = match[2].toUpperCase() as HttpMethod;
-    const path = host === 'tenantApi' ? joinRoutePath('/api', match[3]) : normalizePath(match[3]);
-    routes.push({ method, path });
-  }
-
-  return routes;
-}
-
 function extractBackendRoutes(): BackendRoute[] {
-  const backendSrc = resolve(process.cwd(), 'src');
-  const indexPath = join(backendSrc, 'index.ts');
-  const indexText = readText(indexPath);
-  const imports = extractRouteImports(indexText);
-  const mounts = extractMountedRoutes(indexText);
-  const routes = extractDirectIndexRoutes(indexText);
-
-  for (const [routeVar, base] of mounts) {
-    const importPath = imports.get(routeVar);
-    if (!importPath) continue;
-
-    const file = join(backendSrc, 'routes', `${importPath}.ts`);
-    if (!existsSync(file)) continue;
-
-    const text = readText(file);
-    const routeRegex = new RegExp(`${routeVar}\\.(get|post|put|patch|delete)\\(\\s*'([^']+)'`, 'g');
-    let match: RegExpExecArray | null;
-
-    while ((match = routeRegex.exec(text)) !== null) {
-      routes.push({
-        method: match[1].toUpperCase() as HttpMethod,
-        path: joinRoutePath(base, match[2]),
-      });
-    }
-  }
-
-  const moduleFiles = walkFiles(join(backendSrc, 'modules'), ['.ts']);
-  for (const moduleFile of moduleFiles) {
-    const moduleText = readText(moduleFile);
-    const importedFiles = new Map<string, string>();
-    const importRegex = /import\s+\{\s*([A-Za-z0-9_,\s]+)\s*\}\s+from\s+'([^']+)'/g;
-    let importMatch: RegExpExecArray | null;
-    while ((importMatch = importRegex.exec(moduleText)) !== null) {
-      const sourcePath = importMatch[2];
-      if (!sourcePath.startsWith('.')) continue;
-      const absoluteSource = resolve(dirname(moduleFile), sourcePath.replace(/\.js$/, '.ts'));
-      for (const name of importMatch[1].split(',').map((entry) => entry.trim()).filter(Boolean)) {
-        importedFiles.set(name, absoluteSource);
-      }
-    }
-
-    const isAbsoluteSurface = moduleFile.includes(`${join('modules', 'http-surfaces')}`);
-    const moduleBase = isAbsoluteSurface ? '' : '/api';
-    const mountRegex = /app\.route\('([^']+)',\s*([A-Za-z0-9_]+)\)/g;
-    let mountMatch: RegExpExecArray | null;
-    while ((mountMatch = mountRegex.exec(moduleText)) !== null) {
-      const routeVar = mountMatch[2];
-      const routeFile = importedFiles.get(routeVar);
-      if (!routeFile || !existsSync(routeFile)) continue;
-      const routeText = readText(routeFile);
-      const routeRegex = new RegExp(`${routeVar}\\.(get|post|put|patch|delete)\\(\\s*'([^']+)'`, 'g');
-      let routeMatch: RegExpExecArray | null;
-      while ((routeMatch = routeRegex.exec(routeText)) !== null) {
-        routes.push({
-          method: routeMatch[1].toUpperCase() as HttpMethod,
-          path: joinRoutePath(joinRoutePath(moduleBase, mountMatch[1]), routeMatch[2]),
-        });
-      }
-    }
-
-    const directRegex = /app\.(get|post|put|patch|delete)\('([^']+)'/g;
-    let directMatch: RegExpExecArray | null;
-    while ((directMatch = directRegex.exec(moduleText)) !== null) {
-      routes.push({ method: directMatch[1].toUpperCase() as HttpMethod, path: normalizePath(directMatch[2]) });
-    }
-  }
-
-  return routes;
+  return createBackendRouteManifest();
 }
 
 function extractWebEndpoints(): WebEndpoint[] {

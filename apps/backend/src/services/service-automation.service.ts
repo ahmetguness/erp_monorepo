@@ -5,12 +5,15 @@ import {
   PrismaClient,
   ReservationRefType,
   ServiceStatus,
-} from '@prisma/client';
-import { logger } from '../lib/logger.js';
-import { ConflictError, NotFoundError } from '../errors/index.js';
-import { generateDocumentNumber } from '../utils/generate-number.js';
-import { EDocumentAutomationService } from './edocument-automation.service.js';
-import { assertCanReserveStock, lockInventoryPosition } from './inventory-rules.service.js';
+} from "@prisma/client";
+import { logger } from "../lib/logger.js";
+import { ConflictError, NotFoundError } from "../errors/index.js";
+import { generateDocumentNumber } from "../utils/generate-number.js";
+import { EDocumentAutomationService } from "./edocument-automation.service.js";
+import {
+  assertCanReserveStock,
+  lockInventoryPosition,
+} from "./inventory-rules.service.js";
 
 export interface ServiceAutomationResult {
   serviceRequestId: string;
@@ -31,15 +34,19 @@ export class ServiceAutomationService {
     tenantId: string,
     serviceRequestId: string,
     technicianId: string,
-  ): Promise<{ serviceRequestId: string; assignedToId: string; status: ServiceStatus }> {
+  ): Promise<{
+    serviceRequestId: string;
+    assignedToId: string;
+    status: ServiceStatus;
+  }> {
     const sr = await this.db.serviceRequest.findFirst({
       where: { id: serviceRequestId, tenantId, deletedAt: null },
     });
 
     if (!sr) throw new Error(`Servis Talebi bulunamadı: ${serviceRequestId}`);
 
-    const updated = await this.db.serviceRequest.update({
-      where: { id: serviceRequestId },
+    await this.db.serviceRequest.updateMany({
+      where: { id: serviceRequestId, tenantId },
       data: {
         assignedToId: technicianId,
         status: ServiceStatus.IN_PROGRESS,
@@ -56,11 +63,13 @@ export class ServiceAutomationService {
       },
     });
 
-    logger.info(`[ServiceAutomation] Assigned technician ${technicianId} to ServiceRequest ${serviceRequestId}`);
+    logger.info(
+      `[ServiceAutomation] Assigned technician ${technicianId} to ServiceRequest ${serviceRequestId}`,
+    );
     return {
       serviceRequestId,
       assignedToId: technicianId,
-      status: updated.status,
+      status: ServiceStatus.IN_PROGRESS,
     };
   }
 
@@ -79,18 +88,27 @@ export class ServiceAutomationService {
 
     if (!sr) throw new Error(`Servis Talebi bulunamadı: ${serviceRequestId}`);
 
-    const warehouse = await this.db.warehouse.findFirst({ where: { id: warehouseId, tenantId } });
-    if (!warehouse) throw new NotFoundError('Depo', warehouseId);
+    const warehouse = await this.db.warehouse.findFirst({
+      where: { id: warehouseId, tenantId },
+    });
+    if (!warehouse) throw new NotFoundError("Depo", warehouseId);
 
     const requiredByProduct = new Map<string, number>();
     for (const item of sr.items) {
       if (!item.productId) continue;
       const quantity = Number(item.quantity);
-      if (quantity > 0) requiredByProduct.set(item.productId, (requiredByProduct.get(item.productId) ?? 0) + quantity);
+      if (quantity > 0)
+        requiredByProduct.set(
+          item.productId,
+          (requiredByProduct.get(item.productId) ?? 0) + quantity,
+        );
     }
     const productIds = [...requiredByProduct.keys()].sort();
-    const ownedProductCount = await this.db.product.count({ where: { id: { in: productIds }, tenantId, deletedAt: null } });
-    if (ownedProductCount !== productIds.length) throw new NotFoundError('Servis parcasi');
+    const ownedProductCount = await this.db.product.count({
+      where: { id: { in: productIds }, tenantId, deletedAt: null },
+    });
+    if (ownedProductCount !== productIds.length)
+      throw new NotFoundError("Servis parcasi");
 
     const reservedItemCount = await this.db.$transaction(async (tx) => {
       let count = 0;
@@ -107,25 +125,66 @@ export class ServiceAutomationService {
             releasedAt: null,
             OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
           },
-          orderBy: { reservedAt: 'asc' },
+          orderBy: { reservedAt: "asc" },
         });
-        const alreadyReserved = active.reduce((sum, row) => sum + Number(row.quantity), 0);
+        const alreadyReserved = active.reduce(
+          (sum, row) => sum + Number(row.quantity),
+          0,
+        );
         const remaining = Math.max(0, requiredQuantity - alreadyReserved);
         if (active[0]) {
-          if (remaining > 0) await assertCanReserveStock(tx, tenantId, { productId, warehouseId, quantity: remaining, refType: ReservationRefType.OTHER, refId: sr.id });
-          await tx.inventoryReservation.update({ where: { id: active[0].id }, data: { quantity: new Prisma.Decimal(requiredQuantity) } });
-          if (active.length > 1) await tx.inventoryReservation.updateMany({ where: { id: { in: active.slice(1).map((row) => row.id) } }, data: { releasedAt: new Date() } });
+          if (remaining > 0)
+            await assertCanReserveStock(tx, tenantId, {
+              productId,
+              warehouseId,
+              quantity: remaining,
+              refType: ReservationRefType.OTHER,
+              refId: sr.id,
+            });
+          await tx.inventoryReservation.updateMany({
+            where: { id: active[0].id, tenantId },
+            data: { quantity: new Prisma.Decimal(requiredQuantity) },
+          });
+          if (active.length > 1) {
+            await tx.inventoryReservation.updateMany({
+              where: {
+                id: { in: active.slice(1).map((row) => row.id) },
+                tenantId,
+              },
+              data: { releasedAt: new Date() },
+            });
+          }
         } else {
-          await assertCanReserveStock(tx, tenantId, { productId, warehouseId, quantity: requiredQuantity, refType: ReservationRefType.OTHER, refId: sr.id });
-          await tx.inventoryReservation.create({ data: { tenantId, refType: ReservationRefType.OTHER, refId: sr.id, productId, warehouseId, quantity: new Prisma.Decimal(requiredQuantity) } });
+          await assertCanReserveStock(tx, tenantId, {
+            productId,
+            warehouseId,
+            quantity: requiredQuantity,
+            refType: ReservationRefType.OTHER,
+            refId: sr.id,
+          });
+          await tx.inventoryReservation.create({
+            data: {
+              tenantId,
+              refType: ReservationRefType.OTHER,
+              refId: sr.id,
+              productId,
+              warehouseId,
+              quantity: new Prisma.Decimal(requiredQuantity),
+            },
+          });
         }
         count++;
       }
-      await tx.serviceRequest.update({ where: { id: serviceRequestId }, data: { status: ServiceStatus.WAITING_PARTS } });
+      await tx.serviceRequest.updateMany({
+        where: { id: serviceRequestId, tenantId },
+        data: { status: ServiceStatus.WAITING_PARTS },
+      });
       return count;
     });
 
-    logger.info(`[ServiceAutomation] Reserved ${reservedItemCount} parts for ServiceRequest ${serviceRequestId}`);
+    logger.info(
+      `[ServiceAutomation] Reserved ${reservedItemCount} parts for ServiceRequest ${serviceRequestId}`,
+    );
     return { serviceRequestId, reservedItemCount };
   }
 
@@ -151,8 +210,11 @@ export class ServiceAutomationService {
     }
 
     if (warehouseId) {
-      const warehouse = await this.db.warehouse.findFirst({ where: { id: warehouseId, tenantId, isActive: true }, select: { id: true } });
-      if (!warehouse) throw new NotFoundError('Depo', warehouseId);
+      const warehouse = await this.db.warehouse.findFirst({
+        where: { id: warehouseId, tenantId, isActive: true },
+        select: { id: true },
+      });
+      if (!warehouse) throw new NotFoundError("Depo", warehouseId);
     }
 
     let invoiceId: string | undefined;
@@ -168,11 +230,17 @@ export class ServiceAutomationService {
         throw new Error(`Servis Talebi bulunamadı: ${serviceRequestId}`);
       }
 
-      if (targetSr.status === ServiceStatus.COMPLETED || targetSr.status === ServiceStatus.CANCELLED) throw new ConflictError('Servis talebi zaten terminal durumda; tekrar fatura olusturulamaz.');
+      if (
+        targetSr.status === ServiceStatus.COMPLETED ||
+        targetSr.status === ServiceStatus.CANCELLED
+      )
+        throw new ConflictError(
+          "Servis talebi zaten terminal durumda; tekrar fatura olusturulamaz.",
+        );
 
       // 1. Update Service Request Status to COMPLETED
-      await tx.serviceRequest.update({
-        where: { id: serviceRequestId },
+      await tx.serviceRequest.updateMany({
+        where: { id: serviceRequestId, tenantId },
         data: {
           status: ServiceStatus.COMPLETED,
           closedAt: new Date(),
@@ -209,11 +277,19 @@ export class ServiceAutomationService {
       }
 
       // 3. Generate Draft Invoice for Customer
-      const invNumber = await generateDocumentNumber(tenantId, 'invoice', 'INV-', 'invoice');
+      const invNumber = await generateDocumentNumber(
+        tenantId,
+        "invoice",
+        "INV-",
+        "invoice",
+      );
       invoiceNumber = invNumber;
 
-      const totalNet = sr.items.reduce((sum, i) => sum + Number(i.lineTotal), 0);
-      const totalTax = totalNet * 0.20; // 20% KDV default
+      const totalNet = sr.items.reduce(
+        (sum, i) => sum + Number(i.lineTotal),
+        0,
+      );
+      const totalTax = totalNet * 0.2; // 20% KDV default
       const totalGross = totalNet + totalTax;
 
       const newInvoice = await tx.invoice.create({
@@ -221,7 +297,7 @@ export class ServiceAutomationService {
           tenantId,
           contactId: sr.contactId!,
           type: InvoiceType.SALES,
-          status: 'DRAFT',
+          status: "DRAFT",
           number: invNumber,
           date: new Date(),
           dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // +14 days
@@ -233,10 +309,13 @@ export class ServiceAutomationService {
             create: sr.items.map((item, idx) => ({
               tenantId,
               productId: item.productId,
-              description: item.description || item.product?.name || 'Servis Parça/İşçilik Kalemi',
+              description:
+                item.description ||
+                item.product?.name ||
+                "Servis Parça/İşçilik Kalemi",
               unitPrice: item.unitPrice,
               quantity: item.quantity,
-              taxAmount: new Prisma.Decimal(Number(item.lineTotal) * 0.20),
+              taxAmount: new Prisma.Decimal(Number(item.lineTotal) * 0.2),
               lineTotal: item.lineTotal,
               sortOrder: idx + 1,
             })),
@@ -265,11 +344,15 @@ export class ServiceAutomationService {
         await eDocAutomation.autoCreateAndSendEDocument(tenantId, invoiceId);
         eDocumentCreated = true;
       } catch (err) {
-        logger.error(`[ServiceAutomation] E-Document auto creation error for invoice ${invoiceId}: ${err}`);
+        logger.error(
+          `[ServiceAutomation] E-Document auto creation error for invoice ${invoiceId}: ${err}`,
+        );
       }
     }
 
-    logger.info(`[ServiceAutomation] Completed ServiceRequest ${serviceRequestId}, generated invoice ${invoiceNumber}`);
+    logger.info(
+      `[ServiceAutomation] Completed ServiceRequest ${serviceRequestId}, generated invoice ${invoiceNumber}`,
+    );
     return {
       serviceRequestId,
       status: ServiceStatus.COMPLETED,

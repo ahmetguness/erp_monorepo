@@ -86,6 +86,9 @@ const excludedFiles = new Set([
   'src/modules/platform/admin-list-operations/admin-list-operations.service.ts',
   // Platform-admin sensitive-data grants are explicitly scoped by admin and tenant.
   'src/modules/platform/sensitive-data/sensitive-data.service.ts',
+  // This worker claims candidates across tenants inside an explicit bypass,
+  // then re-enters the claimed tenant scope before processing each record.
+  'src/modules/storage-accounting/infrastructure/chat-attachment.worker.ts',
 ]);
 
 const excludedDirectoryPrefixes = [

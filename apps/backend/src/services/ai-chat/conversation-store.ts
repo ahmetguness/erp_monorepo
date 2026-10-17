@@ -1,4 +1,4 @@
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 // ─────────────────────────────────────────────
 
@@ -22,10 +22,13 @@ function cleanupConversations() {
   }
 }
 
-// Her 5 dakikada temizlik
-setInterval(cleanupConversations, 5 * 60 * 1000);
+// Bu bakım zamanlayıcısı kısa ömürlü CLI/test süreçlerinin kapanmasını engellememeli.
+const cleanupTimer = setInterval(cleanupConversations, 5 * 60 * 1000);
+cleanupTimer.unref();
 
-export function getConversation(sessionId: string): ChatCompletionMessageParam[] {
+export function getConversation(
+  sessionId: string,
+): ChatCompletionMessageParam[] {
   const entry = conversations.get(sessionId);
   if (entry) {
     entry.lastAccess = Date.now();
@@ -60,7 +63,10 @@ export function addToConversation(
       }
       if (oldestKey) conversations.delete(oldestKey);
     }
-    conversations.set(sessionId, { messages: [...messages], lastAccess: Date.now() });
+    conversations.set(sessionId, {
+      messages: [...messages],
+      lastAccess: Date.now(),
+    });
   }
 }
 

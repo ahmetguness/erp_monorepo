@@ -612,8 +612,8 @@ export const StockController = {
                   remaining,
                 );
                 if (decrement > 0) {
-                  await tx.stockLevel.update({
-                    where: { id: level.id },
+                  await tx.stockLevel.updateMany({
+                    where: { id: level.id, tenantId },
                     data: { quantity: { decrement } },
                   });
                   remaining -= decrement;

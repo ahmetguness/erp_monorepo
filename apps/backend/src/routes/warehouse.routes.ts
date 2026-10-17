@@ -4,16 +4,14 @@ import { requireModule } from "../middleware/requireModule";
 import { requirePermission } from "../middleware/requirePermission";
 import { validateBody } from "../middleware/validateBody";
 import {
+  createLocationBodySchema,
+  createWarehouseBodySchema,
   LocationController,
+  transferStockBodySchema,
+  updateWarehouseBodySchema,
   WarehouseController,
 } from "../modules/inventory/http/controllers/index.js";
 import { MODULE_KEYS } from "../types/module.types";
-import {
-  createLocationBodySchema,
-  createWarehouseBodySchema,
-  transferStockBodySchema,
-  updateWarehouseBodySchema,
-} from "../modules/inventory/http/schemas/warehouse.schema.js";
 
 const warehouseRoutes = new Hono();
 
