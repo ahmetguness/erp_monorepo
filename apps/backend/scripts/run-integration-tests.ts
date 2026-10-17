@@ -298,7 +298,8 @@ async function seedTenant(runId: string, suffix: 'a' | 'b') {
 }
 
 async function seed(): Promise<TestContext> {
-  const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const ciRunId = (process.env.CI_RUN_ID ?? 'local').replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 32);
+  const runId = `${ciRunId}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const tenantA = await seedTenant(runId, 'a');
   const tenantB = await seedTenant(runId, 'b');
 
@@ -1899,9 +1900,18 @@ async function testOperationRecoveryFlow(ctx: TestContext): Promise<void> {
   assertStatus(foreign, 404, 'baska tenant kaydinin geri alma gecmisi gorulememeli');
 }
 
-async function main(): Promise<void> {
-  const ctx = await withTimeout('seed', seed());
-  try {
+type IntegrationSuite = 'foundation' | 'finance' | 'operations';
+
+const integrationSuites: readonly IntegrationSuite[] = ['foundation', 'finance', 'operations'];
+
+function selectedSuites(): readonly IntegrationSuite[] {
+  const requested = process.env.INTEGRATION_SUITE ?? 'all';
+  if (requested === 'all') return integrationSuites;
+  if (integrationSuites.includes(requested as IntegrationSuite)) return [requested as IntegrationSuite];
+  throw new Error(`INTEGRATION_SUITE must be one of all, ${integrationSuites.join(', ')}; received ${requested}`);
+}
+
+async function runFoundationSuite(ctx: TestContext): Promise<void> {
     console.log('Integration: Prometheus metrics export');
     await testPrometheusMetricsEndpoint();
     console.log('Integration: tenant isolation');
@@ -1928,6 +1938,9 @@ async function main(): Promise<void> {
     await testPermissionDenied(ctx);
     console.log('Integration: permission simulator smoke');
     await testPermissionSimulatorSmoke(ctx);
+}
+
+async function runFinanceSuite(ctx: TestContext): Promise<void> {
     console.log('Integration: invoice account entry');
     const invoiceId = await testInvoiceCreatesAccountEntry(ctx);
     console.log('Integration: e-document submission idempotency');
@@ -1950,6 +1963,9 @@ async function main(): Promise<void> {
     await testAtomicOutboxClaim(ctx);
     console.log('Integration: atomic marketplace multi-instance claim');
     await testAtomicMarketplaceClaim(ctx);
+}
+
+async function runOperationsSuite(ctx: TestContext): Promise<void> {
     console.log('Integration: stock movement');
     await testStockMovementUpdatesLevel(ctx);
     console.log('Integration: sales order delivery invoice chain');
@@ -1978,11 +1994,27 @@ async function main(): Promise<void> {
     await testDataImportPartialFailurePlan(ctx);
     console.log('Integration: external API key scope and tenant isolation');
     await testApiKeyScopeAndTenantIsolation(ctx);
-    console.log('Backend integration tests: OK');
-  } finally {
-    await cleanup();
-    await prisma.$disconnect();
+}
+
+const suiteRunners: Readonly<Record<IntegrationSuite, (ctx: TestContext) => Promise<void>>> = {
+  foundation: runFoundationSuite,
+  finance: runFinanceSuite,
+  operations: runOperationsSuite,
+};
+
+async function main(): Promise<void> {
+  for (const suite of selectedSuites()) {
+    const ctx = await withTimeout(`${suite} seed`, seed());
+    try {
+      console.log(`Integration suite: ${suite}`);
+      await suiteRunners[suite](ctx);
+      console.log(`Integration suite ${suite}: OK`);
+    } finally {
+      await cleanup();
+    }
   }
+  await prisma.$disconnect();
+  console.log('Backend integration tests: OK');
 }
 
 main().then(() => {

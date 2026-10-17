@@ -1,0 +1,162 @@
+name: CI Assurance
+on:
+  pull_request:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CI: 'true'
+  NODE_VERSION: '22'
+  CI_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+jobs:
+  static-quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test:types-layout
+      - run: npm run test:guards
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run build:types
+      - run: npm run test:unit:ci
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: unit-reports, path: artifacts/unit, if-no-files-found: error }
+  integration:
+    name: Integration (${{ matrix.suite }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix: { suite: [foundation, finance, operations] }
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_DB: axon_ci, POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres -d axon_ci" --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/axon_ci?schema=public
+      REDIS_URL: redis://127.0.0.1:6379
+      JWT_SECRET: ci-integration-secret-with-at-least-32-characters
+      ADMIN_JWT_SECRET: ci-admin-secret-with-at-least-32-characters
+      INTEGRATION_SUITE: ${{ matrix.suite }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run build:types
+      - run: npm --workspace=@repo/backend run db:generate
+      - run: npm --workspace=@repo/backend run db:migrate:deploy
+      - run: npm --workspace=@repo/backend run test:integration:ci
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: 'integration-${{ matrix.suite }}', path: artifacts/integration, if-no-files-found: error }
+  browser-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run build:web
+      - run: npx playwright install --with-deps chromium firefox
+      - run: npm run test:e2e:smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-smoke
+          path: |
+            apps/web/test-results
+            apps/web/playwright-report
+          if-no-files-found: error
+  browser-regression:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run build:web
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e:regression
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-regression
+          path: |
+            apps/web/test-results
+            apps/web/playwright-report
+          if-no-files-found: error
+  production-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run build
+      - run: docker build -f apps/backend/Dockerfile -t axon-backend:${{ github.sha }} .
+      - run: docker build -f apps/web/Dockerfile -t axon-web:${{ github.sha }} .
+      - run: mkdir -p artifacts/security
+      - name: Scan backend image
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/artifacts/security:/reports" aquasec/trivy:0.58.2 image --exit-code 1 --severity HIGH,CRITICAL --format json --output /reports/backend-trivy.json axon-backend:${{ github.sha }}
+      - name: Scan web image
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/artifacts/security:/reports" aquasec/trivy:0.58.2 image --exit-code 1 --severity HIGH,CRITICAL --format json --output /reports/web-trivy.json axon-web:${{ github.sha }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: container-scan-reports, path: artifacts/security, if-no-files-found: warn }
+  supply-chain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run supply-chain:audit
+      - run: npm run supply-chain:licenses
+      - run: npm sbom --sbom-format=cyclonedx > sbom.cdx.json
+      - run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.2 detect --source=/repo --no-banner --redact
+      - uses: actions/upload-artifact@v4
+        with: { name: sbom, path: sbom.cdx.json, if-no-files-found: error }
+  assurance-summary:
+    if: always()
+    needs: [static-quality, unit, integration, browser-smoke, browser-regression, production-build, supply-chain]
+    runs-on: ubuntu-24.04
+    steps:
+      - env: { RESULTS: '${{ toJSON(needs) }}' }
+        run: echo "$RESULTS" >> "$GITHUB_STEP_SUMMARY"
+      - run: |
+          test "${{ needs.static-quality.result }}" = success
+          test "${{ needs.unit.result }}" = success
+          test "${{ needs.integration.result }}" = success
+          test "${{ needs.browser-smoke.result }}" = success
+          test "${{ needs.production-build.result }}" = success
+          test "${{ needs.supply-chain.result }}" = success
+          if [ "${{ github.event_name }}" != pull_request ]; then test "${{ needs.browser-regression.result }}" = success; fi

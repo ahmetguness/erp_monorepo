@@ -9,7 +9,8 @@
     "ios": "expo start --ios --go",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --config vitest.config.mts"
+    "test": "vitest run --config vitest.config.mts",
+    "test:ci": "vitest run --config vitest.config.mts --reporter=default --reporter=junit --outputFile.junit=../../artifacts/unit/mobile.junit.xml"
   },
   "dependencies": {
     "@expo/vector-icons": "~15.0.3",

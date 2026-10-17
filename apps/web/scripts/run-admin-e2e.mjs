@@ -32,8 +32,9 @@ async function run() {
   const existingBaseUrl = await findExistingServer();
   const ownsServer = existingBaseUrl === null;
   const baseUrl = existingBaseUrl ?? managedBaseUrl;
+  const serverMode = process.env.CI ? 'start' : 'dev';
   const server = ownsServer
-    ? spawn(process.execPath, [nextCli, 'dev', '--hostname', '127.0.0.1', '--port', `${port}`], {
+    ? spawn(process.execPath, [nextCli, serverMode, '--hostname', '127.0.0.1', '--port', `${port}`], {
         cwd: webRoot,
         stdio: 'inherit',
         env: { ...process.env, NEXT_DIST_DIR: '.next-e2e' },
@@ -52,7 +53,10 @@ async function run() {
     });
     process.exitCode = exitCode;
   } finally {
-    if (server) server.kill('SIGTERM');
+    if (server && !server.killed) {
+      server.kill('SIGTERM');
+      await new Promise((resolve) => server.once('exit', resolve));
+    }
   }
 }
 
