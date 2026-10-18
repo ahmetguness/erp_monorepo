@@ -27,7 +27,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@repo/types": "*",
     "@tanstack/react-query": "^5.96.2",
-    "@tanstack/react-query-devtools": "^5.96.2",
+    "@tanstack/react-query-devtools": "^5.104.3",
     "axios": "^1.18.1",
     "exceljs": "^4.4.0",
     "framer-motion": "^12.38.0",
