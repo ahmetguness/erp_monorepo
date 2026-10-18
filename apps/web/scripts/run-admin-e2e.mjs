@@ -33,11 +33,12 @@ async function run() {
   const ownsServer = existingBaseUrl === null;
   const baseUrl = existingBaseUrl ?? managedBaseUrl;
   const serverMode = process.env.CI ? 'start' : 'dev';
+  const serverEnv = process.env.CI ? process.env : { ...process.env, NEXT_DIST_DIR: '.next-e2e' };
   const server = ownsServer
     ? spawn(process.execPath, [nextCli, serverMode, '--hostname', '127.0.0.1', '--port', `${port}`], {
         cwd: webRoot,
         stdio: 'inherit',
-        env: { ...process.env, NEXT_DIST_DIR: '.next-e2e' },
+        env: serverEnv,
       })
     : null;
   try {
@@ -55,7 +56,10 @@ async function run() {
   } finally {
     if (server && !server.killed) {
       server.kill('SIGTERM');
-      await new Promise((resolve) => server.once('exit', resolve));
+      await Promise.race([
+        new Promise((resolve) => server.once('exit', resolve)),
+        new Promise((resolve) => setTimeout(resolve, 5_000)),
+      ]);
     }
   }
 }

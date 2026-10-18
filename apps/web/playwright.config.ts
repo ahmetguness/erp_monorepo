@@ -34,7 +34,7 @@ export default defineConfig({
     { name: 'smoke-firefox', testMatch: smokeTests, use: { ...devices['Desktop Firefox'] } },
   ],
   webServer: externalWebServer ? undefined : {
-    command: `node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port ${port}`,
+    command: `node node_modules/next/dist/bin/next ${process.env.CI ? 'start' : 'dev'} --hostname 127.0.0.1 --port ${port}`,
     url: `http://127.0.0.1:${port}/admin/login`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

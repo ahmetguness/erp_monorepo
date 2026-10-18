@@ -47,7 +47,7 @@ const paymentReplayInclude = {
 type PaymentReplay = Prisma.PaymentGetPayload<{ include: typeof paymentReplayInclude }>;
 
 async function findPaymentReplay(
-  db: PrismaClient,
+  db: PrismaClient | Prisma.TransactionClient,
   tenantId: string,
   idempotencyKey: string,
 ): Promise<PaymentReplay | null> {
@@ -307,6 +307,13 @@ export async function createPayment(options: {
     // different payments can both observe the same remaining balance.
     for (const invoiceId of [...new Set((options.input.allocations ?? []).map((item) => item.invoiceId))].sort()) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${options.tenantId}:${invoiceId}`}))`;
+    }
+    if (idempotencyKey) {
+      const replay = await findPaymentReplay(tx, options.tenantId, idempotencyKey);
+      if (replay) {
+        assertPaymentReplayMatches(replay, options.input, amount, direction, paymentDate);
+        return replay;
+      }
     }
     await assertPaymentAllocationsWithinInvoiceBalance(tx, options.tenantId, options.input.allocations ?? []);
 

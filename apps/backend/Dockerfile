@@ -21,8 +21,7 @@ RUN npm run build
 
 FROM deps AS migrator
 COPY apps/backend ./
-RUN npm run db:generate \
-  && ln -sf schema/migrations prisma/migrations
+RUN npm run db:generate
 CMD ["npx", "prisma", "migrate", "deploy", "--schema=prisma/schema"]
 
 FROM base AS runner

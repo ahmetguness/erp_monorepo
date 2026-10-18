@@ -407,7 +407,6 @@ export async function postProductionAccountingEntry(
       idempotencyKey: `work-order-completion:${workOrder.id}`,
       lines: {
         create: journalLines.map((l, index) => ({
-          tenantId,
           accountId: l.accountId,
           debit: l.debit,
           credit: l.credit,

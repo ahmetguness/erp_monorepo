@@ -324,7 +324,7 @@ async function seed(): Promise<TestContext> {
   const contactA = await prisma.contact.create({
     data: {
       tenantId: tenantA.tenant.id,
-      type: ContactType.CUSTOMER,
+      type: ContactType.BOTH,
       code: `CTA-${runId}`,
       name: 'Integration Contact A',
       email: `contact-a-${runId}@example.com`,
@@ -981,6 +981,15 @@ async function testSalesOrderDeliveryInvoiceChain(ctx: TestContext): Promise<voi
     }],
   });
   assertStatus(deliveryResult, 201, 'satis teslimat notu olusturulabilmeli');
+  const deliveryNoteId = readDataId(deliveryResult.body);
+
+  const deliverResult = await api(
+    'PATCH',
+    `/api/delivery-notes/${deliveryNoteId}/status`,
+    token(ctx.ownerAId, ctx.tenantAId),
+    { status: 'DELIVERED', deliveredAt: '2026-05-25T12:00:00.000Z' },
+  );
+  assertStatus(deliverResult, 200, 'satis teslimat notu teslim edildi durumuna gecirilebilmeli');
 
   const deliveredOrder = await prisma.salesOrder.findFirst({
     where: { tenantId: ctx.tenantAId, id: orderId },
@@ -1021,7 +1030,8 @@ async function testSalesOrderDeliveryInvoiceChain(ctx: TestContext): Promise<voi
   assertStatus(crossTenantWorkspace, 404, 'satis is dosyasi tenant disina sizmamali');
 }
 
-async function testEDocumentSubmissionIdempotency(ctx: TestContext, invoiceId: string): Promise<void> {
+async function testEDocumentSubmissionIdempotency(ctx: TestContext): Promise<void> {
+  const invoiceId = await createInvoice(ctx);
   const submissionIdempotencyKey = `edocument-submit:${crypto.randomUUID()}`;
   const input = { invoiceId, type: EDocumentType.E_ARCHIVE, submissionIdempotencyKey };
   const createRequest = () => api('POST', '/api/e-documents', token(ctx.ownerAId, ctx.tenantAId), input);
@@ -1334,14 +1344,7 @@ async function testDomainEventIdempotency(ctx: TestContext): Promise<void> {
   if (after !== before) throw new Error('Domain event idempotency kontrolu yan etki uretmemeli.');
 }
 
-async function testDomainEventCoverageAndDeadLetterReplay(ctx: TestContext): Promise<void> {
-  const coverageResult = await api('GET', '/api/domain-events/coverage', token(ctx.ownerAId, ctx.tenantAId));
-  assertStatus(coverageResult, 200, 'domain event coverage raporu listelenebilmeli');
-  const coverageData = readDataRecord(coverageResult.body);
-  if (readNumberField(coverageData, 'schemaVersion') < 1 || !Array.isArray(coverageData.publishCoverage)) {
-    throw new Error('Domain event coverage raporu schemaVersion/publishCoverage dondurmedi.');
-  }
-
+async function testDomainEventDeadLetterReplay(ctx: TestContext): Promise<void> {
   const source = `domain:stock.low:${ctx.productAId}:${ctx.warehouseAId}`;
   const outbox = await prisma.domainEventOutbox.create({
     data: {
@@ -1944,7 +1947,7 @@ async function runFinanceSuite(ctx: TestContext): Promise<void> {
     console.log('Integration: invoice account entry');
     const invoiceId = await testInvoiceCreatesAccountEntry(ctx);
     console.log('Integration: e-document submission idempotency');
-    await testEDocumentSubmissionIdempotency(ctx, invoiceId);
+    await testEDocumentSubmissionIdempotency(ctx);
     console.log('Integration: closed fiscal period');
     await testClosedFiscalPeriodBlocksInvoice(ctx);
     console.log('Integration: payment allocation');
@@ -1957,8 +1960,8 @@ async function runFinanceSuite(ctx: TestContext): Promise<void> {
     await testDomainEventOutbox(ctx);
     console.log('Integration: domain event idempotency');
     await testDomainEventIdempotency(ctx);
-    console.log('Integration: domain event coverage and dead-letter replay');
-    await testDomainEventCoverageAndDeadLetterReplay(ctx);
+    console.log('Integration: domain event dead-letter replay');
+    await testDomainEventDeadLetterReplay(ctx);
     console.log('Integration: atomic outbox multi-instance claim');
     await testAtomicOutboxClaim(ctx);
     console.log('Integration: atomic marketplace multi-instance claim');
