@@ -44,7 +44,7 @@ jobs:
       - run: npm --workspace=@repo/backend run db:generate
       - run: npm run test:unit:ci
       - run: npm run test:coverage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: unit-reports
@@ -85,7 +85,7 @@ jobs:
       - run: npm --workspace=@repo/backend run db:migrate:deploy
       - run: npm --workspace=@repo/backend run db:seed
       - run: npm --workspace=@repo/backend run test:integration:ci
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: 'integration-${{ matrix.suite }}', path: artifacts/integration, if-no-files-found: error }
   browser-smoke:
@@ -106,7 +106,7 @@ jobs:
       - uses: ./.github/actions/browser-environment
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:e2e:smoke
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: browser-smoke
@@ -134,7 +134,7 @@ jobs:
       - uses: ./.github/actions/browser-environment
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:regression
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: browser-regression
@@ -155,7 +155,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm --workspace=web run test:admin-accessibility
       - run: npm --workspace=web run test:e2e:accessibility
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: accessibility
@@ -179,7 +179,7 @@ jobs:
         run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/artifacts/security:/reports" aquasec/trivy:0.58.2 image --exit-code 1 --severity HIGH,CRITICAL --format json --output /reports/backend-trivy.json axon-backend:${{ github.sha }}
       - name: Scan web image
         run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/artifacts/security:/reports" aquasec/trivy:0.58.2 image --exit-code 1 --severity HIGH,CRITICAL --format json --output /reports/web-trivy.json axon-web:${{ github.sha }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: container-scan-reports, path: artifacts/security, if-no-files-found: warn }
   supply-chain:
@@ -195,7 +195,7 @@ jobs:
       - run: npm run supply-chain:licenses
       - run: npm sbom --sbom-format=cyclonedx > sbom.cdx.json
       - run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.2 detect --source=/repo --no-banner --redact
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: sbom, path: sbom.cdx.json, if-no-files-found: error }
   assurance-summary:
     if: always()
