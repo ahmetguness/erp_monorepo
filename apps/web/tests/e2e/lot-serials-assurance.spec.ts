@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { isCancelledReadRequest, test, expect, type Page } from "./fixtures/test";
 import { PrismaClient } from "@prisma/client";
 
 async function login(page: Page) {
@@ -25,6 +25,7 @@ test("lot serial create, server search, filters, pagination and traceability", a
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("requestfailed", (request) => {
+    if (isCancelledReadRequest(request)) return;
     if (request.url().includes("lot-serials"))
       networkFailures.push(request.url());
   });

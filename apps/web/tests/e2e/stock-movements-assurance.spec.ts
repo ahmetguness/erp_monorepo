@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { isCancelledReadRequest, test, expect } from "./fixtures/test";
 import { PrismaClient } from "@prisma/client";
 
 test("manual movement, filters, totals, refresh and product navigation", async ({
@@ -10,7 +10,7 @@ test("manual movement, filters, totals, refresh and product navigation", async (
     warehouseId = "";
   const failures: string[] = [],
     errors: string[] = [];
-  page.on("requestfailed", (r) => failures.push(r.url()));
+  page.on("requestfailed", (r) => { if (!isCancelledReadRequest(r)) failures.push(r.url()); });
   page.on("response", (r) => {
     if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
   });

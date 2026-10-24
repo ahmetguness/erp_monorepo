@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, isCancelledReadRequest } from './fixtures/test';
 import { PrismaClient } from '@prisma/client';
 
 test('invoice UI create, read, totals, export and reasoned cancellation', async ({ page }) => {
@@ -7,7 +7,7 @@ test('invoice UI create, read, totals, export and reasoned cancellation', async 
   const consoleErrors: string[] = []; const failedRequests: string[] = [];
   let contactId: string | null = null;
   page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
-  page.on('requestfailed', r => failedRequests.push(`${r.method()} ${r.url()}`));
+  page.on('requestfailed', r => { if (!isCancelledReadRequest(r)) failedRequests.push(`${r.method()} ${r.url()}`); });
   try {
     await page.goto('/login');
     await page.getByLabel('E-posta adresi').fill('admin@axondemo.com');

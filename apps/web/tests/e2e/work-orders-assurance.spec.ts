@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures/test';
 async function login(page: Page) { await page.goto('/login'); await page.getByLabel(/E-posta/).fill('admin@axondemo.com'); await page.getByRole('textbox', { name: /ifre/, exact: true }).fill('demo1234'); await page.getByRole('button', { name: /Giri.*Yap/ }).click(); await expect(page).toHaveURL(/\/dashboard$/); }
 const order = { id: 'wo-1', number: 'TEST_E2E_WO_001', status: 'IN_PROGRESS', plannedQty: 10, producedQty: 4, startDate: '2026-09-30T00:00:00.000Z', endDate: null, createdAt: '2026-09-30T00:00:00.000Z', product: { id: 'p', code: 'TEST-P', name: 'TEST_E2E Mamul' }, bom: { id: 'b', name: 'TEST BOM', version: '1.0' }, _count: { items: 2, operations: 1 } };
 

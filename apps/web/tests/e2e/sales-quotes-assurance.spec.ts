@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, isCancelledReadRequest } from "./fixtures/test";
 import { PrismaClient } from "@prisma/client";
 
 test("sales quote UI create, read, filter, navigation and conversion flow", async ({
@@ -15,7 +15,7 @@ test("sales quote UI create, read, filter, navigation and conversion flow", asyn
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("requestfailed", (request) =>
-    failedRequests.push(`${request.method()} ${request.url()}`),
+    { if (!isCancelledReadRequest(request)) failedRequests.push(`${request.method()} ${request.url()}`); },
   );
 
   try {

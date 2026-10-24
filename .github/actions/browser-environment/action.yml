@@ -1,0 +1,22 @@
+name: Browser test environment
+description: Migrate and seed the isolated CI database, then start the real API.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: npm --workspace=@repo/backend run db:generate
+    - shell: bash
+      run: npm --workspace=@repo/backend run db:migrate:deploy
+    - shell: bash
+      run: npm --workspace=@repo/backend run db:seed
+    - shell: bash
+      working-directory: apps/backend
+      run: node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/prepare-browser-fixtures.ts
+    - shell: bash
+      run: |
+        mkdir -p artifacts/browser
+        cd apps/backend
+        nohup node --import ../../scripts/node26-tsx-shim.mjs --import tsx src/index.ts > ../../artifacts/browser/api.log 2>&1 &
+        echo "$!" > ../../artifacts/browser/api.pid
+    - shell: bash
+      run: node scripts/wait-for-http.mjs http://localhost:3001/health

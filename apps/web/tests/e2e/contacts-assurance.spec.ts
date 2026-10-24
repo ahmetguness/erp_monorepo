@@ -1,4 +1,4 @@
-import { test, expect, request } from "@playwright/test";
+import { test, expect, request, isCancelledReadRequest } from "./fixtures/test";
 
 const marker = `TEST_E2E_CONTACT_${Date.now()}`;
 
@@ -9,7 +9,7 @@ test("contacts UI and API assurance flow", async ({ page }) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("requestfailed", (request) =>
-    failedRequests.push(`${request.method()} ${request.url()}`),
+    { if (!isCancelledReadRequest(request)) failedRequests.push(`${request.method()} ${request.url()}`); },
   );
 
   await page.goto("/login");

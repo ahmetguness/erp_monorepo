@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route } from "./fixtures/test";
 
 const json = (route: Route, body: unknown, status = 200) =>
   route.fulfill({
@@ -59,6 +59,9 @@ test("users UI loads members, validates invite, updates role and cancels invitat
   page,
 }) => {
   await login(page);
+  const identity = await page.request.get('http://localhost:3001/api/auth/me');
+  expect(identity.ok()).toBe(true);
+  const { data: { tenant } } = await identity.json();
   const calls: string[] = [];
   await page.route(/\/api\/users(?:\/[^/?]+)?(?:\?.*)?$/, (route) => {
     calls.push(
@@ -91,7 +94,7 @@ test("users UI loads members, validates invite, updates role and cancels invitat
       data: [
         {
           id: "role-read",
-          tenantId: "cmuyhzuqd002mgbhonjvtpqcq",
+          tenantId: tenant.id,
           name: "Okuyucu",
           description: "Salt okunur",
           isSystem: false,

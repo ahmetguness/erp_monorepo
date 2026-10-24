@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { isCancelledReadRequest, test, expect } from "./fixtures/test";
 import { PrismaClient } from "@prisma/client";
 
 async function login(page: import("@playwright/test").Page) {
@@ -27,6 +27,7 @@ test("reservations CRUD, server filters, expiry cleanup and persistence", async 
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("requestfailed", (request) => {
+    if (isCancelledReadRequest(request)) return;
     if (request.url().includes("inventory-reservations"))
       networkFailures.push(`${request.method()} ${request.url()}`);
   });

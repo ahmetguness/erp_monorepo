@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures/test";
 
 async function login(page: Page) {
   await page.route("**/api/settings", (route) =>

@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route } from "./fixtures/test";
 
 const entry = { id: "audit-1", actor: { id: "admin-1", name: "Test Admin", email: "admin@test.invalid" }, action: "UPDATE", module: "TENANTS", targetType: "tenant", targetId: "tenant-1", outcome: "SUCCESS", reason: "TEST_E2E_AUDIT", approvalId: "approval-1", ipAddress: "127.0.0.1", device: "playwright", requestId: "request-1", correlationId: "correlation-1", changes: [{ field: "status", before: "ACTIVE", after: "SUSPENDED" }], previousHash: null, hash: "a".repeat(64), retentionUntil: "2033-10-13T00:00:00.000Z", createdAt: "2026-10-13T10:00:00.000Z" };
 const pageData = { data: [entry], meta: { total: 1, page: 1, pageSize: 50, totalPages: 1 }, integrity: { valid: true, checked: 1, brokenAtId: null }, retentionDays: 2555 };

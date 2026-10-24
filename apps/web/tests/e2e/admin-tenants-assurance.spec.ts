@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/test';
 
 const admin = { id: 'admin-1', email: 'admin@example.test', name: 'Test Admin', isActive: true, lastLoginAt: null, createdAt: '2026-01-01T00:00:00.000Z', roles: ['SUPER_ADMIN'], permissions: ['dashboard.read', 'tenant.read', 'tenant.create', 'tenant.export', 'tenant.settings.update', 'tenant.plan.update', 'tenant.status.update'] };
 const tenant = { id: 'tenant-1', slug: 'test-e2e-tenant', companyName: 'TEST_E2E_TENANT Türkçe', email: 'tenant@example.test', phone: null, plan: 'ENTERPRISE', status: 'ACTIVE', city: 'İstanbul', sector: null, maxUsers: 25, trialEndsAt: null, subscriptionStart: null, subscriptionEnd: null, planChangedAt: null, isCustomPricing: false, modules: ['ACCOUNTING'], notes: null, createdAt: '2026-10-08T00:00:00.000Z', updatedAt: '2026-10-08T00:00:00.000Z', _count: { users: 2, products: 3, invoices: 4, contacts: 5 } };

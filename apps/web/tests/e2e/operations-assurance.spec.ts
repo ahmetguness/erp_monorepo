@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/test';
 
 async function prepare(page: Page) {
   await page.route('**/api/settings', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'wizard', key: 'wizard_completed', value: 'true' }] }) }));

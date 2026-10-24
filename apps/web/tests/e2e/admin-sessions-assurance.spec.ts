@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route } from "./fixtures/test";
 
 const admin = { id: "admin-session", email: "sessions@test.invalid", name: "Session Admin", permissions: [], mfaEnabled: true };
 const now = "2026-10-14T09:00:00.000Z";
@@ -57,7 +57,7 @@ test("reauth form validates, toggles password and submits", async ({ page }) => 
     if (path.endsWith("/auth/me")) return json(route, { data: admin });
     if (request.method() === "GET") return json(route, { data: path.endsWith("security-events") ? [] : sessions });
     calls.push(path);
-    return json(route, { data: { success: true, reauthenticationExpiresAt: "2026-10-15T09:00:00.000Z" } });
+    return json(route, { data: { success: true, reauthenticationExpiresAt: new Date(Date.now() + 86_400_000).toISOString() } });
   });
   await page.goto("/admin/sessions?reauth=1");
   const password = page.locator('input[type="password"]');

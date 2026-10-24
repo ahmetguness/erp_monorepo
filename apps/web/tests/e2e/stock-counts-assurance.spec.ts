@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { isCancelledReadRequest, test, expect } from "./fixtures/test";
 import { PrismaClient } from "@prisma/client";
 
 test("stock count create, detail, finalize, filters, refresh and DB reconciliation", async ({
@@ -11,7 +11,7 @@ test("stock count create, detail, finalize, filters, refresh and DB reconciliati
     countId = "";
   const failures: string[] = [],
     errors: string[] = [];
-  page.on("requestfailed", (request) => failures.push(request.url()));
+  page.on("requestfailed", (request) => { if (!isCancelledReadRequest(request)) failures.push(request.url()); });
   page.on("response", (response) => {
     if (response.status() >= 500)
       failures.push(`${response.status()} ${response.url()}`);

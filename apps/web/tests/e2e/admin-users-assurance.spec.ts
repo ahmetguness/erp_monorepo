@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route } from "./fixtures/test";
 
 const manager = { id: "admin-manager", email: "manager@test.invalid", name: "Test Manager", permissions: ["admin-user.read", "admin-user.manage"], mfaEnabled: true };
 const users = [

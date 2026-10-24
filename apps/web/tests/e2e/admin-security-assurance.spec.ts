@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route } from "./fixtures/test";
 
 const admin = { id: "security-admin", email: "security@test.invalid", name: "Security Admin", permissions: ["security.read", "security.manage"], mfaEnabled: true };
 const finding = { id: "finding-1", key: "TEST_E2E_SECURITY", title: "TEST_E2E TLS Türkçe", category: "TRANSPORT", severity: "CRITICAL", status: "OPEN", verificationStatus: "FAIL", owner: null, remediation: "HTTPS yapılandırmasını tamamlayın.", evidence: ["HTTPS kanıtı bulunamadı"], ticketId: null, firstSeenAt: "2026-10-14T08:00:00.000Z", lastSeenAt: "2026-10-14T09:00:00.000Z", verifiedAt: null, resolvedAt: null };

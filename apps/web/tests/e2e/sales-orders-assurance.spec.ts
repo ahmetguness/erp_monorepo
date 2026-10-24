@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { isCancelledReadRequest, test, expect } from "./fixtures/test";
 import { PrismaClient } from "@prisma/client";
 
 test("sales order UI create, read, totals, lifecycle, search and navigation", async ({
@@ -14,8 +14,7 @@ test("sales order UI create, read, totals, lifecycle, search and navigation", as
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("requestfailed", (request) =>
-    failedRequests.push(`${request.method()} ${request.url()}`),
-  );
+    { if (!isCancelledReadRequest(request)) failedRequests.push(`${request.method()} ${request.url()}`); });
   try {
     await page.goto("/login");
     await page.getByLabel("E-posta adresi").fill("admin@axondemo.com");

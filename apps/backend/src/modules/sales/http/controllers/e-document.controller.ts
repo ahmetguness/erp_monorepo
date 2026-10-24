@@ -342,8 +342,17 @@ export const EDocumentController = {
 
     const duplicateSource = await prisma.eDocument.findFirst({
       where: { tenantId, type: body.type, invoiceId: body.invoiceId ?? null, deliveryNoteId: body.deliveryNoteId ?? null, status: { not: EDocumentStatus.CANCELLED } },
-      select: { id: true },
+      include: {
+        invoice: { select: { id: true, number: true } },
+        deliveryNote: { select: { id: true, number: true } },
+      },
     });
+    // Another request can commit between the key lookup and the source lookup.
+    // Preserve replay semantics in that window as well as on unique conflicts.
+    if (duplicateSource && submissionIdempotencyKey === duplicateSource.submissionIdempotencyKey
+      && hasSameSubmissionIdentity(duplicateSource, body)) {
+      return c.json({ data: duplicateSource });
+    }
     if (duplicateSource) throw new ConflictError('Bu kaynak belge icin aktif bir e-belge zaten bulunuyor.');
 
     let doc;

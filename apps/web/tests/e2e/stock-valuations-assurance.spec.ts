@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { isCancelledReadRequest, test, expect } from "./fixtures/test";
 import { PrismaClient } from "@prisma/client";
 
 test("stock valuation ledger, exact summary, filters, pagination, navigation and error recovery", async ({ page }) => {
@@ -7,6 +7,7 @@ test("stock valuation ledger, exact summary, filters, pagination, navigation and
   let productId = "", otherProductId = "", warehouseId = "";
   const requestFailures: string[] = [], consoleErrors: string[] = [];
   page.on("requestfailed", (request) => {
+    if (isCancelledReadRequest(request)) return;
     if (!request.url().includes("stock-valuations") || !request.failure()?.errorText.includes("intentional")) requestFailures.push(request.url());
   });
   page.on("response", (response) => { if (response.status() >= 500) requestFailures.push(`${response.status()} ${response.url()}`); });

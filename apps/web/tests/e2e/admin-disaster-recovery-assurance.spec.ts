@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route } from "./fixtures/test";
 
 const manager = { id: "admin-dr", email: "dr@test.local", name: "DR Admin", permissions: ["operations.read", "operations.manage", "tenant.read"] };
 const reader = { ...manager, id: "admin-dr-reader", permissions: ["operations.read", "tenant.read"] };
@@ -66,6 +66,7 @@ test("manager can submit backup, restore lifecycle and tenant deployment actions
   await page.getByPlaceholder("Doğrulama notu").fill("İzole restore veri bütünlüğü doğrulandı");
   await page.getByRole("button", { name: "Sonucu Kaydet" }).click();
   await page.getByRole("button", { name: "Yedek testi" }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Yedek doğrulama simülasyonu tamamlandı.' })).toBeVisible();
   const deploymentForm = page.getByLabel("Ortam adı").locator("..");
   await page.getByLabel("Ortam adı").fill("dr-test"); await deploymentForm.getByRole("button", { name: "Kaydet", exact: true }).click();
   await expect.poll(() => writes.sort()).toEqual(["backup", "drill", "result", "settings", "simulation"]);

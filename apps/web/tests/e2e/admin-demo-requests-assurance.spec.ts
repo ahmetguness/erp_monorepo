@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './fixtures/test';
 
 const admin = { id: 'admin-demo-1', email: 'demo-admin@example.test', name: 'Demo Admin', isActive: true, lastLoginAt: null, createdAt: '2026-01-01T00:00:00.000Z', roles: ['SUPER_ADMIN'], permissions: ['dashboard.read', 'demo.read', 'demo.approve', 'demo.reject'] };
 const request = {

@@ -1,11 +1,11 @@
-import { test, expect } from '@playwright/test';
+import { isCancelledReadRequest, test, expect } from './fixtures/test';
 import { PrismaClient } from '@prisma/client';
 
 test('delivery note UI create, read, refresh, lifecycle and export', async ({ page }) => {
   const prisma = new PrismaClient(); const marker = `TEST_E2E_DELIVERY_UI_${Date.now()}`;
   const consoleErrors: string[] = []; const failedRequests: string[] = []; let productId: string | null = null;
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
-  page.on('requestfailed', request => failedRequests.push(`${request.method()} ${request.url()}`));
+  page.on('requestfailed', request => { if (!isCancelledReadRequest(request)) failedRequests.push(`${request.method()} ${request.url()}`); });
   try {
     const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: 'axon-demo' } }); const unit = await prisma.unit.findFirstOrThrow({ where: { tenantId: tenant.id } }); const warehouse = await prisma.warehouse.findFirstOrThrow({ where: { tenantId: tenant.id } });
     productId = (await prisma.product.create({ data: { tenantId: tenant.id, unitId: unit.id, code: marker, name: marker } })).id;

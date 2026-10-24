@@ -20,6 +20,7 @@
     "build:web": "npm --workspace=web run build",
     "typecheck:types": "npm --workspace=@repo/types run typecheck",
     "test:types-layout": "npm --workspace=@repo/types run test:layout",
+    "test:ci-infrastructure": "node --test scripts/tests/*.test.mjs",
     "typecheck:backend": "npm --workspace=@repo/backend run typecheck",
     "typecheck:web": "npm --workspace=web run typecheck",
     "typecheck:mobile": "npm --workspace=mobile run typecheck",
@@ -44,8 +45,8 @@
     "test:web": "npm --workspace=web run test",
     "test:quality": "npm --workspace=@repo/backend run test:quality && npm --workspace=web run test:unit:coverage",
     "test:guards": "npm run test:module-boundaries && npm run test:prisma-architecture && npm --workspace=@repo/backend run test:contracts && npm --workspace=@repo/backend run test:tenant-isolation && npm --workspace=@repo/backend run test:tenant-runtime && npm --workspace=@repo/backend run test:security-hardening && npm --workspace=@repo/backend run test:permission-gating",
-    "test:fast": "npm run typecheck && npm run lint && npm run test:types-layout && npm run test:guards && npm run test:unit",
-    "test:full": "npm run test:fast && npm run test:coverage && npm run test:integration && npm run test:e2e:regression && npm run build",
+    "test:fast": "npm run typecheck && npm run lint && npm run test:types-layout && npm run test:ci-infrastructure && npm run test:guards && npm run test:unit",
+    "test:full": "npm run test:fast && npm run test:coverage && npm run test:integration && npm run test:e2e:smoke && npm run test:e2e:regression && npm run build",
     "supply-chain:licenses": "node scripts/check-licenses.mjs",
     "supply-chain:audit": "npm audit --audit-level=critical",
     "build": "npm --workspace=@repo/backend run db:generate && npm run build:types && npm --workspace=@repo/backend run build && npm --workspace=web run build",
@@ -53,6 +54,8 @@
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.11",
+    "magicast": "0.3.5",
+    "react-dom": "19.1.0",
     "vitest": "^4.1.11"
   },
   "overrides": {

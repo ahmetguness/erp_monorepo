@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "npm --workspace=@repo/types run build",
     "dev": "tsx watch src/index.ts",
     "worker:domain-events": "tsx src/workers/domain-event-outbox.worker.ts",
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc",
@@ -159,7 +160,7 @@
     "db:migrate:review": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-migration-safety.ts",
     "db:push": "prisma db push --schema=prisma/schema",
     "db:studio": "prisma studio --schema=prisma/schema",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx prisma/seed.ts",
     "storage:migrate": "tsx scripts/migrate-local-storage-to-object-storage.ts",
     "marketplace:encrypt-credentials": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/encrypt-marketplace-credentials.ts"
   },

@@ -1,4 +1,4 @@
-import {expect,test,type Page,type Route} from "@playwright/test";
+import {expect,test,type Page,type Route} from "./fixtures/test";
 const admin={id:"privacy-admin",email:"privacy@test.invalid",name:"Privacy Admin",permissions:["privacy.read","privacy.manage"],mfaEnabled:true};
 const item=(status:string,type="EXPORT")=>({id:`req-${status}`,tenantId:"tenant-1",tenantName:"TEST_E2E Tenant",subjectEmail:"subject@test.invalid",type,status,scope:["IDENTITY","MEMBERSHIP"],reason:"Privacy request reason",ticketId:"PRIV-1",requestedById:"maker",verifiedById:status==="PENDING_VERIFICATION"?null:"verifier",approvedById:status==="APPROVED"||status==="COMPLETED"?"checker":null,identityVerifiedAt:null,approvedAt:null,completedAt:status==="COMPLETED"?"2026-10-14T10:00:00Z":null,legalHold:false,createdAt:"2026-10-14T09:00:00Z"});
 const json=(r:Route,b:unknown,s=200)=>r.fulfill({status:s,contentType:"application/json",body:JSON.stringify(b)});

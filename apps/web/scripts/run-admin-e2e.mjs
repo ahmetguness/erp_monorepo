@@ -1,21 +1,27 @@
 import { spawn } from 'node:child_process';
 import { access } from 'node:fs/promises';
-import path from 'node:path';
 import process from 'node:process';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 const port = 3100;
-const managedBaseUrl = `http://127.0.0.1:${port}`;
-const webRoot = process.cwd();
-const nextCli = path.resolve(webRoot, 'node_modules/next/dist/bin/next');
-const playwrightCli = path.resolve(webRoot, '../../node_modules/@playwright/test/cli.js');
+const managedBaseUrl = `http://localhost:${port}`;
+const webRoot = fileURLToPath(new URL('../', import.meta.url));
+const require = createRequire(import.meta.url);
+const nextCli = require.resolve('next/dist/bin/next');
+const playwrightCli = require.resolve('@playwright/test/cli');
 
 async function available(baseUrl) {
-  try { return (await fetch(`${baseUrl}/admin/login`)).ok; } catch { return false; }
+  try { return (await fetch(`${baseUrl}/admin/login`, { signal: AbortSignal.timeout(2_000) })).ok; } catch { return false; }
 }
 
 async function findExistingServer() {
   const configuredBaseUrl = process.env.ADMIN_E2E_BASE_URL;
-  if (configuredBaseUrl && await available(configuredBaseUrl)) return configuredBaseUrl;
+  if (configuredBaseUrl) {
+    if (await available(configuredBaseUrl)) return configuredBaseUrl;
+    throw new Error(`Configured E2E server is unavailable: ${configuredBaseUrl}`);
+  }
+  if (process.env.CI) return null;
   return await available(managedBaseUrl) ? managedBaseUrl : null;
 }
 
@@ -35,7 +41,7 @@ async function run() {
   const serverMode = process.env.CI ? 'start' : 'dev';
   const serverEnv = process.env.CI ? process.env : { ...process.env, NEXT_DIST_DIR: '.next-e2e' };
   const server = ownsServer
-    ? spawn(process.execPath, [nextCli, serverMode, '--hostname', '127.0.0.1', '--port', `${port}`], {
+    ? spawn(process.execPath, [nextCli, serverMode, '--hostname', 'localhost', '--port', `${port}`], {
         cwd: webRoot,
         stdio: 'inherit',
         env: serverEnv,

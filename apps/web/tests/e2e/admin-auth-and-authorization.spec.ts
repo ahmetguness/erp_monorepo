@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/test';
 
 const supportAdmin = {
   id: 'support-admin', email: 'support@example.test', name: 'Support Admin', isActive: true,
@@ -10,6 +10,31 @@ async function fillCredentials(page: Page): Promise<void> {
   await page.getByLabel('E-posta adresi').fill('support@example.test');
   await page.getByLabel('Şifre', { exact: true }).fill('correct-horse-battery-staple');
 }
+
+test('admin giriş formu klavyeyle doldurulup gönderilebilir', async ({ page }) => {
+  await page.route('**/api/admin/auth/login', (route) => route.fulfill({
+    status: 401, contentType: 'application/json',
+    body: JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Geçersiz kimlik bilgileri.' } }),
+  }));
+  await page.goto('/admin/login');
+  const email = page.getByLabel('E-posta adresi');
+  const password = page.getByLabel('Şifre', { exact: true });
+  await email.focus();
+  await page.keyboard.type('support@example.test');
+  await page.keyboard.press('Tab');
+  await expect(password).toBeFocused();
+  await page.keyboard.type('correct-horse-battery-staple');
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Şifreyi göster', exact: true })).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(password).toHaveAttribute('type', 'text');
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('checkbox')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Kimlik Doğrula' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Kimlik doğrulama başarısız.')).toBeVisible();
+});
 
 test('başarısız admin girişi güvenli ve genel hata gösterir', async ({ page }) => {
   await page.route('**/api/admin/auth/login', (route) => route.fulfill({

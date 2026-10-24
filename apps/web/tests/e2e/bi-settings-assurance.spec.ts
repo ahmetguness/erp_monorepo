@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test';
 
 test('BI settings handles API failure, retry and connector controls', async ({ page }) => {
   const login = await page.request.post('http://localhost:3001/api/auth/login', {

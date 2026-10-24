@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/test';
+import { PrismaClient } from '@prisma/client';
 
 async function login(page: Page) {
   await page.goto('/login');
@@ -13,6 +14,16 @@ async function login(page: Page) {
 test('currencies real create, normalization, decimal display and refresh persistence', async ({ page }) => {
   await login(page);
   const name = `TEST_E2E_Para_Birimi_${Date.now().toString().slice(-6)}`;
+  const response = await page.request.get('http://localhost:3001/api/master/currencies');
+  expect(response.ok()).toBe(true);
+  const existing = await response.json();
+  const usedCodes = new Set<string>(existing.data.map((currency: { code: string }) => currency.code));
+  const code = Array.from({ length: 676 }, (_, index) => `Q${String.fromCharCode(65 + Math.floor(index / 26))}${String.fromCharCode(65 + index % 26)}`)
+    .find((candidate) => !usedCodes.has(candidate));
+  if (!code) throw new Error('No unused test currency code remains.');
+  const prisma = new PrismaClient();
+  let created: { id: string; tenantId: string } | undefined;
+  try {
   await page.goto('/dashboard/settings/currencies');
   await expect(page.getByRole('heading', { name: 'Para Birimleri' })).toBeVisible();
   await page.getByRole('button', { name: 'Yeni Para Birimi' }).click();
@@ -23,15 +34,23 @@ test('currencies real create, normalization, decimal display and refresh persist
   await page.getByRole('button', { name: 'Kaydet' }).click();
   await expect(page.getByText('Kod üç harf olmalıdır')).toBeVisible();
   await expect(page.getByText('Geçerli bir kur girin')).toBeVisible();
-  await page.getByRole('textbox', { name: 'Kod*', exact: true }).fill('qxz');
+  await page.getByRole('textbox', { name: 'Kod*', exact: true }).fill(code.toLowerCase());
   await page.getByRole('spinbutton', { name: 'Varsayılan Kur*', exact: true }).fill('12.3456');
+  const createdResponse = page.waitForResponse((result) => result.url().endsWith('/api/master/currencies') && result.request().method() === 'POST');
   await page.getByRole('button', { name: 'Kaydet' }).click();
+  const saved = await createdResponse;
+  expect(saved.status()).toBe(201);
+  created = (await saved.json()).data;
   const row = page.getByRole('row', { name: new RegExp(name) });
-  await expect(row).toContainText('QXZ');
+  await expect(row).toContainText(code);
   await expect(row).toContainText('12.3456');
   await expect(row).toContainText('Döviz');
   await page.reload();
   await expect(page.getByRole('row', { name: new RegExp(name) })).toBeVisible();
+  } finally {
+    if (created) await prisma.currency.deleteMany({ where: { id: created.id, tenantId: created.tenantId, name } });
+    await prisma.$disconnect();
+  }
 });
 
 test('currencies API error is explicit and retry recovers', async ({ page }) => {

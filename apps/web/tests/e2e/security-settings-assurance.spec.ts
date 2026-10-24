@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test';
 
 test('security settings handles failure/retry and renders every policy surface', async ({ page }) => {
   const login = await page.request.post('http://localhost:3001/api/auth/login', {

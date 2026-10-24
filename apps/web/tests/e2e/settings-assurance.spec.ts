@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/test';
 
 let cachedSessionCookie: { name: string; value: string } | null = null;
 

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures/test';
 async function login(page: Page) { await page.goto('/login'); await page.getByLabel(/E-posta/).fill('admin@axondemo.com'); await page.getByRole('textbox', { name: /ifre/, exact: true }).fill('demo1234'); await page.getByRole('button', { name: /Giri.*Yap/ }).click(); await expect(page).toHaveURL(/\/dashboard$/); }
 const center = { id: 'wc-1', code: 'TEST_E2E_WC_01', name: 'TEST Türkçe Merkezi', description: 'Montaj', capacity: 8.5, laborRate: 120, overheadRate: 30, isActive: true, createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z', _count: { operations: 2, workOrderOps: 3 } };
 test('work center list uses server filters and all row/modal actions', async ({ page }) => {

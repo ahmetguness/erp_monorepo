@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/test";
 import { PrismaClient } from "@prisma/client";
 
 test("purchase order three-way match is identical in API, DB and UI", async ({

@@ -17,6 +17,7 @@
     "test:e2e": "node scripts/run-admin-e2e.mjs --project=regression-chromium",
     "test:e2e:smoke": "node scripts/run-admin-e2e.mjs --project=smoke-chromium --project=smoke-firefox",
     "test:e2e:cross-browser": "node scripts/run-admin-e2e.mjs --project=smoke-firefox",
+    "test:e2e:accessibility": "node scripts/run-admin-e2e.mjs --project=accessibility-chromium",
     "test:e2e:tenant": "node scripts/run-admin-e2e.mjs --project=tenant-chromium",
     "test:e2e:admin": "node scripts/run-admin-e2e.mjs --project=admin-chromium",
     "test:e2e:regression": "node scripts/run-admin-e2e.mjs --project=regression-chromium",

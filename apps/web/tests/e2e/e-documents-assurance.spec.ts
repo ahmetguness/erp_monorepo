@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { isCancelledReadRequest, test, expect } from "./fixtures/test";
 import { PrismaClient } from "@prisma/client";
 
 test("e-document UI creates, submits, refreshes and links to its invoice", async ({
@@ -14,8 +14,7 @@ test("e-document UI creates, submits, refreshes and links to its invoice", async
       consoleErrors.push(`${message.text()} ${message.location().url}`);
   });
   page.on("requestfailed", (request) =>
-    failedRequests.push(`${request.method()} ${request.url()}`),
-  );
+    { if (!isCancelledReadRequest(request)) failedRequests.push(`${request.method()} ${request.url()}`); });
   page.on("response", (response) => {
     if (response.status() >= 500)
       failedRequests.push(`${response.status()} ${response.url()}`);

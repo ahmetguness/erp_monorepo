@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { isCancelledReadRequest, test, expect } from "./fixtures/test";
 import { PrismaClient } from "@prisma/client";
 
 test("stock levels aggregate locations and keep filters, navigation and cleanup working", async ({
@@ -11,8 +11,7 @@ test("stock levels aggregate locations and keep filters, navigation and cleanup 
   let warehouseId = "",
     productId = "";
   page.on("requestfailed", (request) =>
-    failures.push(`${request.method()} ${request.url()}`),
-  );
+    { if (!isCancelledReadRequest(request)) failures.push(`${request.method()} ${request.url()}`); });
   page.on("response", (response) => {
     if (response.status() >= 500)
       failures.push(`${response.status()} ${response.url()}`);

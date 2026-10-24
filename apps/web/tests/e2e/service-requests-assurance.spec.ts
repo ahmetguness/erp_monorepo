@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures/test";
 async function login(p: Page) {
   await p.goto("/login");
   await p.getByLabel(/E-posta/).fill("admin@axondemo.com");

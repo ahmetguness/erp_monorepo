@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route } from "./fixtures/test";
 
 const admin = {
   id: "admin-coupon",
@@ -40,18 +40,18 @@ const baseCoupon = {
   ],
 };
 const cors = {
-  "access-control-allow-origin": "http://localhost:3000",
   "access-control-allow-credentials": "true",
   "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
   "access-control-allow-headers": "content-type,idempotency-key",
 };
 
 async function json(route: Route, body: unknown, status = 200) {
+  const headers = { ...cors, 'access-control-allow-origin': route.request().headers().origin ?? 'http://localhost:3100' };
   if (route.request().method() === "OPTIONS")
-    return route.fulfill({ status: 204, headers: cors });
+    return route.fulfill({ status: 204, headers });
   return route.fulfill({
     status,
-    headers: cors,
+    headers,
     contentType: "application/json",
     body: JSON.stringify(body),
   });

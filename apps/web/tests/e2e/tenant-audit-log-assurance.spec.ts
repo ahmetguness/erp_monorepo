@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test';
 
 const row = {
   id: 'audit-e2e-1', tenantId: 'tenant-a', userId: null, module: 'inventory', entityType: 'PRODUCT', entityId: 'product-1',
