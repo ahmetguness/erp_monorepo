@@ -9,6 +9,8 @@ import {
 } from './financial-integrity.service';
 import { recomputeInvoiceStatus } from './financial/invoice-status.service.js';
 import { documentCurrencySchema, toBaseMoney } from './financial/currency.js';
+import { lockInvoiceMutations } from './financial/mutation-locks.js';
+import { enqueueDomainEvent } from '../domain-events/outbox.js';
 
 export type PaymentDirection = 'RECEIVE' | 'SEND';
 
@@ -321,9 +323,7 @@ export async function createPayment(options: {
     payment = await db.$transaction(async (tx) => {
     // Serialize balance checks for the same invoices. Without this lock two
     // different payments can both observe the same remaining balance.
-    for (const invoiceId of [...new Set((options.input.allocations ?? []).map((item) => item.invoiceId))].sort()) {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${options.tenantId}:${invoiceId}`}))`;
-    }
+    await lockInvoiceMutations(tx, options.tenantId, (options.input.allocations ?? []).map((item) => item.invoiceId));
     if (idempotencyKey) {
       const replay = await findPaymentReplay(tx, options.tenantId, idempotencyKey);
       if (replay) {
@@ -396,6 +396,24 @@ export async function createPayment(options: {
       });
     }
 
+    await createAuditLog(tx, {
+      tenantId: options.tenantId,
+      userId: options.userId,
+      module: 'accounting',
+      entityType: EntityType.OTHER,
+      entityId: newPayment.id,
+      action: AuditAction.CREATE,
+      newValues: { amount, method: options.input.method, direction, contactId: options.input.contactId ?? null },
+      ipAddress: options.auditMeta?.ipAddress,
+      userAgent: options.auditMeta?.userAgent,
+    }, { required: true });
+
+    if (direction === 'RECEIVE') {
+      await enqueueDomainEvent(tx, {
+        name: 'payment.received', context: createEventContext({ tenantId: options.tenantId, userId: options.userId }),
+        payload: { paymentId: newPayment.id, contactId: newPayment.contactId, amount: Number(newPayment.amount), method: newPayment.method, reference: newPayment.reference },
+      });
+    }
     return newPayment;
     });
   } catch (error) {
@@ -408,18 +426,6 @@ export async function createPayment(options: {
     assertPaymentReplayMatches(replay, options.input, amount, direction, paymentDate);
     return replay;
   }
-
-  await createAuditLog(db, {
-    tenantId: options.tenantId,
-    userId: options.userId,
-    module: 'accounting',
-    entityType: EntityType.OTHER,
-    entityId: payment.id,
-    action: AuditAction.CREATE,
-    newValues: { amount, method: options.input.method, direction, contactId: options.input.contactId ?? null },
-    ipAddress: options.auditMeta?.ipAddress,
-    userAgent: options.auditMeta?.userAgent,
-  });
 
   if (direction === 'RECEIVE') {
     await domainEvents.publish({

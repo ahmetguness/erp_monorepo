@@ -1,9 +1,11 @@
-import { InvoiceStatus, type PrismaClient } from '@prisma/client';
+import { AuditAction, EntityType, InvoiceStatus, type PrismaClient } from '@prisma/client';
+import { createAuditLog } from '../../../../utils/audit.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../errors/index.js';
 import { AccountingPostingEngineService } from '../../../../services/accounting-posting-engine.service.js';
 import { writeInvoiceAccountEntry } from '../../../../utils/account-entry.js';
 import { toBaseMoney } from '../../../../services/financial/currency.js';
 import { PurchaseThreeWayMatchService } from '../../../../services/purchase-three-way-match.service.js';
+import { lockInvoiceMutations } from '../../../../services/financial/mutation-locks.js';
 import type { ApproveInvoiceCommand, ApproveInvoiceResult, InvoiceApprovalRepository } from '../../application/ports/invoice-approval.repository.js';
 
 export class PrismaInvoiceApprovalRepository implements InvoiceApprovalRepository {
@@ -12,6 +14,7 @@ export class PrismaInvoiceApprovalRepository implements InvoiceApprovalRepositor
   async approve(command: ApproveInvoiceCommand): Promise<ApproveInvoiceResult> {
     try {
       return await this.db.$transaction(async (tx) => {
+      await lockInvoiceMutations(tx, command.tenantId, [command.invoiceId]);
       const keyOwner = await tx.invoice.findFirst({
         where: { tenantId: command.tenantId, postingIdempotencyKey: command.idempotencyKey },
         select: { id: true },
@@ -94,6 +97,12 @@ export class PrismaInvoiceApprovalRepository implements InvoiceApprovalRepositor
         },
       });
       if (updated.count !== 1) throw new ConflictError('Fatura es zamanli olarak degisti.');
+      await createAuditLog(tx, {
+        tenantId: command.tenantId, userId: command.userId, module: 'invoicing', entityType: EntityType.INVOICE,
+        entityId: invoice.id, action: AuditAction.UPDATE, oldValues: { status: invoice.status },
+        newValues: { status: 'SENT', journalEntryId: posting.journalEntryId },
+        ipAddress: command.auditMeta?.ipAddress, userAgent: command.auditMeta?.userAgent,
+      }, { required: true });
       await tx.invoiceHistory.create({
         data: {
           tenantId: command.tenantId, invoiceId: invoice.id, fromStatus: InvoiceStatus.DRAFT,

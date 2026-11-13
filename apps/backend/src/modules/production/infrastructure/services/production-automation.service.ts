@@ -226,25 +226,13 @@ export class ProductionAutomationService {
     workOrderId: string,
     finalOutputQty?: number,
   ): Promise<{ workOrderId: string; status: WorkOrderStatus }> {
-    const wo = await this.db.workOrder.findFirst({
-      where: { id: workOrderId, tenantId, deletedAt: null },
-      include: { product: true },
-    });
-
-    if (!wo) {
-      throw new Error(`İş Emri bulunamadı: ${workOrderId}`);
-    }
-
-    const requestedOutputQty =
-      finalOutputQty !== undefined && Number.isFinite(finalOutputQty)
-        ? finalOutputQty
-        : Number(wo.plannedQty);
-
     await this.db.$transaction(async (tx) => {
       const targetWo = await lockWorkOrder(tx, tenantId, workOrderId);
       if (targetWo.status === 'COMPLETED') return;
+      if (targetWo.status === 'CANCELLED') throw new ConflictError('Cancelled work orders cannot produce finished goods.');
       assertQualityReleased(targetWo.qualityStatus);
-      const outputQty = targetWo.qualityStatus === 'APPROVED' ? targetWo.producedQty.toNumber() : requestedOutputQty;
+      const outputQty = targetWo.qualityStatus === 'APPROVED' ? targetWo.producedQty.toNumber() : (finalOutputQty ?? targetWo.plannedQty.toNumber());
+      if (!Number.isFinite(outputQty) || outputQty <= 0) throw new ConflictError('Finished goods quantity must be positive.');
       if (targetWo.qualityStatus === 'APPROVED' && finalOutputQty !== undefined && finalOutputQty !== outputQty) {
         throw new ConflictError('Output quantity differs from the quality-approved quantity.');
       }
@@ -278,7 +266,7 @@ export class ProductionAutomationService {
         data: {
           tenantId,
           workOrderId,
-          fromStatus: wo.status,
+          fromStatus: targetWo.status,
           toStatus: WorkOrderStatus.COMPLETED,
           notes: "Üretim otomasyonu ile tamamlandı.",
         },
@@ -289,7 +277,7 @@ export class ProductionAutomationService {
         tx,
         tenantId,
         workOrderId,
-        wo.createdById || "SYSTEM",
+        targetWo.createdById || "SYSTEM",
       );
     });
 

@@ -342,8 +342,10 @@ export function useCreatePayment() {
   const { toast } = useUIStore();
   return useMutation({
     mutationFn: (data: CreatePaymentDTO) => createPayment(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["payments"] });
+    onSuccess: async () => {
+      await Promise.all(['payments', 'invoices', 'contacts', 'sales-orders', 'accounting'].map((key) =>
+        qc.invalidateQueries({ queryKey: [key] }),
+      ));
       toast.success("Ödeme kaydedildi.");
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),

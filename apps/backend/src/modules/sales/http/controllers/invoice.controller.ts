@@ -1,3 +1,5 @@
+import { enqueueDomainEvent } from '../../../../domain-events/outbox.js';
+import { lockInvoiceMutations } from '../../../../services/financial/mutation-locks.js';
 import { AuditAction, EntityType, InvoiceStatus, InvoiceType } from '@prisma/client';
 import { Context } from 'hono';
 import { createEventContext, domainEvents } from '../../../../domain-events/index.js';
@@ -367,18 +369,6 @@ export const InvoiceController = {
       tenantId,
     );
 
-    if (body.salesOrderId) {
-      const order = await prisma.salesOrder.findFirstOrThrow({ where: { id: body.salesOrderId, tenantId }, select: { totalGross: true } });
-      const existing = await prisma.invoice.aggregate({
-        where: { tenantId, salesOrderId: body.salesOrderId, deletedAt: null, status: { not: InvoiceStatus.CANCELLED } },
-        _sum: { totalGross: true },
-      });
-      const remaining = Number(order.totalGross) - Number(existing._sum.totalGross ?? 0);
-      if (totalGross > remaining + 0.005) {
-        return c.json(new ValidationError(`Fatura tutari siparisin kalan faturalanabilir tutarini asamaz (${remaining.toFixed(2)}).`).toJSON(), 400);
-      }
-    }
-
     let number = body.number;
     if (!number) {
       number = await generateDocumentNumber(tenantId, 'invoice', 'INV-', 'invoice');
@@ -391,6 +381,17 @@ export const InvoiceController = {
     const dueDate = body.dueDate ? new Date(body.dueDate) : addDays(invoiceDate, invoiceDueDays);
 
     const invoice = await prisma.$transaction(async (tx) => {
+      if (body.salesOrderId) {
+        await tx.$queryRaw`SELECT id FROM sales_orders WHERE id = ${body.salesOrderId} AND "tenantId" = ${tenantId} FOR UPDATE`;
+        const order = await tx.salesOrder.findFirst({ where: { id: body.salesOrderId, tenantId, deletedAt: null } });
+        if (!order || order.status === 'CANCELLED') throw new ValidationError('Sales order is unavailable for invoicing.');
+        const existing = await tx.invoice.aggregate({
+          where: { tenantId, salesOrderId: order.id, deletedAt: null, status: { not: InvoiceStatus.CANCELLED } },
+          _sum: { totalGross: true },
+        });
+        const remaining = order.totalGross.minus(existing._sum.totalGross ?? 0);
+        if (remaining.lessThan(totalGross)) throw new ValidationError('Invoice exceeds the remaining sales order amount.');
+      }
       const newInvoice = await tx.invoice.create({
         data: {
           tenantId,
@@ -431,20 +432,31 @@ export const InvoiceController = {
         });
       }
 
-      return newInvoice;
-    });
+      await createAuditLog(tx, {
+        tenantId,
+        userId,
+        module: 'invoicing',
+        entityType: EntityType.INVOICE,
+        entityId: newInvoice.id,
+        action: AuditAction.CREATE,
+        newValues: { number: newInvoice.number, type: body.type, totalGross, contactId: body.contactId },
+        ipAddress,
+        userAgent,
+      }, { required: true });
 
-    // Audit log (fire-and-forget)
-    await createAuditLog(prisma, {
-      tenantId,
-      userId,
-      module: 'invoicing',
-      entityType: EntityType.INVOICE,
-      entityId: invoice.id,
-      action: AuditAction.CREATE,
-      newValues: { number: invoice.number, type: body.type, totalGross, contactId: body.contactId },
-      ipAddress,
-      userAgent,
+      await enqueueDomainEvent(tx, {
+        name: 'invoice.created',
+        context: createEventContext({ tenantId, userId }),
+        payload: {
+          invoiceId: newInvoice.id,
+          number: newInvoice.number,
+          contactId: newInvoice.contact.id,
+          contactName: newInvoice.contact.name,
+          totalGross: Number(newInvoice.totalGross),
+          dueDate: newInvoice.dueDate,
+        },
+      });
+      return newInvoice;
     });
 
     await domainEvents.publish({
@@ -474,14 +486,7 @@ export const InvoiceController = {
         : undefined,
     );
     const { ipAddress, userAgent } = getRequestMeta(c);
-    const result = await salesApplication.approveInvoice.execute({ tenantId, invoiceId, userId, idempotencyKey });
-    await createAuditLog(prisma, {
-      tenantId, userId, module: 'invoicing', entityType: EntityType.INVOICE, entityId: invoiceId,
-      action: AuditAction.UPDATE,
-      oldValues: { status: InvoiceStatus.DRAFT },
-      newValues: { status: result.status, journalEntryId: result.journalEntryId },
-      ipAddress, userAgent,
-    });
+    const result = await salesApplication.approveInvoice.execute({ tenantId, invoiceId, userId, idempotencyKey, auditMeta: { ipAddress, userAgent } });
     const invoice = await prisma.invoice.findFirst({
       where: { id: invoiceId, tenantId, deletedAt: null },
       include: {
@@ -603,23 +608,21 @@ export const InvoiceController = {
     const cancellationDate = new Date();
     await assertAccountingPeriodOpen(prisma, tenantId, cancellationDate, 'Fatura iptali');
 
-    /*
-      return c.json(new ValidationError('Fatura zaten iptal edilmiş.').toJSON(), 400);
-    }
-
-    if (invoice.status === InvoiceStatus.PAID) {
-      return c.json(new ValidationError('Ödenmiş fatura iptal edilemez.').toJSON(), 400);
-    }
-
-    */
     const updated = await prisma.$transaction(async (tx) => {
+      await lockInvoiceMutations(tx, tenantId, [invoice.id]);
+      const current = await tx.invoice.findFirst({ where: { id: invoice.id, tenantId, deletedAt: null } });
+      if (!current) throw new NotFoundError('Invoice', invoice.id);
+      assertInvoiceCancelable(current, 'Fatura iptali');
+      if (await tx.paymentAllocation.count({ where: { tenantId, invoiceId: current.id } })) {
+        throw new ValidationError('Reverse allocated payments before cancelling the invoice.');
+      }
       const result = await tx.invoice.update({
         where: { id: invoiceId },
         data: { status: InvoiceStatus.CANCELLED },
       });
 
       await tx.invoiceHistory.create({
-        data: { tenantId, invoiceId: invoiceId!, fromStatus: invoice.status, toStatus: InvoiceStatus.CANCELLED, notes: `İptal nedeni: ${reason}` },
+        data: { tenantId, invoiceId: invoiceId!, fromStatus: current.status, toStatus: InvoiceStatus.CANCELLED, notes: `İptal nedeni: ${reason}` },
       });
 
       const postedEntry = await tx.accountEntry.findFirst({
@@ -629,11 +632,11 @@ export const InvoiceController = {
       if (postedEntry) {
         await reverseInvoiceAccountEntry(tx, {
           tenantId,
-          contactId: invoice.contactId,
+          contactId: current.contactId,
           invoiceId: invoiceId!,
-          invoiceNumber: invoice.number,
-          invoiceType: invoice.type,
-          totalGross: toBaseMoney(invoice.totalGross, invoice.exchangeRate).toNumber(),
+          invoiceNumber: current.number,
+          invoiceType: current.type,
+          totalGross: toBaseMoney(current.totalGross, current.exchangeRate).toNumber(),
           date: cancellationDate,
           reason,
           userId,
@@ -641,23 +644,22 @@ export const InvoiceController = {
       }
 
       // SalesOrder.invoicedAmount geri al
-      if (invoice.salesOrderId && (invoice.type === 'SALES' || invoice.type === 'RETURN_SALES')) {
+      if (current.salesOrderId && (current.type === 'SALES' || current.type === 'RETURN_SALES')) {
         await tx.salesOrder.updateMany({
-          where: { id: invoice.salesOrderId, tenantId },
-          data: { invoicedAmount: { decrement: Number(invoice.totalGross) } },
+          where: { id: current.salesOrderId, tenantId },
+          data: { invoicedAmount: { decrement: Number(current.totalGross) } },
         });
       }
 
+      await createAuditLog(tx, {
+        tenantId, userId, module: 'invoicing',
+        entityType: EntityType.INVOICE, entityId: invoiceId!,
+        action: AuditAction.UPDATE,
+        oldValues: { status: current.status },
+        newValues: { status: InvoiceStatus.CANCELLED, reason },
+        ipAddress, userAgent,
+      }, { required: true });
       return result;
-    });
-
-    await createAuditLog(prisma, {
-      tenantId, userId, module: 'invoicing',
-      entityType: EntityType.INVOICE, entityId: invoiceId!,
-      action: AuditAction.UPDATE,
-      oldValues: { status: invoice.status },
-      newValues: { status: InvoiceStatus.CANCELLED, reason },
-      ipAddress, userAgent,
     });
 
     return c.json({ data: updated });

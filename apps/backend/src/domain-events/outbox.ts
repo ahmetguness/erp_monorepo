@@ -51,6 +51,21 @@ function retryAt(attempts: number): Date {
   return new Date(Date.now() + delayMinutes * 60_000);
 }
 
+/** Durable intent only: callers must not execute external listeners inside the transaction. */
+export async function enqueueDomainEvent(tx: Prisma.TransactionClient, event: DomainEvent): Promise<void> {
+  await tx.domainEventOutbox.upsert({
+    where: { tenantId_idempotencyKey: { tenantId: event.context.tenantId, idempotencyKey: idempotencyKeyForEvent(event) } },
+    update: {},
+    create: {
+      tenantId: event.context.tenantId, name: event.name, schemaVersion: DOMAIN_EVENT_SCHEMA_VERSION,
+      source: sourceForEvent(event), idempotencyKey: idempotencyKeyForEvent(event),
+      entityType: entityTypeForEvent(event), entityId: entityIdForEvent(event),
+      payload: toJson(event.payload) ?? Prisma.JsonNull, context: toJson(event.context) ?? Prisma.JsonNull,
+      status: DomainEventOutboxStatus.PENDING, attempts: 0,
+    },
+  });
+}
+
 export async function claimDomainEvent(event: DomainEvent): Promise<OutboxClaim> {
   const idempotencyKey = idempotencyKeyForEvent(event);
   const existing = await prisma.domainEventOutbox.findUnique({

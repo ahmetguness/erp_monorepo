@@ -5,6 +5,7 @@ import { createAuditLog } from '../../utils/audit.js';
 import { reversePaymentAccountEntry } from '../../utils/account-entry.js';
 import { assertAccountingPeriodOpen, assertPaymentReversible } from './period-guard.js';
 import { recomputeInvoiceStatus } from './invoice-status.service.js';
+import { lockInvoiceMutations } from './mutation-locks.js';
 import { toBaseMoney } from './currency.js';
 
 // ─────────────────────────────────────────────
@@ -55,6 +56,7 @@ export async function reversePayment(db: PrismaClient, input: ReversePaymentInpu
   });
 
   await db.$transaction(async (tx) => {
+    await lockInvoiceMutations(tx, input.tenantId, invoiceIds.map((entry) => entry.invoiceId));
     const claimed = await tx.payment.updateMany({
       where: { id: input.paymentId, tenantId: input.tenantId, status: PaymentStatus.COMPLETED },
       data: { status: PaymentStatus.CANCELLED, notes: input.reason },
@@ -88,19 +90,18 @@ export async function reversePayment(db: PrismaClient, input: ReversePaymentInpu
         userId: input.userId,
       });
     }
-  });
-
-  // 4. Audit log (transaction dışı)
-  await createAuditLog(db, {
-    tenantId: input.tenantId,
-    userId: input.userId,
-    module: 'accounting',
-    entityType: EntityType.OTHER,
-    entityId: input.paymentId,
-    action: AuditAction.UPDATE,
-    oldValues: { status: payment.status },
-    newValues: { status: PaymentStatus.CANCELLED, reason: input.reason },
-    ipAddress: input.auditMeta?.ipAddress,
-    userAgent: input.auditMeta?.userAgent,
+    // Audit commits with the financial reversal.
+    await createAuditLog(tx, {
+      tenantId: input.tenantId,
+      userId: input.userId,
+      module: 'accounting',
+      entityType: EntityType.OTHER,
+      entityId: input.paymentId,
+      action: AuditAction.UPDATE,
+      oldValues: { status: payment.status },
+      newValues: { status: PaymentStatus.CANCELLED, reason: input.reason },
+      ipAddress: input.auditMeta?.ipAddress,
+      userAgent: input.auditMeta?.userAgent,
+    }, { required: true });
   });
 }

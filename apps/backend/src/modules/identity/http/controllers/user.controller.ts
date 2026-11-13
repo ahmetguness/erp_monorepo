@@ -1,3 +1,4 @@
+import { serializableTransaction } from '../../../../lib/serializable-transaction.js';
 import { AuditAction,EntityType } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { Context } from 'hono';
@@ -233,17 +234,13 @@ export const UserController = {
     }
 
     const changesGlobalIdentity = body.name !== undefined || body.phone !== undefined;
-    if (changesGlobalIdentity) {
-      const identity = await prisma.user.findUniqueOrThrow({
-        where: { id: userId },
-        select: { tenants: { where: { isActive: true }, select: { tenantId: true } } },
-      });
-      if (identity.tenants.some((membership) => membership.tenantId !== tenantId)) {
-        throw new ValidationError('Birden fazla tenant üyesi olan kullanıcının global profil bilgileri tenant yönetiminden değiştirilemez.');
+    const updatedUser = await serializableTransaction(prisma, async (tx) => {
+      const membership = await tx.tenantUser.findFirst({ where: { tenantId, userId } });
+      if (!membership) throw new NotFoundError('User', userId);
+      if (membership.isOwner && (body.roleId !== undefined || body.isActive === false)) throw new ForbiddenError('Tenant owner membership cannot be changed.');
+      if (changesGlobalIdentity && await tx.tenantUser.count({ where: { userId, isActive: true, tenantId: { not: tenantId } } })) {
+        throw new ValidationError('Shared user identity cannot be modified from tenant administration.');
       }
-    }
-
-    const updatedUser = await prisma.$transaction(async (tx) => {
       const user = changesGlobalIdentity
         ? await tx.user.update({
             where: { id: userId },
@@ -267,7 +264,7 @@ export const UserController = {
       await createAuditLog(tx, {
         tenantId, userId: actorId, module: 'users', entityType: EntityType.OTHER, entityId: userId!,
         action: AuditAction.UPDATE,
-        oldValues: { roleId: tenantUser.roleId, isActive: tenantUser.isActive },
+        oldValues: { roleId: membership.roleId, isActive: membership.isActive },
         newValues: {
           ...(body.name !== undefined && { name: body.name }),
           ...(body.phone !== undefined && { phoneChanged: true }),
@@ -275,7 +272,7 @@ export const UserController = {
           ...(body.isActive !== undefined && { isActive: body.isActive }),
         },
         ipAddress, userAgent,
-      });
+      }, { required: true });
       return user;
     });
 

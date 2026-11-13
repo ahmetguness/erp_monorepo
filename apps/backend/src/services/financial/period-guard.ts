@@ -1,4 +1,4 @@
-import { FiscalPeriodStatus } from '@prisma/client';
+import { FiscalPeriodStatus, Prisma } from '@prisma/client';
 import type { Invoice, Payment, Payroll } from '@prisma/client';
 import { ValidationError } from '../../errors';
 import type { FinancialDbClient } from './types.js';
@@ -115,7 +115,7 @@ export async function assertPaymentAllocationsWithinInvoiceBalance(
   const [invoices, existingAllocations] = await Promise.all([
     db.invoice.findMany({
       where: { tenantId, id: { in: invoiceIds }, deletedAt: null },
-      select: { id: true, number: true, totalGross: true },
+      select: { id: true, number: true, totalGross: true, status: true },
     }),
     db.paymentAllocation.groupBy({
       by: ['invoiceId'],
@@ -126,7 +126,7 @@ export async function assertPaymentAllocationsWithinInvoiceBalance(
 
   const invoiceMap = new Map(invoices.map((invoice) => [invoice.id, invoice]));
   const existingByInvoiceId = new Map(
-    existingAllocations.map((alloc) => [alloc.invoiceId, Number(alloc._sum.amount ?? 0)]),
+    existingAllocations.map((alloc) => [alloc.invoiceId, alloc._sum.amount ?? new Prisma.Decimal(0)]),
   );
 
   for (const allocation of allocations) {
@@ -134,10 +134,11 @@ export async function assertPaymentAllocationsWithinInvoiceBalance(
     if (!invoice) throw new ValidationError('Tahsis edilen fatura bulunamadı.');
 
     const existingAmount = existingByInvoiceId.get(allocation.invoiceId) ?? 0;
-    const nextAmount = existingAmount + allocation.amount;
+    if (invoice.status === 'CANCELLED' || invoice.status === 'DRAFT') throw new ValidationError('Only approved invoices can receive allocations.');
+    const nextAmount = new Prisma.Decimal(existingAmount).plus(allocation.amount);
     const invoiceTotal = Number(invoice.totalGross);
 
-    if (nextAmount - invoiceTotal > 0.001) {
+    if (nextAmount.greaterThan(invoice.totalGross)) {
       throw new ValidationError(
         `${invoice.number} faturasına tahsis edilen toplam tutar (${nextAmount.toFixed(2)}) fatura toplamını (${invoiceTotal.toFixed(2)}) aşamaz.`,
       );

@@ -1,5 +1,6 @@
 import { InvoiceStatus, type Invoice, type Prisma, type PrismaClient } from '@prisma/client';
 import { computeInvoiceStatus } from '../../modules/finance/domain/index.js';
+import { lockInvoiceMutations } from './mutation-locks.js';
 export { computeInvoiceStatus } from '../../modules/finance/domain/index.js';
 export type { InvoicePaymentSnapshot, InvoiceStatusComputation } from '../../modules/finance/domain/index.js';
 
@@ -11,6 +12,10 @@ export async function recomputeInvoiceStatus(
   invoiceId: string,
   options: { userId?: string | null; note?: string; asOf?: Date } = {},
 ): Promise<Invoice | null> {
+  if ('$transaction' in db) {
+    return db.$transaction((tx) => recomputeInvoiceStatus(tx, tenantId, invoiceId, options));
+  }
+  await lockInvoiceMutations(db, tenantId, [invoiceId]);
   const invoice = await db.invoice.findFirst({
     where: { id: invoiceId, tenantId, deletedAt: null },
     include: { payments: { select: { amount: true } } },

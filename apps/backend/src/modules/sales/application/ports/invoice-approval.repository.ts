@@ -3,6 +3,7 @@ export interface ApproveInvoiceCommand {
   invoiceId: string;
   userId?: string | null;
   idempotencyKey: string;
+  auditMeta?: { ipAddress?: string | null; userAgent?: string | null };
 }
 
 export interface ApproveInvoiceResult {

@@ -33,11 +33,12 @@ export interface AuditLogParams {
 /**
  * Audit log kaydı oluşturur.
  * Transaction içinde kullanılabilir (tx parametresi ile).
- * Fire-and-forget olarak da kullanılabilir (hata fırlatmaz).
+ * Optional callers retain best-effort behavior; required transaction callers propagate failures.
  */
 export async function createAuditLog(
   db: typeof prisma | Prisma.TransactionClient,
   params: AuditLogParams,
+  options: { required?: boolean } = {},
 ): Promise<void> {
   try {
     const integrityValues = await withAuditIntegrityMetadata(db, {
@@ -84,7 +85,8 @@ export async function createAuditLog(
     if (db === prisma) {
       void pushSingleAuditLogToSiem(log).catch(() => undefined);
     }
-  } catch {
+  } catch (error: unknown) {
+    if (options.required) throw error;
     // Audit log hatası ana işlemi durdurmamalı
   }
 }
