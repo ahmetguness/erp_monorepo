@@ -88,6 +88,30 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: 'integration-${{ matrix.suite }}', path: artifacts/integration, if-no-files-found: error }
+  cross-module:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_DB: phase3_github_ci, POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres -d phase3_github_ci" --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/phase3_github_ci?schema=public
+      CROSS_MODULE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/phase3_github_ci?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run build:types
+      - run: npm --workspace=@repo/backend run db:generate
+      - run: npm --workspace=@repo/backend run db:migrate:deploy
+      - run: npm run test:cross-module
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: cross-module-assurance, path: artifacts/cross-module, if-no-files-found: error }
   browser-smoke:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -106,6 +130,7 @@ jobs:
       - uses: ./.github/actions/browser-environment
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:e2e:smoke
+      - run: npm run test:e2e:cross-module
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -199,7 +224,7 @@ jobs:
         with: { name: sbom, path: sbom.cdx.json, if-no-files-found: error }
   assurance-summary:
     if: always()
-    needs: [static-quality, unit, integration, browser-smoke, browser-regression, accessibility, production-build, supply-chain]
+    needs: [static-quality, unit, integration, cross-module, browser-smoke, browser-regression, accessibility, production-build, supply-chain]
     runs-on: ubuntu-24.04
     steps:
       - env: { RESULTS: '${{ toJSON(needs) }}' }
@@ -208,6 +233,7 @@ jobs:
           test "${{ needs.static-quality.result }}" = success
           test "${{ needs.unit.result }}" = success
           test "${{ needs.integration.result }}" = success
+          test "${{ needs.cross-module.result }}" = success
           test "${{ needs.browser-smoke.result }}" = success
           test "${{ needs.accessibility.result }}" = success
           test "${{ needs.production-build.result }}" = success

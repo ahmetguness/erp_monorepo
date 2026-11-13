@@ -37,7 +37,7 @@ export function SalesProcessWorkspace({ orderId, onFulfill }: SalesProcessWorksp
   };
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+    <section aria-label="Satış iş dosyası" className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
         <div><div className="flex items-center gap-2"><FileCheck2 className="h-4 w-4 text-sky-300" /><h2 className="text-sm font-semibold text-white">Satış iş dosyası</h2></div><p className="mt-1 text-xs text-slate-500">Tekliften tahsilata bütün süreç tek görünümde</p></div>
         <span className={healthy ? 'rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300' : 'rounded-full bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300'}>{HEALTH_LABELS[workspace.health]}</span>

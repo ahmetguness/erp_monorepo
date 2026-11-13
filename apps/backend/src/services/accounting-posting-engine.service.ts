@@ -9,6 +9,7 @@ import {
 import { createEventContext, domainEvents } from "../domain-events/index.js";
 import { generateDocumentNumber } from "../utils/generate-number.js";
 import { resolveOpenFiscalPeriodId } from "./financial/index.js";
+import { toBaseMoney } from './financial/currency.js';
 
 type PostingDbClient = PrismaClient | Prisma.TransactionClient;
 type PostingSource = "ALL" | "INVOICE" | "PAYMENT" | "STOCK";
@@ -349,9 +350,12 @@ export class AccountingPostingEngineService {
   private invoiceLines(
     invoice: Prisma.InvoiceGetPayload<{ include: { lines: true } }>,
   ): PostingLineDraft[] {
-    const net = numberValue(invoice.totalNet);
-    const tax = numberValue(invoice.totalTax);
-    const gross = numberValue(invoice.totalGross);
+    const gross = toBaseMoney(invoice.totalGross, invoice.exchangeRate).toNumber();
+    const tax = toBaseMoney(invoice.totalTax, invoice.exchangeRate).toNumber();
+    // Allocate the conversion rounding residual to net, keeping the journal balanced.
+    const net = invoice.totalWithholding.isZero()
+      ? toBaseMoney(invoice.totalGross, invoice.exchangeRate).minus(tax).toNumber()
+      : toBaseMoney(invoice.totalNet, invoice.exchangeRate).toNumber();
     const debitNormal = isInvoiceDebitNormal(invoice.type);
     const purchase = isPurchaseInvoice(invoice.type);
 
@@ -432,7 +436,7 @@ export class AccountingPostingEngineService {
       };
     }
 
-    const amount = numberValue(payment.amount);
+    const amount = toBaseMoney(payment.amount, payment.exchangeRate).toNumber();
     const cashRole: PostingRole = payment.cashAccountId ? "CASH" : "BANK";
     const contactRole: PostingRole =
       payment.direction === "SEND" ? "SUPPLIER_PAYABLE" : "CUSTOMER_RECEIVABLE";

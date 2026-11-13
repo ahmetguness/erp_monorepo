@@ -27,6 +27,14 @@ function isKnownMockCredentials(creds: TrendyolCredentials): boolean {
 
 function getBaseUrl(creds: TrendyolCredentials): string {
   if (isTrendyolMockEnabled() || isKnownMockCredentials(creds)) {
+    const configured = process.env.NODE_ENV !== 'production' ? process.env.TRENDYOL_MOCK_BASE_URL : undefined;
+    if (configured) {
+      const url = new URL(configured);
+      if (url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+        throw new Error('TRENDYOL_MOCK_BASE_URL must be a local HTTP origin.');
+      }
+      return url.origin;
+    }
     return 'http://localhost:3099';
   }
 

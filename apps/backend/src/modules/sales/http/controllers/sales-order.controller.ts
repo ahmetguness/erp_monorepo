@@ -6,6 +6,7 @@ import {
   ReservationRefType,
 } from "@prisma/client";
 import { Context } from "hono";
+import { documentCurrencySchema } from '../../../../services/financial/currency.js';
 import {
   createEventContext,
   domainEvents,
@@ -192,6 +193,8 @@ export const SalesOrderController = {
     const tenantId = requireTenantId(c);
 
     const body = getValidatedBody(c, createSalesQuoteBodySchema);
+    const currency = documentCurrencySchema.safeParse(body);
+    if (!currency.success) throw new ValidationError('Gecersiz para birimi veya kur.');
 
     await validateTenantOwnership(
       tenantId,
@@ -235,6 +238,7 @@ export const SalesOrderController = {
 
     const quote = await prisma.salesQuote.create({
       data: {
+        ...currency.data,
         tenantId,
         contactId: body.contactId,
         number,
@@ -420,6 +424,8 @@ export const SalesOrderController = {
           tenantId,
           contactId: quote.contactId,
           quoteId: quote.id,
+            currencyCode: quote.currencyCode,
+            exchangeRate: quote.exchangeRate,
           number,
           date: new Date(),
           totalNet: quote.totalNet,
@@ -615,6 +621,8 @@ export const SalesOrderController = {
     const { ipAddress, userAgent } = getRequestMeta(c);
 
     const body = getValidatedBody(c, createSalesOrderBodySchema);
+    const currency = documentCurrencySchema.safeParse(body);
+    if (!currency.success) throw new ValidationError('Gecersiz para birimi veya kur.');
 
     await validateTenantOwnership(
       tenantId,
@@ -656,6 +664,7 @@ export const SalesOrderController = {
         tenantId,
         contactId: body.contactId,
         quoteId: null,
+          ...currency.data,
         number,
         date: new Date(body.date),
         dueDate: body.dueDate ? new Date(body.dueDate) : null,

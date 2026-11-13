@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Textarea } from '@/components/ui/Textarea';
+import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { FormRow } from '@/components/shared/FormField';
 import { ContactSelect, ProductSelect } from '@/components/shared/EntitySelect';
@@ -60,6 +61,8 @@ const lineSchema = z.object({
 });
 
 const invoiceSchema = z.object({
+  currencyCode: z.string().regex(/^[A-Z]{3}$/),
+  exchangeRate: z.string().refine((value) => Number.isFinite(parseDecimalInput(value)) && parseDecimalInput(value) > 0, 'Pozitif kur giriniz'),
   contactId: z.string().min(1, 'Cari seçiniz'),
   type: z.enum(['SALES', 'PURCHASE', 'RETURN_SALES', 'RETURN_PURCHASE']),
   date: requiredDateString('Tarih zorunludur'),
@@ -68,6 +71,7 @@ const invoiceSchema = z.object({
   lines: z.array(lineSchema).min(1, 'En az bir kalem ekleyin'),
 });
 const invoiceDraftSchema = z.object({
+  currencyCode: z.string().default('TRY'), exchangeRate: z.string().default('1'),
   contactId: z.string(),
   type: z.enum(['SALES', 'PURCHASE', 'RETURN_SALES', 'RETURN_PURCHASE']),
   date: z.string(),
@@ -80,7 +84,7 @@ const invoiceDraftSchema = z.object({
 });
 
 type InvoiceForm = z.infer<typeof invoiceSchema>;
-const INVOICE_FORM_SERVER_FIELDS = ['contactId', 'type', 'date', 'dueDate', 'notes', 'lines'] as const satisfies readonly (keyof InvoiceForm)[];
+const INVOICE_FORM_SERVER_FIELDS = ['contactId', 'type', 'date', 'dueDate', 'notes', 'lines', 'currencyCode', 'exchangeRate'] as const satisfies readonly (keyof InvoiceForm)[];
 
 function addDaysString(dateValue: string, days: number): string {
   const date = new Date(dateValue);
@@ -139,12 +143,15 @@ export function InvoiceFormPage() {
   const { register, control, handleSubmit, setValue, setError, reset, formState: { errors, dirtyFields, isDirty, isSubmitting } } = useForm<InvoiceForm>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
+      currencyCode: 'TRY', exchangeRate: '1',
       type: 'SALES', date: today, dueDate: addDaysString(today, 30),
       lines: [{ description: '', quantity: '1', unitPrice: '0', discount: '0', taxRateId: '', withholdingRateId: '' }],
     },
   });
 
   const { fields, append, remove, replace } = useFieldArray({ control, name: 'lines' });
+  const currencyCode = useWatch({ control, name: 'currencyCode' });
+  const displayCurrency = /^[A-Z]{3}$/.test(currencyCode ?? '') ? currencyCode : 'TRY';
   const sourceOrderAppliedRef = useRef<string | null>(null);
   const initialContactAppliedRef = useRef(false);
   useDirtyStateWarning(isDirty && !createInvoice.isSuccess);
@@ -215,6 +222,8 @@ export function InvoiceFormPage() {
     if ((sourceSalesOrder.items ?? []).some((item) => Number(item.taxRate) > 0) && taxRates.length === 0) return;
 
     setValue('type', 'SALES', { shouldDirty: false, shouldValidate: true });
+    setValue('currencyCode', sourceSalesOrder.currencyCode, { shouldDirty: false });
+    setValue('exchangeRate', String(sourceSalesOrder.exchangeRate), { shouldDirty: false });
     setValue('contactId', sourceSalesOrder.contactId, { shouldDirty: false, shouldValidate: true });
     setValue('notes', `Siparisten oluşturuldu: ${sourceSalesOrder.number}`, { shouldDirty: false });
     replace((sourceSalesOrder.items ?? []).map((item) => ({
@@ -291,6 +300,7 @@ export function InvoiceFormPage() {
   const onSubmit = useCallback((data: InvoiceForm) => {
     createInvoice.mutate({
       contactId: data.contactId, type: data.type, date: data.date,
+      currencyCode: data.currencyCode, exchangeRate: parseDecimalInput(data.exchangeRate),
       salesOrderId: optionalText(sourceSalesOrderId),
       dueDate: optionalText(data.dueDate), notes: optionalText(data.notes),
       lines: data.lines.map((l) => ({
@@ -349,13 +359,17 @@ export function InvoiceFormPage() {
           {totalGross > 0 && (
             <div className="hidden sm:block text-right">
               <p className="text-[10px] text-slate-500 uppercase tracking-wider">Toplam</p>
-              <p className="text-xl font-bold text-emerald-400 tabular-nums">{formatCurrency(totalGross)}</p>
+              <p className="text-xl font-bold text-emerald-400 tabular-nums">{formatCurrency(totalGross, displayCurrency)}</p>
             </div>
           )}
         </div>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit, onInvalid)}>
+        <FormRow cols={2}>
+          <Input label="Para birimi (ISO kodu)" {...register('currencyCode')} error={errors.currencyCode?.message} maxLength={3} />
+          <Input label="Kur (1 birim için TRY)" {...register('exchangeRate')} error={errors.exchangeRate?.message} inputMode="decimal" />
+        </FormRow>
         <div className="flex gap-6">
           {/* ── Left: main form ─────────────────── */}
           <div className="flex-1 min-w-0 space-y-5">
@@ -515,7 +529,7 @@ export function InvoiceFormPage() {
                           <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block text-right">Tutar</label>
                           <div className="h-[38px] flex items-center justify-end">
                             <span className={cn('text-sm font-bold tabular-nums', lineTotal > 0 ? 'text-white' : 'text-slate-600')}>
-                              {formatCurrency(lineTotal)}
+                              {formatCurrency(lineTotal, displayCurrency)}
                             </span>
                           </div>
                         </div>
@@ -541,7 +555,7 @@ export function InvoiceFormPage() {
                     {fields.length} kalem
                   </span>
                   <span className="w-px h-3.5 bg-slate-800" />
-                  <span className="font-semibold text-white text-sm">{formatCurrency(totalGross)}</span>
+                  <span className="font-semibold text-white text-sm">{formatCurrency(totalGross, displayCurrency)}</span>
                   {localDraft.savedAt && <><span className="w-px h-3.5 bg-slate-800" /><span className="text-emerald-400">Taslak otomatik kaydedildi</span></>}
                 </div>
                 <div className="flex items-center gap-2.5">
@@ -618,22 +632,22 @@ export function InvoiceFormPage() {
                 <div className="p-4 space-y-2.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-500">Ara Toplam</span>
-                    <span className="text-slate-300 font-medium tabular-nums">{formatCurrency(totalNet)}</span>
+                    <span className="text-slate-300 font-medium tabular-nums">{formatCurrency(totalNet, displayCurrency)}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-500">KDV</span>
-                    <span className="text-slate-300 font-medium tabular-nums">{formatCurrency(totalTax)}</span>
+                    <span className="text-slate-300 font-medium tabular-nums">{formatCurrency(totalTax, displayCurrency)}</span>
                   </div>
                   {totalWithholding > 0 && (
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-500">Stopaj / Tevkifat</span>
-                      <span className="text-amber-400 font-medium tabular-nums">-{formatCurrency(totalWithholding)}</span>
+                      <span className="text-amber-400 font-medium tabular-nums">-{formatCurrency(totalWithholding, displayCurrency)}</span>
                     </div>
                   )}
                   <div className="h-px bg-slate-800" />
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-white">Genel Toplam</span>
-                    <span className="text-base font-bold text-emerald-400 tabular-nums">{formatCurrency(totalGross)}</span>
+                    <span className="text-base font-bold text-emerald-400 tabular-nums">{formatCurrency(totalGross, displayCurrency)}</span>
                   </div>
                 </div>
               </div>

@@ -15,7 +15,9 @@ function optionalString(value: unknown, field: string): string | undefined {
 export function validateCreateWorkOrder(value: unknown): CreateWorkOrderCommand {
   if (!isRecord(value) || typeof value.productId !== 'string' || !value.productId.trim()) throw new ValidationError('productId zorunludur.');
   if (typeof value.plannedQty !== 'number') throw new ValidationError('plannedQty sayı olmalıdır.');
+  if (value.qualityRequired !== undefined && typeof value.qualityRequired !== 'boolean') throw new ValidationError('qualityRequired boolean olmalidir.');
   const command: CreateWorkOrderCommand = {
+    qualityRequired: typeof value.qualityRequired === 'boolean' ? value.qualityRequired : undefined,
     productId: value.productId,
     plannedQty: value.plannedQty,
     bomId: optionalString(value.bomId, 'bomId'),

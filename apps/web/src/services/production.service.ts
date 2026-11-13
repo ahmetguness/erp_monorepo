@@ -122,6 +122,7 @@ export interface WorkOrderOp {
 }
 
 export interface WorkOrder {
+  qualityStatus?: 'NOT_REQUIRED' | 'PENDING' | 'APPROVED' | 'REJECTED';
   id: string; tenantId: string; number: string; status: WorkOrderStatus;
   productId: string; bomId: string | null;
   plannedQty: number; producedQty: number;

@@ -405,6 +405,8 @@ export async function postProductionAccountingEntry(
       postedAt: entryDate,
       createdById: userId,
       idempotencyKey: `work-order-completion:${workOrder.id}`,
+      refType: 'WORK_ORDER',
+      refId: workOrder.id,
       lines: {
         create: journalLines.map((l, index) => ({
           accountId: l.accountId,

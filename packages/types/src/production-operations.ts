@@ -1,4 +1,5 @@
 export interface CreateWorkOrderCommand {
+  qualityRequired?: boolean;
   productId: string;
   bomId?: string;
   plannedQty: number;

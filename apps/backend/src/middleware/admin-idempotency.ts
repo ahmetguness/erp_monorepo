@@ -33,10 +33,18 @@ export const adminIdempotency: MiddlewareHandler = async (c, next) => {
     try {
       json = JSON.parse(body);
     } catch {
-      return c.json(new ValidationError("JSON istek gövdesi geçersiz.").toJSON(), 400);
+      return c.json(
+        new ValidationError("JSON istek gövdesi geçersiz.").toJSON(),
+        400,
+      );
     }
     if (!adminMutationBodySchema.safeParse(json).success)
-      return c.json(new ValidationError("Admin mutasyon gövdesi bir JSON nesnesi olmalıdır.").toJSON(), 400);
+      return c.json(
+        new ValidationError(
+          "Admin mutasyon gövdesi bir JSON nesnesi olmalıdır.",
+        ).toJSON(),
+        400,
+      );
   }
   const query = new URL(c.req.url).search;
   const requestHash = createHash("sha256")
@@ -62,13 +70,16 @@ export const adminIdempotency: MiddlewareHandler = async (c, next) => {
       409,
     );
   if (claim.kind === "REPLAY")
-    return new Response([204, 205, 304].includes(claim.statusCode) ? null : claim.responseBody, {
-      status: claim.statusCode,
-      headers: {
-        "content-type": claim.contentType,
-        "idempotency-replayed": "true",
+    return new Response(
+      [204, 205, 304].includes(claim.statusCode) ? null : claim.responseBody,
+      {
+        status: claim.statusCode,
+        headers: {
+          "content-type": claim.contentType,
+          "idempotency-replayed": "true",
+        },
       },
-    });
+    );
   try {
     await next();
     const responseBody = await c.res.clone().text();

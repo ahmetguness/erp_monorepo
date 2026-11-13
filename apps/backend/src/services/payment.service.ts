@@ -8,6 +8,7 @@ import {
   assertPaymentAllocationsWithinInvoiceBalance,
 } from './financial-integrity.service';
 import { recomputeInvoiceStatus } from './financial/invoice-status.service.js';
+import { documentCurrencySchema, toBaseMoney } from './financial/currency.js';
 
 export type PaymentDirection = 'RECEIVE' | 'SEND';
 
@@ -17,6 +18,8 @@ export interface PaymentAllocationInput {
 }
 
 export interface CreatePaymentInput {
+  currencyCode?: string;
+  exchangeRate?: number;
   contactId?: string;
   bankAccountId?: string;
   cashAccountId?: string;
@@ -71,6 +74,8 @@ function hasSamePaymentIdentity(
     .map((allocation) => `${allocation.invoiceId}:${Number(allocation.amount)}`)
     .sort();
   return payment.contactId === (input.contactId ?? null)
+    && payment.currencyCode === (input.currencyCode ?? 'TRY')
+    && payment.exchangeRate.equals(input.exchangeRate ?? 1)
     && payment.bankAccountId === (input.bankAccountId ?? null)
     && payment.cashAccountId === (input.cashAccountId ?? null)
     && payment.date.getTime() === paymentDate.getTime()
@@ -181,8 +186,11 @@ function isPayableInvoice(type: InvoiceType): boolean {
 
 export function parseCreatePaymentInput(value: unknown): CreatePaymentInput {
   if (!isRecord(value)) throw new ValidationError('Gecersiz odeme govdesi.');
+  const currency = documentCurrencySchema.safeParse(value);
+  if (!currency.success) throw new ValidationError('Gecersiz para birimi veya kur.');
 
   return {
+    ...currency.data,
     contactId: readOptionalString(value, 'contactId'),
     bankAccountId: readOptionalString(value, 'bankAccountId'),
     cashAccountId: readOptionalString(value, 'cashAccountId'),
@@ -209,17 +217,19 @@ async function validatePaymentRelations(db: PrismaClient, tenantId: string, inpu
   if (input.bankAccountId) {
     const bankAccount = await db.bankAccount.findFirst({
       where: { id: input.bankAccountId, tenantId, deletedAt: null, isActive: true },
-      select: { id: true },
+      select: { id: true, currencyCode: true },
     });
     if (!bankAccount) throw new ValidationError('Secilen banka hesabi bulunamadi.');
+    if (bankAccount.currencyCode !== (input.currencyCode ?? 'TRY')) throw new ValidationError('Odeme ve banka para birimleri eslesmelidir.');
   }
 
   if (input.cashAccountId) {
     const cashAccount = await db.cashAccount.findFirst({
       where: { id: input.cashAccountId, tenantId, deletedAt: null, isActive: true },
-      select: { id: true },
+      select: { id: true, currencyCode: true },
     });
     if (!cashAccount) throw new ValidationError('Secilen kasa hesabi bulunamadi.');
+    if (cashAccount.currencyCode !== (input.currencyCode ?? 'TRY')) throw new ValidationError('Odeme ve kasa para birimleri eslesmelidir.');
   }
 }
 
@@ -254,11 +264,14 @@ async function validatePaymentAllocations(
 
   const invoices = await db.invoice.findMany({
     where: { id: { in: invoiceIds }, tenantId, deletedAt: null },
-    select: { id: true, contactId: true, type: true },
+    select: { id: true, contactId: true, type: true, currencyCode: true, exchangeRate: true },
   });
 
   if (invoices.length !== uniqueInvoiceIds.size) {
     throw new ValidationError('Secilen faturalardan biri bulunamadi.');
+  }
+  if (invoices.some((invoice) => invoice.currencyCode !== (input.currencyCode ?? 'TRY') || !invoice.exchangeRate.equals(input.exchangeRate ?? 1))) {
+    throw new ValidationError('Tahsisat icin fatura ve odeme para birimi/kuru eslesmelidir. Kur farkli odemeler ayri muhasebe islemi gerektirir.');
   }
 
   if (invoices.some((invoice) => invoice.contactId !== input.contactId)) {
@@ -280,6 +293,9 @@ export async function createPayment(options: {
   input: CreatePaymentInput;
   auditMeta?: RequestAuditMeta;
 }, db: PrismaClient) {
+  const currency = documentCurrencySchema.safeParse(options.input);
+  if (!currency.success) throw new ValidationError('Gecersiz para birimi veya kur.');
+  options = { ...options, input: { ...options.input, ...currency.data } };
   const amount = Number(options.input.amount);
   assertMoney(amount, 'Tutar');
   for (const allocation of options.input.allocations ?? []) assertMoney(Number(allocation.amount), 'Tahsisat tutari');
@@ -325,6 +341,8 @@ export async function createPayment(options: {
         cashAccountId: options.input.cashAccountId ?? null,
         date: paymentDate,
         amount,
+        currencyCode: options.input.currencyCode ?? 'TRY',
+        exchangeRate: options.input.exchangeRate ?? 1,
         method: options.input.method,
         direction,
         reference: options.input.reference ?? null,
@@ -371,7 +389,7 @@ export async function createPayment(options: {
         contactId: options.input.contactId,
         paymentId: newPayment.id,
         reference: options.input.reference,
-        amount,
+        amount: toBaseMoney(amount, options.input.exchangeRate ?? 1).toNumber(),
         date: paymentDate,
         direction,
         userId: options.userId,

@@ -2,7 +2,6 @@ import {
   ContactType,
   MarketplaceOrder,
   MarketplaceOrderItem,
-  MarketplaceOrderStatus,
   OrderStatus,
   PrismaClient,
   Prisma,
@@ -11,6 +10,7 @@ import {
 import { logger } from '../lib/logger.js';
 import { TrendyolService, buildTrendyolCredentials } from './trendyol.service.js';
 import { InventoryReservationService } from './inventory-reservation.service.js';
+import { syncMarketplaceFulfillment } from './marketplace/fulfillment.service.js';
 
 export interface MarketplaceAutomationPolicy {
   autoCreateContact: boolean;
@@ -57,13 +57,15 @@ function policyFromNotes(notes: string | null | undefined): MarketplaceAutomatio
   const match = notes.split('\n').find((line) => line.startsWith(POLICY_PREFIX));
   if (!match) return { ...DEFAULT_AUTOMATION_POLICY };
   try {
-    const raw = JSON.parse(match.slice(POLICY_PREFIX.length));
+    const raw: unknown = JSON.parse(match.slice(POLICY_PREFIX.length));
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { ...DEFAULT_AUTOMATION_POLICY };
+    const values: Record<string, unknown> = Object.fromEntries(Object.entries(raw));
     return {
-      autoCreateContact: typeof raw.autoCreateContact === 'boolean' ? raw.autoCreateContact : DEFAULT_AUTOMATION_POLICY.autoCreateContact,
-      autoCreateSalesOrder: typeof raw.autoCreateSalesOrder === 'boolean' ? raw.autoCreateSalesOrder : DEFAULT_AUTOMATION_POLICY.autoCreateSalesOrder,
-      autoReserveStock: typeof raw.autoReserveStock === 'boolean' ? raw.autoReserveStock : DEFAULT_AUTOMATION_POLICY.autoReserveStock,
-      autoCreateInvoice: typeof raw.autoCreateInvoice === 'boolean' ? raw.autoCreateInvoice : DEFAULT_AUTOMATION_POLICY.autoCreateInvoice,
-      autoSyncErpStockToMarketplace: typeof raw.autoSyncErpStockToMarketplace === 'boolean' ? raw.autoSyncErpStockToMarketplace : DEFAULT_AUTOMATION_POLICY.autoSyncErpStockToMarketplace,
+      autoCreateContact: typeof values.autoCreateContact === 'boolean' ? values.autoCreateContact : DEFAULT_AUTOMATION_POLICY.autoCreateContact,
+      autoCreateSalesOrder: typeof values.autoCreateSalesOrder === 'boolean' ? values.autoCreateSalesOrder : DEFAULT_AUTOMATION_POLICY.autoCreateSalesOrder,
+      autoReserveStock: typeof values.autoReserveStock === 'boolean' ? values.autoReserveStock : DEFAULT_AUTOMATION_POLICY.autoReserveStock,
+      autoCreateInvoice: typeof values.autoCreateInvoice === 'boolean' ? values.autoCreateInvoice : DEFAULT_AUTOMATION_POLICY.autoCreateInvoice,
+      autoSyncErpStockToMarketplace: typeof values.autoSyncErpStockToMarketplace === 'boolean' ? values.autoSyncErpStockToMarketplace : DEFAULT_AUTOMATION_POLICY.autoSyncErpStockToMarketplace,
     };
   } catch {
     return { ...DEFAULT_AUTOMATION_POLICY };
@@ -166,7 +168,7 @@ export class MarketplaceAutomationService {
     }
 
     // Step 4: Inventory Reservation
-    if (policy.autoReserveStock && matchedItems.length > 0 && result.salesOrderId) {
+    if (policy.autoReserveStock && matchedItems.length > 0 && result.salesOrderId && ['PENDING', 'PROCESSING', 'SHIPPED'].includes(order.status)) {
       try {
         const reservationIds = await this.ensureInventoryReservations(tenantId, order, result.salesOrderId, matchedItems);
         result.reservationIds = reservationIds;
@@ -179,7 +181,7 @@ export class MarketplaceAutomationService {
 
     // Step 5: Sync Status changes to ERP
     try {
-      await this.syncOrderStatusToErp(tenantId, order);
+      await syncMarketplaceFulfillment(this.db, tenantId, order);
       result.statusSynced = true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -403,12 +405,12 @@ export class MarketplaceAutomationService {
   ): Promise<{ id: string }> {
     return this.db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${'marketplace-order:' + order.id}))`;
-      const scoped = new MarketplaceAutomationService(tx as unknown as PrismaClient);
-      return scoped.ensureSalesOrderUnlocked(tenantId, order, contactId, matchedItems);
+      return this.ensureSalesOrderUnlocked(tx, tenantId, order, contactId, matchedItems);
     });
   }
 
   private async ensureSalesOrderUnlocked(
+    tx: Prisma.TransactionClient,
     tenantId: string,
     order: MarketplaceOrder,
     contactId: string,
@@ -416,14 +418,14 @@ export class MarketplaceAutomationService {
   ): Promise<{ id: string }> {
     const existingRef = `Pazaryeri Siparişi #${order.externalId}`;
     const orderReference = `${existingRef} (${order.channel})`;
-    const existing = await this.db.salesOrder.findFirst({
+    const existing = await tx.salesOrder.findFirst({
       where: { tenantId, notes: orderReference, deletedAt: null },
       select: { id: true },
     });
 
     if (existing) return existing;
 
-    const count = await this.db.salesOrder.count({ where: { tenantId } });
+    const count = await tx.salesOrder.count({ where: { tenantId } });
     const number = `SIP-PAZAR-${String(count + 1).padStart(5, '0')}`;
 
     const items = matchedItems.map(({ item, productId, price }) => {
@@ -445,7 +447,7 @@ export class MarketplaceAutomationService {
     const totalTax = items.reduce((sum, i) => sum + Number(i.taxAmount), 0);
     const totalGross = totalNet + totalTax;
 
-    const created = await this.db.salesOrder.create({
+    const created = await tx.salesOrder.create({
       data: {
         tenantId,
         contactId,
@@ -485,81 +487,4 @@ export class MarketplaceAutomationService {
     return (await this.db.inventoryReservation.findMany({ where: { tenantId, refType: ReservationRefType.SALES_ORDER, refId: salesOrderId, releasedAt: null }, select: { id: true } })).map((entry) => entry.id);
   }
 
-  private async ensureInventoryReservationsUnlocked(
-    tenantId: string,
-    order: MarketplaceOrder,
-    salesOrderId: string,
-    matchedItems: Array<{ item: MarketplaceOrderItem; productId: string; price: number }>,
-  ): Promise<string[]> {
-    const warehouse = await this.db.warehouse.findFirst({
-      where: { tenantId },
-      select: { id: true },
-    });
-
-    if (!warehouse) return [];
-
-    const reservationIds: string[] = [];
-
-    for (const { item, productId } of matchedItems) {
-      const note = `Pazaryeri Rezerve (#${order.externalId})`;
-      const existing = await this.db.inventoryReservation.findFirst({
-        where: { tenantId, productId, refId: salesOrderId },
-        select: { id: true },
-      });
-
-      if (existing) {
-        reservationIds.push(existing.id);
-        continue;
-      }
-
-      const created = await this.db.inventoryReservation.create({
-        data: {
-          tenantId,
-          productId,
-          warehouseId: warehouse.id,
-          quantity: new Prisma.Decimal(item.quantity),
-          refType: ReservationRefType.SALES_ORDER,
-          refId: salesOrderId,
-          notes: note,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        },
-        select: { id: true },
-      });
-
-      reservationIds.push(created.id);
-    }
-
-    return reservationIds;
-  }
-
-  private async syncOrderStatusToErp(tenantId: string, order: MarketplaceOrder): Promise<void> {
-    const existingRef = `Pazaryeri Siparişi #${order.externalId}`;
-    const salesOrder = await this.db.salesOrder.findFirst({
-      where: { tenantId, notes: `${existingRef} (${order.channel})`, deletedAt: null },
-      select: { id: true, status: true },
-    });
-
-    if (!salesOrder) return;
-
-    if (order.status === MarketplaceOrderStatus.CANCELLED) {
-      if (salesOrder.status !== OrderStatus.CANCELLED) {
-        await this.db.salesOrder.update({
-          where: { id: salesOrder.id },
-          data: { status: OrderStatus.CANCELLED },
-        });
-
-        await this.db.inventoryReservation.updateMany({
-          where: { tenantId, refId: salesOrder.id },
-          data: { releasedAt: new Date() },
-        });
-      }
-    } else if (order.status === MarketplaceOrderStatus.DELIVERED) {
-      if (salesOrder.status !== OrderStatus.DELIVERED) {
-        await this.db.salesOrder.update({
-          where: { id: salesOrder.id },
-          data: { status: OrderStatus.DELIVERED },
-        });
-      }
-    }
-  }
 }

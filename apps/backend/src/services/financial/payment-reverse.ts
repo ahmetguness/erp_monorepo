@@ -5,6 +5,7 @@ import { createAuditLog } from '../../utils/audit.js';
 import { reversePaymentAccountEntry } from '../../utils/account-entry.js';
 import { assertAccountingPeriodOpen, assertPaymentReversible } from './period-guard.js';
 import { recomputeInvoiceStatus } from './invoice-status.service.js';
+import { toBaseMoney } from './currency.js';
 
 // ─────────────────────────────────────────────
 // Payment Reverse
@@ -32,6 +33,8 @@ export async function reversePayment(db: PrismaClient, input: ReversePaymentInpu
       status: true,
       date: true,
       amount: true,
+      exchangeRate: true,
+      direction: true,
       contactId: true,
       reference: true,
     },
@@ -78,7 +81,8 @@ export async function reversePayment(db: PrismaClient, input: ReversePaymentInpu
         contactId: payment.contactId,
         paymentId: input.paymentId,
         reference: payment.reference,
-        amount: payment.amount.toNumber(),
+        amount: toBaseMoney(payment.amount, payment.exchangeRate).toNumber(),
+        direction: payment.direction === 'SEND' ? 'SEND' : 'RECEIVE',
         date: reversalDate,
         reason: input.reason,
         userId: input.userId,

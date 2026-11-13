@@ -1,5 +1,4 @@
 import {
-  MovementType,
   Prisma,
   PrismaClient,
   ReservationRefType,
@@ -8,6 +7,9 @@ import {
 import { logger } from "../../../../lib/logger.js";
 import { assertCanReserveStock } from "../../../../services/inventory-rules.service.js";
 import { postProductionAccountingEntry } from "./production-rules.service.js";
+import { assertQualityReleased, lockWorkOrder } from './quality-decision.service.js';
+import { ConflictError } from '../../../../errors/index.js';
+import { recordFinishedGoods } from './finished-goods.service.js';
 
 export interface ProductionDerivationResult {
   workOrderId: string;
@@ -233,21 +235,22 @@ export class ProductionAutomationService {
       throw new Error(`İş Emri bulunamadı: ${workOrderId}`);
     }
 
-    const outputQty =
+    const requestedOutputQty =
       finalOutputQty !== undefined && Number.isFinite(finalOutputQty)
         ? finalOutputQty
         : Number(wo.plannedQty);
 
     await this.db.$transaction(async (tx) => {
-      const targetWo = await tx.workOrder.findFirst({
-        where: { id: workOrderId, tenantId },
-      });
-      if (!targetWo) {
-        throw new Error(`İş Emri bulunamadı: ${workOrderId}`);
+      const targetWo = await lockWorkOrder(tx, tenantId, workOrderId);
+      if (targetWo.status === 'COMPLETED') return;
+      assertQualityReleased(targetWo.qualityStatus);
+      const outputQty = targetWo.qualityStatus === 'APPROVED' ? targetWo.producedQty.toNumber() : requestedOutputQty;
+      if (targetWo.qualityStatus === 'APPROVED' && finalOutputQty !== undefined && finalOutputQty !== outputQty) {
+        throw new ConflictError('Output quantity differs from the quality-approved quantity.');
       }
 
       // 1. Update WorkOrder status & producedQty
-      await tx.workOrder.update({
+      const completed = await tx.workOrder.update({
         where: { id: workOrderId },
         data: {
           status: WorkOrderStatus.COMPLETED,
@@ -268,22 +271,7 @@ export class ProductionAutomationService {
       });
 
       // 3. Post Finished Goods Stock Entry if output warehouse defined
-      if (wo.outputWarehouseId) {
-        await tx.stockMovement.create({
-          data: {
-            tenantId,
-            productId: wo.productId,
-            toWarehouseId: wo.outputWarehouseId,
-            type: MovementType.IN,
-            quantity: new Prisma.Decimal(outputQty),
-            unitCost: wo.product.averageCost ?? new Prisma.Decimal(0),
-            totalCost: new Prisma.Decimal(
-              outputQty * Number(wo.product.averageCost ?? 0),
-            ),
-            notes: `Üretim çıktısı — İş Emri: ${wo.number}`,
-          },
-        });
-      }
+      await recordFinishedGoods(tx, tenantId, completed);
 
       // 4. Record History
       await tx.workOrderHistory.create({

@@ -22,6 +22,7 @@ import {
   useUpdateWorkOrderOperation,
 } from "@/hooks/useProduction";
 import { formatDate } from "@/lib/utils";
+import { WorkOrderQualityPanel } from './WorkOrderQualityPanel';
 
 const STATUS_MAP: Record<
   string,
@@ -118,6 +119,7 @@ export function WorkOrderDetailPage({ id }: { id: string }) {
                 </Button>
                 <Button
                   size="sm"
+                  disabled={wo.qualityStatus === 'PENDING' || wo.qualityStatus === 'REJECTED'}
                   onClick={() =>
                     changeStatus.mutate({ id, data: { status: "COMPLETED" } })
                   }
@@ -143,6 +145,7 @@ export function WorkOrderDetailPage({ id }: { id: string }) {
       />
 
       {/* Info cards */}
+      <WorkOrderQualityPanel order={wo} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
           {

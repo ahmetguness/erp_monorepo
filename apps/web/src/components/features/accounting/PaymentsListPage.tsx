@@ -284,7 +284,7 @@ export function PaymentsListPage() {
       align: "right",
       render: (r) => (
         <span className="font-semibold text-white tabular-nums">
-          {formatCurrency(r.amount)}
+          {formatCurrency(r.amount, r.currencyCode)}
         </span>
       ),
     },
@@ -298,13 +298,14 @@ export function PaymentsListPage() {
   });
 
   // Summary stats
-  const totalAmount = allPayments.reduce((s, p) => s + Number(p.amount), 0);
+  const baseAmount = (payment: Payment) => Number((Number(payment.amount) * payment.exchangeRate).toFixed(2));
+  const totalAmount = allPayments.reduce((s, p) => s + baseAmount(p), 0);
   const completedAmount = allPayments
     .filter((p) => p.status === "COMPLETED")
-    .reduce((s, p) => s + Number(p.amount), 0);
+    .reduce((s, p) => s + baseAmount(p), 0);
   const pendingAmount = allPayments
     .filter((p) => p.status === "PENDING")
-    .reduce((s, p) => s + Number(p.amount), 0);
+    .reduce((s, p) => s + baseAmount(p), 0);
 
   const activeMethod =
     METHODS.find((m) => m.value === selectedMethod) ?? METHODS[0];

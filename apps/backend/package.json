@@ -19,6 +19,7 @@
     "test:contracts": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-api-contracts.ts",
     "test:integration": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/run-integration-tests.ts",
     "test:integration:ci": "node ../../scripts/run-assurance-command.mjs backend-integration ../../artifacts/integration -- npm run test:integration",
+    "test:cross-module": "tsc --project tsconfig.cross-module.json && vitest run --config vitest.cross-module.config.mts",
     "test:chat-integration": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-chat-integration.ts",
     "test:web-smoke": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-web-smoke-flows.ts",
     "test:e2e": "npm run test:web-smoke",
@@ -160,6 +161,7 @@
     "db:migrate:review": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-migration-safety.ts",
     "db:push": "prisma db push --schema=prisma/schema",
     "db:studio": "prisma studio --schema=prisma/schema",
+    "predb:seed": "npm --workspace=@repo/types run build",
     "db:seed": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx prisma/seed.ts",
     "storage:migrate": "tsx scripts/migrate-local-storage-to-object-storage.ts",
     "marketplace:encrypt-credentials": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/encrypt-marketplace-credentials.ts"

@@ -31,7 +31,7 @@ import { DatePicker } from "@/components/ui/DatePicker";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { useCreatePayment } from "@/hooks/useAccounting";
-import { useInvoices } from "@/hooks/useSales";
+import { useInvoice, useInvoices } from "@/hooks/useSales";
 import { createClientIdempotencyKey } from "@/lib/idempotency";
 import {
   applyServerFieldErrors,
@@ -232,10 +232,13 @@ export function PaymentFormPage() {
     ...(contactId ? { contactId } : {}),
   });
 
-  const selectedInvoice = useMemo(
+  const { data: invoiceDetail } = useInvoice(invoiceId);
+  const listedInvoice = useMemo(
     () => invoicesData?.data.find((invoice) => invoice.id === invoiceId),
     [invoiceId, invoicesData],
   );
+  const selectedInvoice = invoiceDetail ?? listedInvoice;
+  const paymentCurrency = selectedInvoice?.currencyCode ?? 'TRY';
 
   useEffect(() => {
     if (!didMount.current) {
@@ -289,12 +292,18 @@ export function PaymentFormPage() {
     : 0;
 
   const onSubmit = (values: PaymentFormValues) => {
+    if (values.invoiceId && selectedInvoice?.id !== values.invoiceId) {
+      setError('invoiceId', { message: 'Fatura bilgileri yüklenene kadar bekleyiniz.' });
+      return;
+    }
     const paymentAmount = parseDecimalInput(values.amount);
     const paymentAllocationAmount = values.invoiceId
       ? parseDecimalInput(values.allocationAmount || values.amount)
       : undefined;
 
     const payload: CreatePaymentDTO = {
+      currencyCode: paymentCurrency,
+      exchangeRate: selectedInvoice?.exchangeRate ?? 1,
       direction: values.direction,
       contactId: values.contactId,
       date: values.date,
@@ -456,7 +465,7 @@ export function PaymentFormPage() {
                 <div>
                   <p className="text-[11px] text-slate-500">Toplam</p>
                   <p className="text-sm font-semibold text-white">
-                    {formatCurrency(selectedInvoice.totalGross)}
+                    {formatCurrency(selectedInvoice.totalGross, paymentCurrency)}
                   </p>
                 </div>
               </div>
@@ -468,6 +477,7 @@ export function PaymentFormPage() {
               <h2 className="text-sm font-semibold text-white">
                 Tutar ve yöntem
               </h2>
+              <p className="text-xs text-slate-400">Para birimi: {paymentCurrency} · Kur: {selectedInvoice?.exchangeRate ?? 1} TRY. Aynı para biriminde kasa/banka hesabı seçiniz.</p>
               <p className="text-xs text-slate-500 mt-0.5">
                 Dekont veya referans bilgisini aynı kayıt üzerinde tutun.
               </p>
@@ -644,12 +654,12 @@ export function PaymentFormPage() {
             <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/35 p-4">
               <SummaryRow
                 label="Tutar"
-                value={numericAmount > 0 ? formatCurrency(numericAmount) : "-"}
+                value={numericAmount > 0 ? formatCurrency(numericAmount, paymentCurrency) : "-"}
               />
               <SummaryRow
                 label="Tahsis"
                 value={
-                  numericAllocation > 0 ? formatCurrency(numericAllocation) : "-"
+                  numericAllocation > 0 ? formatCurrency(numericAllocation, paymentCurrency) : "-"
                 }
               />
               <SummaryRow

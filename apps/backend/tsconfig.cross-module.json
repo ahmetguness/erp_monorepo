@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["tests/cross-module", "src", "vitest.cross-module.config.mts"],
+  "exclude": ["node_modules", "dist"]
+}

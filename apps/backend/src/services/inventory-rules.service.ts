@@ -4,3 +4,4 @@ export { resolveStockLevelLocationId, getStockPosition, assertCanConsumeStock, a
 export { recordInventoryCosting } from './inventory-rules/costing.js';
 export { getReorderSuggestions, getAdvancedStockSuggestions, convertReorderSuggestionsToPurchaseRequest } from './inventory-rules/replenishment.js';
 export { processDeliveryNoteStock } from './inventory-rules/delivery.js';
+export { consumeStock } from './inventory-rules/consumption.js';

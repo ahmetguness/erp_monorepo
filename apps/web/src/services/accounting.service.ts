@@ -83,6 +83,7 @@ export const CashAccountSchema = z.object({
 });
 
 export const PaymentSchema = z.object({
+  currencyCode: z.string().default('TRY'), exchangeRate: z.coerce.number().default(1),
   id: z.string(), tenantId: z.string(),
   contactId: z.string().nullable(), bankAccountId: z.string().nullable(), cashAccountId: z.string().nullable(),
   date: z.string(), amount: z.coerce.number(),
@@ -165,6 +166,7 @@ export type UpdateBankAccountDTO = Partial<CreateBankAccountDTO> & { type?: Bank
 export interface CreateCashAccountDTO { name: string; currencyCode?: string; }
 export type UpdateCashAccountDTO = Partial<CreateCashAccountDTO> & { isActive?: boolean };
 export interface CreatePaymentDTO {
+  currencyCode?: string; exchangeRate?: number;
   contactId?: string; bankAccountId?: string; cashAccountId?: string;
   date: string; amount: number; method: PaymentMethod; reference?: string; notes?: string;
   idempotencyKey?: string;

@@ -7,12 +7,12 @@ import { TYPE_SAFETY_BYPASS_ALLOWLIST } from './code-quality-allowlist.js';
 const repoRoot = resolve(__dirname, '../../..');
 
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'] as const;
-const SKIPPED_DIRS = new Set(['node_modules', '.next', 'dist', 'build', 'coverage', '.git']);
+const SKIPPED_DIRS = new Set(['node_modules', '.next', '.next-e2e', 'dist', 'build', 'coverage', '.git']);
 const QUALITY_SCRIPT_FILES = new Set([
   'apps/backend/scripts/check-code-quality.ts',
   'apps/backend/scripts/code-quality-allowlist.ts',
 ]);
-const GENERATED_OR_CACHE_SEGMENTS = ['node_modules', '.next', 'dist', 'build', 'coverage', '.git'] as const;
+const GENERATED_OR_CACHE_SEGMENTS = ['node_modules', '.next', '.next-e2e', 'dist', 'build', 'coverage', '.git'] as const;
 
 const TYPE_SAFETY_PATTERNS: ReadonlyArray<{ label: string; pattern: RegExp }> = [
   { label: 'explicit any annotation', pattern: /[:(<,=]\s*any\b/ },

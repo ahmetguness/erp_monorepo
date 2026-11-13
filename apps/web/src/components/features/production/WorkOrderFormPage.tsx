@@ -24,6 +24,7 @@ export function WorkOrderFormPage() {
     notes: "",
     inputWarehouseId: "",
     outputWarehouseId: "",
+    qualityRequired: false,
   });
 
   const handleSubmit = () => {
@@ -38,6 +39,7 @@ export function WorkOrderFormPage() {
         notes: form.notes || undefined,
         inputWarehouseId: form.inputWarehouseId || undefined,
         outputWarehouseId: form.outputWarehouseId || undefined,
+        qualityRequired: form.qualityRequired,
       },
       {
         onSuccess: () => router.push("/dashboard/production/work-orders"),
@@ -50,6 +52,10 @@ export function WorkOrderFormPage() {
       <PageHeader title="Yeni İş Emri" subtitle="Üretim iş emri oluşturun." />
 
       <div className="space-y-6 bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input type="checkbox" checked={form.qualityRequired} onChange={(event) => setForm((current) => ({ ...current, qualityRequired: event.target.checked }))} />
+          Mamul girişi için kalite onayı zorunlu
+        </label>
         <FormRow cols={2}>
           <ProductSelect
             label="Ürün"

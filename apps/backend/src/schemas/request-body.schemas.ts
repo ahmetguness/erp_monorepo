@@ -136,6 +136,8 @@ export const createInvoiceBodySchema = z
     number: z.string().trim().min(1).max(50).optional(),
     date: invoiceDateString,
     dueDate: invoiceDateString.optional(),
+    currencyCode: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).optional(),
+    exchangeRate: z.number().finite().positive().max(999999).optional(),
     notes: z.string().trim().max(2000).optional(),
     lines: z
       .array(invoiceLineBodySchema)
@@ -269,6 +271,8 @@ const salesQuoteItemBodySchema = z
 
 const salesQuoteBodySchema = z
   .object({
+    currencyCode: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).optional(),
+    exchangeRate: z.number().finite().positive().max(999999).optional(),
     contactId: nonEmptyString,
     number: z.string().trim().min(1).max(50).optional(),
     date: dateString,
@@ -288,7 +292,7 @@ export const createSalesQuoteBodySchema = salesQuoteBodySchema.refine(
 );
 
 export const updateSalesQuoteBodySchema = salesQuoteBodySchema
-  .omit({ number: true })
+  .omit({ number: true, currencyCode: true, exchangeRate: true })
   .refine(
     (value) =>
       !value.validUntil || new Date(value.validUntil) >= new Date(value.date),
@@ -306,6 +310,8 @@ export const updateSalesQuoteStatusBodySchema = z
 
 export const createSalesOrderBodySchema = z
   .object({
+    currencyCode: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).optional(),
+    exchangeRate: z.number().finite().positive().max(999999).optional(),
     contactId: nonEmptyString,
     number: z.string().trim().min(1).max(50).optional(),
     date: dateString,
@@ -333,6 +339,8 @@ export const updateSalesOrderBodySchema = z
 
 export const createPaymentBodySchema = z
   .object({
+    currencyCode: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).optional(),
+    exchangeRate: z.number().finite().positive().max(999999).optional(),
     contactId: optionalString,
     bankAccountId: optionalString,
     cashAccountId: optionalString,

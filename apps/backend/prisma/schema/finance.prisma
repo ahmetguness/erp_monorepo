@@ -351,6 +351,8 @@ model Payment {
   checkNoteId    String?
   date           DateTime
   amount         Decimal       @db.Decimal(18, 2)
+  currencyCode   String        @default("TRY")
+  exchangeRate   Decimal       @default(1) @db.Decimal(18, 6)
   method         PaymentMethod @default(CASH)
   direction      String        @default("RECEIVE")
   reference      String?

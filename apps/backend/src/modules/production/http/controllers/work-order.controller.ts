@@ -1,5 +1,7 @@
 import { AuditAction,EntityType,MovementType,ReservationRefType,WorkOrderStatus } from '@prisma/client';
 import { Context } from 'hono';
+import { assertQualityReleased, lockWorkOrder } from '../../infrastructure/services/quality-decision.service.js';
+import { recordFinishedGoods } from '../../infrastructure/services/finished-goods.service.js';
 import { createEventContext,domainEvents } from '../../../../domain-events/index.js';
 import { ConflictError,NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
@@ -140,6 +142,7 @@ export const WorkOrderController = {
     const wo = await prisma.workOrder.create({
       data: {
         tenantId, productId: body.productId, bomId: body.bomId ?? null,
+        qualityStatus: body.qualityRequired ? 'PENDING' : 'NOT_REQUIRED',
         number, plannedQty: body.plannedQty,
         startDate: body.startDate ? new Date(body.startDate) : null,
         endDate: body.endDate ? new Date(body.endDate) : null,
@@ -212,6 +215,9 @@ export const WorkOrderController = {
     }> = [];
 
     const updated = await prisma.$transaction(async (tx) => {
+      const current = await lockWorkOrder(tx, tenantId, id);
+      if (body.status === 'COMPLETED') assertQualityReleased(current.qualityStatus);
+      if (current.updatedAt.getTime() !== wo.updatedAt.getTime()) throw new ConflictError('Work order changed; refresh before retrying.');
       const updateResult = await tx.workOrder.updateMany({
         where: { id, tenantId, status: wo.status },
         data: { status: body.status },
@@ -276,47 +282,8 @@ export const WorkOrderController = {
 
       // COMPLETED → stok hareketi: üretilen ürünü output warehouse'a ekle
       if (body.status === 'COMPLETED' && wo.outputWarehouseId && Number(wo.producedQty) > 0) {
-        const existingLevel = await tx.stockLevel.findFirst({
-          where: { tenantId, productId: wo.productId, warehouseId: wo.outputWarehouseId },
-        });
-        const previousQuantity = Number(existingLevel?.quantity ?? 0);
-        const locationId = await resolveStockLevelLocationId(tx, tenantId, wo.outputWarehouseId, existingLevel?.locationId);
-        const stockMovement = await tx.stockMovement.create({
-          data: {
-            tenantId, productId: wo.productId, type: MovementType.IN,
-            quantity: wo.producedQty, toWarehouseId: wo.outputWarehouseId,
-            refType: 'WORK_ORDER', refId: id, notes: `İş emri ${wo.number} üretim çıktısı`,
-          },
-        });
+        await recordFinishedGoods(tx, tenantId, wo);
         const producedQuantity = Number(wo.producedQty);
-        await tx.stockLevel.upsert({
-          where: {
-            productId_warehouseId_locationId: {
-              productId: wo.productId,
-              warehouseId: wo.outputWarehouseId,
-              locationId,
-            },
-          },
-          create: {
-            tenantId,
-            productId: wo.productId,
-            warehouseId: wo.outputWarehouseId,
-            locationId,
-            quantity: wo.producedQty,
-          },
-          update: { quantity: { increment: wo.producedQty } },
-        });
-        await recordInventoryCosting(tx, tenantId, {
-          movementId: stockMovement.id,
-          productId: wo.productId,
-          warehouseId: wo.outputWarehouseId,
-          type: MovementType.IN,
-          quantity: producedQuantity,
-          previousQuantity,
-          quantityChange: producedQuantity,
-          resultingQuantity: previousQuantity + producedQuantity,
-          date: stockMovement.createdAt,
-        });
         completionEvents.push({
           productId: wo.productId,
           productName: wo.product.name,
@@ -440,6 +407,9 @@ export const WorkOrderController = {
 
     await prisma.$transaction(async (tx) => {
       // 1. Material Cost Calculation based on consumptions
+      const current = await lockWorkOrder(tx, tenantId, id);
+      if (current.status !== 'IN_PROGRESS') throw new ConflictError('Work order is no longer active.');
+      if (current.updatedAt.getTime() !== wo.updatedAt.getTime()) throw new ConflictError('Work order changed; refresh before retrying.');
       let consumedCost = 0;
       if (body.consumptions?.length) {
         for (const cons of body.consumptions) {
@@ -488,6 +458,7 @@ export const WorkOrderController = {
         where: { id, tenantId },
         data: {
           producedQty: { increment: body.producedQty },
+          qualityStatus: current.qualityStatus === 'NOT_REQUIRED' ? 'NOT_REQUIRED' : 'PENDING',
           actualMaterialCost: { increment: consumedCost },
           actualLaborCost: { increment: laborCost },
           actualOverheadCost: { increment: overheadCost },

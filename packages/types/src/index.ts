@@ -530,6 +530,8 @@ export interface CashAccount {
 }
 
 export interface Payment {
+  currencyCode?: string;
+  exchangeRate?: number;
   id: string;
   tenantId: string;
   contactId: string | null;

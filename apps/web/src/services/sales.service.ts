@@ -35,6 +35,7 @@ const ContactRefSchema = z.object({
 });
 
 export const SalesQuoteSchema = z.object({
+  currencyCode: z.string().default('TRY'), exchangeRate: z.coerce.number().default(1),
   id: z.string(),
   tenantId: z.string(),
   contactId: z.string(),
@@ -60,6 +61,7 @@ export const SalesQuoteSchema = z.object({
 });
 
 export const SalesOrderSchema = z.object({
+  currencyCode: z.string().default('TRY'), exchangeRate: z.coerce.number().default(1),
   id: z.string(),
   tenantId: z.string(),
   contactId: z.string(),
@@ -114,6 +116,7 @@ export const InvoiceSchema = z.object({
   date: z.string(),
   dueDate: z.string().nullable(),
   currencyCode: z.string(),
+  exchangeRate: z.coerce.number().default(1),
   totalNet: z.coerce.number(),
   totalTax: z.coerce.number(),
   totalGross: z.coerce.number(),
@@ -334,15 +337,17 @@ export interface OrderItemDTO {
 }
 
 export interface CreateSalesQuoteDTO {
+  currencyCode?: string; exchangeRate?: number;
   contactId: string;
   date: string;
   validUntil?: string;
   notes?: string;
   items: OrderItemDTO[];
 }
-export type UpdateSalesQuoteDTO = CreateSalesQuoteDTO;
+export type UpdateSalesQuoteDTO = Omit<CreateSalesQuoteDTO, 'currencyCode' | 'exchangeRate'>;
 
 export interface CreateSalesOrderDTO {
+  currencyCode?: string; exchangeRate?: number;
   contactId: string;
   quoteId?: string;
   date: string;
@@ -370,6 +375,8 @@ export interface InvoiceLineDTO {
 }
 
 export interface CreateInvoiceDTO {
+  currencyCode?: string;
+  exchangeRate?: number;
   contactId: string;
   type: InvoiceType;
   salesOrderId?: string;

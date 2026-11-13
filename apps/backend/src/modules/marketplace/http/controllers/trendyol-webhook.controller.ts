@@ -5,7 +5,7 @@
  * getShipmentPackages: { content: [orderPackage, ...] }.
  */
 
-import { MarketplaceOrderStatus,Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { createHmac } from 'crypto';
 import { Context } from 'hono';
 import { logger } from '../../../../lib/logger.js';
@@ -13,6 +13,8 @@ import { prisma } from '../../../../lib/prisma.js';
 import { MarketplaceAutomationService } from '../../../../services/marketplace-automation.service.js';
 import { mapTrendyolOrderStatus } from '../../../../services/trendyol.service.js';
 import { decrypt } from '../../../../utils/encryption.js';
+import type { WebhookOrderLine, WebhookOrderPackage } from '../../domain/webhook-order.types.js';
+import { upsertMarketplaceOrder } from '../../infrastructure/persistence/webhook-order.repository.js';
 
 const WEBHOOK_API_KEY_HEADER = 'x-api-key';
 const LEGACY_WEBHOOK_SECRET_HEADER = 'x-webhook-secret';
@@ -26,27 +28,6 @@ type JsonObject = Prisma.InputJsonObject;
 type WebhookAuthorizationResult =
   | { ok: true; mode: 'hmac' | 'legacy' }
   | { ok: false; code: 'SIGNATURE_REQUIRED' | 'INVALID_TIMESTAMP' | 'TIMESTAMP_EXPIRED' | 'INVALID_SIGNATURE' };
-
-interface WebhookOrderLine {
-  contentId: string;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  lineTotal: number;
-}
-
-interface WebhookOrderPackage {
-  packageId: string;
-  status: MarketplaceOrderStatus;
-  customerName: string | null;
-  customerEmail: string | null;
-  customerPhone: string | null;
-  shippingAddress: string | null;
-  totalAmount: number;
-  orderDate: Date;
-  lastModifiedDate: string;
-  lines: WebhookOrderLine[];
-}
 
 interface WebhookProcessingResult {
   eventId: string;
@@ -166,11 +147,10 @@ export async function processTrendyolWebhookPayload({
 
     let errorMessage: string | null = null;
     try {
-      const orderRecord = await upsertMarketplaceOrder(tenantId, integrationId, orderPackage);
+      const orderRecord = await upsertMarketplaceOrder(prisma, tenantId, integrationId, orderPackage);
       const automationService = new MarketplaceAutomationService(prisma);
-      await automationService.processOrderAutomation(tenantId, orderRecord.id).catch((autoErr) => {
-        logger.error(`[MarketplaceAutomation] Auto pipeline failed for order ${orderPackage.packageId}: ${autoErr}`);
-      });
+      const automation = await automationService.processOrderAutomation(tenantId, orderRecord.id);
+      if (automation.errors.length) throw new Error(automation.errors.join('; '));
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : String(err);
       logger.error(`[TrendyolWebhook] Processing error for event ${eventId}: ${errorMessage}`);
@@ -313,7 +293,7 @@ function parseOrderPackage(input: JsonObject): WebhookOrderPackage | null {
 
   return {
     packageId,
-    status: mapTrendyolOrderStatus(rawStatus) as MarketplaceOrderStatus,
+    status: mapTrendyolOrderStatus(rawStatus),
     customerName,
     customerEmail: readString(input, 'customerEmail'),
     customerPhone: shipmentAddress ? readString(shipmentAddress, 'phone') : null,
@@ -366,64 +346,4 @@ function readNumber(input: JsonObject, key: string): number | null {
 
 function buildEventId(orderPackage: WebhookOrderPackage): string {
   return `${orderPackage.packageId}:${orderPackage.status}:${orderPackage.lastModifiedDate}`;
-}
-
-async function upsertMarketplaceOrder(
-  tenantId: string,
-  integrationId: string,
-  orderPackage: WebhookOrderPackage,
-): Promise<{ id: string }> {
-  const existing = await prisma.marketplaceOrder.findFirst({
-    where: { tenantId, integrationId, externalId: orderPackage.packageId },
-    select: { id: true, status: true },
-  });
-
-  if (existing) {
-    const updated = await prisma.marketplaceOrder.update({
-      where: { id: existing.id },
-      data: {
-        status: orderPackage.status,
-        customerName: orderPackage.customerName,
-        customerEmail: orderPackage.customerEmail,
-        customerPhone: orderPackage.customerPhone,
-        shippingAddress: orderPackage.shippingAddress,
-        totalAmount: orderPackage.totalAmount,
-        orderDate: orderPackage.orderDate,
-        syncedAt: new Date(),
-        updatedAt: new Date(),
-      },
-      select: { id: true },
-    });
-    return updated;
-  }
-
-  const created = await prisma.marketplaceOrder.create({
-    data: {
-      tenantId,
-      integrationId,
-      externalId: orderPackage.packageId,
-      channel: 'TRENDYOL',
-      status: orderPackage.status,
-      customerName: orderPackage.customerName,
-      customerEmail: orderPackage.customerEmail,
-      customerPhone: orderPackage.customerPhone,
-      shippingAddress: orderPackage.shippingAddress,
-      totalAmount: orderPackage.totalAmount,
-      orderDate: orderPackage.orderDate,
-      syncedAt: new Date(),
-      items: {
-        create: orderPackage.lines.map((line) => ({
-          tenantId,
-          externalProductId: line.contentId,
-          name: line.productName,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-          lineTotal: line.lineTotal,
-        })),
-      },
-    },
-    select: { id: true },
-  });
-
-  return created;
 }

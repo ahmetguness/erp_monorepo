@@ -26,6 +26,7 @@ import { parseIdempotencyKey } from '../../application/operations/idempotency-ke
 type InvoiceLineDTO = CreateInvoiceBody['lines'][number];
 import { requireParam, requireTenantId } from '../../../../utils/context.js';
 import { generateDocumentNumber } from '../../../../utils/generate-number.js';
+import { documentCurrencySchema, toBaseMoney } from '../../../../services/financial/currency.js';
 import { buildOwnershipChecks, validateTenantOwnership } from '../../../../utils/validateTenantOwnership.js';
 
 // ─────────────────────────────────────────────
@@ -220,7 +221,7 @@ export const InvoiceController = {
         skip,
         take: pageSize,
       }),
-      prisma.invoice.findMany({ where, select: { status: true, dueDate: true, totalGross: true, payments: { select: { amount: true } } } }),
+      prisma.invoice.findMany({ where, select: { status: true, dueDate: true, totalGross: true, exchangeRate: true, payments: { select: { amount: true } } } }),
     ]);
 
     const now = new Date();
@@ -230,8 +231,8 @@ export const InvoiceController = {
       payments: undefined,
     }));
     const summary = summaryRows.reduce((acc, invoice) => {
-      const gross = Number(invoice.totalGross);
-      const paid = invoice.payments.reduce((sum, allocation) => sum + Number(allocation.amount), 0);
+      const gross = toBaseMoney(invoice.totalGross, invoice.exchangeRate).toNumber();
+      const paid = toBaseMoney(invoice.payments.reduce((sum, allocation) => sum + Number(allocation.amount), 0), invoice.exchangeRate).toNumber();
       acc.totalGross += gross;
       if (invoice.status === InvoiceStatus.PAID) acc.paidCount += 1;
       if (invoice.status === InvoiceStatus.OVERDUE || (invoice.status !== InvoiceStatus.PAID && invoice.status !== InvoiceStatus.CANCELLED && invoice.dueDate && invoice.dueDate < now)) acc.overdueCount += 1;
@@ -313,6 +314,8 @@ export const InvoiceController = {
     const { ipAddress, userAgent } = getRequestMeta(c);
 
     const body = getValidatedBody(c, createInvoiceBodySchema);
+    const currency = documentCurrencySchema.safeParse(body);
+    if (!currency.success) throw new ValidationError('Gecersiz para birimi veya kur.');
 
     if (!body.contactId || !body.type || !body.date || !body.lines?.length) {
       return c.json(
@@ -338,6 +341,7 @@ export const InvoiceController = {
       const order = await prisma.salesOrder.findFirst({ where: { id: body.salesOrderId, tenantId, deletedAt: null } });
       if (!order) return c.json(new NotFoundError('Satis siparisi', body.salesOrderId).toJSON(), 404);
       if (order.contactId !== body.contactId) return c.json(new ValidationError('Fatura carisi bagli satis siparisi carisi ile ayni olmalidir.').toJSON(), 400);
+      if (order.currencyCode !== currency.data.currencyCode || !order.exchangeRate.equals(currency.data.exchangeRate)) throw new ValidationError('Fatura para birimi ve kuru siparisle eslesmelidir.');
     }
     if (body.purchaseOrderId) {
       if (body.type !== InvoiceType.PURCHASE) {
@@ -346,6 +350,7 @@ export const InvoiceController = {
       const order = await prisma.purchaseOrder.findFirst({ where: { id: body.purchaseOrderId, tenantId, deletedAt: null } });
       if (!order) return c.json(new NotFoundError('Alis siparisi', body.purchaseOrderId).toJSON(), 404);
       if (order.contactId !== body.contactId) return c.json(new ValidationError('Fatura carisi bagli alis siparisi carisi ile ayni olmalidir.').toJSON(), 400);
+      if (order.currencyCode !== currency.data.currencyCode || !order.exchangeRate.equals(currency.data.exchangeRate)) throw new ValidationError('Fatura para birimi ve kuru siparisle eslesmelidir.');
     }
 
     await validateTenantOwnership(
@@ -393,6 +398,7 @@ export const InvoiceController = {
           salesOrderId: body.salesOrderId ?? null,
           purchaseOrderId: body.purchaseOrderId ?? null,
           type: body.type,
+          ...currency.data,
           status: InvoiceStatus.DRAFT,
           number: number!,
           date: invoiceDate,
@@ -627,7 +633,7 @@ export const InvoiceController = {
           invoiceId: invoiceId!,
           invoiceNumber: invoice.number,
           invoiceType: invoice.type,
-          totalGross: Number(invoice.totalGross),
+          totalGross: toBaseMoney(invoice.totalGross, invoice.exchangeRate).toNumber(),
           date: cancellationDate,
           reason,
           userId,

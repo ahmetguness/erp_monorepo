@@ -1,7 +1,9 @@
 import { Context } from 'hono';
 import { prisma } from '../../../../lib/prisma.js';
 import { getQualityControl } from '../../infrastructure/services/quality-control.service.js';
-import { requireTenantId } from '../../../../utils/context.js';
+import { requireParam, requireTenantId, requireUserId } from '../../../../utils/context.js';
+import { decideWorkOrderQuality } from '../../infrastructure/services/quality-decision.service.js';
+import { qualityDecisionSchema } from '../../application/operations/quality-decision.js';
 import { ValidationError } from '../../../../errors/index.js';
 
 function parseHorizonDays(value: string | undefined): number {
@@ -15,6 +17,12 @@ function parseHorizonDays(value: string | undefined): number {
 }
 
 export const QualityControlController = {
+  async decide(c: Context): Promise<Response> {
+    const parsed = qualityDecisionSchema.safeParse(await c.req.json<unknown>());
+    if (!parsed.success) throw new ValidationError('Invalid quality decision.');
+    const data = await decideWorkOrderQuality(prisma, requireTenantId(c), requireUserId(c), requireParam(c, 'id'), parsed.data);
+    return c.json({ data });
+  },
   async get(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const horizonDays = parseHorizonDays(c.req.query('horizonDays'));

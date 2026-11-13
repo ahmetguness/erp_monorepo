@@ -349,16 +349,25 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
     command: ConfirmGoodsReceiptInput,
   ): Promise<PurchaseOrderResult> {
     return this.db.$transaction(async (tx) => {
-      const replay = await tx.stockMovement.findFirst({
+      await lockInventoryPosition(tx, command.tenantId, `receipt:${command.idempotencyKey}`, 'operation');
+      await lockInventoryPosition(tx, command.tenantId, `purchase:${command.purchaseOrderId}`, 'receipt');
+      const receiptItems = await tx.purchaseOrderItem.findMany({
+        where: { tenantId: command.tenantId, orderId: command.purchaseOrderId }, select: { id: true, productId: true },
+      });
+      const replay = await tx.stockMovement.findMany({
         where: {
           tenantId: command.tenantId,
-          idempotencyKey: command.idempotencyKey,
+          idempotencyKey: { in: [command.idempotencyKey, ...receiptItems.map((item) => `${command.idempotencyKey}:${item.id}`)] },
         },
       });
-      if (replay) {
+      if (replay.length) {
         if (
-          replay.refType !== MovementRefType.PURCHASE_ORDER ||
-          replay.refId !== command.purchaseOrderId
+          replay.length !== command.items.length ||
+          replay.some((movement) => movement.refType !== MovementRefType.PURCHASE_ORDER || movement.refId !== command.purchaseOrderId || movement.toWarehouseId !== command.warehouseId) ||
+          command.items.some((line) => {
+            const productId = receiptItems.find((item) => item.id === line.itemId)?.productId;
+            return !replay.some((movement) => movement.productId === productId && movement.quantity.equals(line.receivedQty));
+          })
         ) {
           throw new ConflictError(
             "idempotencyKey baska bir stok islemi icin kullanilmis.",

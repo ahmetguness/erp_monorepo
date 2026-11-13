@@ -1,18 +1,18 @@
 import {
   InvoiceType,
-  MovementType,
   Prisma,
   PrismaClient,
   ReservationRefType,
   ServiceStatus,
 } from "@prisma/client";
 import { logger } from "../lib/logger.js";
-import { ConflictError, NotFoundError } from "../errors/index.js";
+import { ConflictError, NotFoundError, ValidationError } from "../errors/index.js";
 import { generateDocumentNumber } from "../utils/generate-number.js";
 import { EDocumentAutomationService } from "./edocument-automation.service.js";
 import {
   assertCanReserveStock,
   lockInventoryPosition,
+  consumeStock,
 } from "./inventory-rules.service.js";
 
 export interface ServiceAutomationResult {
@@ -208,6 +208,9 @@ export class ServiceAutomationService {
     if (!sr.contactId) {
       throw new Error(`Servis talebi için cari müşteri tanımlı değil.`);
     }
+    if (!warehouseId && sr.items.some((item) => item.productId !== null)) {
+      throw new ValidationError('Stok parçası içeren servis için depo zorunludur.');
+    }
 
     if (warehouseId) {
       const warehouse = await this.db.warehouse.findFirst({
@@ -259,19 +262,14 @@ export class ServiceAutomationService {
       });
 
       if (warehouseId) {
-        for (const item of sr.items) {
+        for (const item of [...sr.items].sort((left, right) => (left.productId ?? '').localeCompare(right.productId ?? ''))) {
           if (!item.productId) continue;
-          await tx.stockMovement.create({
-            data: {
-              tenantId,
+          await consumeStock(tx, tenantId, {
               productId: item.productId,
-              fromWarehouseId: warehouseId,
-              type: MovementType.OUT,
+              warehouseId,
               quantity: item.quantity,
-              unitCost: item.unitPrice,
-              totalCost: item.lineTotal,
+              refId: serviceRequestId,
               notes: `Teknik Servis Parça Kullanımı — Servis No: ${sr.number}`,
-            },
           });
         }
       }

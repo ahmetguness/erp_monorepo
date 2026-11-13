@@ -116,6 +116,7 @@ productionRoutes.delete(
 );
 
 // İş Emirleri
+productionRoutes.post('/work-orders/:id/quality-decisions', requirePermission('production', 'UPDATE'), QualityControlController.decide);
 productionRoutes.get(
   "/work-orders",
   requirePermission("production", "READ"),

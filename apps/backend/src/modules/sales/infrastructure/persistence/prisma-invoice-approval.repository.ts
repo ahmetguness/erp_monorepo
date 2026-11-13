@@ -2,6 +2,8 @@ import { InvoiceStatus, type PrismaClient } from '@prisma/client';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../errors/index.js';
 import { AccountingPostingEngineService } from '../../../../services/accounting-posting-engine.service.js';
 import { writeInvoiceAccountEntry } from '../../../../utils/account-entry.js';
+import { toBaseMoney } from '../../../../services/financial/currency.js';
+import { PurchaseThreeWayMatchService } from '../../../../services/purchase-three-way-match.service.js';
 import type { ApproveInvoiceCommand, ApproveInvoiceResult, InvoiceApprovalRepository } from '../../application/ports/invoice-approval.repository.js';
 
 export class PrismaInvoiceApprovalRepository implements InvoiceApprovalRepository {
@@ -37,6 +39,10 @@ export class PrismaInvoiceApprovalRepository implements InvoiceApprovalRepositor
         return { invoiceId: invoice.id, status: 'SENT', journalEntryId: journal.id, stockMovementCount };
       }
       if (invoice.status !== InvoiceStatus.DRAFT) throw new ValidationError('Sadece taslak faturalar onaylanabilir.');
+      if (invoice.purchaseOrderId) {
+        const match = await new PurchaseThreeWayMatchService(tx).evaluate(command.tenantId, invoice.purchaseOrderId);
+        if (match.summary.status === 'EXCEPTION') throw new ConflictError('Purchase invoice has unresolved three-way match exceptions.');
+      }
 
       const accountEntry = await tx.accountEntry.findFirst({
         where: { tenantId: command.tenantId, refType: 'INVOICE', refId: invoice.id }, select: { id: true },
@@ -44,7 +50,7 @@ export class PrismaInvoiceApprovalRepository implements InvoiceApprovalRepositor
       if (!accountEntry) {
         await writeInvoiceAccountEntry(tx, {
           tenantId: command.tenantId, contactId: invoice.contactId, invoiceId: invoice.id,
-          invoiceNumber: invoice.number, invoiceType: invoice.type, totalGross: Number(invoice.totalGross),
+          invoiceNumber: invoice.number, invoiceType: invoice.type, totalGross: toBaseMoney(invoice.totalGross, invoice.exchangeRate).toNumber(),
           date: invoice.date, userId: command.userId,
         });
       }

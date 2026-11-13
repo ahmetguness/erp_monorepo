@@ -9,6 +9,13 @@ enum WorkOrderStatus {
   CANCELLED
 }
 
+enum WorkOrderQualityStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model WorkCenter {
   id           String   @id @default(cuid())
   tenantId     String
@@ -95,6 +102,7 @@ model RoutingOperation {
 }
 
 model WorkOrder {
+  qualityStatus         WorkOrderQualityStatus @default(NOT_REQUIRED)
   id                    String          @id @default(cuid())
   tenantId              String
   bomId                 String?
@@ -188,6 +196,9 @@ model WorkOrderOperation {
 }
 
 model WorkOrderHistory {
+  qualityDecision WorkOrderQualityStatus?
+  idempotencyKey String?
+  @@unique([tenantId, idempotencyKey])
   id          String           @id @default(cuid())
   tenantId    String
   workOrderId String
