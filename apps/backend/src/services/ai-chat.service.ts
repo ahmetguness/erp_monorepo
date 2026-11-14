@@ -1,3 +1,6 @@
+import { privateConversationKey } from './ai-chat/conversation-scope.js';
+import { randomUUID } from 'node:crypto';
+import { isExplicitToolApproval } from './ai-chat/purchase-approval.js';
 import { openai } from '../lib/openai';
 import { ChatContextService, type ChatPageContext, type LoadedChatEntityContext } from './chat-context.service';
 import { logger } from '../lib/logger';
@@ -136,7 +139,8 @@ function permissionCheckResult(entityContext: LoadedChatEntityContext | null): '
  */
 export async function handlePrivateChat(params: PrivateChatParams): Promise<PrivateChatResult> {
   const { message, tenantId, userId, userName, tenantName, plan, permissions, tenantModules, context } = params;
-  const sessionId = `private:${tenantId}:${userId}`;
+  const sessionId = privateConversationKey(tenantId, userId, plan, permissions, tenantModules);
+  const toolApproval = { userId, turnId: randomUUID(), humanApproved: isExplicitToolApproval(message) };
   const planTools = getAccessibleTools(plan, permissions, tenantModules);
   const entityContext = await ChatContextService.loadEntityContext(tenantId, permissions, tenantModules, context);
   let tokenUsage: AiTokenUsage = {};
@@ -188,7 +192,7 @@ export async function handlePrivateChat(params: PrivateChatParams): Promise<Priv
         const fnName = toolCall.function.name;
         let fnArgs: Record<string, unknown> = {};
         try { fnArgs = JSON.parse(toolCall.function.arguments || '{}'); } catch { /* */ }
-        const result = await executeFunctionCall(fnName, fnArgs, tenantId, sessionId, plan, permissions, tenantModules);
+        const result = await executeFunctionCall(fnName, fnArgs, tenantId, sessionId, toolApproval);
         return {
           role: 'tool' as const,
           tool_call_id: toolCall.id,
@@ -536,7 +540,8 @@ export async function handlePrivateChatStream(
   callbacks: StreamCallbacks,
 ): Promise<void> {
   const { message, tenantId, userId, userName, tenantName, plan, permissions, tenantModules, context } = params;
-  const sessionId = `private:${tenantId}:${userId}`;
+  const sessionId = privateConversationKey(tenantId, userId, plan, permissions, tenantModules);
+  const toolApproval = { userId, turnId: randomUUID(), humanApproved: isExplicitToolApproval(message) };
   const entityContext = await ChatContextService.loadEntityContext(tenantId, permissions, tenantModules, context);
 
   const systemMessage: ChatCompletionMessageParam = {
@@ -585,7 +590,7 @@ export async function handlePrivateChatStream(
           const fnName = toolCall.function.name;
           let fnArgs: Record<string, unknown> = {};
           try { fnArgs = JSON.parse(toolCall.function.arguments || '{}'); } catch { /* */ }
-          const result = await executeFunctionCall(fnName, fnArgs, tenantId, sessionId, plan, permissions, tenantModules);
+          const result = await executeFunctionCall(fnName, fnArgs, tenantId, sessionId, toolApproval);
           return { role: 'tool' as const, tool_call_id: toolCall.id, content: result };
         }),
       );

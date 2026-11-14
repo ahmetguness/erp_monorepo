@@ -1,11 +1,10 @@
 import { Context, Next } from 'hono';
-import { deleteCookie, getCookie } from 'hono/cookie';
+import { getCookie } from 'hono/cookie';
 import jwt from 'jsonwebtoken';
 import type { JwtPayload as JsonWebTokenPayload } from 'jsonwebtoken';
 import { ForbiddenError } from '../errors';
 import { prisma } from '../lib/prisma';
 import { touchSecuritySession } from '../services/security-hardening.service.js';
-import { isSecureCookieEnabled } from '../lib/cookie-config.js';
 import { getTrustedClientIp, isIpv4InCidr } from '../utils/request-ip.js';
 import { runWithTenantScope } from '../lib/tenant-isolation-context.js';
 import { resolveAccessContext } from '../modules/identity/index.js';
@@ -53,11 +52,8 @@ export async function requireAuth(c: Context, next: Next) {
     }
     payload = verifiedPayload;
   } catch {
-    deleteCookie(c, 'axon_token', {
-      path: '/',
-      secure: isSecureCookieEnabled(),
-      sameSite: 'Lax',
-    });
+    // A delayed 401 must not delete a newer HttpOnly login cookie in the browser.
+    // Cookie removal belongs to the explicit logout endpoint.
     return c.json(new ForbiddenError('Geçersiz veya süresi dolmuş token.').toJSON(), 401);
   }
 
@@ -101,13 +97,8 @@ async function authenticateTenantRequest(c: Context, next: Next, payload: JwtPay
     }
 
     if (payload.sessionId) {
-      const sessionStatus = await touchSecuritySession(prisma, payload.tenantId, payload.sessionId);
+      const sessionStatus = await touchSecuritySession(prisma, payload.tenantId, payload.sessionId, payload.userId);
       if (sessionStatus !== 'ACTIVE') {
-        deleteCookie(c, 'axon_token', {
-          path: '/',
-          secure: isSecureCookieEnabled(),
-          sameSite: 'Lax',
-        });
         return c.json(new ForbiddenError('Geçersiz veya süresi dolmuş token.').toJSON(), 401);
       }
       c.set('sessionId', payload.sessionId);

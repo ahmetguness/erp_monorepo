@@ -72,6 +72,9 @@ export function addToConversation(
 
 export function clearConversation(sessionId: string) {
   conversations.delete(sessionId);
+  if (sessionId.startsWith('private:')) {
+    for (const key of conversations.keys()) if (key.startsWith(`${sessionId}:`)) conversations.delete(key);
+  }
 }
 
 // ─────────────────────────────────────────────

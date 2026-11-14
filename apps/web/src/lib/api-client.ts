@@ -5,6 +5,8 @@ import { assertTenantResponseBoundary } from '@/lib/http/tenant-response.guard';
 import { isTrialExpiredError, TRIAL_EXPIRED_MESSAGE } from '@/lib/http/trial-expiry.handler';
 import { toast } from '@/store/ui.store';
 import { ApiErrorSchema } from '@repo/types/contracts';
+import { useAuthStore } from '@/store/auth.store';
+import { installSessionBoundary } from './http/session-boundary';
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_URL,
@@ -12,13 +14,13 @@ const apiClient: AxiosInstance = axios.create({
   timeout: 15000,
   withCredentials: true,
 });
+installSessionBoundary(apiClient, () => JSON.stringify([useAuthStore.getState().tenant?.id, useAuthStore.getState().user?.id]),
+  (changed) => { useAuthStore.subscribe(changed); });
 
 function clearUnauthorizedSession(): void {
   if (typeof window === 'undefined') return;
   document.cookie = 'axon_token=; path=/; max-age=0; SameSite=Lax';
-  import('@/store/auth.store')
-    .then(({ useAuthStore }) => useAuthStore.getState().logout())
-    .catch(() => undefined);
+  useAuthStore.getState().logout();
 
   if (window.location.pathname.startsWith('/login')) return;
   const currentPath = `${window.location.pathname}${window.location.search}`;
@@ -37,9 +39,8 @@ apiClient.interceptors.response.use(undefined, (error: unknown) => {
   return Promise.reject(error);
 });
 
-apiClient.interceptors.response.use(async (response) => {
+apiClient.interceptors.response.use((response) => {
   if (typeof window === 'undefined') return response;
-  const { useAuthStore } = await import('@/store/auth.store');
   const activeTenantId = useAuthStore.getState().tenant?.id;
   if (activeTenantId) assertTenantResponseBoundary(response.data, activeTenantId);
   return response;

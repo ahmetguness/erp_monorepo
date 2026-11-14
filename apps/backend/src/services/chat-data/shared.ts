@@ -6,9 +6,11 @@ export interface LowStockPurchaseAdjustment {
 }
 
 export interface LowStockPurchaseRequestOptions {
+  createdById?: string;
   limit?: number;
   note?: string;
   confirmed?: boolean;
+  expectedPreviewFingerprint?: string;
   adjustments?: LowStockPurchaseAdjustment[];
 }
 

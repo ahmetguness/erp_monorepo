@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto';
 import { AuditAction, EntityType, PermissionAction, Prisma, PrismaClient } from '@prisma/client';
 import { createAuditLog } from '../utils/audit.js';
+import { withSessionRegistryLock, type SessionDatabase } from './security/session-registry.js';
+type SessionDbClient = Pick<Prisma.TransactionClient, 'tenantSetting'>;
 
 export type SecuritySessionStatus = 'ACTIVE' | 'REVOKED' | 'EXPIRED';
 export type SecurityRiskSeverity = 'critical' | 'high' | 'medium' | 'low';
@@ -172,7 +174,7 @@ function withExpiredStatus(
   return expiredByAge || expiredByIdle ? { ...session, status: 'EXPIRED' } : session;
 }
 
-async function readSessions(db: PrismaClient, tenantId: string): Promise<SecuritySession[]> {
+async function readSessions(db: SessionDbClient, tenantId: string): Promise<SecuritySession[]> {
   const settings = await db.tenantSetting.findMany({
     where: {
       tenantId,
@@ -188,7 +190,7 @@ async function readSessions(db: PrismaClient, tenantId: string): Promise<Securit
   );
 }
 
-async function writeSessions(db: PrismaClient, tenantId: string, sessions: readonly SecuritySession[]): Promise<void> {
+async function writeSessions(db: SessionDbClient, tenantId: string, sessions: readonly SecuritySession[]): Promise<void> {
   await db.tenantSetting.upsert({
     where: { tenantId_key: { tenantId, key: SESSION_SETTING_KEY } },
     create: { tenantId, key: SESSION_SETTING_KEY, value: serializeSessions(sessions) },
@@ -197,90 +199,93 @@ async function writeSessions(db: PrismaClient, tenantId: string, sessions: reado
 }
 
 export async function createSecuritySession(
-  db: PrismaClient,
+  db: SessionDatabase,
   tenantId: string,
   userId: string,
   meta: RequestSecurityMeta,
 ): Promise<SecuritySession> {
-  const createdAt = nowIso();
-  const session: SecuritySession = {
-    id: randomUUID(),
-    userId,
-    tenantId,
-    status: 'ACTIVE',
-    createdAt,
-    lastSeenAt: createdAt,
-    revokedAt: null,
-    revokedById: null,
-    ipAddress: meta.ipAddress,
-    userAgent: meta.userAgent,
-    deviceLabel: toDeviceLabel(meta.userAgent),
-  };
+  return withSessionRegistryLock(db, tenantId, async (tx) => {
+    const createdAt = nowIso();
+    const session: SecuritySession = {
+      id: randomUUID(),
+      userId,
+      tenantId,
+      status: 'ACTIVE',
+      createdAt,
+      lastSeenAt: createdAt,
+      revokedAt: null,
+      revokedById: null,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+      deviceLabel: toDeviceLabel(meta.userAgent),
+    };
 
-  const sessions = await readSessions(db, tenantId);
+    const sessions = await readSessions(tx, tenantId);
 
-  // Check concurrent sessions limit for Enterprise plan
-  const tenant = await db.tenant.findUnique({
-    where: { id: tenantId },
-    select: { plan: true },
-  });
-
-  let activeSessionsList = [session, ...sessions.filter((item) => item.id !== session.id)];
-
-  if (tenant?.plan === 'ENTERPRISE') {
-    const limitSetting = await db.tenantSetting.findUnique({
-      where: { tenantId_key: { tenantId, key: 'security.session.concurrent_limit' } },
+    // Check concurrent sessions limit for Enterprise plan
+    const tenant = await tx.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true },
     });
-    const limit = limitSetting ? Number.parseInt(limitSetting.value, 10) : null;
 
-    if (limit && Number.isInteger(limit) && limit > 0) {
-      const activeUserSessions = activeSessionsList.filter((s) => s.userId === userId && s.status === 'ACTIVE');
-      if (activeUserSessions.length > limit) {
-        // Sort by lastSeenAt ascending (oldest first)
-        const sortedActive = [...activeUserSessions].sort((a, b) => a.lastSeenAt.localeCompare(b.lastSeenAt));
-        const toRevokeCount = activeUserSessions.length - limit;
-        const toRevokeIds = new Set(sortedActive.slice(0, toRevokeCount).map((s) => s.id));
+    let activeSessionsList = [session, ...sessions.filter((item) => item.id !== session.id)];
 
-        activeSessionsList = activeSessionsList.map((s) => {
-          if (toRevokeIds.has(s.id)) {
-            return {
-              ...s,
-              status: 'REVOKED' as const,
-              revokedAt: createdAt,
-              revokedById: userId,
-            };
-          }
-          return s;
-        });
+    if (tenant?.plan === 'ENTERPRISE') {
+      const limitSetting = await tx.tenantSetting.findUnique({
+        where: { tenantId_key: { tenantId, key: 'security.session.concurrent_limit' } },
+      });
+      const limit = limitSetting ? Number.parseInt(limitSetting.value, 10) : null;
+
+      if (limit && Number.isInteger(limit) && limit > 0) {
+        const activeUserSessions = activeSessionsList.filter((s) => s.userId === userId && s.status === 'ACTIVE');
+        if (activeUserSessions.length > limit) {
+          // Sort by lastSeenAt ascending (oldest first)
+          const sortedActive = [...activeUserSessions].filter((item) => item.id !== session.id).sort((a, b) => a.lastSeenAt.localeCompare(b.lastSeenAt));
+          const toRevokeCount = activeUserSessions.length - limit;
+          const toRevokeIds = new Set(sortedActive.slice(0, toRevokeCount).map((s) => s.id));
+
+          activeSessionsList = activeSessionsList.map((s) => {
+            if (toRevokeIds.has(s.id)) {
+              return {
+                ...s,
+                status: 'REVOKED' as const,
+                revokedAt: createdAt,
+                revokedById: userId,
+              };
+            }
+            return s;
+          });
+        }
       }
     }
-  }
 
-  await writeSessions(db, tenantId, activeSessionsList);
+    await writeSessions(tx, tenantId, activeSessionsList);
 
-  await createAuditLog(db, {
-    tenantId,
-    userId,
-    module: 'security',
-    entityType: EntityType.OTHER,
-    entityId: session.id,
-    action: AuditAction.CREATE,
-    newValues: sessionToJson(session),
-    ipAddress: meta.ipAddress,
-    userAgent: meta.userAgent,
+    await createAuditLog(tx, {
+      tenantId,
+      userId,
+      module: 'security',
+      entityType: EntityType.OTHER,
+      entityId: session.id,
+      action: AuditAction.CREATE,
+      newValues: sessionToJson(session),
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    }, { required: true });
+
+    return session;
   });
-
-  return session;
 }
 
 export async function touchSecuritySession(
-  db: PrismaClient,
+  db: SessionDatabase,
   tenantId: string,
   sessionId: string,
+  userId: string,
 ): Promise<SecuritySessionStatus | null> {
   const sessions = await readSessions(db, tenantId);
   const session = sessions.find((item) => item.id === sessionId);
-  if (!session) return null;
+  if (!session || session.userId !== userId) return null;
   if (session.status !== 'ACTIVE') return session.status;
 
   const lastSeenAt = new Date(session.lastSeenAt).getTime();
@@ -288,44 +293,53 @@ export async function touchSecuritySession(
     return 'ACTIVE';
   }
 
-  const updated = { ...session, lastSeenAt: nowIso() };
-  await writeSessions(db, tenantId, sessions.map((item) => (item.id === sessionId ? updated : item)));
-  return 'ACTIVE';
+  return withSessionRegistryLock(db, tenantId, async (tx) => {
+    const currentSessions = await readSessions(tx, tenantId);
+    const current = currentSessions.find((item) => item.id === sessionId);
+    if (!current || current.userId !== userId) return null;
+    if (current.status !== 'ACTIVE') return current.status;
+    const updated = { ...current, lastSeenAt: nowIso() };
+    await writeSessions(tx, tenantId, currentSessions.map((item) => item.id === sessionId ? updated : item));
+    return 'ACTIVE';
+  });
 }
 
 export async function revokeSecuritySession(
-  db: PrismaClient,
+  db: SessionDatabase,
   tenantId: string,
   sessionId: string,
   revokedById: string,
   meta: RequestSecurityMeta,
 ): Promise<SecuritySession | null> {
-  const sessions = await readSessions(db, tenantId);
-  const session = sessions.find((item) => item.id === sessionId);
-  if (!session) return null;
+  return withSessionRegistryLock(db, tenantId, async (tx) => {
+    const sessions = await readSessions(tx, tenantId);
+    const session = sessions.find((item) => item.id === sessionId);
+    if (!session) return null;
+    if (session.status === 'REVOKED') return session;
 
-  const revoked: SecuritySession = {
-    ...session,
-    status: 'REVOKED',
-    revokedAt: nowIso(),
-    revokedById,
-  };
-  await writeSessions(db, tenantId, sessions.map((item) => (item.id === sessionId ? revoked : item)));
+    const revoked: SecuritySession = {
+      ...session,
+      status: 'REVOKED',
+      revokedAt: nowIso(),
+      revokedById,
+    };
+    await writeSessions(tx, tenantId, sessions.map((item) => (item.id === sessionId ? revoked : item)));
 
-  await createAuditLog(db, {
-    tenantId,
-    userId: revokedById,
-    module: 'security',
-    entityType: EntityType.OTHER,
-    entityId: sessionId,
-    action: AuditAction.UPDATE,
-    oldValues: sessionToJson(session),
-    newValues: sessionToJson(revoked),
-    ipAddress: meta.ipAddress,
-    userAgent: meta.userAgent,
+    await createAuditLog(tx, {
+      tenantId,
+      userId: revokedById,
+      module: 'security',
+      entityType: EntityType.OTHER,
+      entityId: sessionId,
+      action: AuditAction.UPDATE,
+      oldValues: sessionToJson(session),
+      newValues: sessionToJson(revoked),
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    }, { required: true });
+
+    return revoked;
   });
-
-  return revoked;
 }
 
 export function recordPublicEndpointAbuse(pathGroup: PublicEndpointAbuseMetric['pathGroup'], ipAddress: string): void {
@@ -476,9 +490,8 @@ async function getWebhookAudit(db: PrismaClient, tenantId: string): Promise<Webh
   };
 }
 
-export async function listSecuritySessions(db: PrismaClient, tenantId: string): Promise<SecuritySession[]> {
+export async function listSecuritySessions(db: SessionDbClient, tenantId: string): Promise<SecuritySession[]> {
   const sessions = await readSessions(db, tenantId);
-  await writeSessions(db, tenantId, sessions);
   return sessions.sort((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt));
 }
 

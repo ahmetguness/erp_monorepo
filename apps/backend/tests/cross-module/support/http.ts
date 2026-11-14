@@ -6,7 +6,7 @@ import { readRuntimeConfig } from '../../../src/bootstrap/runtime-config.js';
 const app = createApp(readRuntimeConfig());
 export const entitySchema = z.object({ id: z.string().min(1) });
 export interface Identity { readonly token: string }
-export interface ApiResult { readonly status: number; readonly body: unknown }
+export interface ApiResult { readonly status: number; readonly body: unknown; readonly headers: Headers }
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export async function request(method: Method, path: string, identity: Identity | null, body?: unknown, apiKey?: string, extraHeaders: Readonly<Record<string, string>> = {}): Promise<ApiResult> {
@@ -18,7 +18,7 @@ export async function request(method: Method, path: string, identity: Identity |
   const response = await app.request(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   const text = await response.text();
   const parsed: unknown = text ? JSON.parse(text) : null;
-  return { status: response.status, body: parsed };
+  return { status: response.status, body: parsed, headers: response.headers };
 }
 
 export function data<T>(result: ApiResult, status: number, schema: z.ZodType<T>): T {

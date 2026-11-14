@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma';
 import { PurchaseRequestStatus } from '@prisma/client';
 import { generateDocumentNumber } from '../../utils/generate-number.js';
 import type { LowStockPurchaseRequestOptions } from './shared.js';
+import { fingerprintPurchasePreview } from './purchase-preview.js';
 
 export const inventoryChatDataService = {
   async getStock(tenantId: string) {
@@ -126,10 +127,12 @@ export const inventoryChatDataService = {
       lineEstimated: item.purchasePrice * item.suggestedQuantity,
     }));
 
-    if (!options.confirmed) {
+    const previewFingerprint = fingerprintPurchasePreview(items);
+    if (!options.confirmed || options.expectedPreviewFingerprint !== previewFingerprint) {
       return {
         created: false,
         confirmationRequired: true,
+        previewFingerprint,
         summary: {
           itemCount: items.length,
           totalEstimated: totalEstimated > 0 ? totalEstimated : null,
@@ -150,6 +153,7 @@ export const inventoryChatDataService = {
         number,
         date: new Date(),
         status: PurchaseRequestStatus.DRAFT,
+        createdById: options.createdById,
         notes: options.note?.trim() || 'AI önerisi: kritik stok seviyesinin altındaki ürünler için otomatik taslak.',
         totalEstimated: totalEstimated > 0 ? totalEstimated : null,
         items: {

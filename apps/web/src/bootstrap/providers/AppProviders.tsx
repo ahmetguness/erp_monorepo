@@ -13,11 +13,12 @@ export function AppProviders({ children }: AppProvidersProps) {
   const queryClient = getQueryClient();
 
   useEffect(() => {
-    let activeTenantId = useAuthStore.getState().tenant?.id ?? null;
+    const identity = () => JSON.stringify([useAuthStore.getState().tenant?.id, useAuthStore.getState().user?.id]);
+    let activeIdentity = identity();
     return useAuthStore.subscribe((state) => {
-      const nextTenantId = state.tenant?.id ?? null;
-      if (nextTenantId === activeTenantId) return;
-      activeTenantId = nextTenantId;
+      const nextIdentity = JSON.stringify([state.tenant?.id, state.user?.id]);
+      if (nextIdentity === activeIdentity) return;
+      activeIdentity = nextIdentity;
       queryClient.clear();
     });
   }, [queryClient]);

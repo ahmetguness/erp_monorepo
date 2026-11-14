@@ -167,7 +167,7 @@
     "marketplace:encrypt-credentials": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/encrypt-marketplace-credentials.ts"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.14",
+    "@hono/node-server": "^1.19.19",
     "@hono/node-ws": "^1.2.0",
     "@prisma/client": "^6.19.0",
     "@repo/types": "*",
@@ -175,12 +175,12 @@
     "@types/jsonwebtoken": "^9.0.10",
     "bcryptjs": "^3.0.3",
     "dotenv": "^16.6.1",
-    "hono": "^4.12.27",
+    "hono": "^4.13.18",
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
     "openai": "^6.35.0",
     "resend": "^6.14.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

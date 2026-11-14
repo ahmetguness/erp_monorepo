@@ -60,9 +60,7 @@ export const ChatUploadController = {
   async url(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);
     const attachment = await requireAttachmentAccess(tenantId, requireUserId(c), requireParam(c, 'attachmentId'));
-    const signed = await storageService.createSignedGetUrl(attachment.storageKey, 300);
-    if (signed) await storageAccounting.recordTraffic(tenantId, 'download', attachment.sizeBytes);
-    return c.json({ data: signed ? { url: signed.url, expiresAt: signed.expiresAt.toISOString() } : { url: `/api/chat/attachments/${attachment.id}/download`, expiresAt: new Date(Date.now() + 300_000).toISOString() } });
+    return c.json({ data: { url: `/api/chat/attachments/${attachment.id}/download`, expiresAt: new Date(Date.now() + 300_000).toISOString() } });
   },
   async download(c: Context): Promise<Response> {
     const tenantId = requireTenantId(c);

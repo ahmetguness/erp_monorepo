@@ -5,116 +5,30 @@ import { getMonthStart, getToday, parseDate } from './date-utils.js';
 
 // ─────────────────────────────────────────────
 
-const purchaseRequestPreviewSessions = new Set<string>();
-
-type PlanTier = 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
-
-interface ToolDef {
-  tool: ChatCompletionTool;
-  minPlan: PlanTier;
-  /** RBAC modül adı (küçük harf, requirePermission ile aynı). null = herkes erişebilir */
-  module: string | null;
-  requiredAction?: string;
-}
-
-interface PurchaseRequestAdjustment {
-  productCode: string;
-  quantity: number;
-}
-
-/** Kullanıcının sahip olduğu izinler */
-export interface UserPermissions {
-  isOwner: boolean;
-  modules: Array<{ module: string; action: string }>;
-}
-
-const PLAN_ORDER: Record<PlanTier, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
-
-function hasPlanAccess(userPlan: PlanTier, requiredPlan: PlanTier): boolean {
-  return PLAN_ORDER[userPlan] >= PLAN_ORDER[requiredPlan];
-}
-
-/**
- * Tenant modules (BÜYÜK HARF AppModule) → tool module (küçük harf MODULE_KEY) mapping.
- * Tenant.modules = ['ACCOUNTING', 'CRM', 'SALES', ...]
- * Tool.module = 'accounting', 'contacts', 'invoicing', ...
- */
-const TENANT_MODULE_TO_TOOL_MODULE: Record<string, string> = {
-  ACCOUNTING: 'accounting',
-  INVENTORY: 'inventory',
-  CRM: 'contacts',
-  SALES: 'invoicing',
-  PURCHASING: 'purchasing',
-  WAREHOUSE: 'warehouse',
-  PRODUCTION: 'production',
-  SERVICE: 'service',
-  HR: 'hr',
-  PAYROLL: 'payroll',
-  MARKETPLACE: 'marketplace',
-  REPORTING: 'reporting',
-};
-
-/** Tenant'ın aktif modüllerini tool module adlarına çevir */
-function tenantModulesToToolModules(tenantModules: string[]): string[] {
-  return tenantModules.map((m) => TENANT_MODULE_TO_TOOL_MODULE[m.toUpperCase()] ?? m.toLowerCase());
-}
-
-/** Plan + Rol + Modül bazlı erişilebilir tool'ları döndür */
+import { allowsTool, type ToolAccessPolicy, type UserPermissions } from './tool-access.policy.js';
+import { consumePurchaseApproval, rememberPurchasePreview, type ToolExecutionContext } from './purchase-approval.js';
+import { prisma } from '../../lib/prisma.js';
+import { resolveAccessContext, isAccessFeatureEnabled } from '../../modules/identity/index.js';
+import { FeatureKey } from '@prisma/client';
+import { isTenantOperational } from '../../middleware/tenant-status.js';
+import { createAuditLog } from '../../utils/audit.js';
+import { runWithTenantScope } from '../../lib/tenant-isolation-context.js';
+export type { UserPermissions } from './tool-access.policy.js';
+interface ToolDef extends ToolAccessPolicy { tool: ChatCompletionTool }
+interface PurchaseRequestAdjustment { productCode: string; quantity: number }
 export function getAccessibleTools(plan: string, permissions: UserPermissions, tenantModules: string[]): ChatCompletionTool[] {
-  const tier = (PLAN_ORDER[plan as PlanTier] !== undefined ? plan : 'STARTER') as PlanTier;
-  const activeToolModules = tenantModulesToToolModules(tenantModules);
-
-  return ALL_TOOLS.filter((t) => {
-    // 1. Plan kontrolü
-    if (!hasPlanAccess(tier, t.minPlan)) return false;
-
-    // 2. Modül kontrolü — tool'un modülü tenant'ın aktif modüllerinde mi
-    if (t.module && activeToolModules.length > 0) {
-      if (!activeToolModules.includes(t.module)) return false;
-    }
-
-    // 3. Rol kontrolü — owner her şeye erişir, değilse gerekli aksiyon izni gerekli
-    if (t.module && !permissions.isOwner) {
-      const requiredAction = t.requiredAction ?? 'READ';
-      const hasRead = permissions.modules.some(
-        (p) => p.module === t.module && p.action === requiredAction,
-      );
-      if (!hasRead) return false;
-    }
-
-    return true;
-  }).map((t) => t.tool);
+  return ALL_TOOLS.filter((tool) => allowsTool(tool, plan, permissions, tenantModules)).map((entry) => entry.tool);
 }
-
-/** Tool çağrısı yetkisi kontrol et (defense in depth) */
-export function canCallTool(toolName: string, plan: string, permissions: UserPermissions, tenantModules: string[]): boolean {
-  const tier = (PLAN_ORDER[plan as PlanTier] !== undefined ? plan : 'STARTER') as PlanTier;
-  const def = ALL_TOOLS.find((t) => t.tool.type === 'function' && t.tool.function.name === toolName);
-  if (!def) return false;
-
-  if (!hasPlanAccess(tier, def.minPlan)) return false;
-
-  const activeToolModules = tenantModulesToToolModules(tenantModules);
-  if (def.module && activeToolModules.length > 0) {
-    if (!activeToolModules.includes(def.module)) return false;
-  }
-
-  if (def.module && !permissions.isOwner) {
-    const requiredAction = def.requiredAction ?? 'READ';
-    const hasRead = permissions.modules.some(
-      (p) => p.module === def.module && p.action === requiredAction,
-    );
-    if (!hasRead) return false;
-  }
-
-  return true;
+export function canCallTool(name: string, plan: string, permissions: UserPermissions, tenantModules: string[]): boolean {
+  const definition = ALL_TOOLS.find((entry) => entry.tool.type === 'function' && entry.tool.function.name === name);
+  return definition !== undefined && allowsTool(definition, plan, permissions, tenantModules);
 }
 
 const ALL_TOOLS: ToolDef[] = [
   // ── STARTER ────────────────────────────────
   {
     minPlan: 'STARTER',
-    module: null,
+    module: 'invoicing',
     tool: {
       type: 'function',
       function: {
@@ -125,19 +39,19 @@ const ALL_TOOLS: ToolDef[] = [
     },
   },
   {
-    minPlan: 'STARTER', module: null,
+    minPlan: 'STARTER', module: 'invoicing',
     tool: { type: 'function', function: { name: 'get_overdue_invoices', description: 'Vadesi geçmiş (gecikmiş) faturaları getirir. Kaç gün geciktiği bilgisini de içerir.', parameters: { type: 'object', properties: {} } } },
   },
   {
-    minPlan: 'STARTER', module: null,
+    minPlan: 'STARTER', module: 'invoicing',
     tool: { type: 'function', function: { name: 'get_revenue', description: 'Belirli dönem için gelir/ciro raporunu getirir.', parameters: { type: 'object', properties: { dateFrom: { type: 'string', description: 'Başlangıç tarihi (YYYY-MM-DD)' }, dateTo: { type: 'string', description: 'Bitiş tarihi (YYYY-MM-DD)' } }, required: ['dateFrom', 'dateTo'] } } },
   },
   {
-    minPlan: 'STARTER', module: null,
+    minPlan: 'STARTER', module: 'invoicing',
     tool: { type: 'function', function: { name: 'get_expenses', description: 'Belirli dönem için gider raporunu getirir.', parameters: { type: 'object', properties: { dateFrom: { type: 'string', description: 'Başlangıç tarihi (YYYY-MM-DD)' }, dateTo: { type: 'string', description: 'Bitiş tarihi (YYYY-MM-DD)' } }, required: ['dateFrom', 'dateTo'] } } },
   },
   {
-    minPlan: 'STARTER', module: null,
+    minPlan: 'STARTER', module: 'contacts',
     tool: { type: 'function', function: { name: 'get_balances', description: 'Cari hesap bakiyelerini getirir. Cari bakiye, alacak, borç, kredi limiti aşımı ve riskli cari sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
   },
   {
@@ -145,7 +59,7 @@ const ALL_TOOLS: ToolDef[] = [
     tool: { type: 'function', function: { name: 'get_stock', description: 'Stok durumunu getirir. Stok seviyesi, minimum stok altı ürünler, stok uyarıları ve toplam stok değeri sorguları için kullan.', parameters: { type: 'object', properties: {} } } },
   },
   {
-    minPlan: 'STARTER', module: null,
+    minPlan: 'STARTER', module: 'reporting', additionalModules: ['invoicing', 'accounting', 'inventory'],
     tool: { type: 'function', function: { name: 'get_daily_summary', description: 'Günlük özet raporu getirir. Bugünkü satış/alış tutarları, gecikmiş fatura tutarı, bekleyen ödeme tutarı, açık sipariş sayısı ve stok uyarıları dahil.', parameters: { type: 'object', properties: {} } } },
   },
   {
@@ -153,12 +67,13 @@ const ALL_TOOLS: ToolDef[] = [
     tool: { type: 'function', function: { name: 'get_products', description: 'Ürün listesini getirir. Ürün arama, fiyat, kategori sorguları için kullan.', parameters: { type: 'object', properties: { search: { type: 'string', description: 'Ürün adı veya kodu ile arama' } } } } },
   },
   {
-    minPlan: 'STARTER', module: null,
+    minPlan: 'STARTER', module: 'contacts',
     tool: { type: 'function', function: { name: 'get_contact_detail', description: 'Belirli bir cari hesabın detayını getirir. Müşteri/tedarikçi bilgisi, bakiye sorguları için kullan.', parameters: { type: 'object', properties: { contactName: { type: 'string', description: 'Cari hesap adı (kısmi eşleşme)' } }, required: ['contactName'] } } },
   },
   {
     minPlan: 'STARTER',
     module: 'invoicing',
+    additionalModules: ['contacts'],
     tool: {
       type: 'function',
       function: {
@@ -178,6 +93,7 @@ const ALL_TOOLS: ToolDef[] = [
   {
     minPlan: 'STARTER',
     module: 'invoicing',
+    additionalModules: ['contacts'],
     tool: {
       type: 'function',
       function: {
@@ -190,6 +106,7 @@ const ALL_TOOLS: ToolDef[] = [
   {
     minPlan: 'STARTER',
     module: 'accounting',
+    additionalModules: ['invoicing'],
     tool: {
       type: 'function',
       function: {
@@ -237,6 +154,7 @@ const ALL_TOOLS: ToolDef[] = [
   {
     minPlan: 'PROFESSIONAL',
     module: 'purchasing',
+    additionalModules: ['inventory', 'contacts'],
     requiredAction: 'CREATE',
     tool: {
       type: 'function',
@@ -341,17 +259,27 @@ const ALL_TOOLS: ToolDef[] = [
 // Function call executor
 // ─────────────────────────────────────────────
 
-export async function executeFunctionCall(
+export async function executeFunctionCall(...args: Parameters<typeof executeScopedFunctionCall>): Promise<string> {
+  return runWithTenantScope(args[2], () => executeScopedFunctionCall(...args));
+}
+
+async function executeScopedFunctionCall(
   name: string,
   args: Record<string, unknown>,
   tenantId: string,
   sessionId: string,
-  plan: string,
-  permissions: UserPermissions,
-  tenantModules: string[],
+  approval: ToolExecutionContext,
 ): Promise<string> {
   // Üç katmanlı yetki kontrolü
-  if (!canCallTool(name, plan, permissions, tenantModules)) {
+  const { context } = await resolveAccessContext(prisma, approval.userId, tenantId);
+  const permissions: UserPermissions = { isOwner: context?.membership.isOwner ?? false,
+    modules: context?.membership.permissions.map((entry) => ({ ...entry })) ?? [] };
+  const writeLocked = context && name === 'create_purchase_request_from_low_stock' && (
+    !isAccessFeatureEnabled(context, FeatureKey.PURCHASING) || (context.tenant.status === 'TRIAL' && context.tenant.trialEndsAt !== null && context.tenant.trialEndsAt.getTime() <= Date.now())
+  );
+  if (!context || writeLocked || !isTenantOperational(context.tenant.status) || !canCallTool(name, context.tenant.plan, permissions, [...context.tenant.modules])) {
+    if (context) await createAuditLog(prisma, { tenantId, userId: approval.userId, module: 'ai', entityType: 'OTHER', entityId: name,
+      action: 'OTHER', newValues: { tool: name, allowed: false, turnId: approval.turnId } });
     return JSON.stringify({ error: `Bu veriye erişim yetkiniz bulunmuyor.` });
   }
 
@@ -404,22 +332,21 @@ export async function executeFunctionCall(
       case 'get_purchase_requests':
         result = await ChatDataService.getPurchaseRequests(tenantId);
         break;
-      case 'create_purchase_request_from_low_stock':
-        result = await ChatDataService.createPurchaseRequestFromLowStock(
-          tenantId,
-          {
-            limit: Math.max(1, Math.min(Number(args.limit) || 10, 25)),
-            note: typeof args.note === 'string' ? args.note : undefined,
-            confirmed: args.confirmed === true && purchaseRequestPreviewSessions.has(sessionId),
-            adjustments: parsePurchaseRequestAdjustments(args.adjustments),
-          },
-        );
-        if (isPurchaseRequestPreviewResult(result)) {
-          purchaseRequestPreviewSessions.add(sessionId);
-        } else if (isPurchaseRequestCreatedResult(result)) {
-          purchaseRequestPreviewSessions.delete(sessionId);
-        }
+      case 'create_purchase_request_from_low_stock': {
+        const options = { limit: Math.max(1, Math.min(Number(args.limit) || 10, 25)),
+          note: typeof args.note === 'string' ? args.note : undefined,
+          adjustments: parsePurchaseRequestAdjustments(args.adjustments) };
+        const key = JSON.stringify([tenantId, sessionId]);
+        const preview = await ChatDataService.createPurchaseRequestFromLowStock(tenantId, { ...options, confirmed: false });
+        if (!isPurchaseRequestPreviewResult(preview)) { result = preview; break; }
+        const fingerprint = JSON.stringify([options, preview.previewFingerprint]);
+        const confirmed = args.confirmed === true && consumePurchaseApproval(key, fingerprint, approval);
+        result = confirmed ? await ChatDataService.createPurchaseRequestFromLowStock(tenantId, {
+          ...options, confirmed: true, createdById: approval.userId, expectedPreviewFingerprint: preview.previewFingerprint,
+        }) : preview;
+        if (isPurchaseRequestPreviewResult(result)) rememberPurchasePreview(key, JSON.stringify([options, result.previewFingerprint]), approval);
         break;
+      }
       case 'get_delivery_notes':
         result = await ChatDataService.getDeliveryNotes(tenantId);
         break;
@@ -503,6 +430,8 @@ export async function executeFunctionCall(
         result = { error: `Bilinmeyen fonksiyon: ${name}` };
     }
 
+    await createAuditLog(prisma, { tenantId, userId: approval.userId, module: 'ai', entityType: 'OTHER', entityId: name,
+      action: 'OTHER', newValues: { tool: name, allowed: true, turnId: approval.turnId } });
     return JSON.stringify(result);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
@@ -529,22 +458,16 @@ export function parsePurchaseRequestAdjustments(value: unknown): PurchaseRequest
   });
 }
 
-export function isPurchaseRequestPreviewResult(value: unknown): boolean {
+export function isPurchaseRequestPreviewResult(value: unknown): value is { created: false; confirmationRequired: true; previewFingerprint: string } {
   return (
     typeof value === 'object' &&
     value !== null &&
     Reflect.get(value, 'created') === false &&
+    typeof Reflect.get(value, 'previewFingerprint') === 'string' &&
     Reflect.get(value, 'confirmationRequired') === true
   );
 }
 
-export function isPurchaseRequestCreatedResult(value: unknown): boolean {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Reflect.get(value, 'created') === true
-  );
-}
 
 // ─────────────────────────────────────────────
 // System prompts

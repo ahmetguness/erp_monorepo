@@ -189,7 +189,7 @@ export class ProductionAutomationService {
       autoCompleted = true;
     } else if (derivedStatus !== previousStatus) {
       await this.db.workOrder.update({
-        where: { id: workOrderId },
+        where: { id: workOrderId, tenantId },
         data: { status: derivedStatus },
       });
 
@@ -239,7 +239,7 @@ export class ProductionAutomationService {
 
       // 1. Update WorkOrder status & producedQty
       const completed = await tx.workOrder.update({
-        where: { id: workOrderId },
+        where: { id: workOrderId, tenantId },
         data: {
           status: WorkOrderStatus.COMPLETED,
           producedQty: new Prisma.Decimal(outputQty),
