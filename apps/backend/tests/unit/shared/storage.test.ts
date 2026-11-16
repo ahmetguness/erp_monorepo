@@ -52,6 +52,7 @@ describe('object storage security', () => {
       get: async (_key: string): Promise<StoredObject | null> => null,
       delete: async (key: string): Promise<void> => { calls.push(`delete:${key}`); },
       createSignedGetUrl: async (_key: string, _ttl: number): Promise<SignedObjectUrl | null> => null,
+      createSignedPutUrl: async (_key: string, _contentType: string, _ttl: number): Promise<SignedObjectUrl | null> => null,
     };
     await expect(persistWithObject(storage, {
       key: 'tenant-1/file.txt', body: Buffer.from('safe'), contentType: 'text/plain',

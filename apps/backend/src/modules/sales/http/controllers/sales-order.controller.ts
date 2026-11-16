@@ -1,3 +1,4 @@
+import { enqueueDomainEvent } from '../../../../domain-events/outbox.js';
 import {
   AuditAction,
   EntityType,
@@ -7,10 +8,7 @@ import {
 } from "@prisma/client";
 import { Context } from "hono";
 import { documentCurrencySchema } from '../../../../services/financial/currency.js';
-import {
-  createEventContext,
-  domainEvents,
-} from "../../../../domain-events/index.js";
+import { createEventContext } from "../../../../domain-events/index.js";
 import {
   ConflictError,
   NotFoundError,
@@ -450,30 +448,32 @@ export const SalesOrderController = {
         include: { items: true },
       });
 
-      return newOrder;
-    });
-
-    await prisma.salesOrderHistory.create({
+      await tx.salesOrderHistory.create({
       data: {
         tenantId,
-        orderId: order.id,
+          orderId: newOrder.id,
         toStatus: "DRAFT",
         notes: `Tekliften dönüştürüldü: ${quote.number}`,
       },
     });
-
-    await domainEvents.publish({
+      await enqueueDomainEvent(tx, {
       name: "salesQuote.accepted",
       context: createEventContext({ tenantId, userId }),
       payload: {
         quoteId: quote.id,
-        orderId: order.id,
+        orderId: newOrder.id,
         quoteNumber: quote.number,
-        orderNumber: order.number,
+        orderNumber: newOrder.number,
         contactId: quote.contactId,
         totalGross: Number(quote.totalGross),
       },
     });
+      return newOrder;
+    });
+
+
+
+
 
     return c.json({ data: order }, 201);
   },

@@ -7,7 +7,7 @@ function segments(root: string, file: string): string[] {
 
 function isBackendPublicApi(moduleRoot: string, imported: string): boolean {
   const path = relative(moduleRoot, imported).replace(/\\/g, '/');
-  return path === 'index.ts' || /^(?:domain|application|http\/controllers)\/index\.ts$/.test(path);
+  return path === 'index.ts' || /^(?:domain|application|infrastructure|http\/controllers)\/index\.ts$/.test(path);
 }
 
 export function checkBackendBoundaries(sourceRoot: string, edges: readonly ImportEdge[]): ArchitectureIssue[] {

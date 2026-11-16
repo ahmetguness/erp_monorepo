@@ -1,8 +1,9 @@
+import { enqueueDomainEvent } from '../../../../domain-events/outbox.js';
 import { AuditAction,EntityType,MovementType,ReservationRefType,WorkOrderStatus } from '@prisma/client';
 import { Context } from 'hono';
 import { assertQualityReleased, lockWorkOrder } from '../../infrastructure/services/quality-decision.service.js';
 import { recordFinishedGoods } from '../../infrastructure/services/finished-goods.service.js';
-import { createEventContext,domainEvents } from '../../../../domain-events/index.js';
+import { createEventContext } from '../../../../domain-events/index.js';
 import { ConflictError,NotFoundError,ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import {
@@ -307,6 +308,31 @@ export const WorkOrderController = {
           await postProductionAccountingEntry(tx, tenantId, id, userId);
         }
       }
+    for (const reservationResult of reservationEvents) {
+      await enqueueDomainEvent(tx, {
+        name: 'production.materialReserved',
+        context: createEventContext({ tenantId, userId }),
+        payload: {
+          workOrderId: id,
+          workOrderNumber: wo.number,
+          reservedLineCount: reservationResult.reservedLineCount,
+          reservedQuantity: reservationResult.reservedQuantity,
+        },
+      });
+    }
+
+    for (const completionPayload of completionEvents) {
+      await enqueueDomainEvent(tx, {
+        name: 'production.completed',
+        context: createEventContext({ tenantId, userId }),
+        payload: {
+          workOrderId: id,
+          workOrderNumber: wo.number,
+          ...completionPayload,
+        },
+      });
+    }
+
       const result = await tx.workOrder.findFirst({ where: { id, tenantId } });
       if (!result) throw new NotFoundError('İş Emri', id);
       return result;
@@ -324,30 +350,6 @@ export const WorkOrderController = {
       ...requestMeta,
     });
 
-    for (const reservationResult of reservationEvents) {
-      await domainEvents.publish({
-        name: 'production.materialReserved',
-        context: createEventContext({ tenantId, userId }),
-        payload: {
-          workOrderId: id,
-          workOrderNumber: wo.number,
-          reservedLineCount: reservationResult.reservedLineCount,
-          reservedQuantity: reservationResult.reservedQuantity,
-        },
-      });
-    }
-
-    for (const completionPayload of completionEvents) {
-      await domainEvents.publish({
-        name: 'production.completed',
-        context: createEventContext({ tenantId, userId }),
-        payload: {
-          workOrderId: id,
-          workOrderNumber: wo.number,
-          ...completionPayload,
-        },
-      });
-    }
 
     return c.json({ data: updated });
   },

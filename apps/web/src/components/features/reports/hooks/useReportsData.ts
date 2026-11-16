@@ -262,7 +262,9 @@ export function useReportsData(): UseReportsDataReturn {
   const runReportSchedule = useMutation({
     mutationFn: (id: string) => runSavedReportSchedule(id),
     onSuccess: (result) => {
-      toast.success(`${result.reportName} raporu ${result.mailCount} alıcıya gönderildi.`);
+      toast.success(result.queuedMailCount > 0
+        ? `${result.reportName} raporu ${result.queuedMailCount} alıcı için gönderim kuyruğuna alındı.`
+        : `${result.reportName} raporu ${result.mailCount} alıcıya gönderildi.`);
       qc.invalidateQueries({ queryKey: ['notifications'] });
     },
     onError: (e: unknown) => toast.error(getErrorMessage(e)),

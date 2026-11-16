@@ -1,3 +1,6 @@
+import { providerRetryDelay, parseRetryAfter } from '../../infrastructure/providers/retry-policy.js';
+import { providerRequestSignal } from '../../infrastructure/providers/request-context.js';
+import { setTimeout as pause } from 'node:timers/promises';
 /**
  * Trendyol Partner API — Production-grade Integration Service
  */
@@ -59,7 +62,7 @@ export class TrendyolApiError extends Error {
   }
   get isRateLimit() { return this.statusCode === 429; }
   get isServerError() { return this.statusCode >= 500; }
-  get isRetryable() { return this.isRateLimit || this.isServerError; }
+  get isRetryable() { return this.statusCode === 0 || this.statusCode === 408 || this.isRateLimit || this.isServerError; }
 }
 
 export function maskCredentials(creds: TrendyolCredentials): Record<string, string> {
@@ -162,14 +165,6 @@ async function waitRateLimitRedis(endpoint: string): Promise<void> {
   }
 }
 
-function computeBackoff(attempt: number, retryAfterHeader: string | null): number {
-  if (retryAfterHeader) {
-    const seconds = parseInt(retryAfterHeader, 10);
-    if (!isNaN(seconds) && seconds > 0) return seconds * 1000;
-  }
-  return Math.min(1000 * Math.pow(2, attempt - 1), 8_000);
-}
-
 function buildHeaders(creds: TrendyolCredentials): Record<string, string> {
   const token = Buffer.from(`${creds.apiKey}:${creds.apiSecret}`).toString('base64');
   return {
@@ -188,29 +183,32 @@ export async function trendyolFetch<T>(
   const url = `${getBaseUrl(creds)}${path}`;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const headers = buildHeaders(creds);
+  const jobSignal = providerRequestSignal();
 
   let lastError: TrendyolApiError | null = null;
+  let retryAfterMs = 0;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     await waitRateLimit(path);
 
     if (attempt > 0) {
-      const backoffMs = computeBackoff(attempt, null);
+      const backoffMs = providerRetryDelay(attempt, retryAfterMs);
+      retryAfterMs = 0;
       logger.warn(`[Trendyol] Retry ${attempt}/${MAX_RETRIES} for ${path} in ${backoffMs}ms`);
       await sleep(backoffMs);
     }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const requestHeaders = new Headers(headers);
+    new Headers(options.headers).forEach((value, key) => requestHeaders.set(key, value));
 
     try {
       const res = await observedFetch(url, {
         ...options,
-        headers: { ...headers, ...(options.headers as Record<string, string> ?? {}) },
-        signal: controller.signal,
+        headers: requestHeaders,
+        signal: AbortSignal.any([controller.signal, ...(options.signal ? [options.signal] : []), ...(jobSignal ? [jobSignal] : [])]),
       });
-
-      clearTimeout(timer);
 
       if (!res.ok) {
         const rawBody = await res.text().catch(() => '');
@@ -223,12 +221,7 @@ export async function trendyolFetch<T>(
 
         if (err.isRetryable && attempt < MAX_RETRIES) {
           lastError = err;
-          const retryAfter = res.headers.get('Retry-After');
-          if (retryAfter) {
-            const waitMs = computeBackoff(attempt + 1, retryAfter);
-            logger.warn(`[Trendyol] ${res.status} — waiting ${waitMs}ms (Retry-After: ${retryAfter})`);
-            await sleep(waitMs);
-          }
+          retryAfterMs = parseRetryAfter(res.headers.get('Retry-After'));
           continue;
         }
 
@@ -237,18 +230,21 @@ export async function trendyolFetch<T>(
       }
 
       if (res.status === 204) return {} as T;
-      return res.json() as Promise<T>;
+      return await res.json() as T;
 
     } catch (err) {
       clearTimeout(timer);
       if (err instanceof TrendyolApiError) throw err;
 
-      const isTimeout = (err as Error).name === 'AbortError';
-      const msg = isTimeout ? `Timeout after ${timeoutMs}ms` : `Network error: ${(err as Error).message}`;
+      if (options.signal?.aborted || jobSignal?.aborted) throw err;
+      const isTimeout = err instanceof Error && ['AbortError', 'TimeoutError'].includes(err.name);
+      const msg = isTimeout ? `Timeout after ${timeoutMs}ms` : `Network error: ${err instanceof Error ? err.message : 'Unknown transport error'}`;
       lastError = new TrendyolApiError(msg, isTimeout ? 408 : 0, path);
 
       if (attempt < MAX_RETRIES) continue;
       throw lastError;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -269,5 +265,5 @@ export function readRateLimitSnapshot(): { remaining: number; resetAt: string } 
 }
 
 export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return pause(ms, undefined, { signal: providerRequestSignal() });
 }

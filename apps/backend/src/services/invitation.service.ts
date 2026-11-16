@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { validatePasswordStrength } from '../utils/password-policy.js';
-import { sendMail } from './mail.service';
+import { queueOutboundMail } from './mail-delivery/mail-delivery.service.js';
 import { invitationEmail } from './mail-templates.service';
 import { StarterAccessService } from './starter-access.service.js';
 
@@ -59,6 +59,25 @@ export async function createInvitation(
     const invitation = await tx.invitation.create({
       data: { tenantId, email: normalizedEmail, roleId: roleId || null, tokenHash, expiresAt, invitedBy },
     });
+    // Tenant bilgisi al
+    const tenant = await tx.tenant.findUnique({
+      where: { id: tenantId },
+      select: { companyName: true },
+    });
+
+    // Rol adı al
+    let roleName: string | undefined;
+    if (roleId) {
+      const role = await tx.role.findUnique({ where: { id: roleId }, select: { name: true } });
+      roleName = role?.name;
+    }
+
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const inviteUrl = `${appUrl}/invite?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}`;
+
+    const template = invitationEmail(tenant?.companyName || 'Axon ERP', inviteUrl, roleName);
+    await queueOutboundMail(tx, { tenantId, sentById: invitedBy, to: [normalizedEmail], ...template, expiresAt });
+
     return { kind: 'created' as const, invitation };
   });
 
@@ -67,32 +86,8 @@ export async function createInvitation(
   }
   const invitation = creation.invitation;
 
-  // Tenant bilgisi al
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { companyName: true },
-  });
 
-  // Rol adı al
-  let roleName: string | undefined;
-  if (roleId) {
-    const role = await prisma.role.findUnique({ where: { id: roleId }, select: { name: true } });
-    roleName = role?.name;
-  }
-
-  // Mail gönder
-  const appUrl = process.env.APP_URL || 'http://localhost:3000';
-  const inviteUrl = `${appUrl}/invite?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}`;
-
-  const template = invitationEmail(tenant?.companyName || 'Axon ERP', inviteUrl, roleName);
-  try {
-    await sendMail({ to: normalizedEmail, ...template });
-  } catch (error) {
-    await prisma.invitation.deleteMany({ where: { id: invitation.id, tenantId, status: 'PENDING' } });
-    throw error;
-  }
-
-  logger.info(`Davet gönderildi: ${normalizedEmail} → tenant ${tenantId}`);
+  logger.info(`Davet gönderim kuyruğuna alındı: ${normalizedEmail} → tenant ${tenantId}`);
 
   return { success: true, invitationId: invitation.id };
 }

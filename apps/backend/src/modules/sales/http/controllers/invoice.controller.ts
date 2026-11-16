@@ -2,7 +2,7 @@ import { enqueueDomainEvent } from '../../../../domain-events/outbox.js';
 import { lockInvoiceMutations } from '../../../../services/financial/mutation-locks.js';
 import { AuditAction, EntityType, InvoiceStatus, InvoiceType } from '@prisma/client';
 import { Context } from 'hono';
-import { createEventContext, domainEvents } from '../../../../domain-events/index.js';
+import { createEventContext } from '../../../../domain-events/index.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../errors/index.js';
 import { prisma } from '../../../../lib/prisma.js';
 import { getValidatedBody } from '../../../../middleware/validateBody.js';
@@ -12,7 +12,6 @@ import {
   type CreateInvoiceBody,
 } from '../../../../schemas/request-body.schemas.js';
 import { BusinessRulesService } from '../../../../services/business-rules.service.js';
-import { EDocumentAutomationService } from '../../../../services/edocument-automation.service.js';
 import {
   assertAccountingPeriodOpen,
   assertInvoiceCancelable,
@@ -459,18 +458,7 @@ export const InvoiceController = {
       return newInvoice;
     });
 
-    await domainEvents.publish({
-      name: 'invoice.created',
-      context: createEventContext({ tenantId, userId }),
-      payload: {
-        invoiceId: invoice.id,
-        number: invoice.number,
-        contactId: invoice.contact.id,
-        contactName: invoice.contact.name,
-        totalGross: Number(invoice.totalGross),
-        dueDate: invoice.dueDate,
-      },
-    });
+
 
     return c.json({ data: invoice }, 201);
   },
@@ -513,8 +501,6 @@ export const InvoiceController = {
         notes: allocation.payment?.notes ?? null,
       })),
     };
-    const eDocumentAutomation = new EDocumentAutomationService(prisma);
-    void eDocumentAutomation.autoCreateAndSendEDocument(tenantId, invoice.id, idempotencyKey).catch(() => undefined);
     return c.json({ data: formattedInvoice });
   },
 

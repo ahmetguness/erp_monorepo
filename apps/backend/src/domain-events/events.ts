@@ -1,15 +1,19 @@
 import { EntityType,Priority } from '@prisma/client';
 
-export const DOMAIN_EVENT_SCHEMA_VERSION = 1;
+export const DOMAIN_EVENT_SCHEMA_VERSION = 2;
 
 export interface DomainEventContext {
   tenantId: string;
+  eventId?: string;
   userId?: string | null;
   correlationId?: string | null;
   occurredAt: Date;
 }
 
 export interface DomainEventPayloads {
+  'marketplace.webhook.received': { webhookEventId: string; };
+  'mail.delivery.requested': { mailId: string; expiresAt?: string; provisioning?: { jobId: string; attempt: number; }; };
+  'edocument.delivery.requested': { edocumentId: string; retry: number; };
   'invoice.created': {
     invoiceId: string;
     number: string;
@@ -181,6 +185,9 @@ export interface DomainEventPayloads {
 export type DomainEventName = keyof DomainEventPayloads;
 
 export const DOMAIN_EVENT_NAMES = [
+  'marketplace.webhook.received',
+  'mail.delivery.requested',
+  'edocument.delivery.requested',
   'invoice.created',
   'invoice.overdue',
   'invoice.sent',
@@ -218,6 +225,21 @@ export interface DomainEventPublishCoverageItem {
 }
 
 export const DOMAIN_EVENT_PUBLISH_COVERAGE = [
+  {
+    workflow: 'Kalıcı e-posta gönderimi', eventName: 'mail.delivery.requested',
+    producer: 'apps/backend/src/services/mail-delivery/mail-delivery.service.ts', status: 'covered',
+    notes: 'Mail kaydı, değişmez gönderim içeriği ve outbox aynı transaction içinde; sağlayıcı çağrısı worker içinde.'
+  },
+  {
+    workflow: 'Kalıcı e-belge gönderimi', eventName: 'edocument.delivery.requested',
+    producer: 'apps/backend/src/services/edocument/delivery-intent.ts', status: 'covered',
+    notes: 'Belge ve gönderim niyeti aynı transaction içinde; fatura onayı/servis tamamlamasıyla birlikte commit edilir.'
+  },
+  {
+    workflow: 'Gelen webhook teslimatı', eventName: 'marketplace.webhook.received',
+    producer: 'apps/backend/src/modules/marketplace/infrastructure/webhooks/trendyol-webhook.service.ts', status: 'covered',
+    notes: 'İmzalı webhook kaydı ve outbox commit edildikten sonra 202; stok/sipariş etkisi worker içinde idempotent işlenir.'
+  },
   {
     workflow: 'Satis siparisi onayi',
     eventName: 'sales.order.confirmed',
@@ -404,20 +426,20 @@ export const DOMAIN_EVENT_PUBLISH_COVERAGE = [
 
 export interface DomainEventListenerIdempotencyItem {
   listener: string;
-  strategy: 'source-upsert' | 'append-only' | 'no-op-for-event' | 'natural-idempotency';
+  strategy: 'transactional-receipt' | 'source-upsert' | 'append-only' | 'no-op-for-event' | 'natural-idempotency';
   notes: string;
 }
 
 export const DOMAIN_EVENT_LISTENER_IDEMPOTENCY = [
   {
     listener: 'auditListener',
-    strategy: 'append-only',
-    notes: 'Audit kaydi is gecmisi niteligindedir; replay sonrasi operasyonel incelemede event source ile izlenir.',
+    strategy: 'transactional-receipt',
+    notes: 'Audit and consumer receipt commit together; replay skips committed effects.',
   },
   {
     listener: 'notificationListener',
-    strategy: 'append-only',
-    notes: 'Bildirimler kullanici gorunurlugu icin append-only tutulur; dead-letter replay operator onayi ile calisir.',
+    strategy: 'transactional-receipt',
+    notes: 'Notifications and consumer receipt commit together; crash recovery does not duplicate notifications.',
   },
   {
     listener: 'workflowListener',
@@ -477,6 +499,9 @@ export function entityTypeForEvent(event: DomainEvent): EntityType {
     case 'accounting.entry.failed':
     case 'marketplace.order.received':
     case 'mail.failed':
+    case 'mail.delivery.requested':
+    case 'edocument.delivery.requested':
+    case 'marketplace.webhook.received':
       return EntityType.OTHER;
   }
 }
@@ -519,7 +544,12 @@ export function entityIdForEvent(event: DomainEvent): string {
     case 'marketplace.order.received':
       return event.payload.marketplaceOrderId;
     case 'mail.failed':
+    case 'mail.delivery.requested':
       return event.payload.mailId;
+    case 'edocument.delivery.requested':
+      return event.payload.edocumentId;
+    case 'marketplace.webhook.received':
+      return event.payload.webhookEventId;
     case 'employee.documentMissing':
       return event.payload.employeeId;
     case 'production.materialReserved':
@@ -576,6 +606,12 @@ export function sourceForEvent(event: DomainEvent): string {
       return `domain:marketplace.order.received:${event.payload.marketplaceOrderId}`;
     case 'mail.failed':
       return `domain:mail.failed:${event.payload.mailId}`;
+    case 'marketplace.webhook.received':
+      return `domain:marketplace.webhook.received:${event.payload.webhookEventId}`;
+    case 'mail.delivery.requested':
+      return `domain:mail.delivery.requested:${event.payload.mailId}`;
+    case 'edocument.delivery.requested':
+      return `domain:edocument.delivery.requested:${event.payload.edocumentId}:${event.payload.retry}`;
     case 'employee.documentMissing':
       return `domain:employee.documentMissing:${event.payload.employeeId}:${event.payload.documentName}`;
     case 'production.materialReserved':
@@ -586,5 +622,6 @@ export function sourceForEvent(event: DomainEvent): string {
 }
 
 export function idempotencyKeyForEvent(event: DomainEvent): string {
-  return sourceForEvent(event);
+  const source = sourceForEvent(event);
+  return event.context.eventId ? `${source}:${event.context.eventId}` : source;
 }

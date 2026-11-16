@@ -1,6 +1,6 @@
 import { AuditAction, EntityType, InvoiceType, PaymentMethod, PaymentStatus, Prisma, type PrismaClient } from '@prisma/client';
 import { ConflictError, ValidationError } from '../errors';
-import { createEventContext, domainEvents } from '../domain-events';
+import { createEventContext } from '../domain-events';
 import { createAuditLog } from '../utils/audit.js';
 import { writePaymentAccountEntry } from '../utils/account-entry.js';
 import {
@@ -427,19 +427,6 @@ export async function createPayment(options: {
     return replay;
   }
 
-  if (direction === 'RECEIVE') {
-    await domainEvents.publish({
-      name: 'payment.received',
-      context: createEventContext({ tenantId: options.tenantId, userId: options.userId }),
-      payload: {
-        paymentId: payment.id,
-        contactId: payment.contactId,
-        amount: Number(payment.amount),
-        method: payment.method,
-        reference: payment.reference,
-      },
-    });
-  }
 
   return payment;
 }

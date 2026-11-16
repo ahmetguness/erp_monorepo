@@ -1,3 +1,4 @@
+import { processDomainEventOutboxBatch } from '../../../src/services/domain-event-outbox-worker.service.js';
 import { expect, test } from 'vitest';
 import { z } from 'zod';
 import { db, isolatedDatabase } from '../support/database.js';
@@ -76,6 +77,7 @@ test('D: insufficient stock is recorded as a failed webhook and replay recovers 
   expect((await request('POST', `/api/marketplace/webhook-events/${event.id}/replay`, b.identity)).status).toBe(404);
   const replay = data(await request('POST', `/api/marketplace/webhook-events/${event.id}/replay`, a.identity), 200, z.object({ failed: z.number() }));
   expect(replay.failed).toBe(0);
+  await processDomainEventOutboxBatch(100);
   expect(await db.salesOrder.count({ where: { tenantId: a.tenant.id } })).toBe(1);
   expect(await db.marketplaceOrder.count({ where: { tenantId: a.tenant.id } })).toBe(1);
   expect(await db.inventoryReservation.count({ where: { tenantId: a.tenant.id, releasedAt: null } })).toBe(1);

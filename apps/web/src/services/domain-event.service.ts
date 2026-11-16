@@ -38,6 +38,11 @@ export const DomainEventOutboxSchema = z.object({
   failedListeners: z.unknown().nullable(),
   nextRetryAt: z.string().nullable(),
   processedAt: z.string().nullable(),
+  claimedAt: z.string().nullable().optional().default(null),
+  leaseExpiresAt: z.string().nullable().optional().default(null),
+  quarantinedAt: z.string().nullable().optional().default(null),
+  resolvedAt: z.string().nullable().optional().default(null),
+  deliveries: z.array(z.object({ consumer: z.string(), completedAt: z.string() })).optional().default([]),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -63,7 +68,7 @@ export const DomainEventCoverageSchema = z.object({
   })),
   listenerIdempotency: z.array(z.object({
     listener: z.string(),
-    strategy: z.enum(['source-upsert', 'append-only', 'no-op-for-event', 'natural-idempotency']),
+    strategy: z.enum(['transactional-receipt', 'source-upsert', 'append-only', 'no-op-for-event', 'natural-idempotency']),
     notes: z.string(),
   })),
 });
@@ -87,4 +92,9 @@ export async function getDomainEventFailures(params: Omit<DomainEventParams, 'st
 export async function replayDomainEvent(id: string): Promise<DomainEventReplayResult> {
   const res = await apiClient.post(`/api/domain-events/${id}/replay`);
   return safeParse(SingleResponseSchema(DomainEventReplayResultSchema), res.data, 'replayDomainEvent').data;
+}
+
+export async function getDomainEvents(params: DomainEventParams) {
+  const res = await apiClient.get('/api/domain-events', { params });
+  return safeParse(PaginatedResponseSchema(DomainEventOutboxSchema), res.data, 'getDomainEvents');
 }

@@ -7,9 +7,10 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { useDomainEventFailures, useReplayDomainEvent } from '@/hooks/useDomainEvents';
+import { useDomainEvents, useReplayDomainEvent } from '@/hooks/useDomainEvents';
 import { formatDateTime } from '@/lib/utils';
 import type { DomainEventOutbox, DomainEventStatus } from '@/services/domain-event.service';
+import { DomainEventStatusSchema } from '@/services/domain-event.service';
 
 const STATUS_META: Record<DomainEventStatus, { label: string; variant: BadgeVariant }> = {
   PENDING: { label: 'Bekliyor', variant: 'neutral' },
@@ -41,10 +42,14 @@ function statusBadge(status: DomainEventStatus) {
 export function DomainEventFailuresPage() {
   const [page, setPage] = useState(1);
   const [nameFilter, setNameFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<DomainEventStatus | 'failures' | 'all'>('failures');
   const [selectedEvent, setSelectedEvent] = useState<DomainEventOutbox | null>(null);
   const [lastReplayMessage, setLastReplayMessage] = useState<string | null>(null);
-  const params = useMemo(() => ({ page, limit: 30, name: nameFilter || undefined }), [page, nameFilter]);
-  const { data, isLoading, refetch, isFetching } = useDomainEventFailures(params);
+  const params = useMemo(() => ({
+    page, limit: 30, name: nameFilter || undefined,
+    status: statusFilter === 'failures' || statusFilter === 'all' ? undefined : statusFilter
+  }), [page, nameFilter, statusFilter]);
+  const { data, isLoading, refetch, isFetching, isError } = useDomainEvents(params, statusFilter === 'failures');
   const replay = useReplayDomainEvent();
 
   const handleReplay = (event: DomainEventOutbox) => {
@@ -91,6 +96,10 @@ export function DomainEventFailuresPage() {
       render: (row) => <span className="text-xs tabular-nums text-slate-300">{row.attempts}</span>,
     },
     {
+      key: 'nextRetryAt', header: 'Sonraki deneme', width: '150px',
+      render: (row) => <span className="text-xs text-slate-400">{row.nextRetryAt ? formatDateTime(row.nextRetryAt) : '-'}</span>,
+    },
+    {
       key: 'error',
       header: 'Hata',
       render: (row) => (
@@ -117,12 +126,13 @@ export function DomainEventFailuresPage() {
           size="sm"
           leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
           loading={replay.isPending && replay.variables === row.id}
+          disabled={replay.isPending || !['FAILED', 'DEAD_LETTER'].includes(row.status) || Boolean(row.quarantinedAt || row.resolvedAt)}
           onClick={(event) => {
             event.stopPropagation();
             handleReplay(row);
           }}
         >
-          Replay
+          Yeniden dene
         </Button>
       ),
     },
@@ -130,9 +140,20 @@ export function DomainEventFailuresPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Domain Event Hatalari" subtitle="Failed ve dead-letter outbox kayitlarini izleyin ve tekrar isleyin." />
+      <PageHeader title="İş kuyruğu" subtitle="Bekleyen, işlenen ve başarısız işleri takip edin; başarısız işleri yeniden kuyruğa alın." />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <select aria-label="İş durumu" value={statusFilter} onChange={(event) => {
+          const value = event.target.value;
+          const parsed = DomainEventStatusSchema.safeParse(value);
+          if (value === 'all' || value === 'failures') setStatusFilter(value);
+          else if (parsed.success) setStatusFilter(parsed.data);
+          setPage(1);
+        }} className="h-9 rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm text-slate-200">
+          <option value="failures">Başarısız işler</option>
+          <option value="all">Tüm işler</option>
+          {DomainEventStatusSchema.options.map((status) => <option key={status} value={status}>{STATUS_META[status].label}</option>)}
+        </select>
         <input
           value={nameFilter}
           onChange={(event) => {
@@ -159,12 +180,14 @@ export function DomainEventFailuresPage() {
         </div>
       )}
 
+      {isError && <p role="alert" className="text-sm text-red-400">İş kuyruğu yüklenemedi. Yenile düğmesiyle tekrar deneyin.</p>}
+
       <DataTable
         columns={columns}
         data={data?.data ?? []}
         keyExtractor={(row) => row.id}
         isLoading={isLoading}
-        emptyTitle="Domain event hatası yok"
+        emptyTitle={isError ? 'Kuyruk bilgisi alınamadı' : 'Bu filtreye uygun iş yok'}
         pagination={data ? { page, pageSize: 30, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
         onRowClick={setSelectedEvent}
       />
@@ -189,6 +212,12 @@ export function DomainEventFailuresPage() {
                 <span className="text-slate-500">Idempotency</span>
                 <p className="mt-1 break-all font-mono text-slate-300">{selectedEvent.idempotencyKey}</p>
               </div>
+            </div>
+
+            <div>
+              <p className="mb-1 text-xs text-slate-500">Tamamlanan adımlar</p>
+              <p className="text-xs text-slate-300">{selectedEvent.deliveries.map((delivery) => delivery.consumer).join(', ') || '-'}</p>
+              <p className="mt-2 text-xs text-slate-500">İşleme süresi sınırı: {selectedEvent.leaseExpiresAt ? formatDateTime(selectedEvent.leaseExpiresAt) : '-'}</p>
             </div>
 
             <div>

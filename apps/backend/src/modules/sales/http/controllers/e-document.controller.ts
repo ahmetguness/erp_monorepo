@@ -1,3 +1,5 @@
+import { enqueueDomainEvent } from '../../../../domain-events/outbox.js';
+import { createEventContext } from '../../../../domain-events/events.js';
 import { EDocumentStatus,EDocumentType,Prisma } from '@prisma/client';
 import { Context } from 'hono';
 import { randomUUID,timingSafeEqual } from 'node:crypto';
@@ -359,9 +361,11 @@ export const EDocumentController = {
     const uuid = randomUUID();
     const providerCode = `GIB-${body.type}-${uuid.slice(0, 8).toUpperCase()}`;
     try {
-      doc = await prisma.eDocument.create({
+      doc = await prisma.$transaction(async (tx) => {
+        const created = await tx.eDocument.create({
         data: {
           tenantId,
+            status: 'PROCESSING',
           invoiceId: body.invoiceId ?? null,
           deliveryNoteId: body.deliveryNoteId ?? null,
           type: body.type,
@@ -373,6 +377,9 @@ export const EDocumentController = {
           invoice: { select: { id: true, number: true } },
           deliveryNote: { select: { id: true, number: true } },
         },
+      });
+        await enqueueDomainEvent(tx, { name: 'edocument.delivery.requested', context: createEventContext({ tenantId }), payload: { edocumentId: created.id, retry: 0 } });
+        return created;
       });
     } catch (error) {
       if (!submissionIdempotencyKey || !isUniqueConstraintError(error)) throw error;
@@ -390,12 +397,7 @@ export const EDocumentController = {
       return c.json({ data: replay });
     }
 
-    await automationService.submitEDocument(tenantId, doc.id);
-    const submitted = await prisma.eDocument.findUniqueOrThrow({
-      where: { id: doc.id },
-      include: { invoice: { select: { id: true, number: true } }, deliveryNote: { select: { id: true, number: true } } },
-    });
-    return c.json({ data: submitted }, 201);
+    return c.json({ data: doc }, 201);
   },
 
   async updateStatus(c: Context): Promise<Response> {

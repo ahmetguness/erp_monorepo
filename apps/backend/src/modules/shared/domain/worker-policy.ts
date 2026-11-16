@@ -15,8 +15,9 @@ export function exponentialBackoffMs(attempt: number, policy: WorkerRetryPolicy 
   return Math.min(policy.maxDelayMs, policy.initialDelayMs * (2 ** exponent));
 }
 
-export function nextRetryDate(attempt: number, now: Date, policy: WorkerRetryPolicy = DEFAULT_WORKER_RETRY_POLICY): Date {
-  return new Date(now.getTime() + exponentialBackoffMs(attempt, policy));
+export function nextRetryDate(attempt: number, now: Date, policy: WorkerRetryPolicy = DEFAULT_WORKER_RETRY_POLICY, random: () => number = Math.random): Date {
+  const ceiling = exponentialBackoffMs(attempt, policy);
+  return new Date(now.getTime() + Math.floor(ceiling / 2 + Math.min(1, Math.max(0, random())) * ceiling / 2));
 }
 
 export function hasAttemptsRemaining(attempt: number, policy: WorkerRetryPolicy = DEFAULT_WORKER_RETRY_POLICY): boolean {

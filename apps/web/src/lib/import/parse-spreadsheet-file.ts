@@ -26,7 +26,7 @@ export async function parseSpreadsheetFile(file: File): Promise<string> {
   if (file.name.toLocaleLowerCase("tr-TR").endsWith(".csv")) return file.text();
   const { Workbook } = await import("exceljs");
   const workbook = new Workbook();
-  const workbookBytes = new Uint8Array(await file.arrayBuffer());
+  const workbookBytes = await file.arrayBuffer();
   await workbook.xlsx.load(workbookBytes);
   const worksheet = workbook.worksheets[0];
   if (!worksheet)

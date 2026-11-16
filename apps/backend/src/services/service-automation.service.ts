@@ -8,7 +8,9 @@ import {
 import { logger } from "../lib/logger.js";
 import { ConflictError, NotFoundError, ValidationError } from "../errors/index.js";
 import { generateDocumentNumber } from "../utils/generate-number.js";
-import { EDocumentAutomationService } from "./edocument-automation.service.js";
+import { queueInvoiceDocument } from './edocument/delivery-intent.js';
+import { enqueueDomainEvent } from '../domain-events/outbox.js';
+import { createEventContext } from '../domain-events/events.js';
 import {
   assertCanReserveStock,
   lockInventoryPosition,
@@ -322,6 +324,14 @@ export class ServiceAutomationService {
       });
 
       invoiceId = newInvoice.id;
+      await enqueueDomainEvent(tx, {
+        name: 'invoice.created', context: createEventContext({ tenantId }), payload: {
+          invoiceId: newInvoice.id, number: newInvoice.number, contactId: newInvoice.contactId, contactName: sr.contact?.name ?? 'Cari',
+          totalGross: Number(newInvoice.totalGross), dueDate: newInvoice.dueDate,
+        }
+      });
+      await queueInvoiceDocument(tx, tenantId, newInvoice.id);
+      eDocumentCreated = true;
 
       // 4. Record History
       await tx.serviceRequestHistory.create({
@@ -335,18 +345,6 @@ export class ServiceAutomationService {
       });
     });
 
-    // 5. Trigger Phase 13 E-Document Auto Creation
-    if (invoiceId) {
-      try {
-        const eDocAutomation = new EDocumentAutomationService(this.db);
-        await eDocAutomation.autoCreateAndSendEDocument(tenantId, invoiceId);
-        eDocumentCreated = true;
-      } catch (err) {
-        logger.error(
-          `[ServiceAutomation] E-Document auto creation error for invoice ${invoiceId}: ${err}`,
-        );
-      }
-    }
 
     logger.info(
       `[ServiceAutomation] Completed ServiceRequest ${serviceRequestId}, generated invoice ${invoiceNumber}`,

@@ -7,10 +7,12 @@ if (!/^phase3_[a-z0-9_]+_ci$/.test(target.pathname.slice(1)) || (target.searchPa
 
 process.env.DATABASE_URL = databaseUrl;
 process.env.NODE_ENV = 'test';
+process.env.OPENAI_API_KEY = 'cross-module-test-no-network';
 process.env.JWT_SECRET = 'cross-module-test-tenant-secret-32-characters';
 process.env.ADMIN_JWT_SECRET = 'cross-module-test-admin-secret-32-characters';
 process.env.ALLOWED_ORIGINS = 'http://localhost:3100';
 process.env.MARKETPLACE_WORKER_ENABLED = 'false';
+process.env.ALLOW_LEGACY_WEBHOOK_AUTH = 'false';
 process.env.DOMAIN_EVENT_OUTBOX_WORKER_ENABLED = 'false';
 process.env.CHAT_ATTACHMENT_WORKER_ENABLED = 'false';
 process.env.PERSISTENT_OBSERVABILITY_ENABLED = 'false';

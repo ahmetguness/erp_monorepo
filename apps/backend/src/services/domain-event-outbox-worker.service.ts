@@ -1,617 +1,82 @@
-import { DomainEventOutboxStatus, Prisma, Priority } from '@prisma/client';
-import { hostname } from 'node:os';
-import { randomUUID } from 'node:crypto';
+import { processPendingTenantProvisioning } from '../modules/platform/infrastructure/index.js';
+import type { DomainEvent } from '../domain-events/events.js';
+import { deliverTrendyolWebhook } from '../modules/marketplace/infrastructure/index.js';
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
-import { runWithTenantIsolationBypass, runWithTenantScope } from '../lib/tenant-isolation-context.js';
-import { domainEvents } from '../domain-events';
+import { runWithTenantScope } from '../lib/tenant-isolation-context.js';
+import { registerDomainEventListeners } from '../domain-events/listeners.js';
+import { restoreStoredEvent } from '../domain-events/event-codec.js';
+import { dispatchClaimedEvent } from '../domain-events/delivery/dispatch.js';
+import { claimNextEvent, failEvent, recoverExpiredLeases, type OutboxLease } from '../domain-events/delivery/repository.js';
+import { IncompatibleEventError, PermanentDeliveryError } from '../domain-events/delivery/retry-policy.js';
 import { WorkerLoop } from '../modules/shared/index.js';
 import { runWithObservabilityContext } from './observability.service.js';
-import {
-  DOMAIN_EVENT_NAMES,
-  DOMAIN_EVENT_SCHEMA_VERSION,
-  type DomainEvent,
-  type DomainEventContext,
-  type DomainEventName,
-} from '../domain-events/events.js';
-
-const DEFAULT_BATCH_SIZE = 25;
-const DEFAULT_POLL_INTERVAL_MS = 10_000;
-const DEFAULT_PROCESSING_TIMEOUT_MS = 5 * 60_000;
-const MAX_OUTBOX_ATTEMPTS = 3;
-const WORKER_ID = `${hostname()}:${process.pid}:${randomUUID()}`;
-
-function readPositiveNumberEnv(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-interface StoredDomainEvent {
-  id: string;
-  tenantId: string;
-  name: string;
-  schemaVersion: number;
-  payload: Prisma.JsonValue;
-  context: Prisma.JsonValue;
-  status: DomainEventOutboxStatus;
-}
-
-export interface DomainEventReplayResult {
-  id: string;
-  name: string;
-  beforeStatus: DomainEventOutboxStatus;
-  afterStatus: DomainEventOutboxStatus;
-  attempts: number;
-  replayed: boolean;
-  message: string;
-}
+import { deliverQueuedMail } from './mail-delivery/mail-delivery.service.js';
+import { EDocumentAutomationService } from './edocument-automation.service.js';
+import { ProviderHttpError } from '../infrastructure/providers/retry-policy.js';
+import { reconcileProvisioningMailFailures } from './mail-delivery/provisioning-completion.js';
 
 export interface DomainEventOutboxBatchResult {
-  claimed: number;
-  replayed: number;
-  skipped: number;
-  failed: number;
-  requeuedStale: number;
+  claimed: number; replayed: number; skipped: number; failed: number; requeuedStale: number;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isDomainEventName(value: string): value is DomainEventName {
-  return DOMAIN_EVENT_NAMES.some((name) => name === value);
-}
-
-function readString(record: Record<string, unknown>, key: string): string {
-  const value = record[key];
-  if (typeof value !== 'string') throw new Error(`${key} string degil.`);
-  return value;
-}
-
-function readOptionalString(record: Record<string, unknown>, key: string): string | null {
-  const value = record[key];
-  if (value === undefined || value === null) return null;
-  if (typeof value !== 'string') throw new Error(`${key} string/null degil.`);
-  return value;
-}
-
-function readNumber(record: Record<string, unknown>, key: string): number {
-  const value = record[key];
-  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${key} number degil.`);
-  return value;
-}
-
-function readStringArray(record: Record<string, unknown>, key: string): string[] {
-  const value = record[key];
-  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
-    throw new Error(`${key} string[] degil.`);
-  }
-  return value;
-}
-
-function readPriority(record: Record<string, unknown>, key: string): Priority {
-  const value = readString(record, key);
-  if (value === Priority.CRITICAL || value === Priority.HIGH || value === Priority.MEDIUM || value === Priority.LOW) {
-    return value;
-  }
-  throw new Error(`${key} Priority enum degil.`);
-}
-
-function readDate(record: Record<string, unknown>, key: string): Date {
-  const value = record[key];
-  if (value instanceof Date) return value;
-  if (typeof value !== 'string') throw new Error(`${key} tarih string degil.`);
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) throw new Error(`${key} gecersiz tarih.`);
-  return date;
-}
-
-function readOptionalDate(record: Record<string, unknown>, key: string): Date | null {
-  const value = record[key];
-  if (value === undefined || value === null) return null;
-  if (value instanceof Date) return value;
-  if (typeof value !== 'string') throw new Error(`${key} tarih/null degil.`);
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) throw new Error(`${key} gecersiz tarih.`);
-  return date;
-}
-
-function readContext(value: Prisma.JsonValue): DomainEventContext {
-  if (!isRecord(value)) throw new Error('Event context obje degil.');
-  return {
-    tenantId: readString(value, 'tenantId'),
-    userId: readOptionalString(value, 'userId'),
-    correlationId: readOptionalString(value, 'correlationId'),
-    occurredAt: readDate(value, 'occurredAt'),
-  };
-}
-
-function readPayload(value: Prisma.JsonValue): Record<string, unknown> {
-  if (!isRecord(value)) throw new Error('Event payload obje degil.');
-  return value;
-}
-
-function restoreDomainEvent(name: DomainEventName, context: DomainEventContext, payload: Record<string, unknown>): DomainEvent {
-  switch (name) {
-    case 'invoice.created':
-      return {
-        name,
-        context,
-        payload: {
-          invoiceId: readString(payload, 'invoiceId'),
-          number: readString(payload, 'number'),
-          contactId: readString(payload, 'contactId'),
-          contactName: readString(payload, 'contactName'),
-          totalGross: readNumber(payload, 'totalGross'),
-          dueDate: readOptionalDate(payload, 'dueDate'),
-        },
-      };
-    case 'invoice.overdue':
-      return {
-        name,
-        context,
-        payload: {
-          invoiceId: readString(payload, 'invoiceId'),
-          number: readString(payload, 'number'),
-          contactId: readString(payload, 'contactId'),
-          contactName: readString(payload, 'contactName'),
-          totalGross: readNumber(payload, 'totalGross'),
-          dueDate: readDate(payload, 'dueDate'),
-          daysLate: readNumber(payload, 'daysLate'),
-        },
-      };
-    case 'invoice.sent':
-      return {
-        name,
-        context,
-        payload: {
-          invoiceId: readString(payload, 'invoiceId'),
-          number: readString(payload, 'number'),
-          contactId: readString(payload, 'contactId'),
-          totalGross: readNumber(payload, 'totalGross'),
-        },
-      };
-    case 'invoice.paid':
-      return {
-        name,
-        context,
-        payload: {
-          invoiceId: readString(payload, 'invoiceId'),
-          number: readString(payload, 'number'),
-          contactId: readString(payload, 'contactId'),
-          paidAmount: readNumber(payload, 'paidAmount'),
-        },
-      };
-    case 'payment.received':
-      return {
-        name,
-        context,
-        payload: {
-          paymentId: readString(payload, 'paymentId'),
-          contactId: readOptionalString(payload, 'contactId'),
-          amount: readNumber(payload, 'amount'),
-          method: readString(payload, 'method'),
-          reference: readOptionalString(payload, 'reference'),
-        },
-      };
-    case 'payment.allocated':
-      return {
-        name,
-        context,
-        payload: {
-          paymentId: readString(payload, 'paymentId'),
-          invoiceId: readString(payload, 'invoiceId'),
-          amount: readNumber(payload, 'amount'),
-        },
-      };
-    case 'stock.low':
-      return {
-        name,
-        context,
-        payload: {
-          productId: readString(payload, 'productId'),
-          productCode: readString(payload, 'productCode'),
-          productName: readString(payload, 'productName'),
-          currentQuantity: readNumber(payload, 'currentQuantity'),
-          minStockLevel: readNumber(payload, 'minStockLevel'),
-          warehouseId: readOptionalString(payload, 'warehouseId'),
-        },
-      };
-    case 'stock.reserved':
-    case 'stock.reservation.released':
-      return {
-        name,
-        context,
-        payload: {
-          reservationId: readString(payload, 'reservationId'),
-          productId: readString(payload, 'productId'),
-          quantity: readNumber(payload, 'quantity'),
-          warehouseId: readString(payload, 'warehouseId'),
-        },
-      };
-    case 'delivery.created':
-    case 'delivery.completed':
-      return {
-        name,
-        context,
-        payload: {
-          deliveryNoteId: readString(payload, 'deliveryNoteId'),
-          number: readString(payload, 'number'),
-          type: readString(payload, 'type'),
-          contactId: readOptionalString(payload, 'contactId'),
-        },
-      };
-    case 'sales.order.confirmed':
-    case 'sales.order.cancelled':
-      return {
-        name,
-        context,
-        payload: {
-          orderId: readString(payload, 'orderId'),
-          number: readString(payload, 'number'),
-          contactId: readString(payload, 'contactId'),
-          totalGross: readNumber(payload, 'totalGross'),
-        },
-      };
-    case 'salesQuote.accepted':
-      return {
-        name,
-        context,
-        payload: {
-          quoteId: readString(payload, 'quoteId'),
-          orderId: readString(payload, 'orderId'),
-          quoteNumber: readString(payload, 'quoteNumber'),
-          orderNumber: readString(payload, 'orderNumber'),
-          contactId: readString(payload, 'contactId'),
-          totalGross: readNumber(payload, 'totalGross'),
-        },
-      };
-    case 'purchase.request.created':
-      return {
-        name,
-        context,
-        payload: {
-          requestId: readString(payload, 'requestId'),
-          number: readString(payload, 'number'),
-          totalEstimated: payload.totalEstimated === null || payload.totalEstimated === undefined ? null : readNumber(payload, 'totalEstimated'),
-        },
-      };
-    case 'purchase.order.approved':
-      return {
-        name,
-        context,
-        payload: {
-          orderId: readString(payload, 'orderId'),
-          number: readString(payload, 'number'),
-          contactId: readString(payload, 'contactId'),
-          totalGross: readNumber(payload, 'totalGross'),
-        },
-      };
-    case 'purchase.order.received':
-      return {
-        name,
-        context,
-        payload: {
-          orderId: readString(payload, 'orderId'),
-          number: readString(payload, 'number'),
-          receivedQuantity: readNumber(payload, 'receivedQuantity'),
-        },
-      };
-    case 'supplier.invoice.created':
-      return {
-        name,
-        context,
-        payload: {
-          invoiceId: readString(payload, 'invoiceId'),
-          number: readString(payload, 'number'),
-          purchaseOrderId: readOptionalString(payload, 'purchaseOrderId'),
-          totalGross: readNumber(payload, 'totalGross'),
-        },
-      };
-    case 'threeway.match.failed':
-      return {
-        name,
-        context,
-        payload: {
-          purchaseOrderId: readString(payload, 'purchaseOrderId'),
-          purchaseOrderNumber: readString(payload, 'purchaseOrderNumber'),
-          issueCount: readNumber(payload, 'issueCount'),
-        },
-      };
-    case 'accounting.entry.created':
-      return {
-        name,
-        context,
-        payload: {
-          journalEntryId: readString(payload, 'journalEntryId'),
-          number: readString(payload, 'number'),
-          refType: readOptionalString(payload, 'refType'),
-          refId: readOptionalString(payload, 'refId'),
-          totalDebit: readNumber(payload, 'totalDebit'),
-          totalCredit: readNumber(payload, 'totalCredit'),
-        },
-      };
-    case 'accounting.entry.failed':
-      return {
-        name,
-        context,
-        payload: {
-          refType: readString(payload, 'refType'),
-          refId: readString(payload, 'refId'),
-          reason: readString(payload, 'reason'),
-        },
-      };
-    case 'marketplace.order.received':
-      return {
-        name,
-        context,
-        payload: {
-          marketplaceOrderId: readString(payload, 'marketplaceOrderId'),
-          channel: readString(payload, 'channel'),
-          totalGross: readNumber(payload, 'totalGross'),
-        },
-      };
-    case 'mail.failed':
-      return {
-        name,
-        context,
-        payload: {
-          mailId: readString(payload, 'mailId'),
-          subject: readString(payload, 'subject'),
-          sentById: readOptionalString(payload, 'sentById'),
-          recipients: readStringArray(payload, 'recipients'),
-          error: readOptionalString(payload, 'error'),
-        },
-      };
-    case 'employee.documentMissing':
-      return {
-        name,
-        context,
-        payload: {
-          employeeId: readString(payload, 'employeeId'),
-          employeeName: readString(payload, 'employeeName'),
-          documentName: readString(payload, 'documentName'),
-          severity: readPriority(payload, 'severity'),
-        },
-      };
-    case 'production.materialReserved':
-      return {
-        name,
-        context,
-        payload: {
-          workOrderId: readString(payload, 'workOrderId'),
-          workOrderNumber: readString(payload, 'workOrderNumber'),
-          reservedLineCount: readNumber(payload, 'reservedLineCount'),
-          reservedQuantity: readNumber(payload, 'reservedQuantity'),
-        },
-      };
-    case 'production.completed':
-      return {
-        name,
-        context,
-        payload: {
-          workOrderId: readString(payload, 'workOrderId'),
-          workOrderNumber: readString(payload, 'workOrderNumber'),
-          productId: readString(payload, 'productId'),
-          productName: readString(payload, 'productName'),
-          plannedQty: readNumber(payload, 'plannedQty'),
-          producedQty: readNumber(payload, 'producedQty'),
-          scrapQty: readNumber(payload, 'scrapQty'),
-        },
-      };
-  }
-}
-
-function restoreStoredEvent(record: StoredDomainEvent): DomainEvent {
-  if (!isDomainEventName(record.name)) throw new Error(`Bilinmeyen event adi: ${record.name}`);
-  if (record.schemaVersion > DOMAIN_EVENT_SCHEMA_VERSION) {
-    throw new Error(`Desteklenmeyen event schema version: ${record.schemaVersion}`);
-  }
-  return restoreDomainEvent(record.name, readContext(record.context), readPayload(record.payload));
-}
-
-async function loadOutboxEvent(tenantId: string, id: string): Promise<StoredDomainEvent | null> {
-  return prisma.domainEventOutbox.findFirst({
-    where: { tenantId, id },
-    select: {
-      id: true,
-      tenantId: true,
-      name: true,
-      schemaVersion: true,
-      payload: true,
-      context: true,
-      status: true,
-    },
-  });
-}
-
-export async function replayDomainEventOutbox(tenantId: string, id: string, includeDeadLetter: boolean): Promise<DomainEventReplayResult | null> {
-  const record = await loadOutboxEvent(tenantId, id);
-  if (!record) return null;
-
-  if (record.status === DomainEventOutboxStatus.PROCESSING) {
-    return {
-      id: record.id,
-      name: record.name,
-      beforeStatus: record.status,
-      afterStatus: record.status,
-      attempts: 0,
-      replayed: false,
-      message: 'Event zaten PROCESSING durumunda.',
-    };
-  }
-
-  if (record.status === DomainEventOutboxStatus.PROCESSED) {
-    return {
-      id: record.id,
-      name: record.name,
-      beforeStatus: record.status,
-      afterStatus: record.status,
-      attempts: 0,
-      replayed: false,
-      message: 'Event zaten PROCESSED durumunda.',
-    };
-  }
-
-  if (record.status === DomainEventOutboxStatus.DEAD_LETTER && !includeDeadLetter) {
-    return {
-      id: record.id,
-      name: record.name,
-      beforeStatus: record.status,
-      afterStatus: record.status,
-      attempts: 0,
-      replayed: false,
-      message: 'Dead-letter event sadece manuel replay ile tekrar islenir.',
-    };
-  }
-
-  await domainEvents.publish(restoreStoredEvent(record));
-  const updated = await prisma.domainEventOutbox.findFirst({
-    where: { tenantId, id },
-    select: { status: true, attempts: true },
-  });
-
-  return {
-    id: record.id,
-    name: record.name,
-    beforeStatus: record.status,
-    afterStatus: updated?.status ?? record.status,
-    attempts: updated?.attempts ?? 0,
-    replayed: true,
-    message: 'Event replay icin publish edildi.',
-  };
-}
-
-export async function processDomainEventOutboxBatch(limit = DEFAULT_BATCH_SIZE): Promise<DomainEventOutboxBatchResult> {
-  const processingTimeoutMs = readPositiveNumberEnv(
-    process.env.DOMAIN_EVENT_OUTBOX_PROCESSING_TIMEOUT_MS,
-    DEFAULT_PROCESSING_TIMEOUT_MS,
-  );
-  const staleProcessingCutoff = new Date(Date.now() - processingTimeoutMs);
-  const requeuedStale = await runWithTenantIsolationBypass('domain-event-outbox-worker-stale-processing', async () => {
-    const stale = await prisma.domainEventOutbox.updateMany({
-      where: {
-        tenantId: { not: '' },
-        status: DomainEventOutboxStatus.PROCESSING,
-        OR: [{ leaseExpiresAt: { lte: new Date() } }, { leaseExpiresAt: null, updatedAt: { lte: staleProcessingCutoff } }],
-      },
-      data: {
-        status: DomainEventOutboxStatus.FAILED,
-        lastError: 'Worker lease expired; event safely returned to the durable outbox.',
-        nextRetryAt: new Date(),
-        leaseOwner: null,
-        leaseExpiresAt: null,
-      },
-    });
-    return stale.count;
-  });
-
-  await runWithTenantIsolationBypass('domain-event-outbox-worker-poison-messages', async () =>
-    await prisma.domainEventOutbox.updateMany({
-      where: { tenantId: { not: '' }, status: DomainEventOutboxStatus.FAILED, attempts: { gte: MAX_OUTBOX_ATTEMPTS } },
-      data: { status: DomainEventOutboxStatus.DEAD_LETTER, nextRetryAt: null, leaseOwner: null, leaseExpiresAt: null },
-    }),
-  );
-
-  const leaseExpiresAt = new Date(Date.now() + processingTimeoutMs);
-  const dueEvents = await runWithTenantIsolationBypass('domain-event-outbox-worker-atomic-claim', async () =>
-    await prisma.$queryRaw<Array<{ id: string; tenantId: string }>>`
-      WITH candidates AS (
-        SELECT id
-        FROM domain_event_outbox
-        WHERE status IN ('PENDING', 'FAILED')
-          AND attempts < ${MAX_OUTBOX_ATTEMPTS}
-          AND ("nextRetryAt" IS NULL OR "nextRetryAt" <= NOW())
-        ORDER BY "createdAt" ASC
-        LIMIT ${limit}
-        FOR UPDATE SKIP LOCKED
-      )
-      UPDATE domain_event_outbox AS event
-      SET status = 'PROCESSING',
-          attempts = event.attempts + 1,
-          "claimedAt" = NOW(),
-          "leaseOwner" = ${WORKER_ID},
-          "leaseExpiresAt" = ${leaseExpiresAt},
-          "updatedAt" = NOW()
-      FROM candidates
-      WHERE event.id = candidates.id
-      RETURNING event.id, event."tenantId"
-    `,
-  );
-
-  const result: DomainEventOutboxBatchResult = {
-    claimed: dueEvents.length,
-    replayed: 0,
-    skipped: 0,
-    failed: 0,
-    requeuedStale,
-  };
-  for (const event of dueEvents) {
+async function deliverLease(lease: OutboxLease): Promise<boolean> {
+  return runWithTenantScope(lease.tenantId, async () => {
+    const record = await prisma.domainEventOutbox.findFirstOrThrow({ where: { id: lease.id, tenantId: lease.tenantId } });
     try {
-      const replayed = await runWithTenantScope(event.tenantId, async () => {
-        const record = await loadOutboxEvent(event.tenantId, event.id);
-        if (!record) return false;
-        const restoredEvent = restoreStoredEvent(record);
-        const correlationId = restoredEvent.context.correlationId ?? record.id;
-        await runWithObservabilityContext(
-          { requestId: record.id, correlationId },
-          () => domainEvents.publishClaimed(restoredEvent, record.id),
-        );
-        return true;
-      });
-      if (!replayed) {
-        result.skipped += 1;
-        continue;
+      let event: DomainEvent;
+      try { event = restoreStoredEvent(record); }
+      catch (error) {
+        if (error instanceof IncompatibleEventError) throw error;
+        throw new PermanentDeliveryError(error instanceof Error ? error.message : 'Invalid event payload.');
       }
-      result.replayed += 1;
-    } catch (error) {
-      result.failed += 1;
-      const message = error instanceof Error ? error.message : 'Bilinmeyen outbox worker hatasi';
-      logger.error(`[DomainEventOutboxWorker] ${event.id} replay hatasi: ${message}`);
-      await prisma.domainEventOutbox.updateMany({
-        where: { id: event.id, tenantId: event.tenantId },
-        data: {
-          status: DomainEventOutboxStatus.DEAD_LETTER,
-          lastError: message.slice(0, 2000),
-          nextRetryAt: null,
-        },
+      return await runWithObservabilityContext({ requestId: record.id, correlationId: event.context.correlationId ?? record.id }, async () => {
+        if (event.name === 'marketplace.webhook.received') await deliverTrendyolWebhook(lease.tenantId, event.payload.webhookEventId);
+        if (event.name === 'mail.delivery.requested') await deliverQueuedMail(lease, event.payload);
+        if (event.name === 'edocument.delivery.requested') await new EDocumentAutomationService(prisma).deliverQueuedDocument(lease.tenantId, event.payload.edocumentId);
+        return dispatchClaimedEvent(event, lease);
       });
+    } catch (error) {
+      await failEvent(lease, [{ listener: 'delivery', message: error instanceof Error ? error.message : 'Event failed.' }],
+        error instanceof PermanentDeliveryError || (error instanceof ProviderHttpError && !error.retryable),
+        error instanceof ProviderHttpError ? error.retryAfterMs : 0);
+      return false;
     }
-  }
+  });
+}
 
+export async function processDomainEventOutboxBatch(limit = 25): Promise<DomainEventOutboxBatchResult> {
+  registerDomainEventListeners();
+  await processPendingTenantProvisioning();
+  const result: DomainEventOutboxBatchResult = { claimed: 0, replayed: 0, skipped: 0, failed: 0, requeuedStale: await recoverExpiredLeases() };
+  await reconcileProvisioningMailFailures();
+  const batchSize = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.trunc(limit))) : 25;
+  // Claim immediately before delivery so events never age behind earlier work in a batch.
+  for (let index = 0; index < batchSize; index++) {
+    const lease = await claimNextEvent();
+    if (!lease) break;
+    result.claimed++;
+    if (await deliverLease(lease)) result.replayed++;
+    else result.failed++;
+  }
   return result;
 }
 
 class DomainEventOutboxWorkerService {
   private loop: WorkerLoop | null = null;
-
-  start(intervalMs = Number(process.env.DOMAIN_EVENT_OUTBOX_WORKER_INTERVAL_MS ?? DEFAULT_POLL_INTERVAL_MS)): void {
+  start(intervalMs = Number(process.env.DOMAIN_EVENT_OUTBOX_WORKER_INTERVAL_MS ?? 10_000)): void {
     if (this.loop) return;
-    this.loop = new WorkerLoop('DomainEventOutboxWorker', intervalMs, async () => {
-      await this.tick();
-    });
+    const pollInterval = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 10_000;
+    this.loop = new WorkerLoop('DomainEventOutboxWorker', pollInterval, async () => { await this.tick(); });
     this.loop.start();
   }
-
-  async stop(): Promise<void> {
-    const loop = this.loop;
-    this.loop = null;
-    await loop?.stop();
-  }
-
+  async stop(): Promise<void> { const loop = this.loop; this.loop = null; await loop?.stop(); }
   async tick(): Promise<DomainEventOutboxBatchResult> {
     const result = await processDomainEventOutboxBatch();
-    if (result.claimed > 0 || result.requeuedStale > 0) {
-      logger.info('[DomainEventOutboxWorker] Batch processed', {
-        claimed: result.claimed,
-        replayed: result.replayed,
-        skipped: result.skipped,
-        failed: result.failed,
-        requeuedStale: result.requeuedStale,
-      });
-    }
+    if (result.claimed || result.requeuedStale) logger.info('[DomainEventOutboxWorker] Batch processed', { ...result });
     return result;
   }
 }
-
 export const DomainEventOutboxWorker = new DomainEventOutboxWorkerService();
+
+export { replayDomainEventOutbox, type DomainEventReplayResult } from '../domain-events/delivery/replay.js';

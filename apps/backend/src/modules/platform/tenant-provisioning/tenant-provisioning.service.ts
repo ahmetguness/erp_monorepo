@@ -1,12 +1,12 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { AuditAction, EntityType, PermissionAction, Plan, Prisma, TenantStatus } from '@prisma/client';
+import { AuditAction, EntityType, PermissionAction, Prisma } from '@prisma/client';
 import { PLAN_MODULES, type TenantProvisioningInput, type TenantProvisioningJob, type TenantProvisioningPreview, type TenantProvisioningStepKey } from '@repo/types';
 import { BaseError } from '../../../errors/index.js';
 import { prisma } from '../../../lib/prisma.js';
 import { redactSensitiveText } from '../../../lib/sensitive-redaction.js';
 import { tenantReadyEmail } from '../../../services/mail-templates.service.js';
-import { sendMail } from '../../../services/mail.service.js';
+import { queueOutboundMail } from '../../../services/mail-delivery/mail-delivery.service.js';
 import { createAuditLog } from '../../../utils/audit.js';
 import { toAppModules } from '../../../utils/tenant-modules.js';
 import { tenantProvisioningInputSchema } from './tenant-provisioning.schemas.js';
@@ -32,13 +32,31 @@ function serializeInput(input: TenantProvisioningInput): Prisma.InputJsonObject 
   };
 }
 
+function validStepKey(value: string): TenantProvisioningStepKey {
+  const key = STEP_KEYS.find((item) => item === value);
+  if (!key) throw new TenantProvisioningError('Invalid provisioning step.', 409);
+  return key;
+}
+
+async function failProvisioning(jobId: string, error: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const changed = await tx.tenantProvisioningJob.updateMany({ where: { id: jobId, provisionedTenantId: null, status: { in: ['PENDING', 'RUNNING'] } }, data: { status: 'FAILED', error } });
+    if (!changed.count) return;
+    await tx.tenantProvisioningStep.updateMany({
+      where: { jobId, key: { in: ['TENANT_CREATED', 'OWNER_CREATED', 'DEFAULT_ROLES_CREATED'] } },
+      data: { status: 'FAILED', attempts: { increment: 1 }, error }
+    });
+  });
+}
+
 function serializeJob(job: Prisma.TenantProvisioningJobGetPayload<{ include: { steps: true } }>): TenantProvisioningJob {
   const validStatus = (value: string): TenantProvisioningJob['status'] => {
     if (value === 'PENDING' || value === 'RUNNING' || value === 'SUCCEEDED' || value === 'FAILED') return value;
     throw new TenantProvisioningError('Provisioning durumu bozuk.', 409);
   };
   return { id: job.id, tenantId: job.provisionedTenantId, idempotencyKey: job.idempotencyKey, status: validStatus(job.status), error: job.error,
-    createdAt: job.createdAt.toISOString(), updatedAt: job.updatedAt.toISOString(), steps: job.steps.map(step => ({ key: step.key as TenantProvisioningStepKey,
+    createdAt: job.createdAt.toISOString(), updatedAt: job.updatedAt.toISOString(), steps: job.steps.map(step => ({
+      key: validStepKey(step.key),
       status: validStatus(step.status), attempts: step.attempts, error: step.error, updatedAt: step.updatedAt.toISOString() })) };
 }
 
@@ -63,34 +81,32 @@ export async function previewTenantProvisioning(input: TenantProvisioningInput):
     effectiveModules: [...input.modules], checks, emailPreview: { to: normalizedEmail, subject: 'Axon ERP hesabınız hazır', passwordLinkExpiresInMinutes: 60 } };
 }
 
-async function markStep(jobId: string, key: TenantProvisioningStepKey, status: 'RUNNING' | 'SUCCEEDED' | 'FAILED', error?: string): Promise<void> {
-  await prisma.tenantProvisioningStep.update({ where: { jobId_key: { jobId, key } }, data: { status, error: error ?? null, ...(status === 'RUNNING' ? { attempts: { increment: 1 } } : {}) } });
-}
-
-async function deliverOwnerEmail(jobId: string, tenantId: string, input: TenantProvisioningInput): Promise<void> {
-  await markStep(jobId, 'EMAIL_SENT', 'RUNNING');
+async function queueOwnerEmail(tx: Prisma.TransactionClient, jobId: string, tenantId: string, input: TenantProvisioningInput): Promise<void> {
+  const step = await tx.tenantProvisioningStep.update({ where: { jobId_key: { jobId, key: 'EMAIL_SENT' } }, data: { status: 'RUNNING', attempts: { increment: 1 }, error: null } });
   const { rawToken, tokenHash, expiresAt } = createPasswordResetToken();
-  await prisma.user.update({ where: { email: input.email.toLowerCase() }, data: { passwordResetToken: tokenHash, passwordResetExpiry: expiresAt } });
+  await tx.user.update({ where: { email: input.email.toLowerCase() }, data: { passwordResetToken: tokenHash, passwordResetExpiry: expiresAt } });
   const link = `${process.env.APP_URL || 'http://localhost:3000'}/set-password?token=${rawToken}&email=${encodeURIComponent(input.email.toLowerCase())}`;
-  const mail = await sendMail({ to: input.email, ...tenantReadyEmail(input.ownerName, input.companyName, input.plan, link) });
-  if (!mail.success) {
-    await markStep(jobId, 'EMAIL_SENT', 'FAILED', mail.error || 'E-posta sağlayıcısı gönderimi reddetti.');
-    await prisma.tenantProvisioningJob.update({ where: { id: jobId }, data: { status: 'FAILED', error: mail.error || 'E-posta gönderilemedi.' } });
-    return;
-  }
-  await markStep(jobId, 'EMAIL_SENT', 'SUCCEEDED');
-  await prisma.tenantProvisioningJob.update({ where: { id: jobId }, data: { status: 'SUCCEEDED', error: null } });
-  await createAuditLog(prisma, { tenantId, adminId: (await prisma.tenantProvisioningJob.findUniqueOrThrow({ where: { id: jobId } })).createdById, module: 'TENANT_PROVISIONING', entityType: EntityType.OTHER, entityId: jobId, action: AuditAction.UPDATE, newValues: { emailDelivered: true } });
+  await queueOutboundMail(tx, {
+    tenantId, to: [input.email.toLowerCase()], ...tenantReadyEmail(input.ownerName, input.companyName, input.plan, link),
+    expiresAt, provisioning: { jobId, attempt: step.attempts }
+  });
 }
 
 async function executeProvisioning(jobId: string, input: TenantProvisioningInput, adminId: string): Promise<void> {
   try {
-    await prisma.tenantProvisioningJob.update({ where: { id: jobId }, data: { status: 'RUNNING', error: null } });
-    await Promise.all(['TENANT_CREATED', 'OWNER_CREATED', 'DEFAULT_ROLES_CREATED'].map(key => markStep(jobId, key as TenantProvisioningStepKey, 'RUNNING')));
+    const claimed = await prisma.tenantProvisioningJob.updateMany({ where: { id: jobId, provisionedTenantId: null, status: { in: ['PENDING', 'RUNNING'] } }, data: { status: 'RUNNING', error: null } });
+    if (!claimed.count) return;
     const password = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 12);
-    const result = await prisma.$transaction(async tx => {
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM tenant_provisioning_jobs WHERE id = ${jobId} FOR UPDATE`;
+      const current = await tx.tenantProvisioningJob.findUniqueOrThrow({ where: { id: jobId } });
+      if (current.provisionedTenantId) return;
+      await tx.tenantProvisioningStep.updateMany({
+        where: { jobId, key: { in: ['TENANT_CREATED', 'OWNER_CREATED', 'DEFAULT_ROLES_CREATED'] } },
+        data: { status: 'RUNNING', attempts: { increment: 1 }, error: null }
+      });
       const tenant = await tx.tenant.create({ data: { slug: slugify(input.slug || input.companyName), companyName: input.companyName, email: input.email.toLowerCase(), phone: input.phone || null,
-        city: input.city || null, sector: input.sector || null, plan: input.plan as Plan, status: input.status as TenantStatus, maxUsers: input.maxUsers ?? null,
+        city: input.city || null, sector: input.sector || null, plan: input.plan, status: input.status, maxUsers: input.maxUsers ?? null,
         modules: toAppModules(input.modules), notes: input.notes || null, isCustomPricing: input.isCustomPricing ?? false, trialEndsAt: date(input.trialEndsAt),
         subscriptionStart: date(input.subscriptionStart), subscriptionEnd: date(input.subscriptionEnd), planChangedAt: new Date() } });
       await tx.billingSubscription.create({ data: { tenantId: tenant.id, state: input.status === 'TRIAL' ? 'TRIALING' : 'ACTIVE', monthlyAmount: input.plan === 'STARTER' ? 1990 : input.plan === 'PROFESSIONAL' ? 3990 : 0 } });
@@ -104,15 +120,13 @@ async function executeProvisioning(jobId: string, input: TenantProvisioningInput
       const assigned = await tx.tenantUser.updateMany({ where: { tenantId: tenant.id, userId: user.id }, data: { roleId: adminRole.id } });
       if (assigned.count !== 1) throw new TenantProvisioningError('Owner varsayılan yönetici rolüne atanamadı.');
       await tx.tenantProvisioningJob.update({ where: { id: jobId }, data: { provisionedTenantId: tenant.id } });
-      await createAuditLog(tx, { tenantId: tenant.id, adminId, module: 'TENANT_PROVISIONING', entityType: EntityType.OTHER, entityId: jobId, action: AuditAction.CREATE, newValues: { slug: tenant.slug, plan: tenant.plan, status: tenant.status } });
-      return tenant.id;
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    await Promise.all(['TENANT_CREATED', 'OWNER_CREATED', 'DEFAULT_ROLES_CREATED'].map(key => markStep(jobId, key as TenantProvisioningStepKey, 'SUCCEEDED')));
-    await deliverOwnerEmail(jobId, result, input);
+      await createAuditLog(tx, { tenantId: tenant.id, adminId, module: 'TENANT_PROVISIONING', entityType: EntityType.OTHER, entityId: jobId, action: AuditAction.CREATE, newValues: { slug: tenant.slug, plan: tenant.plan, status: tenant.status } }, { required: true });
+      await tx.tenantProvisioningStep.updateMany({ where: { jobId, key: { in: ['TENANT_CREATED', 'OWNER_CREATED', 'DEFAULT_ROLES_CREATED'] } }, data: { status: 'SUCCEEDED', error: null } });
+      await queueOwnerEmail(tx, jobId, tenant.id, input);
+    });
   } catch (error: unknown) {
     const message = redactSensitiveText(error instanceof Error ? error.message : 'Provisioning başarısız.');
-    await prisma.tenantProvisioningJob.update({ where: { id: jobId }, data: { status: 'FAILED', error: message } });
-    await prisma.tenantProvisioningStep.updateMany({ where: { jobId, status: 'RUNNING' }, data: { status: 'FAILED', error: message } });
+    await failProvisioning(jobId, message);
   }
 }
 
@@ -135,8 +149,7 @@ export async function createTenantProvisioning(input: TenantProvisioningInput, i
     if (concurrent.requestHash !== requestHash) throw new TenantProvisioningError('Idempotency-Key farklı bir istek için kullanılmış.');
     return serializeJob(concurrent);
   }
-  await executeProvisioning(job.id, input, adminId);
-  return getTenantProvisioning(job.id);
+  return serializeJob(job);
 }
 
 export async function getTenantProvisioning(id: string): Promise<TenantProvisioningJob> {
@@ -157,9 +170,31 @@ export async function retryTenantProvisioning(id: string, adminId: string): Prom
   const input = tenantProvisioningInputSchema.parse(job.input);
   if (job.provisionedTenantId) {
     await prisma.tenantProvisioningStep.updateMany({ where: { jobId: job.id, key: { in: ['TENANT_CREATED', 'OWNER_CREATED', 'DEFAULT_ROLES_CREATED'] } }, data: { status: 'SUCCEEDED', error: null } });
-    await deliverOwnerEmail(job.id, job.provisionedTenantId, input);
+    const tenantId = job.provisionedTenantId;
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.tenantProvisioningJob.updateMany({ where: { id: job.id, status: 'FAILED', updatedAt: job.updatedAt }, data: { status: 'RUNNING', error: null } });
+      if (!claimed.count) throw new TenantProvisioningError('Provisioning job changed concurrently.');
+      await queueOwnerEmail(tx, job.id, tenantId, input);
+      await createAuditLog(tx, { tenantId, adminId, module: 'TENANT_PROVISIONING', entityType: EntityType.OTHER, entityId: job.id, action: AuditAction.UPDATE, newValues: { emailRetryQueued: true } }, { required: true });
+    });
   } else {
-    await executeProvisioning(job.id, input, adminId);
+    await prisma.tenantProvisioningJob.updateMany({ where: { id: job.id, status: 'FAILED' }, data: { status: 'PENDING', error: null } });
   }
   return getTenantProvisioning(id);
+}
+
+/** Recover durable requests that never reached the tenant transaction, including a crashed API process. */
+export async function processPendingTenantProvisioning(): Promise<void> {
+  const jobs = await prisma.tenantProvisioningJob.findMany({
+    where: { provisionedTenantId: null, OR: [{ status: 'PENDING' }, { status: 'RUNNING', updatedAt: { lt: new Date(Date.now() - 5 * 60_000) } }] },
+    orderBy: { createdAt: 'asc' }, take: 5,
+  });
+  for (const job of jobs) {
+    const parsed = tenantProvisioningInputSchema.safeParse(job.input);
+    if (!parsed.success) {
+      await failProvisioning(job.id, 'Invalid stored provisioning input.');
+      continue;
+    }
+    await executeProvisioning(job.id, parsed.data, job.createdById);
+  }
 }

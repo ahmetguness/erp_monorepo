@@ -1,3 +1,4 @@
+import { enqueueDomainEvent } from '../domain-events/outbox.js';
 import {
   AuditAction,
   EntityType,
@@ -11,7 +12,7 @@ import { ValidationError } from '../errors/index.js';
 import { createAuditLog } from '../utils/audit.js';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { writeInvoiceAccountEntry } from '../utils/account-entry.js';
-import { createEventContext, domainEvents } from '../domain-events/index.js';
+import { createEventContext } from '../domain-events/index.js';
 
 export type AiUseCase =
   | 'INVOICE_OCR'
@@ -522,22 +523,23 @@ export class AiAutomationService {
         if (sourceAttachment) {
           await tx.attachment.updateMany({ where: { id: sourceAttachment.id, tenantId }, data: { entityType: EntityType.INVOICE, entityId: created.id, category: 'PURCHASING', documentKind: 'GENERAL' } });
         }
+        await enqueueDomainEvent(tx, {
+        name: 'invoice.created',
+        context: createEventContext({ tenantId, userId }),
+        payload: {
+          invoiceId: created.id,
+          number: created.number,
+          contactId,
+          contactName: payloadString(payload, 'contactName') ?? 'Cari',
+          totalGross,
+          dueDate: created.dueDate,
+        },
+      });
         return created;
       });
       resultId = inv.id;
 
-      await domainEvents.publish({
-        name: 'invoice.created',
-        context: createEventContext({ tenantId, userId }),
-        payload: {
-          invoiceId: inv.id,
-          number: inv.number,
-          contactId,
-          contactName: payloadString(payload, 'contactName') ?? 'Cari',
-          totalGross,
-          dueDate: inv.dueDate,
-        },
-      });
+
     }
 
     // 2. Audit Log Record

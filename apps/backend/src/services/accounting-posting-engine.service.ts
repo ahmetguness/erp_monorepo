@@ -1,3 +1,4 @@
+import { enqueueDomainEvent } from '../domain-events/outbox.js';
 import {
   InvoiceStatus,
   InvoiceType,
@@ -6,12 +7,16 @@ import {
   type Prisma,
   type PrismaClient,
 } from "@prisma/client";
-import { createEventContext, domainEvents } from "../domain-events/index.js";
+import { createEventContext } from "../domain-events/index.js";
 import { generateDocumentNumber } from "../utils/generate-number.js";
 import { resolveOpenFiscalPeriodId } from "./financial/index.js";
 import { toBaseMoney } from './financial/currency.js';
 
 type PostingDbClient = PrismaClient | Prisma.TransactionClient;
+function withPostingTransaction<T>(db: PostingDbClient, operation: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return '$transaction' in db ? db.$transaction(operation) : operation(db);
+}
+
 type PostingSource = "ALL" | "INVOICE" | "PAYMENT" | "STOCK";
 type PostingStatus = "POSTED" | "SKIPPED" | "FAILED";
 
@@ -563,7 +568,8 @@ export class AccountingPostingEngineService {
         "journalEntry",
         this.db,
       );
-      const entry = await this.db.journalEntry.create({
+      const entry = await withPostingTransaction(this.db, async (tx) => {
+        const entry = await tx.journalEntry.create({
         data: {
           tenantId,
           fiscalPeriodId,
@@ -599,7 +605,7 @@ export class AccountingPostingEngineService {
       });
 
       if (params.options.emitDomainEvent !== false) {
-        await domainEvents.publish({
+        await enqueueDomainEvent(tx, {
           name: "accounting.entry.created",
           context: createEventContext({
             tenantId,
@@ -615,6 +621,9 @@ export class AccountingPostingEngineService {
           },
         });
       }
+
+        return entry;
+      });
 
       return {
         source: params.source,
@@ -657,10 +666,10 @@ export class AccountingPostingEngineService {
     reason: string,
     userId?: string | null,
   ): Promise<void> {
-    await domainEvents.publish({
+    await withPostingTransaction(this.db, (tx) => enqueueDomainEvent(tx, {
       name: "accounting.entry.failed",
       context: createEventContext({ tenantId, userId: userId ?? null }),
       payload: { refType, refId, reason },
-    });
+    }));
   }
 }

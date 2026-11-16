@@ -5,7 +5,7 @@ import { Context } from 'hono';
 import { ConflictError,NotFoundError,ValidationError } from '../../../../../errors/index.js';
 import { prisma } from '../../../../../lib/prisma.js';
 import { tenantReadyEmail } from '../../../../../services/mail-templates.service.js';
-import { sendMail } from '../../../../../services/mail.service.js';
+import { queueOutboundMail } from '../../../../../services/mail-delivery/mail-delivery.service.js';
 import { createAuditLog,getRequestMeta } from '../../../../../utils/audit.js';
 import { requireParam } from '../../../../../utils/context.js';
 import { modulesForPrismaPlan } from '../../../../../utils/tenant-modules.js';
@@ -196,13 +196,14 @@ export const AdminTenantController = {
         `Modüller: ${formatNotificationValue(translateModules(tenant.modules))}`,
       ]);
 
+      const appUrl = process.env.APP_URL || 'http://localhost:3000';
+      const setPasswordUrl = `${appUrl}/set-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
+      const template = tenantReadyEmail(body.ownerName.trim(), tenant.companyName, tenant.plan, setPasswordUrl);
+      await queueOutboundMail(tx, { tenantId: tenant.id, to: [email], ...template, expiresAt: setPasswordExpiry });
+
       return tenant;
     });
 
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
-    const setPasswordUrl = `${appUrl}/set-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
-    const template = tenantReadyEmail(body.ownerName.trim(), result.companyName, result.plan, setPasswordUrl);
-    await sendMail({ to: email, ...template });
 
     return c.json({ data: await maskTenantForAdmin(c.get('adminId'), result) }, 201);
   },

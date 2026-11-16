@@ -1,4 +1,3 @@
-import { File } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
 import { Workbook } from 'exceljs';
 import { parseSpreadsheetFile } from '@/lib/import/parse-spreadsheet-file';

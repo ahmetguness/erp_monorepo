@@ -57,6 +57,7 @@ export function useMailHistory(params: ListMailParams) {
   return useQuery({
     queryKey: ['mail', 'list', params],
     queryFn: () => listMail(params),
+    refetchInterval: (query) => query.state.data?.data.some((mail) => mail.status === 'PENDING') ? 5_000 : false,
   });
 }
 
@@ -64,6 +65,7 @@ export function useMailMessage(id: string | null) {
   return useQuery({
     queryKey: ['mail', 'detail', id],
     queryFn: () => getMail(id ?? ''),
+    refetchInterval: (query) => query.state.data?.status === 'PENDING' ? 5_000 : false,
     enabled: Boolean(id),
   });
 }
@@ -79,6 +81,7 @@ export function useMailSummary() {
   return useQuery({
     queryKey: ['mail', 'summary'],
     queryFn: getMailSummary,
+    refetchInterval: (query) => (query.state.data?.pendingCount ?? 0) > 0 ? 5_000 : false,
   });
 }
 
@@ -90,11 +93,11 @@ export function useMailTemplateLifecycle() {
 }
 
 export function useSendMail() {
-  return useMailMutation<SendMailDTO, MailResult>(sendMail, 'Mail gönderildi.');
+  return useMailMutation<SendMailDTO, MailResult>(sendMail, 'Mail gönderim kuyruğuna alındı.');
 }
 
 export function useSendBulkMail() {
-  return useMailMutation<BulkMailDTO>(sendBulkMail, 'Toplu mail gönderildi.');
+  return useMailMutation<BulkMailDTO>(sendBulkMail, 'Toplu mail gönderim kuyruğuna alındı.');
 }
 
 export function useRenderMailTemplate() {
@@ -158,17 +161,17 @@ export function useDeleteMailTemplate() {
 }
 
 export function useSendWelcomeMail() {
-  return useMailMutation<WelcomeMailDTO>(sendWelcomeMail, 'Hoş geldin maili gönderildi.');
+  return useMailMutation<WelcomeMailDTO>(sendWelcomeMail, 'Hoş geldin maili gönderim kuyruğuna alındı.');
 }
 
 export function useSendPasswordResetMail() {
-  return useMailMutation<PasswordResetMailDTO>(sendPasswordResetMail, 'Şifre sıfırlama maili gönderildi.');
+  return useMailMutation<PasswordResetMailDTO>(sendPasswordResetMail, 'Şifre sıfırlama maili gönderim kuyruğuna alındı.');
 }
 
 export function useSendInvoiceNotificationMail() {
-  return useMailMutation<InvoiceNotificationMailDTO>(sendInvoiceNotificationMail, 'Fatura bildirimi gönderildi.');
+  return useMailMutation<InvoiceNotificationMailDTO>(sendInvoiceNotificationMail, 'Fatura bildirimi gönderim kuyruğuna alındı.');
 }
 
 export function useSendGenericNotificationMail() {
-  return useMailMutation<GenericNotificationMailDTO>(sendGenericNotificationMail, 'Bildirim maili gönderildi.');
+  return useMailMutation<GenericNotificationMailDTO>(sendGenericNotificationMail, 'Bildirim maili gönderim kuyruğuna alındı.');
 }

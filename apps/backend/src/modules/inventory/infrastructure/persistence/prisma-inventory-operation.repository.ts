@@ -1,3 +1,5 @@
+import { enqueueDomainEvent } from '../../../../domain-events/outbox.js';
+import { createEventContext } from '../../../../domain-events/events.js';
 import {
   MovementRefType,
   MovementType,
@@ -7,7 +9,6 @@ import {
   type InventoryReservation,
   type Prisma,
   type PrismaClient,
-  type PurchaseOrder,
   type StockMovement,
 } from "@prisma/client";
 import {
@@ -149,16 +150,8 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
               lotId: command.lotId ?? null,
             })
           : null;
-      return {
-        movement: await this.writeMovement(tx, command),
-        replayed: false,
-        consumption,
-      };
-    });
-    if (transactionResult.replayed)
-      return { movement: transactionResult.movement, replayed: true };
-    const { movement, consumption } = transactionResult;
-    const updatedProduct = await this.db.product.findFirst({
+      const movement = await this.writeMovement(tx, command);
+      const updatedProduct = await tx.product.findFirst({
       where: {
         id: command.productId,
         tenantId: command.tenantId,
@@ -189,6 +182,16 @@ export class PrismaInventoryOperationRepository implements InventoryOperationRep
             warehouseId: command.warehouseId,
           }
         : undefined;
+      if (lowStockSignal) await enqueueDomainEvent(tx, {
+        name: 'stock.low', context: createEventContext({ tenantId: command.tenantId, userId: command.userId, eventId: movement.id }), payload: lowStockSignal,
+      });
+      return { movement, replayed: false, consumption, lowStockSignal };
+    });
+    if (transactionResult.replayed)
+      return { movement: transactionResult.movement, replayed: true };
+    const { movement, consumption } = transactionResult;
+    const { lowStockSignal } = transactionResult;
+
     return {
       movement,
       replayed: false,

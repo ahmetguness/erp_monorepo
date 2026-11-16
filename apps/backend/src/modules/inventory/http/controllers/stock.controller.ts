@@ -1,10 +1,6 @@
 import { AuditAction, EntityType, MovementType } from "@prisma/client";
 import { Context } from "hono";
 import {
-  createEventContext,
-  domainEvents,
-} from "../../../../domain-events/index.js";
-import {
   ConflictError,
   NotFoundError,
   ValidationError,
@@ -238,13 +234,7 @@ export const StockController = {
         ...getRequestMeta(c),
       });
 
-      if (result.lowStockSignal) {
-        await domainEvents.publish({
-          name: "stock.low",
-          context: createEventContext({ tenantId, userId }),
-          payload: result.lowStockSignal,
-        });
-      }
+
     }
 
     return c.json(

@@ -10,7 +10,8 @@ describe('worker retry policy', () => {
 
   it('computes deterministic retry dates and attempt exhaustion', () => {
     const now = new Date('2026-08-27T12:00:00.000Z');
-    expect(nextRetryDate(3, now, policy).toISOString()).toBe('2026-08-27T12:00:04.000Z');
+    expect(nextRetryDate(3, now, policy, () => 1).toISOString()).toBe('2026-08-27T12:00:04.000Z');
+    expect(nextRetryDate(3, now, policy, () => 0).toISOString()).toBe('2026-08-27T12:00:02.000Z');
     expect(hasAttemptsRemaining(3, policy)).toBe(true);
     expect(hasAttemptsRemaining(4, policy)).toBe(false);
   });

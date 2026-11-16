@@ -113,6 +113,7 @@ const ReportScheduleDispatchResultSchema = z.object({
   recipients: z.array(z.string()),
   notificationCount: z.coerce.number(),
   mailCount: z.coerce.number(),
+  queuedMailCount: z.coerce.number().optional().default(0),
   preview: z.object({
     datasetLabel: z.string(),
     metricLabel: z.string(),

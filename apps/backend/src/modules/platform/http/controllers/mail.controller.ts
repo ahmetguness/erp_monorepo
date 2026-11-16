@@ -36,7 +36,7 @@ import {
   passwordResetEmail,
   welcomeEmail,
 } from "../../../../services/mail-templates.service.js";
-import { sendMail } from "../../../../services/mail.service.js";
+import { queueMail } from "../../../../services/mail-delivery/mail-delivery.service.js";
 import { getRequestMeta } from "../../../../utils/audit.js";
 import { requireTenantId, requireUserId } from "../../../../utils/context.js";
 import {
@@ -326,40 +326,11 @@ async function sendAndRecordMail(options: {
   attachments?: ReturnType<typeof normalizeMailAttachments>;
 }) {
   const recipients = normalizeAddresses(options.to);
-  const history = await MailHistoryService.createOutbound({
-    tenantId: options.tenantId,
-    sentById: options.userId,
-    from: options.from,
-    replyTo: options.replyTo,
-    to: recipients,
-    cc: options.cc,
-    bcc: options.bcc,
-    subject: options.subject,
-    html: options.html,
-    attachments: options.attachments,
+  return queueMail({
+    tenantId: options.tenantId, sentById: options.userId, to: recipients,
+    subject: options.subject, html: options.html, from: options.from,
+    replyTo: options.replyTo, cc: options.cc, bcc: options.bcc, attachments: options.attachments,
   });
-
-  const result = await sendMail({
-    to: recipients,
-    subject: options.subject,
-    html: options.html,
-    ...(options.from && { from: options.from }),
-    ...(options.replyTo && { replyTo: options.replyTo }),
-    ...(options.cc && options.cc.length > 0 && { cc: options.cc }),
-    ...(options.bcc && options.bcc.length > 0 && { bcc: options.bcc }),
-    ...(options.attachments &&
-      options.attachments.length > 0 && { attachments: options.attachments }),
-  });
-
-  await MailHistoryService.complete({
-    id: history.id,
-    tenantId: options.tenantId,
-    success: result.success,
-    providerId: result.id,
-    error: result.error,
-  });
-
-  return result;
 }
 
 export class MailController {
@@ -794,7 +765,7 @@ export class MailController {
       html: htmlWithSignature,
       attachments: normalizedAttachments,
     });
-    return c.json(result, result.success ? 200 : 500);
+    return c.json(result, result.success ? 202 : 500);
   }
 
   /** POST /api/mail/bulk – Aynı içeriği birden fazla adrese tek tek gönder */
@@ -910,7 +881,7 @@ export class MailController {
         to: recipient,
         success: result.success,
         id: result.id,
-        error: result.error,
+        queued: result.queued,
       });
     }
 
@@ -918,7 +889,8 @@ export class MailController {
     return c.json(
       {
         success: successCount === results.length,
-        sent: successCount,
+        sent: 0,
+        queued: successCount,
         failed: results.length - successCount,
         results,
       },
@@ -948,7 +920,7 @@ export class MailController {
       to: recipient,
       ...template,
     });
-    return c.json(result, result.success ? 200 : 500);
+    return c.json(result, result.success ? 202 : 500);
   }
 
   /** POST /api/mail/password-reset – Şifre sıfırlama maili */
@@ -987,7 +959,7 @@ export class MailController {
       to: recipient,
       ...template,
     });
-    return c.json(result, result.success ? 200 : 500);
+    return c.json(result, result.success ? 202 : 500);
   }
 
   /** POST /api/mail/invoice-notification – Fatura bildirimi */
@@ -1031,7 +1003,7 @@ export class MailController {
       to: recipient,
       ...template,
     });
-    return c.json(result, result.success ? 200 : 500);
+    return c.json(result, result.success ? 202 : 500);
   }
 
   /** POST /api/mail/notification – Genel bildirim maili */
@@ -1061,6 +1033,6 @@ export class MailController {
       to: recipient,
       ...template,
     });
-    return c.json(result, result.success ? 200 : 500);
+    return c.json(result, result.success ? 202 : 500);
   }
 }

@@ -5,12 +5,13 @@
     "moduleResolution": "node16",
     "rootDir": ".",
     "outDir": "dist",
+    "noEmit": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["src", "prisma", "scripts"],
+  "include": ["src", "prisma", "scripts", "tests", "*.ts", "*.mts"],
   "exclude": ["node_modules", "dist"]
 }

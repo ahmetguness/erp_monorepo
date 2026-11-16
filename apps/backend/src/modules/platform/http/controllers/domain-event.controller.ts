@@ -42,6 +42,7 @@ export const DomainEventController = {
       prisma.domainEventOutbox.count({ where }),
       prisma.domainEventOutbox.findMany({
         where,
+        include: { deliveries: { where: { tenantId }, select: { consumer: true, completedAt: true } } },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -71,6 +72,7 @@ export const DomainEventController = {
       prisma.domainEventOutbox.count({ where }),
       prisma.domainEventOutbox.findMany({
         where,
+        include: { deliveries: { where: { tenantId }, select: { consumer: true, completedAt: true } } },
         orderBy: { updatedAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,

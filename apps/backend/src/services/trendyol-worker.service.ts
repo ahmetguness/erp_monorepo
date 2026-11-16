@@ -1,3 +1,9 @@
+import { toDomainEventJson } from '../domain-events/outbox.js';
+import { z } from 'zod';
+import { runWithProviderDeadline, providerRequestSignal } from '../infrastructure/providers/request-context.js';
+import { PermanentDeliveryError } from '../domain-events/delivery/retry-policy.js';
+import { upsertMarketplaceOrder } from '../modules/marketplace/infrastructure/index.js';
+import { TrendyolApiError } from './trendyol/transport.js';
 /**
  * Trendyol Sync Worker
  *
@@ -15,8 +21,7 @@ import {
   buildTrendyolCredentials,
   mapTrendyolOrderStatus,
 } from './trendyol.service';
-import { MarketplaceOrderStatus, Prisma, SyncJobType, SyncJobStatus } from '@prisma/client';
-import { hostname } from 'node:os';
+import { Prisma, SyncJobType, SyncJobStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { nextRetryDate, WorkerLoop } from '../modules/shared/index.js';
 import { runWithTenantIsolationBypass, runWithTenantScope } from '../lib/tenant-isolation-context.js';
@@ -28,7 +33,6 @@ import { runWithTenantIsolationBypass, runWithTenantScope } from '../lib/tenant-
 const POLL_INTERVAL_MS = 5_000;
 const JOB_TIMEOUT_MS = 5 * 60_000;
 const FIFTEEN_MIN_MS = 15 * 60_000;
-const WORKER_ID = `${hostname()}:${process.pid}:${randomUUID()}`;
 
 // ---------------------------------------------
 // Job param types
@@ -46,7 +50,7 @@ export interface SyncStockParams {
   force?: boolean;
 }
 
-export type JobParams = SyncOrdersParams | SyncStockParams;
+export interface JobParams extends SyncOrdersParams, SyncStockParams { }
 
 // ---------------------------------------------
 // Worker
@@ -102,6 +106,7 @@ export const TrendyolWorker = {
 async function claimNextJob(tenantId?: string) {
   return runWithTenantIsolationBypass('marketplace-worker-atomic-claim', async () => {
     const leaseExpiresAt = new Date(Date.now() + JOB_TIMEOUT_MS + 30_000);
+    const leaseOwner = randomUUID();
     await prisma.marketplaceSyncJob.updateMany({
       where: {
         ...(tenantId ? { tenantId } : {}),
@@ -116,13 +121,17 @@ async function claimNextJob(tenantId?: string) {
         leaseExpiresAt: null,
       },
     });
+    await prisma.marketplaceSyncJob.updateMany({
+      where: { ...(tenantId ? { tenantId } : {}), status: SyncJobStatus.FAILED, attempts: { gte: prisma.marketplaceSyncJob.fields.maxAttempts } },
+      data: { status: SyncJobStatus.DEAD_LETTER, nextRetryAt: null, leaseOwner: null, leaseExpiresAt: null },
+    });
     const rows = await prisma.$queryRaw<Array<{ id: string; tenantId: string }>>`
       UPDATE marketplace_sync_jobs
       SET    status = 'RUNNING',
              "startedAt" = NOW(),
              "finishedAt" = NULL,
              attempts = attempts + 1,
-             "leaseOwner" = ${WORKER_ID},
+             "leaseOwner" = ${leaseOwner},
              "leaseExpiresAt" = ${leaseExpiresAt},
              "updatedAt" = NOW()
       WHERE  id = (
@@ -130,6 +139,7 @@ async function claimNextJob(tenantId?: string) {
         WHERE  status IN ('PENDING', 'FAILED')
           AND (${tenantId ?? null}::text IS NULL OR "tenantId" = ${tenantId ?? null})
           AND attempts < "maxAttempts"
+          AND "quarantinedAt" IS NULL AND "resolvedAt" IS NULL
           AND ("nextRetryAt" IS NULL OR "nextRetryAt" <= NOW())
         ORDER  BY "createdAt" ASC
         LIMIT  1
@@ -152,7 +162,7 @@ export async function processPendingJobs(tenantId?: string): Promise<void> {
   try {
     job = await claimNextJob(tenantId);
   } catch (err) {
-    const msg = (err as Error).message ?? '';
+    const msg = err instanceof Error ? err.message : '';
     if (msg.includes('does not exist') || msg.includes('P2021')) return;
     throw err;
   }
@@ -165,16 +175,11 @@ async function processClaimedJob(job: NonNullable<Awaited<ReturnType<typeof clai
 
   logger.info(`[TrendyolWorker] Running job ${job.id} (${job.jobType})`);
 
-  let timeoutHandle: NodeJS.Timeout | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timeoutHandle = setTimeout(() => reject(new Error('Job timeout')), JOB_TIMEOUT_MS);
-  });
-
   try {
-    const result = await Promise.race([
-      runJob(job.tenantId, job.integrationId, job.jobType, (job.params ?? {}) as JobParams),
-      timeout,
-    ]);
+    const params = z.object({ hoursBack: z.number().positive().optional(), status: z.string().optional(), force: z.boolean().optional() }).safeParse(job.params ?? {});
+    if (!params.success) throw new PermanentDeliveryError('Invalid marketplace job parameters.');
+    const result = await runWithProviderDeadline(JOB_TIMEOUT_MS, () => runJob(job.tenantId, job.integrationId, job.jobType, params.data));
+    if (result.errorCount > 0) throw new Error(`Marketplace job has ${result.errorCount} unsuccessful items.`);
 
     const apiLimits = TrendyolService.getApiLimitRemaining();
     const finalResult = {
@@ -184,13 +189,13 @@ async function processClaimedJob(job: NonNullable<Awaited<ReturnType<typeof clai
     };
 
     await prisma.marketplaceSyncJob.updateMany({
-      where: { id: job.id, tenantId: job.tenantId },
+      where: { id: job.id, tenantId: job.tenantId, status: SyncJobStatus.RUNNING, leaseOwner: job.leaseOwner },
       data: {
         status: SyncJobStatus.DONE,
         finishedAt: new Date(),
         processedCount: result.processedCount,
         errorCount: result.errorCount,
-        result: finalResult as Prisma.InputJsonValue,
+        result: toDomainEventJson(finalResult) ?? Prisma.JsonNull,
         nextRetryAt: null,
         leaseOwner: null,
         leaseExpiresAt: null,
@@ -200,9 +205,9 @@ async function processClaimedJob(job: NonNullable<Awaited<ReturnType<typeof clai
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`[TrendyolWorker] Job ${job.id} failed: ${msg}`);
-    const exhausted = job.attempts >= job.maxAttempts;
-    await prisma.marketplaceSyncJob.updateMany({
-      where: { id: job.id, tenantId: job.tenantId },
+    const exhausted = job.attempts >= job.maxAttempts || err instanceof PermanentDeliveryError || (err instanceof TrendyolApiError && !err.isRetryable);
+    const failed = await prisma.marketplaceSyncJob.updateMany({
+      where: { id: job.id, tenantId: job.tenantId, status: SyncJobStatus.RUNNING, leaseOwner: job.leaseOwner },
       data: {
         status: exhausted ? SyncJobStatus.DEAD_LETTER : SyncJobStatus.FAILED,
         finishedAt: new Date(),
@@ -213,12 +218,10 @@ async function processClaimedJob(job: NonNullable<Awaited<ReturnType<typeof clai
         leaseExpiresAt: null,
       },
     });
-    await prisma.marketplaceIntegration.updateMany({
+    if (failed.count) await prisma.marketplaceIntegration.updateMany({
       where: { id: job.integrationId, tenantId: job.tenantId },
       data: { syncErrors: { increment: 1 } },
     }).catch(() => {});
-  } finally {
-    if (timeoutHandle) clearTimeout(timeoutHandle);
   }
 }
 
@@ -237,12 +240,12 @@ async function runJob(
   const integration = await prisma.marketplaceIntegration.findFirst({
     where: { id: integrationId, tenantId },
   });
-  if (!integration) throw new Error(`Integration ${integrationId} not found`);
+  if (!integration || !integration.isActive) throw new PermanentDeliveryError('Marketplace integration is unavailable.');
   const creds = buildTrendyolCredentials(integration);
 
   switch (jobType) {
-    case SyncJobType.SYNC_ORDERS: return runSyncOrders(tenantId, integrationId, creds, params as SyncOrdersParams);
-    case SyncJobType.SYNC_STOCK:  return runSyncStock(tenantId, integrationId, creds, params as SyncStockParams);
+    case SyncJobType.SYNC_ORDERS: return runSyncOrders(tenantId, integrationId, creds, params);
+    case SyncJobType.SYNC_STOCK: return runSyncStock(tenantId, integrationId, creds, params);
     default: throw new Error(`Unknown job type: ${jobType}`);
   }
 }
@@ -268,55 +271,27 @@ async function runSyncOrders(
       for (const order of orders) {
         try {
           const externalId = String(order.shipmentPackageId);
-          const mappedStatus = mapTrendyolOrderStatus(order.status) as MarketplaceOrderStatus;
+          const mappedStatus = mapTrendyolOrderStatus(order.status);
           const customerName = [order.customerFirstName, order.customerLastName]
             .filter(Boolean).join(' ').trim() || null;
 
-          const existing = await prisma.marketplaceOrder.findFirst({
-            where: { tenantId, integrationId, externalId },
+          providerRequestSignal()?.throwIfAborted();
+          const existing = await prisma.marketplaceOrder.findFirst({ where: { tenantId, integrationId, externalId }, select: { id: true, status: true } });
+          await upsertMarketplaceOrder(prisma, tenantId, integrationId, {
+            packageId: externalId, status: mappedStatus, customerName, customerEmail: order.customerEmail ?? null,
+            customerPhone: order.shipmentAddress?.phone ?? null, shippingAddress: order.shipmentAddress?.fullAddress ?? null,
+            totalAmount: order.packageGrossAmount, orderDate: new Date(order.orderDate), lastModifiedDate: String(order.lastModifiedDate),
+            lines: order.lines.map((line) => ({
+              contentId: String(line.contentId), productName: line.productName,
+              quantity: line.quantity, unitPrice: line.lineUnitPrice, lineTotal: line.lineGrossAmount
+            })),
           });
-
-          if (existing) {
-            if (existing.status !== mappedStatus) {
-              await prisma.marketplaceOrder.update({
-                where: { id: existing.id },
-                data: { status: mappedStatus, updatedAt: new Date() },
-              });
-              updated++;
-            } else {
-              skipped++;
-            }
-            continue;
-          }
-
-          await prisma.marketplaceOrder.create({
-            data: {
-              tenantId, integrationId, externalId,
-              channel: 'TRENDYOL',
-              status: mappedStatus,
-              customerName,
-              customerEmail: order.customerEmail ?? null,
-              customerPhone: order.shipmentAddress?.phone ?? null,
-              shippingAddress: order.shipmentAddress?.fullAddress ?? null,
-              totalAmount: order.packageGrossAmount,
-              orderDate: new Date(order.orderDate),
-              syncedAt: new Date(),
-              items: {
-                create: order.lines.map((line) => ({
-                  tenantId,
-                  externalProductId: String(line.contentId),
-                  name: line.productName,
-                  quantity: line.quantity,
-                  unitPrice: line.lineUnitPrice,
-                  lineTotal: line.lineGrossAmount,
-                })),
-              },
-            },
-          });
-          created++;
+          if (!existing) created++;
+          else if (existing.status !== mappedStatus) updated++;
+          else skipped++;
         } catch (err) {
           errors++;
-          logger.error(`[TrendyolWorker] Order sync error for ${order.shipmentPackageId}: ${(err as Error).message}`);
+          logger.error(`[TrendyolWorker] Order sync error for ${order.shipmentPackageId}: ${err instanceof Error ? err.message : 'Unknown worker failure'}`);
         }
       }
     },
@@ -383,6 +358,7 @@ async function runSyncStock(
   let batchFailed = 0;
 
   for (let i = 0; i < itemsToSend.length; i += 1000) {
+    providerRequestSignal()?.throwIfAborted();
     const chunk = itemsToSend.slice(i, i + 1000);
     try {
       const res = await TrendyolService.updatePriceAndInventory(creds, chunk);
@@ -406,6 +382,7 @@ async function runSyncStock(
       const failedBarcodes = new Set(summary.failures.map((f) => f.barcode));
       for (const item of chunk) {
         if (failedBarcodes.has(item.barcode)) continue; // don't snapshot failed items
+        providerRequestSignal()?.throwIfAborted();
         await prisma.marketplaceListingSnapshot.upsert({
           where: { listingId: item.listingId },
           create: {
@@ -426,8 +403,9 @@ async function runSyncStock(
         });
       }
     } catch (err) {
+      if (providerRequestSignal()?.aborted || (err instanceof TrendyolApiError && !err.isRetryable)) throw err;
       errors++;
-      logger.error(`[TrendyolWorker] Stock batch error: ${(err as Error).message}`);
+      logger.error(`[TrendyolWorker] Stock batch error: ${err instanceof Error ? err.message : 'Unknown worker failure'}`);
     }
   }
 

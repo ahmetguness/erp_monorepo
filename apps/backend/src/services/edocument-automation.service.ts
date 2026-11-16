@@ -1,4 +1,6 @@
-import { randomUUID } from "crypto";
+import { enqueueDomainEvent } from '../domain-events/outbox.js';
+import { createEventContext } from '../domain-events/events.js';
+import { PermanentDeliveryError } from '../domain-events/delivery/retry-policy.js';
 import {
   EDocumentStatus,
   EDocumentType,
@@ -43,113 +45,6 @@ export class EDocumentAutomationService {
   constructor(private readonly db: PrismaClient) {}
 
   /**
-   * Pipeline Step 1: Invoice Approved / Sent -> EDocument Create & Send to Provider
-   */
-  async autoCreateAndSendEDocument(
-    tenantId: string,
-    invoiceId: string,
-    submissionIdempotencyKey?: string,
-  ): Promise<{ id: string; uuid: string; status: EDocumentStatus }> {
-    const invoice = await this.db.invoice.findFirst({
-      where: { id: invoiceId, tenantId },
-      include: {
-        contact: selectContactFields(),
-        eDocuments: true,
-      },
-    });
-
-    if (!invoice) {
-      throw new Error(`Fatura bulunamadı: ${invoiceId}`);
-    }
-
-    // Check if an EDocument already exists for this invoice
-    const existing = submissionIdempotencyKey
-      ? (invoice.eDocuments.find(
-          (document) =>
-            document.submissionIdempotencyKey === submissionIdempotencyKey,
-        ) ?? invoice.eDocuments[0])
-      : invoice.eDocuments[0];
-    if (existing) {
-      return {
-        id: existing.id,
-        uuid: existing.uuid ?? "",
-        status: existing.status,
-      };
-    }
-
-    // Determine E-Document Type based on Contact Tax Information
-    const isEInvoiceContact = Boolean(
-      invoice.contact?.taxNumber &&
-      invoice.contact.taxNumber.length >= 10 &&
-      !invoice.contact.notes?.includes("E_ARCHIVE_ONLY"),
-    );
-
-    const type = isEInvoiceContact
-      ? EDocumentType.E_INVOICE
-      : EDocumentType.E_ARCHIVE;
-    const uuid = randomUUID();
-    const providerCode = `GIB-${type}-${uuid.slice(0, 8).toUpperCase()}`;
-
-    let doc;
-    try {
-      doc = await this.db.eDocument.create({
-        data: {
-          tenantId,
-          invoiceId: invoice.id,
-          type,
-          uuid,
-          providerCode,
-          status: EDocumentStatus.PROCESSING,
-          submissionIdempotencyKey: submissionIdempotencyKey ?? null,
-          requestPayload: {
-            invoiceNumber: invoice.number,
-            totalGross: Number(invoice.totalGross),
-            contactName: invoice.contact?.name,
-            taxNumber: invoice.contact?.taxNumber,
-            issueDate: invoice.date.toISOString(),
-          } as Prisma.InputJsonValue,
-        },
-      });
-    } catch (error) {
-      const isIdempotencyRace =
-        submissionIdempotencyKey &&
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002";
-      if (!isIdempotencyRace) throw error;
-      const replay = await this.db.eDocument.findUnique({
-        where: {
-          tenantId_submissionIdempotencyKey: {
-            tenantId,
-            submissionIdempotencyKey,
-          },
-        },
-      });
-      if (!replay || replay.invoiceId !== invoice.id || replay.type !== type)
-        throw error;
-      return { id: replay.id, uuid: replay.uuid ?? "", status: replay.status };
-    }
-
-    // Simulate / Dispatch to Provider Integration
-    try {
-      await this.dispatchToProvider(tenantId, doc.id, providerCode);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(
-        `[EDocumentAutomation] Provider dispatch error for doc ${doc.id}: ${msg}`,
-      );
-      await this.db.eDocument.update({
-        where: { id: doc.id },
-        data: {
-          status: EDocumentStatus.ERROR,
-          providerMessage: `Sağlayıcı iletişim hatası: ${msg}`,
-        },
-      });
-    }
-
-    return { id: doc.id, uuid, status: doc.status };
-  }
-
-  /**
    * Pipeline Step 2: Single Source of Truth — Handle Provider Callback / Webhook
    * Only provider callbacks can mark EDocument as ACCEPTED or REJECTED
    */
@@ -172,6 +67,7 @@ export class EDocumentAutomationService {
     }
 
     const newStatus = payload.status;
+    if (doc.status === newStatus) return { edocumentId: doc.id, status: newStatus, invoiceUpdated: false };
     const providerTransitions: Partial<
       Record<EDocumentStatus, EDocumentStatus[]>
     > = {
@@ -234,11 +130,11 @@ export class EDocumentAutomationService {
         throw new ValidationError("E-belge durumu es zamanli olarak degisti.");
 
       if (newStatus === EDocumentStatus.ACCEPTED && doc.invoiceId) {
-        await tx.invoice.update({
-          where: { tenantId_id: { tenantId, id: doc.invoiceId } },
+        const updated = await tx.invoice.updateMany({
+          where: { id: doc.invoiceId, tenantId, status: InvoiceStatus.DRAFT },
           data: { status: InvoiceStatus.SENT },
         });
-        invoiceUpdated = true;
+        invoiceUpdated = updated.count === 1;
       }
     });
 
@@ -320,119 +216,42 @@ export class EDocumentAutomationService {
       );
     }
 
-    const updated = await this.db.eDocument.update({
-      where: { id: doc.id },
-      data: {
-        status: EDocumentStatus.PROCESSING,
-        retryCount: { increment: 1 },
-        lastRetryAt: new Date(),
-        providerMessage: "Yeniden gönderiliyor...",
-      },
-    });
-
-    try {
-      await this.dispatchToProvider(
-        tenantId,
-        doc.id,
-        doc.providerCode ?? `GIB-RETRY-${doc.id.slice(0, 8)}`,
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      await this.db.eDocument.update({
-        where: { id: doc.id },
-        data: {
-          status: EDocumentStatus.ERROR,
-          providerMessage: `Yeniden deneme hatası: ${msg}`,
-        },
+    return this.db.$transaction(async (tx) => {
+      const changed = await tx.eDocument.updateMany({
+        where: { id: doc.id, tenantId, status: doc.status, retryCount: doc.retryCount },
+        data: { status: EDocumentStatus.PROCESSING, retryCount: { increment: 1 }, lastRetryAt: new Date() },
       });
-    }
-
-    return { id: updated.id, status: EDocumentStatus.PROCESSING };
-  }
-
-  async submitEDocument(
-    tenantId: string,
-    edocumentId: string,
-  ): Promise<{ id: string; status: EDocumentStatus }> {
-    const doc = await this.db.eDocument.findFirst({
-      where: { id: edocumentId, tenantId },
-    });
-    if (!doc) throw new Error(`E-Belge bulunamadi: ${edocumentId}`);
-    if (doc.status !== EDocumentStatus.PENDING)
-      throw new ValidationError("Yalnizca PENDING e-belge gonderilebilir.");
-    const updated = await this.db.eDocument.update({
-      where: { id: doc.id },
-      data: { status: EDocumentStatus.PROCESSING },
-    });
-    try {
-      await this.dispatchToProvider(
-        tenantId,
-        doc.id,
-        doc.providerCode ?? `GIB-${doc.id.slice(0, 8)}`,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await this.db.eDocument.update({
-        where: { id: doc.id },
-        data: { status: EDocumentStatus.ERROR, providerMessage: message },
+      if (!changed.count) throw new ValidationError('E-document changed concurrently.');
+      await enqueueDomainEvent(tx, {
+        name: 'edocument.delivery.requested', context: createEventContext({ tenantId }),
+        payload: { edocumentId: doc.id, retry: doc.retryCount + 1 }
       });
-    }
-    return { id: updated.id, status: updated.status };
+      return { id: doc.id, status: EDocumentStatus.PROCESSING };
+    });
   }
 
-  // ── Helper ────────────────────────────────────
-
-  private async dispatchToProvider(
-    tenantId: string,
-    edocumentId: string,
-    providerCode: string,
-  ): Promise<void> {
-    if (
-      process.env.NODE_ENV === "production" &&
-      process.env.EDOCUMENT_PROVIDER_MODE !== "mock"
-    ) {
-      throw new Error("E-belge provider entegrasyonu yapilandirilmamis.");
+  /** The existing mock adapter is durable now; a real provider must implement its own idempotent protocol. */
+  async deliverQueuedDocument(tenantId: string, edocumentId: string): Promise<void> {
+    const doc = await this.db.eDocument.findFirstOrThrow({ where: { id: edocumentId, tenantId }, include: { invoice: { select: { status: true } } } });
+    if (doc.status === EDocumentStatus.ACCEPTED || doc.status === EDocumentStatus.REJECTED) return;
+    if (doc.invoice?.status === InvoiceStatus.CANCELLED) {
+      await this.db.eDocument.updateMany({ where: { id: doc.id, tenantId, status: { in: ['PENDING', 'PROCESSING'] } }, data: { status: 'ERROR', providerMessage: 'Source invoice was cancelled before delivery.' } });
+      throw new PermanentDeliveryError('Source invoice was cancelled before delivery.');
     }
-    setTimeout(async () => {
-      try {
-        const doc = await this.db.eDocument.findFirst({
-          where: { id: edocumentId, tenantId },
-        });
-        if (!doc) return;
-
-        const isSuccess = !doc.providerMessage?.includes("FORCE_FAIL");
-        const status = isSuccess
-          ? EDocumentStatus.ACCEPTED
-          : EDocumentStatus.REJECTED;
-        const message = isSuccess
-          ? "GİB tarafından başarıyla onaylandı."
-          : "GİB Hata 1150: Şema doğrulama hatası.";
-
-        await this.processProviderCallback(tenantId, edocumentId, {
-          status,
-          providerCode,
-          message,
-          responsePayload: {
-            gibResponseCode: isSuccess ? "200" : "1150",
-            isSuccess,
-          },
-        });
-      } catch (err) {
-        logger.error(
-          `[EDocumentAutomation] Async provider callback simulation error: ${err}`,
-        );
-      }
-    }, 1000);
+    if (process.env.NODE_ENV === 'production' && process.env.EDOCUMENT_PROVIDER_MODE !== 'mock') {
+      await this.db.eDocument.updateMany({
+        where: { id: doc.id, tenantId, status: 'PROCESSING' },
+        data: { status: 'ERROR', providerMessage: 'E-document provider is not configured.' }
+      });
+      throw new PermanentDeliveryError('E-document provider is not configured.');
+    }
+    const accepted = !doc.providerMessage?.includes('FORCE_FAIL');
+    await this.processProviderCallback(tenantId, doc.id, {
+      status: accepted ? EDocumentStatus.ACCEPTED : EDocumentStatus.REJECTED,
+      providerCode: doc.providerCode ?? undefined,
+      message: accepted ? 'Mock provider accepted the document.' : 'Mock provider rejected the document.',
+      responsePayload: { isSuccess: accepted, gibResponseCode: accepted ? '200' : '1150' },
+    });
   }
-}
 
-function selectContactFields() {
-  return {
-    select: {
-      id: true,
-      name: true,
-      taxNumber: true,
-      notes: true,
-    },
-  };
 }

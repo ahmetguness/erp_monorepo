@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import { MODULE_KEY, PLAN } from '@repo/types/plans';
-import type { ModuleKey } from '@repo/types/plans';
 
 const optionalDate = z.string().datetime().nullable().optional();
-const moduleValues = Object.values(MODULE_KEY) as [ModuleKey, ...ModuleKey[]];
 export const tenantProvisioningInputSchema = z.object({
   companyName: z.string().trim().min(2).max(160),
   email: z.string().trim().email().max(254),
@@ -15,7 +13,7 @@ export const tenantProvisioningInputSchema = z.object({
   plan: z.enum([PLAN.STARTER, PLAN.PROFESSIONAL, PLAN.ENTERPRISE]),
   status: z.enum(['TRIAL', 'ACTIVE']),
   maxUsers: z.number().int().positive().nullable().optional(),
-  modules: z.array(z.enum(moduleValues)).min(1).refine(modules => new Set(modules).size === modules.length, 'Modüller tekrarlanamaz.'),
+  modules: z.array(z.enum(MODULE_KEY)).min(1).refine(modules => new Set(modules).size === modules.length, 'Modüller tekrarlanamaz.'),
   notes: z.string().trim().max(2000).optional(),
   isCustomPricing: z.boolean().optional(),
   trialEndsAt: optionalDate,

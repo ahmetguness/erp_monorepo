@@ -21,7 +21,7 @@ export function useRetryEDocument() {
     mutationFn: (id: string) => retryEDocument(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['e-documents'] });
-      toast.success('E-Belge entegratöre yeniden gönderildi.');
+      toast.success('E-Belge yeniden gönderim kuyruğuna alındı.');
     },
     onError: (err: unknown) => toast.error(getErrorMessage(err)),
   });

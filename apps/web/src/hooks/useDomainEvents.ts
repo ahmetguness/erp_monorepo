@@ -3,14 +3,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getDomainEventFailures,
+  getDomainEvents,
   replayDomainEvent,
   type DomainEventParams,
 } from '@/services/domain-event.service';
 
-export function useDomainEventFailures(params: Omit<DomainEventParams, 'status'>) {
+export function useDomainEvents(params: DomainEventParams, failuresOnly: boolean) {
   return useQuery({
-    queryKey: ['domain-events', 'failures', params],
-    queryFn: () => getDomainEventFailures(params),
+    queryKey: ['domain-events', failuresOnly ? 'failures' : 'all', params],
+    queryFn: () => failuresOnly ? getDomainEventFailures(params) : getDomainEvents(params),
+    refetchInterval: 10_000,
   });
 }
 

@@ -272,8 +272,11 @@ function AdminTenantsContent() {
   const jobs = useQuery({
     queryKey: ['admin', 'tenant-provisioning'],
     queryFn: getTenantProvisioningJobs,
+    refetchInterval: (query) => query.state.data?.some((item) => item.status === 'PENDING' || item.status === 'RUNNING') ? 5_000 : false,
     enabled: canCreateTenant,
   });
+
+  const activeJob = jobs.data?.find((item) => item.id === job?.id) ?? job;
 
   const retry = useMutation({
     mutationFn: retryTenantProvisioning,
@@ -690,32 +693,32 @@ function AdminTenantsContent() {
               </section>
             )}
 
-            {job && (
+            {activeJob && (
               <section className="space-y-3 rounded-2xl border border-slate-700 bg-slate-950 p-4">
-                <h3 className="font-bold text-white text-sm">Provizyon Durumu: {job.status}</h3>
-                {job.steps.map((step) => (
+                <h3 className="font-bold text-white text-sm">Provizyon Durumu: {activeJob.status}</h3>
+                {activeJob.steps.map((step) => (
                   <p key={step.key} className="text-xs text-slate-300">
                     {step.key}: <strong>{step.status}</strong> • Deneme {step.attempts}
                     {step.error ? ` • ${step.error}` : ''}
                   </p>
                 ))}
-                {job.error && <p className="text-rose-400 text-xs">{job.error}</p>}
+                {activeJob.error && <p className="text-rose-400 text-xs">{activeJob.error}</p>}
                 <div className="flex gap-2 pt-2">
-                  {job.status === 'FAILED' && (
+                  {activeJob.status === 'FAILED' && (
                     <Button
                       variant="danger"
                       size="sm"
                       disabled={retry.isPending}
-                      onClick={() => retry.mutate(job.id)}
+                      onClick={() => retry.mutate(activeJob.id)}
                     >
                       Başarısız Adımı Yeniden Dene
                     </Button>
                   )}
-                  {job.tenantId && (
+                  {activeJob.tenantId && (
                     <Button
                       variant="primary"
                       size="sm"
-                      onClick={() => router.push(`/admin/tenants/${job.tenantId}`)}
+                      onClick={() => router.push(`/admin/tenants/${activeJob.tenantId}`)}
                     >
                       Müşteri Hesabını Aç
                     </Button>

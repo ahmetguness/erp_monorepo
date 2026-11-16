@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
-import { sendMail } from './mail.service';
+import { queueOutboundMail } from './mail-delivery/mail-delivery.service.js';
 import { demoReadyEmail } from './mail-templates.service';
 import bcrypt from 'bcryptjs';
 
@@ -333,33 +333,20 @@ export async function provisionDemoTenant(demoRequestId: string): Promise<DemoPr
         },
       });
 
+      const appUrl = process.env.APP_URL || 'http://localhost:3000';
+      const setPasswordUrl = `${appUrl}/set-password?token=${rawToken}&email=${encodeURIComponent(demoRequest.email)}`;
+
+      const template = demoReadyEmail(
+        demoRequest.fullName,
+        demoRequest.plan,
+        setPasswordUrl,
+        trialEndsAt,
+      );
+      await queueOutboundMail(tx, { tenantId: tenant.id, to: [demoRequest.email], ...template, expiresAt: setPasswordExpiry });
+
       return { tenant, user };
     });
 
-    // Mail gönder (raw token kullan — DB'de hash saklanıyor)
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
-    const setPasswordUrl = `${appUrl}/set-password?token=${rawToken}&email=${encodeURIComponent(demoRequest.email)}`;
-
-    const template = demoReadyEmail(
-      demoRequest.fullName,
-      demoRequest.plan,
-      setPasswordUrl,
-      trialEndsAt,
-    );
-    try {
-      await sendMail({ to: demoRequest.email, ...template });
-    } catch (mailError: unknown) {
-      const mailMessage = mailError instanceof Error ? mailError.message : String(mailError);
-      logger.error(`Demo hazır e-postası gönderilemedi: ${mailMessage}`);
-      await prisma.demoRequestHistory.create({
-        data: {
-          demoRequestId,
-          action: 'EMAIL_DELIVERY_FAILED',
-          actorId: demoRequest.processedBy,
-          note: mailMessage,
-        },
-      });
-    }
 
     logger.info(`Demo tenant oluşturuldu: ${slug} (request: ${demoRequestId})`);
 

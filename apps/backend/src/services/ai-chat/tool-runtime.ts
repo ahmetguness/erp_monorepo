@@ -1,6 +1,6 @@
 import { logger } from '../../lib/logger';
 import { ChatDataService } from '../chat-data.service';
-import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import { getMonthStart, getToday, parseDate } from './date-utils.js';
 
 // ─────────────────────────────────────────────
@@ -8,15 +8,16 @@ import { getMonthStart, getToday, parseDate } from './date-utils.js';
 import { allowsTool, type ToolAccessPolicy, type UserPermissions } from './tool-access.policy.js';
 import { consumePurchaseApproval, rememberPurchasePreview, type ToolExecutionContext } from './purchase-approval.js';
 import { prisma } from '../../lib/prisma.js';
-import { resolveAccessContext, isAccessFeatureEnabled } from '../../modules/identity/index.js';
+import { resolveAccessContext } from '../../modules/identity/infrastructure/index.js';
+import { isAccessFeatureEnabled } from '../../modules/identity/application/index.js';
 import { FeatureKey } from '@prisma/client';
 import { isTenantOperational } from '../../middleware/tenant-status.js';
 import { createAuditLog } from '../../utils/audit.js';
 import { runWithTenantScope } from '../../lib/tenant-isolation-context.js';
 export type { UserPermissions } from './tool-access.policy.js';
-interface ToolDef extends ToolAccessPolicy { tool: ChatCompletionTool }
+interface ToolDef extends ToolAccessPolicy { tool: ChatCompletionFunctionTool }
 interface PurchaseRequestAdjustment { productCode: string; quantity: number }
-export function getAccessibleTools(plan: string, permissions: UserPermissions, tenantModules: string[]): ChatCompletionTool[] {
+export function getAccessibleTools(plan: string, permissions: UserPermissions, tenantModules: string[]): ChatCompletionFunctionTool[] {
   return ALL_TOOLS.filter((tool) => allowsTool(tool, plan, permissions, tenantModules)).map((entry) => entry.tool);
 }
 export function canCallTool(name: string, plan: string, permissions: UserPermissions, tenantModules: string[]): boolean {

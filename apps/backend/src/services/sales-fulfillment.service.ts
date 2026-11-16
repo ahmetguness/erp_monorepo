@@ -1,3 +1,4 @@
+import { enqueueDomainEvent } from '../domain-events/outbox.js';
 import {
   DeliveryNoteStatus,
   DeliveryNoteType,
@@ -9,7 +10,7 @@ import {
   type PrismaClient,
 } from '@prisma/client';
 import { NotFoundError, ValidationError } from '../errors/index.js';
-import { createEventContext, domainEvents } from '../domain-events/index.js';
+import { createEventContext } from '../domain-events/index.js';
 import { generateDocumentNumber } from '../utils/generate-number.js';
 import { writeInvoiceAccountEntry } from '../utils/account-entry.js';
 import { InventoryReservationService, type SalesOrderReservationResult } from './inventory-reservation.service.js';
@@ -301,21 +302,22 @@ export class SalesFulfillmentService {
         data: { invoicedAmount: { increment: decimalToNumber(order.totalGross) } },
       });
 
-      return newInvoice;
-    });
-
-    await domainEvents.publish({
+      await enqueueDomainEvent(tx, {
       name: 'invoice.created',
       context: createEventContext({ tenantId, userId }),
       payload: {
-        invoiceId: invoice.id,
-        number: invoice.number,
+        invoiceId: newInvoice.id,
+        number: newInvoice.number,
         contactId: order.contact.id,
         contactName: order.contact.name,
         totalGross: decimalToNumber(order.totalGross),
         dueDate,
       },
     });
+      return newInvoice;
+    });
+
+
 
     return { id: invoice.id, number: invoice.number, skippedReason: null };
   }

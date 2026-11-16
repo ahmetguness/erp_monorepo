@@ -1,22 +1,22 @@
 import { AuditAction, EntityType, NotificationStatus, Prisma, Priority, TaskType } from '@prisma/client';
-import { prisma } from '../lib/prisma.js';
 import { createTask } from '../services/task.service.js';
 import { createAuditLog } from '../utils/audit.js';
 import { domainEvents } from './bus.js';
+import { toDomainEventJson } from './outbox.js';
 import { entityIdForEvent, entityTypeForEvent, sourceForEvent, type DomainEvent } from './events.js';
 
 let listenersRegistered = false;
 
-async function tenantRecipients(tenantId: string, preferredUserId?: string | null): Promise<string[]> {
+async function tenantRecipients(tx: Prisma.TransactionClient, tenantId: string, preferredUserId?: string | null): Promise<string[]> {
   if (preferredUserId) {
-    const tenantUser = await prisma.tenantUser.findFirst({
+    const tenantUser = await tx.tenantUser.findFirst({
       where: { tenantId, userId: preferredUserId, isActive: true, user: { isActive: true } },
       select: { userId: true },
     });
     if (tenantUser) return [tenantUser.userId];
   }
 
-  const owners = await prisma.tenantUser.findMany({
+  const owners = await tx.tenantUser.findMany({
     where: { tenantId, isActive: true, isOwner: true, user: { isActive: true } },
     select: { userId: true },
     take: 10,
@@ -25,11 +25,11 @@ async function tenantRecipients(tenantId: string, preferredUserId?: string | nul
   return owners.map((owner) => owner.userId);
 }
 
-async function notifyUsers(event: DomainEvent, title: string, message: string, module: string, preferredUserId?: string | null): Promise<void> {
-  const userIds = await tenantRecipients(event.context.tenantId, preferredUserId);
+async function notifyUsers(tx: Prisma.TransactionClient, event: DomainEvent, title: string, message: string, module: string, preferredUserId?: string | null): Promise<void> {
+  const userIds = await tenantRecipients(tx, event.context.tenantId, preferredUserId);
   if (userIds.length === 0) return;
 
-  await prisma.notification.createMany({
+  await tx.notification.createMany({
     data: userIds.map((userId) => ({
       tenantId: event.context.tenantId,
       userId,
@@ -73,9 +73,13 @@ function moduleForEvent(event: DomainEvent): string {
     case 'threeway.match.failed':
       return 'purchasing';
     case 'marketplace.order.received':
+    case 'marketplace.webhook.received':
       return 'marketplace';
     case 'mail.failed':
+    case 'mail.delivery.requested':
       return 'mail';
+    case 'edocument.delivery.requested':
+      return 'invoicing';
     case 'employee.documentMissing':
       return 'hr';
     case 'production.materialReserved':
@@ -176,15 +180,15 @@ function auditPayload(event: DomainEvent): Prisma.InputJsonObject {
       return {
         event: event.name,
         entityId: entityIdForEvent(event),
-        payload: event.payload as Prisma.InputJsonObject,
+        payload: toDomainEventJson(event.payload),
       };
   }
 }
 
-async function auditListener(event: DomainEvent): Promise<void> {
-  if (event.name === 'invoice.created' || event.name === 'payment.received') return;
+async function auditListener(event: DomainEvent, tx: Prisma.TransactionClient): Promise<void> {
+  if (event.name === 'invoice.created' || event.name === 'payment.received' || event.name === 'mail.delivery.requested' || event.name === 'edocument.delivery.requested' || event.name === 'marketplace.webhook.received') return;
 
-  await createAuditLog(prisma, {
+  await createAuditLog(tx, {
     tenantId: event.context.tenantId,
     userId: event.context.userId ?? null,
     module: moduleForEvent(event),
@@ -192,14 +196,14 @@ async function auditListener(event: DomainEvent): Promise<void> {
     entityId: entityIdForEvent(event),
     action: event.name === 'salesQuote.accepted' || event.name === 'production.completed' ? AuditAction.UPDATE : AuditAction.CREATE,
     newValues: auditPayload(event),
-  });
+  }, { required: true });
 }
 
-async function notificationListener(event: DomainEvent): Promise<void> {
+async function notificationListener(event: DomainEvent, tx: Prisma.TransactionClient): Promise<void> {
   switch (event.name) {
     case 'mail.failed':
       await notifyUsers(
-        event,
+        tx, event,
         'Mail gönderimi başarısız oldu',
         `${event.payload.subject}: ${event.payload.error ?? 'Sağlayıcı hata döndürdü.'}`,
         'mail',
@@ -208,7 +212,7 @@ async function notificationListener(event: DomainEvent): Promise<void> {
       return;
     case 'stock.low':
       await notifyUsers(
-        event,
+        tx, event,
         'Kritik stok seviyesi',
         `${event.payload.productCode} - ${event.payload.productName}: ${event.payload.currentQuantity}/${event.payload.minStockLevel}`,
         'inventory',
@@ -216,7 +220,7 @@ async function notificationListener(event: DomainEvent): Promise<void> {
       return;
     case 'invoice.overdue':
       await notifyUsers(
-        event,
+        tx, event,
         'Fatura gecikmeye düştü',
         `${event.payload.number} ${event.payload.daysLate} gün gecikti. Tutar: ${event.payload.totalGross.toFixed(2)} TL`,
         'invoicing',
@@ -224,7 +228,7 @@ async function notificationListener(event: DomainEvent): Promise<void> {
       return;
     case 'employee.documentMissing':
       await notifyUsers(
-        event,
+        tx, event,
         'Personel evrakı eksik',
         `${event.payload.employeeName}: ${event.payload.documentName}`,
         'hr',
@@ -232,7 +236,7 @@ async function notificationListener(event: DomainEvent): Promise<void> {
       return;
     case 'production.materialReserved':
       await notifyUsers(
-        event,
+        tx, event,
         'Uretim malzemesi rezerve edildi',
         `${event.payload.workOrderNumber} icin ${event.payload.reservedLineCount} kalemde ${event.payload.reservedQuantity.toFixed(3)} birim rezerve edildi.`,
         'production',
@@ -240,7 +244,7 @@ async function notificationListener(event: DomainEvent): Promise<void> {
       return;
     case 'production.completed':
       await notifyUsers(
-        event,
+        tx, event,
         'Uretim tamamlandi',
         `${event.payload.workOrderNumber}: ${event.payload.productName} icin ${event.payload.producedQty.toFixed(3)} birim uretildi${event.payload.scrapQty > 0 ? `, ${event.payload.scrapQty.toFixed(3)} fire kaydedildi` : ''}.`,
         'production',
@@ -248,7 +252,7 @@ async function notificationListener(event: DomainEvent): Promise<void> {
       return;
     case 'payment.received':
       await notifyUsers(
-        event,
+        tx, event,
         'Tahsilat alindi',
         `${event.payload.amount.toFixed(2)} TL tahsilat kaydedildi${event.payload.reference ? ` (${event.payload.reference})` : ''}.`,
         'accounting',
@@ -256,7 +260,7 @@ async function notificationListener(event: DomainEvent): Promise<void> {
       return;
     case 'accounting.entry.failed':
       await notifyUsers(
-        event,
+        tx, event,
         'Muhasebe posting hatası',
         `${event.payload.refType}/${event.payload.refId}: ${event.payload.reason}`,
         'accounting',
@@ -264,12 +268,15 @@ async function notificationListener(event: DomainEvent): Promise<void> {
       return;
     case 'salesQuote.accepted':
       await notifyUsers(
-        event,
+        tx, event,
         'Teklif siparise donustu',
         `${event.payload.quoteNumber} kabul edildi ve ${event.payload.orderNumber} siparisi olustu. Tutar: ${event.payload.totalGross.toFixed(2)} TL`,
         'sales',
       );
       return;
+    case 'marketplace.webhook.received':
+    case 'mail.delivery.requested':
+    case 'edocument.delivery.requested':
     case 'invoice.created':
     case 'invoice.sent':
     case 'invoice.paid':
@@ -291,7 +298,7 @@ async function notificationListener(event: DomainEvent): Promise<void> {
   }
 }
 
-async function workflowListener(event: DomainEvent): Promise<void> {
+async function workflowListener(event: DomainEvent, tx: Prisma.TransactionClient): Promise<void> {
   switch (event.name) {
     case 'stock.low':
       await createTask(event.context.tenantId, {
@@ -305,7 +312,7 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         href: `/dashboard/products/${event.payload.productId}`,
         source: sourceForEvent(event),
         createdById: event.context.userId ?? null,
-      });
+      }, tx);
       return;
     case 'invoice.overdue':
       await createTask(event.context.tenantId, {
@@ -320,7 +327,7 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         source: sourceForEvent(event),
         createdById: event.context.userId ?? null,
         dueAt: event.payload.dueDate,
-      });
+      }, tx);
       return;
     case 'employee.documentMissing':
       await createTask(event.context.tenantId, {
@@ -334,7 +341,7 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         href: `/dashboard/hr/employees/${event.payload.employeeId}`,
         source: sourceForEvent(event),
         createdById: event.context.userId ?? null,
-      });
+      }, tx);
       return;
     case 'salesQuote.accepted':
       await createTask(event.context.tenantId, {
@@ -348,7 +355,7 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         href: `/dashboard/sales-orders/${event.payload.orderId}`,
         source: sourceForEvent(event),
         createdById: event.context.userId ?? null,
-      });
+      }, tx);
       return;
     case 'production.completed':
       await createTask(event.context.tenantId, {
@@ -362,7 +369,7 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         href: `/dashboard/production/work-orders/${event.payload.workOrderId}`,
         source: sourceForEvent(event),
         createdById: event.context.userId ?? null,
-      });
+      }, tx);
       return;
     case 'accounting.entry.failed':
       await createTask(event.context.tenantId, {
@@ -376,8 +383,11 @@ async function workflowListener(event: DomainEvent): Promise<void> {
         href: '/dashboard/accounting/journal-entries',
         source: sourceForEvent(event),
         createdById: event.context.userId ?? null,
-      });
+      }, tx);
       return;
+    case 'marketplace.webhook.received':
+    case 'mail.delivery.requested':
+    case 'edocument.delivery.requested':
     case 'invoice.created':
     case 'payment.received':
     case 'invoice.sent':
@@ -405,7 +415,7 @@ async function workflowListener(event: DomainEvent): Promise<void> {
 export function registerDomainEventListeners(): void {
   if (listenersRegistered) return;
   listenersRegistered = true;
-  domainEvents.subscribe(auditListener);
-  domainEvents.subscribe(notificationListener);
-  domainEvents.subscribe(workflowListener);
+  domainEvents.subscribe('auditListener-v1', auditListener);
+  domainEvents.subscribe('notificationListener-v1', notificationListener);
+  domainEvents.subscribe('workflowListener-v1', workflowListener);
 }

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures/test';
+import type { Notification } from '@/services/notification.service';
 
 let activeTenantId = '';
 let activeUserId = '';
@@ -17,7 +18,7 @@ async function login(page: Page) {
   activeUserId = payload.data.user.id;
 }
 
-const notification = { id: 'notification-1', tenantId: 'tenant-1', userId: 'user-1', title: 'TEST_E2E Bildirim Türkçe', message: 'Kontrollü bildirim mesajı', module: 'inventory', entityType: null, entityId: null, status: 'UNREAD', createdAt: '2026-10-08T08:00:00.000Z', readAt: null };
+const notification: Notification = { id: 'notification-1', tenantId: 'tenant-1', userId: 'user-1', title: 'TEST_E2E Bildirim Türkçe', message: 'Kontrollü bildirim mesajı', module: 'inventory', entityType: null, entityId: null, status: 'UNREAD', createdAt: '2026-10-08T08:00:00.000Z', readAt: null };
 const attention = { preferences: { quietHours: { enabled: false, start: '22:00', end: '07:00', timezone: 'Europe/Istanbul' }, digest: { cadence: 'OFF', hour: 9, weekday: 1 }, channels: { inApp: true, email: false }, mutedModules: [], escalation: { enabled: false, afterHours: 24, targetRoleId: null } }, quietHoursActive: false, focusSmartIds: [], groupedSystemNotifications: [], digestCount: 0, suppressedCount: 0, nextDigestAt: null, metrics: { impressions: 0, actions: 0, dismissals: 0, digestOpens: 0 } };
 
 async function mockSupportingRoutes(page: Page) {
@@ -26,7 +27,7 @@ async function mockSupportingRoutes(page: Page) {
 }
 
 test('notifications page searches, marks read, archives, deletes and refreshes', async ({ page }) => {
-  let row: typeof notification | null = notification;
+  let row: Notification | null = notification;
   await page.route('**/api/notifications**', async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/read')) row = row ? { ...row, status: 'READ', readAt: new Date().toISOString() } : row;

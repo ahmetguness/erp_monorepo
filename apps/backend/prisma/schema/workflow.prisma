@@ -149,6 +149,8 @@ model MailMessage {
   textPreview     String?
   attachments     Json?
   attachmentCount Int                @default(0)
+  deliveryPayload Json?
+  deliveryStartedAt DateTime?
   error           String?
   sentById        String?
   sentAt          DateTime?

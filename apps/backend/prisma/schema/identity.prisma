@@ -205,6 +205,7 @@ model Tenant {
   automationExecutions        AutomationExecution[]
   agentCommandPlans           AgentCommandPlan[]
   domainEventOutbox           DomainEventOutbox[]
+  domainEventDeliveries       DomainEventDelivery[]
   tenantSettings              TenantSetting[]
   moduleSettings              ModuleSetting[]
   aiRequestLogs               AiRequestLog[]

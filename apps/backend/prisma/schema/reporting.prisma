@@ -90,8 +90,10 @@ model DomainEventOutbox {
   updatedAt       DateTime                @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveries DomainEventDelivery[]
 
   @@unique([tenantId, idempotencyKey])
+  @@unique([tenantId, id])
   @@index([tenantId, status, createdAt])
   @@index([tenantId, name, createdAt])
   @@index([tenantId, entityType, entityId])
@@ -99,6 +101,22 @@ model DomainEventOutbox {
   @@index([status, leaseExpiresAt])
   @@index([tenantId, resolvedAt, updatedAt])
   @@map("domain_event_outbox")
+}
+
+// A receipt and its database effects commit together; retries skip completed consumers.
+model DomainEventDelivery {
+  id          String   @id @default(cuid())
+  tenantId    String
+  outboxId    String
+  consumer    String
+  completedAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  outbox DomainEventOutbox @relation(fields: [tenantId, outboxId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, outboxId, consumer])
+  @@index([tenantId, completedAt])
+  @@map("domain_event_deliveries")
 }
 
 enum DemoRequestStatus {

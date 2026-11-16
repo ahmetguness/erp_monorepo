@@ -6,6 +6,7 @@ import type { PaginationMeta } from '@/types/api.types';
 
 export const MailResultSchema = z.object({
   success: z.boolean(),
+  queued: z.boolean().optional(),
   id: z.string().optional(),
   error: z.string().optional(),
 });
@@ -51,6 +52,7 @@ const MailMessageDetailSchema = MailMessageListItemSchema.extend({
 const BulkMailResultSchema = z.object({
   success: z.boolean(),
   sent: z.number(),
+  queued: z.number().optional().default(0),
   failed: z.number(),
   results: z.array(z.object({
     to: z.string(),

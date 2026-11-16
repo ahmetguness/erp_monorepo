@@ -1,6 +1,5 @@
 import { MailDeliveryStatus, MailDirection, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { createEventContext, domainEvents } from '../domain-events';
 import type { NormalizedMailAttachment } from '../utils/mail-attachments';
 
 export interface CreateOutboundMailHistoryInput {
@@ -14,14 +13,6 @@ export interface CreateOutboundMailHistoryInput {
   subject: string;
   html: string;
   attachments?: NormalizedMailAttachment[];
-}
-
-export interface CompleteMailHistoryInput {
-  id: string;
-  tenantId: string;
-  success: boolean;
-  providerId?: string;
-  error?: string;
 }
 
 export interface MailHistoryFilters {
@@ -282,10 +273,10 @@ export class MailHistoryService {
     });
   }
 
-  static async createOutbound(input: CreateOutboundMailHistoryInput) {
+  static async createOutbound(input: CreateOutboundMailHistoryInput, tx: Prisma.TransactionClient | typeof prisma = prisma) {
     const attachments = input.attachments ?? [];
 
-    return prisma.mailMessage.create({
+    return tx.mailMessage.create({
       data: {
         tenantId: input.tenantId,
         sentById: input.sentById,
@@ -306,38 +297,4 @@ export class MailHistoryService {
     });
   }
 
-  static async complete(input: CompleteMailHistoryInput) {
-    const result = await prisma.mailMessage.updateMany({
-      where: { id: input.id, tenantId: input.tenantId },
-      data: {
-        status: input.success ? MailDeliveryStatus.SENT : MailDeliveryStatus.FAILED,
-        providerId: input.providerId,
-        error: input.error,
-        sentAt: input.success ? new Date() : undefined,
-      },
-    });
-
-    if (!input.success && result.count > 0) {
-      const mail = await prisma.mailMessage.findFirst({
-        where: { id: input.id, tenantId: input.tenantId },
-        select: { id: true, subject: true, sentById: true, to: true, cc: true, bcc: true, error: true },
-      });
-
-      if (mail) {
-        await domainEvents.publish({
-          name: 'mail.failed',
-          context: createEventContext({ tenantId: input.tenantId, userId: mail.sentById }),
-          payload: {
-            mailId: mail.id,
-            subject: mail.subject,
-            sentById: mail.sentById,
-            recipients: [...mail.to, ...mail.cc, ...mail.bcc],
-            error: mail.error,
-          },
-        });
-      }
-    }
-
-    return result;
-  }
 }

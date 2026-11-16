@@ -5,7 +5,7 @@ import { prisma } from '../../../../../lib/prisma.js';
 import { TrendyolWorker } from '../../../../../services/trendyol-worker.service.js';
 import { requireParam,requireTenantId } from '../../../../../utils/context.js';
 import { getPaginationParams } from '../../../../../utils/pagination.js';
-import { processTrendyolWebhookPayload } from '../trendyol-webhook.controller.js';
+import { queueTrendyolWebhookPayload } from '../../../infrastructure/webhooks/trendyol-webhook.service.js';
 import { marketplaceAutomationService,marketplaceMonitoringService,toJobParams } from './shared.js';
 
 export const MarketplaceMonitoringController = {
@@ -138,7 +138,7 @@ export const MarketplaceMonitoringController = {
     }
 
     try {
-      const results = await processTrendyolWebhookPayload({
+      const results = await queueTrendyolWebhookPayload({
         tenantId,
         integrationId: event.integrationId,
         payload: event.payload,
@@ -152,7 +152,8 @@ export const MarketplaceMonitoringController = {
         },
       });
     } catch (err) {
-      return c.json(new ValidationError(err instanceof Error ? err.message : 'Webhook replay basarisiz.').toJSON(), 400);
+      if (err instanceof ValidationError) return c.json(err.toJSON(), 400);
+      throw err;
     }
   },
 

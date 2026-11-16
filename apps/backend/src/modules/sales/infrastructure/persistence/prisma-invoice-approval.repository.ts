@@ -6,6 +6,7 @@ import { writeInvoiceAccountEntry } from '../../../../utils/account-entry.js';
 import { toBaseMoney } from '../../../../services/financial/currency.js';
 import { PurchaseThreeWayMatchService } from '../../../../services/purchase-three-way-match.service.js';
 import { lockInvoiceMutations } from '../../../../services/financial/mutation-locks.js';
+import { queueInvoiceDocument } from '../../../../services/edocument/delivery-intent.js';
 import type { ApproveInvoiceCommand, ApproveInvoiceResult, InvoiceApprovalRepository } from '../../application/ports/invoice-approval.repository.js';
 
 export class PrismaInvoiceApprovalRepository implements InvoiceApprovalRepository {
@@ -39,6 +40,7 @@ export class PrismaInvoiceApprovalRepository implements InvoiceApprovalRepositor
         const stockMovementCount = await tx.stockMovement.count({
           where: { tenantId: command.tenantId, idempotencyKey: { startsWith: command.idempotencyKey } },
         });
+        await queueInvoiceDocument(tx, command.tenantId, invoice.id, command.idempotencyKey);
         return { invoiceId: invoice.id, status: 'SENT', journalEntryId: journal.id, stockMovementCount };
       }
       if (invoice.status !== InvoiceStatus.DRAFT) throw new ValidationError('Sadece taslak faturalar onaylanabilir.');
@@ -109,6 +111,7 @@ export class PrismaInvoiceApprovalRepository implements InvoiceApprovalRepositor
           toStatus: InvoiceStatus.SENT, notes: 'Fatura onaylandi ve muhasebelestirildi.', createdById: command.userId ?? null,
         },
       });
+      await queueInvoiceDocument(tx, command.tenantId, invoice.id, command.idempotencyKey);
       return {
         invoiceId: invoice.id, status: 'SENT', journalEntryId: posting.journalEntryId,
         stockMovementCount: linkedMovements.length,
@@ -144,6 +147,12 @@ export class PrismaInvoiceApprovalRepository implements InvoiceApprovalRepositor
       select: { id: true },
     });
     if (!journal) return null;
+    const document = await this.db.eDocument.findFirst({ where: { tenantId: command.tenantId, invoiceId: invoice.id }, select: { id: true, status: true } });
+    if (!document) return null;
+    if (document.status === 'PENDING' || document.status === 'PROCESSING') {
+      const intent = await this.db.domainEventOutbox.count({ where: { tenantId: command.tenantId, name: 'edocument.delivery.requested', entityId: document.id } });
+      if (!intent) return null;
+    }
 
     const linkedOrderId = invoice.salesOrderId ?? invoice.purchaseOrderId;
     const productIds = invoice.lines.map((line) => line.productId).filter((id): id is string => id !== null);

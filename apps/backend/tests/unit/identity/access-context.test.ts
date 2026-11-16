@@ -7,7 +7,7 @@ import { resolveAccessFeatures } from '../../../src/modules/identity/infrastruct
 function context(isOwner = false): AccessContext {
   return {
     userId: 'user-1', tenantId: 'tenant-1',
-    tenant: { plan: Plan.PROFESSIONAL, status: TenantStatus.ACTIVE, modules: [AppModule.ACCOUNTING] },
+    tenant: { plan: Plan.PROFESSIONAL, status: TenantStatus.ACTIVE, modules: [AppModule.ACCOUNTING], trialEndsAt: null },
     membership: {
       id: 'membership-1', roleId: 'role-1', roleName: 'Accountant', isOwner,
       permissions: [{ module: 'accounting', action: PermissionAction.READ }],
@@ -26,7 +26,7 @@ describe('request access context', () => {
 
   it('reads resolved feature values from the request context', () => {
     expect(isAccessFeatureEnabled(context(), FeatureKey.API_ACCESS)).toBe(true);
-    expect(isAccessFeatureEnabled(context(), FeatureKey.AI_CHAT)).toBe(false);
+    expect(isAccessFeatureEnabled(context(), FeatureKey.CHAT_ENABLED)).toBe(false);
   });
 
   it('keeps boolean override value semantics consistent with the legacy feature service', () => {

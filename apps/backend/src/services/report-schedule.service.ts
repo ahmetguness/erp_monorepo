@@ -1,6 +1,5 @@
 import { EntityType, NotificationStatus, type Prisma, type PrismaClient } from '@prisma/client';
-import { sendMail } from './mail.service';
-import { MailHistoryService } from './mail-history.service';
+import { queueOutboundMail } from './mail-delivery/mail-delivery.service.js';
 import { isKpiConfig, normalizeKpiConfig, ReportingBuilderService } from './reporting-builder.service';
 import { ValidationError } from '../errors';
 
@@ -11,6 +10,7 @@ export interface ReportScheduleDispatchResult {
   recipients: string[];
   notificationCount: number;
   mailCount: number;
+  queuedMailCount: number;
   preview: {
     datasetLabel: string;
     metricLabel: string;
@@ -77,37 +77,29 @@ export class ReportScheduleService {
       period: preview.period,
     });
 
-    let mailCount = 0;
-    for (const recipient of config.scheduleEmail.recipients) {
-      const history = await MailHistoryService.createOutbound({
-        tenantId,
-        sentById: userId,
-        to: [recipient],
-        subject,
-        html,
-      });
-      const result = await sendMail({ to: recipient, subject, html });
-      await MailHistoryService.complete({
-        id: history.id,
-        tenantId,
-        success: result.success,
-        providerId: result.id,
-        error: result.error,
-      });
-      if (result.success) mailCount++;
-    }
+    await this.db.$transaction(async (tx) => {
+      for (const recipient of config.scheduleEmail.recipients) {
+        await queueOutboundMail(tx, {
+          tenantId,
+          sentById: userId,
+          to: [recipient],
+          subject,
+          html,
+        });
+      }
 
-    await this.db.notification.create({
-      data: {
-        tenantId,
-        userId,
-        title: 'Zamanlanmis rapor gonderildi',
-        message: `${report.name} raporu ${config.scheduleEmail.frequency.toLowerCase()} periyoduyla ${config.scheduleEmail.recipients.length} aliciya gonderildi.`,
-        module: 'reporting',
-        entityType: EntityType.OTHER,
-        entityId: report.id,
-        status: NotificationStatus.UNREAD,
-      },
+      await tx.notification.create({
+        data: {
+          tenantId,
+          userId,
+          title: 'Zamanlanmış rapor kuyruğa alındı',
+          message: `${report.name} raporu ${config.scheduleEmail.recipients.length} alıcı için gönderim kuyruğuna alındı.`,
+          module: 'reporting',
+          entityType: EntityType.OTHER,
+          entityId: report.id,
+          status: NotificationStatus.UNREAD,
+        },
+      });
     });
 
     return {
@@ -116,7 +108,8 @@ export class ReportScheduleService {
       frequency: config.scheduleEmail.frequency,
       recipients: config.scheduleEmail.recipients,
       notificationCount: 1,
-      mailCount,
+      mailCount: 0,
+      queuedMailCount: config.scheduleEmail.recipients.length,
       preview: {
         datasetLabel: preview.datasetLabel,
         metricLabel: preview.metricLabel,
