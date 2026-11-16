@@ -1385,8 +1385,8 @@ async function testDomainEventDeadLetterReplay(ctx: TestContext): Promise<void> 
 
   await processDomainEventOutboxBatch(10);
 
-  const processedOutbox = await prisma.domainEventOutbox.findUniqueOrThrow({
-    where: { id: outbox.id },
+  const processedOutbox = await prisma.domainEventOutbox.findFirstOrThrow({
+    where: { id: outbox.id, tenantId: ctx.tenantAId },
     select: { status: true },
   });
   if (processedOutbox.status !== DomainEventOutboxStatus.PROCESSED) {
