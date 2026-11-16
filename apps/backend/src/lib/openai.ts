@@ -7,5 +7,5 @@ if (!OPENAI_API_KEY) {
 }
 
 export const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY ?? '',
+  apiKey: OPENAI_API_KEY || 'disabled',
 });

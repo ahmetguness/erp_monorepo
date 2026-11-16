@@ -41,6 +41,8 @@
   ],
   "exclude": [
     "node_modules",
+    "tests",
+    "vitest.config.mts",
     "**/*.test.ts",
     "**/*.test.tsx",
     "**/*.spec.ts",

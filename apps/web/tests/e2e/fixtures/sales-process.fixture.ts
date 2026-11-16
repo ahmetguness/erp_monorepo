@@ -39,9 +39,9 @@ export async function withSalesProcess(page: Page, verify: (scenario: SalesProce
     // Exact fixture ownership; never remove shared demo data.
     if (contactId) {
       const invoices = await db.invoice.findMany({ where: { tenantId, contactId }, select: { id: true } });
-      const ids = invoices.map((invoice) => invoice.id);
+      const ids = invoices.map((invoice: { id: string }) => invoice.id);
       const payments = await db.payment.findMany({ where: { tenantId, contactId }, select: { id: true } });
-      const refs = [...ids, ...payments.map((payment) => payment.id)];
+      const refs = [...ids, ...payments.map((payment: { id: string }) => payment.id)];
       await db.paymentAllocation.deleteMany({ where: { tenantId, invoiceId: { in: ids } } });
       await db.payment.deleteMany({ where: { tenantId, contactId } });
       await db.journalEntryLine.deleteMany({ where: { tenantId, journalEntry: { tenantId, refId: { in: refs } } } });

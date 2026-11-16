@@ -18,6 +18,7 @@ env:
   GLOBAL_RATE_LIMIT_PER_MINUTE: '100000'
   GLOBAL_WRITE_RATE_LIMIT_PER_MINUTE: '100000'
   MARKETPLACE_WORKER_ENABLED: 'false'
+  OPENAI_API_KEY: disabled
 jobs:
   static-quality:
     runs-on: ubuntu-24.04
@@ -219,7 +220,7 @@ jobs:
       - run: npm run supply-chain:audit
       - run: npm run supply-chain:licenses
       - run: npm sbom --sbom-format=cyclonedx > sbom.cdx.json
-      - run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.2 detect --source=/repo --no-banner --redact
+      - run: docker run --rm -v "$PWD:/repo" -w /repo zricethezav/gitleaks:v8.24.2 detect --source=/repo --no-banner --redact
       - uses: actions/upload-artifact@v4
         with: { name: sbom, path: sbom.cdx.json, if-no-files-found: error }
   assurance-summary:
