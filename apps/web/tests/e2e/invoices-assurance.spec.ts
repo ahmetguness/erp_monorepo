@@ -36,7 +36,11 @@ test('invoice UI create, read, totals, export and reasoned cancellation', async 
     const db = await prisma.invoice.findUniqueOrThrow({ where: { id }, include: { history: true } });
     expect(db.status).toBe('CANCELLED'); expect(db.history.some(h => h.notes?.includes('TEST_E2E müşteri talebi'))).toBeTruthy();
     await page.goto('/dashboard/invoices'); await page.getByPlaceholder(/Fatura no veya cari/).fill(marker); await expect(page.locator('body')).toContainText(marker);
-    const downloadPromise = page.waitForEvent('download'); await page.getByRole('button', { name: 'Dışa aktar', exact: true }).click(); expect((await downloadPromise).suggestedFilename()).toMatch(/\.csv$/);
+    const exportBtn = page.getByRole('button', { name: 'Dışa aktar', exact: true });
+    await expect(exportBtn).toBeEnabled();
+    const downloadPromise = page.waitForEvent('download', { timeout: 30_000 });
+    await exportBtn.click();
+    expect((await downloadPromise).suggestedFilename()).toMatch(/\.csv$/);
     expect(failedRequests).toEqual([]); expect(consoleErrors).toEqual([]);
   } finally {
     if (contactId) { const ids = (await prisma.invoice.findMany({ where: { contactId }, select: { id: true } })).map(x => x.id); if (ids.length) { await prisma.invoiceHistory.deleteMany({ where: { invoiceId: { in: ids } } }); await prisma.invoiceLine.deleteMany({ where: { invoiceId: { in: ids } } }); await prisma.invoice.deleteMany({ where: { id: { in: ids } } }); } await prisma.contact.deleteMany({ where: { id: contactId } }); }

@@ -84,7 +84,7 @@ const METHOD_COLORS: Record<string, string> = {
 };
 
 const CODE_EXAMPLE = `curl -X GET "https://api.axonerp.com/api/external/products?page=1&limit=10" \\
-  -H "x-api-key: sk_live_xxxxxxxxxxxxxxxx" \\
+  -H "x-api-key: axon_live_xxxxxxxxxxxxxxxx" \\
   -H "Content-Type: application/json"`;
 
 const RESPONSE_EXAMPLE = `{

@@ -1303,6 +1303,7 @@ async function testApiKeyScopeAndTenantIsolation(ctx: TestContext): Promise<void
 }
 
 async function testDomainEventOutbox(ctx: TestContext): Promise<void> {
+  await processDomainEventOutboxBatch(100);
   const events = await prisma.domainEventOutbox.findMany({
     where: {
       tenantId: ctx.tenantAId,
