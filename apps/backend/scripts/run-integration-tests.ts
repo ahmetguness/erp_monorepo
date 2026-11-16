@@ -1379,7 +1379,17 @@ async function testDomainEventDeadLetterReplay(ctx: TestContext): Promise<void> 
   const replayResult = await api('POST', `/api/domain-events/${outbox.id}/replay`, token(ctx.ownerAId, ctx.tenantAId));
   assertStatus(replayResult, 200, 'dead-letter domain event replay edilebilmeli');
   const replayData = readDataRecord(replayResult.body);
-  if (replayData.replayed !== true || replayData.afterStatus !== DomainEventOutboxStatus.PROCESSED) {
+  if (replayData.replayed !== true || replayData.afterStatus !== DomainEventOutboxStatus.PENDING) {
+    throw new Error('Dead-letter replay event statusunu PENDING yapmadi.');
+  }
+
+  await processDomainEventOutboxBatch(10);
+
+  const processedOutbox = await prisma.domainEventOutbox.findUniqueOrThrow({
+    where: { id: outbox.id },
+    select: { status: true },
+  });
+  if (processedOutbox.status !== DomainEventOutboxStatus.PROCESSED) {
     throw new Error('Dead-letter replay event statusunu PROCESSED yapmadi.');
   }
 
