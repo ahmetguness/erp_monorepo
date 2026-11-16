@@ -98,8 +98,10 @@ test("sales order UI create, read, totals, lifecycle, search and navigation", as
     await page.goto("/dashboard/sales-orders");
     await page.getByPlaceholder(/Sipariş no veya cari/).fill(marker);
     await expect(page.locator("body")).toContainText(marker);
-    const downloadPromise = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Dışa aktar", exact: true }).click();
+    const exportBtn = page.getByRole("button", { name: "Dışa aktar", exact: true });
+    await expect(exportBtn).toBeEnabled();
+    const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
+    await exportBtn.click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toMatch(/\.csv$/);
     await page.getByRole("button", { name: "Onaylandı", exact: true }).click();

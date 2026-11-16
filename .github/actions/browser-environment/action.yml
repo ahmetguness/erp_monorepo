@@ -16,7 +16,7 @@ runs:
       run: |
         mkdir -p artifacts/browser
         cd apps/backend
-        nohup node --import ../../scripts/node26-tsx-shim.mjs --import tsx src/index.ts > ../../artifacts/browser/api.log 2>&1 &
+        DOMAIN_EVENT_OUTBOX_WORKER_ENABLED=true DOMAIN_EVENT_OUTBOX_WORKER_INTERVAL_MS=500 EDOCUMENT_PROVIDER_MODE=mock nohup node --import ../../scripts/node26-tsx-shim.mjs --import tsx src/index.ts > ../../artifacts/browser/api.log 2>&1 &
         echo "$!" > ../../artifacts/browser/api.pid
     - shell: bash
       run: node scripts/wait-for-http.mjs http://localhost:3001/health

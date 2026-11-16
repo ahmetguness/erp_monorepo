@@ -83,6 +83,7 @@ test("e-document UI creates, submits, refreshes and links to its invoice", async
               where: { invoiceId: setup.invoice.id },
             })
           )?.status,
+        { timeout: 15_000 },
       )
       .toBe("ACCEPTED");
     await page.getByText(`Fatura ${marker}_INV`, { exact: true }).click();
