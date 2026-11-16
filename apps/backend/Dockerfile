@@ -33,7 +33,8 @@ COPY apps/backend/prisma ./prisma
 RUN cd /app && npm ci --workspace=apps/backend --omit=dev --ignore-scripts \
   && mkdir -p /app/node_modules \
   && ln -s /app/apps/backend/node_modules/zod /app/node_modules/zod \
-  && npm cache clean --force
+  && npm cache clean --force \
+  && rm -rf /app/node_modules/deepmerge-ts /app/apps/backend/node_modules/deepmerge-ts /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --from=builder /app/apps/backend/dist ./dist
 COPY --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
 USER node

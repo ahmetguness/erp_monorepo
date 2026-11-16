@@ -19,6 +19,7 @@ env:
   GLOBAL_WRITE_RATE_LIMIT_PER_MINUTE: '100000'
   MARKETPLACE_WORKER_ENABLED: 'false'
   OPENAI_API_KEY: disabled
+  ENCRYPTION_KEY: ci-encryption-key-for-testing-only
 jobs:
   static-quality:
     runs-on: ubuntu-24.04

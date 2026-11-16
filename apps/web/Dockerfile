@@ -28,7 +28,8 @@ WORKDIR /app
 COPY --from=builder --chown=node:node /app/apps/web/public ./apps/web/public
 COPY --from=builder --chown=node:node /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
-RUN mkdir -p apps/web/.next/cache && chown -R node:node /app
+RUN mkdir -p apps/web/.next/cache && chown -R node:node /app \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
