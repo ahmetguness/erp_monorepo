@@ -136,7 +136,7 @@ test("marketplace automation renders metrics, updates policies, refreshes and re
   await login(page);
   await page.goto("/dashboard/marketplace/automation");
   await expect(page.getByText("TEST-MP-1")).toBeVisible();
-  await expect(page.getByText("7", { exact: true })).toBeVisible();
+  await expect(page.locator("main").getByText("7", { exact: true })).toBeVisible();
   await page
     .getByRole("switch", { name: "Otomatik müşteri carisi oluştur" })
     .click();
