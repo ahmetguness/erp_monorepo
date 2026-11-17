@@ -152,7 +152,7 @@ model DemoRequest {
   processedAt    DateTime?
   processedBy    String?
   ownerId        String?
-  slaDueAt       DateTime             @default(dbgenerated("(now() + '04:00:00'::interval)"))
+  slaDueAt       DateTime             @default(dbgenerated("(CURRENT_TIMESTAMP + '04:00:00'::interval)"))
   history        DemoRequestHistory[]
 
   tenant Tenant? @relation(fields: [tenantId], references: [id])

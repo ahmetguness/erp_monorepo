@@ -1,6 +1,7 @@
 import { EntityType,Priority } from '@prisma/client';
 
-export const DOMAIN_EVENT_SCHEMA_VERSION = 2;
+import { RELEASE_PROTOCOL } from '@repo/types/release';
+export const DOMAIN_EVENT_SCHEMA_VERSION = RELEASE_PROTOCOL.eventSchema;
 
 export interface DomainEventContext {
   tenantId: string;

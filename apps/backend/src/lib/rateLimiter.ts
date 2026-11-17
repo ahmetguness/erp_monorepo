@@ -1,4 +1,6 @@
 import Redis from 'ioredis';
+import { RELEASE_PROTOCOL } from '@repo/types/release';
+import { logger } from './logger.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const redisUrl = process.env.REDIS_URL;
@@ -8,7 +10,33 @@ if (isProduction && !redisUrl) {
   throw new Error('REDIS_URL ortam değişkeni production ortamında zorunludur.');
 }
 
-const redis = redisUrl ? new Redis(redisUrl) : null;
+const redis = redisUrl ? new Redis(redisUrl, { connectTimeout: 2_000, commandTimeout: 2_000, maxRetriesPerRequest: 0 }) : null;
+let lastRedisWarning = 0;
+redis?.on('error', () => {
+  if (Date.now() - lastRedisWarning >= 30_000) {
+    lastRedisWarning = Date.now();
+    logger.warn('[RateLimiter] Redis connection unavailable; protected requests remain fail-closed.');
+  }
+});
+
+export async function probeRedis(): Promise<void> {
+  if (!redis) throw new Error('Redis is not configured.');
+  if (await redis.ping() !== 'PONG') throw new Error('Redis readiness failed.');
+}
+export function closeRateLimiter(): void { redis?.disconnect(); }
+
+/** Heartbeats are isolated by environment and consumer protocol, never by tenant data. */
+export async function workerHeartbeat(action: 'touch' | 'remove' | 'check', id = ''): Promise<void> {
+  if (!redis) throw new Error('Redis is not configured.');
+  const key = `axon:workers:${process.env.DEPLOYMENT_ENV ?? 'development'}:v${RELEASE_PROTOCOL.eventSchema}`;
+  const cutoff = Date.now() - 45_000;
+  if (action === 'touch') {
+    await redis.zadd(key, Date.now(), id);
+    await redis.zremrangebyscore(key, '-inf', cutoff);
+    await redis.expire(key, 90);
+  } else if (action === 'remove') await redis.zrem(key, id);
+  else if (await redis.zcount(key, cutoff, '+inf') === 0) throw new Error('No healthy workers.');
+}
 
 // Geriye dönük uyumluluk ve dev ortamı için basit in-memory fallback.
 const inMemoryStore = new Map<string, { count: number; resetAt: number }>();

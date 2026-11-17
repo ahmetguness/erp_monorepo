@@ -1,0 +1,147 @@
+name: Release Delivery
+on:
+  workflow_run:
+    workflows: [CI Assurance]
+    types: [completed]
+    branches: [main]
+permissions: { contents: read }
+concurrency:
+  group: release-staging
+  cancel-in-progress: false
+jobs:
+  package:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions: { contents: read, actions: read, packages: write }
+    outputs:
+      sha: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with: { ref: '${{ github.event.workflow_run.head_sha }}', persist-credentials: false }
+      - name: Require release assurance for this exact commit
+        uses: actions/github-script@v8
+        with:
+          script: |
+            for (let attempt = 0; attempt < 120; attempt++) {
+              const response = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'release-assurance.yml', head_sha: context.payload.workflow_run.head_sha, event: 'push', per_page: 10 });
+              const run = response.data.workflow_runs.find(run => run.head_branch === 'main' && run.head_repository.full_name === `${context.repo.owner}/${context.repo.repo}`);
+              if (run?.conclusion === 'success') return;
+              if (run?.status === 'completed') throw new Error('Release assurance failed for this commit.');
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+            throw new Error('Release assurance did not finish.');
+      - uses: actions/setup-node@v6
+        with: { node-version: '22', cache: npm }
+      - run: npm ci
+      - run: npm run build:release-tools
+      - name: Image metadata
+        id: metadata
+        run: |
+          echo "repository=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with: { registry: ghcr.io, username: '${{ github.actor }}', password: '${{ secrets.GITHUB_TOKEN }}' }
+      - uses: docker/build-push-action@v7
+        id: backend
+        with:
+          context: .
+          file: apps/backend/Dockerfile
+          target: runner
+          push: true
+          tags: ${{ steps.metadata.outputs.repository }}-backend:${{ github.event.workflow_run.head_sha }}
+          build-args: |
+            RELEASE_VERSION=${{ steps.metadata.outputs.version }}
+            RELEASE_GIT_SHA=${{ github.event.workflow_run.head_sha }}
+      - uses: docker/build-push-action@v7
+        id: migrator
+        with:
+          context: .
+          file: apps/backend/Dockerfile
+          target: migrator
+          push: true
+          tags: ${{ steps.metadata.outputs.repository }}-migrator:${{ github.event.workflow_run.head_sha }}
+          build-args: |
+            RELEASE_VERSION=${{ steps.metadata.outputs.version }}
+            RELEASE_GIT_SHA=${{ github.event.workflow_run.head_sha }}
+      - uses: docker/build-push-action@v7
+        id: web
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ steps.metadata.outputs.repository }}-web:${{ github.event.workflow_run.head_sha }}
+          build-args: |
+            RELEASE_VERSION=${{ steps.metadata.outputs.version }}
+            RELEASE_GIT_SHA=${{ github.event.workflow_run.head_sha }}
+      - name: Write immutable release manifest
+        env:
+          REPOSITORY: ${{ steps.metadata.outputs.repository }}
+          BACKEND_DIGEST: ${{ steps.backend.outputs.digest }}
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
+          MIGRATOR_DIGEST: ${{ steps.migrator.outputs.digest }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node artifacts/release-tools/scripts/release/cli.js manifest "$REPOSITORY-backend@$BACKEND_DIGEST" "$REPOSITORY-web@$WEB_DIGEST" "$REPOSITORY-migrator@$MIGRATOR_DIGEST" "$RELEASE_SHA" release-manifest.json
+      - name: Scan the exact application digests before deployment
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ steps.metadata.outputs.repository }}
+          BACKEND_DIGEST: ${{ steps.backend.outputs.digest }}
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
+        run: |
+          mkdir -p artifacts/release-security
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD -v "$PWD/artifacts/release-security:/reports" aquasec/trivy:0.58.2 image --exit-code 1 --severity HIGH,CRITICAL --format json --output /reports/backend.json "$REPOSITORY-backend@$BACKEND_DIGEST"
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD -v "$PWD/artifacts/release-security:/reports" aquasec/trivy:0.58.2 image --exit-code 1 --severity HIGH,CRITICAL --format json --output /reports/web.json "$REPOSITORY-web@$WEB_DIGEST"
+      - name: Prove runtime readiness, drain and restart using the published digests
+        run: node artifacts/release-tools/scripts/release/cli.js assure release-manifest.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-verification
+          path: |
+            artifacts/release-assurance
+            artifacts/release-security
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-bundle
+          retention-days: 90
+          path: |
+            release-manifest.json
+            artifacts/release-tools
+          if-no-files-found: error
+  staging:
+    needs: package
+    runs-on: [self-hosted, linux, x64, axon-staging]
+    timeout-minutes: 35
+    environment:
+      name: staging
+      url: https://${{ vars.DEPLOYMENT_HOST }}
+    permissions: { contents: read, packages: read }
+    steps:
+      - uses: actions/checkout@v6
+        with: { ref: '${{ needs.package.outputs.sha }}', persist-credentials: false }
+      - uses: actions/download-artifact@v4
+        with: { name: release-bundle, path: bundle }
+      - uses: actions/setup-node@v6
+        with: { node-version: '22' }
+      - uses: docker/login-action@v4
+        with: { registry: ghcr.io, username: '${{ github.actor }}', password: '${{ secrets.GITHUB_TOKEN }}' }
+      - name: Reject an obsolete queued staging release
+        uses: actions/github-script@v8
+        env: { RELEASE_SHA: '${{ needs.package.outputs.sha }}' }
+        with:
+          script: |
+            const { data: branch } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' });
+            if (branch.commit.sha !== process.env.RELEASE_SHA) throw new Error('A newer main commit exists; deploy its verified release instead.');
+      - name: Deploy the verified bundle
+        env:
+          DEPLOYMENT_ENV: staging
+          DEPLOYMENT_ROOT: ${{ vars.DEPLOYMENT_ROOT }}
+          DEPLOYMENT_ENV_FILE: ${{ vars.DEPLOYMENT_ENV_FILE }}
+          DEPLOYMENT_HOST: ${{ vars.DEPLOYMENT_HOST }}
+          API_REPLICAS: ${{ vars.API_REPLICAS || '1' }}
+          WORKER_REPLICAS: ${{ vars.WORKER_REPLICAS || '1' }}
+        run: node bundle/artifacts/release-tools/scripts/release/cli.js deploy bundle/release-manifest.json

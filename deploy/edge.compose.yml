@@ -1,0 +1,24 @@
+services:
+  proxy:
+    image: ${PROXY_IMAGE:?Provide a digest-pinned Caddy 2 image}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    ports: ['80:80', '443:443', '443:443/udp']
+    volumes:
+      - ${DEPLOYMENT_ROOT:?Deployment root required}/proxy:/etc/caddy:ro
+      - certificates:/data
+      - config:/config
+    networks: [application]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:2019/config/']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+networks:
+  application:
+    external: true
+    name: ${DEPLOYMENT_NETWORK}
+volumes:
+  certificates:
+  config:

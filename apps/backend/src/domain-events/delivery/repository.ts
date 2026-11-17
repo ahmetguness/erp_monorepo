@@ -19,7 +19,7 @@ function leaseDurationMs(): number {
   return Number.isFinite(configured) && configured > 0 ? Math.min(30 * 60_000, Math.max(1_000, configured)) : LEASE_DURATION_MS;
 }
 
-export function claimNextEvent(tenantId?: string, id?: string, supportedSchemaVersion = DOMAIN_EVENT_SCHEMA_VERSION): Promise<OutboxLease | null> {
+export function claimNextEvent(tenantId?: string, id?: string, supportedSchemaVersion: number = DOMAIN_EVENT_SCHEMA_VERSION): Promise<OutboxLease | null> {
   return runWithTenantIsolationBypass('domain-event-outbox-worker-atomic-claim', async () => {
     const leaseOwner = randomUUID();
     const durationMs = leaseDurationMs();

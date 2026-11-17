@@ -202,7 +202,7 @@ export function useChatRealtime(): void {
     const refresh = () => {
       void client.invalidateQueries({ queryKey: chatKeys.all });
     };
-    const wsUrl = new URL('/api/chat/ws', API_BASE_URL);
+    const wsUrl = new URL('/api/chat/ws', API_BASE_URL || window.location.origin);
     wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
     let stopped = false;
     let retry: ReturnType<typeof setTimeout> | undefined;

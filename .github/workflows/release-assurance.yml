@@ -1,0 +1,37 @@
+name: Release Assurance
+on:
+  pull_request:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  release-and-migrations:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres, POSTGRES_DB: phase7_github_ci }
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres -d phase7_github_ci" --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v6
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v6
+        with: { node-version: '22', cache: npm }
+      - run: npm ci
+      - run: npm run build:types
+      - run: npm --workspace=@repo/backend run db:generate
+      - run: npm run build:release-tools
+      - run: npm run test:release
+      - run: npm --workspace=@repo/backend run test:unit -- tests/unit/runtime
+      - name: Select previous release baseline
+        env: { CONFIGURED_BASELINE: '${{ vars.PREVIOUS_RELEASE_SHA }}' }
+        run: |
+          baseline="${CONFIGURED_BASELINE:-$(git rev-parse HEAD^)}"
+          [[ "$baseline" =~ ^[a-f0-9]{40}$ ]]
+          echo "BASELINE_GIT_SHA=$baseline" >> "$GITHUB_ENV"
+      - name: Empty install, upgrade, forward-fix and schema drift
+        env:
+          MIGRATION_ASSURANCE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/phase7_github_ci?schema=public
+        run: npm --workspace=@repo/backend run db:verify-release

@@ -15,15 +15,22 @@ RUN cd /app && npm ci --workspace=apps/web --ignore-scripts \
   && PATH=/app/apps/web/node_modules/.bin:$PATH npm --prefix /app/packages/types run build
 
 FROM deps AS builder
+ENV NODE_OPTIONS=--max-old-space-size=4096
 WORKDIR /app/apps/web
 COPY apps/web ./
 COPY packages/types /app/packages/types
-ARG NEXT_PUBLIC_API_URL=http://localhost:3001
+ARG NEXT_PUBLIC_API_URL=
+ARG RELEASE_GIT_SHA=development
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV RELEASE_GIT_SHA=$RELEASE_GIT_SHA
 RUN npm run build
 
 FROM base AS runner
 ENV NODE_ENV=production
+ARG RELEASE_VERSION=development
+ARG RELEASE_GIT_SHA=development
+ENV RELEASE_VERSION=$RELEASE_VERSION RELEASE_GIT_SHA=$RELEASE_GIT_SHA
+LABEL org.opencontainers.image.version=$RELEASE_VERSION org.opencontainers.image.revision=$RELEASE_GIT_SHA
 WORKDIR /app
 COPY --from=builder --chown=node:node /app/apps/web/public ./apps/web/public
 COPY --from=builder --chown=node:node /app/apps/web/.next/standalone ./

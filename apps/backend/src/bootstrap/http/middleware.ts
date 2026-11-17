@@ -53,7 +53,7 @@ export function registerPreRoutingMiddleware(app: Hono, config: RuntimeConfig): 
       'X-Portal-Token',
       'X-Contact-Id',
     ],
-    exposeHeaders: ['Content-Length', 'x-request-id', 'x-correlation-id'],
+    exposeHeaders: ['Content-Length', 'x-request-id', 'x-correlation-id', 'x-axon-release'],
     maxAge: 86400,
     credentials: true,
   }));
@@ -64,6 +64,7 @@ export function registerPreRoutingMiddleware(app: Hono, config: RuntimeConfig): 
     const correlationId = readCorrelationId(context, requestId);
     context.header('x-request-id', requestId);
     context.header('x-correlation-id', correlationId);
+    context.header('x-axon-release', process.env.RELEASE_GIT_SHA ?? 'development');
     await runWithObservabilityContext({ requestId, correlationId }, next);
 
     const durationMs = Date.now() - start;

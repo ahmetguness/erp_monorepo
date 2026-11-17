@@ -52,6 +52,11 @@ export class S3CompatibleObjectStorage implements ObjectStorage {
     if (!response.ok && response.status !== 404) throw new ValidationError(`Object storage silme başarısız: HTTP ${response.status}.`);
   }
 
+  async probe(signal: AbortSignal): Promise<void> {
+    const response = await this.request('HEAD', '', undefined, undefined, signal);
+    if (!response.ok) throw new Error('Object storage readiness failed.');
+  }
+
   async createSignedGetUrl(key: string, expiresInSeconds: number): Promise<SignedObjectUrl> {
     return this.createSignedUrl('GET', key, expiresInSeconds);
   }
@@ -92,13 +97,13 @@ export class S3CompatibleObjectStorage implements ObjectStorage {
     return `/${encodeQueryValue(this.config.bucket)}/${encodeObjectKey(validateObjectKey(key))}`;
   }
 
-  private async request(method: 'PUT' | 'GET' | 'DELETE', rawKey: string, body?: Buffer, contentType?: string): Promise<Response> {
+  private async request(method: 'PUT' | 'GET' | 'DELETE' | 'HEAD', rawKey: string, body?: Buffer, contentType?: string, signal?: AbortSignal): Promise<Response> {
     const now = new Date();
     const { dateStamp, value: dateValue } = amzDate(now);
     const service = 's3';
     const scope = `${dateStamp}/${this.config.region}/${service}/aws4_request`;
     const host = new URL(this.endpoint).host;
-    const canonicalUri = this.objectPath(rawKey);
+    const canonicalUri = method === 'HEAD' ? `/${encodeQueryValue(this.config.bucket)}` : this.objectPath(rawKey);
     const payloadHash = hashHex(body ?? '');
     const headers = new Headers({ host, 'x-amz-content-sha256': payloadHash, 'x-amz-date': dateValue });
     if (contentType) headers.set('content-type', contentType);
@@ -108,6 +113,6 @@ export class S3CompatibleObjectStorage implements ObjectStorage {
     const stringToSign = ['AWS4-HMAC-SHA256', dateValue, scope, hashHex(canonicalRequest)].join('\n');
     const signature = hmacHex(signingKey(this.config.secretAccessKey, dateStamp, this.config.region, service), stringToSign);
     headers.set('authorization', `AWS4-HMAC-SHA256 Credential=${this.config.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`);
-    return observedFetch(`${this.endpoint}${canonicalUri}`, { method, headers, body: body ? bufferToBlob(body) : undefined });
+    return observedFetch(`${this.endpoint}${canonicalUri}`, { method, headers, signal: signal ?? AbortSignal.timeout(15_000), body: body ? bufferToBlob(body) : undefined });
   }
 }

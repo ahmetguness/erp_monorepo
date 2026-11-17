@@ -60,7 +60,7 @@ model PlatformIncidentCommunication {
   updatedAt      DateTime         @updatedAt
   incident       PlatformIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
-  @@index([incidentId, status, createdAt])
+  @@index([incidentId, status, createdAt], map: "platform_incident_communications_incidentId_status_createdAt_id")
   @@index([status, createdAt])
   @@map("platform_incident_communications")
 }

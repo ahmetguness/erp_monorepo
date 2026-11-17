@@ -4,6 +4,7 @@ import { chatRoutes } from './chat/http/index.js';
 
 export {
   injectChatWebSocket,
+  closeChatWebSockets,
   registerChatWebSocket,
 } from './chat/infrastructure/realtime/node-websocket-gateway.js';
 

@@ -20,6 +20,10 @@
     "prepack": "npm run build && npm run test:layout"
   },
   "exports": {
+    "./release": {
+      "import": { "types": "./dist/esm/release.d.ts", "default": "./dist/esm/release.js" },
+      "require": { "types": "./dist/cjs/release.d.ts", "default": "./dist/cjs/release.js" }
+    },
     ".": {
       "import": {
         "types": "./dist/esm/index.d.ts",

@@ -10,6 +10,8 @@
   ],
   "scripts": {
     "build:types": "npm --workspace=@repo/types run build",
+    "build:release-tools": "tsc --project scripts/release/tsconfig.json && node -e \"require('node:fs').copyFileSync('scripts/release/package.json','artifacts/release-tools/package.json')\"",
+    "test:release": "node --import ./scripts/node26-tsx-shim.mjs --import tsx --test scripts/release/tests/*.test.ts",
     "predev:backend": "npm run build:types",
     "prebuild:backend": "npm run build:types",
     "dev:backend": "npm --workspace=@repo/backend run dev",

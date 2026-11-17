@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "noEmit": false, "noUnusedLocals": true, "noUnusedParameters": true, "rootDir": "../..", "outDir": "../../artifacts/release-tools" },
+  "include": ["*.ts"],
+  "exclude": ["tests"]
+}

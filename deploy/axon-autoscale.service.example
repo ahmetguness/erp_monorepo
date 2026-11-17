@@ -1,0 +1,16 @@
+[Unit]
+Description=Axon release-aware API and worker autoscaling
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=axon-deploy
+Group=docker
+# Private settings contain DEPLOYMENT_*, AUTOSCALE_ENABLED and per-role bounds.
+EnvironmentFile=/etc/axon/autoscale.conf
+# Install a verified release-tools bundle here; never execute a mutable runner checkout.
+ExecStart=/usr/bin/node /opt/axon/release-tools/scripts/release/cli.js autoscale
+WorkingDirectory=/opt/axon/source
+TimeoutStartSec=20min
+NoNewPrivileges=true

@@ -1,5 +1,5 @@
 export const PUBLIC_PATHS: ReadonlySet<string> = new Set([
-  '/', '/login', '/register', '/admin/login', '/set-password', '/invite', '/api-docs', '/checkout',
+  '/', '/login', '/register', '/admin/login', '/set-password', '/invite', '/api-docs', '/checkout', '/ready', '/release-info',
 ]);
 
 export type RouteAccessDecision =

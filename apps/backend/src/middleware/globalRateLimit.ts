@@ -11,7 +11,7 @@ const DEFAULT_LIMIT = 300;
 const DEFAULT_WINDOW_MS = 60_000;
 const WRITE_LIMIT = 120;
 const WRITE_WINDOW_MS = 60_000;
-const EXCLUDED_PATH_PREFIXES = ["/health"];
+const OPERATIONAL_READ_PATHS = new Set(['/health', '/ready', '/release']);
 
 function readPositiveInt(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
@@ -32,7 +32,7 @@ export async function globalRateLimit(
   c: Context,
   next: Next,
 ): Promise<Response | void> {
-  if (EXCLUDED_PATH_PREFIXES.some((prefix) => c.req.path.startsWith(prefix))) {
+  if ((c.req.method === 'GET' || c.req.method === 'HEAD') && OPERATIONAL_READ_PATHS.has(c.req.path)) {
     await next();
     return;
   }

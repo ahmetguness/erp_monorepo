@@ -157,6 +157,7 @@
     "db:diagram": "node scripts/generate-dbdiagram.mjs",
     "db:migrate": "prisma migrate dev --schema=prisma/schema",
     "db:migrate:deploy": "prisma migrate deploy --schema=prisma/schema",
+    "db:verify-release": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/deploy/verify-migrations.ts",
     "db:migrate:dry-run": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/migration-dry-run.ts",
     "db:migrate:review": "node --import ../../scripts/node26-tsx-shim.mjs --import tsx scripts/check-migration-safety.ts",
     "db:push": "prisma db push --schema=prisma/schema",

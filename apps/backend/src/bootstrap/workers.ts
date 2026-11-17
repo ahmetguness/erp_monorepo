@@ -3,12 +3,8 @@ import { logger } from "../lib/logger.js";
 import { DomainEventOutboxWorker } from "../services/domain-event-outbox-worker.service.js";
 import { TrendyolWorker } from "../services/trendyol-worker.service.js";
 import type { AppRole } from "./runtime-config.js";
-import { prisma } from "../lib/prisma.js";
 import { PersistentObservabilityWorker } from "../modules/platform/index.js";
 import { ChatAttachmentWorker, ChatRetentionWorker } from "../modules/storage-accounting/index.js";
-
-let shutdownRegistered = false;
-let shuttingDown = false;
 
 function isEnabled(explicitValue: string | undefined, role: AppRole): boolean {
   if (explicitValue === "true") return true;
@@ -20,7 +16,7 @@ export function startWorkers(
   role: AppRole,
   env: NodeJS.ProcessEnv = process.env,
 ): void {
-  if (role !== "worker" && env.PERSISTENT_OBSERVABILITY_ENABLED !== "false")
+  if (isEnabled(env.PERSISTENT_OBSERVABILITY_ENABLED, role))
     PersistentObservabilityWorker.start();
   if (isEnabled(env.DOMAIN_EVENT_OUTBOX_WORKER_ENABLED, role))
     DomainEventOutboxWorker.start();
@@ -42,7 +38,6 @@ export function startWorkers(
   if (chatAttachmentWorkerEnabled) ChatRetentionWorker.start();
 
   startMarketplaceMocks();
-  registerWorkerShutdown();
 }
 
 export async function stopWorkers(): Promise<void> {
@@ -54,24 +49,4 @@ export async function stopWorkers(): Promise<void> {
     ChatRetentionWorker.stop(),
   ]);
   stopAllMocks();
-}
-
-function registerWorkerShutdown(): void {
-  if (shutdownRegistered || process.env.NODE_ENV === "test") return;
-  shutdownRegistered = true;
-  const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    logger.info(
-      `[Workers] ${signal} received; waiting for active jobs to finish.`,
-    );
-    await stopWorkers();
-    await prisma.$disconnect();
-  };
-  process.once("SIGINT", () => {
-    void shutdown("SIGINT");
-  });
-  process.once("SIGTERM", () => {
-    void shutdown("SIGTERM");
-  });
 }

@@ -45,14 +45,16 @@ async function deliverLease(lease: OutboxLease): Promise<boolean> {
   });
 }
 
-export async function processDomainEventOutboxBatch(limit = 25): Promise<DomainEventOutboxBatchResult> {
+export async function processDomainEventOutboxBatch(limit = 25, shouldStop: () => boolean = () => false): Promise<DomainEventOutboxBatchResult> {
   registerDomainEventListeners();
-  await processPendingTenantProvisioning();
+  await processPendingTenantProvisioning(shouldStop);
   const result: DomainEventOutboxBatchResult = { claimed: 0, replayed: 0, skipped: 0, failed: 0, requeuedStale: await recoverExpiredLeases() };
   await reconcileProvisioningMailFailures();
   const batchSize = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.trunc(limit))) : 25;
+  const deadline = Date.now() + 240_000;
   // Claim immediately before delivery so events never age behind earlier work in a batch.
   for (let index = 0; index < batchSize; index++) {
+    if (shouldStop() || Date.now() >= deadline) break;
     const lease = await claimNextEvent();
     if (!lease) break;
     result.claimed++;
@@ -70,9 +72,13 @@ class DomainEventOutboxWorkerService {
     this.loop = new WorkerLoop('DomainEventOutboxWorker', pollInterval, async () => { await this.tick(); });
     this.loop.start();
   }
-  async stop(): Promise<void> { const loop = this.loop; this.loop = null; await loop?.stop(); }
+  async stop(): Promise<void> {
+    const loop = this.loop;
+    await loop?.stop();
+    if (this.loop === loop) this.loop = null;
+  }
   async tick(): Promise<DomainEventOutboxBatchResult> {
-    const result = await processDomainEventOutboxBatch();
+    const result = await processDomainEventOutboxBatch(25, () => this.loop?.isStopping ?? false);
     if (result.claimed || result.requeuedStale) logger.info('[DomainEventOutboxWorker] Batch processed', { ...result });
     return result;
   }

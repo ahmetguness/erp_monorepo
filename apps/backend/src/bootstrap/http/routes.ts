@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import { releaseIdentity } from '@repo/types/release';
+import { runtimeHealth } from '../operations/runtime-health.js';
 import { tenantIsolationBypass } from '../../lib/tenant-isolation-context.js';
 import { requireAuth } from '../../middleware/requireAuth.js';
 import {
@@ -16,6 +18,15 @@ import { requireActiveTrial } from '../../middleware/require-active-trial.js';
 export function registerPublicRoutes(app: Hono): void {
   app.get('/', (context) => context.json({ status: 'ok', service: 'Axon ERP API' }));
   app.get('/health', (context) => context.json({ status: 'ok' }));
+  app.get('/ready', async (context) => {
+    const report = await runtimeHealth.read();
+    context.header('Cache-Control', 'no-store');
+    return context.json(report, report.status === 'ready' ? 200 : 503);
+  });
+  app.get('/release', (context) => {
+    context.header('Cache-Control', 'no-store');
+    return context.json(releaseIdentity(process.env));
+  });
   app.get('/metrics', MetricsController.prometheus);
 
   app.use('/api/public/*', tenantIsolationBypass('public-api'));

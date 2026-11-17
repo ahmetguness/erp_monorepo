@@ -162,7 +162,7 @@ model ObservabilityMetricPoint {
   bucketAt  DateTime
   createdAt DateTime @default(now())
 
-  @@unique([metricKey, scope, scopeId, bucketAt])
+  @@unique([metricKey, scope, scopeId, bucketAt], map: "observability_metric_points_metricKey_scope_scopeId_bucketAt_ke")
   @@index([scope, scopeId, bucketAt])
   @@index([metricKey, bucketAt])
   @@map("observability_metric_points")
@@ -211,6 +211,7 @@ model ObservabilityAlertHistory {
   @@index([fingerprint, status])
   @@index([scope, scopeId, openedAt])
   @@index([status, silencedUntil])
+  @@index([lastModifiedById])
   @@map("observability_alert_history")
 }
 
@@ -362,7 +363,7 @@ model TenantProvisioningJob {
   error               String?
   createdById         String
   createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @updatedAt
+  updatedAt           DateTime                 @default(now()) @updatedAt
   tenant              Tenant?                  @relation(fields: [provisionedTenantId], references: [id], onDelete: SetNull)
   steps               TenantProvisioningStep[]
 
@@ -377,7 +378,7 @@ model TenantProvisioningStep {
   status    String                @default("PENDING")
   attempts  Int                   @default(0)
   error     String?
-  updatedAt DateTime              @updatedAt
+  updatedAt DateTime              @default(now()) @updatedAt
   job       TenantProvisioningJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@unique([jobId, key])
@@ -397,7 +398,7 @@ model BillingSubscription {
   customUnitPrice        Decimal?  @db.Decimal(12, 2)
   customPricingExpiresAt DateTime?
   createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  updatedAt              DateTime  @default(now()) @updatedAt
   tenant                 Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("billing_subscriptions")

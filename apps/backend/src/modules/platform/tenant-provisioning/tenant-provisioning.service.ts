@@ -184,12 +184,13 @@ export async function retryTenantProvisioning(id: string, adminId: string): Prom
 }
 
 /** Recover durable requests that never reached the tenant transaction, including a crashed API process. */
-export async function processPendingTenantProvisioning(): Promise<void> {
+export async function processPendingTenantProvisioning(shouldStop: () => boolean = () => false): Promise<void> {
   const jobs = await prisma.tenantProvisioningJob.findMany({
     where: { provisionedTenantId: null, OR: [{ status: 'PENDING' }, { status: 'RUNNING', updatedAt: { lt: new Date(Date.now() - 5 * 60_000) } }] },
     orderBy: { createdAt: 'asc' }, take: 5,
   });
   for (const job of jobs) {
+    if (shouldStop()) break;
     const parsed = tenantProvisioningInputSchema.safeParse(job.input);
     if (!parsed.success) {
       await failProvisioning(job.id, 'Invalid stored provisioning input.');

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, type ReactNode } from "react";
+import { useState, useCallback, useRef, useSyncExternalStore, type ReactNode } from "react";
 import {
   Copy,
   Check,
@@ -15,6 +15,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { API_BASE_URL } from "@/lib/constants";
+
+// The origin is constant for the document; the server snapshot keeps hydration stable.
+const subscribeToOrigin = () => () => {};
+const browserOrigin = () => window.location.origin;
+const serverOrigin = () => "";
 
 // ─────────────────────────────────────────────
 // Config
@@ -219,6 +224,7 @@ function highlightJson(json: string): ReactNode[] {
 // ─────────────────────────────────────────────
 
 export function ApiPlayground() {
+  const origin = useSyncExternalStore(subscribeToOrigin, browserOrigin, serverOrigin);
   const [apiKey, setApiKey] = useState("");
   const [sandboxMode, setSandboxMode] = useState(true);
   const [showKey, setShowKey] = useState(false);
@@ -337,7 +343,7 @@ export function ApiPlayground() {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const curlCommand = `curl -X ${endpoint.method} "${API_BASE_URL}${endpoint.path}${endpoint.params ?? ""}" \\\n  -H "x-api-key: ${apiKey || "YOUR_API_KEY"}" \\\n  -H "x-sandbox-mode: ${sandboxMode ? "true" : "false"}" \\\n  -H "Content-Type: application/json"${endpoint.hasBody && body.trim() ? ` \\\n  -d '${body.replace(/\n/g, "")}'` : ""}`;
+  const curlCommand = `curl -X ${endpoint.method} "${API_BASE_URL || origin}${endpoint.path}${endpoint.params ?? ""}" \\\n  -H "x-api-key: ${apiKey || "YOUR_API_KEY"}" \\\n  -H "x-sandbox-mode: ${sandboxMode ? "true" : "false"}" \\\n  -H "Content-Type: application/json"${endpoint.hasBody && body.trim() ? ` \\\n  -d '${body.replace(/\n/g, "")}'` : ""}`;
 
   const statusColor =
     statusCode === null

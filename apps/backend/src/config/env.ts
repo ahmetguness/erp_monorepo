@@ -1,3 +1,7 @@
+import type { EnvValidationIssue } from './env-validation.js';
+import { validateDeploymentEnv } from './deployment-env.js';
+export type { EnvValidationIssue } from './env-validation.js';
+
 export type EnvRuntime = "all" | "development" | "test" | "production";
 export type EnvValueKind =
   | "string"
@@ -20,12 +24,6 @@ export interface EnvVarDefinition {
   securityNote: string;
   legacyAliasFor?: string;
   values?: readonly string[];
-}
-
-export interface EnvValidationIssue {
-  name: string;
-  severity: "error" | "warn";
-  message: string;
 }
 
 export interface RuntimeConfigCheck {
@@ -679,7 +677,7 @@ function shouldValidateInRuntime(definition: EnvVarDefinition): boolean {
 }
 
 export function validateEnvRegistry(): EnvValidationIssue[] {
-  const issues: EnvValidationIssue[] = [];
+  const issues: EnvValidationIssue[] = validateDeploymentEnv(process.env);
 
   for (const definition of ENV_REGISTRY) {
     if (!shouldValidateInRuntime(definition)) continue;

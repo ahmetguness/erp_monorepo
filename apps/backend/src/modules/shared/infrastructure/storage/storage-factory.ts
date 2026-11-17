@@ -69,6 +69,16 @@ export function createPrimaryObjectStorage(): ObjectStorage {
   return new S3CompatibleObjectStorage(resolved.config);
 }
 
+export async function probeObjectStorage(signal: AbortSignal): Promise<void> {
+  if (selectedDriver() === 'local') {
+    if (isProduction) throw new Error('Production requires object storage.');
+    return;
+  }
+  const resolved = s3Config();
+  if (!resolved.config) throw new Error('Object storage is not configured.');
+  await new S3CompatibleObjectStorage(resolved.config).probe(signal);
+}
+
 export function getStorageStatus(): StorageStatus {
   const driver = selectedDriver();
   const config = s3Config();

@@ -1,0 +1,8 @@
+[Unit]
+Description=Sample Axon CPU scaling every five minutes
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=5min
+Unit=axon-autoscale.service
+[Install]
+WantedBy=timers.target

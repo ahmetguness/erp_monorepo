@@ -612,6 +612,7 @@ model ApiKey {
 
   @@index([tenantId, isActive])
   @@index([tenantId, deletedAt])
+  @@index([tenantId, rotatedFromId])
   @@map("api_keys")
 }
 

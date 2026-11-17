@@ -1,0 +1,103 @@
+name: axon-release
+
+x-runtime: &runtime
+  image: ${BACKEND_IMAGE:?Digest-pinned backend image required}
+  init: true
+  restart: unless-stopped
+  stop_grace_period: 390s
+  mem_limit: 1g
+  read_only: true
+  tmpfs: [/tmp:size=64m,mode=1777]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  env_file: ["${AXON_ENV_FILE:?Private deployment env file required}"]
+  networks: [application]
+  environment: &environment
+    NODE_OPTIONS: --max-old-space-size=768
+    NODE_ENV: production
+    DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:?Environment required}
+    RELEASE_VERSION: ${RELEASE_VERSION:?Version required}
+    RELEASE_GIT_SHA: ${RELEASE_GIT_SHA:?Commit required}
+    RELEASE_MIGRATION_VERSION: ${RELEASE_MIGRATION_VERSION:?Schema version required}
+    STORAGE_DRIVER: ${STORAGE_DRIVER:-s3}
+    ALLOW_LOCAL_UPLOADS_IN_PRODUCTION: 'false'
+    STORAGE_LEGACY_LOCAL_READ: 'false'
+    MALWARE_SCAN_MODE: enforce
+    CONTENT_SECURITY_POLICY_MODE: both
+
+services:
+  backend:
+    <<: *runtime
+    environment:
+      <<: *environment
+      APP_ROLE: api
+      REQUIRE_WORKER_READINESS: 'true'
+      DOMAIN_EVENT_OUTBOX_WORKER_ENABLED: 'false'
+      MARKETPLACE_WORKER_ENABLED: 'false'
+      CHAT_ATTACHMENT_WORKER_ENABLED: 'false'
+      PERSISTENT_OBSERVABILITY_ENABLED: 'false'
+    networks:
+      application:
+        aliases: ["api-${RELEASE_SLOT:?Slot required}"]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 12
+  worker:
+    <<: *runtime
+    environment:
+      <<: *environment
+      APP_ROLE: worker
+      WORKER_HEALTH_PORT: '3102'
+      DOMAIN_EVENT_OUTBOX_WORKER_ENABLED: 'true'
+      MARKETPLACE_WORKER_ENABLED: 'true'
+      CHAT_ATTACHMENT_WORKER_ENABLED: 'true'
+      PERSISTENT_OBSERVABILITY_ENABLED: 'true'
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3102/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 12
+  migrate:
+    image: ${MIGRATOR_IMAGE:?Digest-pinned migrator image required}
+    init: true
+    restart: 'no'
+    env_file: ["${AXON_ENV_FILE}"]
+    environment:
+      REQUIRE_EMPTY_DATABASE: ${REQUIRE_EMPTY_DATABASE:-false}
+    networks: [application]
+  web:
+    image: ${WEB_IMAGE:?Digest-pinned web image required}
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 60s
+    mem_limit: 768m
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /app/apps/web/.next/cache:uid=1000,gid=1000,size=256m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=512
+      HOSTNAME: 0.0.0.0
+      RELEASE_VERSION: ${RELEASE_VERSION}
+      RELEASE_GIT_SHA: ${RELEASE_GIT_SHA}
+    networks:
+      application:
+        aliases: ["web-${RELEASE_SLOT}"]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 12
+
+networks:
+  application:
+    external: true
+    name: ${DEPLOYMENT_NETWORK:?Private application network required}

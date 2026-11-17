@@ -1,0 +1,93 @@
+name: Operate Release
+on:
+  workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Successful Release Delivery run containing the verified staging bundle
+        required: true
+        type: string
+      environment:
+        type: choice
+        options: [production, staging]
+        required: true
+      operation:
+        type: choice
+        options: [promote, rollback, scale]
+        required: true
+      api_replicas:
+        description: API replica count (1..20)
+        default: '1'
+        type: string
+      worker_replicas:
+        description: Worker replica count (1..20)
+        default: '1'
+        type: string
+permissions: { contents: read, actions: read }
+concurrency:
+  group: operate-${{ inputs.environment }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      run-id: ${{ steps.validate.outputs.result }}
+    steps:
+      - uses: actions/github-script@v8
+        id: validate
+        env:
+          RELEASE_RUN_ID: ${{ inputs.release_run_id }}
+          TARGET_ENV: ${{ inputs.environment }}
+        with:
+          result-encoding: string
+          script: |
+            if (!/^[0-9]+$/.test(process.env.RELEASE_RUN_ID) || !['staging', 'production'].includes(process.env.TARGET_ENV)) throw new Error('Invalid release operation.');
+            const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: Number(process.env.RELEASE_RUN_ID) });
+            if (run.path !== '.github/workflows/release.yml' || run.head_branch !== 'main' || run.event !== 'workflow_run' || run.conclusion !== 'success' || run.repository.full_name !== `${context.repo.owner}/${context.repo.repo}`) throw new Error('Only a successful trusted staging release can be operated.');
+            if (process.env.TARGET_ENV === 'production') {
+              const { data: environment } = await github.rest.repos.getEnvironment({ ...context.repo, environment_name: 'production' });
+              if (!environment.protection_rules?.some(rule => rule.type === 'required_reviewers' && rule.reviewers?.length > 0)) throw new Error('Production requires an environment reviewer rule.');
+            }
+            return process.env.RELEASE_RUN_ID;
+  operate:
+    needs: validate
+    runs-on: [self-hosted, linux, x64, 'axon-${{ inputs.environment }}']
+    timeout-minutes: 35
+    permissions: { contents: read, actions: read, packages: read }
+    environment:
+      name: ${{ inputs.environment }}
+      url: https://${{ vars.DEPLOYMENT_HOST }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-bundle
+          run-id: ${{ needs.validate.outputs.run-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/axon-release-${{ github.run_id }}
+      - uses: actions/setup-node@v6
+        with: { node-version: '22' }
+      - name: Read the verified source commit
+        id: source
+        env: { BUNDLE_ROOT: '${{ runner.temp }}/axon-release-${{ github.run_id }}' }
+        run: |
+          sha=$(node -e 'const fs=require("node:fs");const path=require("node:path");const manifest=JSON.parse(fs.readFileSync(path.join(process.env.BUNDLE_ROOT,"release-manifest.json"),"utf8"));if(!/^[a-f0-9]{40}$/.test(manifest.gitSha))process.exit(1);process.stdout.write(manifest.gitSha)')
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v6
+        with: { ref: '${{ steps.source.outputs.sha }}', persist-credentials: false }
+      - uses: docker/login-action@v4
+        with: { registry: ghcr.io, username: '${{ github.actor }}', password: '${{ secrets.GITHUB_TOKEN }}' }
+      - name: Apply the approved operation
+        env:
+          BUNDLE_ROOT: ${{ runner.temp }}/axon-release-${{ github.run_id }}
+          OPERATION: ${{ inputs.operation }}
+          DEPLOYMENT_ENV: ${{ inputs.environment }}
+          DEPLOYMENT_ROOT: ${{ vars.DEPLOYMENT_ROOT }}
+          DEPLOYMENT_ENV_FILE: ${{ vars.DEPLOYMENT_ENV_FILE }}
+          DEPLOYMENT_HOST: ${{ vars.DEPLOYMENT_HOST }}
+          API_REPLICAS: ${{ inputs.api_replicas }}
+          WORKER_REPLICAS: ${{ inputs.worker_replicas }}
+        run: |
+          case "$OPERATION" in
+            promote) node "$BUNDLE_ROOT/artifacts/release-tools/scripts/release/cli.js" deploy "$BUNDLE_ROOT/release-manifest.json" ;;
+            rollback|scale) node "$BUNDLE_ROOT/artifacts/release-tools/scripts/release/cli.js" "$OPERATION" ;;
+            *) exit 1 ;;
+          esac

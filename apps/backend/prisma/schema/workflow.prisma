@@ -73,7 +73,7 @@ model RecordCollaborationEntry {
   tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdBy User   @relation("RecordCollaborationEntryCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
-  @@index([tenantId, entityType, entityId, createdAt])
+  @@index([tenantId, entityType, entityId, createdAt], map: "record_collaboration_entries_tenantId_entityType_entityId_creat")
   @@index([tenantId, createdById])
   @@map("record_collaboration_entries")
 }

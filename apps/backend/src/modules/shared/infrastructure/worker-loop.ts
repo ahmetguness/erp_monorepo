@@ -1,4 +1,5 @@
 import { logger } from '../../../lib/logger.js';
+import { recordWorkerStarted, recordWorkerTick } from './worker-health.js';
 
 export class WorkerLoop {
   private timer: NodeJS.Timeout | null = null;
@@ -7,15 +8,19 @@ export class WorkerLoop {
 
   constructor(private readonly name: string, private readonly intervalMs: number, private readonly tick: () => Promise<void>) {}
 
+  get isStopping(): boolean { return this.stopping; }
+
   start(): void {
     if (this.timer || this.activeTick) return;
     this.stopping = false;
+    recordWorkerStarted(this.name, this.intervalMs);
     logger.info(`[${this.name}] Started. intervalMs=${this.intervalMs}`);
     this.schedule(0);
   }
 
   async stop(): Promise<void> {
     this.stopping = true;
+    recordWorkerTick(this.name, 'stopped');
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     await this.activeTick;
@@ -31,12 +36,15 @@ export class WorkerLoop {
   }
 
   private async runTick(): Promise<void> {
+    recordWorkerTick(this.name, 'started');
     try {
       await this.tick();
+      recordWorkerTick(this.name, 'succeeded');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown worker error';
       logger.error(`[${this.name}] Tick failed: ${message}`);
     } finally {
+      recordWorkerTick(this.name, 'finished');
       this.activeTick = null;
       this.schedule(this.intervalMs);
     }
