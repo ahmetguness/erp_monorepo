@@ -117,6 +117,8 @@ jobs:
   browser-smoke:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
     services:
       postgres:
         image: postgres:17-alpine
@@ -146,6 +148,8 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
     services:
       postgres:
         image: postgres:17-alpine

@@ -4,3 +4,6 @@ c6b5df35000bbb0f204f0fdcc01decef7fbd65da:apps/backend/prisma/seed.ts:generic-api
 c6b5df35000bbb0f204f0fdcc01decef7fbd65da:apps/backend/prisma/seed.ts:generic-api-key:2139
 e6d88d61fa8110a7e4d6b966e1d8691ca01ba396:apps/backend/prisma/seed.ts:generic-api-key:4543
 e6d88d61fa8110a7e4d6b966e1d8691ca01ba396:apps/backend/prisma/seed.ts:generic-api-key:4550
+# Literal invalid-secret fixture and encryption-key placeholder; neither is a credential.
+5b1f1f2c603843a96360053d2fdbdb368249b915:apps/backend/tests/unit/runtime/deployment-env.test.ts:generic-api-key:21
+5b1f1f2c603843a96360053d2fdbdb368249b915:deploy/runtime.env.example:generic-api-key:10

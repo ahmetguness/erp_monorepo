@@ -363,7 +363,7 @@ export function ApiPlayground() {
           : "bg-amber-500/10";
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-0 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden min-h-[600px]">
+    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-0 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden min-h-150">
       {/* ─── Left Panel: Endpoints ─── */}
       <div className="border-r border-slate-800 bg-slate-900/50 overflow-y-auto">
         {/* API Key */}
@@ -438,7 +438,7 @@ export function ApiPlayground() {
                       </span>
                     </div>
                     {isSelected && (
-                      <ChevronRight className="w-3 h-3 text-sky-400 flex-shrink-0" />
+                      <ChevronRight className="w-3 h-3 text-sky-400 shrink-0" />
                     )}
                   </button>
                 );
@@ -487,7 +487,7 @@ export function ApiPlayground() {
       <div className="flex flex-col overflow-hidden">
         {/* Info bar */}
         <div className="flex items-center gap-2 px-4 py-2 bg-sky-500/5 border-b border-sky-500/10 text-[11px] text-sky-400/80">
-          <Terminal className="w-3 h-3 flex-shrink-0" />
+          <Terminal className="w-3 h-3 shrink-0" />
           Sandbox modu acikken yazma istekleri dogrulanir, ancak veri degisikligi yapilmaz.
         </div>
 
@@ -634,7 +634,7 @@ export function ApiPlayground() {
                   </button>
                 </div>
                 <pre
-                  className={`${statusBg} border border-slate-800 rounded-xl p-4 text-xs font-mono overflow-x-auto max-h-[400px] overflow-y-auto leading-relaxed`}
+                  className={`${statusBg} border border-slate-800 rounded-xl p-4 text-xs font-mono overflow-x-auto max-h-100 overflow-y-auto leading-relaxed`}
                 >
                   {highlightJson(response)}
                 </pre>
