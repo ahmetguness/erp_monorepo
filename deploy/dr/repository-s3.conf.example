@@ -1,0 +1,18 @@
+# Mount a private, reviewed copy at /etc/pgbackrest/conf.d/repository.conf.
+# All values below are placeholders; no credentials are stored here.
+# The repository account/bucket must be different from application object storage.
+[global]
+repo1-type=s3
+repo1-path=/erp/REVIEWED_ENVIRONMENT
+repo1-s3-bucket=REVIEWED_BACKUP_BUCKET
+repo1-s3-endpoint=s3.REVIEWED_REGION.amazonaws.com
+repo1-s3-region=REVIEWED_REGION
+repo1-s3-key-type=auto
+repo1-storage-verify-tls=y
+
+# Use an environment-specific workload identity (no static key in compose).
+# Backup role: restricted List/Get/Put/Delete within repository prefix.
+# Restore role: restricted List/Get only; no Delete/Put. Separate secret retrieval
+# permission for the escrowed pgBackRest cipher, with MFA/JIT operator approval.
+# Apply Object Lock/version retention against a separate retention admin identity;
+# coordinate expiration with pgBackRest (blocked deletes must fail and alert).

@@ -9,6 +9,10 @@
     "packages/*"
   ],
   "scripts": {
+    "dr:build": "docker build -f deploy/dr/Dockerfile -t axon-postgres-dr:phase9 .",
+    "dr:drill": "node --import ./scripts/node26-tsx-shim.mjs --import tsx scripts/disaster-recovery/cli.ts drill",
+    "dr:wal": "node --import ./scripts/node26-tsx-shim.mjs --import tsx scripts/disaster-recovery/cli.ts wal",
+    "test:dr-safety": "node --import ./scripts/node26-tsx-shim.mjs --import tsx --test scripts/disaster-recovery/tests/safety.test.ts",
     "build:performance": "tsc --project scripts/performance/tsconfig.json && node -e \"require('node:fs').copyFileSync('scripts/performance/package.json','artifacts/performance-tools/package.json')\"",
     "performance:local": "npm run build:performance && node artifacts/performance-tools/scripts/performance/cli.js local",
     "test:performance": "node --import ./scripts/node26-tsx-shim.mjs --import tsx --test scripts/performance/tests/*.test.ts",

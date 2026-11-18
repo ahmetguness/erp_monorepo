@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
+const reportDirectory = process.env.CROSS_MODULE_REPORT_DIRECTORY ?? '../../artifacts/cross-module';
 export default defineConfig({
   test: {
     environment: 'node',
@@ -12,8 +13,8 @@ export default defineConfig({
     retry: 0,
     reporters: ['default', 'json', 'junit'],
     outputFile: {
-      json: '../../artifacts/cross-module/results.json',
-      junit: '../../artifacts/cross-module/junit.xml',
+      json: `${reportDirectory}/results.json`,
+      junit: `${reportDirectory}/junit.xml`,
     },
   },
 });

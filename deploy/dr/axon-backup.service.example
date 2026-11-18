@@ -1,0 +1,17 @@
+[Unit]
+Description=ERP PostgreSQL encrypted full backup
+Requires=docker.service
+After=docker.service network-online.target
+# Attach a real independent OnFailure receiver before enabling in staging.
+
+[Service]
+Type=oneshot
+# Review the explicit identity in a separately approved backup rollout.
+ExecStart=/usr/bin/docker exec --user postgres erp-postgres-dr dr-configure timeout --kill-after=10s 120 pgbackrest --stanza=erp check
+ExecStart=/usr/bin/docker exec --user postgres erp-postgres-dr dr-configure timeout --kill-after=10s 1500 pgbackrest --stanza=erp --type=full backup
+ExecStart=/usr/bin/docker exec --user postgres erp-postgres-dr dr-configure timeout --kill-after=10s 120 pgbackrest --stanza=erp expire
+TimeoutStartSec=1800
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
