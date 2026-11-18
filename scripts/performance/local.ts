@@ -15,6 +15,7 @@ import { integer, object } from './validation.js';
 import { performanceBudget } from './budget.js';
 import { captureIndexProbe, capturePlans, captureSQL, performanceSQL } from './diagnostics.js';
 import { commandResult } from '../release/process.js';
+import { reconcileStorage } from './storage-reconciliation.js';
 
 export async function localPerformance(): Promise<void> {
   const budget = performanceBudget(process.env);
@@ -48,7 +49,7 @@ export async function localPerformance(): Promise<void> {
     await docker(['network', 'create', owner]); network = true;
     const subnet = (await docker(['network', 'inspect', '--format', '{{(index .IPAM.Config 0).Subnet}}', owner])).trim();
     const pgEnv = join(temporary, 'postgres.env'); await writeFile(pgEnv, `POSTGRES_USER=phase8\nPOSTGRES_PASSWORD=${password}\nPOSTGRES_DB=phase8_local_ci\n`, { mode: 0o600 });
-    await run('postgres', ['--cpus', '2', '--memory', '1g', '--env-file', pgEnv, 'postgres:17-alpine', '-c', 'shared_preload_libraries=pg_stat_statements', '-c', 'max_connections=100']);
+    await run('postgres', ['--cpus', '2', '--memory', '1g', '--env-file', pgEnv, 'postgres:17-alpine', '-c', 'shared_preload_libraries=pg_stat_statements', '-c', 'max_connections=100', '-c', 'log_error_verbosity=verbose', '-c', 'log_lock_waits=on', '-c', 'deadlock_timeout=100ms', '-c', 'log_parameter_max_length_on_error=0']);
     await run('redis', ['--cpus', '0.5', '--memory', '256m', 'redis:7-alpine']);
     for (let attempt = 0; ; attempt++) {
       try { await docker(['exec', `${owner}-postgres`, 'pg_isready', '-U', 'phase8']); break; }
@@ -113,7 +114,7 @@ export async function localPerformance(): Promise<void> {
     monitor = setInterval(() => { if (!sampling) sampling = sample().catch(() => { samples.push({ at: new Date().toISOString(), unavailable: true }); }).finally(() => { sampling = null; }); }, 10_000);
     const profiles = (process.env.PERF_PROFILES ?? 'read,write,realtime,mixed').split(',');
     const stages = (process.env.PERF_STAGES ?? 'smoke,baseline,medium,target,stress').split(',');
-    if (profiles.some((value) => !['read', 'write', 'realtime', 'mixed'].includes(value)) || stages.some((value) => !Object.hasOwn(PERFORMANCE_STAGES, value))) throw new Error('Unknown selected workload.');
+    if (profiles.some((value) => !['read', 'write', 'upload', 'realtime', 'mixed'].includes(value)) || stages.some((value) => !Object.hasOwn(PERFORMANCE_STAGES, value))) throw new Error('Unknown selected workload.');
     const execute = async (profile: PerformanceProfile, stage: PerformanceStage, seconds: number) => {
       if (diagnostics) await performanceSQL(owner, 'SELECT pg_stat_statements_reset()');
       currentPhase = `${profile}-${stage}`;
@@ -132,6 +133,7 @@ export async function localPerformance(): Promise<void> {
         raw = { config: { profile, stage, users: PERFORMANCE_STAGES[stage], seconds }, passed: false, measurementValid: false, violations: 0, requestsPerSecond: 0, endpoints: {}, generatorFailure: { exitCode: exit, oomKilled: state.OOMKilled === true } };
       }
       if (diagnostics) await captureSQL(owner, output, `${profile}-${stage}`);
+      if (diagnostics) await writeFile(join(output, `${profile}-${stage}-postgres.log`), await dockerLogs(`${owner}-postgres`));
       const backendSnapshot = await tool('snapshot');
       const invariantSnapshot = await tool('invariants');
       const integrityHealthy = object(invariantSnapshot).passed === true;
@@ -161,16 +163,19 @@ export async function localPerformance(): Promise<void> {
     const snapshot = await tool('snapshot'); const invariants = await tool('invariants');
     await writeFile(join(output, 'invariants.json'), JSON.stringify(invariants, null, 2));
     await writeFile(join(output, 'database.json'), JSON.stringify(snapshot, null, 2));
-    await writeFile(join(output, 'provider.json'), await docker(['exec', `${owner}-provider`, 'node', '-e', "fetch('http://127.0.0.1:9001').then(r=>r.text()).then(t=>process.stdout.write(t))"]));
+    const provider=await docker(['exec', `${owner}-provider`, 'node', '-e', "fetch('http://127.0.0.1:9001').then(r=>r.text()).then(t=>process.stdout.write(t))"]);
+    await writeFile(join(output,'provider.json'),provider);
+    const storageReconciliation=await reconcileStorage(owner,JSON.parse(provider) as unknown);
+    await writeFile(join(output,'storage-reconciliation.json'),JSON.stringify(storageReconciliation,null,2));
     const pricing: unknown = JSON.parse(await readFile(process.env.PERF_PRICING_FILE ?? 'scripts/performance/pricing.example.json', 'utf8'));
-    await writeFile(join(output, 'report.md'), renderReport(results, snapshot, pricing));
+    await writeFile(join(output, 'report.md'), renderReport(results, snapshot, pricing)+`\nStorage count/byte reconciliation: ${storageReconciliation.passed?'PASS':'FAIL'}. See storage-reconciliation.json; exact-key recovery is tested separately.\n`);
     await writeFile(join(output, 'resources.md'), analyzeResources(samples));
     if (profiling) for (let index = 0; index < replicas; index++) {
       await docker(['stop', '--time', '30', `${owner}-api-${index}`]);
       await writeFile(join(output, `api-${index}-cpu-summary.json`), JSON.stringify(summarizeCPU(JSON.parse(await readFile(join(output, `api-${index}.cpuprofile`), 'utf8')) as unknown), null, 2));
     }
     console.info(`Performance evidence written to ${output}`);
-    if (results.some((value) => object(value).passed !== true)) process.exitCode = 2;
+    if (results.some((value) => object(value).passed !== true)||!storageReconciliation.passed) process.exitCode = 2;
   } catch (error) {
     const names = (await docker(['ps', '--all', '--filter', `label=com.axon.performance=${owner}`, '--format', '{{.Names}}'])).split('\n').filter(Boolean);
     const diagnostics: Record<string, string> = {};

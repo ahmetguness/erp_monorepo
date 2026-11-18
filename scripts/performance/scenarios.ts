@@ -54,6 +54,7 @@ export async function boundaryProbe(http: WorkloadHTTP, actor: PerformanceActor,
 export async function scenario(profile: PerformanceProfile, http: WorkloadHTTP, actor: PerformanceActor, foreign: PerformanceActor, vu: number, iteration: number): Promise<void> {
   if (iteration % 20 === 0) await boundaryProbe(http, actor, foreign, vu);
   if (profile === 'read') await readScenario(http, actor, vu, iteration);
+  else if (profile === 'upload') await uploadScenario(http, actor, vu);
   else if (profile === 'write') await writeScenario(http, actor, vu, iteration);
   else if (profile === 'realtime') { if (iteration % 5 === 0) await messageScenario(http, actor, vu); else await http.request(actor, vu, 'chat.messages', `/api/chat/conversations/${actor.conversationId}/messages?limit=20`, 'read'); }
   else if ((vu + iteration) % 10 < 6) await readScenario(http, actor, vu, iteration);

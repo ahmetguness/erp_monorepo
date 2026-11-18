@@ -1,5 +1,6 @@
 import type { ObservabilitySnapshot } from '../../../../services/observability.service.js';
 import { runtimePerformanceMetrics } from '../../../../lib/runtime-performance.js';
+import { storageTransactionTelemetry } from '../../../storage-accounting/application/index.js';
 
 type PrometheusMetricType = 'counter' | 'gauge';
 
@@ -28,6 +29,9 @@ export function renderPrometheusMetrics(snapshot: ObservabilitySnapshot): string
   ];
   for (const [name, value] of Object.entries(runtimePerformanceMetrics())) {
     lines.push(metric(name, 'Process-local performance measurement; database operations include pool wait and parameterized raw SQL.', value, undefined, name.endsWith('_total') ? 'counter' : 'gauge'));
+  }
+  for(const [name,value] of Object.entries(storageTransactionTelemetry().counters)) {
+    lines.push(metric(name,'Bounded storage transaction observations; step duration includes client and lock wait.',value,undefined,name.endsWith('_total')?'counter':'gauge'));
   }
 
   for (const row of snapshot.workerJobs.byStatus) {

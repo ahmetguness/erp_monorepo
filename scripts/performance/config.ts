@@ -8,7 +8,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): LoadConfig {
   const stage = env.PERF_STAGE ?? 'smoke';
   if (!Object.hasOwn(PERFORMANCE_STAGES, stage)) throw new Error('Unknown performance stage.');
   const profile = env.PERF_PROFILE ?? 'mixed';
-  if (!['read', 'write', 'realtime', 'mixed', 'soak'].includes(profile)) throw new Error('Unknown performance profile.');
+  if (!['read', 'write', 'upload', 'realtime', 'mixed', 'soak'].includes(profile)) throw new Error('Unknown performance profile.');
   return {
     origin: origin.origin, profile: profile as PerformanceProfile, stage: stage as PerformanceStage,
     users: PERFORMANCE_STAGES[stage as PerformanceStage], rampSeconds: integer(env.PERF_RAMP_SECONDS, 10, 1, 300),

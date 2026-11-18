@@ -106,8 +106,8 @@ export const uploadAttachmentController = {
         source: StorageReservationSource.ERP_ATTACHMENT,
         originalName: safeName,
         object: { key: storagePath, body: buffer, contentType: mimeType },
-        persistMetadata: () =>
-          prisma.attachment.create({
+        persistMetadata: (tx) =>
+          tx.attachment.create({
             data: {
               tenantId,
               entityType: rawEntityType,
@@ -126,11 +126,6 @@ export const uploadAttachmentController = {
               uploadedById: userId,
             },
           }),
-        rollbackMetadata: async (value) => {
-          await prisma.attachment.deleteMany({
-            where: { id: value.id, tenantId },
-          });
-        },
         resourceId: (value) => value.id,
       })
       .catch(mapVersionConflict);
@@ -232,8 +227,8 @@ export const uploadAttachmentController = {
         source: StorageReservationSource.ERP_ATTACHMENT,
         originalName: safeName,
         object: { key: storagePath, body: buffer, contentType: mimeType },
-        persistMetadata: () =>
-          prisma.attachment.create({
+        persistMetadata: (tx) =>
+          tx.attachment.create({
             data: {
               tenantId,
               entityType: current.entityType,
@@ -252,11 +247,6 @@ export const uploadAttachmentController = {
               uploadedById: userId,
             },
           }),
-        rollbackMetadata: async (value) => {
-          await prisma.attachment.deleteMany({
-            where: { id: value.id, tenantId },
-          });
-        },
         resourceId: (value) => value.id,
       })
       .catch(mapVersionConflict);

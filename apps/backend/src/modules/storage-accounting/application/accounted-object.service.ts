@@ -1,22 +1,25 @@
-import { StorageReservationSource, type PrismaClient } from '@prisma/client';
-import type { ObjectStorage, StoredObjectInput } from '../../shared/index.js';
-import { StorageReservationService } from './storage-reservation.service.js';
+import type { PrismaClient, Prisma } from "@prisma/client";
+import { logger } from "../../../lib/logger.js";
+import type { ObjectStorage, StoredObjectInput } from "../../shared/index.js";
+import { StorageReservationService } from "./storage-reservation.service.js";
 
 export interface StoreAccountedObjectInput<T> {
   tenantId: string;
   userId: string;
-  source: StorageReservationSource;
+  source: 'ERP_ATTACHMENT';
   object: StoredObjectInput;
   originalName: string;
-  persistMetadata: () => Promise<T>;
-  rollbackMetadata?: (value: T) => Promise<void>;
+  persistMetadata: (tx: Prisma.TransactionClient) => Promise<T>;
   resourceId: (value: T) => string;
 }
 
 export class AccountedObjectService {
   private readonly reservations: StorageReservationService;
 
-  constructor(private readonly db: PrismaClient, private readonly storage: ObjectStorage) {
+  constructor(
+    private readonly db: PrismaClient,
+    private readonly storage: ObjectStorage,
+  ) {
     this.reservations = new StorageReservationService(db);
   }
 
@@ -33,20 +36,53 @@ export class AccountedObjectService {
     });
     try {
       await this.storage.put(input.object);
-      const metadata = await input.persistMetadata();
-      persistedMetadata = { value: metadata };
-      await this.db.storageReservation.update({
-        where: { id: reservation.id, tenantId: input.tenantId },
-        data: { status: 'SCANNING', uploadedAt: new Date(), resourceId: input.resourceId(metadata) },
-      });
-      await this.reservations.commit(input.tenantId, reservation.id, input.resourceId(metadata));
-      await this.reservations.recordTraffic(input.tenantId, 'upload', input.object.body.byteLength);
-      return metadata;
+      return await this.reservations.commitObject(
+        input.tenantId,
+        reservation.id,
+        async (tx) => {
+          const value = await input.persistMetadata(tx);
+          persistedMetadata = { value };
+          return value;
+        },
+        input.resourceId,
+      );
     } catch (error) {
-      await this.reservations.release(input.tenantId, reservation.id, 'CANCELLED', 'Object persistence failed').catch(() => undefined);
-      await this.storage.delete(input.object.key).catch(() => undefined);
-      if (persistedMetadata && input.rollbackMetadata) {
-        await input.rollbackMetadata(persistedMetadata.value).catch(() => undefined);
+      try {
+        const released = await this.reservations.release(
+          input.tenantId,
+          reservation.id,
+          "CANCELLED",
+          "Object persistence failed",
+        );
+        if (released) {
+          // The durable cleanup marker remains even after an immediate best-effort delete.
+          try {
+            await this.storage.delete(input.object.key);
+          } catch {
+            logger.warn(
+              "[StorageCleanup] Immediate object deletion deferred to recovery",
+            );
+          }
+        } else {
+          const committed = await this.db.storageReservation.findFirst({
+            where: {
+              id: reservation.id,
+              tenantId: input.tenantId,
+              status: "COMMITTED",
+            },
+          });
+          if (
+            committed &&
+            persistedMetadata &&
+            committed.resourceId === input.resourceId(persistedMetadata.value)
+          )
+            return persistedMetadata.value;
+        }
+      } catch {
+        // Commit outcome may be unknown. Never delete a potentially committed object.
+        logger.warn(
+          "[StorageCleanup] Cleanup deferred; durable reservation retained",
+        );
       }
       throw error;
     }

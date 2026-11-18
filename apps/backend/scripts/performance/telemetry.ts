@@ -38,5 +38,10 @@ export async function databaseTelemetry(db: PrismaClient) {
     FROM pg_stat_statements WHERE dbid=(SELECT oid FROM pg_database WHERE datname=current_database()) ORDER BY total_exec_time DESC LIMIT 10
   `;
   const failures = await db.domainEventOutbox.findMany({ where: { status: { in: ['FAILED', 'DEAD_LETTER'] } }, select: { name: true, lastError: true }, take: 5 });
-  return { at: new Date().toISOString(), database, queue, tenants, queries, failures };
+  const [storageCleanup] = await db.$queryRaw<Array<{pending:number;exhausted:number;completed:number}>>`
+    SELECT count(*) FILTER(WHERE "cleanupAfter" IS NOT NULL AND "cleanupAttempts"<5)::int AS pending,
+      count(*) FILTER(WHERE "cleanupAfter" IS NOT NULL AND "cleanupAttempts">=5)::int AS exhausted,
+      count(*) FILTER(WHERE "cleanupCompletedAt" IS NOT NULL)::int AS completed FROM storage_reservations
+  `;
+  return { at: new Date().toISOString(), database, queue, tenants, queries, failures, storageCleanup };
 }
