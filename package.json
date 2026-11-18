@@ -9,6 +9,9 @@
     "packages/*"
   ],
   "scripts": {
+    "build:performance": "tsc --project scripts/performance/tsconfig.json && node -e \"require('node:fs').copyFileSync('scripts/performance/package.json','artifacts/performance-tools/package.json')\"",
+    "performance:local": "npm run build:performance && node artifacts/performance-tools/scripts/performance/cli.js local",
+    "test:performance": "node --import ./scripts/node26-tsx-shim.mjs --import tsx --test scripts/performance/tests/*.test.ts",
     "build:types": "npm --workspace=@repo/types run build",
     "build:release-tools": "tsc --project scripts/release/tsconfig.json && node -e \"require('node:fs').copyFileSync('scripts/release/package.json','artifacts/release-tools/package.json')\"",
     "test:release": "node --import ./scripts/node26-tsx-shim.mjs --import tsx --test scripts/release/tests/*.test.ts",

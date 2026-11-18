@@ -8,6 +8,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { API_BASE_URL } from "@/lib/constants";
+import { createRealtimeRefresh } from './realtime-refresh';
 import { chatKeys } from "../api/chat.keys";
 import {
   clearConversation,
@@ -199,9 +200,9 @@ export function useChatSearch(query: string, conversationId?: string) {
 export function useChatRealtime(): void {
   const client = useQueryClient();
   useEffect(() => {
-    const refresh = () => {
+    const refresh = createRealtimeRefresh(() => {
       void client.invalidateQueries({ queryKey: chatKeys.all });
-    };
+    });
     const wsUrl = new URL('/api/chat/ws', API_BASE_URL || window.location.origin);
     wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
     let stopped = false;
@@ -213,7 +214,7 @@ export function useChatRealtime(): void {
         if (typeof event.data !== 'string') return;
         try {
           const payload: unknown = JSON.parse(event.data);
-          if (typeof payload === 'object' && payload !== null) refresh();
+          refresh.notify(payload);
         } catch {
           // Ignore non-JSON frames; the connection remains usable.
         }
@@ -225,6 +226,7 @@ export function useChatRealtime(): void {
     connect();
     return () => {
       stopped = true;
+      refresh.dispose();
       if (retry) clearTimeout(retry);
       socket?.close();
     };

@@ -103,6 +103,7 @@ model ChatRealtimeOutbox {
 
   @@index([tenantId, conversationId, createdAt])
   @@index([processedAt, createdAt])
+  @@index([tenantId, createdAt, id])
   @@map("chat_realtime_outbox")
 }
 

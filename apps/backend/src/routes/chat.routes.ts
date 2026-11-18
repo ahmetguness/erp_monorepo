@@ -6,17 +6,18 @@ import { ChatController } from "../modules/automation-intelligence/http/controll
 
 export const chatRoutes = new Hono();
 
-// AI Chat Enterprise plan gerektiriyor
-chatRoutes.use("*", requireAccess(ACCESS_POLICIES.chat));
+// Scope the AI policy to its handlers; collaboration shares the /chat prefix.
 
-chatRoutes.post("/", requirePermission("chat", "CREATE"), ChatController.send);
+chatRoutes.post("/", requireAccess(ACCESS_POLICIES.chat), requirePermission("chat", "CREATE"), ChatController.send);
 chatRoutes.post(
   "/stream",
+  requireAccess(ACCESS_POLICIES.chat),
   requirePermission("chat", "CREATE"),
   ChatController.sendStream,
 );
 chatRoutes.delete(
   "/history",
+  requireAccess(ACCESS_POLICIES.chat),
   requirePermission("chat", "DELETE"),
   ChatController.clear,
 );

@@ -1,0 +1,10 @@
+{
+  "source": "Illustrative user-editable budget assumptions; not a provider quote. Infrastructure includes API, worker, web, PostgreSQL and Redis.",
+  "currency": "USD",
+  "monthlyInfrastructure": 100,
+  "storageGiBMonth": 0.02,
+  "egressGiB": 0.09,
+  "aiInputMillion": 3,
+  "aiOutputMillion": 12,
+  "externalCall": 0.001
+}

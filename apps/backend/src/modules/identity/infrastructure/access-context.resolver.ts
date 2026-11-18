@@ -2,6 +2,7 @@ import { FeatureKey, FeatureType, type PrismaClient } from '@prisma/client';
 import { STARTER_FEATURE_DEFAULTS } from '../../../types/feature.types.js';
 import { parseBooleanValue } from '../../../utils/feature-parser.js';
 import type { AccessContextResolution, ResolvedAccessFeature } from '../application/index.js';
+import { readUserAccessSnapshot } from './user-access-snapshot.query.js';
 
 const SECURITY_SETTING_KEYS = ['security.ip_restriction.enabled', 'security.ip_whitelist'] as const;
 
@@ -59,30 +60,12 @@ export async function resolveAccessContext(
   tenantId: string,
   now: Date = new Date(),
 ): Promise<AccessContextResolution> {
-  const membership = await db.tenantUser.findFirst({
-    where: { tenantId, userId, isActive: true, user: { isActive: true }, tenant: { deletedAt: null } },
-    select: {
-      id: true, roleId: true, isOwner: true,
-      roleRef: { select: { name: true, permissions: { select: { module: true, action: true } } } },
-      tenant: { select: {
-        plan: true, status: true, modules: true, trialEndsAt: true,
-        tenantSettings: { where: { key: { in: [...SECURITY_SETTING_KEYS] } }, select: { key: true, value: true } },
-        featureOverrides: {
-          where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
-          select: { featureKey: true, value: true, isEnabled: true },
-        },
-      } },
-    },
-  });
+  const membership = await readUserAccessSnapshot(db, userId, tenantId, now);
   if (!membership) return { context: null, queryCount: 1 };
 
-  const planFeatures = await db.planFeature.findMany({
-    where: { plan: membership.tenant.plan, featureKey: { not: null } },
-    select: { featureKey: true, value: true, isEnabled: true, type: true },
-  });
-  const features = resolveAccessFeatures(planFeatures, membership.tenant.featureOverrides);
+  const features = resolveAccessFeatures(membership.planFeatures, membership.tenant.featureOverrides);
   const settings = new Map(membership.tenant.tenantSettings.map((setting) => [setting.key, setting.value]));
-  return { queryCount: 2, context: {
+  return { queryCount: 1, context: {
     userId, tenantId,
     tenant: { plan: membership.tenant.plan, status: membership.tenant.status, modules: membership.tenant.modules, trialEndsAt: membership.tenant.trialEndsAt },
     membership: {

@@ -1,4 +1,5 @@
 import type { ChatConversation, ChatMessage } from "@repo/types/chat";
+import { unreadMessages } from "./unread-messages.query.js";
 import {
   ChatConversationType,
   ChatMemberRole,
@@ -91,17 +92,17 @@ type Transaction = Prisma.TransactionClient;
 function forwardedContent(source: MessageRow): string {
   const content = source.content?.trim();
   if (source.poll) {
-    return `Anket: ${source.poll.question}\n${source.poll.options.map((option) => `• ${option.label}`).join('\n')}`;
+    return `Anket: ${source.poll.question}\n${source.poll.options.map((option) => `• ${option.label}`).join("\n")}`;
   }
   if (source.event) {
-    return `Etkinlik: ${source.event.title}\n${source.event.startsAt.toLocaleString('tr-TR')}`;
+    return `Etkinlik: ${source.event.title}\n${source.event.startsAt.toLocaleString("tr-TR")}`;
   }
   if (source.attachments.length > 0) {
-    const files = `Dosya: ${source.attachments.map((attachment) => attachment.originalName).join(', ')}`;
+    const files = `Dosya: ${source.attachments.map((attachment) => attachment.originalName).join(", ")}`;
     return content ? `${content}\n${files}` : files;
   }
   if (content) return content;
-  return 'İletilen mesaj';
+  return "İletilen mesaj";
 }
 
 function messageView(row: MessageRow, viewerId: string): ChatMessage {
@@ -153,9 +154,10 @@ function messageView(row: MessageRow, viewerId: string): ChatMessage {
             sortOrder: option.sortOrder,
             voteCount: option.votes.length,
             selectedByMe: option.votes.some((vote) => vote.userId === viewerId),
-            voters: row.poll?.anonymous !== false
-              ? []
-              : option.votes.map((vote) => vote.user),
+            voters:
+              row.poll?.anonymous !== false
+                ? []
+                : option.votes.map((vote) => vote.user),
           })),
         }
       : null,
@@ -276,7 +278,8 @@ async function requireMessage(
     membership.clearedAt && membership.clearedAt > membership.visibleFrom
       ? membership.clearedAt
       : membership.visibleFrom;
-  if (message.createdAt < visibleFrom) throw new NotFoundError("Mesaj", messageId);
+  if (message.createdAt < visibleFrom)
+    throw new NotFoundError("Mesaj", messageId);
   return message;
 }
 
@@ -303,42 +306,8 @@ export class PrismaChatRepository implements ChatRepository {
   constructor(private readonly db: PrismaClient) {}
 
   async getUnreadCount(context: ChatContext): Promise<number> {
-    const memberships = await this.db.chatConversationMember.findMany({
-      where: {
-        tenantId: context.tenantId,
-        userId: context.userId,
-        leftAt: null,
-        archivedAt: null,
-        notificationLevel: { not: 'NONE' },
-        conversation: { deletedAt: null },
-      },
-      select: {
-        conversationId: true,
-        lastReadAt: true,
-        clearedAt: true,
-        visibleFrom: true,
-      },
-    });
-    const counts = await Promise.all(
-      memberships.map((membership) =>
-        this.db.chatMessage.count({
-          where: {
-            tenantId: context.tenantId,
-            conversationId: membership.conversationId,
-            senderId: { not: context.userId },
-            deletedAt: null,
-            createdAt: {
-              gt: latestDate(
-                membership.lastReadAt,
-                membership.clearedAt,
-                membership.visibleFrom,
-              ),
-            },
-          },
-        }),
-      ),
-    );
-    return counts.reduce((total, count) => total + count, 0);
+    const counts = await unreadMessages(this.db, context);
+    return [...counts.values()].reduce((total, count) => total + count, 0);
   }
 
   async listConversations(
@@ -360,28 +329,13 @@ export class PrismaChatRepository implements ChatRepository {
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
     const page = rows.slice(0, limit);
-    const items = await Promise.all(
-      page.map(async (row) => {
-        const membership = row.members.find(
-          (member) => member.userId === context.userId,
-        );
-        const unreadCount = await this.db.chatMessage.count({
-          where: {
-            tenantId: context.tenantId,
-            conversationId: row.id,
-            senderId: { not: context.userId },
-            deletedAt: null,
-            createdAt: {
-              gt: latestDate(
-                membership?.lastReadAt,
-                membership?.clearedAt,
-                membership?.visibleFrom,
-              ),
-            },
-          },
-        });
-        return conversationView(row, context.userId, unreadCount);
-      }),
+    const counts = await unreadMessages(
+      this.db,
+      context,
+      page.map((row) => row.id),
+    );
+    const items = page.map((row) =>
+      conversationView(row, context.userId, counts.get(row.id) ?? 0),
     );
     return {
       items,
@@ -484,7 +438,8 @@ export class PrismaChatRepository implements ChatRepository {
       },
       select: { id: true },
     });
-    if (!group) throw new ValidationError("Yalnız grup bilgileri düzenlenebilir.");
+    if (!group)
+      throw new ValidationError("Yalnız grup bilgileri düzenlenebilir.");
     const row = await this.db.$transaction(async (tx) => {
       const updated = await tx.chatConversation.update({
         where: { id: conversationId, tenantId: context.tenantId },
@@ -548,7 +503,12 @@ export class PrismaChatRepository implements ChatRepository {
       });
       if (existing) return existing;
       if (input.replyToMessageId)
-        await requireMessage(tx, context, input.replyToMessageId, conversationId);
+        await requireMessage(
+          tx,
+          context,
+          input.replyToMessageId,
+          conversationId,
+        );
       const mentions = [
         ...new Set(input.mentionUserIds.filter((id) => id !== context.userId)),
       ];
@@ -610,6 +570,8 @@ export class PrismaChatRepository implements ChatRepository {
       });
       await emit(tx, context.tenantId, conversationId, "message.created", {
         messageId: created.id,
+        clientMessageId: input.clientMessageId,
+        senderId: context.userId,
       });
       return input.attachmentIds.length > 0
         ? requireMessage(tx, context, created.id)
@@ -722,7 +684,12 @@ export class PrismaChatRepository implements ChatRepository {
     messageId: string,
   ): Promise<void> {
     const member = await requireMembership(this.db, context, conversationId);
-    const message = await requireMessage(this.db, context, messageId, conversationId);
+    const message = await requireMessage(
+      this.db,
+      context,
+      messageId,
+      conversationId,
+    );
     if (message.conversationId !== conversationId)
       throw new ValidationError("Mesaj bu sohbete ait değil.");
     if (member.lastReadAt && member.lastReadAt >= message.createdAt) return;
@@ -841,10 +808,16 @@ export class PrismaChatRepository implements ChatRepository {
           messageId,
         },
       });
-    await emit(this.db, context.tenantId, message.conversationId, "message.pinned", {
-      messageId,
-      pinned,
-    });
+    await emit(
+      this.db,
+      context.tenantId,
+      message.conversationId,
+      "message.pinned",
+      {
+        messageId,
+        pinned,
+      },
+    );
   }
 
   async setReaction(
@@ -877,10 +850,16 @@ export class PrismaChatRepository implements ChatRepository {
         },
       });
     const message = await requireMessage(this.db, context, messageId);
-    await emit(this.db, context.tenantId, message.conversationId, "message.reaction_updated", {
-      messageId,
-      emoji,
-    });
+    await emit(
+      this.db,
+      context.tenantId,
+      message.conversationId,
+      "message.reaction_updated",
+      {
+        messageId,
+        emoji,
+      },
+    );
   }
 
   async search(
@@ -903,7 +882,11 @@ export class PrismaChatRepository implements ChatRepository {
     const visibility = memberships.map((membership) => ({
       conversationId: membership.conversationId,
       createdAt: {
-        gte: latestDate(membership.visibleFrom, membership.clearedAt, input.from),
+        gte: latestDate(
+          membership.visibleFrom,
+          membership.clearedAt,
+          input.from,
+        ),
         ...(input.to ? { lte: input.to } : {}),
       },
     }));
@@ -951,36 +934,56 @@ export class PrismaChatRepository implements ChatRepository {
     if (valid !== userIds.length)
       throw new ValidationError("Kullanıcılardan biri tenant üyesi değil.");
     await this.db.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "chat_conversations" WHERE "id" = ${conversationId} AND "tenantId" = ${context.tenantId} FOR UPDATE`);
-      const activeCount = await tx.chatConversationMember.count({ where: { tenantId: context.tenantId, conversationId, leftAt: null } });
-      const alreadyActive = await tx.chatConversationMember.count({ where: { tenantId: context.tenantId, conversationId, userId: { in: userIds }, leftAt: null } });
-      if (activeCount + userIds.length - alreadyActive > maxMembers) throw new ValidationError(`Planınızda grup üye sınırı ${maxMembers}.`);
-      await Promise.all(userIds.map((userId) =>
-        tx.chatConversationMember.upsert({
-          where: { conversationId_userId: { conversationId, userId } },
-          create: {
-            tenantId: context.tenantId,
-            conversationId,
-            userId,
-            visibleFrom:
-              conversation.historyVisibility === "ALL"
-                ? conversation.createdAt
-                : new Date(),
-          },
-          update: {
-            leftAt: null,
-            joinedAt: new Date(),
-            visibleFrom:
-              conversation.historyVisibility === "ALL"
-                ? conversation.createdAt
-                : new Date(),
-          },
-        }),
-      ));
+      await tx.$queryRaw(
+        Prisma.sql`SELECT "id" FROM "chat_conversations" WHERE "id" = ${conversationId} AND "tenantId" = ${context.tenantId} FOR UPDATE`,
+      );
+      const activeCount = await tx.chatConversationMember.count({
+        where: { tenantId: context.tenantId, conversationId, leftAt: null },
+      });
+      const alreadyActive = await tx.chatConversationMember.count({
+        where: {
+          tenantId: context.tenantId,
+          conversationId,
+          userId: { in: userIds },
+          leftAt: null,
+        },
+      });
+      if (activeCount + userIds.length - alreadyActive > maxMembers)
+        throw new ValidationError(`Planınızda grup üye sınırı ${maxMembers}.`);
+      await Promise.all(
+        userIds.map((userId) =>
+          tx.chatConversationMember.upsert({
+            where: { conversationId_userId: { conversationId, userId } },
+            create: {
+              tenantId: context.tenantId,
+              conversationId,
+              userId,
+              visibleFrom:
+                conversation.historyVisibility === "ALL"
+                  ? conversation.createdAt
+                  : new Date(),
+            },
+            update: {
+              leftAt: null,
+              joinedAt: new Date(),
+              visibleFrom:
+                conversation.historyVisibility === "ALL"
+                  ? conversation.createdAt
+                  : new Date(),
+            },
+          }),
+        ),
+      );
     });
-    await emit(this.db, context.tenantId, conversationId, "conversation.member_added", {
-      userIds,
-    });
+    await emit(
+      this.db,
+      context.tenantId,
+      conversationId,
+      "conversation.member_added",
+      {
+        userIds,
+      },
+    );
   }
 
   async removeMember(
@@ -990,10 +993,16 @@ export class PrismaChatRepository implements ChatRepository {
   ): Promise<void> {
     const actor = await requireMembership(this.db, context, conversationId);
     const group = await this.db.chatConversation.findFirst({
-      where: { tenantId: context.tenantId, id: conversationId, type: "GROUP", deletedAt: null },
+      where: {
+        tenantId: context.tenantId,
+        id: conversationId,
+        type: "GROUP",
+        deletedAt: null,
+      },
       select: { id: true },
     });
-    if (!group) throw new ValidationError("Yalnız grup üyeliği değiştirilebilir.");
+    if (!group)
+      throw new ValidationError("Yalnız grup üyeliği değiştirilebilir.");
     if (userId !== context.userId) assertGroupManager(actor.role);
     const target = await this.db.chatConversationMember.findFirst({
       where: {
@@ -1020,9 +1029,15 @@ export class PrismaChatRepository implements ChatRepository {
       where: { id: target.id },
       data: { leftAt: new Date() },
     });
-    await emit(this.db, context.tenantId, conversationId, "conversation.member_removed", {
-      userId,
-    });
+    await emit(
+      this.db,
+      context.tenantId,
+      conversationId,
+      "conversation.member_removed",
+      {
+        userId,
+      },
+    );
   }
 
   async updateMemberRole(
@@ -1033,10 +1048,16 @@ export class PrismaChatRepository implements ChatRepository {
   ): Promise<void> {
     const actor = await requireMembership(this.db, context, conversationId);
     const group = await this.db.chatConversation.findFirst({
-      where: { tenantId: context.tenantId, id: conversationId, type: "GROUP", deletedAt: null },
+      where: {
+        tenantId: context.tenantId,
+        id: conversationId,
+        type: "GROUP",
+        deletedAt: null,
+      },
       select: { id: true },
     });
-    if (!group) throw new ValidationError("Yalnız grup rolleri değiştirilebilir.");
+    if (!group)
+      throw new ValidationError("Yalnız grup rolleri değiştirilebilir.");
     if (actor.role !== "OWNER")
       throw new ForbiddenError("Rol atamak için grup sahibi olmalısınız.");
     const target = await this.db.chatConversationMember.findFirst({
@@ -1050,18 +1071,30 @@ export class PrismaChatRepository implements ChatRepository {
     if (!target) throw new NotFoundError("Grup üyesi", userId);
     if (target.role === "OWNER" && role !== "OWNER") {
       const ownerCount = await this.db.chatConversationMember.count({
-        where: { tenantId: context.tenantId, conversationId, role: "OWNER", leftAt: null },
+        where: {
+          tenantId: context.tenantId,
+          conversationId,
+          role: "OWNER",
+          leftAt: null,
+        },
       });
-      if (ownerCount <= 1) throw new ConflictError("Son grup sahibi düşürülemez.");
+      if (ownerCount <= 1)
+        throw new ConflictError("Son grup sahibi düşürülemez.");
     }
     await this.db.chatConversationMember.update({
       where: { id: target.id },
       data: { role },
     });
-    await emit(this.db, context.tenantId, conversationId, "conversation.member_role_changed", {
-      userId,
-      role,
-    });
+    await emit(
+      this.db,
+      context.tenantId,
+      conversationId,
+      "conversation.member_role_changed",
+      {
+        userId,
+        role,
+      },
+    );
   }
 
   async createInvite(
@@ -1078,13 +1111,31 @@ export class PrismaChatRepository implements ChatRepository {
     if (!active)
       throw new ValidationError("Davet edilecek kullanıcı tenant üyesi değil.");
     const group = await this.db.chatConversation.findFirst({
-      where: { tenantId: context.tenantId, id: conversationId, type: "GROUP", deletedAt: null },
+      where: {
+        tenantId: context.tenantId,
+        id: conversationId,
+        type: "GROUP",
+        deletedAt: null,
+      },
       select: { id: true },
     });
-    if (!group) throw new ValidationError("Yalnız gruplara davet gönderilebilir.");
+    if (!group)
+      throw new ValidationError("Yalnız gruplara davet gönderilebilir.");
     return this.db.chatGroupInvite.upsert({
-      where: { conversationId_inviteeId_status: { conversationId, inviteeId, status: "PENDING" } },
-      create: { tenantId: context.tenantId, conversationId, inviterId: context.userId, inviteeId, expiresAt },
+      where: {
+        conversationId_inviteeId_status: {
+          conversationId,
+          inviteeId,
+          status: "PENDING",
+        },
+      },
+      create: {
+        tenantId: context.tenantId,
+        conversationId,
+        inviterId: context.userId,
+        inviteeId,
+        expiresAt,
+      },
       update: { inviterId: context.userId, expiresAt, respondedAt: null },
       select: { id: true },
     });
@@ -1115,11 +1166,27 @@ export class PrismaChatRepository implements ChatRepository {
         },
       });
       if (accept)
-        await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "chat_conversations" WHERE "id" = ${invite.conversationId} AND "tenantId" = ${context.tenantId} FOR UPDATE`);
+        await tx.$queryRaw(
+          Prisma.sql`SELECT "id" FROM "chat_conversations" WHERE "id" = ${invite.conversationId} AND "tenantId" = ${context.tenantId} FOR UPDATE`,
+        );
       if (accept) {
-        const memberCount = await tx.chatConversationMember.count({ where: { tenantId: context.tenantId, conversationId: invite.conversationId, leftAt: null } });
-        const alreadyActive = await tx.chatConversationMember.count({ where: { tenantId: context.tenantId, conversationId: invite.conversationId, userId: context.userId, leftAt: null } });
-        if (memberCount + (alreadyActive ? 0 : 1) > maxMembers) throw new ConflictError(`Planınızda grup üye sınırı ${maxMembers}.`);
+        const memberCount = await tx.chatConversationMember.count({
+          where: {
+            tenantId: context.tenantId,
+            conversationId: invite.conversationId,
+            leftAt: null,
+          },
+        });
+        const alreadyActive = await tx.chatConversationMember.count({
+          where: {
+            tenantId: context.tenantId,
+            conversationId: invite.conversationId,
+            userId: context.userId,
+            leftAt: null,
+          },
+        });
+        if (memberCount + (alreadyActive ? 0 : 1) > maxMembers)
+          throw new ConflictError(`Planınızda grup üye sınırı ${maxMembers}.`);
       }
       if (accept)
         await tx.chatConversationMember.upsert({
@@ -1141,9 +1208,15 @@ export class PrismaChatRepository implements ChatRepository {
           },
         });
       if (accept)
-        await emit(tx, context.tenantId, invite.conversationId, "conversation.member_added", {
-          userIds: [context.userId],
-        });
+        await emit(
+          tx,
+          context.tenantId,
+          invite.conversationId,
+          "conversation.member_added",
+          {
+            userIds: [context.userId],
+          },
+        );
     });
   }
 
@@ -1178,7 +1251,10 @@ export class PrismaChatRepository implements ChatRepository {
         },
       },
     });
-    return messageView(await requireMessage(this.db, context, message.id, conversationId), context.userId);
+    return messageView(
+      await requireMessage(this.db, context, message.id, conversationId),
+      context.userId,
+    );
   }
 
   async votePoll(
@@ -1216,7 +1292,9 @@ export class PrismaChatRepository implements ChatRepository {
           userId: context.userId,
         })),
       });
-      await emit(tx, context.tenantId, poll.conversationId, "poll.updated", { pollId });
+      await emit(tx, context.tenantId, poll.conversationId, "poll.updated", {
+        pollId,
+      });
     });
   }
 
@@ -1238,7 +1316,9 @@ export class PrismaChatRepository implements ChatRepository {
       where: { id: pollId },
       data: { closedAt: new Date() },
     });
-    await emit(this.db, context.tenantId, poll.conversationId, "poll.updated", { pollId });
+    await emit(this.db, context.tenantId, poll.conversationId, "poll.updated", {
+      pollId,
+    });
   }
 
   async createEvent(
@@ -1262,7 +1342,10 @@ export class PrismaChatRepository implements ChatRepository {
         ...input,
       },
     });
-    return messageView(await requireMessage(this.db, context, message.id, conversationId), context.userId);
+    return messageView(
+      await requireMessage(this.db, context, message.id, conversationId),
+      context.userId,
+    );
   }
 
   async respondEvent(
@@ -1290,6 +1373,12 @@ export class PrismaChatRepository implements ChatRepository {
       },
       update: { status },
     });
-    await emit(this.db, context.tenantId, event.conversationId, "event.updated", { eventId });
+    await emit(
+      this.db,
+      context.tenantId,
+      event.conversationId,
+      "event.updated",
+      { eventId },
+    );
   }
 }

@@ -1,4 +1,5 @@
 import type { ObservabilitySnapshot } from '../../../../services/observability.service.js';
+import { runtimePerformanceMetrics } from '../../../../lib/runtime-performance.js';
 
 type PrometheusMetricType = 'counter' | 'gauge';
 
@@ -25,6 +26,9 @@ export function renderPrometheusMetrics(snapshot: ObservabilitySnapshot): string
     metric('axon_worker_dead_letter', 'Marketplace dead-letter jobs.', snapshot.workerJobs.deadLetterCount),
     metric('axon_authorization_resolution_milliseconds', 'Average authorization resolution latency.', snapshot.authorization.avgDurationMs),
   ];
+  for (const [name, value] of Object.entries(runtimePerformanceMetrics())) {
+    lines.push(metric(name, 'Process-local performance measurement; database operations include pool wait and parameterized raw SQL.', value, undefined, name.endsWith('_total') ? 'counter' : 'gauge'));
+  }
 
   for (const row of snapshot.workerJobs.byStatus) {
     lines.push(metric('axon_worker_jobs', 'Marketplace worker jobs by status.', row.count, { status: row.status }));

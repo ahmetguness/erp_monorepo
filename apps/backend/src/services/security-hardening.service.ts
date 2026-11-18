@@ -182,11 +182,15 @@ async function readSessions(db: SessionDbClient, tenantId: string): Promise<Secu
     },
     select: { key: true, value: true },
   });
+  return resolveSecuritySessions(settings);
+}
+
+export function resolveSecuritySessions(settings: readonly { key: string; value: string }[], now = new Date()): SecuritySession[] {
   const map = new Map(settings.map((setting) => [setting.key, setting.value]));
   const maxAgeDays = positiveSetting(map.get('security.session.max_age_days'), 7);
   const idleTimeoutMins = positiveSetting(map.get('security.session.idle_timeout_mins'), 30);
   return parseSessions(map.get(SESSION_SETTING_KEY)).map((session) =>
-    withExpiredStatus(session, maxAgeDays, idleTimeoutMins),
+    withExpiredStatus(session, maxAgeDays, idleTimeoutMins, now),
   );
 }
 

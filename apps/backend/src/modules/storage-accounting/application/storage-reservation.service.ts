@@ -1,5 +1,6 @@
 import { Prisma, StorageReservationSource, StorageReservationStatus, type PrismaClient } from '@prisma/client';
 import { ConflictError, NotFoundError, ValidationError } from '../../../errors/index.js';
+import { serializableTransaction } from '../../../lib/serializable-transaction.js';
 import { StoragePlanResolver } from '../domain/storage-plan.js';
 
 const RESERVATION_TTL_MS = 30 * 60 * 1_000;
@@ -22,24 +23,6 @@ export interface StorageReservationView {
 }
 
 interface LockedUsageRow { usedBytes: bigint; reservedBytes: bigint }
-
-async function serializableTransaction<T>(
-  db: PrismaClient,
-  operation: (tx: Prisma.TransactionClient) => Promise<T>,
-): Promise<T> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await db.$transaction(operation, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    } catch (error) {
-      const retryable = error instanceof Prisma.PrismaClientKnownRequestError && (
-        error.code === 'P2034' ||
-        (error.code === 'P2010' && typeof error.meta?.code === 'string' && error.meta.code === '40001')
-      );
-      if (!retryable || attempt === 2) throw error;
-    }
-  }
-  throw new ConflictError('Depolama işlemi eşzamanlı güncelleme nedeniyle tamamlanamadı.');
-}
 
 export class StorageReservationService {
   private readonly plans: StoragePlanResolver;
@@ -93,7 +76,7 @@ export class StorageReservationService {
         select: { id: true, objectKey: true, expiresAt: true, expectedBytes: true },
       });
       return { ...reservation, expectedBytes: Number(reservation.expectedBytes) };
-    });
+    }, 5);
   }
 
   async markUploaded(tenantId: string, reservationId: string): Promise<void> {
@@ -122,7 +105,7 @@ export class StorageReservationService {
         where: { id: reservation.id },
         data: { status: StorageReservationStatus.COMMITTED, resourceId, finalizedAt: new Date() },
       });
-    });
+    }, 5);
   }
 
   async release(tenantId: string, reservationId: string, status: 'REJECTED' | 'EXPIRED' | 'CANCELLED', reason?: string): Promise<boolean> {
@@ -140,7 +123,7 @@ export class StorageReservationService {
         data: { status, failureReason: reason, finalizedAt: new Date() },
       });
       return true;
-    });
+    }, 5);
   }
 
   async recordTraffic(tenantId: string, direction: 'upload' | 'download', bytes: number): Promise<void> {

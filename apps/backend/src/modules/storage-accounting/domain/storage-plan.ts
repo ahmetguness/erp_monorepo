@@ -36,15 +36,19 @@ export class StoragePlanResolver {
   }
 
   async resolve(tenantId: string): Promise<StoragePlanLimits> {
-    const [enabled, storage, file, attachments, members, retention, audit] = await Promise.all([
-      this.features.resolveFeature(tenantId, FeatureKey.CHAT_ENABLED),
-      this.features.resolveFeature(tenantId, FeatureKey.STORAGE_LIMIT_BYTES),
-      this.features.resolveFeature(tenantId, FeatureKey.CHAT_FILE_MAX_BYTES),
-      this.features.resolveFeature(tenantId, FeatureKey.CHAT_ATTACHMENTS_PER_MESSAGE),
-      this.features.resolveFeature(tenantId, FeatureKey.CHAT_MAX_GROUP_MEMBERS),
-      this.features.resolveFeature(tenantId, FeatureKey.CHAT_RETENTION_DAYS),
-      this.features.resolveFeature(tenantId, FeatureKey.CHAT_AUDIT_LEVEL),
-    ]);
+    const resolved = new Map((await this.features.resolveAllFeatures(tenantId)).map((feature) => [feature.featureKey, feature]));
+    const requireFeature = (key: FeatureKey) => {
+      const feature = resolved.get(key);
+      if (!feature) throw new ValidationError(`Depolama plan ayarı eksik: ${key}.`);
+      return feature;
+    };
+    const enabled = requireFeature(FeatureKey.CHAT_ENABLED);
+    const storage = requireFeature(FeatureKey.STORAGE_LIMIT_BYTES);
+    const file = requireFeature(FeatureKey.CHAT_FILE_MAX_BYTES);
+    const attachments = requireFeature(FeatureKey.CHAT_ATTACHMENTS_PER_MESSAGE);
+    const members = requireFeature(FeatureKey.CHAT_MAX_GROUP_MEMBERS);
+    const retention = requireFeature(FeatureKey.CHAT_RETENTION_DAYS);
+    const audit = requireFeature(FeatureKey.CHAT_AUDIT_LEVEL);
     const auditLevel = audit.value;
     if (auditLevel !== 'basic' && auditLevel !== 'advanced' && auditLevel !== 'enterprise') {
       throw new ValidationError('Sohbet audit plan ayarı geçersiz.');

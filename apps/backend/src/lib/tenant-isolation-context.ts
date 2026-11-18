@@ -59,6 +59,19 @@ export function getTenantIsolationContext():
   return tenantIsolationContext.getStore();
 }
 
+/** Parameterized raw statements must retain the ORM extension's ambient boundary. */
+export function assertRawQueryTenant(tenantId: string): void {
+  const context = getTenantIsolationContext();
+  if (
+    !tenantId.trim() ||
+    (context?.mode === "tenant" && context.tenantId !== tenantId)
+  ) {
+    throw new Error(
+      "Tenant isolation violation: raw query scope does not match the active tenant.",
+    );
+  }
+}
+
 export function getTenantIsolationBypassReason(): TenantIsolationBypassReason | null {
   const context = getTenantIsolationContext();
   return context?.mode === "bypass" ? context.reason : null;

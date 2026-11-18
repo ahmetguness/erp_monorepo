@@ -35,6 +35,8 @@ export function readDeployConfig(env: NodeJS.ProcessEnv): DeployConfig {
 }
 export function proxyConfig(host: string, slot: DeploymentState['slot']): string {
   if (!/^[a-z0-9.-]+$/.test(host) || (slot !== 'blue' && slot !== 'green')) throw new Error('Invalid proxy target.');
+  // Retire idle upstream sockets before Node's default five-second timeout.
+  // Otherwise a reused socket can reset a non-idempotent request.
   return `${host} {
   header Strict-Transport-Security "max-age=31536000; includeSubDomains"
   @api path /api/* /health /ready /release /metrics
@@ -44,6 +46,9 @@ export function proxyConfig(host: string, slot: DeploymentState['slot']): string
         refresh 5s
       }
       header_up X-Forwarded-Proto https
+      transport http {
+        keepalive 2s
+      }
       fail_duration 10s
       unhealthy_status 503
       lb_policy round_robin
@@ -53,6 +58,9 @@ export function proxyConfig(host: string, slot: DeploymentState['slot']): string
     reverse_proxy {
       dynamic a web-${slot} 3000 {
         refresh 5s
+      }
+      transport http {
+        keepalive 2s
       }
       lb_policy round_robin
     }

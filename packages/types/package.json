@@ -20,6 +20,10 @@
     "prepack": "npm run build && npm run test:layout"
   },
   "exports": {
+    "./performance": {
+      "import": { "types": "./dist/esm/performance.d.ts", "default": "./dist/esm/performance.js" },
+      "require": { "types": "./dist/cjs/performance.d.ts", "default": "./dist/cjs/performance.js" }
+    },
     "./release": {
       "import": { "types": "./dist/esm/release.d.ts", "default": "./dist/esm/release.js" },
       "require": { "types": "./dist/cjs/release.d.ts", "default": "./dist/cjs/release.js" }
