@@ -121,6 +121,37 @@ test('phase10: one complete trace survives real HTTP mail enqueue, durable outbo
   }));
 });
 
+test('phase10: HTTP and application spans both retain final route and failure status', async () => {
+  await withTraceCollector(async collector => {
+    vi.stubEnv('TELEMETRY_ENABLED', 'true');
+    vi.stubEnv('TELEMETRY_SAMPLE_RATIO', '1');
+    vi.stubEnv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', collector.endpoint);
+    try {
+      const app = new Hono();
+      registerPreRoutingMiddleware(app, readRuntimeConfig());
+      app.get('/api/trace-review/:id', context => context.json({ success: true }));
+      app.post('/api/trace-review/:id', context => context.json({ success: false }, 500));
+      for (const [method, status] of [['POST', 500], ['GET', 200]] as const) {
+        const response = await app.request('/api/trace-review/synthetic-private-id', { method });
+        expect(response.status).toBe(status);
+        await flushTraces();
+        const traceId = response.headers.get('traceparent')?.split('-')[1];
+        const spans = collector.spans.filter(span => span.traceId === traceId);
+        expect(spans.map(span => span.name).sort()).toEqual(['application.request', 'http.request']);
+        for (const span of spans) {
+          expect(span.status.code).toBe(status === 500 ? 2 : 1);
+          expect(span.attributes).toContainEqual({ key: 'http.route', value: { stringValue: '/api/trace-review/:id' } });
+          expect(span.attributes).toContainEqual({ key: 'http.response.status_code', value: { intValue: String(status) } });
+        }
+        expect(JSON.stringify(spans)).not.toContain('synthetic-private');
+      }
+    } finally {
+      await flushTraces();
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
 test('phase10: failed outbox consumer exports an error span and preserves durable retry state', async () => {
   const { a } = await fixture();
   await withMailProvider(async provider => withTraceCollector(async collector => {

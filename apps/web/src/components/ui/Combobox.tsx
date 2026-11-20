@@ -133,24 +133,26 @@ export function Combobox({
               type="button"
               aria-label={label ? `${label} seçimini temizle` : 'Seçimi temizle'}
               onClick={(e) => { e.stopPropagation(); handleClear(); }}
-              className="p-1.5 mr-1 text-slate-500 hover:text-slate-300 transition-colors"
+              className="p-1.5 mr-1 text-slate-400 hover:text-slate-300 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
-          <ChevronDown className={cn('w-4 h-4 text-slate-500 mr-3 shrink-0 transition-transform', open && 'rotate-180')} />
+          <ChevronDown className={cn('w-4 h-4 text-slate-400 mr-3 shrink-0 transition-transform', open && 'rotate-180')} />
         </div>
 
         {/* Dropdown */}
         {open && (
-          <div id={listId} className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+          // Keep options in flow so partially covered neighboring controls do
+          // not become small or obstructed pointer targets while selecting.
+          <div id={listId} role="listbox" aria-label={label ?? placeholder} className="relative z-50 mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-56 overflow-y-auto">
             {/* Empty option */}
             <button
               type="button"
-              id={`${listId}-0`} tabIndex={-1}
+              role="option" aria-selected={!value} id={`${listId}-0`} tabIndex={-1}
               onMouseDown={event => event.preventDefault()}
               onClick={() => handleSelect('')}
-              className="w-full text-left px-3.5 py-2 text-sm text-slate-500 hover:bg-slate-700/50 transition-colors"
+              className="w-full text-left px-3.5 py-2 text-sm text-slate-400 hover:bg-slate-700/50 transition-colors"
             >
               — Seçim yok —
             </button>
@@ -159,7 +161,7 @@ export function Combobox({
               <button
                 key={opt.value}
                 type="button"
-                id={`${listId}-${index + 1}`} tabIndex={-1}
+                role="option" aria-selected={opt.value === value} id={`${listId}-${index + 1}`} tabIndex={-1}
                 onMouseDown={event => event.preventDefault()}
                 onClick={() => handleSelect(opt.value)}
                 className={cn(
@@ -174,13 +176,15 @@ export function Combobox({
             ))}
 
             {filtered.length === 0 && !showCreateOption && (
-              <div className="px-3.5 py-3 text-sm text-slate-500 text-center">Sonuç bulunamadı</div>
+              <div className="px-3.5 py-3 text-sm text-slate-400 text-center">Sonuç bulunamadı</div>
             )}
 
             {/* Create new option */}
             {showCreateOption && (
               <button
                 type="button"
+                role="option"
+                aria-selected={false}
                 onClick={handleCreate}
                 className="w-full flex items-center gap-2 px-3.5 py-2.5 text-sm text-sky-400 hover:bg-sky-500/10 transition-colors border-t border-slate-700"
               >

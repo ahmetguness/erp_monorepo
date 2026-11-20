@@ -1,5 +1,13 @@
 # Faz 10 — Observability ve operasyon
 
+> **20 Kasım tekrar incelemesi:** [Ayrıntılı QA raporu](phase-10-review.md).
+> 443 unit, 146 gerçek PostgreSQL cross-module, üç PostgreSQL/Redis integration
+> grubu ve Chromium/Firefox 20/20 PASS. İstek başlığı, staged encryption,
+> realtime deadline, HTTP/outbox span sonucu ve web erişilebilirlik sorunları
+> giderildi. Bu işlevsel doğrulama aşağıdaki **FAIL — performans kabulü** kararını
+> değiştirmez; uzun yük ölçümleri yeniden başlatılmadı. Önceki başarısız browser
+> ve yük koşularının kayıtları korundu.
+
 19–20 Kasım 2026. **Karar: FAIL — performans kabulü geçmedi.** Kod ve yerel
 işlevsel/operasyon kontrolleri uygulandı; güvenilir kapasite doğrulanamadı.
 Son yük ölçümü kullanıcı isteğiyle durduruldu. Production veya staging kabulü

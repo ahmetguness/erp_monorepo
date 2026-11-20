@@ -1,5 +1,14 @@
 # Faz 10.1 — Web kalitesi ve istemci dayanıklılığı
 
+> **20 Kasım tekrar incelemesi:** [QA raporu](phase-10-review.md).
+> Menü/listbox rolleri, geri düğmesi adı, form/navigasyon/görsel açıklaması
+> kontrastı ve açık listenin KDV alanını örtmesi düzeltildi. Son owned fixture
+> `axon-dr-a0957a1d791e`: **20/20 PASS**, skip/retry/flaky=0, cleanup=0.
+> Chromium LCP596 / INP120 ms, CLS0,0567075. Önceki INP216 ms FAIL ve diğer
+> başarısız koşular raporda korunur; bu değişkenliğin kesin nedeni çözülmüş
+> sayılmaz. Yük altında headroom, field p75 ve manuel erişilebilirlik kapıları
+> açık; CONDITIONAL PASS kararı devam eder. Uzun oturum yeniden ölçülmedi.
+
 19–20 Kasım 2026. **Karar: CONDITIONAL PASS.** Yerel browser ve oturum kontrolleri
 başarılıdır; field CWV, manuel erişilebilirlik ve yük altında ek browser kabulü
 açık kapıdır. Bu rapor WCAG sertifikası veya production kapasitesi beyanı değildir.

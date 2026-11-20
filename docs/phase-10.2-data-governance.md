@@ -1,5 +1,12 @@
 # Faz 10.2 — Veri yönetişimi ve uyumluluk
 
+> **20 Kasım tekrar incelemesi:** [QA raporu](phase-10-review.md).
+> Reader-first rotasyonda v2 writer kapalıyken yeni v1 kayıtların okunamaması
+> düzeltildi; eski/yeni v1 ile v2/escrow regresyonları geçti. Son **146/146**
+> gerçek PostgreSQL cross-module kontrolünün **19** governance/observability
+> senaryosu PASS; üç gerçek PostgreSQL/Redis integration grubu da PASS.
+> Hukuki/operasyonel açık kapılar ve CONDITIONAL PASS kararı korunur.
+
 19–20 Kasım 2026. **Karar: CONDITIONAL PASS.** Yerel teknik kontroller geçti;
 hukuki kararlar ve aşağıdaki canlı ortam kapıları açıktır.
 Bu karar Faz 10'un performans kabulünden bağımsızdır. Son yük ölçümü kullanıcı

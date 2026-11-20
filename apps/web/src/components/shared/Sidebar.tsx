@@ -167,7 +167,7 @@ function NavItemRow({
             'flex items-center justify-center w-9 h-9 rounded-lg transition-colors mx-auto',
             isActive
               ? 'bg-sky-500/15 text-sky-400'
-              : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/60',
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
           )}
           aria-label={item.label}
         >
@@ -257,7 +257,7 @@ function NavItemRow({
           'mr-1 min-h-6 min-w-6 rounded p-1 transition-all',
           favoriteHrefs.includes(item.href)
             ? 'text-amber-300 opacity-100'
-            : 'text-slate-600 hover:text-amber-300 opacity-25 group-hover/nav:opacity-100 hover:scale-110',
+            : 'text-slate-400 hover:text-amber-300 opacity-25 group-hover/nav:opacity-100 hover:scale-110',
         )}
       >
         <Star className="h-3.5 w-3.5" fill={favoriteHrefs.includes(item.href) ? 'currentColor' : 'none'} />
@@ -298,7 +298,7 @@ function WorkspaceSettings({ workspace }: { workspace: NavigationWorkspace }) {
         <Settings2 className="h-3.5 w-3.5" /> Çalışma alanını düzenle
       </summary>
       <div className="mt-1 rounded-xl border border-slate-800 bg-slate-950 p-3">
-        <label className="text-[10px] font-semibold uppercase text-slate-500">
+        <label className="text-[10px] font-semibold uppercase text-slate-400">
           Çalışma biçimi
         </label>
         <select
@@ -314,7 +314,7 @@ function WorkspaceSettings({ workspace }: { workspace: NavigationWorkspace }) {
             </option>
           ))}
         </select>
-        <p className="mt-3 text-[10px] font-semibold uppercase text-slate-500">
+        <p className="mt-3 text-[10px] font-semibold uppercase text-slate-400">
           Gizlenebilir alanlar
         </p>
         <div className="mt-1 max-h-28 space-y-1 overflow-y-auto">
@@ -477,7 +477,7 @@ export function Sidebar() {
             className="w-full h-9 flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-2.5 text-xs text-slate-400 hover:border-slate-700 hover:text-slate-300 hover:bg-slate-950/90 transition-all group"
           >
             <div className="flex items-center gap-2 min-w-0">
-              <Search className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-400 transition-colors shrink-0" />
+              <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-400 transition-colors shrink-0" />
               <span className="truncate">Hızlı Ara veya Komut...</span>
             </div>
             <kbd className="rounded border border-slate-800 bg-slate-900/90 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 shrink-0 group-hover:border-slate-700">
@@ -543,7 +543,7 @@ export function Sidebar() {
         {visibleGroups.map((group, gi) => (
           <div key={`${group.label ?? 'primary'}-${gi}`}>
             {group.label && !collapsed && (
-              <p className="px-3 mb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+              <p className="px-3 mb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                 {group.label}
               </p>
             )}
@@ -564,7 +564,7 @@ export function Sidebar() {
         ))}
 
         {visibleGroups.length === 0 && !collapsed && (
-          <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-4 text-center text-xs text-slate-500">
+          <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-4 text-center text-xs text-slate-400">
             Sonuç bulunamadı.
           </div>
         )}
@@ -583,7 +583,7 @@ export function Sidebar() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-slate-300 truncate">{user.name}</p>
-              <p className="text-[10px] text-slate-500 truncate">
+              <p className="text-[10px] text-slate-400 truncate">
                 {tenant?.companyName ?? user.email}
               </p>
             </div>
@@ -596,7 +596,7 @@ export function Sidebar() {
             onClick={logout}
             aria-label="Çıkış Yap"
             className={cn(
-              'flex items-center gap-2 rounded-lg text-xs text-slate-500 hover:text-red-400 hover:bg-red-500/5 transition-colors',
+              'flex items-center gap-2 rounded-lg text-xs text-slate-400 hover:text-red-400 hover:bg-red-500/5 transition-colors',
               collapsed
                 ? 'w-9 h-9 justify-center mx-auto'
                 : 'w-full px-2 py-1.5',

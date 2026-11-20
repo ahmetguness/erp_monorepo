@@ -51,7 +51,7 @@ export function RowActions({ actions }: RowActionsProps) {
         type="button"
         aria-label="Satır işlemleri"
         aria-expanded={open}
-        aria-haspopup="true"
+        aria-haspopup="menu"
         aria-controls={open ? menuId : undefined}
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
         className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-800/90 hover:text-slate-200"
@@ -59,12 +59,13 @@ export function RowActions({ actions }: RowActionsProps) {
         <MoreHorizontal className="w-4 h-4" />
       </button>
       {open && (
-        <div id={menuId} className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-xl border border-slate-800/90 bg-slate-950/95 py-1.5 shadow-2xl shadow-black/25 ring-1 ring-white/3">
+        <div id={menuId} role="menu" aria-label="Satır işlemleri" className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-xl border border-slate-800/90 bg-slate-950/95 py-1.5 shadow-2xl shadow-black/25 ring-1 ring-white/3">
           {actions.map((action, i) => (
             <div key={i}>
               {action.separator && i > 0 && <div className="border-t border-slate-800 my-1" />}
               <button
                 type="button"
+                role="menuitem"
                 data-row-action
                 onClick={(e) => { e.stopPropagation(); action.onClick(); setOpen(false); }}
                 className={cn(

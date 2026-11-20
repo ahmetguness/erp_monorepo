@@ -190,12 +190,47 @@ test('WCAG AA automated checks on real login and authenticated product table; ke
   await actions.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('menu')).toBeVisible();
+  const menuItems = page.getByRole('menuitem');
+  await expect(menuItems.first()).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(menuItems.nth(1)).toBeFocused();
+  issues = await violations(page);
+  await testInfo.attach('products-open-menu-axe', { body: JSON.stringify(issues, null, 2), contentType: 'application/json' });
+  expect(issues).toEqual([]);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(actions).toBeFocused();
   await page.keyboard.press('Tab');
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
 });
+test('product category combobox exposes its options and keyboard selection without creating a record', async ({ page, context }, testInfo) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', error => pageErrors.push(error.name));
+  await login(context);
+  await page.goto('/dashboard/products/new');
+  const category = page.getByRole('combobox', { name: 'Kategori', exact: true });
+  await category.focus();
+  const listbox = page.getByRole('listbox', { name: 'Kategori', exact: true });
+  await expect(listbox).toBeVisible();
+  const empty = listbox.getByRole('option', { name: '— Seçim yok —', exact: true });
+  await expect(empty).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowDown');
+  await expect(category).toHaveAttribute('aria-activedescendant', await empty.getAttribute('id') ?? '');
+  await page.keyboard.press('Enter');
+  await expect(listbox).toHaveCount(0);
+  await expect(category).toBeFocused();
+  await category.fill('Synthetic unsaved category');
+  await expect(listbox.getByRole('option', { name: /Yeni kategori/ })).toBeVisible();
+  await page.getByRole('combobox', { name: 'KDV Oranı', exact: true }).click({ trial: true });
+  const issues = await violations(page);
+  await testInfo.attach('product-open-category-axe', { body: JSON.stringify(issues, null, 2), contentType: 'application/json' });
+  expect(issues).toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(listbox).toHaveCount(0);
+  await expect(category).toBeFocused();
+  expect(pageErrors).toEqual([]);
+});
+
 test('production navigation performance, bounded session resource trend and web-vitals are recorded without identity', async ({ page, context }, testInfo) => {
   const measure = async (page: Page, context: BrowserContext) => {
     const origin = new URL(process.env.QUALITY_BASE_URL ?? '').origin;

@@ -78,8 +78,9 @@ export function registerPreRoutingMiddleware(app: Hono, config: RuntimeConfig): 
       requestTrace = traceContext.getStore();
       const untrack = trackHttpRequest();
       context.header('traceparent', traceparent() ?? '');
-      await runWithObservabilityContext({ requestId, correlationId }, async () => {
-        try { await withSpan('application.request', 1, attributes, next); }
+      // Finalize route/status before either request span is exported.
+      await runWithObservabilityContext({ requestId, correlationId }, () => withSpan('application.request', 1, attributes, async () => {
+        try { await next(); }
         finally {
           untrack();
           const route = matchedRoutes(context).filter(row => row.method === context.req.method && !['*', '/*'].includes(row.path)).at(-1)?.path ?? 'unmatched';
@@ -92,7 +93,7 @@ export function registerPreRoutingMiddleware(app: Hono, config: RuntimeConfig): 
           observeTelemetry('axon_http_request_duration_seconds', (Date.now() - start) / 1000, { method: context.req.method, route, status: String(context.res.status) });
           if (context.res.status >= 400) countTelemetry(context.res.status >= 500 ? 'axon_http_server_errors_total' : 'axon_http_client_errors_total');
         }
-      });
+      }));
     }, context.req.header('traceparent') ?? null);
 
     const durationMs = Date.now() - start;

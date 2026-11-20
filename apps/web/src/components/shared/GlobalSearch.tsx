@@ -405,7 +405,7 @@ export function GlobalSearch() {
       <button
         type="button"
         onClick={openPalette}
-        className="flex h-9 w-full max-w-md items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/40 px-3 text-left text-sm text-slate-500 transition-all hover:border-slate-700 hover:text-slate-300 hover:bg-slate-900/60"
+        className="flex h-9 w-full max-w-md items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/40 px-3 text-left text-sm text-slate-400 transition-all hover:border-slate-700 hover:text-slate-300 hover:bg-slate-900/60"
       >
         <Search className="h-4 w-4 shrink-0 text-slate-400" />
         <span className="hidden min-w-0 flex-1 truncate md:inline">

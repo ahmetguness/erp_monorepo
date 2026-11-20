@@ -124,7 +124,7 @@ function SectionCard({
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               Adım {step}
             </span>
             {done && (
@@ -135,7 +135,7 @@ function SectionCard({
           </div>
           <h3 className="text-sm font-semibold text-white">{title}</h3>
           {description && (
-            <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{description}</p>
           )}
         </div>
       </div>
@@ -171,7 +171,7 @@ function LivePreview({
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-        <Eye className="w-3.5 h-3.5 text-slate-500" />
+        <Eye className="w-3.5 h-3.5 text-slate-400" />
         <span className="text-xs font-semibold text-slate-400">
           Canlı Önizleme
         </span>
@@ -180,7 +180,7 @@ function LivePreview({
         {!hasData ? (
           <div className="py-8 text-center">
             <Package className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-slate-400">
               Bilgileri girdikçe burada görünecek
             </p>
           </div>
@@ -203,7 +203,7 @@ function LivePreview({
                   <p className="text-sm font-semibold text-white truncate">
                     {name || "Ürün Adı"}
                   </p>
-                  <p className="text-xs text-slate-500 font-mono">
+                  <p className="text-xs text-slate-400 font-mono">
                     {code || "KOD"}
                   </p>
                 </div>
@@ -223,7 +223,7 @@ function LivePreview({
               Number(salesPrice || 0) > 0) && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 text-slate-500">
+                  <span className="flex items-center gap-1.5 text-slate-400">
                     <TrendingDown className="w-3 h-3 text-red-400" />
                     Alış
                   </span>
@@ -232,7 +232,7 @@ function LivePreview({
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 text-slate-500">
+                  <span className="flex items-center gap-1.5 text-slate-400">
                     <TrendingUp className="w-3 h-3 text-emerald-400" />
                     Satış
                   </span>
@@ -242,7 +242,7 @@ function LivePreview({
                 </div>
                 <div className="h-px bg-slate-800 my-1" />
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-500">Kar Marjı</span>
+                  <span className="text-slate-400">Kar Marjı</span>
                   <span
                     className={cn(
                       "font-bold",
@@ -256,7 +256,7 @@ function LivePreview({
             )}
 
             {unit && (
-              <div className="text-[10px] text-slate-600 text-center pt-1">
+              <div className="text-[10px] text-slate-400 text-center pt-1">
                 Birim: {unit}
               </div>
             )}
@@ -587,6 +587,7 @@ export function ProductFormPage({ editId }: Props) {
           <div className="flex items-center gap-3">
             <button
               type="button"
+              aria-label="Önceki sayfaya dön"
               onClick={() => router.back()}
               className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600 transition-all duration-200 hover:bg-slate-800 backdrop-blur-sm"
             >
@@ -599,7 +600,7 @@ export function ProductFormPage({ editId }: Props) {
                 </div>
                 {isEdit ? "Ürün Düzenle" : "Yeni Ürün Oluştur"}
               </h1>
-              <p className="text-xs text-slate-500 mt-1 ml-[38px]">
+              <p className="text-xs text-slate-400 mt-1 ml-[38px]">
                 {isEdit
                   ? "Mevcut ürün bilgilerini güncelleyin."
                   : "Kataloğunuza yeni bir ürün ekleyin — adımları takip edin."}
@@ -610,7 +611,7 @@ export function ProductFormPage({ editId }: Props) {
           {/* Progress indicator */}
           <div className="hidden sm:flex items-center gap-3">
             <div className="text-right">
-              <p className="text-xs text-slate-500">İlerleme</p>
+              <p className="text-xs text-slate-400">İlerleme</p>
               <p className="text-sm font-bold text-white">
                 {completedSteps}/{totalSteps}
               </p>
@@ -801,7 +802,7 @@ export function ProductFormPage({ editId }: Props) {
               />
             </FormRow>
             <div className="mt-4 border-t border-slate-800 pt-4">
-              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">
                 Stok planlama
               </p>
               <FormRow cols={2}>
@@ -883,7 +884,7 @@ export function ProductFormPage({ editId }: Props) {
           {/* ── Sticky action bar ───────────────── */}
           <div className="sticky bottom-0 z-20 -mx-1 px-1 pb-4 pt-3 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent">
             <div className="flex items-center justify-between bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-xl px-5 py-3">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
+              <div className="flex items-center gap-2 text-xs text-slate-400">
                 {errorCount > 0 ? (
                   <span className="flex items-center gap-1 text-red-400">
                     <AlertCircle className="w-3.5 h-3.5" />
@@ -950,7 +951,7 @@ export function ProductFormPage({ editId }: Props) {
               <p className="text-xs font-semibold text-slate-400 mb-2">
                 İpuçları
               </p>
-              <ul className="space-y-1.5 text-[11px] text-slate-500 leading-relaxed">
+              <ul className="space-y-1.5 text-[11px] text-slate-400 leading-relaxed">
                 <li>• Ürün kodu benzersiz olmalıdır</li>
                 <li>• Kategori bulamazsanız yeni oluşturabilirsiniz</li>
                 <li>• Başlangıç stoğu sonradan da eklenebilir</li>

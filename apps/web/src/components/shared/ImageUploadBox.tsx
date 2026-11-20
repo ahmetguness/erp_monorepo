@@ -60,7 +60,7 @@ export function ImageUploadBox({
           {previewUrl ? (
             <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url("${previewUrl}")` }} />
           ) : (
-            <div className="flex flex-col items-center gap-2 text-slate-600">
+            <div className="flex flex-col items-center gap-2 text-slate-400">
               <ImageIcon className="h-8 w-8" />
               <span className="text-xs">Gorsel yok</span>
             </div>
@@ -81,12 +81,12 @@ export function ImageUploadBox({
           <p
             className={cn(
               'min-w-0 truncate text-xs',
-              status === 'error' ? 'text-red-400' : status === 'selected' ? 'text-sky-400' : 'text-slate-500',
+              status === 'error' ? 'text-red-400' : status === 'selected' ? 'text-sky-400' : 'text-slate-400',
             )}
           >
             {getStatusLabel(status, hasImage, fileName)}
           </p>
-          <span className="shrink-0 text-[10px] text-slate-600">{maxSizeLabel}</span>
+          <span className="shrink-0 text-[10px] text-slate-400">{maxSizeLabel}</span>
         </div>
 
         {isBusy && (
@@ -120,7 +120,7 @@ export function ImageUploadBox({
               type="button"
               onClick={onClearSelection}
               disabled={disabled || isBusy}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <X className="h-3.5 w-3.5" />
               Vazgec
@@ -145,7 +145,7 @@ export function ImageUploadBox({
           {previewUrl ? (
             <div className="w-full h-full bg-center bg-cover" style={{ backgroundImage: `url("${previewUrl}")` }} />
           ) : (
-            <ImageIcon className="w-6 h-6 text-slate-600" />
+            <ImageIcon className="w-6 h-6 text-slate-400" />
           )}
           {isBusy && (
             <div className="absolute inset-0 flex items-center justify-center bg-slate-950/75">
@@ -168,11 +168,11 @@ export function ImageUploadBox({
               </span>
             )}
           </div>
-          <p className="mt-1 text-[11px] text-slate-500">{description}</p>
+          <p className="mt-1 text-[11px] text-slate-400">{description}</p>
           <p
             className={cn(
               'mt-1 truncate text-[11px]',
-              status === 'error' ? 'text-red-400' : status === 'selected' ? 'text-sky-400' : 'text-slate-600',
+              status === 'error' ? 'text-red-400' : status === 'selected' ? 'text-sky-400' : 'text-slate-400',
             )}
           >
             {getStatusLabel(status, hasImage, fileName)}
@@ -199,7 +199,7 @@ export function ImageUploadBox({
               type="button"
               onClick={onClearSelection}
               disabled={disabled || isBusy}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <X className="w-3.5 h-3.5" />
               Vazgeç
@@ -218,7 +218,7 @@ export function ImageUploadBox({
           )}
         </div>
       </div>
-      <p className="mt-2 text-[10px] text-slate-600">{maxSizeLabel}</p>
+      <p className="mt-2 text-[10px] text-slate-400">{maxSizeLabel}</p>
     </div>
   );
 }
