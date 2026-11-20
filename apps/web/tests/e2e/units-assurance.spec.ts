@@ -23,8 +23,8 @@ test('units validation, real create and delete flow', async ({ page }) => {
   await expect(page.getByText('Kod zorunludur')).toBeVisible();
   await page.getByRole('button', { name: 'İptal' }).click();
   await page.getByRole('button', { name: 'Yeni Birim' }).click();
-  await page.getByRole('textbox', { name: 'Ad*', exact: true }).fill(name);
-  await page.getByRole('textbox', { name: 'Kod*', exact: true }).fill(code);
+  await page.getByRole('textbox', { name: 'Ad', exact: true }).fill(name);
+  await page.getByRole('textbox', { name: 'Kod', exact: true }).fill(code);
   await page.getByRole('button', { name: 'Kaydet' }).click();
   await expect(page.getByText(name)).toBeVisible();
   await page.getByRole('row', { name: new RegExp(`${code} ${name}`) }).getByRole('button', { name: 'Sil' }).click({ force: true });

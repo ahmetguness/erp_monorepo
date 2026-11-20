@@ -78,7 +78,7 @@ test("warehouses list, search, status, detail, edit and location flow", async ({
     await page.getByRole("button", { name: "Düzenle", exact: true }).click();
     const editDialog = page.getByRole("dialog");
     await editDialog
-      .getByRole("textbox", { name: "Ad*" })
+      .getByRole("textbox", { name: "Ad", exact: true })
       .fill(`${marker}_Güncel`);
     await editDialog
       .getByRole("textbox", { name: "Adres", exact: true })

@@ -106,7 +106,7 @@ test("stock count create, detail, finalize, filters, refresh and DB reconciliati
     const textInputs = dialog.locator('input[type="text"]');
     await textInputs.first().fill(marker);
     await dialog
-      .getByRole("button", { name: new RegExp(`${marker} Depo`) })
+      .getByRole("option", { name: new RegExp(`${marker} Depo`) })
       .click();
     await expect(dialog.getByText(`${marker} Türkçe Ürün`)).toBeVisible();
     await dialog.locator('input[type="number"]').fill("3");

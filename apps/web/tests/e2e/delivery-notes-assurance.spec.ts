@@ -12,8 +12,8 @@ test('delivery note UI create, read, refresh, lifecycle and export', async ({ pa
     await page.goto('/login'); await page.getByLabel('E-posta adresi').fill('admin@axondemo.com'); await page.getByLabel('Şifre', { exact: true }).fill('demo1234'); await page.getByRole('button', { name: 'Giriş Yap' }).click(); await expect(page).toHaveURL(/dashboard/); const onboardingClose = page.getByRole('button', { name: "Onboarding'i kapat" }); if (await onboardingClose.isVisible()) await onboardingClose.click();
     await page.goto('/dashboard/delivery-notes'); await expect(page.getByRole('heading', { name: 'İrsaliyeler' })).toBeVisible();
     await page.getByRole('link', { name: 'Yeni irsaliye' }).click(); await expect(page).toHaveURL(/delivery-notes\/new/);
-    await page.getByPlaceholder('Depo ara...').fill(warehouse.name); await page.getByRole('button', { name: new RegExp(warehouse.name) }).last().click();
-    await page.getByPlaceholder('Ürün ara...').fill(marker); await page.getByRole('button', { name: new RegExp(marker) }).last().click();
+    await page.getByPlaceholder('Depo ara...').fill(warehouse.name); await page.getByRole('option', { name: new RegExp(warehouse.name) }).last().click();
+    await page.getByPlaceholder('Ürün ara...').fill(marker); await page.getByRole('option', { name: new RegExp(marker) }).last().click();
     if (await onboardingClose.isVisible()) await onboardingClose.click();
     await page.getByRole('button', { name: 'Kaydet' }).click(); await expect(page).toHaveURL(/dashboard\/delivery-notes$/);
     await page.getByPlaceholder(/İrsaliye no/).fill(marker.slice(-8));

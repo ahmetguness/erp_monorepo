@@ -112,11 +112,11 @@ test("reservations CRUD, server filters, expiry cleanup and persistence", async 
     const textInputs = dialog.locator('input[type="text"]');
     await textInputs.nth(0).fill(marker);
     await dialog
-      .getByRole("button", { name: new RegExp(`${marker}_P`) })
+      .getByRole("option", { name: new RegExp(`${marker}_P`) })
       .click();
     await textInputs.nth(1).fill(marker);
     await dialog
-      .getByRole("button", { name: new RegExp(`${marker}_W`) })
+      .getByRole("option", { name: new RegExp(`${marker}_W`) })
       .click();
     await dialog.locator('input[type="number"]').fill("3.125");
     await dialog.locator("select").selectOption("OTHER");

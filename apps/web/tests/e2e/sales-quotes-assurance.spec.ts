@@ -71,11 +71,11 @@ test("sales quote UI create, read, filter, navigation and conversion flow", asyn
 
     const contactInput = page.getByPlaceholder("Cari ara...");
     await contactInput.fill(marker);
-    await page.getByRole("button", { name: new RegExp(marker) }).click();
+    await page.getByRole("option", { name: new RegExp(marker) }).click();
     const productInputs = page.getByPlaceholder("Ürün ara...");
     await productInputs.first().fill(`${marker}_P1`);
     await page
-      .getByRole("button", { name: new RegExp(`${marker}_P1`) })
+      .getByRole("option", { name: new RegExp(`${marker}_P1`) })
       .click();
     const numbers = page.locator('input[type="number"]');
     await numbers.nth(0).fill("2");
@@ -86,7 +86,7 @@ test("sales quote UI create, read, filter, navigation and conversion flow", asyn
     await page.getByRole("button", { name: "Yeni Kalem Ekle" }).click();
     await productInputs.first().fill(`${marker}_P2`);
     await page
-      .getByRole("button", { name: new RegExp(`${marker}_P2`) })
+      .getByRole("option", { name: new RegExp(`${marker}_P2`) })
       .click();
     await numbers.nth(4).fill("3");
     await numbers.nth(5).fill("500");

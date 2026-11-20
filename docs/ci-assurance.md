@@ -38,4 +38,49 @@ Lockfile'daki eksik `fast-equals`, `resize-observer-polyfill`, Expo font ve WASI
 
 Retry ile geçen test flaky kabul edilir. Sahip, takip kaydı ve son tarih olmadan skip/fixme yapılamaz. Aynı test iki CI koşusunda flaky olursa merge öncesi düzeltilir veya belgeli risk kabulü gerekir.
 
-Playwright `failOnFlakyTests` CI'de açıktır: retry ile geçen test de job'ı başarısız yapar. CI tek worker kullanır; demo tenant'ını değiştiren spec'ler aynı job içinde eşzamanlı çalışmaz. Ayrı job'lar aynı DB'yi paylaşmaz.
+Mevcut Playwright ayarı CI'de iki retry ve tek worker kullanır; `failOnFlakyTests=false` olduğundan retry ile geçen test job'ı kendiliğinden başarısız yapmaz. Flaky kayıtları yukarıdaki ilkeye göre ayrıca değerlendirilir. Demo tenant'ını değiştiren spec'ler aynı job içinde eşzamanlı çalışmaz; ayrı job'lar aynı DB'yi paylaşmaz. Aşağıdaki yerel tekrar 0 retry ile yapılmıştır; workflow'un bu ayarları değiştirilmemiştir.
+
+## 20 Kasım 2026 — erişilebilirlik sözleşmesi ve tarayıcı regresyonu
+
+`7be2f06` için [44783405688 koşusunda](https://github.com/ahmetguness/erp_monorepo/actions/runs/44783405688)
+smoke 14/16, tam regresyon 197/212 geçti. Smoke'taki iki hata aynı fatura
+testinin Chromium ve Firefox örnekleriydi. `assurance-summary` tarayıcı
+işlerinin başarısızlığını doğru biçimde yansıttı; bağımsız üçüncü bir uygulama
+hatası değildi.
+
+Faz 10 erişilebilirlik değişikliklerinden sonra eski E2E seçicilerinin 15 dosyada
+güncellenmesi gerekti. Görsel `*` işareti `aria-hidden` olduğundan bir alanın
+erişilebilir adı `Ad*` yerine `Ad` olur; zorunluluk ve form doğrulaması korunur.
+Combobox satırları `option` rolüyle seçilir. `button` rolü aramak, görünen doğru
+seçeneği bulamaz. Adları birbirinin alt dizisi olan `Ad` ve `Adres` alanlarında
+`exact: true` kullanılır. İşlem düğmeleri ve gerçek combobox seçenekleri aynı
+seçiciyle ele alınmaz.
+
+Fatura testinde ayrıca `İptal` metninin bulunması işlemin bittiğini kanıtlamıyordu:
+`İptal et` düğmesi işlemden önce de görünür. Test şimdi doğru faturanın POST
+cancel isteğinden 200 yanıtını, ekrandaki durum değişimini, ardından DB'deki
+`CANCELLED` değerini ve iptal gerekçesini birlikte doğrular. İptal iş kuralı veya
+DB sonucu değiştirilmedi.
+
+Yerel tekrar, `NEXT_PUBLIC_API_URL=http://localhost:3001` ile production Next web,
+gerçek API, kanonik demo seed ve yalnız yeni/owned PostgreSQL üzerinde yapıldı.
+Smoke ve regresyon ayrı temiz fixture'lar kullanır; kişisel `.env` dosyaları bu
+API fixture'ına yüklenmez. Yerel çalıştırma tek worker ve **0 retry** kullanır;
+workflow, test süreleri, beklenen sonuçlar ve CI'deki retry ayarları değiştirilmez.
+
+| Kontrol | Sonuç |
+|---|---|
+| Production web derlemesi | PASS |
+| Web ve test typecheck | PASS; workspace TypeScript 6.0.3 |
+| Değişen 15 spec lint / diff güvenliği | PASS; yeni any, type assertion, tip susturma veya skip/fixme yok |
+| Chromium + Firefox smoke | 16/16 PASS |
+| Smoke işinin sonraki cross-module adımı | 3/3 PASS |
+| Tam Chromium regresyonu | Sonuç bekleniyor |
+
+Kanıtlar `artifacts/ci-browser-review/` ve ilgili
+`artifacts/disaster-recovery/axon-dr-*/` klasörlerinde JSON/JUnit, hata trace'leri
+ve loglarla korunur. İlk yerel hedefli denemede fatura durumunun erken okunması
+ve `Ad`/`Adres` seçici çakışması da yakalanıp düzeltildi; bu başarısızlık kayıtları
+silinmedi. Bu kontrol, Faz 10'un ayrı `tests/quality` paketindeki 20 testin yerine
+CI'ın `tests/e2e` paketini doğrular. Uzun yük testi veya kapasite kabulü değildir;
+Faz 10 performans kapısı bu CI düzeltmesiyle PASS sayılmaz.

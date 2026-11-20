@@ -22,7 +22,7 @@ test('categories real create, refresh, update, detach-capable form and delete', 
   await expect(page.getByText('Ad zorunludur')).toBeVisible();
   await page.getByRole('button', { name: 'İptal' }).click();
   await page.getByRole('button', { name: 'Yeni Kategori' }).click();
-  await page.getByRole('textbox', { name: 'Ad*', exact: true }).fill(initial);
+  await page.getByRole('textbox', { name: 'Ad', exact: true }).fill(initial);
   await page.getByRole('button', { name: 'Kaydet' }).click();
   await expect(page.getByText(initial, { exact: true })).toBeVisible();
   await page.reload();
@@ -30,7 +30,7 @@ test('categories real create, refresh, update, detach-capable form and delete', 
   const row = page.getByText(initial, { exact: true }).locator('..');
   await row.getByRole('button', { name: 'Düzenle' }).click({ force: true });
   await expect(page.getByText('Kategori görseli', { exact: true })).toBeVisible();
-  await page.getByRole('textbox', { name: 'Ad*', exact: true }).fill(updated);
+  await page.getByRole('textbox', { name: 'Ad', exact: true }).fill(updated);
   await page.getByRole('button', { name: 'Kaydet' }).click();
   await expect(page.getByText(updated, { exact: true })).toBeVisible();
   await page.getByText(updated, { exact: true }).locator('..').getByRole('button', { name: 'Sil' }).click({ force: true });

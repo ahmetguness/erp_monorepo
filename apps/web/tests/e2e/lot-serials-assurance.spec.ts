@@ -102,7 +102,7 @@ test("lot serial create, server search, filters, pagination and traceability", a
     const textInputs = dialog.locator('input[type="text"]');
     await textInputs.nth(0).fill(marker);
     await dialog
-      .getByRole("button", { name: new RegExp(`${marker}_P`) })
+      .getByRole("option", { name: new RegExp(`${marker}_P`) })
       .click();
     await dialog.getByLabel(/Seri Numaras/).fill(`${marker}_CREATED_ŞĞÜ`);
     await dialog.getByRole("button", { name: /Olu/ }).click();

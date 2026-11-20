@@ -96,7 +96,7 @@ test("customer assets list, detail, create, refresh, pagination and delete work"
   await expect(page.getByRole("button", { name: "Oluştur" })).toBeDisabled();
   await page.getByLabel("Varlık adı").fill("Yeni Cihaz");
   await page.getByPlaceholder(/Cari ara/).click();
-  await page.getByRole("button", { name: /C-1.*TEST Müşteri/ }).click();
+  await page.getByRole("option", { name: /C-1.*TEST Müşteri/ }).click();
   await page.getByRole("button", { name: "Oluştur" }).click();
   await expect
     .poll(() =>

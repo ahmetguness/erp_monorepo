@@ -79,7 +79,7 @@ test("product batches create, search, filters, pagination, detail and persistenc
     const productInput = dialog.locator('input[type="text"]').first();
     await productInput.fill(marker);
     await dialog
-      .getByRole("button", { name: new RegExp(`${marker}_P`) })
+      .getByRole("option", { name: new RegExp(`${marker}_P`) })
       .click();
     await dialog.getByLabel(/Parti Numaras/).fill(`${marker}_CREATED`);
     await dialog.locator('input[type="number"]').fill("7.125");

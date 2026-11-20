@@ -64,11 +64,11 @@ test("sales order UI create, read, totals, lifecycle, search and navigation", as
     ).toBeVisible();
     const contactInput = page.getByPlaceholder("Cari ara...");
     await contactInput.fill(marker);
-    await page.getByRole("button", { name: new RegExp(marker) }).click();
+    await page.getByRole("option", { name: new RegExp(marker) }).click();
     const productInput = page.getByPlaceholder("Ürün ara...").first();
     await productInput.fill(`${marker}_P1`);
     await page
-      .getByRole("button", { name: new RegExp(`${marker}_P1`) })
+      .getByRole("option", { name: new RegExp(`${marker}_P1`) })
       .click();
     const numbers = page.locator('input[type="number"]');
     await numbers.nth(0).fill("2");

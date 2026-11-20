@@ -60,11 +60,11 @@ test("manual movement, filters, totals, refresh and product navigation", async (
     const boxes = dialog.locator('input[type="text"]');
     await boxes.nth(0).fill(marker);
     await dialog
-      .getByRole("button", { name: new RegExp(`${marker}_P`) })
+      .getByRole("option", { name: new RegExp(`${marker}_P`) })
       .click();
     await boxes.nth(1).fill(marker);
     await dialog
-      .getByRole("button", { name: new RegExp(`${marker}_W`) })
+      .getByRole("option", { name: new RegExp(`${marker}_W`) })
       .click();
     await dialog.getByLabel("Miktar").fill("5.5");
     await dialog.getByLabel(/Birim Maliyet/).fill("12.25");
