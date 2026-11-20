@@ -59,7 +59,7 @@ export function RowActions({ actions }: RowActionsProps) {
         <MoreHorizontal className="w-4 h-4" />
       </button>
       {open && (
-        <div id={menuId} className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-xl border border-slate-800/90 bg-slate-950/95 py-1.5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.03]">
+        <div id={menuId} className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-xl border border-slate-800/90 bg-slate-950/95 py-1.5 shadow-2xl shadow-black/25 ring-1 ring-white/3">
           {actions.map((action, i) => (
             <div key={i}>
               {action.separator && i > 0 && <div className="border-t border-slate-800 my-1" />}

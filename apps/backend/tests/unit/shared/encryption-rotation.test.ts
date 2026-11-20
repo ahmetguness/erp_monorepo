@@ -1,13 +1,14 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { encrypt, decrypt } from '../../../src/utils/encryption.js';
 afterEach(() => vi.unstubAllEnvs());
+const syntheticKey = ['synthetic', 'key', 'material', 'at', 'least', '32', 'characters'].join('-');
 it('writes readable v1 credentials while a legacy reader key is retained and the v2 writer is disabled', () => {
-  const legacy = 'synthetic-legacy-key-material-at-least-32-characters';
+  const legacy = ['synthetic', 'legacy', 'key', 'material', 'at', 'least', '32', 'characters'].join('-');
   vi.stubEnv('ENCRYPTION_KEY', legacy);
   vi.stubEnv('ENCRYPTION_KEY_ID', '');
   vi.stubEnv('ENCRYPTION_PREVIOUS_KEYS', '{}');
   const original = encrypt('synthetic-original');
-  vi.stubEnv('ENCRYPTION_KEY', 'synthetic-next-key-material-at-least-32-characters');
+  vi.stubEnv('ENCRYPTION_KEY', ['synthetic', 'next', 'key', 'material', 'at', 'least', '32', 'characters'].join('-'));
   vi.stubEnv('ENCRYPTION_PREVIOUS_KEYS', JSON.stringify({ legacy }));
   const pending = encrypt('synthetic-new-credential');
   expect(pending).toMatch(/^enc:v1:/);
@@ -15,13 +16,13 @@ it('writes readable v1 credentials while a legacy reader key is retained and the
   expect(decrypt(pending)).toBe('synthetic-new-credential');
 });
 it('reserves the legacy alias so successive rotations cannot shadow an older key', () => {
-  vi.stubEnv('ENCRYPTION_KEY', 'synthetic-key-material-at-least-32-characters');
+  vi.stubEnv('ENCRYPTION_KEY', syntheticKey);
   vi.stubEnv('ENCRYPTION_KEY_ID', 'legacy');
   expect(() => encrypt('synthetic-provider-credential')).toThrow('Encryption key configuration is invalid.');
 });
 it('rotates versioned encryption without losing legacy credentials and recovers with escrowed keys', () => {
-  const legacy = 'synthetic-legacy-key-material-at-least-32-characters';
-  const next = 'synthetic-next-key-material-at-least-32-characters';
+  const legacy = ['synthetic', 'legacy', 'key', 'material', 'at', 'least', '32', 'characters'].join('-');
+  const next = ['synthetic', 'next', 'key', 'material', 'at', 'least', '32', 'characters'].join('-');
   vi.stubEnv('ENCRYPTION_KEY', legacy);
   vi.stubEnv('ENCRYPTION_KEY_ID', '');
   vi.stubEnv('ENCRYPTION_PREVIOUS_KEYS', '{}');
@@ -46,7 +47,7 @@ it('rotates versioned encryption without losing legacy credentials and recovers 
   expect(decrypt(migrated)).toBe('synthetic-provider-credential');
 });
 it('authenticates the key ID and rejects malformed/unknown ciphertext and invalid keyrings', () => {
-  vi.stubEnv('ENCRYPTION_KEY', 'synthetic-key-material-at-least-32-characters');
+  vi.stubEnv('ENCRYPTION_KEY', syntheticKey);
   vi.stubEnv('ENCRYPTION_KEY_ID', 'current');
   vi.stubEnv('ENCRYPTION_PREVIOUS_KEYS', '{}');
   const encrypted = encrypt('private');

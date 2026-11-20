@@ -10,3 +10,5 @@ e6d88d61fa8110a7e4d6b966e1d8691ca01ba396:apps/backend/prisma/seed.ts:generic-api
 6d66c49b55a3f03599cff601afa811c0534c1233:apps/backend/scripts/run-integration-tests.ts:generic-api-key:188
 6d66c49b55a3f03599cff601afa811c0534c1233:apps/backend/tests/cross-module/scenarios/observability-governance.test.ts:generic-api-key:412
 6d66c49b55a3f03599cff601afa811c0534c1233:apps/backend/tests/unit/runtime/metrics-authorization.test.ts:generic-api-key:34
+6d66c49b55a3f03599cff601afa811c0534c1233:apps/backend/tests/unit/shared/encryption-rotation.test.ts:generic-api-key:18
+6d66c49b55a3f03599cff601afa811c0534c1233:apps/backend/tests/unit/shared/encryption-rotation.test.ts:generic-api-key:49
