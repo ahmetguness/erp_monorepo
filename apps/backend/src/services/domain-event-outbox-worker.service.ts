@@ -15,6 +15,8 @@ import { deliverQueuedMail } from './mail-delivery/mail-delivery.service.js';
 import { EDocumentAutomationService } from './edocument-automation.service.js';
 import { ProviderHttpError } from '../infrastructure/providers/retry-policy.js';
 import { reconcileProvisioningMailFailures } from './mail-delivery/provisioning-completion.js';
+import { withSpan } from '../lib/telemetry/tracing.js';
+import { observeTelemetry, countTelemetry } from '../lib/telemetry/metrics.js';
 
 export interface DomainEventOutboxBatchResult {
   claimed: number; replayed: number; skipped: number; failed: number; requeuedStale: number;
@@ -23,6 +25,8 @@ export interface DomainEventOutboxBatchResult {
 async function deliverLease(lease: OutboxLease): Promise<boolean> {
   return runWithTenantScope(lease.tenantId, async () => {
     const record = await prisma.domainEventOutbox.findFirstOrThrow({ where: { id: lease.id, tenantId: lease.tenantId } });
+    const started = performance.now();
+    let succeeded = false;
     try {
       let event: DomainEvent;
       try { event = restoreStoredEvent(record); }
@@ -30,17 +34,24 @@ async function deliverLease(lease: OutboxLease): Promise<boolean> {
         if (error instanceof IncompatibleEventError) throw error;
         throw new PermanentDeliveryError(error instanceof Error ? error.message : 'Invalid event payload.');
       }
-      return await runWithObservabilityContext({ requestId: record.id, correlationId: event.context.correlationId ?? record.id }, async () => {
+      const delivered = await withSpan('outbox.deliver', 5, { 'messaging.operation.name': 'process', 'messaging.message.type': event.name }, () => runWithObservabilityContext({ requestId: record.id, correlationId: event.context.correlationId ?? record.id }, async () => {
         if (event.name === 'marketplace.webhook.received') await deliverTrendyolWebhook(lease.tenantId, event.payload.webhookEventId);
         if (event.name === 'mail.delivery.requested') await deliverQueuedMail(lease, event.payload);
         if (event.name === 'edocument.delivery.requested') await new EDocumentAutomationService(prisma).deliverQueuedDocument(lease.tenantId, event.payload.edocumentId);
-        return dispatchClaimedEvent(event, lease);
-      });
+        const result = await dispatchClaimedEvent(event, lease);
+        logger.info('Outbox delivery completed', { operation:'outbox.deliver', result:result?'success':'failure', requestId:record.id, correlationId:event.context.correlationId??record.id });
+        return result;
+      }), event.context.traceparent ?? null);
+      succeeded = delivered;
+      return delivered;
     } catch (error) {
       await failEvent(lease, [{ listener: 'delivery', message: error instanceof Error ? error.message : 'Event failed.' }],
         error instanceof PermanentDeliveryError || (error instanceof ProviderHttpError && !error.retryable),
         error instanceof ProviderHttpError ? error.retryAfterMs : 0);
       return false;
+    } finally {
+      observeTelemetry('axon_worker_delivery_duration_seconds', (performance.now() - started) / 1000, { result: succeeded ? 'success' : 'failure' });
+      countTelemetry(succeeded ? 'axon_worker_deliveries_total' : 'axon_worker_delivery_failures_total');
     }
   });
 }
@@ -49,6 +60,7 @@ export async function processDomainEventOutboxBatch(limit = 25, shouldStop: () =
   registerDomainEventListeners();
   await processPendingTenantProvisioning(shouldStop);
   const result: DomainEventOutboxBatchResult = { claimed: 0, replayed: 0, skipped: 0, failed: 0, requeuedStale: await recoverExpiredLeases() };
+  if (result.requeuedStale) countTelemetry('axon_outbox_recovered_leases_total', result.requeuedStale);
   await reconcileProvisioningMailFailures();
   const batchSize = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.trunc(limit))) : 25;
   const deadline = Date.now() + 240_000;

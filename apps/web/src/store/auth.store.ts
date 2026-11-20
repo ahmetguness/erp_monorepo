@@ -6,6 +6,7 @@ import type { AuthUser, TenantInfo } from '@repo/types';
 // ─────────────────────────────────────────────
 
 interface AuthState {
+  sessionVersion: number;
   user: AuthUser | null;
   tenant: TenantInfo | null;
   isAuthenticated: boolean;
@@ -22,6 +23,7 @@ interface AuthActions {
 type AuthStore = AuthState & AuthActions;
 
 const initialState: AuthState = {
+  sessionVersion: 0,
   user: null,
   tenant: null,
   isAuthenticated: false,
@@ -31,7 +33,7 @@ const LEGACY_AUTH_STORAGE_KEY = 'axon-auth';
 
 function clearLegacyAuthStorage(): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
+  try { window.localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY); } catch { /* Authentication remains in memory when browser storage is denied. */ }
 }
 
 clearLegacyAuthStorage();
@@ -41,7 +43,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
 
   login: (user, tenant) => {
     clearLegacyAuthStorage();
-    set({ user, tenant, isAuthenticated: true });
+    set(state => ({ user, tenant, isAuthenticated: true, sessionVersion: state.sessionVersion + 1 }));
   },
 
   logout: () => {
@@ -49,7 +51,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
       document.cookie = 'axon_token=; path=/; max-age=0';
     }
     clearLegacyAuthStorage();
-    set(initialState);
+    set(state => ({ ...initialState, sessionVersion: state.sessionVersion + 1 }));
   },
 
   updateUser: (partial) =>

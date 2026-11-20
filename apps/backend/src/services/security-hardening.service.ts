@@ -499,6 +499,14 @@ export async function listSecuritySessions(db: SessionDbClient, tenantId: string
   return sessions.sort((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt));
 }
 
+/** Caller holds the session-registry lock in its existing transaction. */
+export async function revokeSubjectSessionsInTransaction(tx: Prisma.TransactionClient, tenantId: string, userId: string, adminId: string | null): Promise<void> {
+  const sessions = await readSessions(tx, tenantId);
+  const at = nowIso();
+  const updated = sessions.map((session): SecuritySession => session.userId === userId && session.status === 'ACTIVE' ? { ...session, status: 'REVOKED', revokedAt: at, revokedById: adminId } : session);
+  if (updated.some((session, index) => session !== sessions[index])) await writeSessions(tx, tenantId, updated);
+}
+
 export async function getSecurityHardeningSnapshot(db: PrismaClient, tenantId: string): Promise<SecurityHardeningSnapshot> {
   const [sessions, apiKeyRotation, weakPermissionRisks, webhookAudit] = await Promise.all([
     listSecuritySessions(db, tenantId),

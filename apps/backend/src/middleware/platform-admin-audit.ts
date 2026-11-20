@@ -36,14 +36,14 @@ export const platformAdminAuditMiddleware: MiddlewareHandler = async (c, next) =
   const bodyReason = bodyField("reason");
   const bodyApprovalId = bodyField("approvalId");
   const recordOutcome = async (outcome: "SUCCESS" | "DENIED" | "FAILED", status: number) => {
-    const actorId = c.get("adminId") as string | undefined;
+    const actorId = c.get("adminId");
     if (!actorId) return;
     await createPlatformAudit({
       actorId, action: method, ...target(c.req.path), outcome,
       reason: c.req.header("x-change-reason") ?? bodyReason, approvalId: c.req.header("x-approval-id") ?? bodyApprovalId,
       ipAddress: getTrustedClientIpOrNull(c), device: c.req.header("user-agent") ?? null,
-      requestId: c.get("requestId") as string | undefined ?? c.req.header("x-request-id") ?? null,
-      correlationId: c.req.header("x-correlation-id") ?? null,
+      requestId: c.get("requestId") ?? null,
+      correlationId: c.get("correlationId") ?? null,
       beforeValues: { request: null }, afterValues: requestBody === undefined ? { request: "[not-json]", status } : { request: requestBody, status },
     });
   };

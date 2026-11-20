@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import type { PlatformAuditDiff, PlatformAuditEntry, PlatformAuditOutcome, PlatformAuditPage } from "@repo/types";
 import { prisma } from "../../../lib/prisma.js";
 import type { PlatformAuditFiltersInput } from "./platform-audit.schemas.js";
@@ -67,15 +67,16 @@ export async function createPlatformAudit(input: CreatePlatformAuditInput): Prom
   });
 }
 
-export async function verifyPlatformAuditIntegrity(): Promise<PlatformAuditPage["integrity"]> {
+export async function verifyPlatformAuditIntegrity(db: Pick<PrismaClient, 'platformAdminAuditLog'> = prisma, maxRows = Infinity): Promise<PlatformAuditPage["integrity"]> {
   let checked = 0; let cursor: string | undefined;
   const rowsByHash = new Map<string, AuditRow>();
   const nextByPreviousHash = new Map<string, AuditRow>();
   let genesis: AuditRow | null = null;
   while (true) {
-    const rows = await prisma.platformAdminAuditLog.findMany({ orderBy: { id: "asc" }, take: 1000, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) });
+    const rows = await db.platformAdminAuditLog.findMany({ orderBy: { id: "asc" }, take: 1000, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) });
     for (const row of rows) {
       const { hash: storedHash, ...hashable } = row; const expected = hashPayload(hashable); checked += 1;
+      if (checked > maxRows) throw new Error('Audit probe budget exceeded; full integrity verification required.');
       if (storedHash !== expected || rowsByHash.has(storedHash)) return { valid: false, checked, brokenAtId: row.id };
       rowsByHash.set(storedHash, row);
       if (row.previousHash === null) {

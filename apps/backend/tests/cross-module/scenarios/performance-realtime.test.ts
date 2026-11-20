@@ -12,8 +12,11 @@ import { createSecuritySession, revokeSecuritySession } from '../../../src/servi
 import { createApp } from '../../../src/bootstrap/http/create-app.js';
 import { readRuntimeConfig } from '../../../src/bootstrap/runtime-config.js';
 import { closeChatWebSockets, injectChatWebSocket } from '../../../src/modules/collaboration/chat/infrastructure/realtime/node-websocket-gateway.js';
+import { telemetryMetricsText } from '../../../src/lib/telemetry/metrics.js';
+import { ChatRealtimeDeliveryMetadataSchema } from '@repo/types';
 
 isolatedDatabase();
+const metric = (name:string) => Number(new RegExp('^'+name+' (\\d+)$','m').exec(telemetryMetricsText())?.[1] ?? 0);
 const meta = { ipAddress: '127.0.0.1', userAgent: 'Phase81-isolated-test' };
 const envelope = z.object({ tenantId: z.string(), payload: z.object({ clientMessageId: z.string() }) });
 async function room(tenant: TenantFixture) {
@@ -96,5 +99,33 @@ test('independent Node websocket gateways deliver one durable message across rep
     for (const socket of sockets) socket.close();
     await Promise.all(apps.map(closeChatWebSockets));
     await Promise.all(servers.map((server) => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))));
+  }
+});
+
+
+test('phase10: real websocket receipts are connection-bound and missing acknowledgements remain unconfirmed',async()=>{
+  const {a,b}=await fixture(),conversation=await room(a);
+  const app=createApp(readRuntimeConfig()),server=serve({fetch:app.fetch,hostname:'127.0.0.1',port:0});injectChatWebSocket(app,server);
+  const sockets:WebSocket[]=[],frames:Array<Array<z.infer<typeof ChatRealtimeDeliveryMetadataSchema>>>=[[],[],[]];
+  const confirmed=metric('axon_realtime_confirmed_deliveries_total'),unknown=metric('axon_realtime_unknown_acknowledgements_total'),unconfirmed=metric('axon_realtime_unconfirmed_deliveries_total');
+  try {
+    if(!server.listening)await once(server,'listening');const address=server.address();if(!address||typeof address==='string')throw new Error('Missing test listener');
+    for(const [index,identity]of [a.identity,a.identity,b.identity].entries()){
+      const socket=new WebSocket(`ws://127.0.0.1:${address.port}/api/chat/ws?token=${encodeURIComponent(identity.token)}`);sockets.push(socket);
+      socket.addEventListener('message',(event:MessageEvent<unknown>)=>{if(typeof event.data==='string'){const value:unknown=JSON.parse(event.data);const result=ChatRealtimeDeliveryMetadataSchema.safeParse(value);if(result.success)frames[index].push(result.data);}});
+      await new Promise<void>((resolveOpen,reject)=>{const timer=setTimeout(()=>reject(new Error('Receipt handshake timeout')),5000);socket.addEventListener('open',()=>{clearTimeout(timer);socket.send(JSON.stringify({type:'telemetry.capabilities',version:1,deliveryAck:true}));resolveOpen();},{once:true});socket.addEventListener('error',()=>{clearTimeout(timer);reject(new Error('Receipt handshake failure'));},{once:true});});
+    }
+    expect((await request('POST',`/api/chat/conversations/${conversation.id}/messages`,a.identity,{clientMessageId:randomUUID(),content:'Synthetic receipt evidence'})).status).toBe(201);
+    await expect.poll(()=>frames.map(rows=>rows.length),{timeout:6000}).toEqual([1,1,0]);
+    const id=frames[0][0]?.id;if(!id)throw new Error('Missing real delivery identity');
+    sockets[2].send(JSON.stringify({type:'event.ack',id}));
+    await expect.poll(()=>metric('axon_realtime_unknown_acknowledgements_total')).toBeGreaterThan(unknown);
+    expect(metric('axon_realtime_confirmed_deliveries_total')).toBe(confirmed);
+    sockets[0].send(JSON.stringify({type:'event.ack',id}));
+    await expect.poll(()=>metric('axon_realtime_confirmed_deliveries_total')).toBe(confirmed+1);
+    await expect.poll(()=>metric('axon_realtime_unconfirmed_deliveries_total'),{timeout:6500}).toBe(unconfirmed+1);
+    expect(frames[0].every(frame=>frame.tenantId===a.tenant.id)).toBe(true);expect(frames[2]).toEqual([]);
+  } finally {
+    for(const socket of sockets)socket.close();await closeChatWebSockets(app);if('closeAllConnections'in server)server.closeAllConnections();await new Promise<void>((resolveClose,reject)=>server.close(error=>error?reject(error):resolveClose()));
   }
 });

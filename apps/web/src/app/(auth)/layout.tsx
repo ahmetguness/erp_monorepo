@@ -16,7 +16,7 @@ const MODULES = [
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <main className="min-h-screen bg-slate-950 flex">
       {/* Left — branding panel */}
       <div className="hidden lg:flex lg:w-[480px] xl:w-[540px] flex-col relative overflow-hidden border-r border-slate-800/50">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-950/80 via-slate-900 to-slate-950" />
@@ -63,7 +63,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
 
-          <p className="text-xs text-slate-700">© {new Date().getFullYear()} Axon ERP</p>
+          <p className="text-xs text-slate-400">© {new Date().getFullYear()} Axon ERP</p>
         </div>
       </div>
 
@@ -86,6 +86,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           {children}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

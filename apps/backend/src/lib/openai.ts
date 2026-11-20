@@ -1,9 +1,10 @@
 import OpenAI from 'openai';
+import { logger } from './logger.js';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 if (!OPENAI_API_KEY) {
-  console.warn('⚠️  OPENAI_API_KEY ortam değişkeni tanımlı değil. Chatbot çalışmayacak.');
+  logger.warn('AI provider is not configured', { operation: 'ai.configure', errorCode: 'PROVIDER_NOT_CONFIGURED' });
 }
 
 export const openai = new OpenAI({

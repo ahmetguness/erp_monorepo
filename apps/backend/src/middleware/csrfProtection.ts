@@ -58,7 +58,7 @@ export async function csrfProtection(c: Context, next: Next): Promise<Response |
   const requestOrigin = origin ?? (referer ? extractOrigin(referer) : null);
 
   if (!requestOrigin) {
-    logger.warn(`[CSRF] Blocked request without Origin/Referer: ${c.req.method} ${c.req.path}`);
+    logger.warn('[CSRF] Origin/Referer required', { operation: 'csrf.validate', errorCode: 'CSRF_ERROR', result: 'failure' });
     return c.json(
       { error: { code: 'CSRF_ERROR', message: 'Origin header gereklidir.' } },
       403,
@@ -66,7 +66,7 @@ export async function csrfProtection(c: Context, next: Next): Promise<Response |
   }
 
   if (!isOriginAllowed(requestOrigin)) {
-    logger.warn(`[CSRF] Blocked request from disallowed origin: ${requestOrigin} → ${c.req.method} ${c.req.path}`);
+    logger.warn('[CSRF] Origin denied', { operation: 'csrf.validate', errorCode: 'CSRF_ERROR', result: 'failure' });
     return c.json(
       { error: { code: 'CSRF_ERROR', message: 'Bu origin\'den istek yapılamaz.' } },
       403,

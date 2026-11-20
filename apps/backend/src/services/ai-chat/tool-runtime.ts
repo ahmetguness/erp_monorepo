@@ -1,4 +1,4 @@
-import { logger } from '../../lib/logger';
+import { logger, diagnosticErrorFields } from '../../lib/logger';
 import { ChatDataService } from '../chat-data.service';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import { getMonthStart, getToday, parseDate } from './date-utils.js';
@@ -435,8 +435,7 @@ async function executeScopedFunctionCall(
       action: 'OTHER', newValues: { tool: name, allowed: true, turnId: approval.turnId } });
     return JSON.stringify(result);
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    logger.error(`Chat function call error [${name}]: ${errMsg}`);
+    logger.error('AI tool invocation failed', { operation: 'ai.tool.invoke', ...diagnosticErrorFields(err) });
     return JSON.stringify({ error: `Veri alınamadı: ${name}` });
   }
 }

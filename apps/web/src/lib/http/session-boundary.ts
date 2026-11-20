@@ -1,7 +1,8 @@
 import { CanceledError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
+declare module 'axios' { interface AxiosRequestConfig { axonSessionRevision?: number } }
 
 /** Install before response/error handlers so an old 401 cannot log out the new identity. */
-export function installSessionBoundary(client: AxiosInstance, currentIdentity: () => string, subscribe: (changed: () => void) => void): void {
+export function installSessionBoundary(client: AxiosInstance, currentIdentity: () => string, subscribe: (changed: () => void) => void, currentRevision?: () => number): void {
   let identity = currentIdentity();
   let generation = 0;
   subscribe(() => {
@@ -9,7 +10,10 @@ export function installSessionBoundary(client: AxiosInstance, currentIdentity: (
     if (next !== identity) { identity = next; generation += 1; }
   });
   const requests = new WeakMap<object, number>();
-  client.interceptors.request.use((config) => { requests.set(config, generation); return config; });
+  client.interceptors.request.use((config) => {
+    if (config.axonSessionRevision !== undefined && config.axonSessionRevision !== currentRevision?.()) throw new CanceledError('Oturum değişti; eski işlem gönderilmedi.');
+    requests.set(config, generation); return config;
+  });
   const assertCurrent = (config: InternalAxiosRequestConfig | undefined) => {
     if (config && requests.get(config) !== generation) throw new CanceledError('Oturum değişti; eski istek yanıtı yok sayıldı.');
   };

@@ -63,7 +63,7 @@ export const AdminPrivacyController = {
     });
   },
   async execute(c: Context) {
-    return c.json({ data: await executeRequest(c.req.param("id") ?? "") });
+    return c.json({ data: await executeRequest(c.req.param("id") ?? "", c.get('adminId')) });
   },
   async grant(c: Context) {
     return c.json(

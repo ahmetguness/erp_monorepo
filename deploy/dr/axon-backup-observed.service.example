@@ -1,0 +1,14 @@
+[Unit]
+Description=ERP bounded encrypted backup with attempt-state telemetry
+Requires=docker.service
+After=docker.service network-online.target
+# Set an approved real OnFailure receiver; examples do not deliver externally.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec --user postgres --env DR_BACKUP_ONCE=true --env DR_METRICS_DIRECTORY=/var/run/axon-dr erp-postgres-dr dr-backup-loop
+TimeoutStartSec=1800
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal

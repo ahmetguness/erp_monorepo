@@ -1,9 +1,30 @@
 import { RecoveryOperations } from "./operations.js";
 
 export async function repositoryHealth(operations: RecoveryOperations) {
-  const cluster = operations.cluster;
   const backups = await operations.info();
   const latest = backups.at(-1);
+  const { archiveAgeSeconds: ageSeconds, unrecoveredArchiveFailure, failedCount, archivedCount } = await archiveHealth(operations);
+  const backupAgeSeconds = latest ? Date.now() / 1000 - latest.stop : null;
+  return {
+    passed:
+      backupAgeSeconds !== null &&
+      backupAgeSeconds >= 0 &&
+      backupAgeSeconds <= 26 * 3600 &&
+      ageSeconds >= 0 &&
+      ageSeconds <= 900 &&
+      !unrecoveredArchiveFailure,
+    backupAgeSeconds,
+    archiveAgeSeconds: ageSeconds,
+    unrecoveredArchiveFailure,
+    failedCount,
+    archivedCount,
+  };
+}
+
+
+/** Archiver health is independent of repository-info availability. */
+export async function archiveHealth(operations: RecoveryOperations) {
+  const cluster = operations.cluster;
   const archived = await cluster.sql(
     cluster.source,
     `SELECT json_build_object(
@@ -36,19 +57,5 @@ export async function repositoryHealth(operations: RecoveryOperations) {
     archivedCount < 1
   )
     throw new Error("Archiver has no valid recovery evidence.");
-  const backupAgeSeconds = latest ? Date.now() / 1000 - latest.stop : null;
-  return {
-    passed:
-      backupAgeSeconds !== null &&
-      backupAgeSeconds >= 0 &&
-      backupAgeSeconds <= 26 * 3600 &&
-      ageSeconds >= 0 &&
-      ageSeconds <= 900 &&
-      !unrecoveredArchiveFailure,
-    backupAgeSeconds,
-    archiveAgeSeconds: ageSeconds,
-    unrecoveredArchiveFailure,
-    failedCount,
-    archivedCount,
-  };
+  return { archiveAgeSeconds: ageSeconds, unrecoveredArchiveFailure, failedCount, archivedCount };
 }

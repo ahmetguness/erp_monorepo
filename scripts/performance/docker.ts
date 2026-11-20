@@ -1,7 +1,7 @@
 import { command } from '../release/process.js';
 import { object, string } from './validation.js';
 import { setTimeout as pause } from 'node:timers/promises';
-export const docker = (args: readonly string[]) => command('docker', args);
+export const docker = (args: readonly string[]) => command('docker', args, process.env, { outputLimit: 2_000_000, failOnTruncation: true });
 export const dockerLogs = (container: string) => command('docker', ['logs', '--tail', '1000', container], process.env, { captureStderr: true });
 export async function publishedPort(container: string, port: number): Promise<number> {
   for (let attempt = 0; attempt < 60; attempt++) {

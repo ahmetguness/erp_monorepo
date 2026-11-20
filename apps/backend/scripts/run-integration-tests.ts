@@ -184,35 +184,23 @@ async function apiText(method: HttpMethod, path: string, bearerToken: string): P
 
 async function testPrometheusMetricsEndpoint(): Promise<void> {
   const { app } = await withTimeout('app import', import('../src/index.js'));
-  const previousNodeEnv = process.env.NODE_ENV;
-  const previousToken = process.env.METRICS_BEARER_TOKEN;
-  process.env.NODE_ENV = 'test';
-  delete process.env.METRICS_BEARER_TOKEN;
-  const response = await withTimeout('GET /metrics', Promise.resolve(app.request('/metrics')));
-  const body = await response.text();
-  if (response.status !== 200 || !response.headers.get('content-type')?.includes('text/plain')) {
-    throw new Error('Prometheus metrics endpoint scrape edilebilir formatta donmedi.');
-  }
-  if (!body.includes('axon_http_requests_total') || !body.includes('axon_outbox_pending')) {
-    throw new Error('Prometheus metrics endpoint zorunlu uygulama metriklerini icermiyor.');
-  }
-  if (body.includes('tenantId') || body.includes('userId')) {
-    throw new Error('Prometheus metrics endpoint hassas veya yuksek-cardinality kimlik etiketi sizdiriyor.');
-  }
-
-  process.env.NODE_ENV = 'production';
-  process.env.METRICS_BEARER_TOKEN = 'integration-metrics-token';
+  const previousNodeEnv = process.env.NODE_ENV, previousToken = process.env.METRICS_BEARER_TOKEN;
+  const token = 'synthetic-integration-metrics-token-at-least-32-characters';
   try {
-    const unauthorized = await app.request('/metrics');
-    if (unauthorized.status !== 401) throw new Error('Production metrics endpoint token olmadan erisime izin verdi.');
-    const authorized = await app.request('/metrics', {
-      headers: { authorization: 'Bearer integration-metrics-token' },
-    });
-    if (authorized.status !== 200) throw new Error('Production metrics endpoint gecerli bearer tokeni reddetti.');
+    for (const mode of ['test','production']) {
+      process.env.NODE_ENV = mode; delete process.env.METRICS_BEARER_TOKEN;
+      if ((await app.request('/metrics')).status !== 401) throw new Error('Unconfigured metrics must reject anonymous scraping in every environment.');
+      process.env.METRICS_BEARER_TOKEN = token;
+      if ((await app.request('/metrics')).status !== 401) throw new Error('Metrics accepted a missing bearer.');
+      const response = await withTimeout('GET /metrics', Promise.resolve(app.request('/metrics', { headers: { authorization: 'Bearer ' + token } })));
+      const body = await response.text();
+      if (response.status !== 200 || !response.headers.get('content-type')?.includes('text/plain')) throw new Error('Authenticated Prometheus scrape failed.');
+      if (!body.includes('axon_http_requests_total') || !body.includes('axon_outbox_pending')) throw new Error('Required real process/queue signals are missing.');
+      if (body.includes('tenantId') || body.includes('userId')) throw new Error('Metrics leaked identity labels.');
+    }
   } finally {
     process.env.NODE_ENV = previousNodeEnv;
-    if (previousToken === undefined) delete process.env.METRICS_BEARER_TOKEN;
-    else process.env.METRICS_BEARER_TOKEN = previousToken;
+    if (previousToken === undefined) delete process.env.METRICS_BEARER_TOKEN; else process.env.METRICS_BEARER_TOKEN = previousToken;
   }
 }
 

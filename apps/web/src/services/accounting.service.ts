@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { apiClient } from '@/lib/api-client';
+import { protectedMutation } from '@/lib/http/protected-mutation';
 import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
 import type { PaginationParams, DateRangeParams } from '@/types/api.types';
@@ -313,6 +314,8 @@ export async function getPaymentById(id: string): Promise<Payment> {
 }
 
 export async function createPayment(data: CreatePaymentDTO): Promise<Payment> {
-  const res = await apiClient.post('/api/payments', data);
-  return safeParse(SingleResponseSchema(PaymentSchema), res.data, 'createPayment').data;
+  return protectedMutation('/api/payments', data, async (key, revision) => {
+    const res = await apiClient.post('/api/payments', { ...data, idempotencyKey: key }, { axonSessionRevision: revision });
+    return safeParse(SingleResponseSchema(PaymentSchema), res.data, 'createPayment').data;
+  });
 }

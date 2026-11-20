@@ -13,6 +13,10 @@ interface ApiErrorCopy {
 }
 
 const ERROR_COPY: Partial<Record<ErrorCode, ApiErrorCopy>> = {
+  [ERROR_CODES.NETWORK]: { title: 'Bağlantı kurulamadı', description: 'Bağlantınızı kontrol ederek yeniden deneyin.', icon: <AlertCircle className="h-5 w-5" /> },
+  [ERROR_CODES.TIMEOUT]: { title: 'Yanıt zaman aşımına uğradı', description: 'Okuma işlemini yeniden deneyebilirsiniz. Bir ödeme veya stok işlemi gönderdiyseniz önce sonucunu kontrol edin.', icon: <AlertCircle className="h-5 w-5" /> },
+  [ERROR_CODES.TRIAL_EXPIRED]: { title: 'Deneme süresi doldu', description: 'Yeni işlemler için abonelik ekranından tam sürüme geçin.', icon: <Lock className="h-5 w-5" /> },
+  [ERROR_CODES.MUTATION_RECOVERY_REQUIRED]: { title: 'İşlemin sonucunu kontrol edin', description: 'Önceki gönderimin sonucu belirsiz. Kaydı kontrol edin veya aynı verilerle yeniden deneyin; işlem anahtarı korunur.', icon: <AlertCircle className="h-5 w-5" /> },
   [ERROR_CODES.UNAUTHORIZED]: {
     title: 'Oturum gerekli',
     description: 'Devam etmek için tekrar giriş yapmanız gerekiyor.',
@@ -58,7 +62,7 @@ export function ApiErrorState({ error, className, onRetry }: ApiErrorStateProps)
   const description = copy?.description ?? getErrorMessage(error);
 
   return (
-    <div className={cn('rounded-xl border border-slate-800 bg-slate-900/70 p-6 text-center', className)}>
+    <div role="alert" className={cn('rounded-xl border border-slate-800 bg-slate-900/70 p-6 text-center', className)}>
       <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-slate-300">
         {copy?.icon ?? <AlertCircle className="h-5 w-5" />}
       </div>

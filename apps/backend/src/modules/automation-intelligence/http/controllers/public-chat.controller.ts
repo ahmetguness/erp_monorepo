@@ -135,7 +135,6 @@ export const PublicChatController = {
         tokenUsage: result.governance.tokenUsage,
         ipAddress,
         userAgent,
-        isPublicOutput: true,
       });
       return c.json({ output: sanitized.text });
     } catch (err) {
@@ -151,7 +150,6 @@ export const PublicChatController = {
         errorMessage: errMsg,
         ipAddress,
         userAgent,
-        isPublicOutput: true,
       });
       return c.json({ error: 'Asistan su an yanit veremiyor.' }, 502);
     }
@@ -204,7 +202,6 @@ export const PublicChatController = {
                 status: AiRequestStatus.SUCCEEDED,
                 ipAddress,
                 userAgent,
-                isPublicOutput: true,
               });
               await s.writeSSE({ event: 'done', data: JSON.stringify({ output: sanitized.text }) });
             },
@@ -220,7 +217,6 @@ export const PublicChatController = {
                 errorMessage: String(error),
                 ipAddress,
                 userAgent,
-                isPublicOutput: true,
               });
               await s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan su an yanit veremiyor.' }) });
             },
@@ -239,7 +235,6 @@ export const PublicChatController = {
           errorMessage: errMsg,
           ipAddress,
           userAgent,
-          isPublicOutput: true,
         });
         await s.writeSSE({ event: 'error', data: JSON.stringify({ error: 'Asistan su an yanit veremiyor.' }) });
       }

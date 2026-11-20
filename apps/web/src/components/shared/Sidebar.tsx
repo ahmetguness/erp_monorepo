@@ -254,7 +254,7 @@ function NavItemRow({
         aria-label={`${item.label} favorisini değiştir`}
         title={favoriteHrefs.includes(item.href) ? 'Favorilerden çıkar' : 'Favorilere ekle'}
         className={cn(
-          'mr-1 rounded p-1 transition-all',
+          'mr-1 min-h-6 min-w-6 rounded p-1 transition-all',
           favoriteHrefs.includes(item.href)
             ? 'text-amber-300 opacity-100'
             : 'text-slate-600 hover:text-amber-300 opacity-25 group-hover/nav:opacity-100 hover:scale-110',

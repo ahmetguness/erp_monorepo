@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
@@ -11,15 +11,17 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, helperText, prefixIcon, suffixIcon, required, className, id, ...props }, ref) => {
-    const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
+  ({ label, error, helperText, prefixIcon, suffixIcon, required, className, id, 'aria-invalid': ariaInvalid, 'aria-describedby': ariaDescribedBy, ...props }, ref) => {
+    const generatedId = useId();
+    const inputId = id ?? generatedId;
+    const feedbackId = `${inputId}-feedback`;
 
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
           <label htmlFor={inputId} className="text-[13px] font-medium text-slate-300">
             {label}
-            {required && <span className="text-red-400 ml-0.5">*</span>}
+            {required && <span aria-hidden="true" className="text-red-400 ml-0.5">*</span>}
           </label>
         )}
 
@@ -30,6 +32,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           <input
             ref={ref}
             id={inputId}
+            required={required}
+            aria-invalid={Boolean(error) || ariaInvalid}
+            aria-describedby={[ariaDescribedBy, error || helperText ? feedbackId : undefined].filter(Boolean).join(' ') || undefined}
             className={cn(
               'w-full rounded-xl border bg-slate-950/35 text-sm text-white placeholder-slate-500 shadow-sm',
               'px-3.5 py-2.5 transition-all duration-150',
@@ -50,8 +55,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           )}
         </div>
 
-        {error && <p className="text-xs text-red-400">{error}</p>}
-        {!error && helperText && <p className="text-xs text-slate-500">{helperText}</p>}
+        {error && <p id={feedbackId} role="alert" className="text-xs text-red-400">{error}</p>}
+        {!error && helperText && <p id={feedbackId} className="text-xs text-slate-500">{helperText}</p>}
       </div>
     );
   },

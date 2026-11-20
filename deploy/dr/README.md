@@ -47,3 +47,56 @@ under `/etc/systemd/system` only after staging approval; then enable the timer.
 Do not run both schedulers. The timer is a deployment template, not something the
 local Windows drill enables or validates. Continuous WAL archiving remains a
 separate PostgreSQL responsibility.
+
+## Optional Phase 10 telemetry
+
+The Phase 10 image additionally contains `jq` and `dr-metrics`. Build it with
+`npm run observability:build`; the Phase 9 image tag remains separate. Do not
+replace an adopted database image without the normal staging restore and release
+approval. These scripts do not provision or alter an existing deployment.
+
+Create a dedicated telemetry directory/volume owned by postgres, readable by the
+application runtime, with no repository, database configuration or cipher files.
+Mount it read/write into the database container at `/var/run/axon-dr`, and
+**read only** into API/worker containers at `/run/axon-dr`. Set
+`DR_METRICS_FILE=/run/axon-dr/metrics.prom` on API/worker. The endpoint accepts
+only that exact path, a regular file of at most 16 KiB, and allowlisted numeric
+signals. The file contains no credentials or tenant identifiers. POSIX modes in
+the examples do not establish Windows NTFS access controls.
+
+Run `dr-backup-loop` with `DR_METRICS_DIRECTORY=/var/run/axon-dr` to atomically
+record the actual backup attempt outcome. For a daily oneshot scheduler, review
+`axon-backup-observed.service.example`, pair it with the existing daily timer
+(change the timer's Unit to this service), and use `DR_BACKUP_ONCE=true`.
+Choose one scheduler; never start both. A missing completion file means unknown,
+not successful. A killed host cannot reliably write a failure file, so missing
+backup age and the independent receiver remain necessary controls.
+
+Review `axon-dr-metrics.service.example` and its 30-second timer. The collector
+runs locally as postgres, reads pgBackRest info and `pg_stat_archiver`, uses
+read-only SQL and bounded command deadlines, then atomically publishes the file.
+It never backs up, expires, restores or switches WAL. Configure the correct
+database name and approved container explicitly. Keep the collector independent
+of backup execution, so a failed backup cannot suppress its own alarm.
+
+Prometheus scrapes the authenticated API/worker endpoint; no application database
+password or repository access is given to monitoring. Unknown probe state,
+stale probe timestamp, backup age/failure and archive delay/failure have separate
+alerts. WAL freshness uses the existing 900-second threshold. Synchronize hosts
+with an approved time service; this probe reports database clock skew but cannot
+repair NTP. Scrape intervals, probe caching and alert `for` periods add detection
+latency; the archive timeout alone does not guarantee RPO.
+
+Before enabling the examples, configure and test a real independent failure
+receiver, its escalation policy and resolution delivery. The isolated Phase 10
+receiver is a local test sink. Review private metrics token delivery, network
+isolation, directory ownership, off-host repository IAM and a separate-host
+restore. Never copy synthetic drill credentials or targets into production.
+
+Rollback disables the telemetry timer and unsets `DR_METRICS_FILE`; it does not
+change backup chains, archive settings, application records or audit history.
+Restore the prior approved backup scheduler only after checking that exactly one
+scheduler is active. Seven full chains are not a legal retention determination
+or a promise of exactly seven calendar days. Retention and erasure obligations,
+including what must be reapplied after a restore, require the data owner's and
+legal team's documented approval.

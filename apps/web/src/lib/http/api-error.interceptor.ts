@@ -1,5 +1,7 @@
 import axios, { type AxiosInstance } from 'axios';
 import { API_ERROR_CODES, ApiErrorSchema, type ApiError } from '@repo/types/contracts';
+import { z } from 'zod';
+const legacyErrorSchema = z.object({ error: z.string().optional(), message: z.string().optional(), code: z.string().optional(), details: z.unknown().optional(), fields: z.record(z.string(), z.string()).optional() });
 
 interface ApiErrorInterceptorOptions {
   onUnauthorized?: () => void;
@@ -18,8 +20,9 @@ export function normalizeApiError(error: unknown): ApiError {
     const directResponse = ApiErrorSchema.safeParse(data);
     if (directResponse.success) return directResponse.data;
 
-    if (data && typeof data === 'object') {
-      const rec = data as Record<string, unknown>;
+    const legacy = legacyErrorSchema.safeParse(data);
+    if (legacy.success) {
+      const rec = legacy.data;
       // Case A: { error: string, code?: string }
       if (typeof rec.error === 'string') {
         let code = typeof rec.code === 'string' ? rec.code : undefined;
@@ -37,7 +40,7 @@ export function normalizeApiError(error: unknown): ApiError {
             code,
             message: rec.error,
             details: rec.details,
-            fields: (rec.fields as Record<string, string>) ?? undefined,
+            fields: rec.fields,
           },
         };
       }
@@ -54,7 +57,7 @@ export function normalizeApiError(error: unknown): ApiError {
             code,
             message: rec.message,
             details: rec.details,
-            fields: (rec.fields as Record<string, string>) ?? undefined,
+            fields: rec.fields,
           },
         };
       }
@@ -65,7 +68,7 @@ export function normalizeApiError(error: unknown): ApiError {
             code: rec.code,
             message: typeof rec.error === 'string' ? rec.error : `İşlem hatası: ${rec.code}`,
             details: rec.details,
-            fields: (rec.fields as Record<string, string>) ?? undefined,
+            fields: rec.fields,
           },
         };
       }
@@ -82,6 +85,7 @@ export function normalizeApiError(error: unknown): ApiError {
       else if (status === 429) statusCode = 'RATE_LIMITED';
       return fallbackError(statusCode, `Sunucu hatası: ${status}`);
     }
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') return fallbackError('TIMEOUT', 'Sunucu yanıtı zaman aşımına uğradı.');
     if (error.request) return fallbackError(API_ERROR_CODES.NETWORK, 'Sunucuya bağlanılamadı.');
     return fallbackError(API_ERROR_CODES.UNKNOWN, error.message);
   }

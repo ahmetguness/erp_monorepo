@@ -443,7 +443,7 @@ export function ProductsListPage() {
     qualityFilter === "lowMargin" && !minMargin ? "-100" : minMargin;
   const derivedMaxMargin =
     qualityFilter === "lowMargin" && !maxMargin ? "10" : maxMargin;
-  const { data, isLoading } = useProducts({
+  const { data, isLoading, error, refetch } = useProducts({
     page: listState.page,
     limit: listState.pageSize,
     search: search || undefined,
@@ -589,6 +589,7 @@ export function ProductsListPage() {
             prefixIcon={<Search className="h-4 w-4" />}
           />
           <Select
+            aria-label="Kategori filtresi"
             options={categoryOptions}
             value={categoryId}
             onChange={(event) =>
@@ -600,6 +601,7 @@ export function ProductsListPage() {
             }
           />
           <Select
+            aria-label="Durum filtresi"
             options={ACTIVE_OPTIONS}
             value={activeFilter}
             onChange={(event) =>
@@ -609,6 +611,7 @@ export function ProductsListPage() {
             }
           />
           <Select
+            aria-label="Kalite filtresi"
             options={QUALITY_OPTIONS}
             value={qualityFilter}
             onChange={(event) =>
@@ -730,6 +733,9 @@ export function ProductsListPage() {
         data={products}
         keyExtractor={(product) => product.id}
         isLoading={isLoading}
+        error={error}
+        onRetry={() => { void refetch(); }}
+        caption="Ürünler"
         onRowClick={(product) =>
           router.push(`/dashboard/products/${product.id}`)
         }

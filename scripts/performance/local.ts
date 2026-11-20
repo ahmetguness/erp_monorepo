@@ -10,12 +10,17 @@ import { renderReport } from './report.js';
 import { analyzeResources } from './analysis.js';
 import { summarizeCPU } from './cpu-profile.js';
 import { queueHealthy } from './queue.js';
+import { actualTelemetryExportObserved, telemetryHealthy } from './telemetry-health.js';
+import { resourceMetricResponses, resourceMetricsHistory } from './resource-metrics.js';
 import { browserProbe } from './browser.js';
 import { integer, object } from './validation.js';
 import { performanceBudget } from './budget.js';
 import { captureIndexProbe, capturePlans, captureSQL, performanceSQL } from './diagnostics.js';
 import { commandResult } from '../release/process.js';
 import { reconcileStorage } from './storage-reconciliation.js';
+import { OperationalStack } from '../observability/stack.js';
+import { writeOperationalConfiguration } from '../observability/configuration.js';
+import { internalQuery, querySchema } from '../observability/evidence.js';
 
 export async function localPerformance(): Promise<void> {
   const budget = performanceBudget(process.env);
@@ -31,15 +36,18 @@ export async function localPerformance(): Promise<void> {
   const samples: unknown[] = []; const results: unknown[] = [];
   let network = false; let sampling: Promise<void> | null = null;
   let monitor: ReturnType<typeof setInterval> | undefined; let currentPhase = 'setup';
+  let operationalStack: OperationalStack | undefined;
+  const telemetry = process.env.PERF_TELEMETRY_MODE ?? 'off';
   const run = (name: string, args: readonly string[]) => docker(['run', '--detach', '--name', `${owner}-${name}`, '--label', `com.axon.performance=${owner}`, '--network', owner, ...args]);
   const tool = async (action: 'snapshot' | 'quota' | 'invariants' | 'explain-access'): Promise<unknown> => {
-    const result = await commandResult('docker', ['exec', `${owner}-tools`, 'node', 'dist/scripts/performance/cli.js', action]);
+    const result = await commandResult('docker', ['exec', `${owner}-tools`, 'node', 'dist/scripts/performance/cli.js', action], process.env, { outputLimit: 2_000_000, failOnTruncation: true });
     if (result.exitCode !== 0) await writeFile(join(output, `${currentPhase}-${action}-failure.json`), JSON.stringify(result, null, 2));
     const value: unknown = JSON.parse(result.output);
     if (result.exitCode !== 0 && !(['quota', 'invariants'].includes(action) && object(value).passed === false)) throw new Error(`Performance ${action} command failed; inspect saved diagnostics.`);
     return value;
   };
   try {
+    if (!['off','on'].includes(telemetry)) throw new Error('Unknown performance telemetry mode');
     await docker(['info', '--format', '{{json .NCPU}}']);
     if (process.env.PERF_SKIP_BUILD !== 'true') {
       const args = ['--build-arg', 'RELEASE_VERSION=0.0.0-phase8-local', '--build-arg', `RELEASE_GIT_SHA=${'0'.repeat(40)}`];
@@ -68,6 +76,12 @@ export async function localPerformance(): Promise<void> {
     const proxyPort = await publishedPort(`${owner}-proxy`, 443);
     const schemaVersion = (await readdir('apps/backend/prisma/schema/migrations', { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().at(-1);
     const metricsToken = secret();
+    if (telemetry === 'on') {
+      await writeOperationalConfiguration();
+      const replicas = integer(process.env.PERF_API_REPLICAS, 1, 1, 4);
+      operationalStack = await OperationalStack.create({owner,network:owner,privateDirectory:join(temporary,'ops'),diagnosticsDirectory:output,apiTargets:Array.from({length:replicas},(_,index)=>`${owner}-api-${index}:3001`),workerTargets:[`${owner}-worker:3102`],metricsToken});
+      await operationalStack.start();
+    }
     const env: Record<string, string> = {
       NODE_ENV: 'production', DEPLOYMENT_ENV: 'local', EDOCUMENT_PROVIDER_MODE: 'mock', MOCK_MAIL: 'true', RELEASE_VERSION: '0.0.0-phase8-local', RELEASE_GIT_SHA: '0'.repeat(40), RELEASE_MIGRATION_VERSION: schemaVersion ?? '',
       DATABASE_URL: `postgresql://phase8:${password}@${owner}-postgres/phase8_local_ci?connection_limit=${budget.apiPool}&pool_timeout=10`,
@@ -78,6 +92,8 @@ export async function localPerformance(): Promise<void> {
       STORAGE_DRIVER: 's3', S3_ENDPOINT: `https://${owner}-provider:9000`, S3_REGION: 'auto', S3_ACCESS_KEY_ID: secret(), S3_SECRET_ACCESS_KEY: secret(), S3_BUCKET: 'axon-perf',
       NODE_EXTRA_CA_CERTS: '/qa.crt', MALWARE_SCAN_MODE: 'enforce', MALWARE_SCAN_ENDPOINT: `https://${owner}-provider:9000/scan`,
       METRICS_ENABLED: 'true', METRICS_BEARER_TOKEN: metricsToken, TRUSTED_PROXY_CIDRS: subnet,
+      TELEMETRY_ENABLED: telemetry === 'on' ? 'true' : 'false', TELEMETRY_SAMPLE_RATIO: '0.1',
+      ...(telemetry === 'on' ? { OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:'http://tempo:4318/v1/traces', LOG_EXPORT_ENDPOINT:'http://loki:3100/loki/api/v1/push' } : {}),
       PERF_TENANT_GROUPS: process.env.PERF_TENANT_GROUPS ?? '50', PERF_USERS_PER_TENANT: process.env.PERF_USERS_PER_TENANT ?? '5',
       DOMAIN_EVENT_OUTBOX_WORKER_INTERVAL_MS: String(budget.workerIntervalMs), DOMAIN_EVENT_OUTBOX_WORKER_ENABLED: 'false', MARKETPLACE_WORKER_ENABLED: 'false', CHAT_ATTACHMENT_WORKER_ENABLED: 'false', PERSISTENT_OBSERVABILITY_ENABLED: 'false',
     };
@@ -106,12 +122,20 @@ export async function localPerformance(): Promise<void> {
     await writeFile(join(output, 'environment.json'), JSON.stringify({ ...metadata, docker: { cpuCount: hardware.NCPU, memoryBytes: hardware.MemTotal, kernel: hardware.KernelVersion, operatingSystem: hardware.OperatingSystem } }, null, 2));
     const sample = async () => {
       const urls = Array.from({ length: replicas }, (_, index) => `http://${owner}-api-${index}:3001/metrics`);
+      if (operationalStack) urls.push(`http://${owner}-worker:3102/metrics`);
       const [containers, database, apiText] = await Promise.all([dockerMetrics(owner), tool('snapshot'), docker(['exec', `${owner}-tools`, 'node', '-e', `Promise.all(${JSON.stringify(urls)}.map(async url=>{try{const r=await fetch(url,{headers:{authorization:'Bearer '+process.env.METRICS_BEARER_TOKEN},signal:AbortSignal.timeout(4000)});return {status:r.status,text:await r.text()};}catch{return {status:0,text:''};}})).then(x=>process.stdout.write(JSON.stringify(x)))`])]);
-      samples.push({ at: new Date().toISOString(), phase: currentPhase, containers, database, api: JSON.parse(apiText) as unknown });
+      const monitoring = operationalStack ? await operationalStack.resourceSnapshot() : undefined;
+      const metricsValue: unknown = JSON.parse(apiText);
+      const fullMetrics = resourceMetricResponses.parse(metricsValue);
+      const api = resourceMetricsHistory(fullMetrics);
+      // Overwrite one raw file per phase, rather than repeating every histogram
+      // inside an ever-growing JSON array on every ten-second sample.
+      await writeFile(join(output, `metrics-${currentPhase}.json`), JSON.stringify(fullMetrics.map(response => response.status === 200 ? response : { status: response.status, text: '' })));
+      samples.push({ at: new Date().toISOString(), phase: currentPhase, containers, database, api, apiFullBytes: Buffer.byteLength(apiText), apiHistoryBytes: Buffer.byteLength(JSON.stringify(api)), monitoring });
       await writeFile(join(output, 'resources.json'), JSON.stringify(samples));
     };
     await sample();
-    monitor = setInterval(() => { if (!sampling) sampling = sample().catch(() => { samples.push({ at: new Date().toISOString(), unavailable: true }); }).finally(() => { sampling = null; }); }, 10_000);
+    monitor = setInterval(() => { if (!sampling) sampling = sample().catch(() => { samples.push({ at: new Date().toISOString(), phase: currentPhase, unavailable: true }); }).finally(() => { sampling = null; }); }, 10_000);
     const profiles = (process.env.PERF_PROFILES ?? 'read,write,realtime,mixed').split(',');
     const stages = (process.env.PERF_STAGES ?? 'smoke,baseline,medium,target,stress').split(',');
     if (profiles.some((value) => !['read', 'write', 'upload', 'realtime', 'mixed'].includes(value)) || stages.some((value) => !Object.hasOwn(PERFORMANCE_STAGES, value))) throw new Error('Unknown selected workload.');
@@ -139,7 +163,8 @@ export async function localPerformance(): Promise<void> {
       const integrityHealthy = object(invariantSnapshot).passed === true;
       const sampledQueues = samples.map(object).filter((sample) => sample.phase === currentPhase && !sample.unavailable).map((sample) => object(sample.database).queue);
       const queueValid = queueHealthy(object(backendSnapshot).queue) && sampledQueues.every(queueHealthy);
-      const result = { ...raw, backend: backendSnapshot, queueHealthy: queueValid, integrityHealthy, passed: raw.passed === true && queueValid && integrityHealthy }; results.push(result);
+      const telemetryValid = operationalStack ? telemetryHealthy(samples, currentPhase, replicas + 1) : null;
+      const result = { ...raw, backend: backendSnapshot, queueHealthy: queueValid, integrityHealthy, telemetryHealthy: telemetryValid, passed: raw.passed === true && queueValid && integrityHealthy && telemetryValid !== false }; results.push(result);
       await writeFile(file, JSON.stringify(result, null, 2));
       if (!result.passed) for (const role of [...Array.from({ length: replicas }, (_, index) => `api-${index}`), 'proxy', 'worker']) await writeFile(join(output, `${profile}-${stage}-${role}.log`), await dockerLogs(`${owner}-${role}`));
       console.info(JSON.stringify({ completed: `${profile}/${stage}`, passed: object(result).passed, requestsPerSecond: object(result).requestsPerSecond }));
@@ -170,6 +195,9 @@ export async function localPerformance(): Promise<void> {
     const pricing: unknown = JSON.parse(await readFile(process.env.PERF_PRICING_FILE ?? 'scripts/performance/pricing.example.json', 'utf8'));
     await writeFile(join(output, 'report.md'), renderReport(results, snapshot, pricing)+`\nStorage count/byte reconciliation: ${storageReconciliation.passed?'PASS':'FAIL'}. See storage-reconciliation.json; exact-key recovery is tested separately.\n`);
     await writeFile(join(output, 'resources.md'), analyzeResources(samples));
+    const exporterEvidence = operationalStack ? querySchema.parse(await internalQuery(operationalStack.project + '-sink')('http://prometheus:9090/api/v1/query?query=' + encodeURIComponent('{__name__=~"axon_(telemetry_.*|log_export.*)"}'))) : null;
+    if (operationalStack && !actualTelemetryExportObserved(exporterEvidence?.data.result)) throw new Error('Actual successful trace and log exports were not observed; telemetry measurement is invalid');
+    await writeFile(join(output,'phase10-telemetry.json'),JSON.stringify({mode:telemetry,sampleRatio:telemetry==='on'?0.1:0,exporters:exporterEvidence,storage:operationalStack?JSON.parse(await operationalStack.storageSnapshot()):null,qualification:'Same Phase 8.2 application resource budget; monitoring service consumption is separately sampled in resources.json. Off mode retains Phase10 local instrumentation; the legacy backend comparison separately measures its combined runtime delta.'},null,2));
     if (profiling) for (let index = 0; index < replicas; index++) {
       await docker(['stop', '--time', '30', `${owner}-api-${index}`]);
       await writeFile(join(output, `api-${index}-cpu-summary.json`), JSON.stringify(summarizeCPU(JSON.parse(await readFile(join(output, `api-${index}.cpuprofile`), 'utf8')) as unknown), null, 2));
@@ -184,10 +212,18 @@ export async function localPerformance(): Promise<void> {
     throw error;
   } finally {
     if (monitor) clearInterval(monitor); await sampling;
-    const ids = (await docker(['ps', '--all', '--filter', `label=com.axon.performance=${owner}`, '--format', '{{.ID}}'])).split('\n').filter(Boolean);
-    if (ids.length && ids.every((id) => /^[a-f0-9]{12,64}$/.test(id))) await docker(['rm', '--force', '--volumes', ...ids]);
-    if (network) await docker(['network', 'rm', owner]);
-    if (!/^private-[a-z0-9]{6}$/i.test(relative(output, resolve(temporary)))) throw new Error('Unsafe performance temporary directory.');
-    await rm(temporary, { recursive: true });
+    const cleanupFailures: unknown[] = [];
+    try { if (operationalStack) await operationalStack.stop(); } catch (error) { cleanupFailures.push(error); }
+    try {
+      const ids = (await docker(['ps', '--all', '--filter', `label=com.axon.performance=${owner}`, '--format', '{{.ID}}'])).split('\n').filter(Boolean);
+      if (ids.some(id=>!/^[a-f0-9]{12,64}$/.test(id))) throw new Error('Unexpected owned container identity');
+      if (ids.length) await docker(['rm', '--force', '--volumes', ...ids]);
+    } catch(error) { cleanupFailures.push(error); }
+    try { if (network) await docker(['network', 'rm', owner]); } catch(error) { cleanupFailures.push(error); }
+    try {
+      if (!/^private-[a-z0-9]{6}$/i.test(relative(output, resolve(temporary)))) throw new Error('Unsafe performance temporary directory.');
+      await rm(temporary, { recursive: true });
+    } catch(error) { cleanupFailures.push(error); }
+    if(cleanupFailures.length)throw new AggregateError(cleanupFailures,'Owned performance cleanup failed');
   }
 }

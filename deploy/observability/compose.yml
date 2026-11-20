@@ -1,0 +1,114 @@
+name: ${OPS_PROJECT:?Unique operations project required}
+
+x-security: &security
+  logging:
+    driver: json-file
+    options: {max-size: '10m', max-file: '3'}
+  init: true
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ["/tmp:size=32m,mode=1777"]
+  networks: [monitoring]
+  labels:
+    com.axon.observability: ${OPS_PROJECT}
+
+services:
+  loki-permissions:
+    <<: *security
+    image: node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee
+    user: '0:0'
+    restart: 'no'
+    cpus: 0.25
+    mem_limit: 64m
+    cap_add: [CHOWN]
+    command: [node, -e, "require('node:fs').chownSync('/loki',10001,10001)"]
+    volumes: [loki:/loki]
+  prometheus:
+    <<: *security
+    image: prom/prometheus:v3.7.3@sha256:49214755b6153f90a597adcbff0252cc61069f8ab69ce8411285cd4a560e8038
+    command: [--config.file=/etc/prometheus/prometheus.yml, --storage.tsdb.path=/prometheus, --storage.tsdb.retention.time=7d, --storage.tsdb.retention.size=1GB]
+    cpus: 0.5
+    mem_limit: 384m
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./generated/alerts.json:/etc/prometheus/alerts.json:ro
+      - ${OPS_PRIVATE_DIR:?Private configuration directory required}/metrics-token:/run/axon/metrics-token:ro
+      - ${OPS_PRIVATE_DIR}/api-targets.json:/run/axon/api-targets.json:ro
+      - ${OPS_PRIVATE_DIR}/worker-targets.json:/run/axon/worker-targets.json:ro
+      - ${OPS_PRIVATE_DIR}/dr-targets.json:/run/axon/dr-targets.json:ro
+      - prometheus:/prometheus
+    networks: [monitoring, application]
+  alertmanager:
+    <<: *security
+    image: prom/alertmanager:v0.29.0@sha256:88743b63b3e09ea6e31e140ced5bf45f4a8e82c617c2a963f78841f4995ad1d7
+    command: [--config.file=/run/axon/alertmanager.yml, --storage.path=/alertmanager, --data.retention=168h, --cluster.listen-address=]
+    cpus: 0.25
+    mem_limit: 128m
+    volumes:
+      - ${OPS_PRIVATE_DIR}/alertmanager:/run/axon:ro
+      - alertmanager:/alertmanager
+    networks: [monitoring, application]
+  tempo:
+    <<: *security
+    image: grafana/tempo:2.9.0@sha256:65a5789759435f1ef696f1953258b9bbdb18eb571d5ce711ff812d2e128288a4
+    command: [-config.file=/etc/tempo.yml]
+    cpus: 0.5
+    mem_limit: 384m
+    volumes:
+      - ./tempo.yml:/etc/tempo.yml:ro
+      - tempo:/var/tempo
+    networks: [monitoring, application]
+  loki:
+    <<: *security
+    image: grafana/loki:3.6.0@sha256:6a705de65df88aa0d90a44779606b0042722c86637335a73858f65f9fe9f9557
+    command: [-config.file=/etc/loki.yml]
+    depends_on:
+      loki-permissions:
+        condition: service_completed_successfully
+    cpus: 0.5
+    mem_limit: 384m
+    volumes:
+      - ./loki.yml:/etc/loki.yml:ro
+      - loki:/loki
+    networks: [monitoring, application]
+  grafana:
+    <<: *security
+    image: grafana/grafana:12.3.0@sha256:70d9599b186ce287be0d2c5ba9a78acb2e86c1a68c9c41449454d0fc3eeb84e8
+    cpus: 0.5
+    mem_limit: 384m
+    networks: [monitoring, management]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/axon/grafana-password
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_SECURITY_DISABLE_GRAVATAR: 'true'
+      GF_LOG_MODE: console
+      GF_LOG_CONSOLE_FORMAT: json
+    ports: ["127.0.0.1:${OPS_GRAFANA_PORT:-3300}:3000"]
+    volumes:
+      - ${OPS_PRIVATE_DIR}/grafana-password:/run/axon/grafana-password:ro
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/axon.yml:ro
+      - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/axon.yml:ro
+      - ./generated/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana:/var/lib/grafana
+
+networks:
+  management:
+    labels: {com.axon.observability: '${OPS_PROJECT}'}
+  monitoring:
+    internal: true
+    labels: {com.axon.observability: '${OPS_PROJECT}'}
+  application:
+    external: true
+    name: ${OPS_APPLICATION_NETWORK:?Private application network required}
+
+volumes:
+  prometheus: {labels: {com.axon.observability: '${OPS_PROJECT}'}}
+  alertmanager: {labels: {com.axon.observability: '${OPS_PROJECT}'}}
+  tempo: {labels: {com.axon.observability: '${OPS_PROJECT}'}}
+  loki: {labels: {com.axon.observability: '${OPS_PROJECT}'}}
+  grafana: {labels: {com.axon.observability: '${OPS_PROJECT}'}}

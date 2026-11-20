@@ -267,3 +267,10 @@ export const ChatRealtimeEventSchema = z.object({
   payload: z.record(z.string(), z.unknown()),
 });
 export type ChatRealtimeEvent = z.infer<typeof ChatRealtimeEventSchema>;
+
+const realtimeReceiptId = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
+export const ChatRealtimeControlSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('telemetry.capabilities'), version: z.literal(1), deliveryAck: z.literal(true), reconnected: z.boolean().optional() }).strict(),
+  z.object({ type: z.literal('event.ack'), id: realtimeReceiptId }).strict(),
+]);
+export const ChatRealtimeDeliveryMetadataSchema = z.object({ id: realtimeReceiptId, tenantId: z.string().min(1).max(128), type: z.string().min(1).max(80), version: z.literal(1) });

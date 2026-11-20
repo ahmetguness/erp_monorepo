@@ -1,7 +1,8 @@
 import { AiPermissionCheckResult, AiRequestStatus, AiRequestType, EntityType, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger, diagnosticErrorFields } from '../lib/logger';
 import { sanitizeOutput } from '../lib/output-sanitizer';
+import { redactSensitiveText, redactSensitiveValue } from '../lib/sensitive-redaction.js';
 import { getAiGovernancePolicy, type AiGovernancePolicy } from './ai/policy.service.js';
 
 export const AI_PROMPT_VERSIONS = {
@@ -46,7 +47,6 @@ export interface AiGovernanceLogInput {
   errorMessage?: string | null;
   ipAddress?: string | null;
   userAgent?: string | null;
-  isPublicOutput?: boolean;
 }
 
 export interface AiGovernanceListParams {
@@ -59,7 +59,6 @@ export interface AiGovernanceListParams {
 }
 
 const MAX_SUMMARY_LENGTH = 700;
-const MAX_ERROR_LENGTH = 500;
 const ESTIMATED_USD_PER_1K_TOKENS = 0.0003;
 
 function compactText(value: string | null | undefined): string | null {
@@ -97,12 +96,13 @@ function estimateCostUsd(tokenUsage: AiTokenUsage | undefined): number | null {
   return Number(((total / 1000) * ESTIMATED_USD_PER_1K_TOKENS).toFixed(6));
 }
 
-function buildGovernanceResult(input: AiGovernanceLogInput): Prisma.InputJsonValue | undefined {
-  const result = toJsonValue(input.result);
+function buildGovernanceResult(input: AiGovernanceLogInput, logContent: boolean): Prisma.InputJsonValue | undefined {
+  const result = logContent ? toJsonValue(redactSensitiveValue(input.result)) : undefined;
   const tokenCost = estimateCostUsd(input.tokenUsage);
   const governanceMeta: Prisma.InputJsonObject = {
     tokenCostEstimateUsd: tokenCost,
     policy: input.policy ? toJsonValue(input.policy) ?? null : null,
+    contentLoggingEnabled: logContent,
   };
 
   if (result === undefined) return governanceMeta;
@@ -112,11 +112,11 @@ function buildGovernanceResult(input: AiGovernanceLogInput): Prisma.InputJsonVal
   return { value: result, governance: governanceMeta };
 }
 
-function redactSummary(text: string | null | undefined, isPublic: boolean): { summary: string | null; fields: string[] } {
+function redactSummary(text: string | null | undefined): { summary: string | null; fields: string[] } {
   const compacted = compactText(text);
   if (!compacted) return { summary: null, fields: [] };
-  const sanitized = sanitizeOutput(compacted, isPublic);
-  return { summary: sanitized.text, fields: sanitized.maskedTypes };
+  const sanitized = sanitizeOutput(compacted, true);
+  return { summary: redactSensitiveText(sanitized.text), fields: sanitized.maskedTypes };
 }
 
 export function mapAiEntityType(value: string | undefined | null): EntityType | null {
@@ -139,7 +139,7 @@ export function mapAiEntityType(value: string | undefined | null): EntityType | 
 }
 
 export async function recordAiRequestLog(input: AiGovernanceLogInput): Promise<void> {
-  let shouldLog = true;
+  let shouldLog = false;
   if (input.policy) {
     shouldLog = input.policy.logPrompts;
   } else if (input.tenantId) {
@@ -147,16 +147,17 @@ export async function recordAiRequestLog(input: AiGovernanceLogInput): Promise<v
       const policy = await getAiGovernancePolicy(prisma, input.tenantId);
       shouldLog = policy.logPrompts;
     } catch {
-      // fallback to true
+      // A policy outage never enables prompt/body persistence.
     }
   }
+  shouldLog = shouldLog && process.env.AI_GOVERNANCE_CONTENT_LOGGING_ENABLED === 'true';
 
   const inputSummary = shouldLog
-    ? redactSummary(input.inputText, input.isPublicOutput ?? false)
+    ? redactSummary(input.inputText)
     : { summary: '[REDACTED_BY_POLICY]', fields: [] };
 
   const outputSummary = shouldLog
-    ? redactSummary(input.outputText, input.isPublicOutput ?? false)
+    ? redactSummary(input.outputText)
     : { summary: '[REDACTED_BY_POLICY]', fields: [] };
 
   const redactedFields = unique([
@@ -175,28 +176,27 @@ export async function recordAiRequestLog(input: AiGovernanceLogInput): Promise<v
         model: input.model,
         entityType: input.entityType ?? null,
         entityId: input.entityId ?? null,
-        entityContext: toJsonValue(input.entityContext),
+        entityContext: shouldLog ? toJsonValue(redactSensitiveValue(input.entityContext)) : undefined,
         permissionCheckResult: input.permissionCheckResult,
         redactedFields,
         inputSummary: inputSummary.summary,
         outputSummary: outputSummary.summary,
-        draft: toJsonValue(input.draft),
-        result: buildGovernanceResult(input),
-        userApprovedAction: input.userApprovedAction ?? null,
+        draft: shouldLog ? toJsonValue(redactSensitiveValue(input.draft)) : undefined,
+        result: buildGovernanceResult(input, shouldLog),
+        userApprovedAction: input.userApprovedAction && /^[a-zA-Z0-9_.:-]{1,80}$/.test(input.userApprovedAction) ? input.userApprovedAction : input.userApprovedAction ? '[REDACTED]' : null,
         status: input.status,
         usedTools: input.usedTools ?? false,
         tokenPrompt: input.tokenUsage?.prompt ?? null,
         tokenCompletion: input.tokenUsage?.completion ?? null,
         tokenTotal: input.tokenUsage?.total ?? null,
-        errorMessage: input.errorMessage ? input.errorMessage.slice(0, MAX_ERROR_LENGTH) : null,
+        errorMessage: input.errorMessage ? 'AI_OPERATION_FAILED' : null,
         ipAddress: input.ipAddress ?? null,
         userAgent: input.userAgent ?? null,
         completedAt: input.status === AiRequestStatus.STARTED ? null : new Date(),
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.error(`AI governance log write failed: ${message}`);
+    logger.error('AI governance log write failed', { operation: 'ai.governance.persist', ...diagnosticErrorFields(err) });
   }
 }
 

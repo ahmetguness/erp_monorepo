@@ -43,6 +43,14 @@ const MARKETPLACE_MOCK_CHANNELS = [
 ] as const;
 
 export const ENV_REGISTRY: readonly EnvVarDefinition[] = [
+  { name: 'TELEMETRY_ENABLED', kind: 'boolean', required: false, runtime: 'all', defaultValue: 'false', secretClass: 'internal', securityNote: 'Opt-in bounded OTLP/HTTP JSON trace export; business operations never wait for ingestion.' },
+  { name: 'TELEMETRY_SAMPLE_RATIO', kind: 'number', required: false, runtime: 'all', defaultValue: '0.1', secretClass: 'internal', securityNote: 'Root trace sampling ratio from 0 through 1; remote sampling decisions propagate.' },
+  { name: 'LOG_EXPORT_ENDPOINT', kind: 'url', required: false, runtime: 'all', secretClass: 'sensitive', securityNote: 'Private Loki JSON push endpoint without credentials/query; only redacted structured logs are exported.' },
+  { name: 'DR_METRICS_FILE', kind: 'string', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Optional read-only /run/axon-dr/metrics.prom file from the independent DR collector.' },
+  { name: 'READINESS_STORAGE_PROBE', kind: 'boolean', required: false, runtime: 'all', defaultValue: 'false', secretClass: 'internal', securityNote: 'Enables real storage readiness in isolated non-production drills; production always probes storage.' },
+  { name: 'ENCRYPTION_KEY_ID', kind: 'string', required: false, runtime: 'all', secretClass: 'internal', securityNote: 'Opt-in v2 encryption writer ID; deploy all compatible readers before enabling.' },
+  { name: 'ENCRYPTION_PREVIOUS_KEYS', kind: 'string', required: false, runtime: 'all', secretClass: 'secret', securityNote: 'At most four escrowed decryption keys as a private JSON object, including legacy for v1 ciphertext; never expose.' },
+  { name: 'AI_GOVERNANCE_CONTENT_LOGGING_ENABLED', kind: 'boolean', required: false, runtime: 'all', defaultValue: 'false', secretClass: 'internal', securityNote: 'Explicit operator opt-in plus tenant policy required for redacted AI log content; disabled by default and on policy failure.' },
   {
     name: "DATABASE_URL",
     kind: "url",
@@ -499,7 +507,7 @@ export const ENV_REGISTRY: readonly EnvVarDefinition[] = [
     runtime: "all",
     defaultValue: "pretty",
     secretClass: "internal",
-    securityNote: "Use json in production for centralized log ingestion.",
+    securityNote: "Production always emits structured JSON; pretty applies only outside production.",
   },
   {
     name: "METRICS_ENABLED",
@@ -516,7 +524,7 @@ export const ENV_REGISTRY: readonly EnvVarDefinition[] = [
     required: false,
     runtime: "production",
     secretClass: "secret",
-    securityNote: "Protects the metrics scrape endpoint in production.",
+    securityNote: "Required for scraping in every environment; use at least 32 random characters. Missing/weak values fail closed.",
   },
   {
     name: "OBSERVABILITY_ERROR_RATE_ALERT_PCT",

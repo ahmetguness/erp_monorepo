@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { DomainEventOutboxStatus, PrismaClient, SyncJobStatus } from '@prisma/client';
+import { countTelemetry } from '../lib/telemetry/metrics.js';
 
 const SLOW_ENDPOINT_THRESHOLD_MS = 1_000;
 const SLOW_QUERY_THRESHOLD_MS = 500;
@@ -272,6 +273,7 @@ function pushLimited<T>(target: T[], item: T, limit: number): void {
 }
 
 function getEndpointMetric(method: string, path: string): EndpointLatencyMetric {
+  if (endpointMetrics.size >= 256 && !endpointMetrics.has(endpointKey(method, path))) { method = 'OTHER'; path = 'overflow'; }
   const key = endpointKey(method, path);
   const existing = endpointMetrics.get(key);
   if (existing) return existing;
@@ -375,6 +377,7 @@ export function recordUnhandledError(input: ErrorMetricInput): void {
 
 export function recordSlowQuery(input: SlowQueryMetricInput): void {
   if (input.durationMs < SLOW_QUERY_THRESHOLD_MS) return;
+  countTelemetry('axon_database_slow_operations_total');
   const occurredAt = input.occurredAt ?? new Date();
   const context = getCurrentObservabilityContext();
   pushLimited(recentSlowQueries, {
@@ -396,6 +399,7 @@ export function recordAuthorizationResolution(input: AuthorizationResolutionMetr
 }
 
 export function recordExternalRequest(input: ExternalRequestMetricInput): void {
+  if (externalRequestMetrics.size >= 32 && !externalRequestMetrics.has(input.service)) input = { ...input, service: 'other' };
   const current = externalRequestMetrics.get(input.service) ?? { requestCount: 0, errorCount: 0, totalDurationMs: 0, maxDurationMs: 0 };
   current.requestCount += 1;
   current.totalDurationMs += input.durationMs;

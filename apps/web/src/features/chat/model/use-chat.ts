@@ -8,7 +8,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { API_BASE_URL } from "@/lib/constants";
-import { createRealtimeRefresh } from './realtime-refresh';
+import { bindRealtimeSession } from './realtime-session';
+import { useAuthStore } from '@/store/auth.store';
 import { chatKeys } from "../api/chat.keys";
 import {
   clearConversation,
@@ -200,35 +201,13 @@ export function useChatSearch(query: string, conversationId?: string) {
 export function useChatRealtime(): void {
   const client = useQueryClient();
   useEffect(() => {
-    const refresh = createRealtimeRefresh(() => {
-      void client.invalidateQueries({ queryKey: chatKeys.all });
-    });
     const wsUrl = new URL('/api/chat/ws', API_BASE_URL || window.location.origin);
     wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-    let stopped = false;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    let socket: WebSocket | undefined;
-    const connect = () => {
-      socket = new WebSocket(wsUrl);
-      socket.onmessage = (event) => {
-        if (typeof event.data !== 'string') return;
-        try {
-          const payload: unknown = JSON.parse(event.data);
-          refresh.notify(payload);
-        } catch {
-          // Ignore non-JSON frames; the connection remains usable.
-        }
-      };
-      socket.onclose = () => {
-        if (!stopped) retry = setTimeout(connect, 1_500);
-      };
-    };
-    connect();
-    return () => {
-      stopped = true;
-      refresh.dispose();
-      if (retry) clearTimeout(retry);
-      socket?.close();
-    };
+    return bindRealtimeSession({
+      currentIdentity: () => { const state = useAuthStore.getState(); return state.tenant && state.user ? JSON.stringify([state.tenant.id, state.user.id, state.sessionVersion]) : null; },
+      subscribe: changed => useAuthStore.subscribe(changed),
+      currentTenantId: () => useAuthStore.getState().tenant?.id ?? null,
+      url: wsUrl.toString(), refresh: () => { void client.invalidateQueries({ queryKey: chatKeys.all }); },
+    });
   }, [client]);
 }

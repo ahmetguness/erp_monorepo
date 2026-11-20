@@ -345,10 +345,10 @@ export function PaymentsListPage() {
         title="Ödemeler"
         subtitle="Tahsilat ve ödeme kayıtlarını yönetin."
         action={
-          <Link
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
+          <button
+            type="button"
+            aria-label="Yeni Ödeme"
+            onClick={() => {
               setCreateOpen(true);
             }}
             className="group relative inline-flex items-center gap-2.5 h-10 px-5 rounded-xl font-medium text-sm text-white
@@ -360,7 +360,7 @@ export function PaymentsListPage() {
               <Plus className="w-3.5 h-3.5" />
             </span>
             Yeni Ödeme
-          </Link>
+          </button>
         }
       />
 
@@ -460,6 +460,7 @@ export function PaymentsListPage() {
 
         {/* Method filter pills */}
         <select
+          aria-label="Ödeme yöntemi filtresi"
           value={methodFilter}
           onChange={(e) => setMethodFilter(e.target.value)}
           className="bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500"

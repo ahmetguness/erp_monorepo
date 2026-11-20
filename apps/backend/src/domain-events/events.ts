@@ -8,6 +8,7 @@ export interface DomainEventContext {
   eventId?: string;
   userId?: string | null;
   correlationId?: string | null;
+  traceparent?: string | null;
   occurredAt: Date;
 }
 

@@ -1,7 +1,8 @@
 import { Resend } from 'resend';
+import { logger } from './logger.js';
 
 if (!process.env.RESEND_API_KEY) {
-  console.warn('[Mail] RESEND_API_KEY tanımlı değil – mail gönderimi devre dışı.');
+  logger.warn('[Mail] Provider is not configured; delivery is disabled', { operation: 'mail.configure', errorCode: 'PROVIDER_NOT_CONFIGURED' });
 }
 
 export const resend = process.env.RESEND_API_KEY

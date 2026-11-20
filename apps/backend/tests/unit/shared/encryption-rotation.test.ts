@@ -1,0 +1,58 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { encrypt, decrypt } from '../../../src/utils/encryption.js';
+afterEach(() => vi.unstubAllEnvs());
+it('writes readable v1 credentials while a legacy reader key is retained and the v2 writer is disabled', () => {
+  const legacy = 'synthetic-legacy-key-material-at-least-32-characters';
+  vi.stubEnv('ENCRYPTION_KEY', legacy);
+  vi.stubEnv('ENCRYPTION_KEY_ID', '');
+  vi.stubEnv('ENCRYPTION_PREVIOUS_KEYS', '{}');
+  const original = encrypt('synthetic-original');
+  vi.stubEnv('ENCRYPTION_KEY', 'synthetic-next-key-material-at-least-32-characters');
+  vi.stubEnv('ENCRYPTION_PREVIOUS_KEYS', JSON.stringify({ legacy }));
+  const pending = encrypt('synthetic-new-credential');
+  expect(pending).toMatch(/^enc:v1:/);
+  expect(decrypt(original)).toBe('synthetic-original');
+  expect(decrypt(pending)).toBe('synthetic-new-credential');
+});
+it('reserves the legacy alias so successive rotations cannot shadow an older key', () => {
+  vi.stubEnv('ENCRYPTION_KEY', 'synthetic-key-material-at-least-32-characters');
+  vi.stubEnv('ENCRYPTION_KEY_ID', 'legacy');
+  expect(() => encrypt('synthetic-provider-credential')).toThrow('Encryption key configuration is invalid.');
+});
+it('rotates versioned encryption without losing legacy credentials and recovers with escrowed keys', () => {
+  const legacy = 'synthetic-legacy-key-material-at-least-32-characters';
+  const next = 'synthetic-next-key-material-at-least-32-characters';
+  vi.stubEnv('ENCRYPTION_KEY', legacy);
+  vi.stubEnv('ENCRYPTION_KEY_ID', '');
+  vi.stubEnv('ENCRYPTION_PREVIOUS_KEYS', '{}');
+  const oldCipher = encrypt('synthetic-provider-credential');
+  expect(oldCipher).toMatch(/^enc:v1:/);
+  vi.stubEnv('ENCRYPTION_KEY', next);
+  vi.stubEnv('ENCRYPTION_KEY_ID', 'rotation-2026');
+  vi.stubEnv('ENCRYPTION_PREVIOUS_KEYS', JSON.stringify({ legacy }));
+  expect(decrypt(oldCipher)).toBe('synthetic-provider-credential');
+  const migrated = encrypt(decrypt(oldCipher));
+  expect(migrated).toMatch(/^enc:v2:rotation-2026:/);
+  expect(decrypt(migrated)).toBe('synthetic-provider-credential');
+  vi.stubEnv('ENCRYPTION_PREVIOUS_KEYS', '{}');
+  expect(() => decrypt(oldCipher)).toThrow();
+  expect(decrypt(migrated)).toBe('synthetic-provider-credential');
+  vi.stubEnv('ENCRYPTION_KEY', legacy);
+  vi.stubEnv('ENCRYPTION_KEY_ID', '');
+  expect(decrypt(oldCipher)).toBe('synthetic-provider-credential');
+  expect(() => decrypt(migrated)).toThrow();
+  vi.stubEnv('ENCRYPTION_KEY', next);
+  vi.stubEnv('ENCRYPTION_KEY_ID', 'rotation-2026');
+  expect(decrypt(migrated)).toBe('synthetic-provider-credential');
+});
+it('authenticates the key ID and rejects malformed/unknown ciphertext and invalid keyrings', () => {
+  vi.stubEnv('ENCRYPTION_KEY', 'synthetic-key-material-at-least-32-characters');
+  vi.stubEnv('ENCRYPTION_KEY_ID', 'current');
+  vi.stubEnv('ENCRYPTION_PREVIOUS_KEYS', '{}');
+  const encrypted = encrypt('private');
+  expect(() => decrypt(encrypted.replace(':current:', ':unknown:'))).toThrow();
+  expect(() => decrypt(encrypted + 'xx')).toThrow();
+  vi.stubEnv('ENCRYPTION_PREVIOUS_KEYS', 'invalid-secret-json');
+  expect(() => decrypt('enc:v1:00:00:00')).toThrow();
+  expect(() => encrypt('')).not.toThrow();
+});

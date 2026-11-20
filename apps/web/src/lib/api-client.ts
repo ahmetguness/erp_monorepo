@@ -7,6 +7,7 @@ import { toast } from '@/store/ui.store';
 import { ApiErrorSchema } from '@repo/types/contracts';
 import { useAuthStore } from '@/store/auth.store';
 import { installSessionBoundary } from './http/session-boundary';
+import { tenantSessionRevision } from './http/tenant-session';
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_URL,
@@ -14,8 +15,8 @@ const apiClient: AxiosInstance = axios.create({
   timeout: 15000,
   withCredentials: true,
 });
-installSessionBoundary(apiClient, () => JSON.stringify([useAuthStore.getState().tenant?.id, useAuthStore.getState().user?.id]),
-  (changed) => { useAuthStore.subscribe(changed); });
+installSessionBoundary(apiClient, () => JSON.stringify([useAuthStore.getState().tenant?.id, useAuthStore.getState().user?.id, useAuthStore.getState().sessionVersion]),
+  (changed) => { useAuthStore.subscribe(changed); }, tenantSessionRevision);
 
 function clearUnauthorizedSession(): void {
   if (typeof window === 'undefined') return;

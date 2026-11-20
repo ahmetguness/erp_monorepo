@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { EmptyState } from './EmptyState';
+import { ApiErrorState } from './ApiErrorState';
+import { getErrorCode } from '@/types/api.types';
 import { Pagination, type PaginationProps } from '@/components/ui/Pagination';
 
 // ─────────────────────────────────────────────
@@ -31,6 +33,9 @@ export interface DataTableProps<T> {
     onTogglePage: () => void;
   };
   isLoading?: boolean;
+  error?: unknown;
+  onRetry?: () => void;
+  caption?: string;
   pagination?: PaginationProps;
   onRowClick?: (row: T) => void;
   emptyTitle?: string;
@@ -106,6 +111,9 @@ export function DataTable<T>({
   keyExtractor,
   selection,
   isLoading = false,
+  error,
+  onRetry,
+  caption = 'Kayıtlar',
   pagination,
   onRowClick,
   emptyTitle = 'Kayıt bulunamadı',
@@ -113,20 +121,25 @@ export function DataTable<T>({
   className,
   density = 'comfortable',
 }: DataTableProps<T>) {
+  const accessBlocked = ['FORBIDDEN', 'UNAUTHORIZED', 'TRIAL_EXPIRED', 'FEATURE_DISABLED', 'MODULE_DISABLED'].includes(getErrorCode(error) ?? '');
+  if (error && (data.length === 0 || accessBlocked)) return <ApiErrorState error={error} onRetry={accessBlocked ? undefined : onRetry} className={className} />;
   const columnCount = columns.length + (selection ? 1 : 0);
 
   return (
-    <div className={cn(
+    <div aria-busy={isLoading} className={cn(
       'overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/45 shadow-xl shadow-black/10',
       'ring-1 ring-white/[0.03] backdrop-blur-sm',
       className,
     )}>
+      {isLoading && <p role="status" className="sr-only">Kayıtlar yükleniyor.</p>}
+      {Boolean(error) && <div className="border-b border-slate-800 p-3"><p role="status" className="mb-2 text-sm text-amber-300">Güncelleme tamamlanamadı. Son alınan kayıtlar gösteriliyor.</p><ApiErrorState error={error} onRetry={onRetry} /></div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
+          <caption className="sr-only">{caption}</caption>
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-slate-800/80 bg-slate-900/95">
               {selection && (
-                <th className={cn('w-10 px-4 text-center', density === 'compact' ? 'py-2.5' : 'py-3.5')}>
+                <th scope="col" className={cn('w-10 px-4 text-center', density === 'compact' ? 'py-2.5' : 'py-3.5')}>
                   <SelectionCheckbox
                     label="Sayfadaki kayıtları seç"
                     checked={selection.isPageSelected}
@@ -139,6 +152,7 @@ export function DataTable<T>({
               {columns.map((col) => (
                 <th
                   key={col.key}
+                  scope="col"
                   style={col.width ? { width: col.width } : undefined}
                   className={cn(
                     'px-5 py-3.5 text-[11px] font-semibold uppercase text-slate-400 whitespace-nowrap',
@@ -166,6 +180,8 @@ export function DataTable<T>({
                 <tr
                   key={keyExtractor(row)}
                   onClick={() => onRowClick?.(row)}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onKeyDown={event => { if (onRowClick && event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); onRowClick(row); } }}
                   className={cn(
                     'group border-b border-slate-800/35 transition-colors duration-150 last:border-b-0',
                     onRowClick && 'cursor-pointer',

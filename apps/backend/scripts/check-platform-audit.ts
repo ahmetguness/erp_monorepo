@@ -1,6 +1,8 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { Hono } from "hono";
+import { registerPreRoutingMiddleware } from '../src/bootstrap/http/middleware.js';
+import { readRuntimeConfig } from '../src/bootstrap/runtime-config.js';
 import { prisma } from "../src/lib/prisma.js";
 import { platformAdminAuditMiddleware } from "../src/middleware/platform-admin-audit.js";
 import {
@@ -110,6 +112,7 @@ async function main(): Promise<void> {
     2,
   );
   const app = new Hono();
+  registerPreRoutingMiddleware(app, readRuntimeConfig());
   app.use("*", async (c, next) => {
     c.set("adminId", admin.id);
     await next();
@@ -120,6 +123,7 @@ async function main(): Promise<void> {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      "origin": "http://localhost:3000",
       "content-length": "51",
       "x-request-id": `middleware-${marker}`,
       "x-correlation-id": `correlation-${marker}`,

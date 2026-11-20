@@ -15,7 +15,7 @@ import { TrendyolApiError } from './trendyol/transport.js';
  */
 
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger, diagnosticErrorFields } from '../lib/logger';
 import {
   TrendyolService,
   buildTrendyolCredentials,
@@ -204,7 +204,7 @@ async function processClaimedJob(job: NonNullable<Awaited<ReturnType<typeof clai
     logger.info(`[TrendyolWorker] Job ${job.id} done: ${JSON.stringify(finalResult)}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[TrendyolWorker] Job ${job.id} failed: ${msg}`);
+    logger.error('Marketplace job failed', { operation: 'marketplace.sync', ...diagnosticErrorFields(err) });
     const exhausted = job.attempts >= job.maxAttempts || err instanceof PermanentDeliveryError || (err instanceof TrendyolApiError && !err.isRetryable);
     const failed = await prisma.marketplaceSyncJob.updateMany({
       where: { id: job.id, tenantId: job.tenantId, status: SyncJobStatus.RUNNING, leaseOwner: job.leaseOwner },
@@ -291,7 +291,7 @@ async function runSyncOrders(
           else skipped++;
         } catch (err) {
           errors++;
-          logger.error(`[TrendyolWorker] Order sync error for ${order.shipmentPackageId}: ${err instanceof Error ? err.message : 'Unknown worker failure'}`);
+          logger.error('Marketplace order synchronization failed', { operation: 'marketplace.orders', ...diagnosticErrorFields(err) });
         }
       }
     },
@@ -405,7 +405,7 @@ async function runSyncStock(
     } catch (err) {
       if (providerRequestSignal()?.aborted || (err instanceof TrendyolApiError && !err.isRetryable)) throw err;
       errors++;
-      logger.error(`[TrendyolWorker] Stock batch error: ${err instanceof Error ? err.message : 'Unknown worker failure'}`);
+      logger.error('Marketplace stock batch failed', { operation: 'marketplace.stock', ...diagnosticErrorFields(err) });
     }
   }
 

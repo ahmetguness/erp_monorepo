@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { isExplicitToolApproval } from './ai-chat/purchase-approval.js';
 import { openai } from '../lib/openai';
 import { ChatContextService, type ChatPageContext, type LoadedChatEntityContext } from './chat-context.service';
-import { logger } from '../lib/logger';
+import { logger, diagnosticErrorFields } from '../lib/logger';
 import { AI_MODELS, AI_PROMPT_VERSIONS, type AiTokenUsage } from './ai-governance.service';
 import type {
   ChatCompletion,
@@ -312,8 +312,7 @@ export async function handlePublicChat(
           const result = await checkEmailFn(email);
           toolResult = JSON.stringify(result);
         } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          logger.error(`Public chat email check error: ${errMsg}`);
+          logger.error('Public chat email check failed', { operation: 'ai.public.email-check', ...diagnosticErrorFields(err) });
           toolResult = JSON.stringify({ available: true, message: 'Kontrol yapılamadı, devam edebilirsiniz.' });
         }
       }
@@ -342,8 +341,7 @@ export async function handlePublicChat(
             toolResult = JSON.stringify({ success: true, message: 'Demo talebi başarıyla oluşturuldu.' });
           }
         } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          logger.error(`Public chat demo request error: ${errMsg}`);
+          logger.error('Public chat demo request failed', { operation: 'ai.public.demo-request', ...diagnosticErrorFields(err) });
           toolResult = JSON.stringify({ success: false, message: 'Demo talebi oluşturulamadı.' });
         }
       }
@@ -445,7 +443,7 @@ export async function handlePublicChatStream(
             const result = await checkEmailFn(email);
             toolResult = JSON.stringify(result);
           } catch (err) {
-            logger.error(`Public chat stream email check error: ${err instanceof Error ? err.message : String(err)}`);
+            logger.error('Public chat stream email check failed', { operation: 'ai.public.stream.email-check', ...diagnosticErrorFields(err) });
             toolResult = JSON.stringify({ available: true, message: 'Kontrol yapılamadı, devam edebilirsiniz.' });
           }
         }
@@ -470,7 +468,7 @@ export async function handlePublicChatStream(
               ? JSON.stringify({ success: false, message: demoResult.message ?? 'Demo talebi oluşturulamadı.' })
               : JSON.stringify({ success: true, message: 'Demo talebi başarıyla oluşturuldu.' });
           } catch (err) {
-            logger.error(`Public chat stream demo request error: ${err instanceof Error ? err.message : String(err)}`);
+            logger.error('Public chat stream demo request failed', { operation: 'ai.public.stream.demo-request', ...diagnosticErrorFields(err) });
             toolResult = JSON.stringify({ success: false, message: 'Demo talebi oluşturulamadı.' });
           }
         }

@@ -1,0 +1,15 @@
+[Unit]
+Description=ERP read-only backup and WAL telemetry probe
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+# Directory is a dedicated volume shared READ ONLY with API/worker at
+# /run/axon-dr. No repository, cipher or database credential is shared with ERP.
+ExecStart=/usr/bin/docker exec --user postgres --env DR_METRICS_DIRECTORY=/var/run/axon-dr --env PGDATABASE=erp erp-postgres-dr dr-metrics
+TimeoutStartSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal

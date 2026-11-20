@@ -28,6 +28,8 @@ async function main(): Promise<void> {
       }),
     ),
   );
+  const executor = admins[1];
+  if (!executor) throw new Error("Missing privacy assurance operator");
   const member = await runWithTenantIsolationBypass(
     "admin-console",
     async () =>
@@ -75,8 +77,8 @@ async function main(): Promise<void> {
       admins[1]!.id,
     );
     const executions = await Promise.allSettled([
-      executeRequest(request.id),
-      executeRequest(request.id),
+      executeRequest(request.id, executor.id),
+      executeRequest(request.id, executor.id),
     ]);
     assert.equal(
       executions.filter((item) => item.status === "fulfilled").length,
@@ -152,7 +154,7 @@ async function main(): Promise<void> {
     try {
       await verifyIdentity(rollbackRequest.id, admins[0]!.id);
       await decideRequest(rollbackRequest.id, admins[1]!.id, true);
-      await assert.rejects(() => executeRequest(rollbackRequest.id));
+      await assert.rejects(() => executeRequest(rollbackRequest.id, executor.id));
       const state = await runWithTenantIsolationBypass(
         "admin-console",
         async () => ({

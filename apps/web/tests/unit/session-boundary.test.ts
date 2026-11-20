@@ -27,3 +27,13 @@ it('accepts a response for the unchanged identity', async () => {
   installSessionBoundary(client, () => 'A:user-1', () => undefined);
   expect((await client.get('/reports')).data).toEqual({ total: 1 });
 });
+
+it('does not send an old mutation queued before a session change', async () => {
+  let revision = 1; let sent = false;
+  const client = axios.create({ adapter: async config => { sent = true; return { config, data: {}, headers: {}, status: 200, statusText: 'OK' }; } });
+  installSessionBoundary(client, () => 'A', () => undefined, () => revision);
+  const pending = client.post('/payments', {}, { axonSessionRevision: revision });
+  revision++;
+  await expect(pending).rejects.toMatchObject({ code: 'ERR_CANCELED' });
+  expect(sent).toBe(false);
+});

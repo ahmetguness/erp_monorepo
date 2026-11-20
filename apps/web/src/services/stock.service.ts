@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { apiClient } from "@/lib/api-client";
+import { protectedMutation } from '@/lib/http/protected-mutation';
 import { safeParse } from "@/lib/safe-parse";
 import {
   SingleResponseSchema,
@@ -448,12 +449,11 @@ export async function getStockMovements(params: StockMovementParams) {
 export async function createManualMovement(
   data: CreateManualMovementDTO,
 ): Promise<z.infer<typeof StockMovementCreateSchema>> {
-  const command: RecordStockMovementCommand = {
-    ...data,
-    idempotencyKey: data.idempotencyKey ?? crypto.randomUUID(),
-  };
-  const res = await apiClient.post("/api/stock/movements", command);
-  return safeParse(StockMovementCreateSchema, res.data, "createManualMovement");
+  return protectedMutation('/api/stock/movements', data, async (key, revision) => {
+    const command: RecordStockMovementCommand = { ...data, idempotencyKey: key };
+    const res = await apiClient.post('/api/stock/movements', command, { axonSessionRevision: revision });
+    return safeParse(StockMovementCreateSchema, res.data, 'createManualMovement');
+  });
 }
 
 export async function getStockCounts(): Promise<StockCount[]> {

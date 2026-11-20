@@ -5,7 +5,7 @@ import { setTimeout as pause } from 'node:timers/promises';
  * Trendyol Partner API — Production-grade Integration Service
  */
 
-import { logger } from '../../lib/logger';
+import { logger, diagnosticErrorFields } from '../../lib/logger';
 import { isMarketplaceMockChannelEnabled } from '../../config/env';
 import { observedFetch } from '../../modules/shared/index.js';
 import type { TrendyolCredentials } from './types.js';
@@ -107,7 +107,7 @@ function getRedisClient(): RedisClient | null {
     const Redis = require('ioredis') as new (url: string) => RedisClient;
     _redisClient = new Redis(process.env.REDIS_URL);
     _redisClient.on('error', (err: Error) => {
-      logger.warn(`[Trendyol] Redis error: ${err.message} — falling back to in-process rate limiter`);
+      logger.warn('Marketplace coordination unavailable; existing fallback retained', { operation: 'marketplace.rate-limit', ...diagnosticErrorFields(err) });
       _redisClient = null;
     });
     return _redisClient;
@@ -136,7 +136,7 @@ async function waitRateLimitInProcess(endpoint: string): Promise<void> {
 
   if (bucket.count >= RATE_LIMIT) {
     const waitMs = RATE_WINDOW_MS - (now - bucket.windowStart) + 50;
-    logger.warn(`[Trendyol] Rate limit reached for ${key}, waiting ${waitMs}ms`);
+    logger.warn('Marketplace rate limit reached', { operation: 'marketplace.rate-limit', durationMs: waitMs });
     await sleep(waitMs);
     bucket.count = 0;
     bucket.windowStart = Date.now();
@@ -157,7 +157,7 @@ async function waitRateLimitRedis(endpoint: string): Promise<void> {
     if (count === 1) await redis.expire(key, Math.ceil(RATE_WINDOW_MS / 1000));
     if (count > RATE_LIMIT) {
       const waitMs = RATE_WINDOW_MS + 50;
-      logger.warn(`[Trendyol] Redis rate limit for ${key}, waiting ${waitMs}ms`);
+    logger.warn('Marketplace rate limit reached', { operation: 'marketplace.rate-limit', durationMs: waitMs });
       await sleep(waitMs);
     }
   } catch {
@@ -194,7 +194,7 @@ export async function trendyolFetch<T>(
     if (attempt > 0) {
       const backoffMs = providerRetryDelay(attempt, retryAfterMs);
       retryAfterMs = 0;
-      logger.warn(`[Trendyol] Retry ${attempt}/${MAX_RETRIES} for ${path} in ${backoffMs}ms`);
+      logger.warn('Marketplace request retry scheduled', { operation: 'marketplace.request', attempt, durationMs: backoffMs });
       await sleep(backoffMs);
     }
 
@@ -225,7 +225,7 @@ export async function trendyolFetch<T>(
           continue;
         }
 
-        logger.error(`[Trendyol] ${err.message} — seller: ${maskCredentials(creds).sellerId}`);
+        logger.error('Marketplace provider request failed', { operation: 'marketplace.request', status: res.status, ...diagnosticErrorFields(err) });
         throw err;
       }
 

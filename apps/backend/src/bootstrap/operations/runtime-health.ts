@@ -18,7 +18,7 @@ const probes: ReadinessProbe[] = [{
   }, { maxWait: 1_500, timeout: 2_500 }); },
 }];
 if (process.env.REDIS_URL || process.env.NODE_ENV === 'production') probes.push({ name: 'redis', check: probeRedis });
-if (process.env.NODE_ENV === 'production') probes.push({ name: 'objectStorage', check: probeObjectStorage });
+if (process.env.NODE_ENV === 'production' || process.env.READINESS_STORAGE_PROBE === 'true') probes.push({ name: 'objectStorage', check: probeObjectStorage });
 if (process.env.APP_ROLE === 'worker' || process.env.APP_ROLE === 'all') {
   probes.push({ name: 'workers', check: async () => { if (!areWorkersHealthy()) throw new Error('Worker loops are not healthy.'); } });
 } else if (process.env.REQUIRE_WORKER_READINESS === 'true') {

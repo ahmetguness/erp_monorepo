@@ -207,7 +207,7 @@ export function InvoicesListPage() {
   const [tableDensity, setTableDensity] = useState<'comfortable' | 'compact'>('compact');
   const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>([...INVOICE_COLUMN_KEYS]);
 
-  const { data, isLoading } = useInvoices({
+  const { data, isLoading, error, refetch } = useInvoices({
     page,
     limit: pageSize,
     type: type || undefined,
@@ -424,8 +424,8 @@ export function InvoicesListPage() {
           placeholder="Fatura no veya cari adı ara..."
           className="w-72"
         />
-        <Select options={TYPE_OPTIONS} value={type} onChange={(event) => setQuickType(parseInvoiceType(event.target.value))} className="w-40" />
-        <Select options={STATUS_OPTIONS} value={status} onChange={(event) => setQuickStatus(parseInvoiceStatus(event.target.value))} className="w-44" />
+        <Select aria-label="Fatura türü filtresi" options={TYPE_OPTIONS} value={type} onChange={(event) => setQuickType(parseInvoiceType(event.target.value))} className="w-40" />
+        <Select aria-label="Fatura durumu filtresi" options={STATUS_OPTIONS} value={status} onChange={(event) => setQuickStatus(parseInvoiceStatus(event.target.value))} className="w-44" />
         <ListStandardControls
           module="sales"
           listKey="sales.invoices"
@@ -510,6 +510,9 @@ export function InvoicesListPage() {
           onTogglePage: bulkSelection.togglePage,
         }}
         isLoading={isLoading}
+        error={error}
+        onRetry={() => { void refetch(); }}
+        caption="Faturalar"
         density={tableDensity}
         onRowClick={(invoice) => router.push(`/dashboard/invoices/${invoice.id}`)}
         emptyTitle={type || status || search ? 'Filtreye uygun fatura bulunamadı' : 'Fatura bulunamadı'}
@@ -517,7 +520,7 @@ export function InvoicesListPage() {
         pagination={data ? { page, pageSize, total: data.meta.total, totalPages: data.meta.totalPages, onChange: setPage } : undefined}
       />
 
-      {!isLoading && invoices.length === 0 && !type && !status && !search && (
+      {!isLoading && !error && invoices.length === 0 && !type && !status && !search && (
         <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">
           <div className="mb-2 flex items-center gap-2 font-medium text-slate-200">
             <FileText className="h-4 w-4 text-sky-300" />

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ValidationError } from '../../../../errors/index.js';
+import { observedFetch } from '../../../../lib/telemetry/observed-fetch.js';
 
 export type MalwareScanMode = 'disabled' | 'monitor' | 'enforce';
 
@@ -43,7 +44,7 @@ async function scanForMalware(input: FileSecurityInput): Promise<void> {
   const form = new FormData();
   form.set('file', new Blob([new Uint8Array(input.body)], { type: input.contentType }), input.fileName);
   form.set('sha256', createHash('sha256').update(input.body).digest('hex'));
-  const response = await fetch(endpoint, { method: 'POST', body: form });
+  const response = await observedFetch(endpoint, { method: 'POST', body: form, signal: AbortSignal.timeout(15_000) });
   if (!response.ok) {
     if (mode === 'enforce') throw new ValidationError(`Malware tarama servisi başarısız: HTTP ${response.status}.`);
     return;

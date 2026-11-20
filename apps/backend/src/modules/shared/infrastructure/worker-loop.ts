@@ -1,4 +1,4 @@
-import { logger } from '../../../lib/logger.js';
+import { logger, diagnosticErrorFields } from '../../../lib/logger.js';
 import { recordWorkerStarted, recordWorkerTick } from './worker-health.js';
 
 export class WorkerLoop {
@@ -41,8 +41,7 @@ export class WorkerLoop {
       await this.tick();
       recordWorkerTick(this.name, 'succeeded');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown worker error';
-      logger.error(`[${this.name}] Tick failed: ${message}`);
+      logger.error('Worker tick failed', { operation: this.name, ...diagnosticErrorFields(error) });
     } finally {
       recordWorkerTick(this.name, 'finished');
       this.activeTick = null;

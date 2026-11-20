@@ -5,6 +5,7 @@ import { getTrustedClientIpOrNull } from './request-ip.js';
 import { createAuditCriticalActionAlert } from '../services/audit-alert.service.js';
 import { pushSingleAuditLogToSiem } from '../services/siem-export.service.js';
 import { recordAuditIntegrityHead, withAuditIntegrityMetadata } from '../services/audit-log-full.service.js';
+import { getCurrentObservabilityContext } from '../services/observability.service.js';
 
 // ─────────────────────────────────────────────
 // Audit Log Helper
@@ -68,7 +69,7 @@ export async function createAuditLog(
         adminId: params.adminId ?? null,
         reason: params.reason ?? null,
         ticketId: params.ticketId ?? null,
-        requestId: params.requestId ?? null,
+        requestId: params.requestId ?? getCurrentObservabilityContext()?.requestId ?? null,
         approvalId: params.approvalId ?? null,
         rollbackOfId: params.rollbackOfId ?? null,
       },
@@ -107,6 +108,6 @@ export function getRequestMeta(c: Context): {
     ...supportAudit,
     ipAddress: getTrustedClientIpOrNull(c),
     userAgent: c.req.header('user-agent') ?? null,
-    requestId: c.get('requestId') as string | undefined ?? c.req.header('x-request-id') ?? null,
+    requestId: c.get('requestId') ?? null,
   };
 }

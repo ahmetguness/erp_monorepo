@@ -1,0 +1,24 @@
+# Copy outside the repository; configure a real HTTPS receiver and token.
+# This example is deliberately not deployable without operator configuration.
+global:
+  resolve_timeout: 1m
+route:
+  receiver: operations
+  group_by: [alertname, service, severity]
+  group_wait: 15s
+  group_interval: 1m
+  repeat_interval: 4h
+receivers:
+  - name: operations
+    webhook_configs:
+      - url_file: /run/axon/alert-webhook-url
+        send_resolved: true
+        max_alerts: 20
+        http_config:
+          authorization:
+            type: Bearer
+            credentials_file: /run/axon/alert-webhook-token
+inhibit_rules:
+  - source_matchers: ['alertname="PostgresProbeFailure"']
+    target_matchers: ['alertname=~"OutboxBacklog|OutboxExpiredLease"']
+    equal: [instance]

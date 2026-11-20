@@ -306,7 +306,7 @@ export function ContactsListPage() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const importRef = useRef<HTMLDivElement>(null);
 
-  const { data, isLoading } = useContacts({
+  const { data, isLoading, error, refetch } = useContacts({
     page,
     limit: pageSize,
     search: search || undefined,
@@ -319,7 +319,7 @@ export function ContactsListPage() {
   const bulkSelection = useBulkSelection(contacts.map((contact) => contact.id));
   const summary = data?.summary;
   const hasActiveFilters = !!type || !!status || !!balanceFilter;
-  const isEmptyFirstUse = !isLoading && !search && !hasActiveFilters && (data?.meta.total ?? 0) === 0;
+  const isEmptyFirstUse = !isLoading && !error && !search && !hasActiveFilters && (data?.meta.total ?? 0) === 0;
 
   const activeFilterChips = [
     type
@@ -797,6 +797,7 @@ export function ContactsListPage() {
             <span>Filtrele:</span>
           </div>
           <Select
+            aria-label="Cari türü filtresi"
             options={TYPE_OPTIONS}
             value={type}
             onChange={(e) => {
@@ -806,6 +807,7 @@ export function ContactsListPage() {
             className="w-36 !h-8 !py-1 text-xs rounded-lg border-slate-800 bg-slate-900/60"
           />
           <Select
+            aria-label="Cari durumu filtresi"
             options={STATUS_OPTIONS}
             value={status}
             onChange={(e) => {
@@ -815,6 +817,7 @@ export function ContactsListPage() {
             className="w-36 !h-8 !py-1 text-xs rounded-lg border-slate-800 bg-slate-900/60"
           />
           <Select
+            aria-label="Bakiye filtresi"
             options={BALANCE_OPTIONS}
             value={balanceFilter}
             onChange={(e) => {
@@ -847,6 +850,9 @@ export function ContactsListPage() {
           onTogglePage: bulkSelection.togglePage,
         }}
         isLoading={isLoading}
+        error={error}
+        onRetry={() => { void refetch(); }}
+        caption="Cariler"
         density={tableDensity}
         onRowClick={(r) => router.push(`/dashboard/contacts/${r.id}`)}
         emptyTitle="Cari hesap bulunamadı"

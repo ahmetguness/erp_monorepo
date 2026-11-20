@@ -1,5 +1,7 @@
 import { Prisma, DomainEventOutboxStatus } from '@prisma/client';
 import { DOMAIN_EVENT_SCHEMA_VERSION, entityIdForEvent, entityTypeForEvent, idempotencyKeyForEvent, sourceForEvent, type DomainEvent } from './events.js';
+import { traceparent } from '../lib/telemetry/context.js';
+import { getCurrentObservabilityContext } from '../services/observability.service.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date);
@@ -29,7 +31,7 @@ export async function enqueueDomainEvent(tx: Prisma.TransactionClient, event: Do
       tenantId: event.context.tenantId, name: event.name, schemaVersion: event.name === 'marketplace.webhook.received' || event.name === 'mail.delivery.requested' || event.name === 'edocument.delivery.requested' ? DOMAIN_EVENT_SCHEMA_VERSION : 1,
       source: sourceForEvent(event), idempotencyKey: idempotencyKeyForEvent(event),
       entityType: entityTypeForEvent(event), entityId: entityIdForEvent(event),
-      payload: toDomainEventJson(event.payload) ?? Prisma.JsonNull, context: toDomainEventJson(event.context) ?? Prisma.JsonNull,
+      payload: toDomainEventJson(event.payload) ?? Prisma.JsonNull, context: toDomainEventJson({ ...event.context, correlationId: event.context.correlationId ?? getCurrentObservabilityContext()?.correlationId, traceparent: traceparent() ?? event.context.traceparent }) ?? Prisma.JsonNull,
       status: DomainEventOutboxStatus.PENDING, attempts: 0,
     },
   });

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { apiClient } from '@/lib/api-client';
+import { protectedMutation } from '@/lib/http/protected-mutation';
 import { safeParse } from '@/lib/safe-parse';
 import { SingleResponseSchema, PaginatedResponseSchema } from '@/types/api.types';
 import type { PaginationParams, DateRangeParams } from '@/types/api.types';
@@ -347,12 +348,11 @@ export async function sendPurchaseOrder(id: string): Promise<PurchaseOrder> {
 }
 
 export async function receivePurchaseOrder(id: string, data: ReceiveOrderDTO): Promise<PurchaseOrder> {
-  const command: Omit<ConfirmGoodsReceiptCommand, 'purchaseOrderId'> = {
-    ...data,
-    idempotencyKey: data.idempotencyKey ?? crypto.randomUUID(),
-  };
-  const res = await apiClient.post(`/api/purchase-orders/${id}/receive`, command);
-  return safeParse(SingleResponseSchema(PurchaseOrderSchema), res.data, 'receivePurchaseOrder').data;
+  return protectedMutation(`/api/purchase-orders/${id}/receive`, data, async (key, revision) => {
+    const command: Omit<ConfirmGoodsReceiptCommand, 'purchaseOrderId'> = { ...data, idempotencyKey: key };
+    const res = await apiClient.post(`/api/purchase-orders/${id}/receive`, command, { axonSessionRevision: revision });
+    return safeParse(SingleResponseSchema(PurchaseOrderSchema), res.data, 'receivePurchaseOrder').data;
+  });
 }
 
 export async function cancelPurchaseOrder(id: string): Promise<PurchaseOrder> {

@@ -15,7 +15,7 @@ export class DrillCluster {
   readonly directory: string;
   readonly keyFile: string;
   readonly audit: DrillAudit;
-  constructor(readonly id: string) {
+  constructor(readonly id: string, private readonly image = DR_IMAGE) {
     owner(id);
     this.source = `${id}-source`;
     this.repository = `${id}-repository`;
@@ -24,8 +24,8 @@ export class DrillCluster {
     this.keyFile = resolve(this.directory, "private", "cipher");
     this.audit = new DrillAudit(this.directory, id);
   }
-  static fresh(): DrillCluster {
-    return new DrillCluster(`axon-dr-${randomBytes(6).toString("hex")}`);
+  static fresh(image = DR_IMAGE): DrillCluster {
+    return new DrillCluster(`axon-dr-${randomBytes(6).toString("hex")}`, image);
   }
   async assertOwned(
     kind: "container" | "volume" | "network",
@@ -126,7 +126,7 @@ export class DrillCluster {
       "POSTGRES_DB=phase3_dr_ci",
       "--env",
       "POSTGRES_INITDB_ARGS=--data-checksums",
-      DR_IMAGE,
+      this.image,
       ...(restore
         ? ["sleep", "infinity"]
         : [

@@ -1,5 +1,9 @@
 // ─────────────────────────────────────────────
 import { redactSensitiveText, redactSensitiveValue } from './sensitive-redaction.js';
+import { exportDiagnosticLog } from './telemetry/log-exporter.js';
+import { traceContext } from './telemetry/context.js';
+import { countTelemetry } from './telemetry/metrics.js';
+export { diagnosticErrorFields } from './telemetry/error-fields.js';
 
 // ANSI helpers
 // ─────────────────────────────────────────────
@@ -69,23 +73,30 @@ type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'http';
 function sanitizeFields(fields: StructuredLogFields | undefined): StructuredLogFields {
   if (!fields) return {};
   return Object.fromEntries(
-    Object.entries(fields).map(([key, value]) => [key, redactSensitiveValue(value, key) as string | number | boolean | null | undefined]),
+    Object.entries(fields).slice(0, 32).filter(([key]) => /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(key) && !['timestamp', 'level', 'message', 'service', 'environment', 'traceId', 'spanId', '__proto__'].includes(key)).map(([key, value]) => {
+      const redacted = redactSensitiveValue(value, key);
+      return [key, redacted === null || redacted === undefined || typeof redacted === 'string' || typeof redacted === 'number' || typeof redacted === 'boolean' ? redacted : '[redacted]'];
+    }),
   );
 }
 
 function useJsonLogs(): boolean {
-  return process.env.LOG_FORMAT === 'json' || (process.env.LOG_FORMAT !== 'pretty' && process.env.NODE_ENV === 'production');
+  return process.env.NODE_ENV === 'production' || process.env.LOG_FORMAT === 'json';
 }
 
 function writeJson(level: LogLevel, message: string, fields?: StructuredLogFields): void {
-  console.log(JSON.stringify({
+  const json = JSON.stringify({
     timestamp: new Date().toISOString(),
-    level,
+    level: level === 'http' || level === 'success' ? 'info' : level,
     service: process.env.OTEL_SERVICE_NAME ?? '@repo/backend',
     environment: process.env.NODE_ENV ?? 'development',
     message: redactSensitiveText(message),
+    traceId: traceContext.getStore()?.traceId,
+    spanId: traceContext.getStore()?.spanId,
     ...sanitizeFields(fields),
-  }));
+  });
+  console.log(json);
+  exportDiagnosticLog(json);
 }
 
 function formatFields(fields: StructuredLogFields | undefined): string {
@@ -100,7 +111,7 @@ function formatFields(fields: StructuredLogFields | undefined): string {
 // Logger
 // ─────────────────────────────────────────────
 
-export const logger = {
+const output = {
   info: (msg: string, fields?: StructuredLogFields) => useJsonLogs()
     ? writeJson('info', msg, fields)
     : console.log(`${time()} ${badge('INFO', bg.blue, fg.white)}  ${fg.white}${redactSensitiveText(msg)}${r}${formatFields(sanitizeFields(fields))}`),
@@ -135,11 +146,23 @@ export const logger = {
   },
 };
 
+function diagnostic(work: () => void): void {
+  try { work(); } catch { countTelemetry('axon_log_write_failures_total'); }
+}
+export const logger = {
+  info: (message: string, fields?: StructuredLogFields) => diagnostic(() => output.info(message, fields)),
+  success: (message: string, fields?: StructuredLogFields) => diagnostic(() => output.success(message, fields)),
+  warn: (message: string, fields?: StructuredLogFields) => diagnostic(() => output.warn(message, fields)),
+  error: (message: string, fields?: StructuredLogFields) => diagnostic(() => output.error(message, fields)),
+  http: (method: string, path: string, status: number, milliseconds: number, fields?: StructuredLogFields) => diagnostic(() => output.http(method, path, status, milliseconds, fields)),
+};
+
 // ─────────────────────────────────────────────
 // Banner
 // ─────────────────────────────────────────────
 
 export function printBanner(port: number): void {
+  if (useJsonLogs()) { logger.info('Server started', { port }); return; }
   const env = process.env.NODE_ENV ?? 'development';
   const envColor = env === 'production' ? fg.green : env === 'test' ? fg.yellow : fg.cyan;
 

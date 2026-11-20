@@ -1,8 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ReadinessMonitor } from '../../../src/bootstrap/operations/readiness.js';
 import { ProcessLifecycle } from '../../../src/bootstrap/operations/lifecycle.js';
 
 describe('runtime readiness and drain', () => {
+  it('bounds an uncooperative transport and never starts more probes behind it', async () => {
+    vi.useFakeTimers();
+    let release: () => void = () => undefined; let calls = 0;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const monitor = new ReadinessMonitor([{ name: 'database', check: () => { calls++; return blocked; } }], 0);
+    try {
+      const result = monitor.read(); await vi.advanceTimersByTimeAsync(3001);
+      expect(await result).toEqual({ status: 'not_ready', checks: { database: 'down' } });
+      expect((await monitor.read()).status).toBe('not_ready'); expect(calls).toBe(1);
+      release(); await Promise.resolve(); await Promise.resolve();
+      expect((await monitor.read()).status).toBe('ready'); expect(calls).toBe(2);
+    } finally { release(); vi.useRealTimers(); }
+  });
   it('reports dependency failures without exposing credentials or exception text', async () => {
     const monitor = new ReadinessMonitor([
       { name: 'database', check: async () => {} },

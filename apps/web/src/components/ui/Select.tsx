@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SelectOption } from '@/types/form.types';
@@ -13,17 +13,19 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ label, error, helperText, options, placeholder, required, className, id, ...props }, ref) => {
-    const selectId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
+  ({ label, error, helperText, options, placeholder, required, className, id, 'aria-describedby': describedBy, 'aria-invalid': invalid, ...props }, ref) => {
+    const generatedId = useId();
+    const selectId = id ?? generatedId;
+    const helpId = error || helperText ? selectId + '-help' : undefined;
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
           <label htmlFor={selectId} className="text-[13px] font-medium text-slate-300">
-            {label}{required && <span className="text-red-400 ml-0.5">*</span>}
+            {label}{required && <span aria-hidden="true" className="text-red-400 ml-0.5">*</span>}
           </label>
         )}
         <div className="relative">
-          <select ref={ref} id={selectId}
+          <select ref={ref} id={selectId} required={required} aria-invalid={error ? true : invalid} aria-describedby={[describedBy, helpId].filter(Boolean).join(' ') || undefined}
             className={cn(
               'w-full appearance-none rounded-xl border bg-slate-950/35 text-sm text-white shadow-sm',
               'px-3.5 py-2.5 pr-9 transition-all duration-150',
@@ -44,8 +46,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
         </div>
-        {error && <p className="text-xs text-red-400">{error}</p>}
-        {!error && helperText && <p className="text-xs text-slate-500">{helperText}</p>}
+        {error && <p id={helpId} role="alert" className="text-xs text-red-400">{error}</p>}
+        {!error && helperText && <p id={helpId} className="text-xs text-slate-400">{helperText}</p>}
       </div>
     );
   },

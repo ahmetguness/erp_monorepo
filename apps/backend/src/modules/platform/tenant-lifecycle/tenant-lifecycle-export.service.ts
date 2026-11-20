@@ -4,7 +4,8 @@ import { prisma } from '../../../lib/prisma.js';
 import { TenantLifecycleError } from './tenant-lifecycle.policy.js';
 
 // A portable business-data export, not a full database/attachment backup.
-const BUSINESS_MODELS = new Set(['Contact', 'Product', 'Warehouse', 'Invoice', 'InvoiceItem', 'SalesOrder', 'SalesOrderItem', 'PurchaseOrder', 'PurchaseOrderItem', 'Payment', 'JournalEntry', 'JournalEntryLine', 'StockMovement', 'StockLevel']);
+const businessModels = ['Contact', 'Product', 'Warehouse', 'Invoice', 'InvoiceLine', 'SalesOrder', 'SalesOrderItem', 'PurchaseOrder', 'PurchaseOrderItem', 'Payment', 'PaymentAllocation', 'LedgerAccount', 'JournalEntry', 'JournalEntryLine', 'StockMovement', 'StockLevel'] as const satisfies readonly Prisma.ModelName[];
+const BUSINESS_MODELS: ReadonlySet<string> = new Set(businessModels);
 function identifier(value: string): Prisma.Sql {
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) throw new Error('Invalid schema identifier');
   return Prisma.raw(`"${value}"`);

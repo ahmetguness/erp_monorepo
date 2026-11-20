@@ -7,9 +7,12 @@ x-runtime: &runtime
   stop_grace_period: 390s
   mem_limit: 1g
   read_only: true
-  tmpfs: [/tmp:size=64m,mode=1777]
+  tmpfs: ["/tmp:size=64m,mode=1777"]
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options: {max-size: '10m', max-file: '3'}
   env_file: ["${AXON_ENV_FILE:?Private deployment env file required}"]
   networks: [application]
   environment: &environment
@@ -70,6 +73,9 @@ services:
       REQUIRE_EMPTY_DATABASE: ${REQUIRE_EMPTY_DATABASE:-false}
     networks: [application]
   web:
+    logging:
+      driver: json-file
+      options: {max-size: '10m', max-file: '3'}
     image: ${WEB_IMAGE:?Digest-pinned web image required}
     init: true
     restart: unless-stopped

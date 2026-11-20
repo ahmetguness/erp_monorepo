@@ -2,6 +2,7 @@ import { Priority, type Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { DOMAIN_EVENT_NAMES, DOMAIN_EVENT_SCHEMA_VERSION, type DomainEvent, type DomainEventContext, type DomainEventName } from './events.js';
 import { PermanentDeliveryError, IncompatibleEventError } from './delivery/retry-policy.js';
+import { parseTraceparent } from '../lib/telemetry/context.js';
 
 export interface StoredDomainEvent {
   tenantId: string;
@@ -85,6 +86,7 @@ function readContext(value: Prisma.JsonValue): DomainEventContext {
     ...(value.eventId !== undefined ? { eventId: readString(value, 'eventId') } : {}),
     userId: readOptionalString(value, 'userId'),
     correlationId: readOptionalString(value, 'correlationId'),
+    traceparent: typeof value.traceparent === 'string' && parseTraceparent(value.traceparent) ? value.traceparent : undefined,
     occurredAt: readDate(value, 'occurredAt'),
   };
 }

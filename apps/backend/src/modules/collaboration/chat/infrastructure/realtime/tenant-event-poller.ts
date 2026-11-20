@@ -29,7 +29,7 @@ export type RealtimeReader = (
 ) => Promise<RealtimeBatch>;
 interface Listener extends RealtimeAudience {
   connectedAt: number;
-  send(message: string): boolean;
+  send(message: string, evidence?: Readonly<{ id: string; createdAt: number }>): boolean;
   close(code: number, reason: string): void;
 }
 interface Channel {
@@ -226,13 +226,14 @@ export class TenantEventPoller {
         version: 1,
         payload: event.payload,
       });
+      const evidence = { id: event.id, createdAt: event.createdAt.getTime() };
       for (const [id, listener] of [...channel.listeners])
         if (
           id > previouslyChecked &&
           authorized.has(id) &&
           recipients.has(listener.userId) &&
-          event.createdAt.getTime() >= listener.connectedAt &&
-          !listener.send(message)
+          evidence.createdAt >= listener.connectedAt &&
+          !listener.send(message, evidence)
         ) {
           this.remove(channel, id);
           listener.close(1013, "Realtime consumer backpressure");

@@ -16,10 +16,10 @@ export interface TenantQueryParams {
 }
 
 const prismaLogLevels: Prisma.PrismaClientOptions["log"] =
-  process.env.PRISMA_QUERY_LOG === "true"
+  process.env.PRISMA_QUERY_LOG === "true" && process.env.NODE_ENV !== 'production'
     ? ["query", "error", "warn"]
     : process.env.NODE_ENV === "production"
-      ? ["error"]
+      ? []
       : ["error", "warn"];
 
 const basePrisma =
@@ -168,7 +168,7 @@ const tenantSafePrisma = basePrisma.$extends({
           action: operation as Prisma.PrismaAction,
           args: args as UnknownRecord,
         });
-        const result = await observeDatabaseOperation(() => query(args));
+        const result = await observeDatabaseOperation(() => query(args), model, operation);
         recordSlowQuery({
           model,
           action: operation,

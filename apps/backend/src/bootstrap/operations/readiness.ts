@@ -1,3 +1,5 @@
+import { setTelemetryGauge } from '../../lib/telemetry/metrics.js';
+import { withinProbeDeadline } from '../../lib/probe-deadline.js';
 export type DependencyStatus = 'up' | 'down';
 export interface ReadinessProbe {
   name: string;
@@ -13,6 +15,7 @@ export class ReadinessMonitor {
   private pending: Promise<ReadinessReport> | undefined;
   private cached: { at: number; report: ReadinessReport } | undefined;
   private draining = false;
+  private readonly inFlight = new Set<string>();
 
   constructor(private readonly probes: readonly ReadinessProbe[], private readonly cacheMs = 2_000) {}
 
@@ -34,8 +37,17 @@ export class ReadinessMonitor {
   private async probe(): Promise<ReadinessReport> {
     const checks: Record<string, DependencyStatus> = {};
     await Promise.all(this.probes.map(async ({ name, check }) => {
-      try { await check(AbortSignal.timeout(3_000)); checks[name] = 'up'; }
+      try {
+        if (this.inFlight.has(name)) throw new Error('Previous probe is still pending');
+        this.inFlight.add(name);
+        const work = Promise.resolve().then(() => check(AbortSignal.timeout(3000)));
+        void work.then(() => this.inFlight.delete(name), () => this.inFlight.delete(name));
+        await withinProbeDeadline(work);
+        checks[name] = 'up';
+      }
       catch { checks[name] = 'down'; }
+      const dependency = name === 'objectStorage' ? 'storage' : name === 'workers' ? 'worker' : name;
+      if (['database', 'redis', 'storage', 'worker'].includes(dependency)) setTelemetryGauge('axon_dependency_up', checks[name] === 'up' ? 1 : 0, { dependency });
     }));
     return { status: Object.values(checks).every((status) => status === 'up') ? 'ready' : 'not_ready', checks };
   }

@@ -3,6 +3,7 @@ import { domainEvents } from '../bus.js';
 import type { DomainEvent } from '../events.js';
 import { failEvent, finishEvent, type OutboxLease } from './repository.js';
 import { PermanentDeliveryError, LostOutboxLeaseError } from './retry-policy.js';
+import { countTelemetry } from '../../lib/telemetry/metrics.js';
 
 /** Each database consumer commits its effects and receipt in the same transaction. */
 export async function dispatchClaimedEvent(event: DomainEvent, lease: OutboxLease): Promise<boolean> {
@@ -21,7 +22,7 @@ export async function dispatchClaimedEvent(event: DomainEvent, lease: OutboxLeas
         const completed = await tx.domainEventDelivery.findUnique({
           where: { tenantId: lease.tenantId, tenantId_outboxId_consumer: { tenantId: lease.tenantId, outboxId: lease.id, consumer } },
         });
-        if (completed) return;
+        if (completed) { countTelemetry('axon_outbox_duplicate_consumer_skips_total'); return; }
         await listener(event, tx);
         await tx.domainEventDelivery.create({ data: { tenantId: lease.tenantId, outboxId: lease.id, consumer } });
       }, { timeout: 30_000 });

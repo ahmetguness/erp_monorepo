@@ -1,5 +1,6 @@
 import { AppProviders } from "@/bootstrap/providers/AppProviders";
 import { ToastContainer } from "@/components/ui/Toast";
+import { WebVitals } from '@/components/telemetry/WebVitals';
 import "./globals.css";
 
 export const metadata = {
@@ -27,7 +28,8 @@ export default function RootLayout({
         <meta charSet="utf-8" />
       </head>
       <body className="font-sans relative text-slate-900 bg-slate-950 selection:bg-blue-50 selection:text-blue-900">
-        <div id="main-content" role="main" className="min-h-screen">
+        <WebVitals />
+        <div id="main-content" className="min-h-screen">
           <AppProviders>{children}</AppProviders>
           <ToastContainer />
         </div>
