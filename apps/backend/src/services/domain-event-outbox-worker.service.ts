@@ -34,11 +34,13 @@ async function deliverLease(lease: OutboxLease): Promise<boolean> {
         if (error instanceof IncompatibleEventError) throw error;
         throw new PermanentDeliveryError(error instanceof Error ? error.message : 'Invalid event payload.');
       }
-      const delivered = await withSpan('outbox.deliver', 5, { 'messaging.operation.name': 'process', 'messaging.message.type': event.name }, () => runWithObservabilityContext({ requestId: record.id, correlationId: event.context.correlationId ?? record.id }, async () => {
+      const attributes: Record<string, string | number> = { 'messaging.operation.name': 'process', 'messaging.message.type': event.name };
+      const delivered = await withSpan('outbox.deliver', 5, attributes, () => runWithObservabilityContext({ requestId: record.id, correlationId: event.context.correlationId ?? record.id }, async () => {
         if (event.name === 'marketplace.webhook.received') await deliverTrendyolWebhook(lease.tenantId, event.payload.webhookEventId);
         if (event.name === 'mail.delivery.requested') await deliverQueuedMail(lease, event.payload);
         if (event.name === 'edocument.delivery.requested') await new EDocumentAutomationService(prisma).deliverQueuedDocument(lease.tenantId, event.payload.edocumentId);
         const result = await dispatchClaimedEvent(event, lease);
+        if (!result) attributes['error.type'] = 'ConsumerError';
         logger.info('Outbox delivery completed', { operation:'outbox.deliver', result:result?'success':'failure', requestId:record.id, correlationId:event.context.correlationId??record.id });
         return result;
       }), event.context.traceparent ?? null);

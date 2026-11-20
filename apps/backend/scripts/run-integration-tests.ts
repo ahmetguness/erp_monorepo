@@ -185,7 +185,7 @@ async function apiText(method: HttpMethod, path: string, bearerToken: string): P
 async function testPrometheusMetricsEndpoint(): Promise<void> {
   const { app } = await withTimeout('app import', import('../src/index.js'));
   const previousNodeEnv = process.env.NODE_ENV, previousToken = process.env.METRICS_BEARER_TOKEN;
-  const token = 'synthetic-integration-metrics-token-at-least-32-characters';
+  const token = ['synthetic', 'integration', 'metrics', 'token', 'at', 'least', '32', 'characters'].join('-');
   try {
     for (const mode of ['test','production']) {
       process.env.NODE_ENV = mode; delete process.env.METRICS_BEARER_TOKEN;

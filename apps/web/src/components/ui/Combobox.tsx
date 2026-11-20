@@ -143,11 +143,11 @@ export function Combobox({
 
         {/* Dropdown */}
         {open && (
-          <div id={listId} role="listbox" aria-label={label ?? placeholder} className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+          <div id={listId} className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-56 overflow-y-auto">
             {/* Empty option */}
             <button
               type="button"
-              role="option" aria-selected={!value} id={`${listId}-0`} tabIndex={-1}
+              id={`${listId}-0`} tabIndex={-1}
               onMouseDown={event => event.preventDefault()}
               onClick={() => handleSelect('')}
               className="w-full text-left px-3.5 py-2 text-sm text-slate-500 hover:bg-slate-700/50 transition-colors"
@@ -159,7 +159,7 @@ export function Combobox({
               <button
                 key={opt.value}
                 type="button"
-                role="option" aria-selected={opt.value === value} id={`${listId}-${index + 1}`} tabIndex={-1}
+                id={`${listId}-${index + 1}`} tabIndex={-1}
                 onMouseDown={event => event.preventDefault()}
                 onClick={() => handleSelect(opt.value)}
                 className={cn(
@@ -181,8 +181,6 @@ export function Combobox({
             {showCreateOption && (
               <button
                 type="button"
-                role="option"
-                aria-selected={false}
                 onClick={handleCreate}
                 className="w-full flex items-center gap-2 px-3.5 py-2.5 text-sm text-sky-400 hover:bg-sky-500/10 transition-colors border-t border-slate-700"
               >

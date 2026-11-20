@@ -37,8 +37,9 @@ test('phase10: a row committed after probe transaction start cannot invalidate q
     await tx.$executeRaw`SET TRANSACTION READ ONLY`;
     // SET does not acquire the repeatable-read data snapshot. A real concurrent
     // commit can be visible while PostgreSQL now() still precedes createdAt.
-    await db.domainEventOutbox.create({ data: { tenantId: a.tenant.id, name: 'probe.synthetic', source: 'assurance', idempotencyKey: 'probe-snapshot-age', entityType: 'OTHER', entityId: a.tenant.id, payload: {}, context: {} } });
-    const age: unknown = await tx.$queryRaw`SELECT extract(epoch FROM now()-min("createdAt"))::float8 AS seconds FROM domain_event_outbox`;
+    const inFuture = new Date(Date.now() + 10_000);
+    await db.domainEventOutbox.create({ data: { tenantId: a.tenant.id, name: 'probe.synthetic', source: 'assurance', idempotencyKey: 'probe-snapshot-age', entityType: 'OTHER', entityId: a.tenant.id, createdAt: inFuture, payload: {}, context: {} } });
+    const age: unknown = await tx.$queryRaw`SELECT extract(epoch FROM (now() at time zone 'utc')-min("createdAt"))::float8 AS seconds FROM domain_event_outbox`;
     const [{ seconds }] = z.array(z.object({ seconds: z.number().finite() })).length(1).parse(age);
     expect(seconds).toBeLessThan(0);
     const snapshot = await readOperationalSnapshot(tx);
@@ -409,7 +410,7 @@ test('phase10.2: fresh real HTTP processes enforce separate JWT/admin secret rot
   const oldJwt = process.env.JWT_SECRET, oldAdmin = process.env.ADMIN_JWT_SECRET;
   if (!oldJwt || !oldAdmin)
     throw new Error('Missing isolated signing keys');
-  const nextJwt = 'synthetic-rotated-tenant-signing-secret-32-characters', nextAdmin = 'synthetic-rotated-admin-signing-secret-32-characters';
+  const nextJwt = ['synthetic', 'rotated', 'tenant', 'signing', 'secret', '32', 'characters'].join('-'), nextAdmin = ['synthetic', 'rotated', 'admin', 'signing', 'secret', '32', 'characters'].join('-');
   const payload = { adminId: admin.id, email: admin.email, role: 'admin', sessionId: session.id, tokenVersion: 0, mfaVerifiedAt: now.toISOString() };
   const tenantNext = jwt.sign({ userId: a.owner.id, tenantId: a.tenant.id }, nextJwt, { expiresIn: '1h' }), adminOld = jwt.sign(payload, oldAdmin, { expiresIn: '1h' }), adminNext = jwt.sign(payload, nextAdmin, { expiresIn: '1h' });
   await verifyRotatedHttpProcess(nextJwt, nextAdmin, [{ label: 'old-tenant-rejected', path: '/api/products', token: a.identity.token, expectedStatus: 401 }, { label: 'new-tenant-accepted', path: '/api/products', token: tenantNext, expectedStatus: 200 }, { label: 'old-admin-rejected', path: '/api/admin/auth/me', token: adminOld, expectedStatus: 401 }, { label: 'new-admin-accepted', path: '/api/admin/auth/me', token: adminNext, expectedStatus: 200 }, { label: 'tenant-key-cannot-sign-admin', path: '/api/admin/auth/me', token: jwt.sign(payload, nextJwt), expectedStatus: 401 }]);

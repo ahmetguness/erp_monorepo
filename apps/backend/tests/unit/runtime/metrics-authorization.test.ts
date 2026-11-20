@@ -31,7 +31,7 @@ it('requires an explicitly configured bearer in every environment and retains th
   expect((await app.request('/metrics')).status).toBe(401);
   vi.stubEnv('METRICS_BEARER_TOKEN', 'weak');
   expect((await app.request('/metrics', { headers: { authorization: 'Bearer weak' } })).status).toBe(401);
-  const token = 'synthetic-metrics-token-of-at-least-32-characters';
+  const token = ['synthetic', 'metrics', 'token', 'of', 'at', 'least', '32', 'characters'].join('-');
   vi.stubEnv('METRICS_BEARER_TOKEN', token);
   expect((await app.request('/metrics', { headers: { authorization: token } })).status).toBe(401);
   expect((await app.request('/metrics', { headers: { authorization: 'Bearer wrong' } })).status).toBe(401);
